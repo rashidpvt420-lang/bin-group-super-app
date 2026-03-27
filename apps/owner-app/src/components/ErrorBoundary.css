@@ -1,0 +1,19 @@
+.error-boundary-fallback {
+  background: #111;
+  color: #f44;
+  padding: 20px;
+  min-height: 100vh;
+  font-family: monospace;
+}
+
+.error-boundary-fallback h1 {
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+
+.error-boundary-fallback pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}

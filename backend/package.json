@@ -1,0 +1,17 @@
+{
+  "name": "home-os-backend",
+  "version": "1.0.0",
+  "description": "HOME OS MVP backend for BIN Group blueprint",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "uuid": "^11.0.5"
+  }
+}

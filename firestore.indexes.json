@@ -1,0 +1,83 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "workOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "technicianAssigned",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "workOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "propertyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resolvedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "workOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "assetId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contracts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "propertyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "role",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isSuspended",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

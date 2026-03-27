@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+        (function() {
+            const metaDark = document.createElement('meta');
+            metaDark.name = 'theme-color';
+            metaDark.content = '#0F172A';
+            metaDark.media = '(prefers-color-scheme: dark)';
+            document.head.appendChild(metaDark);
+            
+            const metaLight = document.createElement('meta');
+            metaLight.name = 'theme-color';
+            metaLight.content = '#ffffff';
+            metaLight.media = '(prefers-color-scheme: light)';
+            document.head.appendChild(metaLight);
+        })();
+    </script>
+    <title>BIN Group Admin Portal</title>
+</head>
+
+<body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+</body>
+
+</html>

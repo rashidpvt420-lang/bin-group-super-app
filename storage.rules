@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+  
+    // Helper: Is Authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: Role Verification (Sovereign Role Protocol)
+    function hasRole(role) {
+      return isAuth() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('ADMIN') || hasRole('admin');
+    }
+
+    function isAuditor() {
+      return hasRole('AUDITOR') || hasRole('compliance_officer');
+    }
+
+    // ─── KYC & IDENTITY VAULT ──────────────────────────────────────────────
+    match /kyc_documents/{documentId} {
+      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
+      allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
+    }
+
+    match /kyc/{userId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
+      allow write: if isAuth() && (request.auth.uid == userId) && 
+                   request.resource.size < 10 * 1024 * 1024 &&
+                   request.resource.contentType.matches('application/pdf|image/.*');
+    }
+
+    // ─── TRANSACTIONAL ASSETS (Property & Contracts) ─────────────────────────
+    match /property_images/{documentId} {
+      allow read: if true; 
+      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
+    }
+    
+    match /contracts/{documentId} {
+      allow write: if isAdmin(); // Only Admin can upload signed institutional contracts
+      allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
+    }
+
+    // ─── OPERATIONAL ASSETS (Work Orders & Evidence) ─────────────────────────
+    match /workOrders/{orderId}/{allPaths=**} {
+      allow read: if isAuth();
+      allow write: if isAuth() && (hasRole('TECHNICIAN') || hasRole('technician') || isAdmin());
+    }
+
+    // ─── PUBLIC INFRASTRUCTURE ──────────────────────────────────────────────
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Default lockdown for unmanaged paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

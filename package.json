@@ -1,0 +1,22 @@
+{
+  "name": "bin-group-platform",
+  "private": true,
+  "description": "Consolidated BIN Group Property Management Ecosystem",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "functions"
+  ],
+  "scripts": {
+    "build": "npm run build -ws",
+    "deploy": "powershell ./deploy-production.ps1",
+    "clean": "npm run clean -ws && rm -rf hosting/public/*"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "firebase": "10.14.1"
+  }
+}

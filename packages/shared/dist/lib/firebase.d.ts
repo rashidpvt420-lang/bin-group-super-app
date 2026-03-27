@@ -1,0 +1,14 @@
+import { FirebaseApp } from 'firebase/app';
+import { Auth } from 'firebase/auth';
+import { FirebaseStorage } from 'firebase/storage';
+import { Analytics } from 'firebase/analytics';
+import { Functions } from 'firebase/functions';
+import { collection, Firestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
+export declare const app: FirebaseApp;
+export declare const db: Firestore;
+export declare const auth: Auth;
+export declare const storage: FirebaseStorage;
+export declare const functions: Functions;
+export declare const analytics: Analytics | null;
+export { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc };
+export default app;

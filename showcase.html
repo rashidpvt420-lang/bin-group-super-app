@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIN Group | Smart Asset Management Ecosystem</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F172A;
+            --accent: #10B981;
+            --accent-glow: rgba(16, 185, 129, 0.4);
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --background: #020617;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: white;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Ambient Glow Shadows */
+        .glow {
+            position: fixed;
+            width: 40vw;
+            height: 40vw;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            z-index: -1;
+            filter: blur(80px);
+            opacity: 0.5;
+        }
+
+        .glow-1 {
+            top: -10%;
+            right: -10%;
+        }
+
+        .glow-2 {
+            bottom: -10%;
+            left: -10%;
+        }
+
+        nav {
+            padding: 2rem 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, var(--background), transparent);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        .hero {
+            padding: 4rem 5%;
+            text-align: center;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 4.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+            letter-spacing: -2px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.5rem 1.2rem;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 2rem;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .portals {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2.5rem;
+            padding: 4rem 5%;
+        }
+
+        .portal-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .portal-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent);
+            background: rgba(16, 185, 129, 0.05);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .portal-card i {
+            font-size: 2.5rem;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .portal-card h3 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .portal-card p {
+            color: #94a3b8;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 100px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent);
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .status-pill.emergency {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .live-data {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .live-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .live-val {
+            font-weight: 800;
+            color: white;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--primary);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(16, 185, 129, 0.5);
+        }
+
+        .mockup-container {
+            margin-top: 6rem;
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .iphone-frame {
+            width: 320px;
+            height: 650px;
+            background: #111;
+            border: 8px solid #222;
+            border-radius: 40px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 50px 100px rgba(0, 0, 0, 0.8);
+        }
+
+        .iphone-screen {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            padding: 4rem 5%;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            padding: 1.5rem;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid var(--glass-border);
+        }
+
+        .stat-card .val {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .label {
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.8rem;
+            }
+
+            .portals {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: inline-block;
+        }
+
+        .hero-desc {
+            font-size: 1.3rem;
+            color: #94a3b8;
+            margin-bottom: 3rem;
+        }
+
+        .hero-actions {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .btn-outline {
+            border: 1px solid var(--glass-border);
+            color: white;
+        }
+
+        .portal-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .portal-footer {
+            margin-top: 2rem;
+        }
+
+        .net-payout {
+            color: var(--accent);
+        }
+
+        .sos-alert {
+            color: var(--danger);
+        }
+
+        .gold-screen-header {
+            margin-top: 4rem;
+        }
+
+        .mockup-label {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+        }
+
+        .site-footer {
+            padding: 4rem 5%;
+            text-align: center;
+            color: #475569;
+            border-top: 1px solid var(--glass-border);
+            margin-top: 8rem;
+        }
+
+        .screen-a { background-image: url('screen_a.png'); }
+        .screen-c { background-image: url('screen_c.png'); }
+    </style>
+</head>
+
+<body>
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+
+    <nav>
+        <div class="logo">BIN<span>GROUP</span></div>
+        <div class="status-pill" id="port-display">
+            <span class="status-indicator"></span>
+            BACKEND LIVE: PORT 3000
+        </div>
+    </nav>
+
+    <div class="hero">
+        <div class="badge">Official 2026 UAE Benchmark Release</div>
+        <h1>Self-Healing Asset Management <span>Ecosystem</span></h1>
+        <p class="hero-desc">
+            The #1 "No-Call" PropTech platform for Dubai's elite landlords.
+            Invisible maintenance. Hands-off wealth. Total transparency.
+        </p>
+        <div class="hero-actions">
+            <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer" class="btn btn-primary" title="Launch Admin Management Dashboard">Launch Admin God Mode</a>
+            <a href="INDEX.md" class="btn btn-outline" title="View Market Comparison Guide">View Market Cheat Sheet</a>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="val" id="health-avg">84.2</div>
+            <div class="label">Avg. Portfolio Health</div>
+        </div>
+        <div class="stat-card">
+            <div class="val">AED 2.4M</div>
+            <div class="label">Portfolio Value Managed</div>
+        </div>
+        <div class="stat-card">
+            <div class="val">22m</div>
+            <div class="label">Avg. SOS Arrival</div>
+        </div>
+        <div class="stat-card">
+            <div class="val">100%</div>
+            <div class="label">Visual-Gate Compliance</div>
+        </div>
+    </div>
+
+    <div class="portals">
+        <!-- Portal: Tenant -->
+        <div class="portal-card">
+            <div class="status-pill portal-header">TENANT PORTAL</div>
+            <h3>The Uber Experience</h3>
+            <p>One giant camera button. No phone numbers. Real-time technician tracking on live Dubai maps.</p>
+            <div class="live-data">
+                <div class="live-row"><span>Active Tickets</span> <span class="live-val">12</span></div>
+                <div class="live-row"><span>Auto-Triage Accu.</span> <span class="live-val">98.2%</span></div>
+            </div>
+            <div class="portal-footer">
+                <span class="status-pill">AI Vision Triage Active</span>
+            </div>
+        </div>
+
+        <!-- Portal: Owner -->
+        <div class="portal-card">
+            <div class="status-pill portal-header">OWNER DASHBOARD</div>
+            <h3>The Money Maker</h3>
+            <p>0-100 Property Health monitoring. Automated move-out renovation engine. RERA logic approvals.</p>
+            <div class="live-data">
+                <div class="live-row"><span>Total Rent</span> <span class="live-val">AED 45,000</span></div>
+                <div class="live-row"><span>Net Payout</span> <span class="live-val net-payout">AED
+                        41,375</span></div>
+            </div>
+            <div class="portal-footer">
+                <span class="status-pill">Auto-Settlement Logic Enabled</span>
+            </div>
+        </div>
+
+        <!-- Portal: Technician -->
+        <div class="portal-card">
+            <div class="status-pill emergency portal-header">FIELD OPERATIONS</div>
+            <h3>No Photo, No Pay</h3>
+            <p>Offline-first performance. Morning stock check gates. Mandatory proof-of-work signature.</p>
+            <div class="live-data">
+                <div class="live-row"><span>Technicians Live</span> <span class="live-val">8</span></div>
+                <div class="live-row"><span>Active SOS Jobs</span> <span class="live-val sos-alert">1</span></div>
+            </div>
+            <div class="portal-footer">
+                <span class="status-pill" id="sla-timer">SLA Countdown: 30:00</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="hero gold-screen-header">
+        <h2>Golden Screen Previews</h2>
+    </div>
+
+    <div class="mockup-container">
+        <div class="iphone-frame">
+            <div class="iphone-screen screen-a"></div>
+            <div class="mockup-label">Tenant: Screen A</div>
+        </div>
+        <div class="iphone-frame">
+            <div class="iphone-screen screen-c"></div>
+            <div class="mockup-label">Technician: Screen C</div>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 BIN Group - Smart Asset Management LLC. Dubai, UAE.</p>
+    </footer>
+
+    <script>
+        const API_BASE = "http://localhost:5000";
+
+        // 1. Fetch real health status from backend
+        async function updateLiveMetrics() {
+            try {
+                const response = await fetch(`${API_BASE}/api/owner/OWNER_045/properties/PROP_045/health-score`);
+                const data = await response.json();
+                if (data && data.healthScore) {
+                    document.getElementById('health-avg').innerText = data.healthScore;
+                }
+            } catch (e) {
+                console.warn("Backend not reached yet, using simulation.");
+                // Fallback simulation
+                const health = document.getElementById('health-avg');
+                const current = parseFloat(health.innerText);
+                const delta = (Math.random() - 0.5) * 0.5;
+                health.innerText = (current + delta).toFixed(1);
+            }
+        }
+
+        // 2. SLA Countdown Timer
+        let seconds = 1800; // 30 mins
+        function updateSlaTimer() {
+            const timerEl = document.getElementById('sla-timer');
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            timerEl.innerText = `SLA Countdown: ${m}:${s.toString().padStart(2, '0')}`;
+            if (seconds > 0) seconds--;
+        }
+
+        setInterval(updateLiveMetrics, 5000);
+        setInterval(updateSlaTimer, 1000);
+
+        // Update Port Display
+        document.getElementById('port-display').innerText = "BACKEND LIVE: PORT 5000";
+    </script>
+</body>
+
+</html>

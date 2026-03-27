@@ -1,0 +1,21 @@
+{
+  "rera_benchmarks_2026": {
+    "dubai": {
+      "dubai_marina": { "avg_rent_sqft": 110, "service_charge_benchmark": 18.50, "demand_weight": 1.25 },
+      "jumeirah_village_circle": { "avg_rent_sqft": 75, "service_charge_benchmark": 12.00, "demand_weight": 0.95 },
+      "business_bay": { "avg_rent_sqft": 105, "service_charge_benchmark": 16.50, "demand_weight": 1.15 },
+      "international_city": { "avg_rent_sqft": 45, "service_charge_benchmark": 8.00, "demand_weight": 0.80 },
+      "palm_jumeirah": { "avg_rent_sqft": 180, "service_charge_benchmark": 25.00, "demand_weight": 1.50 }
+    },
+    "abu_dhabi": {
+      "al_reem_island": { "avg_rent_sqft": 90, "service_charge_benchmark": 14.00, "demand_weight": 1.10 },
+      "yas_island": { "avg_rent_sqft": 100, "service_charge_benchmark": 15.00, "demand_weight": 1.20 }
+    }
+  },
+  "asset_complexity_modifiers": {
+    "tower": 1.15,
+    "mall": 1.30,
+    "villa": 1.0,
+    "warehouse": 0.85
+  }
+}

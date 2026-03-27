@@ -1,0 +1,21 @@
+{
+    "java.import.exclusions": [
+        "**/android/**",
+        "**/node_modules/**",
+        "**/.idea/**",
+        "**/build/**",
+        "**/dist/**"
+    ],
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "java.autobuild.enabled": false,
+    "gradle.nestedProjects": false,
+    "files.exclude": {
+        "**/bin-group-super-app/android": true,
+        "**/node_modules/@capacitor/android": true,
+        "**/node_modules/@capacitor/camera/android": true,
+        "**/node_modules/@capacitor/preferences/android": true
+    },
+    "dart.flutterSdkPath": "C:\\Users\\My-PC\\Downloads\\flutter_windows_3.41.1-stable\\flutter",
+    "css.lint.unknownAtRules": "ignore",
+    "scss.lint.unknownAtRules": "ignore"
+}
