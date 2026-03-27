@@ -5,6 +5,7 @@ This document defines the standard for connecting smart building sensors (Water,
 ---
 
 ## 🏗️ 1. Architecture: Sensor to Ticket
+
 `Sensor Trigger` -> `IoT Gateway (MQTT/HTTPS)` -> `BIN API (/api/iot/trigger)` -> `AI Triage` -> `Work Order`.
 
 ---
@@ -32,14 +33,17 @@ Every IoT device must pulse data in the following format to trigger a maintenanc
 ---
 
 ## 🛠️ 3. Hardware Standard
+
 To ensure <200ms trigger latency, BIN Group recommends the following connectivity:
-*   **LPWAN (LoRaWAN/NB-IoT)**: Preferred for tower-wide water and fire safety sensors.
-*   **Zigbee/Wi-Fi**: Acceptable for internal unit temperature and lighting controls.
-*   **Local Gateway**: All data must be aggregated to a local gateway before being sent to the cloud via TLS 1.3.
+
+* **LPWAN (LoRaWAN/NB-IoT)**: Preferred for tower-wide water and fire safety sensors.
+* **Zigbee/Wi-Fi**: Acceptable for internal unit temperature and lighting controls.
+* **Local Gateway**: All data must be aggregated to a local gateway before being sent to the cloud via TLS 1.3.
 
 ---
 
 ## 🚨 4. Fail-Safe Protocol
-1.  **Duplicate Check**: If multiple sensors trigger the same event within 60 seconds, group them into a single "Complex Incident."
-2.  **Connectivity Offline**: If a "Heartbeat" is missed for >30 mins, trigger a "Device Offline" low-priority maintenance ticket for investigation.
-3.  **Critical Override**: "Fire" or "Gas Leak" payloads bypass the standard queue and trigger immediate SMS/Phone call to the Building Manager.
+
+1. **Duplicate Check**: If multiple sensors trigger the same event within 60 seconds, group them into a single "Complex Incident."
+2. **Connectivity Offline**: If a "Heartbeat" is missed for >30 mins, trigger a "Device Offline" low-priority maintenance ticket for investigation.
+3. **Critical Override**: "Fire" or "Gas Leak" payloads bypass the standard queue and trigger immediate SMS/Phone call to the Building Manager.

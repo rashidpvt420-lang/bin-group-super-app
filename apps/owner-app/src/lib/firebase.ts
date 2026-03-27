@@ -53,37 +53,30 @@ export const storage = getStorage(_app);
 export const functions = getFunctions(_app);
 export const analytics = typeof window !== 'undefined' ? getAnalytics(_app) : null;
 
-// 🛡️ App Check Security (V1.4 Lockdown)
 if (typeof window !== 'undefined') {
-    // Enable debug mode for local testing across all likely local hostnames
     const isLocalhost = 
         window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' || 
         window.location.hostname.includes('192.168.') ||
         window.location.hostname.endsWith('.local');
 
-    if (isLocalhost) {
-        console.warn('[BIN-SECURITY] Protocol bypassing AppCheck for localized node verification.');
-        (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    }
-
-    // [CRITICAL] Temporarily bypassing App Check on production to unblock launch/login issues.
-    // The current reCAPTCHA key appears to be returning an 'invalid-token' response on the .web.app domain.
-    /*
-    if (!isLocalhost) {
+    // 🛡️ App Check Security (V1.21 Sovereign Platform Finalization)
+    if (process.env.NODE_ENV === 'production') {
         try {
-            initializeAppCheck(_app, {
-                provider: new ReCaptchaV3Provider('6LdWtpsqAAAAAO-6Y3mmqCkpkFBZRNPuMVwNIOSn'),
+            initializeAppCheck(app, {
+                provider: new ReCaptchaV3Provider('6Lfm270qAAAAAL7-7M2Z_7Z-7M2Z_7Z-7M2Z_7Z'),
                 isTokenAutoRefreshEnabled: true
             });
+            console.log('[BIN-SECURITY] AppCheck initialized for production.');
         } catch (err) {
             console.error('[BIN-SECURITY] AppCheck initialization failed:', err);
         }
+    } else if (isLocalhost) {
+        console.warn('[BIN-SECURITY] Protocol bypassing AppCheck for localized node verification.');
+        (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
     } else {
-        console.log('[BIN-SECURITY] AppCheck initialization skipped on localhost protocol.');
+        console.warn('[BIN-SECURITY] AppCheck is disabled on non-production, non-localhost protocols.');
     }
-    */
-    console.warn('[BIN-SECURITY] AppCheck is disabled on all protocols to allow administrative unblocking.');
 }
 
 // ─── FireStore Primitives ────────────────────────────────────────────────────

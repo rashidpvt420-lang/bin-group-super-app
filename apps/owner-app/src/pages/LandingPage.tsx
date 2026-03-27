@@ -2,10 +2,12 @@ import React from 'react';
 import { Box, Typography, Button, Container, Stack, Grid, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useLanguage } from '../context/LanguageContext';
 import { ArrowRight, ShieldCheck, Globe, Building2, TrendingUp } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t, isRTL } = useLanguage();
 
     return (
         <Box sx={{ 
@@ -57,12 +59,12 @@ const LandingPage: React.FC = () => {
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent'
                     }}>
-                        INSTITUTIONAL ASSET <br />
-                        <Box component="span" sx={{ color: binThemeTokens.gold, WebkitTextFillColor: binThemeTokens.gold }}>INTELLIGENCE</Box>
+                        {t('landing.hero_title_line1')} <br />
+                        <Box component="span" sx={{ color: binThemeTokens.gold, WebkitTextFillColor: binThemeTokens.gold }}>{t('landing.hero_title_line2')}</Box>
                     </Typography>
 
                     <Typography variant="h6" sx={{ color: 'text.secondary', maxWidth: 800, fontWeight: 500, lineHeight: 1.6 }}>
-                        Sovereign-grade valuation and predictive maintenance for the UAE's most complex infrastructure. Driven by the BIN-GENESIS™ Engine.
+                        {t('landing.subtitle')}
                     </Typography>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mt: 4 }}>
@@ -70,7 +72,7 @@ const LandingPage: React.FC = () => {
                             variant="contained" 
                             size="large"
                             onClick={() => navigate('/onboarding')}
-                            endIcon={<ArrowRight />}
+                            endIcon={<ArrowRight style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />}
                             sx={{ 
                                 background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
                                 color: '#000', 
@@ -80,7 +82,7 @@ const LandingPage: React.FC = () => {
                                 fontSize: '1.1rem'
                             }}
                         >
-                            GET INSTITUTIONAL QUOTE
+                            {t('btn.quote')}
                         </Button>
                         <Button 
                             variant="outlined" 
@@ -95,22 +97,22 @@ const LandingPage: React.FC = () => {
                                 '&:hover': { borderColor: binThemeTokens.gold }
                             }}
                         >
-                            PARTNER LOGIN
+                            {t('landing.partner_login')}
                         </Button>
                     </Stack>
 
                     <Grid container spacing={4} sx={{ mt: 10, maxWidth: 1000 }}>
                         {[
-                            { icon: <ShieldCheck size={28} />, title: "SIRA & CD Compliance", desc: "Automated risk audits for institutional safety." },
-                            { icon: <Building2 size={28} />, title: "Precision Maintenance", desc: "Predictive lifecycle management for high-risk systems." },
-                            { icon: <TrendingUp size={28} />, title: "Yield Maximization", desc: "Data-driven strategy for GCC asset holders." }
+                            { icon: <ShieldCheck size={28} />, title: t('landing.feature.risk_title'), desc: t('landing.feature.risk_desc') },
+                            { icon: <Building2 size={28} />, title: t('landing.feature.maintenance_title'), desc: t('landing.feature.maintenance_desc') },
+                            { icon: <TrendingUp size={28} />, title: t('landing.feature.yield_title'), desc: t('landing.feature.yield_desc') }
                         ].map((item, i) => (
                             <Grid item xs={12} md={4} key={i}>
                                 <Box sx={{ 
                                     p: 4, borderRadius: 6, 
                                     bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)', 
                                     border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.05)}`, 
-                                    textAlign: 'left', height: '100%' 
+                                    textAlign: isRTL ? 'right' : 'left', height: '100%' 
                                 }}>
                                     <Box sx={{ color: binThemeTokens.gold, mb: 2 }}>{item.icon}</Box>
                                     <Typography variant="h6" fontWeight="900" sx={{ color: 'text.primary', mb: 1 }}>{item.title}</Typography>
@@ -125,7 +127,7 @@ const LandingPage: React.FC = () => {
             {/* Footer */}
             <Box sx={{ p: 4, borderTop: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.05)}`, textAlign: 'center' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES
+                    {t('landing.footer')}
                 </Typography>
             </Box>
         </Box>

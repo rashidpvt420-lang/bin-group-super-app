@@ -13,7 +13,8 @@ import {
     Button,
     useTheme,
     useMediaQuery,
-    IconButton
+    IconButton,
+    alpha
 } from '@mui/material';
 import { 
     ArrowLeft, 
@@ -33,21 +34,23 @@ import QuoteModelingStep from '../components/onboarding/QuoteModelingStep';
 import ContractSelectionStep from '../components/onboarding/ContractSelectionStep';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useLanguage } from '../context/LanguageContext';
 
 const onboardingSteps = [
-    'Landing',
-    'Property Intake',
-    'Asset Analysis',
-    'Quote & Plan',
-    'Contract Selection',
-    'Service Tailoring',
-    'Security Deposit',
-    'Account Selection'
+    'onboarding.step.landing',
+    'onboarding.step.intake',
+    'onboarding.step.analysis',
+    'onboarding.step.quote',
+    'onboarding.step.selection',
+    'onboarding.step.tailoring',
+    'onboarding.step.deposit',
+    'onboarding.step.activation'
 ];
 
 const PropertyOnboardingPage: React.FC = () => {
     const navigate = useNavigate();
     const { step, nextStep, prevStep, setSelectedPlan, reset } = useOnboardingStore();
+    const { t, isRTL } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -112,11 +115,11 @@ const PropertyOnboardingPage: React.FC = () => {
                             <IconButton sx={{ color: binThemeTokens.textSecondary }}><HelpCircle size={20} /></IconButton>
                                 <Button 
                                     variant="text"
-                                    startIcon={<ArrowLeft />} 
+                                    startIcon={<ArrowLeft style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />} 
                                     onClick={handleExit}
                                     sx={{ color: binThemeTokens.textSecondary }}
                                 >
-                                    Exit
+                                    {t('btn.exit')}
                                 </Button>
                         </Box>
                     </Box>
@@ -125,7 +128,7 @@ const PropertyOnboardingPage: React.FC = () => {
                         <Box sx={{ py: 2 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>
-                                    STEP {step}: {onboardingSteps[step].toUpperCase()}
+                                    STEP {step}: {t(onboardingSteps[step]).toUpperCase()}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>
                                     {Math.round((step / (onboardingSteps.length - 1)) * 100)}%
@@ -153,7 +156,7 @@ const PropertyOnboardingPage: React.FC = () => {
                         >
                             {onboardingSteps.map((label) => (
                                 <Step key={label}>
-                                    <StepLabel>{label}</StepLabel>
+                                    <StepLabel>{t(label)}</StepLabel>
                                 </Step>
                             ))}
                         </Stepper>

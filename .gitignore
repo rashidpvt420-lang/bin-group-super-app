@@ -64,6 +64,21 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.local
+.env.production
+.env.development
+
+# Build & Output
+build/
+dist/
+apps/*/build/
+apps/*/dist/
+
+# Hosting target (static assets)
+hosting/public/admin/
+hosting/public/static/
+hosting/public/index.html
+hosting/public/asset-manifest.json
 
 # dataconnect generated files
 .dataconnect

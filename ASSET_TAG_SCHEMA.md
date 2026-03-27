@@ -24,20 +24,24 @@ When a technician scans a sticker, the app decodes the following JSON to fetch r
 ---
 
 ## 🗓️ 2. Service History Lifecycle
+
 The "Digital Heartbeat" of the asset:
-1.  **Scan**: Unlocks the maintenance history for that specific unit.
-2.  **Diagnostic**: AI analyzes previous fail-patterns (e.g., "Frequent gas leak") to suggest parts.
-3.  **Update**: Technician logs a "Service Pulse" after completion, updating the next "Preventive Maintenance" date.
+
+1. **Scan**: Unlocks the maintenance history for that specific unit.
+2. **Diagnostic**: AI analyzes previous fail-patterns (e.g., "Frequent gas leak") to suggest parts.
+3. **Update**: Technician logs a "Service Pulse" after completion, updating the next "Preventive Maintenance" date.
 
 ---
 
 ## 🛠️ 3. Physical Tagging Standard
-*   **Material**: Weatherproof, heat-resistant UV stickers (Essential for outdoor condenser units).
-*   **Placement**: Eye-level, adjacent to the serial number plate.
-*   **Tamper Proof**: Notification sent if a tag ID is scanned from a location > 50 meters away from the registered GPS property coordinate.
+
+* **Material**: Weatherproof, heat-resistant UV stickers (Essential for outdoor condenser units).
+* **Placement**: Eye-level, adjacent to the serial number plate.
+* **Tamper Proof**: Notification sent if a tag ID is scanned from a location > 50 meters away from the registered GPS property coordinate.
 
 ---
 
 ## 📈 4. Benefits for Owners
-*   **Asset Valuation**: Proof of maintenance history increases property resale/rental value.
-*   **Audit Trail**: Immutable record of which technician touched which machine and when.
+
+* **Asset Valuation**: Proof of maintenance history increases property resale/rental value.
+* **Audit Trail**: Immutable record of which technician touched which machine and when.

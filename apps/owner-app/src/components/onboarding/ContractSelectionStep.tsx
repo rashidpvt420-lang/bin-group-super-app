@@ -26,8 +26,8 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
     if (!valuationResult) {
         return (
             <Box sx={{ p: 10, textAlign: 'center' }}>
-                <Typography color="error">No valuation result found. Please go back.</Typography>
-                <Button onClick={onBack}>BACK</Button>
+                <Typography color="error">{t('quote.no_result')}</Typography>
+                <Button onClick={onBack}>{t('btn.back')}</Button>
             </Box>
         );
     }
@@ -43,10 +43,10 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
         <Box sx={{ maxWidth: 1300, mx: 'auto' }}>
             <Box sx={{ textAlign: 'center', mb: isMobile ? 4 : 8 }}>
                 <Typography variant={isMobile ? "h4" : "h3"} fontWeight="950" sx={{ mb: 2, textTransform: 'uppercase' }}>
-                    SELECT INSTITUTIONAL TIER
+                    {t('contract.select_tier')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                    Aligning service excellence with your portfolio of {properties.length} assets.
+                    {t('contract.subtitle', { count: properties.length })}
                 </Typography>
             </Box>
 
@@ -65,7 +65,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                     <Crown color={binThemeTokens.gold} size={40} />
                 </Box>
                 <Box flexGrow={1}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>PORTFOLIO RECOMMENDATION</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>{t('contract.portfolio_recommendation')}</Typography>
                     <Typography variant="h4" fontWeight="950" sx={{ mb: 1 }}>{contractRecommendation.recommendedTier}</Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
                         {(contractRecommendation.recommendedReason || []).map((r: string, i: number) => (
@@ -74,7 +74,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: isMobile ? 'left' : 'right' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>ANALYSIS SCORE</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{t('contract.analysis_score')}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="950" sx={{ color: binThemeTokens.gold }}>{contractRecommendation.score}/100</Typography>
                 </Box>
             </Box>
@@ -95,21 +95,21 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                                 '&:hover': { transform: 'translateY(-10px)', borderColor: binThemeTokens.gold }
                             }}>
                                 {isRecommended && (
-                                    <Chip label="OPTIMAL FIT" size="small" sx={{ position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 2 }} />
+                                    <Chip label={t('contract.optimal_fit')} size="small" sx={{ position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 2 }} />
                                 )}
                                 <CardContent sx={{ p: 5 }}>
-                                    <Typography variant="h6" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 950, letterSpacing: 2 }}>{pkg.packageName.toUpperCase()}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 4, display: 'block' }}>FULL PORTFOLIO ACV</Typography>
+                                    <Typography variant="h6" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 950, letterSpacing: 2 }}>{t(`tier.${pkg.packageName.toLowerCase()}`)}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, mb: 4, display: 'block' }}>{t('contract.full_portfolio_acv')}</Typography>
                                     
                                     <Box sx={{ mb: 6 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
                                             <Typography variant="h3" fontWeight="950">
                                                 AED {pkg.annualPrice.toLocaleString()}
                                             </Typography>
-                                            <Typography variant="body1" color="text.secondary">/yr</Typography>
+                                            <Typography variant="body1" color="text.secondary">/{t('common.yr')}</Typography>
                                         </Box>
                                         <Typography variant="subtitle1" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
-                                            AED {pkg.monthlyPrice.toLocaleString()} /mo (Quarterly)
+                                            AED {pkg.monthlyPrice.toLocaleString()} /{t('common.mo')} ({t('contract.quarterly')})
                                         </Typography>
                                     </Box>
 
@@ -129,7 +129,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                                         onClick={() => handleSelect(pkg)}
                                         sx={{ borderRadius: 5, py: 2.5, fontWeight: 950, fontSize: '1.1rem', background: isRecommended ? binThemeTokens.goldGradient : alpha('#fff', 0.05), color: isRecommended ? '#000' : '#fff' }}
                                     >
-                                        ENGAGE {pkg.packageName.toUpperCase()}
+                                        {t('btn.engage_tier', { tier: t(`tier.${pkg.packageName.toLowerCase()}`) })}
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -141,13 +141,13 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
             {portfolioIntelligence.portfolioDiscount > 0 && (
                 <Box sx={{ mt: 6, p: 3, textAlign: 'center', bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 4, border: `1px dashed ${binThemeTokens.gold}` }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                        <Gem size={16} /> PORTFOLIO SAVINGS: AED {portfolioIntelligence.portfolioDiscountAmount.toLocaleString()} APPLIED
+                        <Gem size={16} /> {t('contract.portfolio_savings', { amount: portfolioIntelligence.portfolioDiscountAmount.toLocaleString() })}
                     </Typography>
                 </Box>
             )}
 
             <Box sx={{ mt: 10, textAlign: 'center' }}>
-                <Button variant="text" onClick={onBack} size="large" sx={{ color: 'text.secondary', fontWeight: 700 }}>BACK TO ANALYSIS</Button>
+                <Button variant="text" onClick={onBack} size="large" sx={{ color: 'text.secondary', fontWeight: 700 }}>{t('btn.back_analysis')}</Button>
             </Box>
         </Box>
     );

@@ -63,7 +63,7 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
     
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.text(`REGION: ${input.emirate.toUpperCase()} | ASSET: ${input.assetType.toUpperCase()} | v1.19`, margin, 42);
+    doc.text(`REGION: ${input.emirate.toUpperCase()} | ASSET: ${input.assetType.toUpperCase()} | v1.21-SOVEREIGN`, margin, 42);
 
     // Section 1: Executive Summary
     doc.setTextColor(11, 11, 12);
@@ -75,7 +75,8 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
         ['Portfolio Area', `${input.sqft.toLocaleString()} Sq.Ft`],
         ['Institutional Yield', `${input.annualYield}%`],
         ['Institutional AMC (Floor)', `AED ${valuation.annualContractValue?.toLocaleString()}`],
-        ['Mission Priority Status', 'S-CLASS SOVEREIGN READINESS']
+        ['Mission Priority Status', 'S-CLASS SOVEREIGN READINESS'],
+        ['Majlis Configuration', input.majlisType ? input.majlisType.toUpperCase() : 'N/A']
     ];
 
     doc.autoTable({
@@ -126,7 +127,7 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text('CONFIDENTIAL: This document is an institutional sovereign audit produced by bin-group software.', margin, 285);
+    doc.text('CONFIDENTIAL: This document is an institutional sovereign audit produced by BIN-GENESIS™ v1.21.', margin, 285);
 
     doc.save(`BIN-TENDER-${input.emirate}-${Date.now()}.pdf`);
 }

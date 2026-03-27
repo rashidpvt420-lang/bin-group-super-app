@@ -1,4 +1,3 @@
-// owner-app/src/pages/DashboardPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Container, Grid, Card, CardContent, Typography, Box, Button,
@@ -13,9 +12,11 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SpeedIcon from '@mui/icons-material/Speed';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
+import { useLanguage } from '../context/LanguageContext';
 import { ShieldAlert, Crown, Tent } from 'lucide-react';
 import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
@@ -24,6 +25,7 @@ import { calculateESGRatings } from '../utils/esgRatingEngine';
 
 export default function DashboardPage() {
     const { user, godMode } = useRole();
+    const { t, isRTL } = useLanguage();
     const [contracts, setContracts] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -35,12 +37,10 @@ export default function DashboardPage() {
 
         const fetchData = async () => {
             try {
-                // Fetch Portfolio via Aggregation Engine
                 const portfolio = await fetchPortfolioAggregation(user.uid, godMode);
                 setContracts(portfolio.contracts);
                 setProperties(portfolio.properties);
 
-                // Run Live Metrics Engines
                 const yieldMetrics = calculateAnnualYieldMetrics(portfolio);
                 const complianceScore = calculateComplianceScore(portfolio);
                 const esgRating = calculateESGRatings(portfolio);
@@ -51,7 +51,6 @@ export default function DashboardPage() {
                     esg: esgRating
                 });
 
-                // Fetch Notifications
                 const alertRef = collection(db, 'notifications');
                 const alertQuery = godMode 
                     ? query(alertRef, orderBy('createdAt', 'desc'), limit(10))
@@ -78,19 +77,15 @@ export default function DashboardPage() {
         );
     }
 
-    // Dynamic KPI Calculation
-    const totalContractValue = contracts.reduce((sum, c) => sum + (c.annualContractValue || 0), 0);
     const totalProperties = properties.length;
     
-    // If no properties, show Empty State Onboarding CTA
     if (totalProperties === 0) {
         return (
             <Container maxWidth="md" sx={{ py: 15, textAlign: 'center' }}>
                 <ShieldAlert size={80} color={binThemeTokens.gold} style={{ marginBottom: 24, opacity: 0.5 }} />
-                <Typography variant="h3" fontWeight="900" sx={{ color: '#fff', mb: 2 }}>PORTFOLIO OFFLINE</Typography>
+                <Typography variant="h3" fontWeight="900" sx={{ color: '#fff', mb: 2 }}>{t('dash.empty_title')}</Typography>
                 <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, mb: 6 }}>
-                    You have no active bin-group institutional service contracts.
-                    Begin your sovereign asset onboarding to unlock live monitoring.
+                    {t('dash.empty_subtitle')}
                 </Typography>
                 <Button 
                     variant="contained" 
@@ -105,7 +100,7 @@ export default function DashboardPage() {
                         fontSize: '1.2rem',
                         boxShadow: '0 20px 40px rgba(198, 167, 94, 0.3)'
                     }}>
-                    + START ASSET ONBOARDING
+                    {t('dash.empty_cta')}
                 </Button>
             </Container>
         );
@@ -113,13 +108,13 @@ export default function DashboardPage() {
 
   return (
     <Container maxWidth="xl" sx={{ py: 6 }}>
-      <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 8, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 3 }}>
         <Box>
             <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>
-                Portfolio Intelligence
+                {t('dash.title')}
             </Typography>
             <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>
-                {user?.displayName?.toUpperCase() || 'OWNER'} Terminal · {totalProperties} Locked Assets
+                {user?.displayName?.toUpperCase() || t('status.owner')} {t('dash.terminal')} · {totalProperties} {t('dash.locked_assets')}
             </Typography>
         </Box>
         <Button 
@@ -136,17 +131,17 @@ export default function DashboardPage() {
                 '&:hover': { transform: 'scale(1.02)' }
             }}
             onClick={() => window.location.href = '/onboarding'}>
-            + ONBOARD NEW ASSET
+            {t('dash.onboard_cta')}
         </Button>
       </Box>
 
       {/* Economic Powergrid */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
         {[
-            { label: 'GROSS CONTRACT VALUE', val: `AED ${(metrics?.yield?.grossContractValue/1000).toFixed(1)}K`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
-            { label: 'ANNUAL YIELD (EST)', val: `${metrics?.yield?.annualYield}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
-            { label: 'PORTFOLIO RADIUS', val: properties[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
-            { label: 'MAJLIS READINESS', val: properties.some(p => p.propertyType === 'majlis') ? 'SOVEREIGN' : `${metrics?.compliance}%`, trend: 'OPTIMAL', icon: <InfoOutlinedIcon /> },
+            { label: t('dash.kpi.gross_val'), val: `AED ${(metrics?.yield?.grossContractValue/1000).toFixed(1)}K`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
+            { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
+            { label: t('dash.kpi.radius'), val: properties[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
+            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'majlis') ? t('status.sovereign') : `${metrics?.compliance}%`, trend: 'OPTIMAL', icon: <InfoOutlinedIcon /> },
         ].map((kpi, i) => (
             <Grid item xs={12} md={3} key={i}>
                 <Card sx={{ 
@@ -168,27 +163,6 @@ export default function DashboardPage() {
                 </Card>
             </Grid>
         ))}
-        <Grid item xs={12} md={3}>
-            <Card sx={{ 
-                bgcolor: 'rgba(22, 22, 24, 0.7)', 
-                backdropFilter: 'blur(20px)',
-                p: 1.5, 
-                borderRadius: 6, 
-                border: '1px solid rgba(198, 167, 94, 0.15)',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-            }}>
-                <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                        <Box sx={{ color: binThemeTokens.gold }}><InfoOutlinedIcon /></Box>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 900, letterSpacing: 1 }}>OPTIMAL</Typography>
-                    </Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1, letterSpacing: 2 }}>MAJLIS READINESS</Typography>
-                    <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>
-                        {properties.some(p => p.propertyType === 'majlis') ? 'SOVEREIGN' : `${metrics?.compliance}%`}
-                    </Typography>
-                </CardContent>
-            </Card>
-        </Grid>
       </Grid>
 
       {/* Institutional Intelligence Deck — 6 KPIs */}
@@ -196,7 +170,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>NET ROI</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.net_roi')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>
                           {metrics?.yield?.netROI?.toFixed(1) || '0.0'}%
                       </Typography>
@@ -209,7 +183,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>GROSS ROI</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.gross_roi')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>
                           {metrics?.yield?.grossROI?.toFixed(1) || '0.0'}%
                       </Typography>
@@ -222,7 +196,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>SOVEREIGN ESG</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.esg')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.gold }}>{metrics?.esg?.rating || 'N/A'}</Typography>
                       <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.05)', mt: 1, borderRadius: 2, overflow: 'hidden' }}>
                           <Box sx={{ width: `${metrics?.esg?.weightedAverage || 0}%`, height: '100%', background: 'linear-gradient(90deg, #C6A75E, #E6C77A)' }} />
@@ -233,7 +207,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>COMPLIANCE SCORE</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.compliance')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>{metrics?.compliance || '0'}%</Typography>
                       <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.05)', mt: 1, borderRadius: 2, overflow: 'hidden' }}>
                           <Box sx={{ width: `${metrics?.compliance || 0}%`, height: '100%', background: 'linear-gradient(90deg, #60A5FA, #3B82F6)' }} />
@@ -244,7 +218,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>ASSET INTEGRITY</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.integrity')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>{metrics?.esg?.gScore || '0'}/100</Typography>
                       <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.05)', mt: 1, borderRadius: 2, overflow: 'hidden' }}>
                           <Box sx={{ width: `${metrics?.esg?.gScore || 0}%`, height: '100%', background: 'linear-gradient(90deg, #FACC15, #EAB308)' }} />
@@ -255,7 +229,7 @@ export default function DashboardPage() {
           <Grid item xs={12} sm={6} md={3}>
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
-                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>TENANT SATISFACTION</Typography>
+                      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.satisfaction')}</Typography>
                       <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>{(metrics?.esg?.sScore / 20)?.toFixed(1) || '0.0'}/5.0</Typography>
                       <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.05)', mt: 1, borderRadius: 2, overflow: 'hidden' }}>
                           <Box sx={{ width: `${metrics?.esg?.sScore || 0}%`, height: '100%', background: 'linear-gradient(90deg, #4ADE80, #22C55E)' }} />
@@ -268,7 +242,7 @@ export default function DashboardPage() {
       {/* Portfolio Ledger & Alerts */}
       <Grid container spacing={6}>
         <Grid item xs={12} lg={8}>
-          <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>ASSET LEDGER</Typography>
+          <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>{t('dash.ledger')}</Typography>
           <TableContainer component={Paper} sx={{ 
               bgcolor: 'rgba(22, 22, 24, 0.6)', 
               borderRadius: 6, 
@@ -279,10 +253,10 @@ export default function DashboardPage() {
             <Table>
               <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
                 <TableRow>
-                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ASSET NODE / UNIT</TableCell>
-                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>HEALTH INDEX</TableCell>
-                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ANNUAL AMC</TableCell>
-                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>PROTOCOL STATUS</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('dash.asset_node')}</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('dash.health_index')}</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('dash.annual_amc')}</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('dash.protocol_status')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -311,7 +285,7 @@ export default function DashboardPage() {
                                     <ShieldAlert size={14} color={binThemeTokens.gold} style={{ opacity: 0.8 }} />
                                 )}
                             </Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{p.buildingName || 'PRIVATE ASSET'} · {p.emirate}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{p.buildingName || t('dash.private_asset')} · {p.emirate}</Typography>
                             </TableCell>
                             <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -331,7 +305,7 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell>
                             <Chip 
-                                label={contract?.status || 'PENDING'} 
+                                label={contract?.status || t('status.pending')} 
                                 size="small" 
                                 sx={{ 
                                     fontSize: '0.7rem', height: 24, fontWeight: 900, 
@@ -350,19 +324,22 @@ export default function DashboardPage() {
         </Grid>
 
         <Grid item xs={12} lg={4}>
-            <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>SOVEREIGN ALERTS</Typography>
+            <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>{t('dash.alerts')}</Typography>
             <Stack spacing={3}>
                 {notifications.length > 0 ? notifications.map((n, i) => (
                     <Paper key={i} sx={{ 
                         p: 3, 
                         bgcolor: 'rgba(198, 167, 94, 0.03)', 
-                        borderLeft: `4px solid ${binThemeTokens.gold}`, 
+                        borderLeft: isRTL ? 'none' : `4px solid ${binThemeTokens.gold}`, 
+                        borderRight: isRTL ? `4px solid ${binThemeTokens.gold}` : 'none',
                         borderRadius: 4,
                         border: '1px solid rgba(198, 167, 94, 0.1)'
                     }}>
                         <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 0.5 }}>{n.title}</Typography>
                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2, lineHeight: 1.6 }}>{n.message}</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>MISSION FEED →</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {t('dash.mission_feed')} {isRTL ? <ArrowLeft size={14} /> : <ArrowRight size={14} />}
+                        </Typography>
                     </Paper>
                 )) : (
                     <Paper sx={{ 
@@ -371,7 +348,7 @@ export default function DashboardPage() {
                         display: 'flex', flexDirection: 'column', alignItems: 'center'
                     }}>
                         <NotificationsActiveIcon sx={{ color: 'rgba(198,167,94,0.1)', fontSize: 60, mb: 2 }} />
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>Listening for mission-critical protocol alerts...</Typography>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{t('dash.listening')}</Typography>
                     </Paper>
                 )}
             </Stack>
@@ -387,20 +364,20 @@ export default function DashboardPage() {
           background: 'linear-gradient(135deg, #161618 0%, #0B0B0C 100%)',
           boxShadow: '0 40px 100px rgba(0,0,0,0.8)'
       }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 6 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={3} sx={{ mb: 6 }}>
               <Box>
-                  <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 1 }}>SOVEREIGN ASSET COMMAND</Typography>
-                  <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>Institutional Grade Auditing & National Zone Interface</Typography>
+                  <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 1 }}>{t('dash.command_deck')}</Typography>
+                  <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>{t('dash.command_subtitle')}</Typography>
               </Box>
-              <Chip label="v1.19-PROD" size="medium" sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, p: 2 }} />
+              <Chip label="v1.21-SOVEREIGN" size="medium" sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, p: 2 }} />
           </Stack>
  
           <Grid container spacing={4}>
               {[
-                { label: 'SOVEREIGN HASH ANCHOR', val: contracts[0]?.id?.substring(0,16).toUpperCase() || 'STAGING_READY', icon: <SecurityIcon /> },
-                { label: 'MUNICIPALITY ADAPTER', val: 'DLD / ADM SYNC ACTIVE', icon: <AssignmentIcon /> },
-                { label: 'INSURER RISK GRADE', val: metrics?.esg?.weightedAverage > 80 ? 'P.1 (OPTIMAL)' : 'P.2 (STABLE)', icon: <TrendingUpIcon /> },
-                { label: 'GATEWAY STATUS', val: 'SECURE_TUNNEL_ACTIVE', icon: <SpeedIcon /> },
+                { label: t('dash.hash_anchor'), val: contracts[0]?.id?.substring(0,16).toUpperCase() || 'STAGING_READY', icon: <SecurityIcon /> },
+                { label: t('dash.municipality_adapter'), val: 'DLD / ADM SYNC ACTIVE', icon: <AssignmentIcon /> },
+                { label: t('dash.risk_grade'), val: metrics?.esg?.weightedAverage > 80 ? 'P.1 (OPTIMAL)' : 'P.2 (STABLE)', icon: <TrendingUpIcon /> },
+                { label: t('dash.gateway_status'), val: 'SECURE_TUNNEL_ACTIVE', icon: <SpeedIcon /> },
               ].map((kpi, i) => (
                 <Grid item xs={12} md={3} key={i}>
                     <Box sx={{ 
@@ -432,7 +409,7 @@ export default function DashboardPage() {
                         fontSize: '1.1rem',
                         '&:hover': { bgcolor: 'rgba(198,167,94,0.05)', transform: 'translateY(-2px)' }
                     }}>
-                    GENERATE INSTITUTIONAL AUDIT →
+                    {t('dash.audit_btn')} {isRTL ? '←' : '→'}
                   </Button>
               </Grid>
               <Grid item xs={12} md={6}>
@@ -448,7 +425,7 @@ export default function DashboardPage() {
                         boxShadow: '0 20px 40px rgba(198, 167, 94, 0.3)',
                         '&:hover': { transform: 'scale(1.02)' }
                     }}>
-                    SYNC WITH NATIONAL GATEWAY →
+                    {t('dash.sync_btn')} {isRTL ? '←' : '→'}
                   </Button>
               </Grid>
           </Grid>

@@ -5,15 +5,17 @@ This is the comprehensive "Provisioning List" for the DevOps team to set up all 
 ---
 
 ## 🏦 1. Financial & Payment Logic
+
 | Service | Provider | Purpose |
 | :--- | :--- | :--- |
 | **Payments** | Stripe / PayTabs | Rent collection, Vendor payouts, Escrow holds. |
 | **Identity** | UAE PASS API | EID verification, Legal digital signatures. |
-| **VAT Reporting**| FTA API (Digital)| Real-time VAT log synchronization. |
+| **VAT Reporting** | FTA API (Digital) | Real-time VAT log synchronization. |
 
 ---
 
 ## 💬 2. Messaging & Auth
+
 | Service | Provider | Purpose |
 | :--- | :--- | :--- |
 | **Auth** | Firebase Auth | Phone/OTP login for all users. |
@@ -23,6 +25,7 @@ This is the comprehensive "Provisioning List" for the DevOps team to set up all 
 ---
 
 ## 🗺️ 3. Infrastructure & Intelligence
+
 | Service | Provider | Purpose |
 | :--- | :--- | :--- |
 | **Maps/GIS** | Google Maps API | Technician routing, Property geo-fencing, Makani lookup. |
@@ -33,5 +36,6 @@ This is the comprehensive "Provisioning List" for the DevOps team to set up all 
 ---
 
 ## 🛠️ 4. Integration Secrets Management
-*   **Safety**: All keys must be stored in **GCP Secret Manager**.
-*   **Branching**: Use separate API Key sets for `Development`, `Staging`, and `Production`.
+
+* **Safety**: All keys must be stored in **GCP Secret Manager**.
+* **Branching**: Use separate API Key sets for `Development`, `Staging`, and `Production`.

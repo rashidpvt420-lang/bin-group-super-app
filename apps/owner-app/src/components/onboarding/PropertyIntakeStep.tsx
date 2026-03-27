@@ -227,20 +227,20 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                         <Typography variant="h3" fontWeight="900" sx={{ mb: 1, textTransform: 'uppercase' }}>
                             {t('onboarding.bulk_intake')}
                         </Typography>
-                        <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400 }}>
-                            Asset Identification & Sovereign Portfolio Setup
+                        <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 400 }}>
+                            {t('intake.identification')}
                         </Typography>
                     </Box>
                     <Chip 
                         icon={<Building2 size={16} />} 
-                        label={`${properties.length} / 500 ASSETS`} 
+                        label={`${properties.length} / 500 ${t('common.assets')}`} 
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 2, py: 2.5, borderRadius: 2 }} 
                     />
                 </Box>
 
                 <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 3 }}>
-                    <Tab label="Manual Portfolio Entry" icon={<Plus size={18} />} iconPosition="start" />
-                    <Tab label="Bulk CSV Upload" icon={<FileSpreadsheet size={18} />} iconPosition="start" />
+                    <Tab label={t('button.manual_entry')} icon={<Plus size={18} />} iconPosition="start" />
+                    <Tab label={t('button.bulk_csv')} icon={<FileSpreadsheet size={18} />} iconPosition="start" />
                 </Tabs>
 
                 {tabValue === 1 ? (
@@ -252,9 +252,9 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             title="Upload Portfolio CSV"
                             onChange={handleCsvUpload}
                         />
-                        <Typography variant="h5" fontWeight="900" gutterBottom>Upload Portfolio CSV</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Maximum 500 properties per upload. Schema must match BIN-GENESIS Template.</Typography>
-                        <Button variant="contained" onClick={handleFileSelect} startIcon={<FileSpreadsheet />}>Select CSV File</Button>
+                        <Typography variant="h5" fontWeight="900" gutterBottom>{t('button.bulk_csv')}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{t('onboarding.csv_helper')}</Typography>
+                        <Button variant="contained" onClick={handleFileSelect} startIcon={<FileSpreadsheet />}>{t('button.select_csv')}</Button>
                     </Box>
                 ) : (
                     <Paper sx={{ p: 3, borderRadius: 4, mb: 4, bgcolor: 'background.paper', border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
@@ -262,11 +262,11 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             <Table stickyHeader size="small">
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>Property</TableCell>
-                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>Type</TableCell>
-                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>Units</TableCell>
-                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>Usage</TableCell>
-                                        <TableCell align="right" sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>Action</TableCell>
+                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>{t('field.property')}</TableCell>
+                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>{t('field.type')}</TableCell>
+                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>{t('field.units')}</TableCell>
+                                        <TableCell sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>{t('field.usage')}</TableCell>
+                                        <TableCell align="right" sx={{ bgcolor: 'rgba(0,0,0,0.2)', fontWeight: 900 }}>{t('common.action')}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -279,7 +279,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                         >
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight="900">
-                                                    {prop.address || `Asset #${index + 1}`}
+                                                    {prop.address || `${t('common.asset')} #${index + 1}`}
                                                 </Typography>
                                                 <Typography variant="caption" color="text.secondary">{prop.area}, {prop.emirate}</Typography>
                                             </TableCell>
@@ -297,7 +297,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             </Table>
                         </TableContainer>
                         <Button fullWidth variant="outlined" sx={{ mt: 2, borderStyle: 'dashed' }} onClick={handleAddProperty} startIcon={<Plus />}>
-                            Add Property to Portfolio
+                            {t('button.add_property')}
                         </Button>
                     </Paper>
                 )}
@@ -305,7 +305,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 {activeProperty && (
                     <Paper sx={{ p: 4, borderRadius: 4, border: `1px solid ${binThemeTokens.gold}` }}>
                         <Typography variant="h5" fontWeight="900" sx={{ mb: 4, borderLeft: `4px solid ${binThemeTokens.gold}`, pl: 2 }}>
-                            Asset Details: {activeProperty.address || `Asset #${(editingIndex || 0) + 1}`}
+                            {t('onboarding.asset_details')}: {activeProperty.address || `${t('common.asset')} #${(editingIndex || 0) + 1}`}
                         </Typography>
 
                         <Grid container spacing={3}>
@@ -321,11 +321,11 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label={t('field.type')} select value={activeProperty.propertyType} onChange={(e) => updateProperty(editingIndex!, { propertyType: e.target.value })}>
-                                    <MenuItem value="Residential">Residential</MenuItem>
-                                    <MenuItem value="Commercial">Commercial</MenuItem>
-                                    <MenuItem value="Mixed-Use">Mixed-Use Tower / Development</MenuItem>
-                                    <MenuItem value="Institutional">Institutional (Hospital/School)</MenuItem>
-                                    <MenuItem value="Majlis">Sovereign Majlis / Estate</MenuItem>
+                                    <MenuItem value="Residential">{t('type.residential')}</MenuItem>
+                                    <MenuItem value="Commercial">{t('type.commercial')}</MenuItem>
+                                    <MenuItem value="Mixed-Use">{t('type.mixed')}</MenuItem>
+                                    <MenuItem value="Institutional">{t('type.institutional')}</MenuItem>
+                                    <MenuItem value="Majlis">{t('type.majlis')}</MenuItem>
                                 </TextField>
                             </Grid>
                             
@@ -334,23 +334,23 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                     <MenuItem value="Rental">{t('property.rental')}</MenuItem>
                                     <MenuItem value="Personal">{t('property.personal')}</MenuItem>
                                     <MenuItem value="Mixed">{t('property.mixed')}</MenuItem>
-                                    <MenuItem value="Government">Government / Public</MenuItem>
+                                    <MenuItem value="Government">{t('property.gov')}</MenuItem>
                                 </TextField>
                             </Grid>
 
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label={t('field.grade')} select value={activeProperty.assetGrade} onChange={(e) => updateProperty(editingIndex!, { assetGrade: e.target.value as any })}>
-                                    <MenuItem value="Standard">Standard</MenuItem>
-                                    <MenuItem value="Premium">Premium</MenuItem>
-                                    <MenuItem value="Luxury">Luxury</MenuItem>
-                                    <MenuItem value="Ultra-Luxury">Ultra-Luxury</MenuItem>
-                                    <MenuItem value="Sovereign">Sovereign / Royal</MenuItem>
+                                    <MenuItem value="Standard">{t('grade.standard')}</MenuItem>
+                                    <MenuItem value="Premium">{t('grade.premium')}</MenuItem>
+                                    <MenuItem value="Luxury">{t('grade.luxury')}</MenuItem>
+                                    <MenuItem value="Ultra-Luxury">{t('grade.ultra')}</MenuItem>
+                                    <MenuItem value="Sovereign">{t('grade.sovereign')}</MenuItem>
                                 </TextField>
                             </Grid>
 
                             {/* 2. Scale & Mixed Use Logic */}
                             <Grid item xs={12}>
-                                <Divider sx={{ my: 1 }}><Chip label="Asset Scale & Composition" size="small" /></Divider>
+                                <Divider sx={{ my: 1 }}><Chip label={t('onboarding.asset_scale')} size="small" /></Divider>
                             </Grid>
 
                             <Grid item xs={12} sm={3}>
@@ -370,13 +370,13 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             {(activeProperty.propertyType === 'Mixed-Use' || activeProperty.useType === 'Mixed') && (
                                 <React.Fragment>
                                     <Grid item xs={12} sm={4}>
-                                        <TextField fullWidth type="number" label="Retail Shops" value={activeProperty.shops} onChange={(e) => updateProperty(editingIndex!, { shops: parseInt(e.target.value) || 0 })} />
+                                        <TextField fullWidth type="number" label={t('field.shops')} value={activeProperty.shops} onChange={(e) => updateProperty(editingIndex!, { shops: parseInt(e.target.value) || 0 })} />
                                     </Grid>
                                     <Grid item xs={12} sm={4}>
-                                        <TextField fullWidth type="number" label="Offices" value={activeProperty.offices} onChange={(e) => updateProperty(editingIndex!, { offices: parseInt(e.target.value) || 0 })} />
+                                        <TextField fullWidth type="number" label={t('field.offices')} value={activeProperty.offices} onChange={(e) => updateProperty(editingIndex!, { offices: parseInt(e.target.value) || 0 })} />
                                     </Grid>
                                     <Grid item xs={12} sm={4}>
-                                        <TextField fullWidth type="number" label="Serviced Rooms" value={activeProperty.rooms} onChange={(e) => updateProperty(editingIndex!, { rooms: parseInt(e.target.value) || 0 })} />
+                                        <TextField fullWidth type="number" label={t('field.serviced_rooms')} value={activeProperty.rooms} onChange={(e) => updateProperty(editingIndex!, { rooms: parseInt(e.target.value) || 0 })} />
                                     </Grid>
                                 </React.Fragment>
                             )}
@@ -385,7 +385,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             {activeProperty.propertyType === 'Majlis' && (
                                 <React.Fragment>
                                     <Grid item xs={12}>
-                                         <Divider sx={{ my: 1 }}><Chip label="Sovereign Majlis Profile" color="primary" size="small" /></Divider>
+                                         <Divider sx={{ my: 1 }}><Chip label={t('onboarding.majlis_profile')} color="primary" size="small" /></Divider>
                                     </Grid>
                                     <Grid item xs={12} sm={6}>
                                         <TextField fullWidth label="Majlis Profile" select value={activeProperty.majlisType} onChange={(e) => updateProperty(editingIndex!, { majlisType: e.target.value as any })}>
@@ -403,17 +403,17 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                             {/* Systems */}
                             <Grid item xs={12}>
-                                <Typography variant="subtitle2" fontWeight="900" sx={{ mb: 2 }}>Essential FM Systems</Typography>
+                                <Typography variant="subtitle2" fontWeight="900" sx={{ mb: 2 }}>{t('onboarding.fm_systems')}</Typography>
                                 <Grid container spacing={1}>
                                     {[
-                                        { key: 'lifts', label: 'Lifts / Elevators', type: 'number' },
-                                        { key: 'pool', label: 'Swimming Pool', type: 'check' },
-                                        { key: 'tank', label: 'Main Water Tank', type: 'check' },
-                                        { key: 'sira', label: 'CCTV / SIRA Active', type: 'check' },
-                                        { key: 'fireAlarm', label: 'Civil Defense Alarm', type: 'check' },
-                                        { key: 'districtCooling', label: 'District Cooling', type: 'check' },
-                                        { key: 'solarIntegration', label: 'Solar Power', type: 'check' },
-                                        { key: 'evReadiness', label: 'EV Charging', type: 'check' },
+                                        { key: 'lifts', label: t('field.lifts'), type: 'number' },
+                                        { key: 'pool', label: t('field.pool'), type: 'check' },
+                                        { key: 'tank', label: t('field.tank'), type: 'check' },
+                                        { key: 'sira', label: t('field.sira'), type: 'check' },
+                                        { key: 'fireAlarm', label: t('field.civil_defense'), type: 'check' },
+                                        { key: 'districtCooling', label: t('field.district_cooling'), type: 'check' },
+                                        { key: 'solarIntegration', label: t('field.solar'), type: 'check' },
+                                        { key: 'evReadiness', label: t('field.ev'), type: 'check' },
                                     ].map(sys => (
                                         <Grid item xs={6} sm={3} key={sys.key}>
                                             {sys.type === 'check' ? (
@@ -443,7 +443,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 <Stack spacing={3} sx={{ position: 'sticky', top: 100 }}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'background.paper', border: `2px solid ${binThemeTokens.gold}` }}>
                         <Typography variant="h6" fontWeight="900" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Workflow size={20} color={binThemeTokens.gold} /> PORTFOLIO INTELLIGENCE
+                            <Workflow size={20} color={binThemeTokens.gold} /> {t('onboarding.portfolio_intel')}
                         </Typography>
                         <Divider sx={{ my: 2 }} />
                         
@@ -453,11 +453,11 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                 <Typography variant="h6" fontWeight="900">{portfolioSummary.totalProperties}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="text.secondary">Total Units / Assets</Typography>
+                                <Typography variant="body2" color="text.secondary">{t('summary.total_units')}</Typography>
                                 <Typography variant="h6" fontWeight="900">{portfolioSummary.totalUnits}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="text.secondary">Total SqFt Managed</Typography>
+                                <Typography variant="body2" color="text.secondary">{t('summary.total_sqft')}</Typography>
                                 <Typography variant="h6" fontWeight="900">{portfolioSummary.totalSqFt.toLocaleString()}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -468,15 +468,15 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                         {portfolioSummary.isMixedUsePortfolio && (
                             <Alert icon={<Gem size={20} />} severity="info" sx={{ mt: 3, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, color: '#fff' }}>
-                                <Typography variant="caption" fontWeight="900">MIXED-USE ASSET DETECTED</Typography>
-                                <Typography variant="body2" sx={{ fontSize: '0.7rem', display: 'block' }}>Engine will apply differential maintenance rates for Offices, Shops & Pools.</Typography>
+                                <Typography variant="caption" fontWeight="900">{t('onboarding.mixed_use_alert')}</Typography>
+                                <Typography variant="body2" sx={{ fontSize: '0.7rem', display: 'block' }}>{t('onboarding.mixed_use_helper')}</Typography>
                             </Alert>
                         )}
 
                         {portfolioSummary.isSovereignPortfolio && (
                             <Alert icon={<Landmark size={20} />} severity="warning" sx={{ mt: 2, bgcolor: 'rgba(255,255,255,0.05)', border: `1px solid ${binThemeTokens.gold}`, color: binThemeTokens.gold }}>
-                                <Typography variant="caption" fontWeight="900">SOVEREIGN MAJLIS PROTOCOL</Typography>
-                                <Typography variant="body2" sx={{ fontSize: '0.7rem', display: 'block' }}>Mandatory Civil Defense & SIRA audits included in base contract.</Typography>
+                                <Typography variant="caption" fontWeight="900">{t('onboarding.sovereign_protocol')}</Typography>
+                                <Typography variant="body2" sx={{ fontSize: '0.7rem', display: 'block' }}>{t('onboarding.sovereign_helper')}</Typography>
                             </Alert>
                         )}
 
@@ -485,24 +485,24 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             fullWidth 
                             size="large"
                             onClick={handleProceed}
-                            endIcon={<ArrowRight />}
+                            endIcon={<ArrowRight style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />}
                             disabled={properties.length === 0}
                             sx={{ mt: 4, py: 2, fontWeight: 900, fontSize: '1.1rem' }}
                         >
-                            Next: Asset Analysis
+                            {t('button.next_asset_analysis')}
                         </Button>
                     </Paper>
 
-                    <Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), display: { xs: 'none', md: 'block' } }}>
-                        <Typography variant="caption" fontWeight="900" color="primary" sx={{ letterSpacing: 1 }}>BIN-GENESIS™ AUDIT LOG</Typography>
+                     <Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), display: { xs: 'none', md: 'block' } }}>
+                        <Typography variant="caption" fontWeight="900" color="primary" sx={{ letterSpacing: 1 }}>{t('onboarding.audit_log')}</Typography>
                         <Stack spacing={1} sx={{ mt: 2 }}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Info size={14} />
-                                <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Verifying {portfolioSummary.totalUnits} assets against municipal records...</Typography>
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{t('onboarding.verifying_assets', { count: portfolioSummary.totalUnits })}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <ShieldAlert size={14} color={binThemeTokens.gold} />
-                                <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Asset grade normalization active: {portfolioSummary.recommendedTier}</Typography>
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{t('onboarding.normalization_active', { tier: portfolioSummary.recommendedTier })}</Typography>
                             </Box>
                         </Stack>
                     </Paper>

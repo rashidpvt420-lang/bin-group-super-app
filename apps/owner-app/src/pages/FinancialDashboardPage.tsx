@@ -25,6 +25,7 @@ import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/fi
 import { useRole } from '../context/RoleContext';
 import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
+import { useLanguage } from '../context/LanguageContext';
 
 interface Transaction {
     id: string;
@@ -41,6 +42,7 @@ interface PortfolioContract {
 
 export default function FinancialDashboardPage() {
   const { user, godMode } = useRole();
+  const { t, isRTL } = useLanguage();
   const [financials, setFinancials] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,11 +115,11 @@ export default function FinancialDashboardPage() {
   const handleExportCSV = () => {
     if (!financials) return;
     const csv = [
-      ['Financial Summary'],
-      ['Total Rent Collected', financials.totalRentCollected],
-      ['BIN Group Fee', financials.breakdown.binGroupFee],
-      ['Maintenance Invoices', financials.breakdown.maintenanceInvoices],
-      ['Net Payout', financials.netPayout],
+      [t('fin.title')],
+      [t('fin.kpi.total_collection'), financials.totalRentCollected],
+      [t('fin.deduction.fee'), financials.breakdown.binGroupFee],
+      [t('fin.deduction.maint'), financials.breakdown.maintenanceInvoices],
+      [t('fin.kpi.sovereign_payout'), financials.netPayout],
     ].map((row) => row.join(',')).join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -126,11 +128,11 @@ export default function FinancialDashboardPage() {
     a.href = url;
     a.download = `bin-audit-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-    setSnackbar({ open: true, message: 'Institutional Audit Ledger exported to CSV.', severity: 'success' });
+    setSnackbar({ open: true, message: t('fin.export_success'), severity: 'success' });
   };
 
   const handleBridgeActivation = () => {
-    setSnackbar({ open: true, message: 'Institutional Bridge Status: Connection pending final banking partner authorization.', severity: 'info' });
+    setSnackbar({ open: true, message: t('fin.bridge_pending'), severity: 'info' });
   };
 
   if (loading) {
@@ -151,8 +153,8 @@ export default function FinancialDashboardPage() {
         mb: 8, gap: 4 
       }}>
         <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1, fontSize: { xs: '2.4rem', md: '3rem' } }}>Financial Ledger</Typography>
-            <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>Institutional yield auditing and sovereign liquidity gateways.</Typography>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1, fontSize: { xs: '2.4rem', md: '3rem' } }}>{t('fin.title')}</Typography>
+            <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{t('fin.subtitle')}</Typography>
         </Box>
         <Button 
             variant="outlined" 
@@ -169,17 +171,17 @@ export default function FinancialDashboardPage() {
                 '&:hover': { bgcolor: 'rgba(198,167,94,0.05)', borderColor: binThemeTokens.goldLight }
             }}
         >
-          EXPORT AUDIT
+          {t('fin.export_btn')}
         </Button>
       </Box>
 
       {/* KPI Cards */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
         {[
-            { label: 'TOTAL ASSET COLLECTION', val: financials.totalRentCollected, color: binThemeTokens.textPrimary, icon: <Wallet size={20} /> },
-            { label: 'SOVEREIGN PAYOUT', val: financials.netPayout, color: binThemeTokens.gold, icon: <ShieldCheck size={20} /> },
-            { label: 'PENDING LIQUIDITY', val: financials.pendingPayments, color: binThemeTokens.goldLight, icon: <Landmark size={20} /> },
-            { label: 'OVERDUE DEFICIT', val: financials.overdueAmount, color: '#ff4d4d', icon: <TrendingUp size={20} /> },
+            { label: t('fin.kpi.total_collection'), val: financials.totalRentCollected, color: binThemeTokens.textPrimary, icon: <Wallet size={20} /> },
+            { label: t('fin.kpi.sovereign_payout'), val: financials.netPayout, color: binThemeTokens.gold, icon: <ShieldCheck size={20} /> },
+            { label: t('fin.kpi.pending_liquidity'), val: financials.pendingPayments, color: binThemeTokens.goldLight, icon: <Landmark size={20} /> },
+            { label: t('fin.kpi.overdue_deficit'), val: financials.overdueAmount, color: '#ff4d4d', icon: <TrendingUp size={20} /> },
         ].map((kpi, i) => (
             <Grid item xs={12} sm={6} md={3} key={i}>
                 <Card sx={{ 
@@ -207,12 +209,12 @@ export default function FinancialDashboardPage() {
               p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', 
               border: '1px solid rgba(255,255,255,0.05)', mb: 4
           }}>
-            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>DEDUCTIONS BREAKDOWN</Typography>
+            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>{t('fin.deductions_title')}</Typography>
             <Stack spacing={4} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />}>
                 {[
-                    { label: 'BIN-GROUP MANAGEMENT FEE (5%)', desc: 'Institutional oversight and service guarantee.', val: financials.breakdown.binGroupFee },
-                    { label: 'MAINTENANCE INVOICES (OFFSET)', desc: 'Non-contractual mission repairs and parts.', val: financials.breakdown.maintenanceInvoices },
-                    { label: 'TURNOVER ENGINE COSTS', desc: 'Deep-clean and asset restoration cycles.', val: financials.breakdown.turnoverCosts }
+                    { label: t('fin.deduction.fee'), desc: t('fin.deduction.fee_desc'), val: financials.breakdown.binGroupFee },
+                    { label: t('fin.deduction.maint'), desc: t('fin.deduction.maint_desc'), val: financials.breakdown.maintenanceInvoices },
+                    { label: t('fin.deduction.turnover'), desc: t('fin.deduction.turnover_desc'), val: financials.breakdown.turnoverCosts }
                 ].map((row, i) => (
                     <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box>
@@ -228,7 +230,7 @@ export default function FinancialDashboardPage() {
 
             <Box sx={{ mt: 6, p: 3, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.05)', border: '1px solid rgba(198,167,94,0.1)' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TOTAL INSTITUTIONAL DEDUCTIONS</Typography>
+                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{t('fin.total_deductions')}</Typography>
                 <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
                   AED {(Object.values(financials.breakdown) as number[]).reduce((a, b) => a + b, 0).toLocaleString()}
                 </Typography>
@@ -237,7 +239,7 @@ export default function FinancialDashboardPage() {
           </Paper>
 
           <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)' }}>
-            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>COLLECTION TRENDS</Typography>
+            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>{t('fin.trends_title')}</Typography>
             <Box sx={{ height: { xs: 250, md: 350 }, width: '100%' }}>
                 <ResponsiveContainer>
                     <BarChart data={financials.dailyTrend}>
@@ -268,29 +270,29 @@ export default function FinancialDashboardPage() {
             <Box sx={{ width: 60, height: 60, borderRadius: '50%', bgcolor: 'rgba(198,167,94,0.1)', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
                 <Landmark color={binThemeTokens.gold} size={28} />
             </Box>
-            <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2 }}>ANNUAL ADVANCE</Typography>
+            <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2 }}>{t('fin.advance_title')}</Typography>
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4, lineHeight: 1.8 }}>
-              Unlock your **Full Year's Portfolio Liquidity** instantly. Zero-wait interface to institutional banking bridges.
+              {t('fin.advance_desc')}
             </Typography>
             <Button
               variant="contained" fullWidth
               sx={{ background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', color: '#0B0B0C', py: 2.5, fontWeight: 900 }}
               onClick={handleBridgeActivation} 
-            >ACTIVATE LIQUIDITY BRIDGE</Button>
+            >{t('fin.advance_btn')}</Button>
           </Paper>
         </Grid>
       </Grid>
 
       <Box sx={{ mt: 10 }}>
-        <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary }}>SETTLEMENT LOGS</Typography>
+        <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary }}>{t('fin.logs_title')}</Typography>
         <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.6)', borderRadius: 6 }}>
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>DATE</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRANSACTION HASH</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AMOUNT</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.date')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.hash')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.amount')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.status')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -302,12 +304,12 @@ export default function FinancialDashboardPage() {
                                 {tx.type === 'debit' ? '-' : '+'} AED {tx.amount?.toLocaleString()}
                             </TableCell>
                             <TableCell>
-                                <Chip label="SETTLED" size="small" sx={{ bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold, border: '1px solid rgba(198, 167, 94, 0.4)' }} />
+                                <Chip label={t('status.settled')} size="small" sx={{ bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold, border: '1px solid rgba(198, 167, 94, 0.4)' }} />
                             </TableCell>
                         </TableRow>
                     ))}
                     {transactions.length === 0 && (
-                        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 10, color: binThemeTokens.textSecondary }}>No transactions found in this protocol. Portfolio ledger is empty.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={4} align="center" sx={{ py: 10, color: binThemeTokens.textSecondary }}>{t('fin.log.empty')}</TableCell></TableRow>
                     )}
                 </TableBody>
             </Table>

@@ -16,14 +16,14 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
     const { t } = useLanguage();
 
     const logs = [
-        "Initializing BIN-GENESIS™ Portfolio Scanner...",
-        `Batch processing ${properties.length} asset identities...`,
-        "Mapping Community Benchmarks across Emirates...",
-        "Differential maintenance logic applied for Mixed-Use units...",
-        "Cross-checking SIRA & Civil Defense mandatory missions...",
-        "Applying Institutional Volume efficiency multipliers...",
-        "Securing data via Sovereign Vault Archive...",
-        "Portfolio modeling complete."
+        t('analysis.log_init'),
+        t('analysis.log_batch', { count: properties.length }),
+        t('analysis.log_benchmarks'),
+        t('analysis.log_mixed'),
+        t('analysis.log_compliance'),
+        t('analysis.log_volume'),
+        t('analysis.log_vault'),
+        t('analysis.log_complete')
     ];
 
     useEffect(() => {
@@ -58,10 +58,10 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                 <Box sx={{ textAlign: 'center', mb: 6 }}>
                     <Binary color={binThemeTokens.gold} size={48} className="animate-pulse" />
                     <Typography variant="h3" fontWeight="900" sx={{ mt: 2, mb: 1, color: binThemeTokens.gold, textTransform: 'uppercase' }}>
-                        PORTFOLIO ANALYSIS
+                        {t('onboarding.analysis')}
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                        Synthesizing institutional data for {properties.length} properties...
+                        {t('analysis.synthesizing', { count: properties.length })}
                     </Typography>
                 </Box>
 
@@ -75,7 +75,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                     <Stack spacing={1}>
                         {analysisLog.map((log, i) => (
                             <Typography key={i} variant="body2" sx={{ color: i === analysisLog.length - 1 ? binThemeTokens.gold : 'rgba(255,255,255,0.6)' }}>
-                                <Box component="span" sx={{ mr: 2, color: binThemeTokens.gold }}>[SYSTEM]</Box>{log}
+                                <Box component="span" sx={{ mr: 2, color: binThemeTokens.gold }}>[{t('common.system')}]</Box>{log}
                             </Typography>
                         ))}
                     </Stack>
@@ -89,45 +89,45 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
             <Box sx={{ textAlign: 'center', mb: 8 }}>
                 <ShieldCheck color="#4ADE80" size={64} style={{ marginBottom: 16 }} />
                 <Typography variant="h3" fontWeight="900" sx={{ mb: 2, textTransform: 'uppercase' }}>
-                    PORTFOLIO CLASSIFIED
+                    {t('analysis.classified')}
                 </Typography>
                 <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 700, letterSpacing: 1.5 }}>
-                    {portfolioSummary.recommendedTier} GRADE ASSETS
+                    {t('analysis.grade_assets', { tier: portfolioSummary.recommendedTier })}
                 </Typography>
             </Box>
 
             <Grid container spacing={4}>
                 <Grid item xs={12} md={4}>
-                    <PaperWithLabel label="PORTFOLIO SCALE" icon={<Building2 size={24} />}>
-                        <MetricRow label="Total Assets" value={properties.length} />
-                        <MetricRow label="Total Units" value={portfolioSummary.totalUnits} />
-                        <MetricRow label="Managed Area" value={`${portfolioSummary.totalSqFt.toLocaleString()} sqft`} />
+                    <PaperWithLabel label={t('analysis.scale')} icon={<Building2 size={24} />}>
+                        <MetricRow label={t('summary.total_props')} value={properties.length} />
+                        <MetricRow label={t('summary.total_units')} value={portfolioSummary.totalUnits} />
+                        <MetricRow label={t('analysis.managed_area')} value={`${portfolioSummary.totalSqFt.toLocaleString()} ${t('common.sqft')}`} />
                     </PaperWithLabel>
                 </Grid>
                 
                 <Grid item xs={12} md={4}>
-                    <PaperWithLabel label="ASSET COMPOSITION" icon={<Workflow size={24} />}>
-                        <MetricRow label="Residential" value={properties.filter(p => p.propertyType === 'Residential').length} />
-                        <MetricRow label="Commercial" value={properties.filter(p => p.propertyType === 'Commercial' || p.propertyType === 'Mixed-Use').length} />
-                        <MetricRow label="Sovereign/Majlis" value={properties.filter(p => p.propertyType === 'Majlis').length} />
+                    <PaperWithLabel label={t('analysis.composition')} icon={<Workflow size={24} />}>
+                        <MetricRow label={t('type.residential')} value={properties.filter(p => p.propertyType === 'Residential').length} />
+                        <MetricRow label={t('type.commercial')} value={properties.filter(p => p.propertyType === 'Commercial' || p.propertyType === 'Mixed-Use').length} />
+                        <MetricRow label={t('type.majlis')} value={properties.filter(p => p.propertyType === 'Majlis').length} />
                     </PaperWithLabel>
                 </Grid>
 
                 <Grid item xs={12} md={4}>
                     <Box sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 6, border: `2px solid ${binThemeTokens.gold}`, height: '100%' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Zap size={18} /> EFFICIENCY GAIN
+                            <Zap size={18} /> {t('analysis.efficiency')}
                         </Typography>
                         <Typography variant="h2" fontWeight="900" sx={{ mb: 2 }}>
                             {properties.length >= 20 ? '15%' : properties.length >= 7 ? '10%' : properties.length >= 3 ? '5%' : '0%'}
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            Applied volume discount based on institutional portfolio scale. Verified against BIN-GENESIS™ benchmarks.
+                            {t('analysis.efficiency_desc')}
                         </Typography>
                         {portfolioSummary.isSovereignPortfolio && (
                             <Chip 
                                 icon={<Landmark size={14} />} 
-                                label="SOVEREIGN PROTOCOL ACTIVE" 
+                                label={t('onboarding.sovereign_protocol')} 
                                 sx={{ mt: 3, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} 
                             />
                         )}
@@ -143,7 +143,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                     endIcon={<ArrowRight />}
                     sx={{ px: 8, py: 2.5, fontWeight: 900, fontSize: '1.2rem', borderRadius: 4, background: binThemeTokens.goldGradient, color: '#000' }}
                 >
-                    GENERATE INSTITUTIONAL QUOTE
+                    {t('btn.quote')}
                 </Button>
             </Box>
         </Box>

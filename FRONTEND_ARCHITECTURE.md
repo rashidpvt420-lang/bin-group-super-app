@@ -5,6 +5,7 @@ All mobile applications are built using **React Native (Expo)** to ensure 95% co
 ---
 
 ## 📁 1. Master Folder Structure
+
 ```text
 /src
   /api             - Axios helpers for backend communication
@@ -21,23 +22,27 @@ All mobile applications are built using **React Native (Expo)** to ensure 95% co
 ## 🗺️ 2. Core Navigation Map (Role-Based)
 
 ### **Tenant Portal**
-*   `DashboardStack`: Map / Issue Reporting / SOS Button.
-*   `FinanceStack`: Rent Status / Receipt History / Direct Debit.
-*   `ProfileStack`: Lease Doc / Ejari PDF / Support Chat.
+
+* `DashboardStack`: Map / Issue Reporting / SOS Button.
+* `FinanceStack`: Rent Status / Receipt History / Direct Debit.
+* `ProfileStack`: Lease Doc / Ejari PDF / Support Chat.
 
 ### **Owner Portal**
-*   `PortfolioStack`: ROI Dashboard / Property Unit Grid / Heatmap.
-*   `ApprovalStack`: Pending Quotes / Turnover Approval Logic.
-*   `FinancialStack`: Monthly Waterfall Statements / Tax Receipts.
+
+* `PortfolioStack`: ROI Dashboard / Property Unit Grid / Heatmap.
+* `ApprovalStack`: Pending Quotes / Turnover Approval Logic.
+* `FinancialStack`: Monthly Waterfall Statements / Tax Receipts.
 
 ### **Technician App**
-*   `CheckInStack`: Morning Gate (Van check) -> QR Job Unlocking.
-*   `TaskStack`: Active Routes -> Job Details -> Proof of Work.
-*   `InventoryStack`: Van Stock Request -> Parts Scanner.
+
+* `CheckInStack`: Morning Gate (Van check) -> QR Job Unlocking.
+* `TaskStack`: Active Routes -> Job Details -> Proof of Work.
+* `InventoryStack`: Van Stock Request -> Parts Scanner.
 
 ---
 
 ## 📡 3. Base API Service Helper (`apiClient.js`)
+
 ```javascript
 import axios from 'axios';
 

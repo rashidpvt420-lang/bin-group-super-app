@@ -5,14 +5,17 @@ This document outlines the specific technical and legal integrations required fo
 ---
 
 ## 🆔 1. UAE PASS Integration (Digital Identity)
+
 **Purpose**: Secure biometric-linked authentication and legally binding e-signatures for Tenancy Contracts.
 
 ### API Mapping & Sandbox Specs
-*   **Provider**: Telecommunications and Digital Government Regulatory Authority (TDRA).
-*   **Environment**: `https://stg-id.uaepass.ae` (STAGING) / `https://id.uaepass.ae` (PROD).
-*   **Scope Requested**: `urn:uae:digitalid:profile:general`, `urn:uae:digitalid:profile:national`, `urn:uae:digitalid:profile:legal_signature`.
+
+* **Provider**: Telecommunications and Digital Government Regulatory Authority (TDRA).
+* **Environment**: `https://stg-id.uaepass.ae` (STAGING) / `https://id.uaepass.ae` (PROD).
+* **Scope Requested**: `urn:uae:digitalid:profile:general`, `urn:uae:digitalid:profile:national`, `urn:uae:digitalid:profile:legal_signature`.
 
 ### Data Objects (Required for KYC)
+
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `uuid` | string | Unique identifier across the UAE PASS ecosystem. |
@@ -25,9 +28,11 @@ This document outlines the specific technical and legal integrations required fo
 ---
 
 ## 📜 2. DLD / Ejari Synchronization
+
 **Purpose**: Verification of property ownership (Title Deeds) and automation of Lease Registration.
 
 ### Data Types for Registration
+
 To register a lease via the DLD Sandbox, the following JSON structure is mandatory:
 
 ```json
@@ -55,30 +60,34 @@ To register a lease via the DLD Sandbox, the following JSON structure is mandato
 ```
 
 ### Integration Workflow
-1.  **Verification**: Call `/api/v1/property/verify` with Title Deed and EID of the landlord.
-2.  **Drafting**: Map BIN Group Digital Contract fields to Ejari Schema.
-3.  **Submission**: Trigger `registerLease` endpoint upon dual UAE PASS signature confirmation.
-4.  **Sync**: Webhook `ejari_registered` returns the Ejari Certificate Number and PDF.
+
+1. **Verification**: Call `/api/v1/property/verify` with Title Deed and EID of the landlord.
+2. **Drafting**: Map BIN Group Digital Contract fields to Ejari Schema.
+3. **Submission**: Trigger `registerLease` endpoint upon dual UAE PASS signature confirmation.
+4. **Sync**: Webhook `ejari_registered` returns the Ejari Certificate Number and PDF.
 
 ---
 
 ## 🗺️ 3. Makani & GIS Logic
+
 **Purpose**: Validation of exact building coordinates for technician routing and municipality reporting.
 
-*   **Logic**: Every property entry must resolve a **Makani Number** to a Lat/Lng coordinate.
-*   **Requirement**: The app must perform a reverse-lookup if the user pins a location, or valid a 10-digit Makani ID via the Dubai Municipality API.
+* **Logic**: Every property entry must resolve a **Makani Number** to a Lat/Lng coordinate.
+* **Requirement**: The app must perform a reverse-lookup if the user pins a location, or valid a 10-digit Makani ID via the Dubai Municipality API.
 
 ---
 
 ## 🏢 4. RERA Service Charge Index
+
 **Purpose**: Compliance with service charge regulations to prevent over-billing.
 
-*   **Service Charge Index API**: Sync annual service charge rates per sqft for specific communities (e.g., Dubai Marina, Business Bay).
-*   **Over-billing Guard**: The [Quotation Engine](./QUOTATION_ENGINE_UI_LOGIC.md) must flag quotes that exceed the RERA Service Charge index by more than 10%.
+* **Service Charge Index API**: Sync annual service charge rates per sqft for specific communities (e.g., Dubai Marina, Business Bay).
+* **Over-billing Guard**: The [Quotation Engine](./QUOTATION_ENGINE_UI_LOGIC.md) must flag quotes that exceed the RERA Service Charge index by more than 10%.
 
 ---
 
 ## ✅ 5. Compliance Checklist
-- [ ] **Trade License**: Valid activity for "Property Management" and "Building Maintenance".
-- [ ] **TRS (Task Registering System)**: Integration with DLD for property management agents.
-- [ ] **Escrow Account**: All security deposits must be linked to a RERA-approved escrow structure.
+
+* [ ] **Trade License**: Valid activity for "Property Management" and "Building Maintenance".
+* [ ] **TRS (Task Registering System)**: Integration with DLD for property management agents.
+* [ ] **Escrow Account**: All security deposits must be linked to a RERA-approved escrow structure.

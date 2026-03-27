@@ -3,6 +3,7 @@ import { Box, Typography, Button, Stack, Chip, Divider, useTheme, useMediaQuery 
 import { ArrowRight, ArrowLeft, TrendingUp, ShieldCheck, Sparkles } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import { useLanguage } from '../../context/LanguageContext';
 import { generateTenderScopePdf, TenderInput } from '../../utils/tenderExportEngine';
 import { FileDown } from 'lucide-react';
 
@@ -13,14 +14,15 @@ interface Props {
 
 export default function QuoteModelingStep({ onNext, onBack }: Props) {
     const { valuationResult, propertyData } = useOnboardingStore();
+    const { t, isRTL } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     if (!valuationResult) {
         return (
             <Box sx={{ p: 10, textAlign: 'center' }}>
-                <Typography color="error">No valuation result found. Please go back and rescan.</Typography>
-                <Button onClick={onBack}>BACK</Button>
+                <Typography color="error">{t('quote.no_result')}</Typography>
+                <Button onClick={onBack}>{t('btn.back')}</Button>
             </Box>
         );
     }
@@ -51,11 +53,11 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                 <Sparkles color={binThemeTokens.gold} size={28} />
                 <Typography variant={isMobile ? "h5" : "h4"} fontWeight="900" sx={{ color: '#FFFFFF' }}>
-                    Institutional Quote Summary
+                    {t('quote.summary_title')}
                 </Typography>
             </Box>
             <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 6 }}>
-                2026 Sovereign Predictive Yield Model — Calibration Complete.
+                {t('quote.subtitle')}
             </Typography>
 
             {/* EXECUTIVE SUMMARY KPI BAR */}
@@ -72,13 +74,13 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 background: 'linear-gradient(135deg, #161618 0%, #0B0B0C 100%)'
             }}>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>ANNUAL VALUATION</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.annual_valuation')}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
                         AED {packages?.[1]?.annualPrice?.toLocaleString()}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>EFFICIENCY GAIN</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('analysis.efficiency')}</Typography>
                     <Stack direction="row" alignItems="center" spacing={1} justifyContent="center" sx={{ mt: 1 }}>
                         <TrendingUp color="#4ADE80" size={24} />
                         <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>
@@ -87,7 +89,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>ASSET GRADE</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('field.grade')}</Typography>
                     <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF' }}>
                         {(propertyData.assetGrade || '').toUpperCase()}
                     </Typography>
@@ -103,23 +105,23 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 boxShadow: `0 30px 60px rgba(198,167,94,0.1)`,
             }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 4, display: 'block', letterSpacing: 2 }}>
-                    LIVE SAVINGS SIMULATION — UAE MARKET BENCHMARK
+                    {t('quote.savings_simulation')}
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: 4 }}>
                     <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>MARKET AVERAGE</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.market_average')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through', fontWeight: 900 }}>
                             AED {savingsSimulation.marketAverageAnnual?.toLocaleString()}
                         </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 3, bgcolor: 'rgba(198,167,94,0.05)', borderRadius: 5, border: '1px solid rgba(198,167,94,0.2)', flexGrow: 1, width: isMobile ? '100%' : 'auto' }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>ESTIMATED ANNUAL SAVINGS</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{t('quote.estimated_savings')}</Typography>
                         <Typography variant={isMobile ? "h3" : "h2"} sx={{ color: binThemeTokens.goldLight, fontWeight: 950 }}>
                             AED {savingsSimulation.savingsAmount?.toLocaleString()}
                         </Typography>
                     </Box>
                     <Box sx={{ textAlign: isMobile ? 'left' : 'right', width: isMobile ? '100%' : 'auto' }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>BIN-GROUP TOTAL</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.bin_group_total')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: '#FFFFFF', fontWeight: 900 }}>
                             AED {savingsSimulation.binGroupAnnual?.toLocaleString()}
                         </Typography>
@@ -131,7 +133,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
             <Box sx={{ mb: 6, p: 5, bgcolor: 'rgba(11, 11, 12, 0.95)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
                 <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
                     <ShieldCheck color={binThemeTokens.gold} size={28} />
-                    <Typography variant="h5" fontWeight="900">UAE MARKET ALIGNMENT</Typography>
+                    <Typography variant="h5" fontWeight="900">{t('quote.market_alignment')}</Typography>
                     <Box flexGrow={1} />
                     <Chip label={benchmark.alignmentStatus} sx={{ bgcolor: 'rgba(74,222,128,0.1)', color: '#4ADE80', fontWeight: 900, border: '1px solid rgba(74,222,128,0.3)' }} />
                 </Stack>
@@ -140,18 +142,18 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 </Typography>
                 <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
                     <Box>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>BENCHMARK RANGE</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('quote.benchmark_range')}</Typography>
                         <Typography variant="h5" fontWeight="700">AED {benchmark.marketBenchmarkMin.toLocaleString()} - {benchmark.marketBenchmarkMax.toLocaleString()}</Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>SOURCE</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('common.source')}</Typography>
                         <Typography variant="h5" fontWeight="700">{benchmark.benchmarkSource}</Typography>
                     </Box>
                 </Box>
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, mt: 10 }}>
-                <Button variant="text" onClick={onBack} size="large" sx={{ color: binThemeTokens.textSecondary, py: 2, px: 4, fontWeight: 700 }}>BACK TO ANALYSIS</Button>
+                <Button variant="text" onClick={onBack} size="large" sx={{ color: binThemeTokens.textSecondary, py: 2, px: 4, fontWeight: 700 }}>{t('btn.back_analysis')}</Button>
                 <Button 
                     variant="outlined" 
                     onClick={handleDownloadTender}
@@ -165,7 +167,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                         '&:hover': { borderColor: binThemeTokens.goldLight, bgcolor: 'rgba(198,167,94,0.05)' }
                     }}
                 >
-                    DOWNLOAD INSTITUTIONAL TENDER
+                    {t('btn.download_tender')}
                 </Button>
                 <Box flexGrow={1} />
                 <Button 
@@ -180,7 +182,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                         borderRadius: 4
                     }}
                 >
-                    SELECT CONTRACT TIER
+                    {t('btn.select_tier')}
                 </Button>
             </Box>
         </Box>

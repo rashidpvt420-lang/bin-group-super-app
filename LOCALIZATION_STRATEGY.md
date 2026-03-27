@@ -5,15 +5,17 @@ To reach the #1 position in the UAE market, the app must provide a "Cultural-Fir
 ---
 
 ## 🏗️ 1. Technical Implementation
-*   **Framework**: Use `i18next` for Web/React and `intl` for Flutter/React Native.
-*   **Layout Engine**: All UI containers must use Flexbox/Grid with `flex-direction: row-reverse` or `dir="rtl"` when the language is set to `ar`.
-*   **Fonts**: 
-    *   **English**: Inter, Roboto, or Outfit.
-    *   **Arabic**: Dubai Font, IBM Plex Sans Arabic, or Almarai.
+
+* **Framework**: Use `i18next` for Web/React and `intl` for Flutter/React Native.
+* **Layout Engine**: All UI containers must use Flexbox/Grid with `flex-direction: row-reverse` or `dir="rtl"` when the language is set to `ar`.
+* **Fonts**:
+  * **English**: Inter, Roboto, or Outfit.
+  * **Arabic**: Dubai Font, IBM Plex Sans Arabic, or Almarai.
 
 ---
 
 ## 🌍 2. Trans-creation vs. Translation
+
 We do not use direct machine translations for the following high-impact terms:
 
 | English | Standard Translation | BIN Group Preferred (UAE Context) |
@@ -26,6 +28,7 @@ We do not use direct machine translations for the following high-impact terms:
 ---
 
 ## 📊 3. Master Translation Source (Schema)
+
 The master translation file `i18n_translation_master.json` is organized by functional domain:
 
 ```json
@@ -54,6 +57,7 @@ The master translation file `i18n_translation_master.json` is organized by funct
 ---
 
 ## ✅ 4. RTL Quality Check (LQA)
-- [ ] **Mirroring**: Does the icon for "Back" reverse direction in Arabic? (Yes).
-- [ ] **Numerical Formatting**: Use Western Arabic numerals (1, 2, 3) + "AED" or "د.إ" consistently.
-- [ ] **Text Truncation**: Ensure Arabic text (which is often 20% longer) does not bleed out of UI buttons.
+
+* [ ] **Mirroring**: Does the icon for "Back" reverse direction in Arabic? (Yes).
+* [ ] **Numerical Formatting**: Use Western Arabic numerals (1, 2, 3) + "AED" or "د.إ" consistently.
+* [ ] **Text Truncation**: Ensure Arabic text (which is often 20% longer) does not bleed out of UI buttons.

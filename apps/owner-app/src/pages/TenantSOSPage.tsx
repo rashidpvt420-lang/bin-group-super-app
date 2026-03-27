@@ -10,8 +10,10 @@ import { AlertTriangle, Home, Camera, ShieldAlert, Send, ArrowLeft, CheckCircle2
 import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function TenantSOSPage() {
+    const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
     const { user } = useRole();
     const [category, setCategory] = useState('');
@@ -49,11 +51,11 @@ export default function TenantSOSPage() {
             <Container maxWidth="sm" sx={{ py: 12, textAlign: 'center' }}>
                 <Paper sx={{ p: 8, bgcolor: 'rgba(76, 175, 80, 0.05)', border: '1px solid #4CAF50', borderRadius: 10 }}>
                     <CheckCircle2 color="#4CAF50" size={64} />
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#4CAF50', mt: 4, mb: 2, letterSpacing: -1 }}>DISPATCH TRIGGERED</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: '#4CAF50', mt: 4, mb: 2, letterSpacing: -1 }}>{t('sos.success_title')}</Typography>
                     <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, mb: 6 }}>
-                        Sovereign response team notified. A verified technician will arrive within **4 HOURS** (SLA Protocol Alpha).
+                        {t('sos.success_subtitle')}
                     </Typography>
-                    <Button variant="contained" fullWidth size="large" onClick={() => navigate('/dashboard')} sx={{ bgcolor: '#4CAF50', color: '#FFF', fontWeight: 900, py: 2 }}>RETURN TO DASHBOARD</Button>
+                    <Button variant="contained" fullWidth size="large" onClick={() => navigate('/dashboard')} sx={{ bgcolor: '#4CAF50', color: '#FFF', fontWeight: 900, py: 2 }}>{t('sos.return_dash')}</Button>
                 </Paper>
             </Container>
         );
@@ -67,30 +69,30 @@ export default function TenantSOSPage() {
             <Box sx={{ mb: 6, position: 'relative', zIndex: 1 }}>
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                     <ShieldAlert color="#DC2626" size={24} />
-                    <Typography variant="overline" sx={{ color: '#DC2626', fontWeight: 900, letterSpacing: 3 }}>EMERGENCY PROTOCOL</Typography>
+                    <Typography variant="overline" sx={{ color: '#DC2626', fontWeight: 900, letterSpacing: 3 }}>{t('sos.emergency_protocol')}</Typography>
                 </Stack>
-                <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>SOS Dispatch</Typography>
-                <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>Report critical infrastructure failures for immediate institutional restoration.</Typography>
+                <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>{t('sos.title')}</Typography>
+                <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>{t('sos.subtitle')}</Typography>
             </Box>
 
             <Paper elevation={0} sx={{ p: { xs: 4, md: 6 }, borderRadius: 8, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(220, 38, 38, 0.2)', boxShadow: '0 40px 100px rgba(0,0,0,0.5)', position: 'relative', zIndex: 1 }}>
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={4}>
                         <FormControl fullWidth variant="outlined">
-                            <InputLabel sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>FAULT CATEGORY</InputLabel>
+                            <InputLabel sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('sos.fault_category')}</InputLabel>
                             <Select 
                                 value={category} 
-                                label="FAULT CATEGORY" 
-                                title="FAULT CATEGORY"
-                                inputProps={{ title: "FAULT CATEGORY" }}
+                                label={t('sos.fault_category')} 
+                                title={t('sos.fault_category')}
+                                inputProps={{ title: t('sos.fault_category') }}
                                 onChange={(e) => setCategory(e.target.value)}
                                 required
                                 sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)', color: '#FFFFFF' }}
                             >
-                                <MenuItem value="ac_failure">AC / HVAC CRITICAL FAILURE</MenuItem>
-                                <MenuItem value="plumbing">MAJOR PLUMBING / FLOODING</MenuItem>
-                                <MenuItem value="electrical">ELECTRICAL SHORT / BLACKOUT</MenuItem>
-                                <MenuItem value="security">SECURITY / ACCESS BREACH</MenuItem>
+                                <MenuItem value="ac_failure">{t('sos.cat.ac')}</MenuItem>
+                                <MenuItem value="plumbing">{t('sos.cat.plumbing')}</MenuItem>
+                                <MenuItem value="electrical">{t('sos.cat.electrical')}</MenuItem>
+                                <MenuItem value="security">{t('sos.cat.security')}</MenuItem>
                             </Select>
                         </FormControl>
 
@@ -98,9 +100,9 @@ export default function TenantSOSPage() {
                             fullWidth 
                             multiline 
                             rows={4} 
-                            label="MISSION DESCRIPTION" 
-                            title="MISSION DESCRIPTION"
-                            placeholder="Provide unit details and fault specifics..."
+                            label={t('sos.mission_description')} 
+                            title={t('sos.mission_description')}
+                            placeholder={t('sos.description_placeholder')}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             required
@@ -114,7 +116,7 @@ export default function TenantSOSPage() {
                             fullWidth
                             sx={{ py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.2)', color: binThemeTokens.gold, fontWeight: 900, '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' } }}
                         >
-                            {image ? image.name : 'ATTACH VISUAL EVIDENCE'}
+                            {image ? image.name : t('sos.attach_evidence')}
                             <input hidden accept="image/*" type="file" onChange={e => setImage(e.target.files?.[0] || null)} />
                         </Button>
 
@@ -128,7 +130,7 @@ export default function TenantSOSPage() {
                             disabled={submitting}
                             sx={{ bgcolor: '#DC2626', color: '#FFFFFF', py: 2.5, fontWeight: 900, borderRadius: 4, boxShadow: '0 10px 30px rgba(220, 38, 38, 0.3)', '&:hover': { bgcolor: '#B91C1C' }, '&.Mui-disabled': { bgcolor: 'rgba(220, 38, 38, 0.1)', color: 'rgba(255,255,255,0.2)' } }}
                         >
-                            {submitting ? <CircularProgress size={24} color="inherit" /> : <><Send size={20} style={{ marginRight: 8 }} /> TRIGGER DISPATCH</>}
+                            {submitting ? <CircularProgress size={24} color="inherit" /> : <><Send size={20} style={{ [isRTL ? 'marginLeft' : 'marginRight']: 8 }} /> {t('sos.trigger_btn')}</>}
                         </Button>
                     </Stack>
                 </form>

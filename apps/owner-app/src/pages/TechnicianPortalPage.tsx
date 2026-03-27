@@ -3,6 +3,7 @@ import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip } from '@m
 import { Wrench, Clock, ShieldCheck, Activity, MapPin } from 'lucide-react';
 import { db, collection, query, orderBy, onSnapshot, limit } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useLanguage } from '../context/LanguageContext';
 
 interface Ticket {
     id: string;
@@ -15,6 +16,7 @@ interface Ticket {
 }
 
 export default function TechnicianPortalPage() {
+    const { t } = useLanguage();
     const [tickets, setTickets] = React.useState<Ticket[]>([]);
     const [loading, setLoading] = React.useState(true);
 
@@ -32,10 +34,10 @@ export default function TechnicianPortalPage() {
     }, []);
 
     const kpis = [
-        { label: 'ACTIVE TICKETS', val: tickets.filter(t => t.status !== 'CLOSED').length.toString(), trend: 'LIVE', icon: <Wrench size={24} />, color: binThemeTokens.gold },
-        { label: 'MTTR (AVG)', val: '1.2h', trend: 'OPTIMAL', icon: <Clock size={24} />, color: binThemeTokens.goldLight },
-        { label: 'SLA COMPLIANCE', val: '99.2%', trend: 'SOVEREIGN', icon: <ShieldCheck size={24} />, color: binThemeTokens.textPrimary },
-        { label: 'ZONE UPTIME', val: '100%', trend: 'STABLE', icon: <Activity size={24} />, color: binThemeTokens.textPrimary },
+        { label: t('tech.active_tickets'), val: tickets.filter(t => t.status !== 'CLOSED').length.toString(), trend: t('tech.trend.live'), icon: <Wrench size={24} />, color: binThemeTokens.gold },
+        { label: t('tech.kpi.mttr'), val: '1.2h', trend: t('tech.trend.optimal'), icon: <Clock size={24} />, color: binThemeTokens.goldLight },
+        { label: t('tech.kpi.sla'), val: '99.2%', trend: t('tech.trend.sovereign'), icon: <ShieldCheck size={24} />, color: binThemeTokens.textPrimary },
+        { label: t('tech.kpi.uptime'), val: '100%', trend: t('tech.trend.stable'), icon: <Activity size={24} />, color: binThemeTokens.textPrimary },
     ];
 
     return (
@@ -45,10 +47,10 @@ export default function TechnicianPortalPage() {
             
             <Box sx={{ mb: 8, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 3, position: 'relative', zIndex: 1 }}>
                 <Box>
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, fontSize: { xs: '2.5rem', md: '3.5rem' } }}>Service Node</Typography>
-                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>Live maintenance grid and sovereign asset restoration.</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, fontSize: { xs: '2.5rem', md: '3.5rem' } }}>{t('tech.service_node')}</Typography>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>{t('tech.subtitle')}</Typography>
                 </Box>
-                <Chip label="PROTOCOL ALPHA-4" sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} />
+                <Chip label={t('tech.protocol')} sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} />
             </Box>
 
             {/* Performance Grid */}
@@ -66,7 +68,7 @@ export default function TechnicianPortalPage() {
             </Grid>
 
             {/* Mission Log */}
-            <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: '#FFFFFF', letterSpacing: 1, position: 'relative', zIndex: 1 }}>MISSION DISPATCH</Typography>
+            <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: '#FFFFFF', letterSpacing: 1, position: 'relative', zIndex: 1 }}>{t('tech.mission_dispatch')}</Typography>
             <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
                 {tickets.length > 0 ? tickets.map((ticket, i) => (
                     <Grid item xs={12} key={i}>
@@ -74,32 +76,32 @@ export default function TechnicianPortalPage() {
                             <Grid container alignItems="center" spacing={3}>
                                 <Grid item xs={12} md={2}>
                                     <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{ticket.id.substring(0, 8).toUpperCase()}</Typography>
-                                    <Chip label={ticket.priority || 'NORMAL'} size="small" sx={{ mt: 1, fontWeight: 900, fontSize: '0.6rem', bgcolor: ticket.priority === 'EMERGENCY' ? '#ff4d4d' : 'rgba(255,255,255,0.1)', color: '#fff' }} />
+                                    <Chip label={ticket.priority === 'EMERGENCY' ? t('tech.priority.emergency') : t('tech.priority.normal')} size="small" sx={{ mt: 1, fontWeight: 900, fontSize: '0.6rem', bgcolor: ticket.priority === 'EMERGENCY' ? '#ff4d4d' : 'rgba(255,255,255,0.1)', color: '#fff' }} />
                                 </Grid>
                                 <Grid item xs={12} md={5}>
                                     <Stack direction="row" spacing={2} alignItems="center">
                                         <MapPin size={18} color={binThemeTokens.textSecondary} />
                                         <Box>
-                                            <Typography variant="subtitle1" fontWeight="900" sx={{ color: '#FFFFFF' }}>{ticket.propertyId || 'Unknown Unit'}</Typography>
+                                            <Typography variant="subtitle1" fontWeight="900" sx={{ color: '#FFFFFF' }}>{ticket.propertyId || t('tech.unknown_unit')}</Typography>
                                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.trade}: {ticket.description}</Typography>
                                         </Box>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={12} md={3}>
                                     <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1 }}>STATUS TRACKING</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1 }}>{t('tech.status_tracking')}</Typography>
                                         <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontWeight: 900, textTransform: 'uppercase' }}>{ticket.status}</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={2}>
-                                    <Button fullWidth variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>OPEN NODE</Button>
+                                    <Button fullWidth variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>{t('tech.open_node')}</Button>
                                 </Grid>
                             </Grid>
                         </Paper>
                     </Grid>
                 )) : (
                     <Box sx={{ width: '100%', textAlign: 'center', py: 8 }}>
-                         <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>No active mission dispatches in this sector.</Typography>
+                         <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>{t('tech.empty')}</Typography>
                     </Box>
                 )}
             </Grid>

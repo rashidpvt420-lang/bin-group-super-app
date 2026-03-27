@@ -14,7 +14,7 @@ import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signIn
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, Building2, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
-    const { lang } = useLanguage();
+    const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
     const [email, setEmail] = useState('');
@@ -177,8 +177,8 @@ const LoginPage: React.FC = () => {
                             </Typography>
                         </Box>
                     </Box>
-                    <Typography variant="h4" fontWeight="900" sx={{ color: '#fff', mb: 1 }}>PARTNER PORTAL</Typography>
-                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>AUTHENTICATED INSTITUTIONAL ACCESS <Chip label="v1.4-FIX" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
+                    <Typography variant="h4" fontWeight="900" sx={{ color: '#fff', mb: 1 }}>{t('login.portal')}</Typography>
+                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>{t('login.auth_access')} <Chip label="v1.21-SOVEREIGN" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
                 </Box>
 
                 <Card sx={{ 
@@ -210,7 +210,7 @@ const LoginPage: React.FC = () => {
                             <Stack spacing={3}>
                                 <TextField
                                     fullWidth
-                                    label="Access Email"
+                                    label={t('login.email')}
                                     variant="outlined"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -237,7 +237,7 @@ const LoginPage: React.FC = () => {
 
                                 <TextField
                                     fullWidth
-                                    label="Secure Key (Password)"
+                                    label={t('login.password')}
                                     type={showPassword ? 'text' : 'password'}
                                     variant="outlined"
                                     value={password}
@@ -288,11 +288,11 @@ const LoginPage: React.FC = () => {
                                         }
                                     }}
                                 >
-                                    {loading ? <CircularProgress size={24} color="inherit" /> : 'SECURE SIGN IN'}
+                                    {loading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
                                 </Button>
 
                                 <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, px: 2 }}>OR INSTITUTIONAL SSO</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, px: 2 }}>{t('login.or_sso')}</Typography>
                                 </Divider>
 
                                 <Button
@@ -313,7 +313,7 @@ const LoginPage: React.FC = () => {
                                         }
                                     }}
                                 >
-                                    SIGN IN WITH GOOGLE
+                                    {t('login.google')}
                                 </Button>
 
                                 <Box sx={{ textAlign: 'center' }}>
@@ -331,7 +331,7 @@ const LoginPage: React.FC = () => {
                                             await signInWithRedirect(auth, provider);
                                         }}
                                     >
-                                        [SOVEREIGN-REDIRECT] Troubleshoot Popup? Click here.
+                                        {t('login.troubleshoot')}
                                     </Typography>
                                 </Box>
                             </Stack>
@@ -343,25 +343,25 @@ const LoginPage: React.FC = () => {
                     <Grid item xs={4}>
                         <Box sx={{ textAlign: 'center' }}>
                             <ShieldCheck size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
-                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">ISO 27001 SECURE</Typography>
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.iso_secure')}</Typography>
                         </Box>
                     </Grid>
                     <Grid item xs={4}>
                         <Box sx={{ textAlign: 'center' }}>
                             <TrendingUp size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
-                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">INSTITUTIONAL GRADE</Typography>
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.inst_grade')}</Typography>
                         </Box>
                     </Grid>
                     <Grid item xs={4}>
                         <Box sx={{ textAlign: 'center' }}>
                             <Building2 size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
-                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">UAE PORTFOLIO OPS</Typography>
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.uae_ops')}</Typography>
                         </Box>
                     </Grid>
                 </Grid>
 
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>
-                    &copy; 2026 BIN-GROUP UAE. UNAUTHORIZED ACCESS IS MONITORED.
+                    {t('login.footer')}
                 </Typography>
             </Container>
         </Box>
