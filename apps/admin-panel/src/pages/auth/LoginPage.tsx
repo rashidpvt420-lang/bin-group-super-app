@@ -1,8 +1,8 @@
 import React from 'react';
-import Login from '../../components/Login';
+import UnifiedLogin from '../../components/UnifiedLogin';
 
 const LoginPage = () => {
-    return <Login />;
+    return <UnifiedLogin />;
 };
 
 export default LoginPage;

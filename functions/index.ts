@@ -1,10 +1,12 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// ── CONFIGURATION HELPERS ──────────────────────────────────────────────────
 
 // ── UTILITIES ──────────────────────────────────────────────────────────────
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -534,105 +536,157 @@ export const checkAssetHealthPredictive = onSchedule("every 24 hours", async (ev
         if (alertType) {
             await db.collection("notifications").add({
                 userId: data.ownerId,
-                title: `PREDICTIVE: Potential ${data.type} Failure`,
-                message: `Asset ${data.serialNumber} in ${data.buildingId} has exceeded operating safety thresholds. Lifecycle: ${data.operatingHours}h. Replacement recommended.`,
-                type: alertType,
-                severity: severity,
+                title: "Predictive Maintenance Alert",
+                message: `Asset ${doc.id} (${data.type}) showing symptoms of ${alertType}. Level: ${severity}`,
+                type: "PREDICTIVE_MAINTENANCE",
+                severity,
                 createdAt: now
             });
         }
     });
 });
-
-// ── SOVEREIGN PAYMENT GATEWAY (V1.4 PRODUCTION) ───────────────────────────
-
 /**
  * 1. createPaymentIntent
- * HTTPS Callable: Initiates the institutional payment session. 
- * Design Principle: This is the ONLY legitimate way to create a 'contracts' record.
- * Returns a session ID and secures the contract in 'PENDING' state.
+ * HTTPS Callable: Records a payment intention and issues a specific Manifest.
  */
 export const createPaymentIntent = onCall({ enforceAppCheck: true }, async (request) => {
-    const { amount, currency, propertySnapshot, planSnapshot, addOnsSnapshot } = request.data;
+    const { amount, currency, ownerId, propertyId, method } = request.data;
+    
+    // 1. Strict Method Validation
+    const allowed = ['CASH', 'CHEQUE', 'BANK_TRANSFER'];
+    if (!allowed.includes(method)) {
+        throw new HttpsError("invalid-argument", `UNSUPPORTED_PAYMENT_METHOD: ${method}`);
+    }
 
-    if (!amount || !propertySnapshot || !planSnapshot) {
+    if (!amount || !ownerId || !propertyId) {
         throw new HttpsError("invalid-argument", "Missing protocol parameters for Asset Handshake.");
     }
 
-    // Generate Secure Identification Hashes
-    const providerSessionId = `SESS_${admin.firestore.Timestamp.now().toMillis()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Create the tracking record in Firestore (BACKEND ONLY)
+    // 2. Generate Manifest based on Business Decision
+    let paymentManifest: any = { method };
+
+    if (method === 'BANK_TRANSFER') {
+        paymentManifest = {
+            ...paymentManifest,
+            bankName: "Emirates NBD",
+            accountName: "BIN-GROUP MANAGEMENT LLC",
+            iban: "AE12345678901234567890",
+            swiftCode: "ENBD AEAD",
+            branch: "Dubai Main Branch",
+            paymentReferenceInstruction: "Please include your OWNER_ID or CONTRACT_ID in the transfer description for SOVEREIGN reconciliation.",
+            verificationNote: "Admin verification required after transfer receipt (2-3 business days)."
+        };
+    } else if (method === 'CHEQUE') {
+        paymentManifest = {
+            ...paymentManifest,
+            payableTo: "BIN-GROUP MANAGEMENT LLC",
+            dropOffLocation: "Office 101, Business Tower, Dubai",
+            collectionPolicy: "Cheque must be current-dated or post-dated as per contract terms.",
+            chequeNumberRequired: true,
+            verificationNote: "Contract activation occurs only after cheque clearance."
+        };
+    } else if (method === 'CASH') {
+        paymentManifest = {
+            ...paymentManifest,
+            officeLocation: "Office 101, Business Tower, Dubai",
+            acceptedHours: "09:00 AM - 05:00 PM (Monday to Friday)",
+            receiptPolicy: "Digital receipt will be issued upon physical verification.",
+            contactInstruction: "Please call +971-50-000-0000 to coordinate collection.",
+            verificationNote: "Instant activation available after physical receipt."
+        };
+    }
+
+    // [LEDGER] Create UNVERIFIED record
+    const paymentId = `pmt_${admin.firestore.Timestamp.now().toMillis()}`;
     const contractRef = await db.collection("contracts").add({
-        status: "PAYMENT_PENDING",
-        paymentVerified: false, // Strictly false upon initialization
+        paymentId,
+        ownerId,
+        propertyId,
+        status: "AWAITING_VERIFICATION",
+        paymentVerified: false,
         amount,
         currency: currency || "AED",
-        propertySnapshot,
-        planSnapshot,
-        addOnsSnapshot: addOnsSnapshot || [],
-        paymentIntentId: providerSessionId,
+        provider: method,
+        platform: "SOVEREIGN_V1.24_FINAL_MANUAL",
+        paymentManifest,
         createdAt: admin.firestore.Timestamp.now(),
         updatedAt: admin.firestore.Timestamp.now()
     });
 
-    const contractId = contractRef.id;
+    console.log(`[LEDGER] Intent Created: ${paymentId} via ${method}`);
 
-    console.log(`[PAYMENT-GATEWAY] Contract ${contractId} registered. Intent ${providerSessionId} created.`);
-    
     return {
-        sessionId: providerSessionId,
-        gatewayUrl: `https://mock-gateway.bin-group.com/pay/${providerSessionId}`, // Secured Gateway Proxy
-        contractId
+        paymentId,
+        paymentManifest,
+        contractId: contractRef.id
     };
 });
 
 /**
- * 2. paymentWebhook
- * HTTPS Request: Hardened endpoint for the real payment provider callback.
- * ONLY this function can update the 'paymentVerified' flag.
+ * 2. adminVerifyPayment
+ * HTTPS Callable: The ONLY authority for payment settlement.
  */
-export const paymentWebhook = onRequest(async (req, res) => {
-    // 🔒 Security: In production, verify the provider's signature here (e.g., Stripe verifySignature)
-    // const sig = req.headers['stripe-signature'];
+export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (request) => {
+    const caller = request.auth;
     
-    const { contractId, status, secretKey } = req.body;
-    const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "BIN_SOVEREIGN_SECRET_2026";
-
-    // Hardened Secret Verification (Institutional Implementation)
-    if (secretKey !== WEBHOOK_SECRET) {
-        console.warn("[SECURITY] Invalid webhook source detected.");
-        res.status(403).send("Unauthorized Access Protocol.");
-        return;
+    // 1. Admin-Only Enforcement
+    if (!caller?.token?.admin) {
+        throw new HttpsError("permission-denied", "Unauthorized attempt to bypass sovereign settlement.");
     }
 
-    if (status === "SUCCESS") {
-        const contractRef = db.collection("contracts").doc(contractId);
-        const contractSnap = await contractRef.get();
+    const { contractId, paymentId, method, referenceId, amountReceived, notes, receivedAt } = request.data;
+    
+    if (!contractId || !paymentId || !method || !referenceId) {
+        throw new HttpsError("invalid-argument", "Missing critical verification parameters: contractId, paymentId, method, referenceId.");
+    }
 
-        if (contractSnap.exists && contractSnap.data()?.paymentVerified) {
-            console.log(`[PAYMENT-WEBHOOK] Contract ${contractId} already verified. Skipping redundant payload.`);
-            res.status(200).send("Already Verified.");
-            return;
-        }
+    const contractRef = db.collection("contracts").doc(contractId);
+    
+    try {
+        await db.runTransaction(async (transaction) => {
+            const snap = await transaction.get(contractRef);
+            
+            if (!snap.exists) throw new Error("CONTRACT_NOT_FOUND");
+            if (snap.data()?.paymentVerified) throw new Error("ALREADY_VERIFIED");
+            if (snap.data()?.paymentId !== paymentId) throw new Error("PAYMENT_LINKAGE_MISMATCH");
 
-        await contractRef.update({
-            paymentVerified: true,
-            status: "AWAITING_ACTIVATION",
-            paymentConfirmedAt: admin.firestore.Timestamp.now(),
-            updatedAt: admin.firestore.Timestamp.now()
+            // 2. Perform Settlement Transition
+            transaction.update(contractRef, {
+                paymentVerified: true,
+                status: "AWAITING_ACTIVATION",
+                settledMethod: method,
+                settledReferenceId: referenceId,
+                verifiedBy: caller.uid,
+                verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+                amountReceived: amountReceived || snap.data()?.amount,
+                receivedDate: receivedAt || admin.firestore.FieldValue.serverTimestamp(),
+                verificationNotes: notes || "Standard manual verification.",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // 3. Write Atomic Audit Event
+            const eventRef = db.collection("payment_events").doc(`${paymentId}_settlement`);
+            transaction.set(eventRef, {
+                type: 'MANUAL_SETTLEMENT',
+                paymentId,
+                contractId,
+                adminId: caller.uid,
+                method,
+                referenceId,
+                amount: amountReceived || snap.data()?.amount,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                environment: "SOVEREIGN_PROD"
+            });
         });
-        console.log(`[PAYMENT-WEBHOOK] Contract ${contractId} VERIFIED via independent provider callback.`);
-        res.status(200).send("Verified.");
-    } else {
-        // Record Failure for Protocol Transparency
-        await db.collection("contracts").doc(contractId).update({
-            status: "PAYMENT_FAILED",
-            failureReason: status || "UNKNOWN_PROVIDER_ERROR",
-            updatedAt: admin.firestore.Timestamp.now()
-        });
-        console.warn(`[PAYMENT-WEBHOOK] Transaction Failed for Contract ${contractId}. Reason: ${status}`);
-        res.status(400).send("Transaction Failure.");
+
+        console.log(`[LEDGER] SETTLED: Contract ${contractId} vs Payment ${paymentId}`);
+        return { 
+            success: true, 
+            message: "Payment settled via sovereign override. Contract ready for activation." 
+        };
+    } catch (err: any) {
+        console.error(`[SETTLEMENT-CRASH] ${err.message}`);
+        throw new HttpsError("internal", err.message);
     }
 });
 
@@ -659,6 +713,12 @@ export const financialSettlementEngine = onCall({ enforceAppCheck: true }, async
     console.log(`[SETTLEMENT-ENGINE] Action: ${action} for Payment: ${paymentId}`);
 
     if (action === 'LOCK_TO_ESCROW') {
+        // Idempotency: Fail-closed if payment is already locked
+        const ledgerSnap = await db.collection("escrow_ledger").doc(paymentId).get();
+        if (ledgerSnap.exists) {
+            throw new HttpsError("already-exists", "This payment has already been secured in escrow.");
+        }
+
         // Create an Escrow Ledger record
         await db.collection("escrow_ledger").doc(paymentId).set({
             paymentId,
@@ -681,8 +741,15 @@ export const financialSettlementEngine = onCall({ enforceAppCheck: true }, async
     }
 
     if (action === 'RELEASE_PAYOUT') {
+        const ledgerRef = db.collection("escrow_ledger").doc(paymentId);
+        const ledgerSnap = await ledgerRef.get();
+
+        if (!ledgerSnap.exists || ledgerSnap.data()?.status !== "LOCKED_IN_ESCROW") {
+            throw new HttpsError("failed-precondition", "Payment not found or not in a valid state for release.");
+        }
+
         // 🔒 Production Logic: Orchestrate CBUAE transfer (Mocked for V1.4)
-        await db.collection("escrow_ledger").doc(paymentId).update({
+        await ledgerRef.update({
             status: "SETTLED_TO_OWNER",
             settledAt: admin.firestore.FieldValue.serverTimestamp()
         });

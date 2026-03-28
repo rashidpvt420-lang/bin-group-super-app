@@ -1,35 +1,29 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography, alpha } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import MapIcon from '@mui/icons-material/Map';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import SettingsIcon from '@mui/icons-material/Settings';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import RadarIcon from '@mui/icons-material/Radar';
 import SecurityIcon from '@mui/icons-material/Security';
+import SettingsIcon from '@mui/icons-material/Settings';
+import RadarIcon from '@mui/icons-material/Radar';
+import { binThemeTokens } from '../theme/adminTheme';
 
 const Navigation = () => {
-    const menuItems = [
-        { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-        { text: 'INTAKE VAULT (V1.15)', icon: <SecurityIcon sx={{ color: '#b59410' }} />, path: '/admin/vault' },
-        { text: 'GOD MODE (CEO)', icon: <TrendingUpIcon sx={{ color: '#8b5cf6' }} />, path: '/god-mode' },
-        { text: 'SOS EMERGENCY', icon: <PendingActionsIcon sx={{ color: '#ef4444' }} />, path: '/sos' },
-        { text: 'Bulk Import (500+)', icon: <CloudUploadIcon sx={{ color: '#1a237e' }} />, path: '/bulk-import' },
-        { text: 'Map', icon: <MapIcon />, path: '/map' },
-        { text: 'Live Operations', icon: <RadarIcon sx={{ color: '#3b82f6' }} />, path: '/admin/live-ops' },
-        { text: 'Pilot Control', icon: <RadarIcon sx={{ color: '#059669' }} />, path: '/admin/pilot' },
+    const primaryMenu = [
+        { text: 'DASHBOARD', icon: <DashboardIcon />, path: '/dashboard' },
+        { text: 'INTAKE VAULT', icon: <SecurityIcon />, path: '/admin/vault', color: binThemeTokens.gold },
+        { text: 'PAYMENT APPROVALS', icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
+    ];
+
+    const managementMenu = [
+        { text: 'Live Operations', icon: <RadarIcon />, path: '/admin/live-ops' },
         { text: 'Owners', icon: <PeopleIcon />, path: '/owners' },
-        { text: 'Brokers', icon: <PeopleIcon sx={{ color: '#f59e0b' }} />, path: '/broker' },
+        { text: 'Brokers', icon: <PeopleIcon />, path: '/broker' },
         { text: 'Tickets', icon: <ReceiptIcon />, path: '/tickets' },
-        { text: '💰 Profit Engine', icon: <TrendingUpIcon sx={{ color: '#16a34a' }} />, path: '/admin/profitability' },
-        { text: 'Pricing & Plans', icon: <ReceiptIcon />, path: '/pricing' },
-        { text: 'Procurement', icon: <PendingActionsIcon />, path: '/procurement' },
-        { text: 'Manual Approvals', icon: <PendingActionsIcon sx={{ color: '#10b981' }} />, path: '/admin/manual-approvals' },
+    ];
+
+    const systemMenu = [
         { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
     ];
 
@@ -37,34 +31,87 @@ const Navigation = () => {
         <Drawer
             variant="permanent"
             sx={{
-                width: 240,
+                width: 280,
                 flexShrink: 0,
-                '& .MuiDrawer-paper': { width: 240, boxSizing: 'border-box' },
+                '& .MuiDrawer-paper': { 
+                    width: 280, 
+                    boxSizing: 'border-box',
+                    bgcolor: '#020617',
+                    borderRight: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
+                },
             }}
         >
-            <div className="p-5 font-bold text-[1.2rem]">
-                BIN GROUP ADMIN
-            </div>
-            <Divider />
-            <List>
-                {menuItems.map((item) => (
-                    <ListItem key={item.text} component={NavLink} to={item.path} className="no-underline text-inherit">
-                        <ListItemIcon>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} />
+            <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 2 }}>
+                    BIN GROUP
+                </Typography>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 4 }}>
+                    ADMINISTRY
+                </Typography>
+            </Box>
+            
+            <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
+            
+            <List sx={{ px: 2, pt: 2 }}>
+                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900 }}>SOVEREIGN CORE</Typography>
+                {primaryMenu.map((item) => (
+                    <ListItem 
+                        key={item.text} 
+                        component={NavLink} 
+                        to={item.path} 
+                        sx={{ 
+                            borderRadius: 2, mb: 0.5,
+                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40 }}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} />
                     </ListItem>
                 ))}
             </List>
-            <Divider sx={{ mt: 'auto' }} />
-            <List>
-                <ListItem
-                    button
-                    onClick={() => window.open('http://localhost:3001', '_blank')}
-                    className="text-[#10b981]"
-                >
-                    <ListItemIcon><PeopleIcon sx={{ color: '#10b981' }} /></ListItemIcon>
-                    <ListItemText primary="View Owner Portal ↗" />
-                </ListItem>
+
+            <List sx={{ px: 2 }}>
+                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900 }}>OPERATIONS</Typography>
+                {managementMenu.map((item) => (
+                    <ListItem 
+                        key={item.text} 
+                        component={NavLink} 
+                        to={item.path}
+                        sx={{ 
+                            borderRadius: 2, mb: 0.5,
+                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40 }}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} />
+                    </ListItem>
+                ))}
             </List>
+
+            <Box sx={{ mt: 'auto', p: 2 }}>
+                <List>
+                    {systemMenu.map((item) => (
+                        <ListItem 
+                            key={item.text} 
+                            component={NavLink} 
+                            to={item.path}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40 }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} />
+                        </ListItem>
+                    ))}
+                    <ListItem
+                        component="a"
+                        href="http://localhost:3001"
+                        target="_blank"
+                        sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#10b981', 0.05) }}
+                    >
+                        <ListItemIcon sx={{ color: '#10b981', minWidth: 40 }}><PeopleIcon /></ListItemIcon>
+                        <ListItemText primary="Owner Portal ↗" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#10b981' }} />
+                    </ListItem>
+                </List>
+            </Box>
         </Drawer>
     );
 };

@@ -121,14 +121,48 @@ const LandingPage: React.FC = () => {
                             </Grid>
                         ))}
                     </Grid>
+
+                    {/* OAuth Compliance Section: Data Transparency */}
+                    <Box sx={{ mt: 8, p: 4, bgcolor: 'rgba(198,167,94,0.03)', borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, maxWidth: 800 }}>
+                        <Typography variant="h6" color={binThemeTokens.gold} fontWeight="900" gutterBottom>
+                            INSTITUTIONAL DATA TRANSPARENCY
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                            BIN-GROUP utilizes Google OAuth to authenticate authorized asset administrators. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem. Your data is never shared with third parties and is used exclusively for secure session management and cross-portal authorization.
+                        </Typography>
+                    </Box>
                 </Stack>
             </Container>
 
-            {/* Footer */}
-            <Box sx={{ p: 4, borderTop: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.05)}`, textAlign: 'center' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                    {t('landing.footer')}
-                </Typography>
+            {/* Compliance Footer */}
+            <Box sx={{ p: 4, borderTop: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.05)}`, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <Container maxWidth="md">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="center" alignItems="center" sx={{ mb: 2 }}>
+                        {[
+                            { label: 'Home', href: 'https://bin-group-57c60.web.app/' },
+                            { label: 'Privacy Policy', href: 'https://bin-group-57c60.web.app/privacy-policy.html' },
+                            { label: 'Terms of Service', href: 'https://bin-group-57c60.web.app/terms-of-service.html' },
+                            { label: 'Support', href: 'https://bin-group-57c60.web.app/support' }
+                        ].map((link) => (
+                            <Typography 
+                                key={link.label}
+                                component="a" 
+                                href={link.href}
+                                sx={{ 
+                                    color: binThemeTokens.textSecondary, 
+                                    textDecoration: 'none', 
+                                    fontWeight: 700,
+                                    '&:hover': { color: binThemeTokens.gold }
+                                }}
+                            >
+                                {link.label}
+                            </Typography>
+                        ))}
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900, display: 'block', mt: 1 }}>
+                        © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | DUBAI, UAE
+                    </Typography>
+                </Container>
             </Box>
         </Box>
     );

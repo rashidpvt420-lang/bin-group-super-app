@@ -1,177 +1,322 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth, functions } from '../lib/firebase';
+import { db, functions } from '../lib/firebase';
 import { 
-  collection, query, where, onSnapshot, doc, updateDoc, getDoc 
+  collection, query, where, onSnapshot, doc 
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
-  TableHead, TableRow, Button, IconButton, Chip, Modal, CircularProgress 
+  TableHead, TableRow, Button, IconButton, Chip, Modal, CircularProgress,
+  TextField, Stack, Dialog, DialogTitle, DialogContent, DialogActions,
+  alpha, Grid
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CloseIcon from '@mui/icons-material/Close';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { HandHelping, Receipt, History } from 'lucide-react';
 
-interface PaymentApproval {
+interface Contract {
   id: string;
+  paymentId: string;
   amount: number;
-  type: string;
-  paymentMethod: string;
-  receiptUrl: string;
-  tenantId: string;
+  currency: string;
+  ownerId: string;
   propertyId: string;
-  submittedAt: any;
+  provider: string;
   status: string;
+  paymentVerified: boolean;
+  paymentManifest: any;
+  createdAt: any;
 }
 
 export default function AdminPaymentApproval() {
-  const [pendingPayments, setPendingPayments] = useState<PaymentApproval[]>([]);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [pendingContracts, setPendingContracts] = useState<Contract[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  
+  // Verification Form State
+  const [referenceId, setReferenceId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [amountReceived, setAmountReceived] = useState<number | ''>('');
 
   useEffect(() => {
+    // We listen to contracts that are awaiting verification
     const q = query(
-      collection(db, 'payments'),
-      where('status', '==', 'pending')
+      collection(db, 'contracts'),
+      where('status', '==', 'AWAITING_VERIFICATION'),
+      where('paymentVerified', '==', false)
     );
 
     return onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as PaymentApproval));
-      setPendingPayments(fetched);
+      } as Contract));
+      setPendingContracts(fetched);
     });
   }, []);
 
-  const handleApprove = async (payment: PaymentApproval) => {
-    setProcessingId(payment.id);
+  const openVerification = (contract: Contract) => {
+    setSelectedContract(contract);
+    setAmountReceived(contract.amount);
+    setReferenceId('');
+    setNotes('');
+    setVerifyDialogOpen(true);
+  };
+
+  const handleVerify = async () => {
+    if (!selectedContract) return;
+    if (!referenceId) {
+      alert("Reference ID is mandatory for sovereign audit.");
+      return;
+    }
+
+    setProcessingId(selectedContract.id);
+    setVerifyDialogOpen(false);
+    
     try {
-      // 1. Update Payment Status to VERIFIED (Audit-ready)
-      const paymentRef = doc(db, 'payments', payment.id);
-      await updateDoc(paymentRef, {
-        status: 'VERIFIED',
-        approvedAt: new Date().toISOString(),
-        approvedBy: auth.currentUser?.email || 'System Admin'
+      const adminVerifyFunc = httpsCallable(functions, 'adminVerifyPayment');
+      const result = await adminVerifyFunc({
+        contractId: selectedContract.id,
+        paymentId: selectedContract.paymentId,
+        method: selectedContract.provider,
+        referenceId,
+        amountReceived: amountReceived || selectedContract.amount,
+        notes: notes || "Standard manual verification via Admin Hub.",
+        receivedAt: new Date().toISOString()
       });
 
-      // 2. Resolve Property Owner
-      const propertySnap = await getDoc(doc(db, 'properties', payment.propertyId));
-      if (!propertySnap.exists()) throw new Error("Property not found");
-      const ownerId = propertySnap.data().ownerId;
-
-      // 3. Move to Escrow (V2.0 — Enterprise Escrow State Machine)
-      const settlementEngine = httpsCallable(functions, 'financialSettlementEngine');
-      await settlementEngine({
-        action: 'LOCK_TO_ESCROW',
-        paymentId: payment.id,
-        gross_amount: payment.amount,
-        ownerId: ownerId,
-        propertyId: payment.propertyId,
-        type: payment.type || 'rent_collection'
-      });
-
-      alert(`Payment Verified. Funds are now LOCKED_IN_ESCROW. Settlement will occur once maintenance/lease milestones are COMPLETED.`);
+      console.log("Verification Success:", result);
+      alert("Payment Settled. Contract activated for property onboarding.");
     } catch (error: any) {
-      console.error("Approval flow failed:", error);
-      alert(`Critical Error: ${error.message}`);
+      console.error("Verification failed:", error);
+      alert(`Settlement Error: ${error.message}`);
     } finally {
       setProcessingId(null);
+      setSelectedContract(null);
     }
   };
 
   return (
-    <Box sx={{ p: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 2, color: 'white' }}>
-        <SecurityIcon sx={{ color: '#10b981', fontSize: 40 }} /> MANUAL PAYMENT APPROVALS
-      </Typography>
-
-      <TableContainer component={Paper} sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Invoice</TableCell>
-              <TableCell sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Method</TableCell>
-              <TableCell align="right" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Amount (AED)</TableCell>
-              <TableCell sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Tenant</TableCell>
-              <TableCell align="center" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Receipt</TableCell>
-              <TableCell align="right" sx={{ color: '#94a3b8', fontWeight: 'bold' }}>Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {pendingPayments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 10, color: '#64748b', fontSize: '0.9rem', fontStyle: 'italic' }}>
-                  No pending manual payments in the queue.
-                </TableCell>
-              </TableRow>
-            ) : (
-              pendingPayments.map((payment) => (
-                <TableRow key={payment.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                  <TableCell sx={{ color: 'white' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>#{payment.id.slice(0, 8)}</Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b' }}>{payment.type}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={payment.paymentMethod} size="small" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontWeight: 'bold', fontSize: '10px' }} />
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: '#10b981', fontWeight: '900' }}>
-                    {payment.amount.toLocaleString()}
-                  </TableCell>
-                  <TableCell sx={{ color: '#cbd5e1' }}>{payment.tenantId.slice(0, 10)}...</TableCell>
-                  <TableCell align="center">
-                    <IconButton onClick={() => setSelectedImage(payment.receiptUrl)} sx={{ color: '#3b82f6' }}>
-                      <VisibilityIcon />
-                    </IconButton>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      variant="contained"
-                      disabled={processingId === payment.id}
-                      onClick={() => handleApprove(payment)}
-                      startIcon={processingId === payment.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
-                      sx={{ 
-                        bgcolor: '#10b981', 
-                        '&:hover': { bgcolor: '#059669' },
-                        fontWeight: 'bold',
-                        borderRadius: 2
-                      }}
-                    >
-                      Approve
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {/* Image Modal */}
-      <Modal open={!!selectedImage} onClose={() => setSelectedImage(null)}>
-        <Box sx={{ 
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: '80%', maxWidth: 800, bgcolor: '#0f172a', border: '2px solid #1e293b', boxShadow: 24, p: 4, borderRadius: 4 
-        }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>PAYMENT PROOF VERIFICATION</Typography>
-            <IconButton onClick={() => setSelectedImage(null)} sx={{ color: 'white' }}><CloseIcon /></IconButton>
-          </Box>
-          <Box 
-            component="img"
-            src={selectedImage || ''} 
-            alt="Payment Receipt" 
-            sx={{ 
-              width: '100%', 
-              height: 'auto', 
-              maxHeight: '70vh', 
-              objectFit: 'contain', 
-              borderRadius: 4 
-            }} 
-          />
+    <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white' }}>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
+        <SecurityIcon sx={{ color: '#C6A75E', fontSize: 40 }} />
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: -1 }}>
+            SOVEREIGN SETTLEMENT VAULT
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 700 }}>
+            BIN-GROUP Institutional Payment Verification Authority
+          </Typography>
         </Box>
-      </Modal>
+      </Stack>
+
+      <Grid container spacing={4}>
+        <Grid item xs={12} lg={9}>
+          <TableContainer component={Paper} sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4, overflow: 'hidden' }}>
+            <Table>
+              <TableHead sx={{ bgcolor: alpha('#C6A75E', 0.1) }}>
+                <TableRow>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>INTENT ID</TableCell>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>METHOD</TableCell>
+                  <TableCell align="right" sx={{ color: '#C6A75E', fontWeight: 900 }}>VALUE</TableCell>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>ENTITY</TableCell>
+                  <TableCell align="right" sx={{ color: '#C6A75E', fontWeight: 900 }}>ACTION</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pendingContracts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
+                      <Stack alignItems="center" spacing={2}>
+                        <Receipt size={48} color="#1e293b" />
+                        <Typography variant="body2" sx={{ color: '#64748b', fontStyle: 'italic' }}>
+                          Settlement queue is clear. All sovereign funds are matched.
+                        </Typography>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  pendingContracts.map((contract) => (
+                    <TableRow key={contract.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>
+                          {contract.paymentId}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>
+                          Contract: {contract.id.slice(0, 8)}...
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={contract.provider} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: alpha('#C6A75E', 0.1), 
+                            color: '#C6A75E', 
+                            fontWeight: 900, 
+                            border: '1px solid #C6A75E' 
+                          }} 
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body1" sx={{ color: '#10b981', fontWeight: 900 }}>
+                          {contract.currency} {contract.amount.toLocaleString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 700 }}>
+                          Owner: {contract.ownerId.slice(0, 8)}...
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="contained"
+                          disabled={processingId === contract.id}
+                          onClick={() => openVerification(contract)}
+                          startIcon={processingId === contract.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
+                          sx={{ 
+                            bgcolor: '#C6A75E', 
+                            color: '#000',
+                            '&:hover': { bgcolor: '#b59410' },
+                            fontWeight: 900,
+                            borderRadius: 2
+                          }}
+                        >
+                          Verify Settlement
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Grid>
+
+        <Grid item xs={12} lg={3}>
+           <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <History size={20} color="#C6A75E" /> SETTLEMENT POLICY
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                1. Reference ID must match bank/cheque record.
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                2. Reconciliation is permanent and irreversible once submitted.
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                3. Activation triggers immediate property onboarding emails.
+              </Typography>
+              <Box sx={{ mt: 4, p: 2, bgcolor: alpha('#ef4444', 0.1), border: '1px solid #ef4444', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900 }}>
+                  WARNING: AUDIT LOGS ACTIVE
+                </Typography>
+              </Box>
+           </Paper>
+        </Grid>
+      </Grid>
+
+      {/* VERIFICATION DIALOG */}
+      <Dialog 
+        open={verifyDialogOpen} 
+        onClose={() => !processingId && setVerifyDialogOpen(false)}
+        PaperProps={{
+          sx: { bgcolor: '#0f172a', color: 'white', borderRadius: 4, border: '1px solid #1e293b', width: '100%', maxWidth: 500 }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, borderBottom: '1px solid #1e293b' }}>
+          CONFIRM SETTLEMENT
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
+                Verification Reference (UTN / Cheque #)
+              </Typography>
+              <TextField
+                fullWidth
+                required
+                variant="outlined"
+                value={referenceId}
+                onChange={(e) => setReferenceId(e.target.value)}
+                placeholder="e.g. UTN-123456789"
+                sx={{ 
+                  mt: 1,
+                  '& .MuiOutlinedInput-root': {
+                    color: 'white',
+                    bgcolor: '#020617',
+                    '& fieldset': { borderColor: '#1e293b' },
+                    '&:hover fieldset': { borderColor: '#C6A75E' },
+                    '&.Mui-focused fieldset': { borderColor: '#C6A75E' },
+                  }
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
+                Confirmed Amount Received (AED)
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                variant="outlined"
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(Number(e.target.value))}
+                sx={{ 
+                  mt: 1,
+                  '& .MuiOutlinedInput-root': {
+                    color: 'white',
+                    bgcolor: '#020617',
+                    '& fieldset': { borderColor: '#1e293b' },
+                  }
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
+                Audit Notes
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Internal reconciliation details..."
+                sx={{ 
+                  mt: 1,
+                  '& .MuiOutlinedInput-root': {
+                    color: 'white',
+                    bgcolor: '#020617',
+                    '& fieldset': { borderColor: '#1e293b' },
+                  }
+                }}
+              />
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, borderTop: '1px solid #1e293b' }}>
+          <Button onClick={() => setVerifyDialogOpen(false)} sx={{ color: '#64748b', fontWeight: 900 }}>CANCEL</Button>
+          <Button 
+            onClick={handleVerify} 
+            variant="contained" 
+            sx={{ 
+              bgcolor: '#10b981', 
+              color: '#fff', 
+              fontWeight: 900,
+              '&:hover': { bgcolor: '#059669' }
+            }}
+          >
+            CONFIRM & ACTIVATE
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -10,7 +10,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth, doc, getDoc, setDoc } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, Building2, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -84,23 +84,11 @@ const LoginPage: React.FC = () => {
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            let result;
-            
-            try {
-                result = await signInWithPopup(auth, provider);
-                handleAuthResult(result);
-            } catch (popupError: any) {
-                if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/popup-closed-by-user') {
-                    console.log("🔒 [SOVEREIGN-FALLBACK] Popup blocked. Executing redirect-handshake...");
-                    await signInWithRedirect(auth, provider);
-                    return;
-                }
-                throw popupError;
-            }
+            // Force Secure Flow (Authorization Code Flow) via Redirect
+            await signInWithRedirect(auth, provider);
         } catch (err: any) {
             console.error("Google Login Error:", err);
             setError(err.message || "Failed to sign in with Google.");
-        } finally {
             setLoading(false);
         }
     };

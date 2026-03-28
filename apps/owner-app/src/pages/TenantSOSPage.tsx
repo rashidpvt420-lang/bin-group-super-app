@@ -35,7 +35,7 @@ export default function TenantSOSPage() {
                 hasImage: !!image,
                 status: 'OPEN',
                 priority: (category === 'ac_failure' || category === 'plumbing' || category === 'electrical') ? 'EMERGENCY' : 'MEDIUM',
-                propertyId: sessionPropertyId || 'PILOT_DUB_01', // Fallback to pilot if not set
+                propertyId: sessionPropertyId || 'UNASSOCIATED', // Strictly use session info
                 createdAt: serverTimestamp()
             });
             setSubmitted(true);

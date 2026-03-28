@@ -61,10 +61,10 @@ describe('AdminPanel - DashboardPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Cash Collected/)).toBeTruthy();
-      expect(screen.getByText(/Pending Payments/)).toBeTruthy();
-      expect(screen.getByText(/Overdue/)).toBeTruthy();
-      expect(screen.getByText(/Success Rate/)).toBeTruthy();
     });
+    expect(screen.getByText(/Pending Payments/)).toBeTruthy();
+    expect(screen.getByText(/Overdue/)).toBeTruthy();
+    expect(screen.getByText(/Success Rate/)).toBeTruthy();
   });
 
   test('should display financial metrics', async () => {
@@ -72,10 +72,10 @@ describe('AdminPanel - DashboardPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/125,000|125000/)).toBeTruthy(); // Cash collected
-      expect(screen.getByText(/45,000|45000/)).toBeTruthy();   // Pending
-      expect(screen.getByText(/15,000|15000/)).toBeTruthy();   // Overdue
-      expect(screen.getByText(/94.5%|94.5/)).toBeTruthy();     // Success rate
     });
+    expect(screen.getByText(/45,000|45000/)).toBeTruthy();   // Pending
+    expect(screen.getByText(/15,000|15000/)).toBeTruthy();   // Overdue
+    expect(screen.getByText(/94.5%|94.5/)).toBeTruthy();     // Success rate
   });
 
   test('should render charts', async () => {
@@ -83,8 +83,8 @@ describe('AdminPanel - DashboardPage', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('bar-chart')).toBeTruthy();
-      expect(screen.getByTestId('line-chart')).toBeTruthy();
     });
+    expect(screen.getByTestId('line-chart')).toBeTruthy();
   });
 
   test('should refresh data on interval', async () => {

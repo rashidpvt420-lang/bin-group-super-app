@@ -32,16 +32,28 @@ import {
     ShieldCheck,
     Gem
 } from 'lucide-react';
-import { db, collection, query, orderBy, onSnapshot, updateDoc, doc } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { binThemeTokens } from '../../theme/adminTheme';
 
 interface IntakeSubmission {
     id: string;
-    properties: any[];
-    portfolioSummary: any;
-    contactInfo: any;
-    status: 'PENDING' | 'ANALYZED' | 'APPROVED' | 'REJECTED';
+    status: string;
+    source: string;
+    createdAt: any;
+    contactInfo?: {
+        name: string;
+        email: string;
+        licenseNumber: string;
+    };
+    properties?: any[];
+    portfolioSummary?: {
+        totalUnits: number;
+        recommendedTier: string;
+    };
     aiAssessment?: {
         score: number;
+        aiModel: string;
         riskLevel: string;
         valuationRange: {
             min: number;
@@ -54,14 +66,10 @@ interface IntakeSubmission {
             period: string;
         }>;
         efficiencyRecommendations: string[];
-        aiModel: string;
-        analyzedAt: any;
     };
-    createdAt: any;
-    source: string;
 }
 
-const IntakeVaultPage: React.FC = () => {
+export const IntakeVaultPage: React.FC = () => {
     const [submissions, setSubmissions] = useState<IntakeSubmission[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedIntake, setSelectedIntake] = useState<IntakeSubmission | null>(null);
@@ -90,40 +98,51 @@ const IntakeVaultPage: React.FC = () => {
 
     if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#0f172a' }}>
-                <CircularProgress sx={{ color: '#C6A75E' }} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#020617' }}>
+                <CircularProgress sx={{ color: binThemeTokens.gold }} />
             </Box>
         );
     }
 
     return (
-        <Box sx={{ p: 4, bgcolor: '#f8fafc', minHeight: '100vh' }}>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ p: 6, bgcolor: '#020617', minHeight: '100vh' }}>
+            <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                    <Typography variant="h4" fontWeight="900" sx={{ color: '#0f172a', mb: 0.5 }}>
-                        INTUITIVE INTAKE VAULT
+                    <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1, letterSpacing: -1 }}>
+                        INTAKE VAULT
                     </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                        Sovereign Queue for Institutional Asset Submissions (V1.15)
+                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>
+                        SOVEREIGN QUEUE FOR INSTITUTIONAL ASSET SUBMISSIONS
                     </Typography>
                 </Box>
                 <Chip 
-                    label="VAULT SECURITY ON" 
-                    icon={<ShieldCheck size={16} />} 
-                    sx={{ bgcolor: '#0f172a', color: '#fff', fontWeight: 900, px: 1 }} 
+                    label="VAULT ENCRYPTED" 
+                    icon={<ShieldCheck size={16} color={binThemeTokens.gold} />} 
+                    sx={{ 
+                        bgcolor: alpha(binThemeTokens.gold, 0.1), 
+                        color: binThemeTokens.gold, 
+                        fontWeight: 900, 
+                        border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`,
+                        px: 1 
+                    }} 
                 />
             </Box>
 
-            <TableContainer component={Paper} sx={{ borderRadius: 4, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
+            <TableContainer component={Paper} sx={{ 
+                borderRadius: 4, 
+                bgcolor: binThemeTokens.graphite,
+                border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
+                boxShadow: 'none'
+            }}>
                 <Table>
-                    <TableHead sx={{ bgcolor: '#0f172a' }}>
+                    <TableHead>
                         <TableRow>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }}>SUBMISSION ID</TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }}>DATE</TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }}>ASSETS</TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }}>TIER</TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }}>AI STATUS</TableCell>
-                            <TableCell sx={{ color: '#fff', fontWeight: 900 }} align="right">ACTIONS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>SUBMISSION ID</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>DATE</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ASSETS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TIER</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AI STATUS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">ACTIONS</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -158,7 +177,10 @@ const IntakeVaultPage: React.FC = () => {
                                     />
                                 </TableCell>
                                 <TableCell align="right">
-                                    <IconButton color="primary" onClick={() => setSelectedIntake(intake)}>
+                                    <IconButton 
+                                        sx={{ color: binThemeTokens.gold, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1) } }} 
+                                        onClick={() => setSelectedIntake(intake)}
+                                    >
                                         <Eye size={20} />
                                     </IconButton>
                                 </TableCell>
@@ -173,18 +195,25 @@ const IntakeVaultPage: React.FC = () => {
                 anchor="right"
                 open={!!selectedIntake}
                 onClose={() => setSelectedIntake(null)}
-                PaperProps={{ sx: { width: { xs: '100%', md: 600 }, p: 4, bgcolor: '#fff' } }}
+                PaperProps={{ 
+                    sx: { 
+                        width: { xs: '100%', md: 600 }, 
+                        p: 6, 
+                        bgcolor: '#020617', 
+                        borderLeft: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` 
+                    } 
+                }}
             >
                 {selectedIntake && (
                     <Box>
-                        <Typography variant="h5" fontWeight="900" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            INTAKE ANALYSIS <BrainCircuit color="#C6A75E" />
+                        <Typography variant="h4" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 2 }}>
+                            INTAKE ANALYSIS <BrainCircuit size={32} />
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-                            ID: {selectedIntake.id} | Source: {selectedIntake.source}
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 2, display: 'block', mb: 3 }}>
+                            PROTOCOL ID: {selectedIntake.id.toUpperCase()} | ORIGIN: {selectedIntake.source}
                         </Typography>
 
-                        <Divider sx={{ mb: 4 }} />
+                        <Divider sx={{ mb: 4, borderColor: alpha(binThemeTokens.gold, 0.1) }} />
 
                         {selectedIntake.aiAssessment ? (
                             <Stack spacing={3}>
@@ -192,14 +221,14 @@ const IntakeVaultPage: React.FC = () => {
                                     severity="success" 
                                     icon={<Gem size={20} />}
                                     sx={{ 
-                                        bgcolor: alpha('#C6A75E', 0.1), 
-                                        color: '#000', 
-                                        border: '1px solid #C6A75E',
-                                        '& .MuiAlert-icon': { color: '#C6A75E' }
+                                        bgcolor: alpha(binThemeTokens.gold, 0.05), 
+                                        color: binThemeTokens.textPrimary, 
+                                        border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`,
+                                        '& .MuiAlert-icon': { color: binThemeTokens.gold }
                                     }}
                                 >
                                     <Typography variant="subtitle2" fontWeight="900">BIN-GENESIS™ AI SCORE: {selectedIntake.aiAssessment.score}/100</Typography>
-                                    <Typography variant="caption">Model: {selectedIntake.aiAssessment.aiModel}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>HEURISTIC MODEL: {selectedIntake.aiAssessment.aiModel}</Typography>
                                 </Alert>
 
                                 <Box>
@@ -284,7 +313,11 @@ const IntakeVaultPage: React.FC = () => {
                                         variant="contained" 
                                         startIcon={<CheckCircle />}
                                         onClick={() => handleApprove(selectedIntake.id)}
-                                        sx={{ bgcolor: '#0f172a', fontWeight: 900, py: 1.5 }}
+                                        sx={{ 
+                                            background: binThemeTokens.goldGradient, 
+                                            color: binThemeTokens.black,
+                                            fontWeight: 950, py: 2 
+                                        }}
                                         disabled={selectedIntake.status === 'APPROVED'}
                                     >
                                         {selectedIntake.status === 'APPROVED' ? 'INTAKE COMPLETED' : 'CONVERT TO OWNER'}
@@ -293,7 +326,11 @@ const IntakeVaultPage: React.FC = () => {
                                         variant="outlined" 
                                         color="error"
                                         startIcon={<XCircle />}
-                                        sx={{ fontWeight: 900 }}
+                                        sx={{ 
+                                            fontWeight: 900, 
+                                            borderColor: binThemeTokens.danger,
+                                            color: binThemeTokens.danger
+                                        }}
                                     >
                                         REJECT
                                     </Button>

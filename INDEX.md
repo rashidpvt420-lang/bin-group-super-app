@@ -72,4 +72,4 @@ This repository contains the functional prototype and technical foundation for t
 * **[Developer Environment Setup](./DEV_SETUP_GUIDE.md)**: Zero-to-hero onboarding for new engineering hires.
 
 ---
-_Created for: Rashid AbdulGhani | BIN Construction - General Maintenance LLC_
+_Created for: Rashid AbdulGhani | BIN-Group - General Maintenance LLC_

@@ -117,7 +117,15 @@ service cloud.firestore {
                       (request.resource.data.tenantId == uid() || request.resource.data.userId == uid())
                     );
       allow update: if isAuth() && isActive() && (
-                      isAdmin() || isTechnician() ||
+                      isAdmin() ||
+                      (isTechnician() && (
+                        // If completing, MUST have evidence
+                        (request.resource.data.status == 'COMPLETED' && 
+                         resource.data.hasBeforePhoto == true && 
+                         resource.data.hasAfterPhoto == true) ||
+                        // Otherwise allow status changes or notes updates
+                        (request.resource.data.status != 'COMPLETED')
+                      )) ||
                       (isTenant() && (resource.data.tenantId == uid() || resource.data.userId == uid())) ||
                       isOwner()
                     );
@@ -150,12 +158,13 @@ service cloud.firestore {
                         request.resource.data.paymentVerified == false
                       )
                     );
-      // HARDENING: Clients CANNOT toggle paymentVerified to true
+      // HARDENING: Clients CANNOT toggle paymentVerified or status away from unverified/pending
       allow update: if isAuth() && isActive() && (
                       isAdmin() || (
                         isOwner() && 
                         resource.data.ownerId == uid() &&
-                        request.resource.data.paymentVerified == resource.data.paymentVerified
+                        request.resource.data.paymentVerified == resource.data.paymentVerified &&
+                        request.resource.data.status == resource.data.status
                       )
                     );
       allow delete: if false;
@@ -262,7 +271,7 @@ service cloud.firestore {
     match /intake_submissions/{intakeId} {
       // Public users can create new submissions. 
       // We enforce 'PENDING' status on all new entries.
-      allow create: if request.resource.data.status == 'PENDING';
+      allow create: if request.resource.data.status in ['PENDING', 'PENDING_REVIEW'];
       
       // Reading, updating, or deleting intakes is strictly restricted to Admins.
       allow read, update, delete: if isAdmin();

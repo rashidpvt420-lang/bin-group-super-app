@@ -24,7 +24,7 @@ Object.defineProperty(exports, "serverTimestamp", { enumerable: true, get: funct
 Object.defineProperty(exports, "deleteDoc", { enumerable: true, get: function () { return firestore_1.deleteDoc; } });
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.firebaseapp.com",
+    authDomain: "bin-group-57c60.web.app",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
     messagingSenderId: "123413252227",

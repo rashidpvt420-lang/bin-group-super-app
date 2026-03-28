@@ -48,8 +48,8 @@ describe('AdminPanel - LiveMapPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Ahmed Al-Mansouri/)).toBeTruthy();
-      expect(screen.getByText(/Sara Al-Zaabi/)).toBeTruthy();
     });
+    expect(screen.getByText(/Sara Al-Zaabi/)).toBeTruthy();
   });
 
   test('should show technician status', async () => {
@@ -57,8 +57,8 @@ describe('AdminPanel - LiveMapPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/ON_ROUTE|On Route/)).toBeTruthy();
-      expect(screen.getByText(/ARRIVED|Arrived/)).toBeTruthy();
     });
+    expect(screen.getByText(/ARRIVED|Arrived/)).toBeTruthy();
   });
 
   test('should display coordinates', async () => {
@@ -66,8 +66,8 @@ describe('AdminPanel - LiveMapPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/25\.2048|25.20/)).toBeTruthy();
-      expect(screen.getByText(/55\.2708|55.27/)).toBeTruthy();
     });
+    expect(screen.getByText(/55\.2708|55.27/)).toBeTruthy();
   });
 
   test('should show ETA for on-route technicians', async () => {
@@ -83,8 +83,8 @@ describe('AdminPanel - LiveMapPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/12.*Completed|Completed.*12/)).toBeTruthy();
-      expect(screen.getByText(/3.*Remaining|Remaining.*3/)).toBeTruthy();
     });
+    expect(screen.getByText(/3.*Remaining|Remaining.*3/)).toBeTruthy();
   });
 
   test('should refresh map every 30 seconds', async () => {

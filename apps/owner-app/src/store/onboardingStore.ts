@@ -85,6 +85,8 @@ export interface OnboardingState {
     accountCreated: boolean;
     valuationResult: any | null;
     intakeId: string | null;
+    paymentManifest: any | null;
+    paymentMethod: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null;
     companyProfile: {
         name: string;
         licenseNumber: string;
@@ -112,6 +114,8 @@ export interface OnboardingState {
     setPaymentRequested: (status: boolean) => void;
     setAccountCreated: (status: boolean) => void;
     setValuationResult: (result: any) => void;
+    setPaymentManifest: (manifest: any) => void;
+    setPaymentMethod: (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null) => void;
     calculateSummary: () => void;
     reset: () => void;
 }
@@ -195,6 +199,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             accountCreated: false,
             valuationResult: null,
             intakeId: null,
+            paymentManifest: null,
+            paymentMethod: null,
             companyProfile: {
                 name: '',
                 licenseNumber: '',
@@ -265,6 +271,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             setPaymentRequested: (paymentRequested) => set({ paymentRequested }),
             setAccountCreated: (accountCreated) => set({ accountCreated }),
             setValuationResult: (valuationResult) => set({ valuationResult }),
+            setPaymentManifest: (paymentManifest) => set({ paymentManifest }),
+            setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
 
             calculateSummary: () => {
                 const props = get().properties;
@@ -303,6 +311,8 @@ export const useOnboardingStore = create<OnboardingState>()(
                 paymentRequested: false,
                 accountCreated: false,
                 valuationResult: null,
+                paymentManifest: null,
+                paymentMethod: null,
                 companyProfile: {
                     name: '',
                     licenseNumber: '',

@@ -1,12 +1,48 @@
-// apps/owner-app/src/pages/BrokerPortalPage.tsx
 import React from 'react';
 import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip, Divider } from '@mui/material';
 import { Building, Users, TrendingUp, Landmark, Share2, Search, Briefcase } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
+import Papa from 'papaparse';
+import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 
 export default function BrokerPortalPage() {
     const { t } = useLanguage();
+    const [uploading, setUploading] = React.useState(false);
+    const [leads, setLeads] = React.useState<any[]>([]);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const rows = results.data as any[];
+                let count = 0;
+                for (const row of rows) {
+                    if (row.propertyName && row.ownerName) {
+                        await addDoc(collection(db, 'intake_submissions'), {
+                            ...row,
+                            status: 'PENDING_REVIEW',
+                            createdAt: serverTimestamp(),
+                            source: 'BROKER_CSV_IMPORT'
+                        });
+                        count++;
+                    }
+                }
+                setUploading(false);
+                alert(`${count} assets successfully added to the intake queue.`);
+            },
+            error: (err) => {
+                console.error("CSV Parse Error:", err);
+                setUploading(false);
+            }
+        });
+    };
+
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
             {/* Background Texture */}
@@ -17,7 +53,18 @@ export default function BrokerPortalPage() {
                     <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1 }}>{t('broker.title')}</Typography>
                     <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>{t('broker.subtitle')}</Typography>
                 </Box>
-                <Button variant="contained" sx={{ background: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3, px: 4 }}>{t('broker.list_new')}</Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button 
+                        component="label" 
+                        variant="outlined" 
+                        disabled={uploading}
+                        sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3, px: 4 }}
+                    >
+                        {uploading ? 'PARSING...' : t('broker.import_csv')}
+                        <input hidden accept=".csv" type="file" onChange={handleFileUpload} />
+                    </Button>
+                    <Button variant="contained" sx={{ background: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3, px: 4 }}>{t('broker.list_new')}</Button>
+                </Box>
             </Box>
 
             {/* Market Intelligence */}

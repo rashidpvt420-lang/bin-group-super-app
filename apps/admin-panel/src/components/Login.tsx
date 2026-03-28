@@ -106,6 +106,13 @@ export default function Login() {
                     </form>
                 </div>
             </div>
+            
+            {/* Branding Footer */}
+            <div className="mt-8 text-center">
+                <p className="text-[10px] text-[#94a3b8] font-black uppercase tracking-[0.2em]">
+                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href='/privacy-policy.html' style={{ color: '#DAA520', textDecoration: 'none', marginLeft: '10px', fontWeight: 'bold' }}>Privacy Policy</a>
+                </p>
+            </div>
         </div>
     );
 }

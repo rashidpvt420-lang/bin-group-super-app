@@ -14,10 +14,12 @@ import TurnoverEnginePage from './pages/TurnoverEnginePage';
 import InvoiceDetailsPage from './pages/InvoiceDetailsPage';
 import TenantSOSPage from './pages/TenantSOSPage';
 import TechnicianPortalPage from './pages/TechnicianPortalPage';
+import TicketDetailPage from './pages/TicketDetailPage';
 import BrokerPortalPage from './pages/BrokerPortalPage';
 import AuditorPortalPage from './pages/public/AuditorPortalPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import TermsPage from './pages/public/TermsPage';
+import SupportPage from './pages/public/SupportPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SovereignHeader from './components/SovereignHeader';
 import { RoleProvider } from './context/RoleContext';
@@ -35,14 +37,19 @@ export default function App() {
               <CssBaseline />
               <SovereignHeader />
               <Routes>
-                {/* PUBLIC ROUTES */}
+                {/* PUBLIC COMPLIANCE ROUTES */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/verify" element={<InvoiceVerificationPage />} />
                 <Route path="/verify-cert" element={<CertificateVerificationPage />} />
                 <Route path="/onboarding" element={<PropertyOnboardingPage />} />
-                <Route path="/privacy" element={<PrivacyPage />} />
-                <Route path="/terms" element={<TermsPage />} />
+                <Route path="/privacy-policy" element={<PrivacyPage />} />
+                <Route path="/terms-of-service" element={<TermsPage />} />
+                <Route path="/support" element={<SupportPage />} />
+                
+                {/* LEGACY ALIASES (Prevent Breakage) */}
+                <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+                <Route path="/terms" element={<Navigate to="/terms-of-service" replace />} />
 
                 {/* OWNER PORTAL (Authenticated) */}
                 <Route path="/dashboard" element={
@@ -80,6 +87,11 @@ export default function App() {
                 <Route path="/tech" element={
                     <ProtectedRoute allowedRoles={['technician', 'admin']}>
                       <TechnicianPortalPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="/tech/ticket/:id" element={
+                    <ProtectedRoute allowedRoles={['technician', 'admin']}>
+                      <TicketDetailPage />
                     </ProtectedRoute>
                 } />
                  {/* Technician email alias mapping alias */}

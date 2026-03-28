@@ -4,9 +4,9 @@ This document outlines the high-level strategic features that transform the BIN 
 
 ---
 
-## 🤖 1. AI-Driven Market & Asset Intelligence
+## 🤖 1. Heuristic-Driven Market & Asset Intelligence
 
-* **Predictive Valuation**: Real-time AI estimation of property market value and rental yield trends using DLD open data.
+* **Predictive Valuation**: Real-time logic-based estimation of property market value and rental yield trends using DLD open data.
 * **Cap Rate Forecasting**: Deep analytics to project ROI 12-36 months out, helping institutional investors time their exits.
 * **Risk Intelligence**: Automated alerts for market shifts, supply influx in specific communities (e.g., JVC vs. Marina), and environmental risks.
 
@@ -25,7 +25,7 @@ This document outlines the high-level strategic features that transform the BIN 
 ## 🏢 4. Lifestyle & Tenant Engagement Layer
 
 * **The Lifestyle App**: In-app visitor management, parking permits, and local utility (DEWA/Empower) coordination.
-* **Gemini Multilingual Concierge**: A conversational AI Assistant that handles resident queries, booking amenities, and legal term explanations 24/7 in English & Arabic.
+* **Heuristic Maintenance Triage**: A logic-driven assessment engine that handles resident queries and legal term explanations based on a verified knowledge base.
 * **Tenant Sentiment Pulse**: Behavioral analytics to predict churn risk and suggest proactive lease renewal incentives.
 
 ## 💼 5. Flexible Revenue & Marketplace
@@ -33,10 +33,10 @@ This document outlines the high-level strategic features that transform the BIN 
 * **Hybrid Leasing Support**: Seamlessly switch or manage units for **Long-Term** or **Short-Term (Airbnb-style)** rentals within one platform.
 * **Verified Vendor Hub**: A platform for external vetted companies (Renovation, Solar, Insurance) to bid on jobs with BIN Group taking a 10-15% commission.
 
-## 🏛️ 6. AI Compliance & Digital Lifecycle
+## 🏛️ 6. Compliance & Digital Lifecycle
 
 * **Auto-Ejari & Regulatory Bridge**: Direct API integration for automated lease registration and legal compliance tracking.
-* **AI Document OCR**: Instant digitizing of Title Deeds and manual contracts via scan-to-database logic.
+* **Document OCR**: Instant digitizing of Title Deeds and manual contracts via scan-to-database logic.
 
 ## 🌳 7. ESG & Sustainability Tracking (Net Zero Ready)
 

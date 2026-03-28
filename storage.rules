@@ -51,6 +51,14 @@ service firebase.storage {
       allow write: if isAuth() && (hasRole('TECHNICIAN') || hasRole('technician') || isAdmin());
     }
 
+    // ─── FIELD EVIDENCE VAULT ──────────────────────────────────────────────
+    match /evidence_photos/{ticketId}/{allPaths=**} {
+      allow read: if isAuth();
+      allow write: if isAuth() && (hasRole('TECHNICIAN') || hasRole('technician') || isAdmin()) &&
+                   request.resource.size < 10 * 1024 * 1024 &&
+                   request.resource.contentType.matches('image/.*');
+    }
+
     // ─── PUBLIC INFRASTRUCTURE ──────────────────────────────────────────────
     match /public/{allPaths=**} {
       allow read: if true;

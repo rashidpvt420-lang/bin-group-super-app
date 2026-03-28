@@ -3,9 +3,11 @@
 
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -39,19 +41,11 @@ import CompliancePage from './pages/admin/CompliancePage';
 import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
 import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
-import IntakeVaultPage from './pages/admin/IntakeVaultPage';
+import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import { FinancialTickerPage, TechnicianMapPage } from './pages/Placeholders';
+import { adminTheme } from './theme/adminTheme';
 
-const theme = createTheme({
-    palette: {
-        primary: {
-            main: '#1976d2'
-        },
-        secondary: {
-            main: '#dc004e'
-        }
-    }
-});
+// Removed legacy primary theme definition to use centralized adminTheme.ts
 
 function AppContent() {
     const { isAuthenticated, loading } = useAuth();
@@ -107,10 +101,17 @@ function AppContent() {
 
 function Layout() {
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f1f5f9' }}>
-            <Navigation />
-            <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'auto' }}>
-                <Outlet />
+        <Box sx={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', bgcolor: '#020617' }}>
+            <Box sx={{ display: 'flex', flexGrow: 1 }}>
+                <Navigation />
+                <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'auto' }}>
+                    <Outlet />
+                </Box>
+            </Box>
+            <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
+                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href='/privacy-policy.html' style={{ color: '#DAA520', textDecoration: 'none', marginLeft: '10px', fontWeight: 'bold' }}>Privacy Policy</a>
+                </Typography>
             </Box>
         </Box>
     );
@@ -118,7 +119,7 @@ function Layout() {
 
 export default function App() {
     return (
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={adminTheme}>
             <CssBaseline />
             <Router basename="/admin">
                 <AuthProvider>

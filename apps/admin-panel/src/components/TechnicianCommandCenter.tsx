@@ -15,15 +15,15 @@ import {
     Radar,
     LucideIcon
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import './TechnicianCommandCenter.css';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 // Helper for type-safe icons in React 18
 const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
     <IconComponent size={size} className={className} color={color} />
 );
-import { motion, AnimatePresence } from 'framer-motion';
-import './TechnicianCommandCenter.css';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 interface Telemetry {
     technicianId: string;

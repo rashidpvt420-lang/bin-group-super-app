@@ -10,96 +10,72 @@ import { httpsCallable } from 'firebase/functions';
  * Verification happens via independent Backend-to-Backend (B2B) Webhooks.
  */
 
-export interface PaymentSession {
-    sessionId: string;
-    gatewayUrl: string;
+export interface PaymentManifest {
+    method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER';
+    bankName?: string;
+    accountName?: string;
+    iban?: string;
+    swiftCode?: string;
+    branch?: string;
+    paymentReferenceInstruction?: string;
+    payableTo?: string;
+    dropOffLocation?: string;
+    collectionPolicy?: string;
+    chequeNumberRequired?: boolean;
+    officeLocation?: string;
+    acceptedHours?: string;
+    receiptPolicy?: string;
+    contactInstruction?: string;
+    verificationNote: string;
+}
+
+export interface PaymentIntentResult {
+    paymentId: string;
+    paymentManifest: PaymentManifest;
     contractId: string;
 }
 
 /**
  * 1. createPaymentIntent()
- * - Securely Handshakes with the Backend Cloud Function.
- * - Delegate contract document generation to the backend to prevent spoofing.
+ * - Registers a manual payment intention with the BIN-BACKEND™.
  */
-export const createPaymentIntent = async (amount: number, propertyData: any, selectedPlan: any, selectedAddOns: string[], ownerEmail?: string): Promise<PaymentSession> => {
+export const createPaymentIntent = async (
+    method: string,
+    amount: number, 
+    propertyId: string,
+    ownerId: string
+): Promise<PaymentIntentResult> => {
     try {
-        // God-Mode Bypass: If we are in a pilot environment or using a known admin email
-        const userEmail = (ownerEmail || auth.currentUser?.email)?.toLowerCase();
-        const goldList = ['rashidpvt420@gmail.com', 'rashid.pvt420@gmail.com', 'rashidbinabdulghani@gmail.com'];
-        
-        if (userEmail && goldList.includes(userEmail)) {
-            console.log("💎 [SOVEREIGN-BYPASS] Institutional account detected. Provisioning demo contract...");
-            
-            // Create a local contract record in Firestore directly to bypass the Cloud Function
-            const contractId = `SOV-${Date.now().toString(36).toUpperCase()}`;
-            await setDoc(doc(db, 'contracts', contractId), {
-                id: contractId,
-                ownerId: auth.currentUser?.uid,
-                amount,
-                packageName: selectedPlan?.packageName,
-                tier: selectedPlan?.tier,
-                propertySnapshot: propertyData,
-                paymentVerified: true, // Auto-verify for Admin
-                status: 'PENDING_ACTIVATION',
-                createdAt: serverTimestamp()
-            });
-
-            return {
-                sessionId: 'DEMO_SESSION',
-                gatewayUrl: '/onboarding?step=7', // Direct return to activation
-                contractId
-            };
-        }
-
-        // Institutional Handshake: Calling the Secure Cloud Function
         const initiateFn = httpsCallable(functions, 'createPaymentIntent');
         const result = await initiateFn({
             amount,
-            currency: 'AED',
-            propertySnapshot: propertyData,
-            planSnapshot: selectedPlan,
-            addOnsSnapshot: selectedAddOns
+            method,
+            propertyId,
+            ownerId,
+            currency: 'AED'
         });
 
-        const { sessionId, gatewayUrl, contractId } = result.data as any;
-
-        return {
-            sessionId,
-            gatewayUrl,
-            contractId
-        };
+        return result.data as PaymentIntentResult;
     } catch (error) {
-        console.error('[PAYMENT-HARDENING] Secure Handshake Interrupted:', error);
-        
-        // Final Fallback for UI Demo Stability
-        if (process.env.NODE_ENV === 'development') {
-             return { sessionId: 'MOCK', gatewayUrl: '#', contractId: 'MOCK-CONTRACT' };
-        }
-        
-        throw new Error("GATEWAY_CONNECTION_FAILURE: Resource protocol rejected.");
+        console.error('[PAYMENT-ENGINE] Intent Creation Failed:', error);
+        throw new Error("MANIFEST_GENERATION_FAILURE: Resource protocol rejected.");
     }
 };
 
 /**
  * 2. verifyPaymentStatus()
- * - Strictly reads database state which can ONLY be updated by the webhook.
+ * - Strictly reads database state which can ONLY be updated by an Admin in the backend.
  */
 export const verifyPaymentStatus = async (contractId: string): Promise<boolean> => {
     try {
-        // God-Mode Bypass: Always verify for institutional accounts
-        const userEmail = auth.currentUser?.email?.toLowerCase();
-        const goldList = ['rashidpvt420@gmail.com', 'rashid.pvt420@gmail.com', 'rashidbinabdulghani@gmail.com'];
-        if (userEmail && goldList.includes(userEmail)) return true;
-
         const contractSnap = await getDoc(doc(db, 'contracts', contractId));
         if (contractSnap.exists()) {
             const data = contractSnap.data();
-            // 🚨 SECURITY: We only trust the 'paymentVerified' flag if set by the Backend
-            return data.paymentVerified === true;
+            return data.status === 'AWAITING_ACTIVATION' && data.paymentVerified === true;
         }
         return false;
     } catch (error) {
-        console.error('[PAYMENT-HARDENING] Registry Verification Failed:', error);
+        console.error('[PAYMENT-ENGINE] Registry Verification Failed:', error);
         return false;
     }
 };

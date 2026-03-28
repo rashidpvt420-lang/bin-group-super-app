@@ -10,18 +10,25 @@ import {
     LinearProgress,
     Snackbar,
     Alert,
-    TextField
+    Card,
+    CardContent
 } from '@mui/material';
 import { 
-    CreditCard, 
+    Banknote, 
+    Building2, 
+    ReceiptText, 
     ShieldCheck, 
     Lock, 
     CheckCircle2, 
-    TrendingUp
+    TrendingUp,
+    Info,
+    ChevronRight,
+    Copy
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { createPaymentIntent, verifyPaymentStatus } from '../../lib/paymentService';
+import { auth } from '../../lib/firebase';
 
 const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNext, onBack }) => {
     const { 
@@ -29,56 +36,46 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
         valuationResult,
         propertyData, 
         selectedPlan, 
-        selectedAddOns, 
         setPaymentVerified, 
         setPaymentRequested, 
         paymentVerified,
         contractId,
         setContractId,
-        updatePropertyData
+        paymentMethod,
+        setPaymentMethod,
+        paymentManifest,
+        setPaymentManifest
     } = useOnboardingStore();
-    const [isPaying, setIsPaying] = useState(false);
+
+    const [isGenerating, setIsGenerating] = useState(false);
     const [checkingStatus, setCheckingStatus] = useState(false);
-    const [showHandoff, setShowHandoff] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
     const annualTotal = valuationResult?.portfolioIntelligence?.finalAnnualPrice || selectedPlan?.annualPrice || 0;
     const activationDeposit = Math.round(annualTotal * 0.15);
-    const remainingBalance = annualTotal - activationDeposit;
     const totalProperties = properties.length;
     const baseContractPrice = selectedPlan?.annualPrice || 0;
 
-    const [confirmEmail, setConfirmEmail] = useState(propertyData.ownerEmail || '');
-
-    const handlePayment = async () => {
-        setIsPaying(true);
-        setPaymentRequested(true); 
-
-        // Update store with email before intent creation
-        if (confirmEmail) updatePropertyData({ ownerEmail: confirmEmail });
-
+    const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER') => {
+        setIsGenerating(true);
+        setPaymentMethod(method);
+        
         try {
-            // Unlocks the Handshake: Calls a Secure Backend Function to initiate session
-            const session = await createPaymentIntent(activationDeposit, properties[0] || propertyData, selectedPlan, selectedAddOns, confirmEmail || propertyData.ownerEmail);
-            setContractId(session.contractId);
-
-            console.log(`[SOVEREIGN-GATEWAY] Initiated Session: ${session.sessionId}`);
-
-            if (session.sessionId === 'DEMO_SESSION' || session.sessionId === 'MOCK') {
-                // 💎 BYPASS GRANTED: Instantly activate without handoff
-                setPaymentVerified(true);
-                setIsPaying(false); 
-                setSnackbar({ open: true, message: "💎 [SOVEREIGN-BYPASS] Institutional verification granted for " + (confirmEmail || 'Admin'), severity: 'success' });
-            } else {
-                setTimeout(() => {
-                    setIsPaying(false);
-                    setShowHandoff(true);
-                }, 3500);
-            }
-        } catch (error) {
-            console.error("Payment Initiation Error:", error);
-            setSnackbar({ open: true, message: "Sovereign Link Terminated. Connection rejected by gateway.", severity: 'error' });
-            setIsPaying(false);
+            const ownerId = auth.currentUser?.uid || 'anonymous';
+            const propertyId = properties[0]?.id || 'P-PROT-1';
+            
+            const result = await createPaymentIntent(method, activationDeposit, propertyId, ownerId);
+            
+            setContractId(result.contractId);
+            setPaymentManifest(result.paymentManifest);
+            setPaymentRequested(true);
+            
+            setSnackbar({ open: true, message: `Payment Manifest Ready: ${method}`, severity: 'success' });
+        } catch (error: any) {
+            console.error("Manifest Error:", error);
+            setSnackbar({ open: true, message: "Protocol Error: Handshake Rejected by Settlement Engine.", severity: 'error' });
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -87,23 +84,100 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
         setCheckingStatus(true);
 
         try {
-            // READS ONLY DATABASE-CONFIRMED STATUS (Updated via Webhook on backend)
             const isConfirmed = await verifyPaymentStatus(contractId);
             if (isConfirmed) {
                 setPaymentVerified(true);
+                setSnackbar({ open: true, message: "PAYMENT VERIFIED: Institutional Registry Updated.", severity: 'success' });
             } else {
-                // If it's not confirmed yet, wait and alert user
-                setTimeout(() => {
-                    setCheckingStatus(false);
-                    console.log("[PROTOCOL] Registry not yet updated via Webhook.");
-                }, 2000);
+                setSnackbar({ open: true, message: "Verification Pending: Awaiting Administrative Settlement.", severity: 'info' });
             }
         } catch (error) {
             console.error("Verification Breach:", error);
+        } finally {
             setCheckingStatus(false);
         }
     };
 
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        setSnackbar({ open: true, message: "Copied to Clipboard", severity: 'success' });
+    };
+
+    const renderManifest = () => {
+        if (!paymentManifest) return null;
+
+        const { method } = paymentManifest;
+
+        return (
+            <Box sx={{ mt: 3, textAlign: 'left' }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>
+                    OFFICIAL SETTLEMENT INSTRUCTIONS
+                </Typography>
+                
+                {method === 'BANK_TRANSFER' && (
+                    <Stack spacing={2}>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>BANK NAME</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.bankName}</Typography>
+                        </Box>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>ACCOUNT NAME</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.accountName}</Typography>
+                        </Box>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>IBAN</Typography>
+                                <Typography variant="body1" fontWeight={700} sx={{ letterSpacing: 1 }}>{paymentManifest.iban}</Typography>
+                            </Box>
+                            <Button size="small" onClick={() => copyToClipboard(paymentManifest.iban)} sx={{ color: binThemeTokens.gold }}><Copy size={16} /></Button>
+                        </Box>
+                        <Alert severity="info" icon={<Info size={20} />} sx={{ bgcolor: 'rgba(198,167,94,0.05)', color: binThemeTokens.textPrimary, border: '1px solid rgba(198,167,94,0.2)' }}>
+                            {paymentManifest.paymentReferenceInstruction}
+                        </Alert>
+                    </Stack>
+                )}
+
+                {method === 'CHEQUE' && (
+                    <Stack spacing={2}>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>PAYABLE TO</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.payableTo}</Typography>
+                        </Box>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>DROP-OFF LOCATION</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.dropOffLocation}</Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mt: 1, display: 'block' }}>
+                            {paymentManifest.collectionPolicy}
+                        </Typography>
+                    </Stack>
+                )}
+
+                {method === 'CASH' && (
+                    <Stack spacing={2}>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>OFFICE LOCATION</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.officeLocation}</Typography>
+                        </Box>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>COLLECTION HOURS</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.acceptedHours}</Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mt: 1, display: 'block' }}>
+                            {paymentManifest.contactInstruction}
+                        </Typography>
+                    </Stack>
+                )}
+
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198,167,94,0.1)', borderRadius: 2, border: '1px solid binThemeTokens.gold' }}>
+                    <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 0.5 }}>FINAL VERIFICATION NOTICE</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
+                        {paymentManifest.verificationNote}
+                    </Typography>
+                </Box>
+            </Box>
+        );
+    };
 
     return (
         <Box>
@@ -112,14 +186,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                 <Typography variant="h4" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold }}>Institutional Portfolio Activation</Typography>
                 <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>Service Agreement for Portfolio of {totalProperties} Mixed-Use Assets.</Typography>
                 
-                <Paper sx={{ 
-                    p: 4, 
-                    borderRadius: 6, 
-                    bgcolor: 'rgba(22, 22, 24, 0.6)', 
-                    border: '1px solid rgba(198,167,94,0.1)',
-                    backdropFilter: 'blur(10px)',
-                    mb: 4 
-                }}>
+                <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(198,167,94,0.1)', backdropFilter: 'blur(10px)', mb: 4 }}>
                     <Typography variant="h6" fontWeight="900" sx={{ mb: 4, letterSpacing: 1, color: binThemeTokens.gold }}>Institutional Agreement Summary</Typography>
                     
                     <Stack spacing={3} divider={<Divider sx={{ borderColor: 'rgba(198,167,94,0.1)' }} />}>
@@ -131,24 +198,6 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                             <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {baseContractPrice.toLocaleString()}</Typography>
                         </Box>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box>
-                                <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>Institutional Service Add-Ons</Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{selectedAddOns.length} compliance & mission-critical services</Typography>
-                            </Box>
-                            <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AGGREGATED</Typography>
-                        </Box>
-
-                        {valuationResult?.portfolioIntelligence?.portfolioDiscount > 0 && (
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: binThemeTokens.gold }}>
-                                <Box>
-                                    <Typography variant="subtitle2" fontWeight="900">Institutional Volume Discount</Typography>
-                                    <Typography variant="caption" sx={{ opacity: 0.8 }}>Portfolio Scale Efficiency ({valuationResult.portfolioIntelligence.portfolioDiscount}%)</Typography>
-                                </Box>
-                                <Typography variant="h6" fontWeight="900">- AED {valuationResult.portfolioIntelligence.portfolioDiscountAmount.toLocaleString()}</Typography>
-                            </Box>
-                        )}
-
                         <Box sx={{ py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>TOTAL PORTFOLIO AMC</Typography>
                             <Box sx={{ textAlign: 'right' }}>
@@ -159,171 +208,138 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     </Stack>
                 </Paper>
 
-                <Paper sx={{ 
-                    p: 4, 
-                    borderRadius: 6, 
-                    bgcolor: 'rgba(198, 167, 94, 0.05)', 
-                    border: '1px solid rgba(198, 167, 94, 0.1)' 
-                }}>
+                <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(198, 167, 94, 0.05)', border: '1px solid rgba(198, 167, 94, 0.1)' }}>
                     <Typography variant="h6" fontWeight="900" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5, color: binThemeTokens.gold }}>
                         <TrendingUp color={binThemeTokens.gold} size={24} /> Asset Appreciation Multiplier
                     </Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.8 }}>
-                        By activating this contract, your portfolio qualifies for the prestigious <strong>BIN-CERTIFIED™</strong> status.
-                        The aggregate institutional coverage for {totalProperties} assets adds significant risk mitigation and estimated capital appreciation premium.
+                        By activating this contract, your portfolio qualifies for <strong>BIN-CERTIFIED™</strong> status.
+                        Manual administrative settlement ensures sovereign-grade audit compliance for your institutional records.
                     </Typography>
                 </Paper>
             </Grid>
 
             <Grid item xs={12} md={5}>
                 <Paper sx={{ 
-                    p: 4, 
-                    borderRadius: 8, 
-                    bgcolor: '#161618', 
+                    p: 4, borderRadius: 8, bgcolor: '#161618', 
                     border: '1px solid rgba(198, 167, 94, 0.2)',
-                    position: 'sticky', 
-                    top: 180, 
+                    position: 'sticky', top: 180, 
                     boxShadow: '0 40px 80px rgba(0,0,0,0.6)',
                     textAlign: 'center'
                 }}>
                     <Box sx={{ mb: 4 }}>
-                        <Box sx={{ 
-                            width: 80, height: 80, borderRadius: '50%', 
-                            background: 'linear-gradient(135deg, rgba(198,167,94,0.1), rgba(198,167,94,0.3))', 
-                            mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2,
-                            border: '1px solid rgba(198,167,94,0.2)'
-                        }}>
-                            <CreditCard color={binThemeTokens.gold} size={32} />
-                        </Box>
-                        <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>Institutional Activation</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>SECURED 15% SOVEREIGN DEPOSIT</Typography>
-                    </Box>
-
-                    <Box sx={{ 
-                        py: 3, px: 2, borderRadius: 6, 
-                        bgcolor: 'rgba(255,255,255,0.02)', 
-                        mb: 3, 
-                        border: '1px dashed rgba(198,167,94,0.3)' 
-                    }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1, display: 'block', mb: 1 }}>PORTFOLIO ANNUAL VALUATION</Typography>
-                        <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>
-                            AED {annualTotal.toLocaleString()}
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ 
-                        py: 4, px: 2, borderRadius: 6, 
-                        bgcolor: 'rgba(198,167,94,0.05)', 
-                        mb: 3, 
-                        border: `2px solid rgba(198,167,94,0.4)` 
-                    }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, display: 'block', mb: 1 }}>15% ACTIVATION DEPOSIT (DUE NOW)</Typography>
-                        <Typography variant="h2" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
+                        <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>Official Settlement</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>15% ACTIVATION DEPOSIT (DUE NOW)</Typography>
+                        <Typography variant="h2" fontWeight="900" sx={{ color: binThemeTokens.goldLight, mt: 1 }}>
                             AED {activationDeposit.toLocaleString()}
                         </Typography>
                     </Box>
 
-                    <Box sx={{ 
-                        py: 2, px: 2, borderRadius: 4, 
-                        bgcolor: 'rgba(255,255,255,0.02)', 
-                        mb: 2, 
-                        border: '1px solid rgba(255,255,255,0.06)' 
-                    }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1, display: 'block', mb: 0.5 }}>REMAINING BALANCE — 4 QUARTERLY INSTALLMENTS</Typography>
-                        <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>
-                            AED {Math.round((annualTotal - activationDeposit) / 4).toLocaleString()} / quarter
-                        </Typography>
-                    </Box>
-                    <Stack spacing={2.5} sx={{ mb: 6, textAlign: 'left' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <ShieldCheck size={20} color={binThemeTokens.gold} />
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 600 }}>Zero-Latency Service Activation</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <CheckCircle2 size={20} color={binThemeTokens.gold} />
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 600 }}>Unlocks BIN-SOVEREIGN™ Owner Dashboard</Typography>
-                        </Box>
-                    </Stack>
-
-                    {!paymentVerified && (
-                         <Box sx={{ mb: 4, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(198,167,94,0.1)' }}>
-                            <TextField 
-                                fullWidth
-                                label="Verify Sovereign Email (Institutional Link)"
-                                variant="outlined"
-                                placeholder="rashid.pvt420@gmail.com"
-                                value={confirmEmail}
-                                onChange={(e) => {
-                                    setConfirmEmail(e.target.value.toLowerCase());
-                                    updatePropertyData({ ownerEmail: e.target.value.toLowerCase() });
-                                }}
-                                helperText="God-Mode accounts bypass payment gateway"
-                                FormHelperTextProps={{ sx: { color: binThemeTokens.gold, fontWeight: 700, opacity: 0.8 } }}
-                                sx={{
-                                    '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: 'center', fontWeight: 'bold' },
-                                    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-                                    '& .MuiOutlinedInput-root': {
-                                        background: 'rgba(255,255,255,0.03)',
-                                        '& fieldset': { borderColor: 'rgba(198,167,94,0.3)' },
-                                        '&:hover fieldset': { borderColor: binThemeTokens.gold },
-                                        '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
-                                    },
-                                }}
-                            />
-                        </Box>
-                    )}
-
                     {!paymentVerified ? (
                         <>
-                            {!showHandoff && !isPaying && (
-                                <Button 
-                                    variant="contained" 
-                                    fullWidth 
-                                    size="large"
-                                    onClick={handlePayment}
-                                    sx={{ 
-                                        background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                                        color: '#0B0B0C', 
-                                        py: 3, 
-                                        fontWeight: 900, 
-                                        fontSize: '1.2rem', 
-                                        borderRadius: 4,
-                                        boxShadow: '0 15px 30px rgba(198, 167, 94, 0.3)',
-                                        '&:hover': { transform: 'scale(1.02)', boxShadow: '0 20px 40px rgba(198, 167, 94, 0.4)' } 
-                                    }}
-                                >
-                                    ENGAGE PRODUCTION GATEWAY
-                                </Button>
-                            )}
-
-                            {isPaying && (
-                                <Box>
-                                    <Typography variant="subtitle1" fontWeight="900" sx={{ mb: 2, color: binThemeTokens.gold }}>Initialising Secure Protocol...</Typography>
-                                    <LinearProgress 
-                                        sx={{ 
-                                            height: 12, borderRadius: 6, mb: 2, 
-                                            bgcolor: 'rgba(255,255,255,0.05)',
-                                            '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #C6A75E, #E6C77A)' }
-                                        }} 
-                                    />
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>TRANSMITTING HANDSHAKE TO UAE CENTRAL PORTAL...</Typography>
-                                </Box>
-                            )}
-
-                            {showHandoff && (
-                                <Box sx={{ p: 4, bgcolor: 'rgba(198,167,94,0.04)', borderRadius: 6, border: '1px solid rgba(198,167,94,0.3)' }}>
-                                    <Typography variant="h6" fontWeight="900" sx={{ mb: 2, color: binThemeTokens.gold }}>PAYMENT PENDING</Typography>
-                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>
-                                        A secure payment window was launched. Completed the transaction there.
+                            {!paymentManifest ? (
+                                <Stack spacing={2}>
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 1 }}>
+                                        Select a manual payment method to generate your institutional manifest.
                                     </Typography>
+                                    
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        onClick={() => handleGenerateManifest('BANK_TRANSFER')}
+                                        disabled={isGenerating}
+                                        sx={{ 
+                                            py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', 
+                                            color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
+                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <Building2 size={24} color={binThemeTokens.gold} />
+                                            <Typography fontWeight={700}>BANK TRANSFER</Typography>
+                                        </Box>
+                                        <ChevronRight size={20} />
+                                    </Button>
+
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        onClick={() => handleGenerateManifest('CHEQUE')}
+                                        disabled={isGenerating}
+                                        sx={{ 
+                                            py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', 
+                                            color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
+                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <ReceiptText size={24} color={binThemeTokens.gold} />
+                                            <Typography fontWeight={700}>CHEQUE PAYMENT</Typography>
+                                        </Box>
+                                        <ChevronRight size={20} />
+                                    </Button>
+
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        onClick={() => handleGenerateManifest('CASH')}
+                                        disabled={isGenerating}
+                                        sx={{ 
+                                            py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', 
+                                            color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
+                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <Banknote size={24} color={binThemeTokens.gold} />
+                                            <Typography fontWeight={700}>CASH DEPOSIT</Typography>
+                                        </Box>
+                                        <ChevronRight size={20} />
+                                    </Button>
+
+                                    {isGenerating && (
+                                        <Box sx={{ mt: 2 }}>
+                                            <LinearProgress sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { background: binThemeTokens.gold } }} />
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1, display: 'block' }}>GENERATING DEPOSIT MANIFEST...</Typography>
+                                        </Box>
+                                    )}
+                                </Stack>
+                            ) : (
+                                <Box>
+                                    <Paper sx={{ p: 1, bgcolor: 'rgba(198,167,94,0.05)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.2)', mb: 3 }}>
+                                        <Typography variant="caption" fontWeight={950} color={binThemeTokens.gold}>MANIFEST: {paymentMethod}</Typography>
+                                    </Paper>
+                                    
+                                    {renderManifest()}
+
+                                    <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>
+                                        Once you have initiated the payment, our administrative team will verify the settlement.
+                                    </Typography>
+
                                     <Button 
                                         fullWidth 
-                                        variant="outlined" 
+                                        variant="contained" 
                                         onClick={handleCheckStatus}
                                         disabled={checkingStatus}
-                                        sx={{ mb: 2, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900, py: 1.5 }}
+                                        sx={{ 
+                                            background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
+                                            color: '#0B0B0C', py: 2, fontWeight: 950, borderRadius: 4,
+                                            boxShadow: '0 10px 20px rgba(198, 167, 94, 0.2)', mb: 2
+                                        }}
                                     >
-                                        {checkingStatus ? "VERIFYING..." : "CHECK PAYMENT STATUS"}
+                                        {checkingStatus ? "VERIFYING LEDGER..." : "VERIFY PAYMENT STATUS"}
+                                    </Button>
+
+                                    <Button 
+                                        fullWidth 
+                                        variant="text" 
+                                        size="small"
+                                        onClick={() => setPaymentManifest(null)}
+                                        sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}
+                                    >
+                                        Change Payment Method
                                     </Button>
                                 </Box>
                             )}
@@ -331,9 +347,9 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     ) : (
                         <Box sx={{ p: 4, bgcolor: 'rgba(74,222,128,0.1)', borderRadius: 6, border: '1px solid rgba(74,222,128,0.3)' }}>
                             <CheckCircle2 color="#4ADE80" size={48} style={{ margin: '0 auto 16px' }} />
-                            <Typography variant="h5" fontWeight="900" sx={{ color: '#4ADE80', mb: 1 }}>PAYMENT CONFIRMED</Typography>
+                            <Typography variant="h5" fontWeight="900" sx={{ color: '#4ADE80', mb: 1 }}>SETTLEMENT VERIFIED</Typography>
                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>
-                                Transaction verified via Blockchain hash. Asset activation in progress.
+                                Your activation deposit has been confirmed by the BIN-ADMINISTRY™.
                             </Typography>
                             <Button 
                                 fullWidth 
@@ -351,18 +367,8 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
 
                     <Box sx={{ mt: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, opacity: 0.6 }}>
                         <Lock size={16} color={binThemeTokens.gold} />
-                        <Typography variant="caption" sx={{ fontWeight: 900, letterSpacing: 2, color: binThemeTokens.goldLight }}>SSL SHA-256 ENCRYPTED</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 900, letterSpacing: 2, color: binThemeTokens.goldLight }}>SOVEREIGN SECURE SETTLEMENT</Typography>
                     </Box>
-
-                    <Button 
-                        fullWidth 
-                        variant="text" 
-                        onClick={onBack}
-                        disabled={isPaying}
-                        sx={{ mt: 3, color: binThemeTokens.textSecondary, fontWeight: 900 }}
-                    >
-                        Review Portfolio Scope
-                    </Button>
                 </Paper>
             </Grid>
         </Grid>

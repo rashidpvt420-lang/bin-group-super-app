@@ -15,8 +15,11 @@ interface Ticket {
     createdAt: any;
 }
 
+import { useNavigate } from 'react-router-dom';
+
 export default function TechnicianPortalPage() {
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const [tickets, setTickets] = React.useState<Ticket[]>([]);
     const [loading, setLoading] = React.useState(true);
 
@@ -94,7 +97,14 @@ export default function TechnicianPortalPage() {
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={2}>
-                                    <Button fullWidth variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>{t('tech.open_node')}</Button>
+                                    <Button 
+                                        fullWidth 
+                                        variant="outlined" 
+                                        onClick={() => navigate(`/tech/ticket/${ticket.id}`)}
+                                        sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}
+                                    >
+                                        {t('tech.open_node')}
+                                    </Button>
                                 </Grid>
                             </Grid>
                         </Paper>
