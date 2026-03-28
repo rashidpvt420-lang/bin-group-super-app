@@ -1,7 +1,7 @@
 // Admin Panel - Main Structure (React + TypeScript)
 // admin-panel/src/App.tsx
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
