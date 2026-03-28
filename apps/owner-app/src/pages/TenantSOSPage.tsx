@@ -15,7 +15,7 @@ import { useLanguage } from '../context/LanguageContext';
 export default function TenantSOSPage() {
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
-    const { user } = useRole();
+    const { user, propertyId: sessionPropertyId } = useRole();
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [image, setImage] = useState<File | null>(null);
@@ -35,7 +35,7 @@ export default function TenantSOSPage() {
                 hasImage: !!image,
                 status: 'OPEN',
                 priority: (category === 'ac_failure' || category === 'plumbing' || category === 'electrical') ? 'EMERGENCY' : 'MEDIUM',
-                propertyId: 'PILOT_DUB_01',
+                propertyId: sessionPropertyId || 'PILOT_DUB_01', // Fallback to pilot if not set
                 createdAt: serverTimestamp()
             });
             setSubmitted(true);

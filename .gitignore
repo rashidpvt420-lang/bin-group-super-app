@@ -74,11 +74,12 @@ dist/
 apps/*/build/
 apps/*/dist/
 
-# Hosting target (static assets)
-hosting/public/admin/
-hosting/public/static/
-hosting/public/index.html
-hosting/public/asset-manifest.json
+# Hosting target (production artifacts)
+hosting/public/
+!hosting/public/.keep
+
+# TypeScript build results
+functions/lib/
 
 # dataconnect generated files
 .dataconnect

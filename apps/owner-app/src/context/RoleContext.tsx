@@ -8,6 +8,7 @@ interface RoleContextType {
     godMode: boolean;
     loading: boolean;
     user: User | null;
+    propertyId: string | null;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -17,6 +18,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [isAdmin, setIsAdmin] = useState(false);
     const [godMode, setGodMode] = useState(false);
     const [user, setUser] = useState<User | null>(null);
+    const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -46,21 +48,25 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                                 setRole(data.role?.toLowerCase() || 'owner');
                                 setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
                                 setGodMode(data.godMode === true);
+                                setPropertyId(data.propertyId || null);
                             } else {
                                 setRole('owner');
                                 setIsAdmin(false);
                                 setGodMode(false);
+                                setPropertyId(null);
                             }
                         }
                     }
                 } catch (err) {
                     console.error("Critical role/claim lookup failure:", err);
                     setRole('owner');
+                    setPropertyId(null);
                 }
             } else {
                 setRole(null);
                 setIsAdmin(false);
                 setGodMode(false);
+                setPropertyId(null);
             }
             setLoading(false);
         });
@@ -69,7 +75,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, isAdmin, godMode, loading, user }}>
+        <RoleContext.Provider value={{ role, isAdmin, godMode, loading, user, propertyId }}>
             {children}
         </RoleContext.Provider>
     );
