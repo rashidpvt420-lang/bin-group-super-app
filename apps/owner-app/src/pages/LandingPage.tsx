@@ -139,10 +139,10 @@ const LandingPage: React.FC = () => {
                 <Container maxWidth="md">
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="center" alignItems="center" sx={{ mb: 2 }}>
                         {[
-                            { label: 'Home', href: 'https://bin-group-57c60.web.app/' },
-                            { label: 'Privacy Policy', href: 'https://bin-group-57c60.web.app/privacy-policy.html' },
-                            { label: 'Terms of Service', href: 'https://bin-group-57c60.web.app/terms-of-service.html' },
-                            { label: 'Support', href: 'https://bin-group-57c60.web.app/support' }
+                            { label: 'Home', href: '/' },
+                            { label: 'Privacy Policy', href: '/privacy-policy' },
+                            { label: 'Terms of Service', href: '/terms-of-service' },
+                            { label: 'Support', href: '/support' }
                         ].map((link) => (
                             <Typography 
                                 key={link.label}

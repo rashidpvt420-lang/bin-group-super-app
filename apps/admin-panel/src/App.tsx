@@ -110,7 +110,14 @@ function Layout() {
             </Box>
             <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href='/privacy-policy.html' style={{ color: '#DAA520', textDecoration: 'none', marginLeft: '10px', fontWeight: 'bold' }}>Privacy Policy</a>
+                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | 
+                    <Typography 
+                        component="a" 
+                        href="/privacy-policy.html" 
+                        sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
+                    >
+                        Privacy Policy
+                    </Typography>
                 </Typography>
             </Box>
         </Box>
