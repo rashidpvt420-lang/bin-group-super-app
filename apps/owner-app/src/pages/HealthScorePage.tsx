@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Container,
   Card,
-  CardContent,
   Typography,
   Box,
   Grid,
@@ -15,7 +14,6 @@ import {
   TableHead,
   TableRow,
   Chip,
-  LinearProgress,
   Select,
   MenuItem,
   FormControl,
@@ -24,9 +22,11 @@ import {
   Stack,
   Divider
 } from '@mui/material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { ShieldCheck, Activity, Database, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Activity, Database, AlertTriangle, Construction } from 'lucide-react';
+import { db, collection, query, where, getDocs, limit } from '../lib/firebase';
+import { useRole } from '../context/RoleContext';
 
 interface HealthScoreData {
   date: string;
@@ -47,42 +47,89 @@ interface PropertyHealth {
     tenantRating: number;
     responseTime: number;
   };
+  components?: any[];
 }
 
 export default function HealthScorePage() {
-  const [selectedProperty, setSelectedProperty] = useState('demo_p1');
+  const { user, godMode } = useRole();
+  const [selectedProperty, setSelectedProperty] = useState('');
   const [healthData, setHealthData] = useState<PropertyHealth | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Mocking API response
-    setTimeout(() => {
-        setHealthData({
-            propertyId: 'demo_p1',
-            name: 'Marina Heights Portfolio',
-            currentScore: 94,
-            trend: [
-                { date: 'Feb 24', score: 88, openTickets: 4, completedPPM: 12 },
-                { date: 'Mar 01', score: 90, openTickets: 2, completedPPM: 15 },
-                { date: 'Mar 10', score: 92, openTickets: 1, completedPPM: 18 },
-                { date: 'Mar 24', score: 94, openTickets: 1, completedPPM: 22 },
-            ],
-            scoreBreakdown: {
-                openTickets: 2,
-                completedPPM: 98,
-                latePayments: 0,
-                tenantRating: 4.8,
-                responseTime: 1.2
+    async function fetchHealth() {
+        if (!user) return;
+        
+        try {
+            // Check if portfolioMetrics exist for this owner
+            const metricsRef = collection(db, 'portfolioMetrics');
+            const q = godMode 
+                ? query(metricsRef, limit(1))
+                : query(metricsRef, where('ownerId', '==', user.uid), limit(1));
+            
+            const snap = await getDocs(q);
+            
+            if (!snap.empty) {
+                const data = snap.docs[0].data() as any;
+                setHealthData({
+                    propertyId: snap.docs[0].id,
+                    name: data.name || 'Your Portfolio',
+                    currentScore: data.currentScore || 0,
+                    trend: data.trend || [],
+                    scoreBreakdown: data.scoreBreakdown || {
+                        openTickets: 0,
+                        completedPPM: 0,
+                        latePayments: 0,
+                        tenantRating: 0,
+                        responseTime: 0
+                    },
+                    components: data.components || []
+                });
+                setIsReady(true);
+            } else {
+                // Not ready for this user yet
+                setIsReady(false);
             }
-        });
-        setLoading(false);
-    }, 1000);
-  }, []);
+        } catch (err) {
+            console.error("Health fetch failure:", err);
+            setIsReady(false);
+        } finally {
+            setLoading(false);
+        }
+    }
 
-  if (loading || !healthData) {
+    fetchHealth();
+  }, [user, godMode]);
+
+  if (loading) {
     return (
         <Container sx={{ py: 10, textAlign: 'center' }}>
             <Typography variant="h5" sx={{ color: binThemeTokens.gold }}>Scanning Asset Integrity Layers...</Typography>
+        </Container>
+    );
+  }
+
+  if (!isReady) {
+    return (
+        <Container sx={{ py: 20, textAlign: 'center' }}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+                <Construction size={80} color={binThemeTokens.gold} />
+            </Box>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 2 }}>
+                ASSET INTELLIGENCE UNDER CONSTRUCTION
+            </Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 600, mx: 'auto' }}>
+                The real-time auditing engine is currently synchronizing with your property nodes. 
+                Full integrity reporting will be available once the initial lifecycle scan is complete.
+            </Typography>
+            <Button 
+                variant="outlined" 
+                onClick={() => window.history.back()}
+                sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.gold }}
+            >
+                RETURN TO DASHBOARD
+            </Button>
         </Container>
     );
   }
@@ -97,7 +144,7 @@ export default function HealthScorePage() {
         <FormControl sx={{ minWidth: 350 }}>
             <InputLabel sx={{ color: binThemeTokens.gold }}>SELECT ASSET NODE</InputLabel>
             <Select
-                value={selectedProperty}
+                value={healthData?.propertyId}
                 label="SELECT ASSET NODE"
                 sx={{ 
                     bgcolor: 'rgba(22, 22, 24, 0.7)', 
@@ -108,8 +155,7 @@ export default function HealthScorePage() {
                     '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.05)' }
                 }}
             >
-                <MenuItem value="demo_p1">Marina Heights Portfolio</MenuItem>
-                <MenuItem value="demo_p2">Downtown Tower Node</MenuItem>
+                <MenuItem value={healthData?.propertyId}>{healthData?.name}</MenuItem>
             </Select>
         </FormControl>
       </Box>
@@ -141,7 +187,7 @@ export default function HealthScorePage() {
                     mx: 'auto',
                     boxShadow: '0 0 50px rgba(198, 167, 94, 0.2)'
                 }}>
-                    <Typography variant="h1" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{healthData.currentScore}</Typography>
+                    <Typography variant="h1" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{healthData?.currentScore}</Typography>
                 </Box>
                 <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 1.5 }}>OPTIMAL CONDITION</Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, px: 4 }}>
@@ -166,10 +212,10 @@ export default function HealthScorePage() {
         <Grid item xs={12} md={8}>
             <Grid container spacing={4} sx={{ mb: 4 }}>
                 {[
-                    { label: 'OPEN TICKETS', val: `-${healthData.scoreBreakdown.openTickets}`, color: '#ff4d4d', icon: <AlertTriangle /> },
-                    { label: 'COMPLETED PPM', val: `+${healthData.scoreBreakdown.completedPPM}%`, color: binThemeTokens.gold, icon: <ShieldCheck /> },
-                    { label: 'TENANT RATING', val: `+${healthData.scoreBreakdown.tenantRating}`, color: binThemeTokens.goldLight, icon: <Activity /> },
-                    { label: 'AVG MTTR', val: `${healthData.scoreBreakdown.responseTime}h`, color: binThemeTokens.gold, icon: <Activity /> },
+                    { label: 'OPEN TICKETS', val: healthData?.scoreBreakdown.openTickets !== undefined ? `-${healthData?.scoreBreakdown.openTickets}` : '0', color: '#ff4d4d', icon: <AlertTriangle /> },
+                    { label: 'COMPLETED PPM', val: healthData?.scoreBreakdown.completedPPM !== undefined ? `+${healthData?.scoreBreakdown.completedPPM}%` : '0%', color: binThemeTokens.gold, icon: <ShieldCheck /> },
+                    { label: 'TENANT RATING', val: healthData?.scoreBreakdown.tenantRating !== undefined ? `+${healthData?.scoreBreakdown.tenantRating}` : '5.0', color: binThemeTokens.goldLight, icon: <Activity /> },
+                    { label: 'AVG MTTR', val: healthData?.scoreBreakdown.responseTime !== undefined ? `${healthData?.scoreBreakdown.responseTime}h` : '0h', color: binThemeTokens.gold, icon: <Activity /> },
                 ].map((kpi, i) => (
                     <Grid item xs={12} sm={6} md={3} key={i}>
                         <Paper sx={{ 
@@ -196,7 +242,7 @@ export default function HealthScorePage() {
                 <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>HEALTH VELOCITY (30D)</Typography>
                 <Box sx={{ height: 350, width: '100%' }}>
                     <ResponsiveContainer>
-                        <LineChart data={healthData.trend}>
+                        <LineChart data={healthData?.trend || []}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                             <XAxis dataKey="date" stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} />
                             <YAxis domain={[0, 100]} stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} />
@@ -219,54 +265,52 @@ export default function HealthScorePage() {
         </Grid>
       </Grid>
 
-      {/* Digital Twin Layer */}
-      <Box sx={{ mt: 10 }}>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
-              <Database color={binThemeTokens.gold} size={28} />
-              <Typography variant="h5" sx={{ fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>DIGITAL TWIN COMPONENT REGISTRY</Typography>
-          </Stack>
-          <TableContainer component={Paper} sx={{ 
-              bgcolor: 'rgba(22, 22, 24, 0.6)', 
-              borderRadius: 6, 
-              border: '1px solid rgba(255,255,255,0.05)',
-              boxShadow: '0 30px 60px rgba(0,0,0,0.3)'
-          }}>
-              <Table>
-                  <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
-                      <TableRow>
-                          <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>COMPONENT NODE</TableCell>
-                          <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>ENTITY SERIAL</TableCell>
-                          <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>INTEGRITY</TableCell>
-                          <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>LIFECYCLE STATUS</TableCell>
-                      </TableRow>
-                  </TableHead>
-                  <TableBody>
-                      {[
-                        { node: 'CHILL WATER PUMP ASSEMBLY', serial: 'CW-DXB-9923', condition: '94%', status: 'HEALTHY' },
-                        { node: 'INTERNAL LIFT NODE A-1', serial: 'ELV-Z5-0012', condition: '72%', status: 'PREDICTIVE_WARNING' },
-                        { node: 'FIRE SUPPRESSION GRID', serial: 'FSS-SOV-002', condition: '100%', status: 'MISSION_READY' },
-                      ].map((asset, i) => (
-                        <TableRow key={i} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                          <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{asset.node}</TableCell>
-                          <TableCell sx={{ fontFamily: 'monospace', color: binThemeTokens.textSecondary, fontSize: '0.85rem' }}>{asset.serial}</TableCell>
-                          <TableCell sx={{ color: binThemeTokens.goldLight, fontWeight: 900 }}>{asset.condition}</TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={asset.status} 
-                              size="small" 
-                              sx={{ 
-                                fontSize: '0.65rem', fontWeight: 900,
-                                bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold,
-                                border: '1px solid rgba(198, 167, 94, 0.4)'
-                              }} 
-                            />
-                          </TableCell>
+      {/* Digital Twin Layer - Only show if components available */}
+      {healthData?.components && healthData.components.length > 0 && (
+        <Box sx={{ mt: 10 }}>
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
+                <Database color={binThemeTokens.gold} size={28} />
+                <Typography variant="h5" sx={{ fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>DIGITAL TWIN COMPONENT REGISTRY</Typography>
+            </Stack>
+            <TableContainer component={Paper} sx={{ 
+                bgcolor: 'rgba(22, 22, 24, 0.6)', 
+                borderRadius: 6, 
+                border: '1px solid rgba(255,255,255,0.05)',
+                boxShadow: '0 30px 60px rgba(0,0,0,0.3)'
+            }}>
+                <Table>
+                    <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
+                        <TableRow>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>COMPONENT NODE</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>ENTITY SERIAL</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>INTEGRITY</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>LIFECYCLE STATUS</TableCell>
                         </TableRow>
-                      ))}
-                  </TableBody>
-              </Table>
-          </TableContainer>
-      </Box>
+                    </TableHead>
+                    <TableBody>
+                        {healthData.components.map((asset: any, i: number) => (
+                            <TableRow key={i} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
+                                <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{asset.node}</TableCell>
+                                <TableCell sx={{ fontFamily: 'monospace', color: binThemeTokens.textSecondary, fontSize: '0.85rem' }}>{asset.serial}</TableCell>
+                                <TableCell sx={{ color: binThemeTokens.goldLight, fontWeight: 900 }}>{asset.condition}</TableCell>
+                                <TableCell>
+                                    <Chip 
+                                        label={asset.status} 
+                                        size="small" 
+                                        sx={{ 
+                                            fontSize: '0.65rem', fontWeight: 900,
+                                            bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold,
+                                            border: '1px solid rgba(198, 167, 94, 0.4)'
+                                        }} 
+                                    />
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+        </Box>
+      )}
 
       <Box sx={{ mt: 8, mb: 10 }}>
         <Button 

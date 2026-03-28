@@ -38,8 +38,21 @@ service cloud.firestore {
     // Admins: full access. Users: read/write own profile only.
     match /users/{userId} {
       allow read:   if isAuth() && (uid() == userId || isAdmin());
-      allow create: if isAuth() && uid() == userId;
-      allow update: if isAuth() && (uid() == userId || isAdmin());
+      // Users can only create their own profile. admin/godMode MUST be false by default if client-side created.
+      allow create: if isAuth() && uid() == userId && (
+                      request.resource.data.get('isAdmin', false) == false &&
+                      request.resource.data.get('godMode', false) == false
+                    );
+      // Users can update their profile but CANNOT change sensitivity fields (role, isAdmin, godMode, isSuspended).
+      allow update: if isAuth() && (
+                      isAdmin() || 
+                      (uid() == userId && 
+                        request.resource.data.get('isAdmin', resource.data.isAdmin) == resource.data.isAdmin &&
+                        request.resource.data.get('godMode', resource.data.godMode) == resource.data.godMode &&
+                        request.resource.data.get('role', resource.data.role) == resource.data.role &&
+                        request.resource.data.get('isSuspended', resource.data.isSuspended) == resource.data.isSuspended
+                      )
+                    );
       allow delete: if false; // Soft delete only
     }
 

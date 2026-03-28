@@ -7,7 +7,7 @@ import {
     getRedirectResult,
     UserCredential
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function UnifiedLogin() {
     const [email, setEmail] = useState('');
@@ -37,22 +37,6 @@ export default function UnifiedLogin() {
         const user = userCredential.user;
         const uid = user.uid;
         
-        // CEO/ADMIN Bypass for Sovereign Verification (Institutional Gold List)
-        const goldList = ['rashidpvt420@gmail.com', 'rashid.pvt420@gmail.com', 'rashidbinabdulghani@gmail.com'];
-        if (user.email && goldList.includes(user.email.toLowerCase())) {
-            await setDoc(doc(db, 'users', uid), {
-                email: user.email.toLowerCase(),
-                role: 'ADMIN',
-                isAdmin: true,
-                godMode: true,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
-            
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            window.location.href = isLocal ? 'http://localhost:3000/' : '/admin/';
-            return;
-        }
-
         const docRef = doc(db, 'users', uid);
         const docSnap = await getDoc(docRef);
 
@@ -191,7 +175,7 @@ export default function UnifiedLogin() {
             {/* Branding Footer */}
             <div className="mt-8 text-center">
                 <p className="text-[10px] text-[#94a3b8] font-black uppercase tracking-[0.2em]">
-                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href="/privacy-policy.html" className="text-[#DAA520] no-underline ml-2 font-bold">Privacy Policy</a>
+                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href="/privacy-policy" className="text-[#DAA520] no-underline ml-2 font-bold">Privacy Policy</a>
                 </p>
             </div>
         </div>

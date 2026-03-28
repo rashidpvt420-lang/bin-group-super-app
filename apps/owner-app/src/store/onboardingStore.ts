@@ -31,23 +31,37 @@ export interface PropertyData {
     gen: boolean;
     hvac: boolean;
     districtCooling: boolean;
-    // Majlis Specific
+    // Institutional / Majlis Specific
     majlis: boolean;
-    majlisType: 'private' | 'estate' | 'royal' | 'government' | 'event' | 'sovereign' | 'none';
-    majlisSubtype: string;
-    majlisGarden: boolean;
-    heritageSensitivity: 'Standard' | 'Cultural' | 'Protected' | 'Royal' | 'Sovereign';
-    guestCapacity: number;
-    parkingCapacity: number;
-    hospitalityReadiness: boolean;
-    irrigationSystem: boolean;
-    solarIntegration: boolean;
-    evReadiness: boolean;
-    securityLevel: string;
-    protocolLevel: string;
-    publicGathering: boolean;
-    governmentUse: boolean;
-    eventUse: boolean;
+    majlisType: 'government' | 'sovereign' | 'royal' | 'estate' | 'none';
+    majlisSubtype?: string;
+    majlisGarden?: boolean;
+    authorityName?: string;
+    departmentName?: string;
+    protocolLevel?: 'Standard' | 'High' | 'Sovereign';
+    securityLevel?: 'Standard' | 'Enhanced' | 'Maximum';
+    hospitalityReadiness?: boolean;
+    guestCapacity?: number;
+    parkingCapacity?: number;
+    heritageSensitivity?: 'Standard' | 'Cultural' | 'Protected' | 'Sovereign';
+    eventUse?: boolean;
+    publicAccessLevel?: 'Private' | 'Restricted' | 'Public';
+    irrigationSystem?: boolean;
+    solarIntegration?: boolean;
+    evReadiness?: boolean;
+    publicGathering?: boolean;
+    governmentUse?: boolean;
+    // Hotel Specific
+    hotelClass?: string; 
+    roomCount?: number;
+    restaurantCount?: number;
+    eventHalls?: number;
+    spaGym?: boolean;
+    laundryKitchenComplexity?: 'Low' | 'Medium' | 'High';
+    backOfHouseComplexity?: 'Standard' | 'Complex';
+    occupancyProfile?: string;
+    chilledWaterProfile?: string;
+    commonAreaIntensity?: 'Standard' | 'High' | 'Intense';
     // Compliance missions
     missions: string[];
     // Status

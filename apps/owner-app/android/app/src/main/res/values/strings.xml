@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BIN GROUP Owner</string>
+    <string name="title_activity_main">BIN GROUP Owner</string>
+    <string name="package_name">com.bingroup.owner</string>
+    <string name="custom_url_scheme">com.bingroup.owner</string>
+</resources>

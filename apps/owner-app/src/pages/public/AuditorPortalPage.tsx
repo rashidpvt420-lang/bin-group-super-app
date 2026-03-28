@@ -1,6 +1,7 @@
+
 // apps/owner-app/src/pages/public/AuditorPortalPage.tsx
 import React, { useState } from 'react';
-import { 
+import {
     Container, Paper, Typography, Box, Grid, Card,
     Button, Divider, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, CircularProgress, Stack
 } from '@mui/material';
@@ -14,10 +15,33 @@ export default function AuditorPortalPage() {
     const navigate = useNavigate();
     const [generating, setGenerating] = useState(false);
 
+    const [isReady, setIsReady] = useState(false);
+    const [auditData, setAuditData] = useState<any[]>([]);
+
     React.useEffect(() => {
         if (!loading && (!user || !role || !['AUDITOR', 'ADMIN'].includes(role as string))) {
             navigate('/dashboard');
+            return;
         }
+
+        async function checkAuditIntegrity() {
+            if (!user) return;
+            try {
+                const { collection, getDocs, query, limit } = await import('../../lib/firebase');
+                const { db } = await import('../../lib/firebase');
+                const snap = await getDocs(query(collection(db, 'auditLogs'), limit(10)));
+                if (!snap.empty) {
+                    setAuditData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    setIsReady(true);
+                } else {
+                    setIsReady(false);
+                }
+            } catch (err) {
+                console.error("Audit integrity check failure:", err);
+                setIsReady(false);
+            }
+        }
+        if (user) checkAuditIntegrity();
     }, [loading, user, role, navigate]);
 
     if (loading) return (
@@ -28,9 +52,36 @@ export default function AuditorPortalPage() {
 
     if (!user || !role || !['AUDITOR', 'ADMIN'].includes(role as string)) return null;
 
+    if (!isReady) {
+        return (
+            <Container sx={{ py: 20, textAlign: 'center' }}>
+                <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+                    <ShieldCheck size={80} color={binThemeTokens.gold} />
+                </Box>
+                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 2 }}>
+                    AUDIT FEDERATION HUB OFFLINE
+                </Typography>
+                <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 600, mx: 'auto' }}>
+                    The read-only transparency protocol is currently synchronizing with the National Regulatory Registry.
+                    Institutional audit logs will populate upon the next block validation cycle.
+                </Typography>
+                <Button
+                    variant="outlined"
+                    onClick={() => navigate('/dashboard')}
+                    sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.gold }}
+                >
+                    RETURN TO SECURE DASHBOARD
+                </Button>
+            </Container>
+        );
+    }
+
     const handleAuditRequest = () => {
         setGenerating(true);
-        setTimeout(() => setGenerating(false), 2000);
+        setTimeout(() => {
+            setGenerating(false);
+            alert("Audit Bundle Generation restricted. Contact Federation HQ for secure key transfer.");
+        }, 1500);
     };
 
     return (
@@ -54,11 +105,11 @@ export default function AuditorPortalPage() {
             <Grid container spacing={6}>
                 {/* Early Warning Engine */}
                 <Grid item xs={12} md={8}>
-                    <Paper sx={{ 
-                        p: 5, 
-                        borderRadius: 6, 
-                        mb: 6, 
-                        bgcolor: '#161618', 
+                    <Paper sx={{
+                        p: 5,
+                        borderRadius: 6,
+                        mb: 6,
+                        bgcolor: '#161618',
                         border: '1px solid rgba(198, 167, 94, 0.2)',
                         boxShadow: '0 30px 60px rgba(0,0,0,0.5)'
                     }}>
@@ -66,31 +117,31 @@ export default function AuditorPortalPage() {
                             <Bell color={binThemeTokens.goldLight} size={24} />
                             <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.goldLight, letterSpacing: 1 }}>COMPLIANCE EARLY-WARNING ENGINE</Typography>
                         </Stack>
-                        <Alert 
-                            severity="warning" 
+                        <Alert
+                            severity="warning"
                             icon={<Activity color={binThemeTokens.gold} />}
-                            sx={{ 
-                                mb: 4, 
-                                borderRadius: 4, 
-                                bgcolor: 'rgba(198, 167, 94, 0.05)', 
-                                color: binThemeTokens.textPrimary, 
+                            sx={{
+                                mb: 4,
+                                borderRadius: 4,
+                                bgcolor: 'rgba(198, 167, 94, 0.05)',
+                                color: binThemeTokens.textPrimary,
                                 border: '1px solid rgba(198, 167, 94, 0.15)',
                                 '& .MuiAlert-message': { width: '100%' }
                             }}
                         >
                             <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>PREDICTIVE VIOLATION DETECTED: CLUSTER SOUTH-C</Typography>
                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5, lineHeight: 1.6 }}>
-                                Fire Safety Certification ID: **CERT-DXB-921** is 15 days from expiration. 
+                                Fire Safety Certification ID: **CERT-DXB-921** is 15 days from expiration.
                                 **Regulatory Prediction:** Transition renewal lag (5d) puts entity risk at 84% on April 10.
                             </Typography>
                         </Alert>
-                        <Button 
-                            variant="outlined" 
-                            fullWidth 
-                            sx={{ 
-                                py: 2.5, 
-                                borderRadius: 3, 
-                                borderColor: binThemeTokens.gold, 
+                        <Button
+                            variant="outlined"
+                            fullWidth
+                            sx={{
+                                py: 2.5,
+                                borderRadius: 3,
+                                borderColor: binThemeTokens.gold,
                                 color: binThemeTokens.gold,
                                 fontWeight: 900,
                                 '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.05)', borderColor: binThemeTokens.goldLight }
@@ -100,9 +151,9 @@ export default function AuditorPortalPage() {
                         </Button>
                     </Paper>
 
-                    <TableContainer component={Paper} sx={{ 
-                        borderRadius: 6, 
-                        bgcolor: 'rgba(22, 22, 24, 0.6)', 
+                    <TableContainer component={Paper} sx={{
+                        borderRadius: 6,
+                        bgcolor: 'rgba(22, 22, 24, 0.6)',
                         border: '1px solid rgba(255,255,255,0.05)',
                         boxShadow: '0 30px 60px rgba(0,0,0,0.4)'
                     }}>
@@ -116,29 +167,25 @@ export default function AuditorPortalPage() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {[
-                                    { entity: 'Emaar-A Node', zone: 'DUBAI-CENTRAL', integrity: 94, hash: '0x f7e2b...4d2e' },
-                                    { entity: 'Nakheel-B Node', zone: 'PALM-ZONE-1', integrity: 88, hash: '0x c94b1...e9f3' },
-                                    { entity: 'Aldar-S Node', zone: 'AD-SOUTH-HUB', integrity: 100, hash: '0x d102a...c3b4' },
-                                ].map((row, i) => (
+                                {auditData.map((row, i) => (
                                     <TableRow key={i} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                                        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{row.entity}</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{row.zone}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{row.entity || row.name || 'Unknown'}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{row.zone || 'UAE'}</TableCell>
                                         <TableCell>
                                             <Stack direction="row" spacing={2} alignItems="center">
-                                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, minWidth: 35 }}>{row.integrity}%</Typography>
-                                                <LinearProgress 
-                                                    variant="determinate" 
-                                                    value={row.integrity} 
-                                                    sx={{ 
-                                                        width: 80, height: 6, borderRadius: 3, 
+                                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, minWidth: 35 }}>{row.integrity || 100}%</Typography>
+                                                <LinearProgress
+                                                    variant="determinate"
+                                                    value={row.integrity || 100}
+                                                    sx={{
+                                                        width: 80, height: 6, borderRadius: 3,
                                                         bgcolor: 'rgba(255,255,255,0.05)',
-                                                        '& .MuiLinearProgress-bar': { bgcolor: row.integrity > 90 ? binThemeTokens.gold : binThemeTokens.goldLight }
-                                                    }} 
+                                                        '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold }
+                                                    }}
                                                 />
                                             </Stack>
                                         </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace', color: binThemeTokens.goldLight, fontSize: '0.8rem', letterSpacing: 0.5 }}>{row.hash}</TableCell>
+                                        <TableCell sx={{ fontFamily: 'monospace', color: binThemeTokens.goldLight, fontSize: '0.8rem', letterSpacing: 0.5 }}>{row.hash || row.id}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -148,11 +195,11 @@ export default function AuditorPortalPage() {
 
                 {/* Audit Bundle & API Hub */}
                 <Grid item xs={12} md={4}>
-                    <Paper sx={{ 
-                        p: 5, 
-                        borderRadius: 6, 
-                        bgcolor: '#161618', 
-                        border: '1px solid rgba(255,255,255,0.05)', 
+                    <Paper sx={{
+                        p: 5,
+                        borderRadius: 6,
+                        bgcolor: '#161618',
+                        border: '1px solid rgba(255,255,255,0.05)',
                         mb: 6,
                         background: 'linear-gradient(135deg, #161618 0%, #0B0B0C 100%)',
                         boxShadow: '0 30px 60px rgba(0,0,0,0.5)'
@@ -165,15 +212,15 @@ export default function AuditorPortalPage() {
                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4, lineHeight: 1.8 }}>
                             Generate an encrypted, municipality-grade **Audit Bundle (ZIP)** containing all notarized evidence and certification history for the current fiscal cycle.
                         </Typography>
-                        <Button 
-                            fullWidth 
-                            variant="contained" 
-                            size="large" 
+                        <Button
+                            fullWidth
+                            variant="contained"
+                            size="large"
                             onClick={handleAuditRequest}
-                            sx={{ 
-                                background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                                color: '#0B0B0C', 
-                                fontWeight: 900, 
+                            sx={{
+                                background: 'linear-gradient(135deg, #C6A75E, #E6C77A)',
+                                color: '#0B0B0C',
+                                fontWeight: 900,
                                 py: 3,
                                 borderRadius: 4,
                                 boxShadow: '0 20px 40px rgba(198, 167, 94, 0.3)',
@@ -185,10 +232,10 @@ export default function AuditorPortalPage() {
                         </Button>
                     </Paper>
 
-                    <Paper sx={{ 
-                        p: 5, 
-                        borderRadius: 6, 
-                        bgcolor: 'rgba(22, 22, 24, 0.4)', 
+                    <Paper sx={{
+                        p: 5,
+                        borderRadius: 6,
+                        bgcolor: 'rgba(22, 22, 24, 0.4)',
                         border: '1px solid rgba(255,255,255,0.03)',
                         boxShadow: '0 30px 60px rgba(0,0,0,0.3)'
                     }}>

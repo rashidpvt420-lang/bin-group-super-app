@@ -35,26 +35,19 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         setIsAdmin(claims.role === 'admin' || claims.isAdmin === true);
                         setGodMode(claims.godMode === true);
                     } else {
-                        // FALLBACK TO FIRESTORE + HARDCODED (PILOT PHASE)
-                        const email = currentUser.email?.toLowerCase();
-                        if (email === 'rashidpvt420@gmail.com') {
-                            setRole('admin');
-                            setIsAdmin(true);
-                            setGodMode(true);
+                        // FALLBACK TO FIRESTORE SECURED ROLE DATA
+                        const snap = await getDoc(doc(db, "users", currentUser.uid));
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            setRole(data.role?.toLowerCase() || 'owner');
+                            setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
+                            setGodMode(data.godMode === true);
+                            setPropertyId(data.propertyId || null);
                         } else {
-                            const snap = await getDoc(doc(db, "users", currentUser.uid));
-                            if (snap.exists()) {
-                                const data = snap.data();
-                                setRole(data.role?.toLowerCase() || 'owner');
-                                setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                                setGodMode(data.godMode === true);
-                                setPropertyId(data.propertyId || null);
-                            } else {
-                                setRole('owner');
-                                setIsAdmin(false);
-                                setGodMode(false);
-                                setPropertyId(null);
-                            }
+                            setRole('owner');
+                            setIsAdmin(false);
+                            setGodMode(false);
+                            setPropertyId(null);
                         }
                     }
                 } catch (err) {

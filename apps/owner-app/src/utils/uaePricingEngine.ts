@@ -2,8 +2,8 @@ import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 import { calculateBuildingHealth } from './buildingHealthEngine';
 
 export type Emirate = 'Dubai' | 'Abu Dhabi' | 'Sharjah' | 'Ajman' | 'RAK' | 'Fujairah' | 'UAQ';
-export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Government';
-export type BuildingGrade = 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury';
+export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Government' | 'GOVERNMENT_MAJLIS' | 'GOVERNMENT_PROPERTY' | 'HOTEL';
+export type BuildingGrade = 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
 export type ViewType = 'Community' | 'Pool' | 'Park' | 'Sea' | 'Skyline' | 'Golf' | 'Burj Khalifa';
 
 export interface PropertyDoc {
@@ -75,6 +75,7 @@ export interface QuotationPackageModule {
     includedVisits: number;
     coverageScope: string[];
     recommended: boolean;
+    contractTemplateType?: 'GOVERNMENT_MAJLIS_CONTRACT' | 'GOVERNMENT_PROPERTY_CONTRACT' | 'HOTEL_CONTRACT' | 'STANDARD_AMC';
 }
 
 // ── NEW: Compliance Mission Item ───────────────────────────────────────────────
@@ -170,6 +171,7 @@ const DISTRICT_TIERS: Record<string, { tier: string; mult: number; ownership: 'F
 // ── Compliance Mission Generator ──────────────────────────────────────────────
 const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
     const missions: ComplianceMissionItem[] = [];
+    const pType = inputs.propertyType;
     
     // Always mandatory
     missions.push({
@@ -180,6 +182,28 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         mandatory: true,
         urgencyDays: 30
     });
+
+    if (pType === 'HOTEL') {
+        missions.push({
+            trigger: 'HOTEL_PROTOCOL',
+            mission: 'Guest-Facing Health & Safety Audit (Water/Food/HVAC)',
+            authority: 'Dubai Health Authority / Municipality',
+            frequency: 'Monthly',
+            mandatory: true,
+            urgencyDays: 15
+        });
+    }
+
+    if (pType === 'GOVERNMENT_MAJLIS') {
+        missions.push({
+            trigger: 'MAJLIS_PROTOCOL',
+            mission: 'Sovereign VIP Protocol Readiness & Security Audit',
+            authority: 'Protocol Office / SIRA',
+            frequency: 'Quarterly + Event-Based',
+            mandatory: true,
+            urgencyDays: 7
+        });
+    }
 
     if (inputs.fireAlarm) {
         missions.push({
@@ -192,7 +216,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
     
-    if (inputs.verticalLevel > 2 || inputs.liftsCount > 0 || inputs.escalators) {
+    if (inputs.verticalLevel > 2 || inputs.liftsCount > 0 || inputs.escalators || inputs.lifts > 0) {
         missions.push({
             trigger: 'Lifts / Elevators',
             mission: 'Elevator & Escalator Annual Safety Inspection',
@@ -236,7 +260,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
     
-    if (inputs.sira) {
+    if (inputs.sira || pType === 'GOVERNMENT_MAJLIS' || pType === 'GOVERNMENT_PROPERTY' || pType === 'HOTEL') {
         missions.push({
             trigger: 'CCTV / Security System',
             mission: 'CCTV System Annual Maintenance & SIRA Compliance Audit',
@@ -247,7 +271,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
     
-    if (inputs.pool) {
+    if (inputs.pool || pType === 'HOTEL') {
         missions.push({
             trigger: 'Swimming Pool',
             mission: 'Pool Water Quality Certificate & Civil Defense Compliance',
@@ -280,9 +304,9 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
 
-    if (inputs.assetType === 'Commercial' || inputs.propertyType === 'Commercial') {
+    if (inputs.assetType === 'Commercial' || inputs.propertyType === 'Commercial' || pType === 'GOVERNMENT_PROPERTY' || pType === 'HOTEL') {
         missions.push({
-            trigger: 'Commercial Asset',
+            trigger: 'Institutional Asset',
             mission: 'Health & Safety Audit (OSHAD / OSHA UAE Compliance)',
             authority: 'OSHAD / Dubai Municipality',
             frequency: 'Annual',
@@ -311,7 +335,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
     }
 
     // ── MAJLIS-SPECIFIC COMPLIANCE MISSIONS ───────────────────────────────────
-    if (inputs.majlis || inputs.propertyType === 'Majlis') {
+    if (pType === 'GOVERNMENT_MAJLIS') {
         missions.push({
             trigger: 'Majlis Asset',
             mission: 'Majlis HVAC & Cooling Load Audit (Enhanced Capacity Check)',
@@ -320,64 +344,14 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             mandatory: true,
             urgencyDays: 30
         });
-        if (inputs.majlisType === 'royal' || inputs.majlisType === 'government') {
-            missions.push({
-                trigger: 'Institutional Majlis',
-                mission: 'Sovereign Protocol Readiness & VIP Safety Sign-off',
-                authority: 'Asset Manager / Protocol Office / Presidential Court',
-                frequency: 'Per Event + Annual',
-                mandatory: true,
-                urgencyDays: 7
-            });
-            missions.push({
-                trigger: 'Government Majlis',
-                mission: 'Estidama PBR (Pearl Building Rating) Compliance Audit',
-                authority: 'Abu Dhabi Department of Municipalities and Transport',
-                frequency: 'Annual',
-                mandatory: true,
-                urgencyDays: 90
-            });
-        }
-        if (inputs.majlisType === 'estate') {
-            missions.push({
-                trigger: 'Estate Majlis',
-                mission: 'Agricultural & Irrigation System Efficiency Audit',
-                authority: 'Municipality / Asset Owner',
-                frequency: 'Quarterly',
-                mandatory: true,
-                urgencyDays: 45
-            });
-        }
-        if (inputs.heritageSensitivity === 'Protected' || inputs.heritageSensitivity === 'Royal') {
-            missions.push({
-                trigger: 'Heritage Sensitivity',
-                mission: 'Cultural Heritage Fabric Conservation Assessment',
-                authority: 'Dubai Culture / DCT Abu Dhabi',
-                frequency: 'Annual',
-                mandatory: true,
-                urgencyDays: 120
-            });
-        }
-        if (inputs.sira) {
-            missions.push({
-                trigger: 'Majlis CCTV',
-                mission: 'Majlis SIRA-Grade CCTV Maintenance & Privacy Compliance Audit',
-                authority: 'Security Industry Regulatory Agency (SIRA)',
-                frequency: 'Annual',
-                mandatory: true,
-                urgencyDays: 45
-            });
-        }
-        if (inputs.majlisGarden) {
-            missions.push({
-                trigger: 'Majlis Garden',
-                mission: 'Landscape Irrigation System Audit & Water Conservation Check',
-                authority: 'DEWA / Asset Manager',
-                frequency: 'Bi-Annual',
-                mandatory: false,
-                urgencyDays: 90
-            });
-        }
+        missions.push({
+            trigger: 'Government Majlis',
+            mission: 'Estidama PBR (Pearl Building Rating) Compliance Audit',
+            authority: 'Abu Dhabi Department of Municipalities and Transport',
+            frequency: 'Annual',
+            mandatory: true,
+            urgencyDays: 90
+        });
     }
 
     return missions.sort((a, b) => a.urgencyDays - b.urgencyDays);
@@ -388,24 +362,48 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
     recommendedTier: string;
     recommendedReason: string[];
     score: number;
+    contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT' | 'GOVERNMENT_PROPERTY_CONTRACT' | 'HOTEL_CONTRACT' | 'STANDARD_AMC';
 } => {
     let score = 0;
     const reasons: string[] = [];
+    const pType = inputs.propertyType;
+    const ownerType = inputs.ownerType || 'PRIVATE';
 
+    // ── INSTITUTIONAL CONTRACT ROUTING ──────────────────────────────────────
+    if (ownerType === 'GOVERNMENT' && pType === 'GOVERNMENT_MAJLIS') {
+        return { 
+            recommendedTier: 'INSTITUTIONAL_SOVEREIGN', 
+            recommendedReason: ['Government Majlis Protocol Requirements', 'VIP Security Level Integration'], 
+            score: 100,
+            contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT'
+        };
+    }
+
+    if (ownerType === 'GOVERNMENT' && pType === 'GOVERNMENT_PROPERTY') {
+        return { 
+            recommendedTier: 'GOVERNMENT_FACILITY_MANAGEMENT', 
+            recommendedReason: ['Departmental Asset Criticality', 'Enhanced Compliance Stack'], 
+            score: 95,
+            contractTemplate: 'GOVERNMENT_PROPERTY_CONTRACT'
+        };
+    }
+
+    if (pType === 'HOTEL') {
+        return { 
+            recommendedTier: 'HOSPITALITY_PREMIUM_FM', 
+            recommendedReason: ['24/7 Operations Load', 'Guest-Facing Service Intensity'], 
+            score: 98,
+            contractTemplate: 'HOTEL_CONTRACT'
+        };
+    }
+
+    // ── STANDARD ROUTING ───────────────────────────────────────────────────
     if (gradeMult >= 1.8) { score += 30; reasons.push('Luxury/Ultra-Luxury grade requires full FM coverage'); }
     if (missions.length >= 5) { score += 25; reasons.push(`${missions.length} mandatory compliance missions detected`); }
     if ((inputs.buildingAge || 0) > 10) { score += 20; reasons.push('Asset age > 10 years — reactive costs rising'); }
     if (inputs.districtCooling) { score += 10; reasons.push('District Cooling interface requires specialist management'); }
     if (inputs.pool || inputs.bmu) { score += 10; reasons.push('High-complexity systems (Pool/BMU) detected'); }
     if (inputs.strategy === 'rent') { score += 15; reasons.push('Rental yield strategy — Zero-call model maximizes tenant retention'); }
-    if ((inputs.floors || inputs.verticalLevel || 1) > 20) { score += 10; reasons.push('High-rise vertical complexity detected'); }
-    if (inputs.majlis || inputs.propertyType === 'Majlis') {
-        score += 30;
-        const mjType = inputs.majlisType || 'private';
-        reasons.push(mjType === 'royal' ? 'Royal/Sovereign Majlis — full FM + hospitality readiness required'
-            : mjType === 'estate' ? 'Estate Majlis — premium grounds & HVAC management required'
-            : 'Majlis asset — enhanced cooling & deep-care package recommended');
-    }
 
     let tier: string;
     if (score >= 70) {
@@ -416,7 +414,7 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
         tier = 'MAINTENANCE ONLY CONTRACT';
     }
 
-    return { recommendedTier: tier, recommendedReason: reasons, score };
+    return { recommendedTier: tier, recommendedReason: reasons, score, contractTemplate: 'STANDARD_AMC' };
 };
 
 // ── Portfolio Discount Logic ──────────────────────────────────────────────────

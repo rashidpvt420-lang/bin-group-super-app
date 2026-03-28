@@ -44,26 +44,6 @@ const LoginPage: React.FC = () => {
         const uid = result.user.uid;
         const email = (result.user.email || '').toLowerCase();
         
-        const googleAdmin = 'rashidpvt420@gmail.com';
-        const goldList = [googleAdmin, 'rashid.pvt420@gmail.com', 'rashidbinabdulghani@gmail.com'];
-
-        if (email && goldList.includes(email)) {
-             const isCEO = email.includes('rashidpvt') || email.includes('rashid.pvt');
-             const profileData = {
-                email,
-                uid,
-                displayName: isCEO ? "BIN-GROUP CEO (ADMIN)" : "BIN-GROUP TECHNICAL",
-                role: isCEO ? 'ceo' : 'technical',
-                isAdmin: true,
-                godMode: true,
-                status: 'active',
-                updatedAt: new Date().toISOString()
-            };
-            await setDoc(doc(db, "users", uid), profileData, { merge: true });
-            navigate('/dashboard');
-            return;
-        }
-
         const snap = await getDoc(doc(db, "users", uid));
         if (snap.exists()) {
             const data = snap.data();

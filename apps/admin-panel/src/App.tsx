@@ -113,7 +113,7 @@ function Layout() {
                     © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | 
                     <Typography 
                         component="a" 
-                        href="/privacy-policy.html" 
+                        href="/privacy-policy" 
                         sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
                     >
                         Privacy Policy

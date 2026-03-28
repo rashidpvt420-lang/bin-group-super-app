@@ -1,34 +1,99 @@
 // owner-app/src/pages/InvoiceDetailsPage.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Container, Paper, Typography, Box, Table, TableBody, 
     TableCell, TableContainer, TableHead, TableRow, Divider,
-    Button, Stack, Chip, Grid
+    Button, Stack, Chip, Grid, CircularProgress
 } from '@mui/material';
-import { Download, Printer, ShieldCheck, FileText, Share2 } from 'lucide-react';
+import { Download, Printer, ShieldCheck, FileText, Share2, FileQuestion } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { db, doc, getDoc } from '../lib/firebase';
+import { useRole } from '../context/RoleContext';
 
 export default function InvoiceDetailsPage() {
-    // Mock Data for V1.4 Preview
-    const invoice = {
-        id: 'INV-2026-0034',
-        date: '2026-03-24',
-        dueDate: '2026-04-01',
-        owner: 'Institutional Portfolio A',
-        entity: 'UAE Ministry of Infrastructure',
-        campus: 'Dubai East Education Cluster',
-        ownerTrn: '100XXXXXXXXX003',
-        region: 'Dubai East Cluster',
-        integrityHash: 'a5c1e34b8e2f4d1c9a0b7d2e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a',
-        property: 'Marina Heights Unit 2201',
-        items: [
-            { descEn: 'Institutional Management Fee', descAr: 'رسوم الإدارة المؤسسية', qty: 1, rate: 2500, total: 2500 },
-            { descEn: 'Emergency Plumbing Resolution', descAr: 'إصلاح السباكة في حالات الطوارئ', qty: 1, rate: 450, total: 450 },
-            { descEn: 'SLA Breach Credit (4hrs)', descAr: 'خصم انتهاك اتفاقية مستوى الخدمة', qty: 1, rate: -250, total: -250 },
-        ]
-    };
+    const { id } = useParams();
+    const { user, godMode } = useRole();
+    const [invoice, setInvoice] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    const total = invoice.items.reduce((sum, item) => sum + item.total, 0);
+    useEffect(() => {
+        async function fetchInvoice() {
+            if (!id) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                // In BIN-OS, invoices are often linked to contracts or specific billingEvents
+                const docRef = doc(db, 'contracts', id);
+                const snap = await getDoc(docRef);
+
+                if (snap.exists()) {
+                    const data = snap.data();
+                    // Basic security check: owner must own the contract unless godMode
+                    if (!godMode && data.ownerId !== user?.uid) {
+                        setInvoice(null);
+                    } else {
+                        setInvoice({
+                            id: snap.id,
+                            date: data.createdAt?.toDate().toLocaleDateString() || 'N/A',
+                            dueDate: data.dueDate?.toDate().toLocaleDateString() || 'N/A',
+                            owner: data.ownerName || 'Valued Partner',
+                            entity: data.entityName || 'Authorized Asset',
+                            campus: data.campus || 'Main Cluster',
+                            ownerTrn: data.trn || 'Pending Verification',
+                            region: data.region || 'UAE',
+                            integrityHash: data.integrityHash || '0xVIRTUAL_SETTLEMENT_LAYER',
+                            property: data.propertyName || 'Registered Property',
+                            items: data.billingItems || []
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Invoice fetch error:", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchInvoice();
+    }, [id, user, godMode]);
+
+    if (loading) {
+        return (
+            <Container sx={{ py: 10, textAlign: 'center' }}>
+                <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold }} />
+                <Typography sx={{ mt: 2, color: binThemeTokens.gold }}>Retrieving Secure Ledger...</Typography>
+            </Container>
+        );
+    }
+
+    if (!invoice) {
+        return (
+            <Container sx={{ py: 20, textAlign: 'center' }}>
+                <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+                    <FileQuestion size={80} color={binThemeTokens.gold} />
+                </Box>
+                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 2 }}>
+                    LEDGER NOT FOUND
+                </Typography>
+                <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 600, mx: 'auto' }}>
+                    The requested invoice could not be located in the current settlement layer. 
+                    Please verify the Invoice ID or contact institutional support.
+                </Typography>
+                <Button 
+                    variant="outlined" 
+                    onClick={() => window.history.back()}
+                    sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.gold }}
+                >
+                    RETURN TO PORTFOLIO
+                </Button>
+            </Container>
+        );
+    }
+
+    const total = invoice.items.reduce((sum: number, item: any) => sum + item.total, 0);
     const vat = Math.round(total * 0.05);
     const finalTotal = total + vat;
 
@@ -136,7 +201,7 @@ export default function InvoiceDetailsPage() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {invoice.items.map((item, i) => (
+                            {invoice.items.map((item: any, i: number) => (
                                 <TableRow key={i} sx={{ '&:last-child td': { borderBottom: 0 } }}>
                                     <TableCell sx={{ py: 4, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{item.descEn}</Typography>
