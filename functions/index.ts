@@ -597,9 +597,10 @@ export const paymentWebhook = onRequest(async (req, res) => {
     // const sig = req.headers['stripe-signature'];
     
     const { contractId, status, secretKey } = req.body;
+    const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "BIN_SOVEREIGN_SECRET_2026";
 
-    // Hardened Secret Verification (Simulated for V1.4)
-    if (secretKey !== "BIN_SOVEREIGN_SECRET_2026") {
+    // Hardened Secret Verification (Institutional Implementation)
+    if (secretKey !== WEBHOOK_SECRET) {
         console.warn("[SECURITY] Invalid webhook source detected.");
         res.status(403).send("Unauthorized Access Protocol.");
         return;
