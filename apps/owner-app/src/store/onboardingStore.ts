@@ -8,6 +8,7 @@ export interface PropertyData {
     propertyType: string;
     subType: string;
     useType: 'Rental' | 'Personal' | 'Mixed' | 'Government';
+    ownerType: 'Private' | 'Government';
     floors: number;
     units: number;
     bedrooms: number;
@@ -33,11 +34,12 @@ export interface PropertyData {
     districtCooling: boolean;
     // Institutional / Majlis Specific
     majlis: boolean;
-    majlisType: 'government' | 'sovereign' | 'royal' | 'estate' | 'none';
+    majlisType: 'government' | 'none'; // Restricted to Government only per final business rules
     majlisSubtype?: string;
     majlisGarden?: boolean;
     authorityName?: string;
     departmentName?: string;
+    govPropertySubtype?: 'office' | 'service_center' | 'facility' | 'accommodation' | 'compound' | 'mixed_government_building';
     protocolLevel?: 'Standard' | 'High' | 'Sovereign';
     securityLevel?: 'Standard' | 'Enhanced' | 'Maximum';
     hospitalityReadiness?: boolean;
@@ -51,8 +53,10 @@ export interface PropertyData {
     evReadiness?: boolean;
     publicGathering?: boolean;
     governmentUse?: boolean;
+    hvacCount?: number;
+    hvacType?: string;
     // Hotel Specific
-    hotelClass?: string; 
+    hotelClass?: '3_STAR' | '4_STAR' | '5_STAR' | 'DELUXE' | 'ULTRA_LUXURY'; 
     roomCount?: number;
     restaurantCount?: number;
     eventHalls?: number;
@@ -62,6 +66,7 @@ export interface PropertyData {
     occupancyProfile?: string;
     chilledWaterProfile?: string;
     commonAreaIntensity?: 'Standard' | 'High' | 'Intense';
+    poolsCount?: number;
     // Compliance missions
     missions: string[];
     // Status
@@ -141,6 +146,7 @@ const defaultProperty: PropertyData = {
     propertyType: 'Residential',
     subType: 'Apartment',
     useType: 'Rental',
+    ownerType: 'Private',
     floors: 1,
     units: 1,
     bedrooms: 1,
@@ -300,7 +306,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                     estimatedACV: 0, // Calculated in pricing engine later
                     recommendedTier: 'Premium',
                     isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
-                    isSovereignPortfolio: props.some(p => p.majlisType === 'sovereign' || p.assetGrade === 'Sovereign'),
+                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign' || p.propertyType === 'GOVERNMENT_MAJLIS' || p.propertyType === 'GOVERNMENT_PROPERTY'),
                 };
 
                 // Logic for tier recommendation

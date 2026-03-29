@@ -450,7 +450,8 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
         
         generateTenderScopePdf({
             emirate: input.emirate,
-            assetType: (input as any).majlis ? `Sovereign Majlis (${(input as any).majlisType})` : (input.assetType || 'Residential'),
+            propertyType: (input as any).propertyType || 'Residential',
+            assetType: (input as any).propertyType === 'GOVERNMENT_MAJLIS' ? 'Government Majlis' : (input.assetType || 'Residential'),
             sqft: input.floorPlateSqFt || 0, // Use floorPlateSqFt from input
             annualYield: 7.12, // Default benchmark yield
             majlisType: (input as any).majlisType,
@@ -532,7 +533,7 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                     <Box sx={{ textAlign: 'center' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>ASSET CLASS</Typography>
                         <Typography variant="h4" fontWeight="900" sx={{ color: '#fff', fontSize: '1.2rem', mt: 1 }}>
-                            {(input as any).majlis ? `SOVEREIGN MAJLIS (${(input as any).majlisType?.toUpperCase()})` : (input.assetType?.toUpperCase() || 'SOVEREIGN')}
+                            {(input as any).propertyType === 'GOVERNMENT_MAJLIS' ? 'GOVERNMENT MAJLIS' : (input.assetType?.toUpperCase() || 'SOVEREIGN')}
                         </Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
                             {valuationResult.geographyIntelligence?.districtTier || 'PRIME'} GRADE
@@ -542,9 +543,9 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
 
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, flexGrow: 1 }}>
-                        Calibration complete. {input.emirate} market benchmarks for {(input as any).majlis ? 'Institutional Majlis' : (input.assetType || (input as any).subType || 'asset')} in {valuationResult.geographyIntelligence?.districtTier || 'UAE'} district.
+                        Calibration complete. {input.emirate} market benchmarks for {(input as any).propertyType === 'GOVERNMENT_MAJLIS' ? 'Government Majlis' : (input.assetType || (input as any).subType || 'asset')} in {valuationResult.geographyIntelligence?.districtTier || 'UAE'} district.
                     </Typography>
-                    {(input as any).majlis && (['royal', 'government'].includes((input as any).majlisType)) && (
+                    {((input as any).propertyType === 'GOVERNMENT_MAJLIS' || (input as any).propertyType === 'GOVERNMENT_PROPERTY' || (input as any).propertyType === 'HOTEL') && (
                          <Chip 
                             label="TENDER READY" 
                             size="small"

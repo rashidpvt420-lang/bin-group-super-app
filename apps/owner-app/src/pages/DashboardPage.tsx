@@ -141,7 +141,7 @@ export default function DashboardPage() {
             { label: t('dash.kpi.gross_val'), val: `AED ${(metrics?.yield?.grossContractValue/1000).toFixed(1)}K`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
             { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
             { label: t('dash.kpi.radius'), val: properties[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
-            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'majlis') ? t('status.sovereign') : `${metrics?.compliance}%`, trend: 'OPTIMAL', icon: <InfoOutlinedIcon /> },
+            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
         ].map((kpi, i) => (
             <Grid item xs={12} md={3} key={i}>
                 <Card sx={{ 

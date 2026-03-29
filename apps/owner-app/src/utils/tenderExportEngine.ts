@@ -4,12 +4,13 @@ import 'jspdf-autotable';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 /**
- * Institutional Tender Export Module v1.0
- * Generates sovereign-grade tender packs for Abu Dhabi / Al Ain government and private estate mandates.
+ * Institutional Tender Export Module v1.21
+ * Generates sovereign-grade tender packs for Abu Dhabi / Al Ain government and hospitality mandates.
  */
 
 export interface TenderInput {
     emirate: string;
+    propertyType: string;
     assetType: string;
     sqft: number;
     annualYield: number;
@@ -24,7 +25,7 @@ export function generateComplianceMatrix(input: TenderInput) {
         { standard: 'Civil Defense (DCD)', requirement: 'Mandatory 24/7 Monitoring', status: 'INCLUDED', frequency: 'Real-time' },
         { standard: 'SIRA (Security)', requirement: 'IP CCTV & Entry Logic Verification', status: 'INCLUDED', frequency: 'Annual Audit' },
         { standard: 'Municipality (ADM/DLD)', requirement: 'Sovereign Health Reporting', status: 'INCLUDED', frequency: 'Quarterly' },
-        { standard: 'Heritage Authority', requirement: 'Sensitive Facade Conservation', status: input.heritageSensitivity !== 'standard' ? 'S-CLASS ENFORCED' : 'EXEMPT', frequency: 'Specialist' },
+        { standard: 'Heritage Authority', requirement: 'Sensitive Facade Conservation', status: input.heritageSensitivity !== 'Standard' && input.heritageSensitivity !== 'standard' ? 'S-CLASS ENFORCED' : 'EXEMPT', frequency: 'Specialist' },
         { standard: 'Estidama Rating', requirement: 'Sustainability Reporting', status: input.hasSolar ? 'GOLD ENFORCED' : 'PEARL 1', frequency: 'Bi-Annual' }
     ];
 }
@@ -35,7 +36,7 @@ export function generateLifecycleProjection(input: TenderInput) {
     return years.map((year, i) => ({
         year,
         opEx: (opEx * (1 + (i * 0.05))).toFixed(0), // 5% inflation/wear
-        capEx: (i === 3 ? (opEx * 2.5) : (opEx * 0.3)).toFixed(0), // Major HVAC/Elevator refresh in Y4
+        capEx: (i === 3 ? (opEx * 2.5) : (opEx * 0.3)).toFixed(0), // Major HVAC refresh in Y4
         integrityScore: (98 - (i * 1.5)).toFixed(1)
     }));
 }
@@ -63,7 +64,7 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
     
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.text(`REGION: ${input.emirate.toUpperCase()} | ASSET: ${input.assetType.toUpperCase()} | v1.21-SOVEREIGN`, margin, 42);
+    doc.text(`REGION: ${input.emirate.toUpperCase()} | ASSET: ${input.assetType.toUpperCase()} | v7.1-INSTITUTIONAL`, margin, 42);
 
     // Section 1: Executive Summary
     doc.setTextColor(11, 11, 12);
@@ -73,10 +74,11 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
 
     const summaryData = [
         ['Portfolio Area', `${input.sqft.toLocaleString()} Sq.Ft`],
+        ['Asset Category', input.propertyType.replace('_', ' ')],
         ['Institutional Yield', `${input.annualYield}%`],
-        ['Institutional AMC (Floor)', `AED ${valuation.annualContractValue?.toLocaleString()}`],
+        ['Institutional AMC (Floor)', `AED ${valuation.annualContractValue?.toLocaleString() || valuation.package?.annualPrice?.toLocaleString() || valuation.fmQuote?.annualEstimate?.target?.toLocaleString()}`],
         ['Mission Priority Status', 'S-CLASS SOVEREIGN READINESS'],
-        ['Majlis Configuration', input.majlisType ? input.majlisType.toUpperCase() : 'N/A']
+        ['Majlis Configuration', input.propertyType === 'GOVERNMENT_MAJLIS' ? (input.majlisType || 'GOVERNMENT').toUpperCase() : 'N/A']
     ];
 
     doc.autoTable({
@@ -127,7 +129,7 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text('CONFIDENTIAL: This document is an institutional sovereign audit produced by BIN-GENESIS™ v1.21.', margin, 285);
+    doc.text('CONFIDENTIAL: This document is an institutional sovereign audit produced by BIN-GENESIS™ v7.1.', margin, 285);
 
     doc.save(`BIN-TENDER-${input.emirate}-${Date.now()}.pdf`);
 }

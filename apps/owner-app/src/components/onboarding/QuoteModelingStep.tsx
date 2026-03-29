@@ -32,6 +32,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
     const handleDownloadTender = () => {
         const tenderInput: TenderInput = {
             emirate: propertyData?.emirate || 'Abu Dhabi',
+            propertyType: propertyData?.propertyType || 'Residential',
             assetType: propertyData?.propertyType || 'Residential Portfolio',
             sqft: propertyData?.sqft || 0,
             annualYield: 7.2, // Calibrated for super-app launch
@@ -89,8 +90,14 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>ASSET CLASS</Typography>
+                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
+                        {propertyData.propertyType === 'GOVERNMENT_MAJLIS' ? 'GOV MAJLIS' : (propertyData.propertyType || '').toUpperCase()}
+                    </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('field.grade')}</Typography>
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF' }}>
+                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: '#FFFFFF' }}>
                         {(propertyData.assetGrade || '').toUpperCase()}
                     </Typography>
                 </Box>

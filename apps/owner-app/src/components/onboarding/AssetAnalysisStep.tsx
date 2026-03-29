@@ -109,7 +109,9 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                     <PaperWithLabel label={t('analysis.composition')} icon={<Workflow size={24} />}>
                         <MetricRow label={t('type.residential')} value={properties.filter(p => p.propertyType === 'Residential').length} />
                         <MetricRow label={t('type.commercial')} value={properties.filter(p => p.propertyType === 'Commercial' || p.propertyType === 'Mixed-Use').length} />
-                        <MetricRow label={t('type.majlis')} value={properties.filter(p => p.propertyType === 'Majlis').length} />
+                        <MetricRow label={t('type.majlis')} value={properties.filter(p => p.propertyType === 'GOVERNMENT_MAJLIS').length} />
+                        <MetricRow label={t('type.govt_property')} value={properties.filter(p => p.propertyType === 'GOVERNMENT_PROPERTY').length} />
+                        <MetricRow label={t('type.hotel')} value={properties.filter(p => p.propertyType === 'HOTEL').length} />
                     </PaperWithLabel>
                 </Grid>
 

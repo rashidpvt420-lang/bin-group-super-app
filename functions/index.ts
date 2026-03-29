@@ -217,14 +217,14 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
     });
 
     // 2.1 Sector-Specific Routing Protocol (V1.4)
-    if (ticket.propertyType === "School") {
+    if (ticket.propertyType === "School" || ticket.propertyType === "Institutional") {
         if (text.includes("lab")) detectedTrade = "ELECTRICAL";
         if (text.includes("washroom")) detectedTrade = "PLUMBING";
         if (text.includes("classroom")) detectedTrade = "HVAC";
     }
 
     // 2.2 Guest-Impact Priority Override (V1.4 Hospitality)
-    if (ticket.propertyType === "Hotel" && ticket.source === "guestRoom") {
+    if ((ticket.propertyType === "Hotel" || ticket.propertyType === "HOTEL") && ticket.source === "guestRoom") {
         priority = "EMERGENCY"; // hospitality response requirement <30mins
     }
 

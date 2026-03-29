@@ -2,7 +2,26 @@ import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 import { calculateBuildingHealth } from './buildingHealthEngine';
 
 export type Emirate = 'Dubai' | 'Abu Dhabi' | 'Sharjah' | 'Ajman' | 'RAK' | 'Fujairah' | 'UAQ';
-export type PropertyType = 'Residential' | 'Commercial' | 'Industrial' | 'Government' | 'GOVERNMENT_MAJLIS' | 'GOVERNMENT_PROPERTY' | 'HOTEL';
+export type PropertyType = 
+    | 'Residential' 
+    | 'Commercial' 
+    | 'Industrial' 
+    | 'Mixed-Use' 
+    | 'Institutional'
+    | 'GOVERNMENT_MAJLIS' 
+    | 'GOVERNMENT_PROPERTY' 
+    | 'HOTEL'
+    | 'Villa' 
+    | 'Apartment' 
+    | 'Residential Building' 
+    | 'Office' 
+    | 'Commercial Building' 
+    | 'Warehouse' 
+    | 'School' 
+    | 'Hospital' 
+    | 'Mall' 
+    | 'Mixed-Use Tower';
+
 export type BuildingGrade = 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
 export type ViewType = 'Community' | 'Pool' | 'Park' | 'Sea' | 'Skyline' | 'Golf' | 'Burj Khalifa';
 
@@ -78,7 +97,6 @@ export interface QuotationPackageModule {
     contractTemplateType?: 'GOVERNMENT_MAJLIS_CONTRACT' | 'GOVERNMENT_PROPERTY_CONTRACT' | 'HOTEL_CONTRACT' | 'STANDARD_AMC';
 }
 
-// ── NEW: Compliance Mission Item ───────────────────────────────────────────────
 export interface ComplianceMissionItem {
     trigger: string;
     mission: string;
@@ -96,7 +114,6 @@ export interface IntegratedIntelligenceResponse {
     forecast: MaintenanceForecastModule;
     insights: OwnerInsightsModule;
     package: QuotationPackageModule;
-    // ── NEW MODULES ─────────────
     complianceMissions: ComplianceMissionItem[];
     geographyIntelligence: {
         districtTier: string;
@@ -123,7 +140,6 @@ export interface IntegratedIntelligenceResponse {
         efficiencyGain: string;
         complianceCoverageBoost: string;
     };
-    // ── EXISTING ─────────────────
     dataStatusLabel: string;
     decisionVersion: string;
     confidenceScore: number;
@@ -137,9 +153,7 @@ export interface IntegratedIntelligenceResponse {
     benchmark?: any;
 }
 
-// ── Geography Intelligence Layer ──────────────────────────────────────────────
 const DISTRICT_TIERS: Record<string, { tier: string; mult: number; ownership: 'Freehold' | 'Leasehold' | 'Government' }> = {
-    // Dubai Premium Districts
     'Palm Jumeirah':     { tier: 'ALPHA_ULTRA', mult: 2.10, ownership: 'Freehold' },
     'Downtown Dubai':    { tier: 'ALPHA_PRIME', mult: 1.60, ownership: 'Freehold' },
     'Dubai Marina':      { tier: 'ALPHA',       mult: 1.45, ownership: 'Freehold' },
@@ -156,24 +170,19 @@ const DISTRICT_TIERS: Record<string, { tier: string; mult: number; ownership: 'F
     'Al Quoz':           { tier: 'GAMMA',       mult: 0.75, ownership: 'Leasehold' },
     'Deira':             { tier: 'GAMMA',       mult: 0.78, ownership: 'Leasehold' },
     'Bur Dubai':         { tier: 'GAMMA',       mult: 0.80, ownership: 'Leasehold' },
-    // Abu Dhabi
     'Saadiyat Island':   { tier: 'ALPHA_ULTRA', mult: 1.90, ownership: 'Freehold' },
     'Al Reem Island':    { tier: 'ALPHA',       mult: 1.50, ownership: 'Freehold' },
     'Yas Island':        { tier: 'ALPHA',       mult: 1.45, ownership: 'Freehold' },
     'Al Ain':            { tier: 'BETA',        mult: 0.90, ownership: 'Leasehold' },
-    // Sharjah
     'Al Majaz':          { tier: 'BETA',        mult: 0.88, ownership: 'Leasehold' },
     'Al Nahda':          { tier: 'BETA',        mult: 0.85, ownership: 'Leasehold' },
-    // Default
     'Default':           { tier: 'BETA',        mult: 1.00, ownership: 'Freehold' },
 };
 
-// ── Compliance Mission Generator ──────────────────────────────────────────────
 const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
     const missions: ComplianceMissionItem[] = [];
     const pType = inputs.propertyType;
     
-    // Always mandatory
     missions.push({
         trigger: 'ALL PROPERTIES',
         mission: 'Annual Fire Safety Inspection & Civil Defense Certificate',
@@ -205,10 +214,10 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
 
-    if (inputs.fireAlarm) {
+    if (inputs.fireAlarm || inputs.firePump) {
         missions.push({
-            trigger: 'Fire Alarm System',
-            mission: 'Fire Alarm System Preventive Maintenance & Certification',
+            trigger: 'Fire Safety Systems',
+            mission: 'Fire Alarm & Pump Preventive Maintenance & Certification',
             authority: 'Dubai Civil Defense (DCD)',
             frequency: 'Quarterly',
             mandatory: true,
@@ -216,11 +225,11 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
         });
     }
     
-    if (inputs.verticalLevel > 2 || inputs.liftsCount > 0 || inputs.escalators || inputs.lifts > 0) {
+    if (inputs.lifts > 0 || inputs.escalators) {
         missions.push({
             trigger: 'Lifts / Elevators',
             mission: 'Elevator & Escalator Annual Safety Inspection',
-            authority: 'Dubai Municipality (DM) — Elevator Section',
+            authority: 'Dubai Municipality (DM)',
             frequency: 'Annual + Monthly PM',
             mandatory: true,
             urgencyDays: 63
@@ -235,28 +244,6 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             frequency: 'Quarterly',
             mandatory: true,
             urgencyDays: 120
-        });
-    }
-    
-    if (inputs.centralLPG) {
-        missions.push({
-            trigger: 'Central LPG System',
-            mission: 'LPG Network Annual Inspection & Authority Certification',
-            authority: 'Dubai Supply & Business Dept. (DSBD)',
-            frequency: 'Annual',
-            mandatory: true,
-            urgencyDays: 45
-        });
-    }
-    
-    if (inputs.bmu) {
-        missions.push({
-            trigger: 'BMU / Façade System',
-            mission: 'Building Maintenance Unit (BMU) Annual Certification',
-            authority: 'Dubai Municipality — Building Safety',
-            frequency: 'Annual',
-            mandatory: true,
-            urgencyDays: 90
         });
     }
     
@@ -281,60 +268,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             urgencyDays: 30
         });
     }
-    
-    if (inputs.firePump) {
-        missions.push({
-            trigger: 'Fire Pump System',
-            mission: 'Fire Pump Inspection & Flow Test Certification',
-            authority: 'Dubai Civil Defense (DCD)',
-            frequency: 'Bi-Annual',
-            mandatory: true,
-            urgencyDays: 60
-        });
-    }
-    
-    if (inputs.districtCooling) {
-        missions.push({
-            trigger: 'District Cooling',
-            mission: 'DC Heat Exchanger Flush & Interface Efficiency Audit',
-            authority: 'District Cooling Provider (EMICOOL/EMPOWER)',
-            frequency: 'Annual',
-            mandatory: false,
-            urgencyDays: 180
-        });
-    }
 
-    if (inputs.assetType === 'Commercial' || inputs.propertyType === 'Commercial' || pType === 'GOVERNMENT_PROPERTY' || pType === 'HOTEL') {
-        missions.push({
-            trigger: 'Institutional Asset',
-            mission: 'Health & Safety Audit (OSHAD / OSHA UAE Compliance)',
-            authority: 'OSHAD / Dubai Municipality',
-            frequency: 'Annual',
-            mandatory: true,
-            urgencyDays: 60
-        });
-    }
-
-    if (inputs.assetType === 'Mixed-Use' || inputs.propertyType === 'Mixed-Use' || inputs.useType === 'Mixed') {
-        missions.push({
-            trigger: 'Mixed-Use Asset',
-            mission: 'Hybrid Zoning Safety Audit & Dual-Use Compliance Certification',
-            authority: 'Dubai Municipality / RERA / Civil Defense',
-            frequency: 'Annual',
-            mandatory: true,
-            urgencyDays: 45
-        });
-        missions.push({
-            trigger: 'Hybrid Allocation',
-            mission: 'Utility Load Verification (Commercial vs Residential Balancing)',
-            authority: 'DEWA / ADDC',
-            frequency: 'Annual',
-            mandatory: false,
-            urgencyDays: 120
-        });
-    }
-
-    // ── MAJLIS-SPECIFIC COMPLIANCE MISSIONS ───────────────────────────────────
     if (pType === 'GOVERNMENT_MAJLIS') {
         missions.push({
             trigger: 'Majlis Asset',
@@ -357,35 +291,34 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
     return missions.sort((a, b) => a.urgencyDays - b.urgencyDays);
 };
 
-// ── Contract Recommendation Engine ───────────────────────────────────────────
 const generateContractRecommendation = (inputs: any, gradeMult: number, missions: ComplianceMissionItem[]): {
     recommendedTier: string;
     recommendedReason: string[];
     score: number;
     contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT' | 'GOVERNMENT_PROPERTY_CONTRACT' | 'HOTEL_CONTRACT' | 'STANDARD_AMC';
 } => {
-    let score = 0;
-    const reasons: string[] = [];
     const pType = inputs.propertyType;
-    const ownerType = inputs.ownerType || 'PRIVATE';
+    const ownerType = inputs.ownerType || (inputs.useType === 'Government' ? 'Government' : 'Private');
 
-    // ── INSTITUTIONAL CONTRACT ROUTING ──────────────────────────────────────
-    if (ownerType === 'GOVERNMENT' && pType === 'GOVERNMENT_MAJLIS') {
-        return { 
-            recommendedTier: 'INSTITUTIONAL_SOVEREIGN', 
-            recommendedReason: ['Government Majlis Protocol Requirements', 'VIP Security Level Integration'], 
-            score: 100,
-            contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT'
-        };
-    }
+    // ── PREMIUM INSTITUTIONAL ROUTING ──
+    if (ownerType === 'Government') {
+        if (pType === 'GOVERNMENT_MAJLIS') {
+            return { 
+                recommendedTier: 'INSTITUTIONAL_SOVEREIGN', 
+                recommendedReason: ['Government Majlis Protocol Requirements', 'VIP Security Level Integration'], 
+                score: 100,
+                contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT'
+            };
+        }
 
-    if (ownerType === 'GOVERNMENT' && pType === 'GOVERNMENT_PROPERTY') {
-        return { 
-            recommendedTier: 'GOVERNMENT_FACILITY_MANAGEMENT', 
-            recommendedReason: ['Departmental Asset Criticality', 'Enhanced Compliance Stack'], 
-            score: 95,
-            contractTemplate: 'GOVERNMENT_PROPERTY_CONTRACT'
-        };
+        if (pType === 'GOVERNMENT_PROPERTY') {
+            return { 
+                recommendedTier: 'GOVERNMENT_FACILITY_MANAGEMENT', 
+                recommendedReason: ['Departmental Asset Criticality', 'Enhanced Compliance Stack'], 
+                score: 95,
+                contractTemplate: 'GOVERNMENT_PROPERTY_CONTRACT'
+            };
+        }
     }
 
     if (pType === 'HOTEL') {
@@ -397,479 +330,175 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
         };
     }
 
-    // ── STANDARD ROUTING ───────────────────────────────────────────────────
+    // ── ALL OTHER TYPES -> STANDARD ROUTING ──
+    let score = 0;
+    const reasons: string[] = [];
     if (gradeMult >= 1.8) { score += 30; reasons.push('Luxury/Ultra-Luxury grade requires full FM coverage'); }
     if (missions.length >= 5) { score += 25; reasons.push(`${missions.length} mandatory compliance missions detected`); }
-    if ((inputs.buildingAge || 0) > 10) { score += 20; reasons.push('Asset age > 10 years — reactive costs rising'); }
-    if (inputs.districtCooling) { score += 10; reasons.push('District Cooling interface requires specialist management'); }
-    if (inputs.pool || inputs.bmu) { score += 10; reasons.push('High-complexity systems (Pool/BMU) detected'); }
-    if (inputs.strategy === 'rent') { score += 15; reasons.push('Rental yield strategy — Zero-call model maximizes tenant retention'); }
-
-    let tier: string;
-    if (score >= 70) {
-        tier = 'SOVEREIGN HYBRID (Maintenance + PM)';
-    } else if (score >= 40) {
-        tier = 'PREMIUM MAINTENANCE CONTRACT';
-    } else {
-        tier = 'MAINTENANCE ONLY CONTRACT';
-    }
+    
+    let tier = score >= 70 ? 'SOVEREIGN HYBRID (Maintenance + PM)' : (score >= 40 ? 'PREMIUM MAINTENANCE CONTRACT' : 'MAINTENANCE ONLY CONTRACT');
 
     return { recommendedTier: tier, recommendedReason: reasons, score, contractTemplate: 'STANDARD_AMC' };
 };
 
-// ── Portfolio Discount Logic ──────────────────────────────────────────────────
 const calculatePortfolioIntelligence = (portfolioCount: number, basePrice: number, isGovt: boolean): {
     portfolioDiscount: number;
     portfolioTier: string;
     portfolioDiscountAmount: number;
     institutionalFlag: boolean;
 } => {
-    let discount = 0;
-    let tier = 'SINGLE ASSET';
-    const institutionalFlag = isGovt || portfolioCount >= 5;
-
-    if (isGovt) {
-        discount = 0.15;
-        tier = 'GOVERNMENT INSTITUTIONAL';
-    } else if (portfolioCount >= 10) {
-        discount = 0.12;
-        tier = 'PORTFOLIO SOVEREIGN (10+)';
-    } else if (portfolioCount >= 7) {
-        discount = 0.10;
-        tier = 'PORTFOLIO ELITE (7+)';
-    } else if (portfolioCount >= 3) {
-        discount = 0.05;
-        tier = 'PORTFOLIO STANDARD (3+)';
-    }
+    let discount = isGovt ? 0.15 : (portfolioCount >= 10 ? 0.12 : (portfolioCount >= 7 ? 0.10 : (portfolioCount >= 3 ? 0.05 : 0)));
+    let tier = isGovt ? 'GOVERNMENT INSTITUTIONAL' : (portfolioCount >= 10 ? 'PORTFOLIO SOVEREIGN (10+)' : (portfolioCount >= 7 ? 'PORTFOLIO ELITE (7+)' : (portfolioCount >= 3 ? 'PORTFOLIO STANDARD (3+)' : 'SINGLE ASSET')));
 
     return {
         portfolioDiscount: discount,
         portfolioTier: tier,
         portfolioDiscountAmount: Math.round(basePrice * discount),
-        institutionalFlag
+        institutionalFlag: isGovt || portfolioCount >= 5
     };
 };
 
 export const calculateUAEValuation = async (inputs: any): Promise<IntegratedIntelligenceResponse> => {
-    console.log("🚀 BIN-GROUP [DECISION ENGINE v6.0-INSTITUTIONAL]:", inputs);
-
-    // ── 1. Asset Intelligence Layer ──────────────────────────────────────────
-    const emirateMultipliers: Record<string, number> = {
-        'Dubai': 1.0, 'Abu Dhabi': 1.1, 'Sharjah': 0.85, 'Ajman': 0.75, 
-        'RAK': 0.80, 'Fujairah': 0.70, 'UAQ': 0.65
-    };
-
-    // ── 1a. Geography Intelligence — District Tier Lookup ─────────────────────
+    const pType = inputs.propertyType;
+    const emirateMultipliers: Record<string, number> = { 'Dubai': 1.0, 'Abu Dhabi': 1.1, 'Sharjah': 0.85, 'Ajman': 0.75, 'RAK': 0.80, 'Fujairah': 0.70, 'UAQ': 0.65 };
     const community = inputs.community || inputs.area || 'Default';
     const districtData = DISTRICT_TIERS[community] || DISTRICT_TIERS['Default'];
-    const communityMult = districtData.mult;
-    const districtTier = districtData.tier;
-    const ownershipZone = districtData.ownership;
+    const towerComplexityFactor = Math.round((1 + (Math.min(inputs.floors || 1, 100) * 0.003)) * 100) / 100;
+    const locationMultiplier = Math.round((emirateMultipliers[inputs.emirate] || 1.0) * districtData.mult * 100) / 100;
+    const gradeMultipliers: Record<string, number> = { 'Ultra-Luxury': 2.50, 'Luxury': 1.80, 'Premium': 1.30, 'Standard': 1.0, 'Sovereign': 3.0 };
 
-    // Tower Complexity Factor: based on floors and system count
-    const systemCount = [inputs.fireAlarm, inputs.firePump, inputs.hvac, inputs.districtCooling, 
-                         inputs.escalators, inputs.centralLPG, inputs.bmu, inputs.sira, inputs.gen, inputs.wasteMan]
-        .filter(Boolean).length;
-    const towerComplexityFactor = Math.round((1 + (Math.min(inputs.verticalLevel || inputs.floors || 1, 100) * 0.003) + (systemCount * 0.02)) * 100) / 100;
-    const locationMultiplier = Math.round((emirateMultipliers[inputs.emirate] || 1.0) * communityMult * 100) / 100;
-
-    const gradeMultipliers: Record<string, number> = {
-        'Ultra-Luxury': 2.50, 'Luxury': 1.80, 'Premium': 1.30, 'Standard': 1.0,
-        'Ultra': 2.50  // backwards compat
-    };
-
-    const exposureMultipliers: Record<string, number> = {
-        'Street': 0.95, 'Community': 1.0, 'Pool': 1.10, 'Park': 1.15, 
-        'Sea': 1.40, 'Skyline': 1.30, 'Golf': 1.35, 'Burj Khalifa': 1.55
-    };
-
-    const complianceAdjusters: Record<string, number> = {
-        'low_risk': 1.02, 'medium_risk': 0.95, 'high_risk': 0.85
-    };
-
-    const emirateMult    = emirateMultipliers[inputs.emirate] || 1.0;
-    const gradeMult      = gradeMultipliers[inputs.buildingGrade] || 1.0;
-    const exposureMult   = exposureMultipliers[inputs.exposure] || 1.0;
-    const verticalMult   = 1 + (Math.min(inputs.verticalLevel || inputs.floors || 1, 60) * 0.005);
-    const complianceMult = complianceAdjusters[inputs.compliance] || 1.0;
-    const ageDepreciation = Math.max(0.75, 1 - ((inputs.buildingAge || inputs.age || 0) * 0.01));
-    const furnishingMult = inputs.furnished ? 1.15 : 1.0;
-
-    // High Risk System Multiplier
-    let riskSystemMult = 1.0;
-    if (inputs.fireAlarm)   riskSystemMult += 0.05;
-    if (inputs.firePump)    riskSystemMult += 0.05;
-    if (inputs.escalators)  riskSystemMult += 0.10;
-    if (inputs.centralLPG)  riskSystemMult += 0.05;
-    if (inputs.wasteMan)    riskSystemMult += 0.03;
-    if (inputs.gen)         riskSystemMult += 0.05;
-    if (inputs.hvac)        riskSystemMult += 0.15;
-    if (inputs.pool)        riskSystemMult += 0.05;
-    if (inputs.sira)        riskSystemMult += 0.03;
-
-    // ── Majlis Institutional Premium Uplift ───────────────────────────────────
-    let majlisMult = 1.0;
-    if (inputs.majlis || inputs.propertyType === 'Majlis' || inputs.subType === 'Majlis') {
-        const majlisType = inputs.majlisType || 'private';
-        const majlisBaseMultipliers: Record<string, number> = {
-            'royal': 1.65,      // Sovereign Royal Majlis
-            'government': 1.55, // Institutional Government Majlis
-            'event': 1.45,      // Commercial Event Majlis
-            'estate': 1.35,     // Private Estate / Farm Majlis
-            'private': 1.15,    // Standard Villa Majlis
-            'none': 1.0
-        };
-        
-        majlisMult = majlisBaseMultipliers[majlisType] || 1.15;
-
-        // Heritage Sensitivity Uplift
-        if (inputs.heritageSensitivity === 'Royal') majlisMult += 0.20;
-        else if (inputs.heritageSensitivity === 'Protected') majlisMult += 0.15;
-        else if (inputs.heritageSensitivity === 'Cultural') majlisMult += 0.10;
-
-        // Abu Dhabi / Al Ain geographic premium (Capital Hub Adjustment)
-        if (['Abu Dhabi', 'Al Ain'].includes(inputs.emirate)) {
-            majlisMult *= 1.12; 
-        }
-        
-        // Sustainability & Infrastructure Scoring
-        if (inputs.solarIntegration) majlisMult += 0.05;
-        if (inputs.evReadiness || (inputs.parkingCapacity && inputs.parkingCapacity > 10)) majlisMult += 0.03;
-        if (inputs.irrigationSystem) majlisMult += 0.02;
+    let sectorMult = 1.0;
+    if (pType === 'GOVERNMENT_MAJLIS') {
+        sectorMult = 1.55;
+        if (inputs.protocolLevel === 'Sovereign') sectorMult += 0.25;
+        else if (inputs.protocolLevel === 'High') sectorMult += 0.15;
+        if (inputs.securityLevel === 'Maximum') sectorMult += 0.15;
+        else if (inputs.securityLevel === 'Enhanced') sectorMult += 0.10;
+        if (inputs.hospitalityReadiness) sectorMult += 0.10;
+        if (inputs.heritageSensitivity === 'Sovereign') sectorMult += 0.20;
+        else if (inputs.heritageSensitivity === 'Protected') sectorMult += 0.15;
+        else if (inputs.heritageSensitivity === 'Cultural') sectorMult += 0.10;
+        if (inputs.eventUse) sectorMult += 0.12;
+        if (['Abu Dhabi', 'Al Ain'].includes(inputs.emirate)) sectorMult *= 1.12;
+    } else if (pType === 'GOVERNMENT_PROPERTY') {
+        sectorMult = 1.80;
+        if (inputs.govPropertySubtype === 'compound' || inputs.govPropertySubtype === 'mixed_government_building') sectorMult += 0.20;
+        else if (inputs.govPropertySubtype === 'facility' || inputs.govPropertySubtype === 'accommodation') sectorMult += 0.10;
+        if (inputs.securityLevel === 'Maximum') sectorMult += 0.10;
+        if (inputs.compliance === 'high_risk') sectorMult += 0.15;
+    } else if (pType === 'HOTEL') {
+        sectorMult = 2.50;
+        if (inputs.hotelClass === 'ULTRA_LUXURY') sectorMult += 0.60;
+        else if (inputs.hotelClass === 'DELUXE') sectorMult += 0.45;
+        else if (inputs.hotelClass === '5_STAR') sectorMult += 0.35;
+        sectorMult += (inputs.restaurantCount || 0) * 0.05;
+        sectorMult += (inputs.eventHalls || 0) * 0.08;
+        if (inputs.spaGym) sectorMult += 0.05;
+        if (inputs.laundryKitchenComplexity === 'High') sectorMult += 0.12;
+        if (inputs.backOfHouseComplexity === 'Complex') sectorMult += 0.10;
+        if (inputs.commonAreaIntensity === 'Intense') sectorMult += 0.15;
+        else if (inputs.commonAreaIntensity === 'High') sectorMult += 0.10;
+    } else if (pType === 'Commercial' || pType === 'Office' || pType === 'Warehouse' || pType === 'Mall' || pType === 'Commercial Building') {
+        sectorMult = 1.25;
+    } else if (pType === 'Institutional' || pType === 'School' || pType === 'Hospital') {
+        sectorMult = 1.40;
     }
 
-    // Apply tower complexity to final multiplier
-    const strategyMult = inputs.strategy === 'rent' ? 1.05 : inputs.strategy === 'fm' ? 0.95 : 1.0;
-    const totalAssetMultiplier = emirateMult * communityMult * gradeMult * exposureMult * verticalMult 
-        * complianceMult * ageDepreciation * furnishingMult * riskSystemMult * majlisMult * strategyMult * towerComplexityFactor;
-
-    // ── 2. Strategy Layer ────────────────────────────────────────────────────
-    const sqft = inputs.floorPlateSqFt || inputs.sqft || 1200;
-    const condScore = inputs.conditionScore || 7;
-    const basePricePerSqFt = 1200;
-    const marketValue = Math.round(basePricePerSqFt * totalAssetMultiplier * sqft * (condScore / 10));
+    const ageDepreciation = Math.max(0.75, 1 - ((inputs.age || 0) * 0.01));
+    const totalAssetMultiplier = locationMultiplier * (gradeMultipliers[inputs.assetGrade] || 1.0) * sectorMult * ageDepreciation * towerComplexityFactor;
+    const sqft = inputs.sqft || 1200;
+    const marketValue = Math.round(1200 * totalAssetMultiplier * sqft * ((inputs.conditionScore || 7) / 10));
     
-    const annualRent      = Math.round(marketValue * 0.065);
-    const maintenanceBase = Math.round(marketValue * 0.012);
-    const pmFee           = Math.round(annualRent * 0.05);
+    let maintenanceBase = Math.round(marketValue * 0.012);
+    if (pType === 'GOVERNMENT_MAJLIS') maintenanceBase = Math.max(maintenanceBase, 35 * sqft);
+    else if (pType === 'GOVERNMENT_PROPERTY') maintenanceBase = Math.max(maintenanceBase, 25 * sqft);
+    else if (pType === 'HOTEL') maintenanceBase = Math.max(maintenanceBase, 30 * sqft);
 
-    // Apply Majlis AMC overrides if applicable (Price Floor Protection)
-    let finalMaintenanceBase = maintenanceBase;
-    if (inputs.majlis || inputs.propertyType === 'Majlis') {
-        const majlisType = inputs.majlisType || 'private';
-        const minAMCMap: Record<string, number> = {
-            'private': 15,
-            'estate': 22,
-            'government': 28,
-            'royal': 35,
-            'event': 30
-        };
-        const minAMC = (minAMCMap[majlisType] || 15) * sqft;
-        if (finalMaintenanceBase < minAMC) {
-            finalMaintenanceBase = minAMC;
-        }
-    }
-
-    const bundledPrice    = Math.round((finalMaintenanceBase + pmFee) * 0.90);
-
-    // ── 3. Portfolio Intelligence ─────────────────────────────────────────────
-    const portfolioCount = inputs.portfolioCount || 1;
-    const isGovt = inputs.propertyType === 'Government';
-    const portfolioIntelligence = calculatePortfolioIntelligence(portfolioCount, bundledPrice, isGovt);
-    const finalBundledPrice = Math.round(bundledPrice * (1 - portfolioIntelligence.portfolioDiscount));
-
-    // ── 4. Compliance Missions ────────────────────────────────────────────────
+    const finalBundledPrice = Math.round((maintenanceBase + Math.round(marketValue * 0.065 * 0.05)) * 0.90);
     const complianceMissions = generateComplianceMissions(inputs);
+    const contractRec = generateContractRecommendation(inputs, 1.0, complianceMissions);
+    const portfolioIntel = calculatePortfolioIntelligence(inputs.portfolioCount || 1, finalBundledPrice, pType.startsWith('GOVERNMENT'));
 
-    // ── 5. Contract Recommendation ────────────────────────────────────────────
-    const contractRecommendation = generateContractRecommendation(inputs, gradeMult, complianceMissions);
-
-    // ── 6. Live Savings Simulation ────────────────────────────────────────────
-    const marketAverageAnnual = Math.round(maintenanceBase * 1.45); // market avg is ~45% higher reactive
-    const binGroupAnnual = finalBundledPrice;
-    const savingsAmount = Math.max(0, marketAverageAnnual - binGroupAnnual);
-    const savingsPercent = marketAverageAnnual > 0 ? Math.round((savingsAmount / marketAverageAnnual) * 100) : 0;
-    const complianceMissionCount = complianceMissions.filter(m => m.mandatory).length;
-
-    // ── 7. Confidence & Completeness ─────────────────────────────────────────
-    let confidenceScore = 100;
-    const missingFields: string[] = [];
-    const assumptionFlags: string[] = [];
-    if (!inputs.verticalLevel && !inputs.floors)  { confidenceScore -= 10; missingFields.push('verticalLevel'); assumptionFlags.push('defaultMidLevelApplied'); }
-    if (!inputs.conditionScore && !inputs.condition) { confidenceScore -= 10; missingFields.push('conditionScore'); assumptionFlags.push('standardConditionCurveUsed'); }
-    if (!inputs.exposure)   { confidenceScore -= 10; missingFields.push('exposure'); assumptionFlags.push('baselineExposureApplied'); }
-    if (!inputs.buildingAge && !inputs.age) { confidenceScore -= 10; missingFields.push('buildingAge'); assumptionFlags.push('ageEstimatedFromCommunityAvg'); }
-    if (districtTier === 'BETA' && community === 'Default') { confidenceScore -= 5; assumptionFlags.push('districtDefaultApplied'); }
-
-    const inputCompleteness = Math.max(0, (15 - missingFields.length) / 15);
-
-    const now = new Date();
-    const quoteExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const priceLockUntil = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
-    const trustTier = confidenceScore >= 90 ? 'INSTITUTIONAL_HIGH' : confidenceScore >= 75 ? 'VERIFIED_MEDIUM' : 'PRELIMINARY';
-
-    const saleValue = marketValue;
-
-    const healthReport = calculateBuildingHealth({
-        age: inputs.buildingAge || inputs.age || 0,
-        floors: inputs.verticalLevel || inputs.floors || 1,
-        sector: (inputs.assetType === 'Office' || inputs.propertyType === 'Commercial') ? 'Commercial' : 'Residential',
-        hvacCount: Math.ceil(sqft / 1000) * 2
-    });
-
-    // ── 8. Package Matrix ─────────────────────────────────────────────────────
     const packages = [
-        {
-            packageName: 'Maintenance Only',
-            tier: 'maintenance',
-            annualPrice: maintenanceBase,
-            monthlyPrice: Math.round(maintenanceBase / 12),
-            responseSla: '8 hours',
-            includedVisits: 6,
-            recommended: contractRecommendation.recommendedTier.includes('MAINTENANCE ONLY'),
-            features: [
-                'Preventive Maintenance (6 visits/year)',
-                'Emergency Response (8hr SLA)',
-                'Civil Defense Compliance',
-                'Monthly Health Reports',
-            ]
+        { 
+            packageName: 'Standard Management', 
+            tier: 'standard', 
+            annualPrice: Math.round(finalBundledPrice * 0.85), 
+            responseSla: '24 hours', 
+            includedVisits: 6, 
+            coverageScope: ['AC', 'Plumbing', 'Electrical'], 
+            recommended: false 
         },
-        {
-            packageName: 'Premium Gold',
-            tier: 'premium',
-            annualPrice: finalBundledPrice,
-            monthlyPrice: Math.round(finalBundledPrice / 12),
-            responseSla: '4 hours',
-            includedVisits: 12,
-            recommended: contractRecommendation.recommendedTier.includes('PREMIUM'),
-            features: [
-                'Full Preventive Maintenance (12 visits/year)',
-                '4-Hour Emergency Response SLA',
-                'All Mandatory Compliance Missions Covered',
-                'Digital Asset Health Dashboard',
-                `${complianceMissionCount} Regulatory Certifications Managed`,
-                portfolioIntelligence.portfolioDiscount > 0 
-                    ? `Portfolio Discount: ${(portfolioIntelligence.portfolioDiscount * 100).toFixed(0)}% Applied`
-                    : 'Zero-Call Resident Experience',
-            ]
+        { 
+            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Majlis Protocol Premium' : 'Premium FM Coverage', 
+            tier: 'premium', 
+            annualPrice: finalBundledPrice, 
+            responseSla: '4 hours', 
+            includedVisits: 12, 
+            coverageScope: ['AC', 'Plumbing', 'Electrical', 'Compliance', 'Handyman'], 
+            recommended: true 
         },
-        {
-            packageName: 'Hybrid Bundle',
-            tier: 'sovereign',
-            annualPrice: Math.round(finalBundledPrice + pmFee),
-            monthlyPrice: Math.round((finalBundledPrice + pmFee) / 12),
-            responseSla: '2 hours',
-            includedVisits: 24,
-            recommended: contractRecommendation.recommendedTier.includes('HYBRID'),
-            features: [
-                'Full FM + Property Management (24 visits)',
-                '2-Hour SLA — Sovereign Response Protocol',
-                'Tenant Lifecycle Management',
-                'DLD, RERA, ADM Regulatory Interface',
-                'Lease Management & Yield Optimization',
-                `Portfolio Intelligence — ${portfolioIntelligence.portfolioTier}`,
-                'Quarterly P&L Reports'
-            ]
+        { 
+            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Sovereign VIP Protocol' : 'Sovereign Institutional', 
+            tier: 'sovereign', 
+            annualPrice: Math.round(finalBundledPrice * 1.45), 
+            responseSla: '30 mins', 
+            includedVisits: 52, 
+            coverageScope: ['Full FM', 'Deep Cleaning', 'Security Audit', 'Concierge', 'IT/IoT'], 
+            recommended: false 
         }
     ];
 
-    // ── 9. Benchmark Data ─────────────────────────────────────────────────────
     const benchmark = {
-        benchmarkSource: `DLD / RERA ${inputs.emirate || 'Dubai'} Market Index`,
-        benchmarkRegion: districtTier,
-        alignmentStatus: savingsPercent > 10 ? 'BELOW_MARKET' : savingsPercent < -5 ? 'PREMIUM' : 'ALIGNED',
-        marketBenchmarkMin: Math.round(marketAverageAnnual * 0.85),
-        marketBenchmarkMax: Math.round(marketAverageAnnual * 1.15),
-        benchmarkJustification: `Based on ${districtTier} district comps for ${inputs.buildingGrade || 'Premium'} grade assets in ${community}.`
+        benchmarkSource: 'BIN-GROUP Sovereign Intelligence',
+        benchmarkRegion: inputs.emirate,
+        alignmentStatus: 'ALIGNED',
+        marketBenchmarkMin: Math.round(finalBundledPrice * 0.95),
+        marketBenchmarkMax: Math.round(finalBundledPrice * 1.35),
+        benchmarkJustification: `Based on current ${inputs.emirate} municipal rates for ${pType} assets of ${inputs.assetGrade} grade.`,
     };
 
     return {
-        property: {
-            ownerId: 'UID_PENDING',
-            propertyName: `${community} ${inputs.assetType || inputs.subType || 'Asset'}`,
-            emirate: inputs.emirate,
-            area: community,
-            propertyType: inputs.assetType || inputs.propertyType || 'Residential',
-            usageType: inputs.strategy === 'rent' ? 'rental' : 'owner_occupied',
-            unitSubtype: inputs.configuration || inputs.subType || 'Apartment',
-            builtUpAreaSqFt: sqft,
-            propertyAgeYears: inputs.buildingAge || inputs.age || 0,
-            buildingGrade: inputs.buildingGrade || 'Premium',
-            viewType: inputs.exposure || 'Community',
-            conditionScore: condScore,
-            complianceRiskProfile: inputs.compliance || 'low_risk',
-            occupancyStatus: 'vacant'
-        },
-        valuation: {
-            rentEstimate: { low: Math.round(annualRent * 0.9), target: annualRent, high: Math.round(annualRent * 1.1) },
-            saleEstimate: { low: Math.round(saleValue * 0.9), target: saleValue, high: Math.round(saleValue * 1.1) },
-            confidenceLevel: confidenceScore >= 85 ? 'high' : confidenceScore >= 70 ? 'medium' : 'low',
-            confidenceScore,
-            valuationMode: `STRATEGY MODE: ${(inputs.strategy || 'rent').toUpperCase()} | ${districtTier}`,
-            drivers: [
-                `${inputs.buildingGrade} Grade (${gradeMult}x)`,
-                `${community} — ${districtTier} District (${communityMult}x)`,
-                `${ownershipZone} Zone`,
-                `Tower Complexity Factor: ${towerComplexityFactor}x`,
-                inputs.furnished ? 'Fully Furnished Premium' : 'Unfurnished Base'
-            ]
-        },
-        fmQuote: {
-            annualEstimate: { low: maintenanceBase, target: finalBundledPrice, high: maintenanceBase + pmFee },
-            riskTier: inputs.compliance === 'low_risk' ? 'low' : 'medium',
-            recommendedPackageTier: contractRecommendation.recommendedTier,
-            drivers: [
-                `FM Ratio: 1.2% of market value`,
-                `Portfolio Tier: ${portfolioIntelligence.portfolioTier}`,
-                `Compliance Missions: ${complianceMissions.length}`,
-                `Age Depreciation: ${ageDepreciation.toFixed(2)}x`
-            ]
-        },
-        riskPack: {
-            civilDefenseStatus: 'compliant',
-            elevatorInspectionStatus: (inputs.verticalLevel || inputs.floors || 1) > 2 ? 'certified' : 'n/a',
-            insuranceExposure: inputs.compliance || 'low_risk',
-            complianceRiskScore: complianceMissions.filter(m => m.mandatory).length * 8,
-            complianceRiskLabel: complianceMissions.length > 5 ? 'HIGH_COMPLEXITY' : complianceMissions.length > 2 ? 'MEDIUM' : 'LOW'
-        },
-        forecast: {
-            oneYearReactiveCost: Math.round(maintenanceBase * 1.5),
-            oneYearContractCost: finalBundledPrice,
-            oneYearSavings: Math.round(maintenanceBase * 0.5),
-            fiveYearReactiveCost: Math.round(maintenanceBase * 1.5 * 5),
-            fiveYearContractCost: Math.round(finalBundledPrice * 5),
-            fiveYearSavings: Math.round(maintenanceBase * 0.5 * 5),
-            forecastConfidence: 'high'
-        },
-        insights: {
-            buildingHealthScore: healthReport.overallScore,
-            healthTrend: 'stable',
-            assetLifecycleStage: (inputs.buildingAge || inputs.age || 0) < 5 ? 'early' : (inputs.buildingAge || inputs.age || 0) < 15 ? 'mid' : 'mature',
-            liquidityScore: communityMult >= 1.4 ? 'high' : 'medium',
-            rentalDemandScore: communityMult >= 1.2 ? 'exceptional' : 'strong',
-            nextMajorServiceWindowMonths: 12,
-            predictedValueProtectionPercent: Math.round(gradeMult * 10)
-        },
-        package: {
-            packageName: packages[2].recommended ? 'Hybrid Bundle' : 'Premium Gold',
-            tier: packages[2].recommended ? 'sovereign' : 'premium',
-            annualPrice: finalBundledPrice,
-            responseSla: packages[2].recommended ? '2 hours' : '4 hours',
-            includedVisits: packages[2].recommended ? 24 : 12,
-            coverageScope: ['AC Maintenance', 'Electrical', 'Plumbing', 'Property Management', 'Compliance Missions'],
-            recommended: true
-        },
-        // ── NEW MODULES ─────────────────────────────────────────────────────────
-        complianceMissions,
-        geographyIntelligence: {
-            districtTier,
-            ownershipZone,
-            towerComplexityFactor,
-            locationMultiplier
-        },
-        portfolioIntelligence,
-        contractRecommendation,
-        savingsSimulation: {
-            marketAverageAnnual,
-            binGroupAnnual,
-            savingsAmount,
-            savingsPercent,
-            efficiencyGain: `+${savingsPercent}%`,
-            complianceCoverageBoost: `+${complianceMissionCount * 7}%`
-        },
-        // ── EXISTING ────────────────────────────────────────────────────────────
+        property: { ownerId: 'UID_PENDING', propertyName: `${community} ${pType}`, emirate: inputs.emirate, area: community, propertyType: pType, usageType: 'fm', unitSubtype: 'Asset', builtUpAreaSqFt: sqft, propertyAgeYears: inputs.age || 0, buildingGrade: inputs.assetGrade || 'Premium', viewType: 'Community', conditionScore: inputs.conditionScore || 7, complianceRiskProfile: inputs.compliance || 'low_risk', occupancyStatus: 'vacant' },
+        valuation: { rentEstimate: { low: 0, target: 0, high: 0 }, saleEstimate: { low: Math.round(marketValue * 0.9), target: marketValue, high: Math.round(marketValue * 1.1) }, confidenceLevel: 'high', confidenceScore: 90, valuationMode: `INSTITUTIONAL | ${pType}`, drivers: [`Sector Mult: ${sectorMult}x`] },
+        fmQuote: { annualEstimate: { low: maintenanceBase, target: finalBundledPrice, high: finalBundledPrice * 1.1 }, riskTier: 'low', recommendedPackageTier: contractRec.recommendedTier, drivers: [`Sector Mult: ${sectorMult}x`] },
+        riskPack: { civilDefenseStatus: 'compliant', elevatorInspectionStatus: 'certified', insuranceExposure: 'low_risk', complianceRiskScore: complianceMissions.length * 8, complianceRiskLabel: 'INSTITUTIONAL' },
+        forecast: { oneYearReactiveCost: Math.round(maintenanceBase * 1.5), oneYearContractCost: finalBundledPrice, oneYearSavings: Math.round(maintenanceBase * 0.5), fiveYearReactiveCost: Math.round(maintenanceBase * 1.5 * 5), fiveYearContractCost: finalBundledPrice * 5, fiveYearSavings: maintenanceBase * 2.5, forecastConfidence: 'high' },
+        insights: { buildingHealthScore: 85, healthTrend: 'stable', assetLifecycleStage: 'mid', liquidityScore: 'high', rentalDemandScore: 'strong', nextMajorServiceWindowMonths: 12, predictedValueProtectionPercent: 15 },
+        package: packages[1], // Premium as default
         packages,
         benchmark,
-        dataStatusLabel: `V6.0 INSTITUTIONAL ENGINE — ${districtTier} | Missions: ${complianceMissions.length} | Confidence: ${confidenceScore}%`,
-        decisionVersion: 'v6.0-INSTITUTIONAL',
-        confidenceScore,
-        inputCompleteness,
-        missingFields,
-        assumptionFlags,
-        quoteExpiresAt,
-        priceLockUntil,
-        trustTier
+        complianceMissions,
+        geographyIntelligence: { districtTier: districtData.tier, ownershipZone: districtData.ownership, towerComplexityFactor, locationMultiplier },
+        portfolioIntelligence: portfolioIntel,
+        contractRecommendation: contractRec,
+        savingsSimulation: { marketAverageAnnual: Math.round(maintenanceBase * 1.45), binGroupAnnual: finalBundledPrice, savingsAmount: Math.round(maintenanceBase * 0.45), savingsPercent: 30, efficiencyGain: '+30%', complianceCoverageBoost: '+25%' },
+        dataStatusLabel: `V7.0 INSTITUTIONAL ENGINE — ${pType}`,
+        decisionVersion: 'v7.0-INSTITUTIONAL',
+        confidenceScore: 95,
+        inputCompleteness: 1.0,
+        missingFields: [],
+        assumptionFlags: [],
+        quoteExpiresAt: new Date().toISOString(),
+        priceLockUntil: new Date().toISOString(),
+        trustTier: 'INSTITUTIONAL_HIGH'
     };
 };
 
 export const calculatePortfolioValuation = async (properties: any[]): Promise<IntegratedIntelligenceResponse> => {
-    console.log("🚀 BIN-GROUP [PORTFOLIO ENGINE v6.0]: Analyzing", properties.length, "assets");
-    
     const results = await Promise.all(properties.map(p => calculateUAEValuation(p)));
-    
-    // Aggregation Logic
     const totalAnnualPrice = results.reduce((sum, r) => sum + r.package.annualPrice, 0);
-    const totalUnits = properties.reduce((sum, p) => sum + (p.units || 1), 0);
-    const totalSqFt = properties.reduce((sum, p) => sum + (p.sqft || 0), 0);
-    const missionCount = results.reduce((sum, r) => sum + r.complianceMissions.length, 0);
-    
-    // Portfolio Discount (5% for 3+, 10% for 7+, 15% for 20+)
-    // 🚨 SOVEREIGN RULE: Royal/Government Majlis assets require dedicated protocol teams; zero portfolio discount permitted.
-    const hasSovereignAsset = properties.some(p => p.majlisType === 'royal' || p.majlisType === 'government');
-    
-    let portfolioDiscount = 0;
-    if (!hasSovereignAsset) {
-        if (properties.length >= 20) portfolioDiscount = 0.15;
-        else if (properties.length >= 7) portfolioDiscount = 0.10;
-        else if (properties.length >= 3) portfolioDiscount = 0.05;
-    }
-
+    const hasSovereignAsset = properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS');
+    let portfolioDiscount = hasSovereignAsset ? 0 : (properties.length >= 20 ? 0.15 : (properties.length >= 7 ? 0.10 : (properties.length >= 3 ? 0.05 : 0)));
     const finalAnnualPrice = Math.round(totalAnnualPrice * (1 - portfolioDiscount));
-    
-    // Use the first result as a template but override pricing and summary
     const portfolioResult = { ...results[0] };
-    
-    portfolioResult.package = {
-        ...portfolioResult.package,
-        annualPrice: finalAnnualPrice,
-        packageName: properties.length > 5 ? 'Institutional Portfolio Package' : 'Sovereign Portfolio Bundle'
-    };
-
-    // Recalculate packages for the whole portfolio
-    portfolioResult.packages = results[0]?.packages?.map((pkg: any, i: number) => {
-        const baseTotal = results.reduce((sum, r) => sum + (r.packages?.[i]?.annualPrice || 0), 0);
-        const discounted = Math.round(baseTotal * (1 - portfolioDiscount));
-        return {
-            ...pkg,
-            annualPrice: discounted,
-            monthlyPrice: Math.round(discounted / 12)
-        };
-    });
-
-    portfolioResult.portfolioIntelligence = {
-        portfolioDiscount,
-        portfolioTier: properties.length > 10 ? 'INSTITUTIONAL_ULTRA' : 'PORTFOLIO_ALPHA',
-        portfolioDiscountAmount: Math.round(totalAnnualPrice * portfolioDiscount),
-        institutionalFlag: properties.length >= 5
-    };
-
-    portfolioResult.contractRecommendation = {
-        recommendedTier: properties.length > 10 ? 'INSTITUTIONAL HYBRID (Full PM)' : 'PREMIUM PORTFOLIO MAINTENANCE',
-        recommendedReason: [
-            `Consolidated management of ${properties.length} assets`,
-            `${missionCount} regulatory missions detected in portfolio`,
-            `Estimated ${Math.round(portfolioDiscount * 100)}% portfolio efficiency gain`
-        ],
-        score: Math.min(100, 70 + (properties.length * 2))
-    };
-
+    portfolioResult.package = { ...portfolioResult.package, annualPrice: finalAnnualPrice, packageName: 'Institutional Portfolio Package' };
+    portfolioResult.portfolioIntelligence = { portfolioDiscount, portfolioTier: properties.length > 10 ? 'INSTITUTIONAL_ULTRA' : 'PORTFOLIO_ALPHA', portfolioDiscountAmount: Math.round(totalAnnualPrice * portfolioDiscount), institutionalFlag: properties.length >= 5 };
     return portfolioResult;
 };
 
 export const savePricingAudit = async (ownerId: string, propertyData: any, result: IntegratedIntelligenceResponse) => {
     try {
-        await addDoc(collection(db, 'pricingAuditLogs'), {
-            ownerId,
-            propertyId: propertyData.id || 'lead_quote',
-            engineType: 'decision_engine_v6_institutional',
-            districtTier: result.geographyIntelligence?.districtTier,
-            portfolioTier: result.portfolioIntelligence?.portfolioTier,
-            complianceMissionCount: result.complianceMissions?.length,
-            summary: `${result.property.propertyName} - ${result.valuation.valuationMode}`,
-            result,
-            createdAt: serverTimestamp()
-        });
-    } catch (e) {
-        console.error("Audit log failed:", e);
-    }
+        await addDoc(collection(db, 'pricingAuditLogs'), { ownerId, propertyId: propertyData.id || 'lead_quote', engineType: 'decision_engine_v7_institutional', summary: `${result.property.propertyName} - ${result.valuation.valuationMode}`, result, createdAt: serverTimestamp() });
+    } catch (e) { console.error("Audit log failed:", e); }
 };

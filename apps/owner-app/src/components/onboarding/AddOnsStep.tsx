@@ -128,9 +128,9 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Deep Care Programme',
             desc: 'Monthly deep cleaning, joinery care, upholstery protection & guest-wear restoration.',
             price: 8400,
-            mandatory: propertyData.majlis && (propertyData.majlisType === 'royal' || propertyData.majlisType === 'estate'),
-            showIf: propertyData.majlis,
-            reason: 'Required for high-footfall Majlis reception assets.'
+            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
+            reason: 'Required for high-footfall Government Majlis reception assets.'
         },
         {
             id: 'majlis_landscaping',
@@ -138,8 +138,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Landscaping & Grounds AMC',
             desc: 'Fortnightly garden maintenance, irrigation systems, palm care & decorative lighting.',
             price: 6000,
-            mandatory: propertyData.majlis && propertyData.majlisGarden,
-            showIf: propertyData.majlis && propertyData.majlisGarden,
+            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS' && propertyData.majlisGarden,
+            showIf: (propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis) && propertyData.majlisGarden,
             reason: 'Mandatory for properties with landscaped grounds.'
         },
         {
@@ -149,7 +149,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Pressure washing, window cleaning, entrance gate & perimeter care.',
             price: 2800,
             mandatory: false,
-            showIf: propertyData.majlis,
+            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
             reason: 'Recommended for premium Majlis estates.'
         },
         {
@@ -158,8 +158,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Premium HVAC Service',
             desc: 'Enhanced cooling load management, filter care, seasonal balancing for large Majlis reception areas.',
             price: 4500,
-            mandatory: propertyData.majlis && (propertyData.majlisType === 'royal' || propertyData.majlisType === 'estate'),
-            showIf: propertyData.majlis,
+            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
             reason: 'Majlis cooling loads exceed standard residential specs.'
         },
         {
@@ -168,9 +168,30 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Hospitality Readiness Maintenance',
             desc: 'Pre-event deep inspection, on-call response, VIP guest standards compliance.',
             price: 3600,
-            mandatory: propertyData.majlis && propertyData.majlisType === 'royal',
-            showIf: propertyData.majlis,
+            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
             reason: 'Sovereign Majlis VIP hosting standard.'
+        },
+        // ── INSTITUTIONAL SECTOR ADD-ONS ──────────────────────────────────
+        {
+            id: 'hotel_guest_safety',
+            icon: ShieldAlert,
+            name: 'Hotel Guest Safety Audit',
+            desc: 'Monthly DHA/Municipality compliance audits for guest-facing systems.',
+            price: 12500,
+            mandatory: propertyData.propertyType === 'HOTEL',
+            showIf: propertyData.propertyType === 'HOTEL',
+            reason: 'Mandatory guest-facing health & safety compliance.'
+        },
+        {
+            id: 'gov_compliance_pack',
+            icon: Activity,
+            name: 'Gov Property Compliance Pack',
+            desc: 'Consolidated multi-departmental audit readiness and reporting.',
+            price: 9500,
+            mandatory: propertyData.propertyType === 'GOVERNMENT_PROPERTY',
+            showIf: propertyData.propertyType === 'GOVERNMENT_PROPERTY',
+            reason: 'Departmental asset criticality and compliance stack.'
         }
     ];
 
