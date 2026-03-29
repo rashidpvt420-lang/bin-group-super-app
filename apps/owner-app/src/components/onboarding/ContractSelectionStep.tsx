@@ -67,21 +67,21 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                 </Box>
                 <Box flexGrow={1}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>{t('contract.portfolio_recommendation')}</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ mb: 1 }}>{contractRecommendation.recommendedTier}</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ mb: 1 }}>{contractRecommendation?.recommendedTier || 'Standard'}</Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-                        {(contractRecommendation.recommendedReason || []).map((r: string, i: number) => (
+                        {(Array.isArray(contractRecommendation?.recommendedReason) ? contractRecommendation.recommendedReason : []).map((r: string, i: number) => (
                             <Chip key={i} label={r} size="small" sx={{ bgcolor: alpha('#fff', 0.05), border: '1px solid rgba(255,255,255,0.1)', fontWeight: 700 }} />
                         ))}
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: isMobile ? 'left' : 'right' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{t('contract.analysis_score')}</Typography>
-                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="950" sx={{ color: binThemeTokens.gold }}>{contractRecommendation.score}/100</Typography>
+                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="950" sx={{ color: binThemeTokens.gold }}>{contractRecommendation?.score || 0}/100</Typography>
                 </Box>
             </Box>
 
             <Grid container spacing={4} justifyContent="center">
-                {packages.map((pkg: any, i: number) => {
+                {(Array.isArray(packages) ? packages : []).map((pkg: any, i: number) => {
                     const isRecommended = pkg.recommended;
                     return (
                         <Grid item xs={12} md={4} key={i}>
@@ -117,7 +117,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                                     <Divider sx={{ mb: 6 }} />
 
                                     <Stack spacing={2.5} sx={{ mb: 8 }}>
-                                        {pkg.features.map((f: string, j: number) => (
+                                        {(Array.isArray(pkg.coverageScope) ? pkg.coverageScope : []).map((f: string, j: number) => (
                                             <Box key={j} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
                                                 <CheckCircle size={20} color={binThemeTokens.gold} style={{ marginTop: 2 }} />
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{f}</Typography>
@@ -139,7 +139,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                 })}
             </Grid>
 
-            {portfolioIntelligence.portfolioDiscount > 0 && (
+            {portfolioIntelligence?.portfolioDiscount > 0 && (
                 <Box sx={{ mt: 6, p: 3, textAlign: 'center', bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 4, border: `1px dashed ${binThemeTokens.gold}` }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                         <Gem size={16} /> {t('contract.portfolio_savings', { amount: formatAED(portfolioIntelligence.portfolioDiscountAmount) })}

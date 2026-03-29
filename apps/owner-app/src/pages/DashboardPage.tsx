@@ -136,13 +136,13 @@ export default function DashboardPage() {
         </Button>
       </Box>
 
-      {/* Economic Powergrid */}
+            {/* Economic Powergrid */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
         {[
             { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(metrics?.yield?.grossContractValue)}`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
             { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield || 0}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
-            { label: t('dash.kpi.radius'), val: properties[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
-            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
+            { label: t('dash.kpi.radius'), val: properties?.[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
+            { label: t('dash.kpi.majlis_readiness'), val: properties?.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
         ].map((kpi, i) => (
             <Grid item xs={12} md={3} key={i}>
                 <Card sx={{ 
@@ -261,8 +261,8 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {properties.map((p) => {
-                    const contract = contracts.find(c => c.propertyId === p.id);
+                {(properties || []).map((p) => {
+                    const contract = (contracts || []).find(c => c.propertyId === p.id);
                     return (
                         <TableRow key={p.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                             <TableCell>
@@ -327,7 +327,7 @@ export default function DashboardPage() {
         <Grid item xs={12} lg={4}>
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>{t('dash.alerts')}</Typography>
             <Stack spacing={3}>
-                {notifications.length > 0 ? notifications.map((n, i) => (
+                {(notifications || []).length > 0 ? (notifications || []).map((n, i) => (
                     <Paper key={i} sx={{ 
                         p: 3, 
                         bgcolor: 'rgba(198, 167, 94, 0.03)', 

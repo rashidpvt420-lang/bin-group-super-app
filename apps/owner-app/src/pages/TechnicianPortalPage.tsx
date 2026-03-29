@@ -58,7 +58,7 @@ export default function TechnicianPortalPage() {
 
             {/* Performance Grid */}
             <Grid container spacing={3} sx={{ mb: 8, position: 'relative', zIndex: 1 }}>
-                {kpis.map((kpi, i) => (
+                {(kpis ?? []).map((kpi, i) => (
                     <Grid item xs={12} sm={6} md={3} key={i}>
                         <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(198,167,94,0.15)', borderRadius: 6, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
                             <Box sx={{ color: kpi.color, mb: 3 }}>{kpi.icon}</Box>
@@ -73,7 +73,7 @@ export default function TechnicianPortalPage() {
             {/* Mission Log */}
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: '#FFFFFF', letterSpacing: 1, position: 'relative', zIndex: 1 }}>{t('tech.mission_dispatch')}</Typography>
             <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
-                {tickets.length > 0 ? tickets.map((ticket, i) => (
+                {(tickets || []).length > 0 ? (tickets || []).map((ticket, i) => (
                     <Grid item xs={12} key={i}>
                         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(22, 22, 24, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, '&:hover': { border: '1px solid rgba(198,167,94,0.3)', bgcolor: 'rgba(22, 22, 24, 0.6)' } }}>
                             <Grid container alignItems="center" spacing={3}>

@@ -186,7 +186,7 @@ export default function TurnoverEnginePage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {quotes.map((quote) => (
+            {(quotes || []).map((quote) => (
               <TableRow key={quote.quoteId} hover>
                 <TableCell>
                   <Button
