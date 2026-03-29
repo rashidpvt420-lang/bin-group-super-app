@@ -57,15 +57,15 @@
 
 **Feature Breakdown:**
 
-| Feature | Dev | QA | Timeline |
-|---------|-----|----|----------|
-| **Visual Gate** (Photo requirement) | 2d | 1d | Feb 17-20 |
-| **SOS Toggle** + AED 150 warning | 2d | 1d | Feb 21-24 |
-| **OpenAI Image Analysis** | 3d | 2d | Feb 24-Mar 3 |
-| **Create Ticket Endpoint** | 2d | 1d | Mar 3-6 |
-| **Track Ticket Status** | 2d | 1d | Mar 7-10 |
-| **Move-Out Request** | 3d | 1d | Mar 10-13 |
-| **Polish & Bug Fixes** | 2d | 1d | Mar 14-17 |
+|Feature|Dev|QA|Timeline|
+|---|---|---|---|
+|**Visual Gate** (Photo requirement)|2d|1d|Feb 17-20|
+|**SOS Toggle** + AED 150 warning|2d|1d|Feb 21-24|
+|**OpenAI Image Analysis**|3d|2d|Feb 24-Mar 3|
+|**Create Ticket Endpoint**|2d|1d|Mar 3-6|
+|**Track Ticket Status**|2d|1d|Mar 7-10|
+|**Move-Out Request**|3d|1d|Mar 10-13|
+|**Polish & Bug Fixes**|2d|1d|Mar 14-17|
 
 **Deliverables:**
 
@@ -88,15 +88,15 @@
 
 **Goal:** MVP for property management & financial visibility
 
-| Feature | Dev | QA | Timeline |
-|---------|-----|----|----------|
-| **Authentication** + role check | 2d | 1d | Feb 17-20 |
-| **Property List Dashboard** | 2d | 1d | Feb 21-24 |
-| **Health Score Widget** | 3d | 2d | Feb 24-Mar 3 |
-| **Turnover Engine** (Quote generation) | 3d | 1d | Mar 3-6 |
-| **Approve/Reject Refurbishment** | 2d | 1d | Mar 7-10 |
-| **Liability Waiver Popup** | 1d | 1d | Mar 10-11 |
-| **Financial Dashboard** | 3d | 1d | Mar 11-14 |
+|Feature|Dev|QA|Timeline|
+|---|---|---|---|
+|**Authentication** + role check|2d|1d|Feb 17-20|
+|**Property List Dashboard**|2d|1d|Feb 21-24|
+|**Health Score Widget**|3d|2d|Feb 24-Mar 3|
+|**Turnover Engine** (Quote gen)|3d|1d|Mar 3-6|
+|**Approve/Reject Refurbishment**|2d|1d|Mar 7-10|
+|**Liability Waiver Popup**|1d|1d|Mar 10-11|
+|**Financial Dashboard**|3d|1d|Mar 11-14|
 
 **Deliverables:**
 
@@ -118,15 +118,15 @@
 
 **Goal:** Field operations - morning gate, job tracking, proof of work
 
-| Feature | Dev | QA | Timeline |
-|---------|-----|----|----------|
-| **Morning Gate** (08:00 AM lock) | 2d | 1d | Feb 17-20 |
-| **Van Inventory Photo** upload | 1d | 1d | Feb 21-22 |
-| **Daily Schedule** (assigned jobs) | 2d | 1d | Feb 22-25 |
-| **QR Code Scanning** | 2d | 1d | Feb 26-Mar 1 |
-| **Asset Tagging** | 2d | 1d | Mar 2-5 |
-| **Proof of Work** (Before/After/Sig) | 3d | 1d | Mar 5-8 |
-| **Job Completion** invoice generation | 2d | 1d | Mar 9-12 |
+|Feature|Dev|QA|Timeline|
+|---|---|---|---|
+|**Morning Gate** (08:00 AM lock)|2d|1d|Feb 17-20|
+|**Van Inventory Photo** upload|1d|1d|Feb 21-22|
+|**Daily Schedule** (assigned jobs)|2d|1d|Feb 22-25|
+|**QR Code Scanning**|2d|1d|Feb 26-Mar 1|
+|**Asset Tagging**|2d|1d|Mar 2-5|
+|**Proof of Work** (Before/After)|3d|1d|Mar 5-8|
+|**Job Completion** invoice|2d|1d|Mar 9-12|
 
 **Deliverables:**
 
@@ -149,16 +149,16 @@
 
 **Goal:** CEO command center with real-time monitoring
 
-| Feature | Dev | QA | Timeline |
-|---------|-----|----|----------|
-| **Live Map Display** (Google Maps) | 3d | 1d | Mar 17-21 |
-| **Real-time Technician Tracking** | 2d | 1d | Mar 22-24 |
-| **Financial Ticker** (automated refresh) | 2d | 1d | Mar 24-26 |
-| **Active SOS Feed** | 1d | 1d | Mar 27-28 |
-| **Broker Portal** (agent tracking) | 2d | 1d | Mar 28-30 |
-| **Owner Suspension** (Two-strike rule) | 2d | 1d | Mar 31-Apr 2 |
-| **Reports Dashboard** | 3d | 1d | Apr 3-7 |
-| **Admin Settings** (system controls) | 1d | 1d | Apr 8-9 |
+|Feature|Dev|QA|Timeline|
+|---|---|---|---|
+|**Live Map Display** (Google Maps)|3d|1d|Mar 17-21|
+|**Real-time Tech Tracking**|2d|1d|Mar 22-24|
+|**Financial Ticker** (refresh)|2d|1d|Mar 24-26|
+|**Active SOS Feed**|1d|1d|Mar 27-28|
+|**Broker Portal** (tracking)|2d|1d|Mar 28-30|
+|**Owner Suspension** (Two-strike)|2d|1d|Mar 31-Apr 2|
+|**Reports Dashboard**|3d|1d|Apr 3-7|
+|**Admin Settings** (controls)|1d|1d|Apr 8-9|
 
 **Deliverables:**
 
@@ -362,11 +362,14 @@
 
 *How BIN Group outpaces traditional UAE property platforms.*
 
-| Category | Must-Have (Base) | Competitive Edge (BIN GROUP) |
-| :--- | :--- | :--- |
-| **Core Ops** | Rent collection, Lease Tracking | **Automated Lifecycle & GovBridge Integration** |
-| **Analytics** | Basic PDF Reports | **Real-time ROI & Market Forecasting** |
-| **AI Layer** | Manual Triage | **Predictive Maintenance & 24/7 Gemini Concierge** |
+|Category|Must-Have (Base)|Competitive Edge (BIN GROUP)|
+|:---|:---|:---|
+|**Core Ops**|Rent collection, Lease Tracking|**Automated Lifecycle & GovBridge Integration**|
+|**Analytics**|Basic PDF Reports|**Real-time ROI & Market Forecasting**|
+|**AI Layer**|Manual Triage|**& 24/7 Gemini Concierge**|
+
+### Created for: Rashid AbdulGhani | BIN-Group - General Maintenance LLC
+
 | **UX** | Static Tenant Link | **Immersive VR/AR & Self-Service Super Portal** |
 | **Moat** | Database storage | **Blockchain SLA Vault & IoT Digital Twin** |
 

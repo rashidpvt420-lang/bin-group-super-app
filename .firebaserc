@@ -2,6 +2,26 @@
   "projects": {
     "default": "bin-group-57c60"
   },
-  "targets": {},
+  "targets": {
+    "bin-group-57c60": {
+      "hosting": {
+        "admin-panel": [
+          "studio-5724711541-8a962-admin"
+        ],
+        "owner-portal": [
+          "studio-5724711541-8a962-owner"
+        ],
+        "tenant-portal": [
+          "studio-5724711541-8a962-tenant"
+        ],
+        "technician-portal": [
+          "studio-5724711541-8a962-tech"
+        ],
+        "bin-group": [
+          "home-os-owner-app"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

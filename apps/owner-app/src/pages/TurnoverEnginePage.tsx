@@ -31,6 +31,7 @@ import { Package, CheckCircle, TrendingUp, Clock, AlertTriangle, ArrowRight } fr
 import { db, collection, query, where, getDocs, doc, updateDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { fetchTurnoverStats } from '../utils/turnoverEngine';
+import { formatAED } from '../utils/formatters';
 
 interface TurnoverQuote {
   quoteId: string;
@@ -201,14 +202,14 @@ export default function TurnoverEnginePage() {
                 </TableCell>
                 <TableCell>{quote.unitId}</TableCell>
                 <TableCell>{quote.unitType}</TableCell>
-                <TableCell align="right">AED {quote.totalQuote.toLocaleString()}</TableCell>
+                <TableCell align="right">AED {formatAED(quote.totalQuote)}</TableCell>
                 <TableCell align="right">
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    AED {quote.finalPrice.toLocaleString()}
+                    AED {formatAED(quote.finalPrice)}
                   </Typography>
                   {quote.discount > 0 && (
                     <Typography variant="caption" color="success.main">
-                      -AED {quote.discount.toLocaleString()}
+                      -{formatAED(quote.discount)} AED
                     </Typography>
                   )}
                 </TableCell>

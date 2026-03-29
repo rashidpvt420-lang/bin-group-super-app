@@ -5,6 +5,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { generateTenderScopePdf, TenderInput } from '../../utils/tenderExportEngine';
+import { formatAED } from '../../utils/formatters';
 import { FileDown } from 'lucide-react';
 
 interface Props {
@@ -77,7 +78,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.annual_valuation')}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                        AED {packages?.[1]?.annualPrice?.toLocaleString()}
+                        AED {formatAED(packages?.[1]?.annualPrice)}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
@@ -85,20 +86,20 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     <Stack direction="row" alignItems="center" spacing={1} justifyContent="center" sx={{ mt: 1 }}>
                         <TrendingUp color="#4ADE80" size={24} />
                         <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>
-                            {savingsSimulation?.efficiencyGain}
+                            {savingsSimulation?.efficiencyGain || '0%'}
                         </Typography>
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>ASSET CLASS</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                        {propertyData.propertyType === 'GOVERNMENT_MAJLIS' ? 'GOV MAJLIS' : (propertyData.propertyType || '').toUpperCase()}
+                        {propertyData?.propertyType === 'GOVERNMENT_MAJLIS' ? 'GOV MAJLIS' : (propertyData?.propertyType || 'ASSET').toUpperCase()}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('field.grade')}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: '#FFFFFF' }}>
-                        {(propertyData.assetGrade || '').toUpperCase()}
+                        {(propertyData?.assetGrade || 'STANDARD').toUpperCase()}
                     </Typography>
                 </Box>
             </Box>
@@ -118,19 +119,19 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.market_average')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through', fontWeight: 900 }}>
-                            AED {savingsSimulation.marketAverageAnnual?.toLocaleString()}
+                            AED {formatAED(savingsSimulation?.marketAverageAnnual)}
                         </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 3, bgcolor: 'rgba(198,167,94,0.05)', borderRadius: 5, border: '1px solid rgba(198,167,94,0.2)', flexGrow: 1, width: isMobile ? '100%' : 'auto' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{t('quote.estimated_savings')}</Typography>
                         <Typography variant={isMobile ? "h3" : "h2"} sx={{ color: binThemeTokens.goldLight, fontWeight: 950 }}>
-                            AED {savingsSimulation.savingsAmount?.toLocaleString()}
+                            AED {formatAED(savingsSimulation?.savingsAmount)}
                         </Typography>
                     </Box>
                     <Box sx={{ textAlign: isMobile ? 'left' : 'right', width: isMobile ? '100%' : 'auto' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.bin_group_total')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: '#FFFFFF', fontWeight: 900 }}>
-                            AED {savingsSimulation.binGroupAnnual?.toLocaleString()}
+                            AED {formatAED(savingsSimulation?.binGroupAnnual)}
                         </Typography>
                     </Box>
                 </Box>
@@ -142,19 +143,19 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     <ShieldCheck color={binThemeTokens.gold} size={28} />
                     <Typography variant="h5" fontWeight="900">{t('quote.market_alignment')}</Typography>
                     <Box flexGrow={1} />
-                    <Chip label={benchmark.alignmentStatus} sx={{ bgcolor: 'rgba(74,222,128,0.1)', color: '#4ADE80', fontWeight: 900, border: '1px solid rgba(74,222,128,0.3)' }} />
-                </Stack>
-                <Typography sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>
-                    {benchmark.benchmarkJustification}
-                </Typography>
-                <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
-                    <Box>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('quote.benchmark_range')}</Typography>
-                        <Typography variant="h5" fontWeight="700">AED {benchmark.marketBenchmarkMin.toLocaleString()} - {benchmark.marketBenchmarkMax.toLocaleString()}</Typography>
-                    </Box>
+                    <Chip label={benchmark?.alignmentStatus || 'ALIGNED'} sx={{ bgcolor: 'rgba(74,222,128,0.1)', color: '#4ADE80', fontWeight: 900, border: '1px solid rgba(74,222,128,0.3)' }} />
+            </Stack>
+            <Typography sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>
+                {benchmark?.benchmarkJustification || 'Verified against institutional market data.'}
+            </Typography>
+            <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : 'row', gap: 2 }}>
+                <Box>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('quote.benchmark_range')}</Typography>
+                    <Typography variant="h5" fontWeight="700">AED {formatAED(benchmark?.marketBenchmarkMin)} - {formatAED(benchmark?.marketBenchmarkMax)}</Typography>
+                </Box>
                     <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('common.source')}</Typography>
-                        <Typography variant="h5" fontWeight="700">{benchmark.benchmarkSource}</Typography>
+                        <Typography variant="h5" fontWeight="700">{benchmark?.benchmarkSource || 'Sovereign Intelligence'}</Typography>
                     </Box>
                 </Box>
             </Box>

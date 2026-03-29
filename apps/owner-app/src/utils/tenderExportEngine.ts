@@ -2,6 +2,7 @@
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { formatAED, formatNumber } from './formatters';
 
 /**
  * Institutional Tender Export Module v1.21
@@ -73,10 +74,10 @@ export function generateTenderScopePdf(input: TenderInput, valuation: any) {
     doc.line(margin, 67, 190, 67);
 
     const summaryData = [
-        ['Portfolio Area', `${input.sqft.toLocaleString()} Sq.Ft`],
+        ['Portfolio Area', `${formatNumber(input.sqft)} Sq.Ft`],
         ['Asset Category', input.propertyType.replace('_', ' ')],
         ['Institutional Yield', `${input.annualYield}%`],
-        ['Institutional AMC (Floor)', `AED ${valuation.annualContractValue?.toLocaleString() || valuation.package?.annualPrice?.toLocaleString() || valuation.fmQuote?.annualEstimate?.target?.toLocaleString()}`],
+        ['Institutional AMC (Floor)', `AED ${formatAED(valuation.annualContractValue || valuation.package?.annualPrice || valuation.fmQuote?.annualEstimate?.target)}`],
         ['Mission Priority Status', 'S-CLASS SOVEREIGN READINESS'],
         ['Majlis Configuration', input.propertyType === 'GOVERNMENT_MAJLIS' ? (input.majlisType || 'GOVERNMENT').toUpperCase() : 'N/A']
     ];

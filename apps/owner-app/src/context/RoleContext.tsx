@@ -22,12 +22,23 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // [STABILITY] Tight 3-second safety catch
+        const safetyTimeout = setTimeout(() => {
+            if (loading) {
+                console.warn("[ROLE] Global Stability Timeout (3s): Releasing UI.");
+                setLoading(false);
+            }
+        }, 3000);
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
                 try {
-                    // [SECURITY] Fetch ID token result to check for custom claims
-                    const tokenResult = await currentUser.getIdTokenResult(true);
+                    // [SECURITY] Tight timeout for claim lookup
+                    const tokenPromise = currentUser.getIdTokenResult(true);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 2000));
+                    
+                    const tokenResult = await Promise.race([tokenPromise, timeoutPromise]) as any;
                     const claims = tokenResult.claims;
                     
                     if (claims.role) {
@@ -36,7 +47,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         setGodMode(claims.godMode === true);
                     } else {
                         // FALLBACK TO FIRESTORE SECURED ROLE DATA
-                        const snap = await getDoc(doc(db, "users", currentUser.uid));
+                        const snapPromise = getDoc(doc(db, "users", currentUser.uid));
+                        const snap = await Promise.race([snapPromise, timeoutPromise]) as any;
+                        
                         if (snap.exists()) {
                             const data = snap.data();
                             setRole(data.role?.toLowerCase() || 'owner');
@@ -52,19 +65,25 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     }
                 } catch (err) {
                     console.error("Critical role/claim lookup failure:", err);
-                    setRole('owner');
-                    setPropertyId(null);
+                    setRole('owner'); // Resilient fallback
+                } finally {
+                    setLoading(false);
+                    clearTimeout(safetyTimeout);
                 }
             } else {
                 setRole(null);
                 setIsAdmin(false);
                 setGodMode(false);
                 setPropertyId(null);
+                setLoading(false);
+                clearTimeout(safetyTimeout);
             }
-            setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            clearTimeout(safetyTimeout);
+        };
     }, []);
 
     return (

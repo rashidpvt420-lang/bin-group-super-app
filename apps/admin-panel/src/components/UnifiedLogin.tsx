@@ -37,51 +37,61 @@ export default function UnifiedLogin() {
         const user = userCredential.user;
         const uid = user.uid;
         
-        const docRef = doc(db, 'users', uid);
-        const docSnap = await getDoc(docRef);
+        try {
+            const docRef = doc(db, 'users', uid);
+            const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-            const role = docSnap.data().role;
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            console.info(`🔒 [SSO-GATEWAY] Routing verified identity (Role: ${role})`);
+            if (docSnap.exists()) {
+                const role = docSnap.data().role;
+                const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                
+                console.info(`🔒 [SSO-GATEWAY] Routing verified identity (Role: ${role})`);
 
-            switch (role) {
-                case 'TENANT':
-                    window.location.href = isLocal ? 'http://localhost:5173/' : 'https://bin-group-57c60-tenant.web.app/';
-                    break;
-                case 'TECHNICIAN':
-                    window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-group-57c60-tech.web.app/';
-                    break;
-                case 'OWNER':
-                    window.location.href = isLocal ? 'http://localhost:5175/' : 'https://bin-group-57c60.web.app/dashboard';
-                    break;
-                case 'ADMIN':
-                    window.location.href = isLocal ? 'http://localhost:3000/' : '/admin/';
-                    break;
-                default:
-                    setError('Account role not recognized.');
+                // Set a short timeout to clear loading in case redirect is slow
+                setTimeout(() => setLoading(false), 3000);
+
+                switch (role?.toUpperCase()) {
+                    case 'TENANT':
+                        window.location.href = isLocal ? 'http://localhost:5173/' : 'https://bin-group-57c60-tenant.web.app/';
+                        break;
+                    case 'TECHNICIAN':
+                        window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-group-57c60-tech.web.app/';
+                        break;
+                    case 'OWNER':
+                        window.location.href = isLocal ? 'http://localhost:5175/dashboard' : 'https://bin-group-57c60.web.app/dashboard';
+                        break;
+                    case 'ADMIN':
+                        window.location.href = isLocal ? 'http://localhost:3000/' : '/admin/';
+                        break;
+                    default:
+                        setError('Account role not recognized.');
+                        setLoading(false);
+                }
+            } else {
+                setError('No sovereign profile found. Contact BIN-GROUP HQ.');
+                setLoading(false);
             }
-        } else {
-            setError('No sovereign profile found. Contact BIN-GROUP HQ.');
+        } catch (err: any) {
+            console.error("Auth Success Error:", err);
+            setError("Profile sync failed. Please try again.");
+            setLoading(false);
         }
     };
 
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setError('');
+        // Safety timeout for the "Handshaking" button
+        const timeout = setTimeout(() => setLoading(false), 8000);
         try {
-            // [SOVEREIGN-AUDIT] Secure GoogleAuthProvider initialization with explicit flow params
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ 
                 prompt: 'select_account',
-                // Explicitly request standard auth code flow scope
                 auth_type: 'rerequest'
             });
-
-            // Standardize on signInWithRedirect for Institutional Compliance on cross-origin SPA
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
+            clearTimeout(timeout);
             console.error("🚨 [SSO-GATEWAY] Initiation Failure:", err);
             setError(err.message || 'Failed to initiate secure handshake.');
             setLoading(false);

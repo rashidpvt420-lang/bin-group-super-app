@@ -16,6 +16,7 @@ import { CheckCircle, ArrowRight, ArrowLeft, Star, Crown, Shield, Landmark, Gem 
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatAED } from '../../utils/formatters';
 
 export default function ContractSelectionStep({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
     const { valuationResult, setSelectedPlan, properties, portfolioSummary } = useOnboardingStore();
@@ -104,12 +105,12 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
                                     <Box sx={{ mb: 6 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
                                             <Typography variant="h3" fontWeight="950">
-                                                AED {pkg.annualPrice.toLocaleString()}
+                                                AED {formatAED(pkg.annualPrice)}
                                             </Typography>
                                             <Typography variant="body1" color="text.secondary">/{t('common.yr')}</Typography>
                                         </Box>
                                         <Typography variant="subtitle1" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
-                                            AED {pkg.monthlyPrice.toLocaleString()} /{t('common.mo')} ({t('contract.quarterly')})
+                                            AED {formatAED(pkg.monthlyPrice)} /{t('common.mo')} ({t('contract.quarterly')})
                                         </Typography>
                                     </Box>
 
@@ -141,7 +142,7 @@ export default function ContractSelectionStep({ onNext, onBack }: { onNext: () =
             {portfolioIntelligence.portfolioDiscount > 0 && (
                 <Box sx={{ mt: 6, p: 3, textAlign: 'center', bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 4, border: `1px dashed ${binThemeTokens.gold}` }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                        <Gem size={16} /> {t('contract.portfolio_savings', { amount: portfolioIntelligence.portfolioDiscountAmount.toLocaleString() })}
+                        <Gem size={16} /> {t('contract.portfolio_savings', { amount: formatAED(portfolioIntelligence.portfolioDiscountAmount) })}
                     </Typography>
                 </Box>
             )}

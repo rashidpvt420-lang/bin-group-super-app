@@ -22,6 +22,7 @@ import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { calculateComplianceScore } from '../utils/complianceScoreEngine';
 import { calculateESGRatings } from '../utils/esgRatingEngine';
+import { formatAED } from '../utils/formatters';
 
 export default function DashboardPage() {
     const { user, godMode } = useRole();
@@ -138,10 +139,10 @@ export default function DashboardPage() {
       {/* Economic Powergrid */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
         {[
-            { label: t('dash.kpi.gross_val'), val: `AED ${(metrics?.yield?.grossContractValue/1000).toFixed(1)}K`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
-            { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
+            { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(metrics?.yield?.grossContractValue)}`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
+            { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield || 0}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
             { label: t('dash.kpi.radius'), val: properties[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
-            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
+            { label: t('dash.kpi.majlis_readiness'), val: properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
         ].map((kpi, i) => (
             <Grid item xs={12} md={3} key={i}>
                 <Card sx={{ 
@@ -230,7 +231,7 @@ export default function DashboardPage() {
               <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
                   <CardContent>
                       <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('dash.kpi.satisfaction')}</Typography>
-                      <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>{(metrics?.esg?.sScore / 20)?.toFixed(1) || '0.0'}/5.0</Typography>
+                      <Typography variant="h5" fontWeight="900" sx={{ mt: 2, color: binThemeTokens.textPrimary }}>{((metrics?.esg?.sScore || 0) / 20)?.toFixed(1) || '0.0'}/5.0</Typography>
                       <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.05)', mt: 1, borderRadius: 2, overflow: 'hidden' }}>
                           <Box sx={{ width: `${metrics?.esg?.sScore || 0}%`, height: '100%', background: 'linear-gradient(90deg, #4ADE80, #22C55E)' }} />
                       </Box>
@@ -301,7 +302,7 @@ export default function DashboardPage() {
                             </Box>
                             </TableCell>
                             <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, fontSize: '1.1rem' }}>
-                                AED {contract?.annualContractValue?.toLocaleString() || '---'}
+                                AED {formatAED(contract?.annualContractValue)}
                             </TableCell>
                             <TableCell>
                             <Chip 

@@ -1,38 +1,24 @@
 "use strict";
-// packages/shared/src/utils/propertyClassifier.ts
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.classifyProperty = void 0;
-/**
- * MASTER COMMANDER DIRECTIVE V1.10: Auto-detection layer for UAE property archetypes.
- */
-const classifyProperty = (data) => {
-    // 1. Institutional Overrides
-    if ((data.classrooms || 0) >= 10)
-        return 'School';
-    if ((data.beds || 0) >= 50)
-        return 'Hospital';
-    if (data.starRating && data.starRating > 0)
-        return 'Hotel';
-    if (data.authorityName && data.authorityName.length > 0)
-        return 'Government';
-    // 2. Structural Signatures
-    if ((data.floors || 0) >= 15)
-        return 'Tower';
-    if ((data.villasInCluster || 0) > 1)
-        return 'Compound';
-    if (data.majlisFlag)
-        return 'Majlis';
-    // 3. Usage Baselines
-    if (data.propertyUsage === 'industrial')
-        return 'Warehouse';
-    if (data.propertyUsage === 'commercial') {
-        if ((data.areaSqFt || 0) > 5000)
-            return 'Office';
-        return 'Retail';
-    }
-    // 4. Residential Fallbacks
-    if ((data.villasInCluster || 0) === 1)
-        return 'Villa';
-    return 'Apartment';
+const classifyProperty = (inputs) => {
+    const pType = (inputs.propertyType || '').toUpperCase();
+    if (pType === 'GOVERNMENT_MAJLIS')
+        return 'GOVERNMENT_MAJLIS';
+    if (pType === 'GOVERNMENT_PROPERTY')
+        return 'GOVERNMENT_PROPERTY';
+    if (pType === 'HOTEL')
+        return 'HOTEL';
+    if (['VILLA', 'APARTMENT', 'RESIDENTIAL BUILDING', 'RESIDENTIAL'].includes(pType))
+        return 'RESIDENTIAL';
+    if (['OFFICE', 'COMMERCIAL BUILDING', 'WAREHOUSE', 'MALL', 'COMMERCIAL'].includes(pType))
+        return 'COMMERCIAL';
+    if (['INDUSTRIAL'].includes(pType))
+        return 'INDUSTRIAL';
+    if (['MIXED-USE TOWER', 'MIXED-USE'].includes(pType))
+        return 'MIXED_USE';
+    if (['SCHOOL', 'HOSPITAL', 'INSTITUTIONAL'].includes(pType))
+        return 'INSTITUTIONAL';
+    return 'RESIDENTIAL';
 };
 exports.classifyProperty = classifyProperty;

@@ -2,24 +2,24 @@ import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 import { calculateBuildingHealth } from './buildingHealthEngine';
 
 export type Emirate = 'Dubai' | 'Abu Dhabi' | 'Sharjah' | 'Ajman' | 'RAK' | 'Fujairah' | 'UAQ';
-export type PropertyType = 
-    | 'Residential' 
-    | 'Commercial' 
-    | 'Industrial' 
-    | 'Mixed-Use' 
+export type PropertyType =
+    | 'Residential'
+    | 'Commercial'
+    | 'Industrial'
+    | 'Mixed-Use'
     | 'Institutional'
-    | 'GOVERNMENT_MAJLIS' 
-    | 'GOVERNMENT_PROPERTY' 
+    | 'GOVERNMENT_MAJLIS'
+    | 'GOVERNMENT_PROPERTY'
     | 'HOTEL'
-    | 'Villa' 
-    | 'Apartment' 
-    | 'Residential Building' 
-    | 'Office' 
-    | 'Commercial Building' 
-    | 'Warehouse' 
-    | 'School' 
-    | 'Hospital' 
-    | 'Mall' 
+    | 'Villa'
+    | 'Apartment'
+    | 'Residential Building'
+    | 'Office'
+    | 'Commercial Building'
+    | 'Warehouse'
+    | 'School'
+    | 'Hospital'
+    | 'Mall'
     | 'Mixed-Use Tower';
 
 export type BuildingGrade = 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
@@ -154,35 +154,35 @@ export interface IntegratedIntelligenceResponse {
 }
 
 const DISTRICT_TIERS: Record<string, { tier: string; mult: number; ownership: 'Freehold' | 'Leasehold' | 'Government' }> = {
-    'Palm Jumeirah':     { tier: 'ALPHA_ULTRA', mult: 2.10, ownership: 'Freehold' },
-    'Downtown Dubai':    { tier: 'ALPHA_PRIME', mult: 1.60, ownership: 'Freehold' },
-    'Dubai Marina':      { tier: 'ALPHA',       mult: 1.45, ownership: 'Freehold' },
-    'Business Bay':      { tier: 'ALPHA',       mult: 1.25, ownership: 'Freehold' },
-    'DIFC':              { tier: 'ALPHA_PRIME', mult: 1.55, ownership: 'Freehold' },
-    'Jumeirah':          { tier: 'BETA_PLUS',   mult: 1.30, ownership: 'Freehold' },
-    'Emirates Hills':    { tier: 'ALPHA_ULTRA', mult: 2.00, ownership: 'Freehold' },
-    'Arabian Ranches':   { tier: 'BETA_PLUS',   mult: 1.20, ownership: 'Freehold' },
-    'JBR':               { tier: 'ALPHA',       mult: 1.40, ownership: 'Freehold' },
-    'JLT':               { tier: 'BETA_PLUS',   mult: 1.15, ownership: 'Freehold' },
-    'Silicon Oasis':     { tier: 'BETA',        mult: 1.00, ownership: 'Freehold' },
-    'International City':{ tier: 'GAMMA',       mult: 0.85, ownership: 'Leasehold' },
-    'Discovery Gardens': { tier: 'GAMMA',       mult: 0.82, ownership: 'Leasehold' },
-    'Al Quoz':           { tier: 'GAMMA',       mult: 0.75, ownership: 'Leasehold' },
-    'Deira':             { tier: 'GAMMA',       mult: 0.78, ownership: 'Leasehold' },
-    'Bur Dubai':         { tier: 'GAMMA',       mult: 0.80, ownership: 'Leasehold' },
-    'Saadiyat Island':   { tier: 'ALPHA_ULTRA', mult: 1.90, ownership: 'Freehold' },
-    'Al Reem Island':    { tier: 'ALPHA',       mult: 1.50, ownership: 'Freehold' },
-    'Yas Island':        { tier: 'ALPHA',       mult: 1.45, ownership: 'Freehold' },
-    'Al Ain':            { tier: 'BETA',        mult: 0.90, ownership: 'Leasehold' },
-    'Al Majaz':          { tier: 'BETA',        mult: 0.88, ownership: 'Leasehold' },
-    'Al Nahda':          { tier: 'BETA',        mult: 0.85, ownership: 'Leasehold' },
-    'Default':           { tier: 'BETA',        mult: 1.00, ownership: 'Freehold' },
+    'Palm Jumeirah': { tier: 'ALPHA_ULTRA', mult: 2.10, ownership: 'Freehold' },
+    'Downtown Dubai': { tier: 'ALPHA_PRIME', mult: 1.60, ownership: 'Freehold' },
+    'Dubai Marina': { tier: 'ALPHA', mult: 1.45, ownership: 'Freehold' },
+    'Business Bay': { tier: 'ALPHA', mult: 1.25, ownership: 'Freehold' },
+    'DIFC': { tier: 'ALPHA_PRIME', mult: 1.55, ownership: 'Freehold' },
+    'Jumeirah': { tier: 'BETA_PLUS', mult: 1.30, ownership: 'Freehold' },
+    'Emirates Hills': { tier: 'ALPHA_ULTRA', mult: 2.00, ownership: 'Freehold' },
+    'Arabian Ranches': { tier: 'BETA_PLUS', mult: 1.20, ownership: 'Freehold' },
+    'JBR': { tier: 'ALPHA', mult: 1.40, ownership: 'Freehold' },
+    'JLT': { tier: 'BETA_PLUS', mult: 1.15, ownership: 'Freehold' },
+    'Silicon Oasis': { tier: 'BETA', mult: 1.00, ownership: 'Freehold' },
+    'International City': { tier: 'GAMMA', mult: 0.85, ownership: 'Leasehold' },
+    'Discovery Gardens': { tier: 'GAMMA', mult: 0.82, ownership: 'Leasehold' },
+    'Al Quoz': { tier: 'GAMMA', mult: 0.75, ownership: 'Leasehold' },
+    'Deira': { tier: 'GAMMA', mult: 0.78, ownership: 'Leasehold' },
+    'Bur Dubai': { tier: 'GAMMA', mult: 0.80, ownership: 'Leasehold' },
+    'Saadiyat Island': { tier: 'ALPHA_ULTRA', mult: 1.90, ownership: 'Freehold' },
+    'Al Reem Island': { tier: 'ALPHA', mult: 1.50, ownership: 'Freehold' },
+    'Yas Island': { tier: 'ALPHA', mult: 1.45, ownership: 'Freehold' },
+    'Al Ain': { tier: 'BETA', mult: 0.90, ownership: 'Leasehold' },
+    'Al Majaz': { tier: 'BETA', mult: 0.88, ownership: 'Leasehold' },
+    'Al Nahda': { tier: 'BETA', mult: 0.85, ownership: 'Leasehold' },
+    'Default': { tier: 'BETA', mult: 1.00, ownership: 'Freehold' },
 };
 
 const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
     const missions: ComplianceMissionItem[] = [];
     const pType = inputs.propertyType;
-    
+
     missions.push({
         trigger: 'ALL PROPERTIES',
         mission: 'Annual Fire Safety Inspection & Civil Defense Certificate',
@@ -224,7 +224,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             urgencyDays: 15
         });
     }
-    
+
     if (inputs.lifts > 0 || inputs.escalators) {
         missions.push({
             trigger: 'Lifts / Elevators',
@@ -235,7 +235,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             urgencyDays: 63
         });
     }
-    
+
     if (inputs.tank) {
         missions.push({
             trigger: 'Water Storage Tank',
@@ -246,7 +246,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             urgencyDays: 120
         });
     }
-    
+
     if (inputs.sira || pType === 'GOVERNMENT_MAJLIS' || pType === 'GOVERNMENT_PROPERTY' || pType === 'HOTEL') {
         missions.push({
             trigger: 'CCTV / Security System',
@@ -257,7 +257,7 @@ const generateComplianceMissions = (inputs: any): ComplianceMissionItem[] => {
             urgencyDays: 45
         });
     }
-    
+
     if (inputs.pool || pType === 'HOTEL') {
         missions.push({
             trigger: 'Swimming Pool',
@@ -303,18 +303,18 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
     // ── PREMIUM INSTITUTIONAL ROUTING ──
     if (ownerType === 'Government') {
         if (pType === 'GOVERNMENT_MAJLIS') {
-            return { 
-                recommendedTier: 'INSTITUTIONAL_SOVEREIGN', 
-                recommendedReason: ['Government Majlis Protocol Requirements', 'VIP Security Level Integration'], 
+            return {
+                recommendedTier: 'INSTITUTIONAL_SOVEREIGN',
+                recommendedReason: ['Government Majlis Protocol Requirements', 'VIP Security Level Integration'],
                 score: 100,
                 contractTemplate: 'GOVERNMENT_MAJLIS_CONTRACT'
             };
         }
 
         if (pType === 'GOVERNMENT_PROPERTY') {
-            return { 
-                recommendedTier: 'GOVERNMENT_FACILITY_MANAGEMENT', 
-                recommendedReason: ['Departmental Asset Criticality', 'Enhanced Compliance Stack'], 
+            return {
+                recommendedTier: 'GOVERNMENT_FACILITY_MANAGEMENT',
+                recommendedReason: ['Departmental Asset Criticality', 'Enhanced Compliance Stack'],
                 score: 95,
                 contractTemplate: 'GOVERNMENT_PROPERTY_CONTRACT'
             };
@@ -322,9 +322,9 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
     }
 
     if (pType === 'HOTEL') {
-        return { 
-            recommendedTier: 'HOSPITALITY_PREMIUM_FM', 
-            recommendedReason: ['24/7 Operations Load', 'Guest-Facing Service Intensity'], 
+        return {
+            recommendedTier: 'HOSPITALITY_PREMIUM_FM',
+            recommendedReason: ['24/7 Operations Load', 'Guest-Facing Service Intensity'],
             score: 98,
             contractTemplate: 'HOTEL_CONTRACT'
         };
@@ -335,7 +335,7 @@ const generateContractRecommendation = (inputs: any, gradeMult: number, missions
     const reasons: string[] = [];
     if (gradeMult >= 1.8) { score += 30; reasons.push('Luxury/Ultra-Luxury grade requires full FM coverage'); }
     if (missions.length >= 5) { score += 25; reasons.push(`${missions.length} mandatory compliance missions detected`); }
-    
+
     let tier = score >= 70 ? 'SOVEREIGN HYBRID (Maintenance + PM)' : (score >= 40 ? 'PREMIUM MAINTENANCE CONTRACT' : 'MAINTENANCE ONLY CONTRACT');
 
     return { recommendedTier: tier, recommendedReason: reasons, score, contractTemplate: 'STANDARD_AMC' };
@@ -408,7 +408,7 @@ export const calculateUAEValuation = async (inputs: any): Promise<IntegratedInte
     const totalAssetMultiplier = locationMultiplier * (gradeMultipliers[inputs.assetGrade] || 1.0) * sectorMult * ageDepreciation * towerComplexityFactor;
     const sqft = inputs.sqft || 1200;
     const marketValue = Math.round(1200 * totalAssetMultiplier * sqft * ((inputs.conditionScore || 7) / 10));
-    
+
     let maintenanceBase = Math.round(marketValue * 0.012);
     if (pType === 'GOVERNMENT_MAJLIS') maintenanceBase = Math.max(maintenanceBase, 35 * sqft);
     else if (pType === 'GOVERNMENT_PROPERTY') maintenanceBase = Math.max(maintenanceBase, 25 * sqft);
@@ -420,32 +420,32 @@ export const calculateUAEValuation = async (inputs: any): Promise<IntegratedInte
     const portfolioIntel = calculatePortfolioIntelligence(inputs.portfolioCount || 1, finalBundledPrice, pType.startsWith('GOVERNMENT'));
 
     const packages = [
-        { 
-            packageName: 'Standard Management', 
-            tier: 'standard', 
-            annualPrice: Math.round(finalBundledPrice * 0.85), 
-            responseSla: '24 hours', 
-            includedVisits: 6, 
-            coverageScope: ['AC', 'Plumbing', 'Electrical'], 
-            recommended: false 
+        {
+            packageName: 'Standard Management',
+            tier: 'standard',
+            annualPrice: Math.round(finalBundledPrice * 0.85),
+            responseSla: '24 hours',
+            includedVisits: 6,
+            coverageScope: ['AC', 'Plumbing', 'Electrical'],
+            recommended: false
         },
-        { 
-            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Majlis Protocol Premium' : 'Premium FM Coverage', 
-            tier: 'premium', 
-            annualPrice: finalBundledPrice, 
-            responseSla: '4 hours', 
-            includedVisits: 12, 
-            coverageScope: ['AC', 'Plumbing', 'Electrical', 'Compliance', 'Handyman'], 
-            recommended: true 
+        {
+            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Majlis Protocol Premium' : 'Premium FM Coverage',
+            tier: 'premium',
+            annualPrice: finalBundledPrice,
+            responseSla: '4 hours',
+            includedVisits: 12,
+            coverageScope: ['AC', 'Plumbing', 'Electrical', 'Compliance', 'Handyman'],
+            recommended: true
         },
-        { 
-            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Sovereign VIP Protocol' : 'Sovereign Institutional', 
-            tier: 'sovereign', 
-            annualPrice: Math.round(finalBundledPrice * 1.45), 
-            responseSla: '30 mins', 
-            includedVisits: 52, 
-            coverageScope: ['Full FM', 'Deep Cleaning', 'Security Audit', 'Concierge', 'IT/IoT'], 
-            recommended: false 
+        {
+            packageName: pType === 'GOVERNMENT_MAJLIS' ? 'Sovereign VIP Protocol' : 'Sovereign Institutional',
+            tier: 'sovereign',
+            annualPrice: Math.round(finalBundledPrice * 1.45),
+            responseSla: '30 mins',
+            includedVisits: 52,
+            coverageScope: ['Full FM', 'Deep Cleaning', 'Security Audit', 'Concierge', 'IT/IoT'],
+            recommended: false
         }
     ];
 

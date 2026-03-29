@@ -8,6 +8,7 @@ import DrawIcon from '@mui/icons-material/Draw';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import ArticleIcon from '@mui/icons-material/Article';
 import { useLanguage } from '../context/LanguageContext';
+import { formatAED } from '../utils/formatters';
 
 interface Props {
     propertyData: any;
@@ -43,6 +44,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
     };
 
     const contract = getContractContent();
+    const annualPrice = Math.round(selectedPlan?.annualPrice || selectedPlan?.package?.annualPrice || 0);
 
     return (
         <Box>
@@ -68,7 +70,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="subtitle2" fontWeight="bold">1. PARTIES</Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                        Property: {propertyData?.address || propertyData?.propertyName} <br/>
+                        Property: {propertyData?.address || propertyData?.propertyName || 'Subject Asset'} <br/>
                         Owner/Entity: {propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}<br/>
                         Provider: BIN GROUP PROPERTY MANAGEMENT LLC
                     </Typography>
@@ -80,7 +82,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
 
                     <Typography variant="subtitle2" fontWeight="bold">3. PRICING & DISBURSEMENT</Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                        Annual Management Fee: AED {Math.round(selectedPlan?.annualPrice || selectedPlan?.package?.annualPrice).toLocaleString()}<br/>
+                        Annual Management Fee: AED {formatAED(annualPrice)}<br/>
                         Payment Schedule: Institutional settlement manifest applies.
                     </Typography>
 

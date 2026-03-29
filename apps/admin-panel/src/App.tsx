@@ -7,6 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import CircularProgress from '@mui/material/CircularProgress';
 
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -46,16 +47,31 @@ import { FinancialTickerPage, TechnicianMapPage } from './pages/Placeholders';
 import { adminTheme } from './theme/adminTheme';
 
 // Removed legacy primary theme definition to use centralized adminTheme.ts
-
 function AppContent() {
     const { isAuthenticated, loading } = useAuth();
+    const [safetyReleased, setSafetyReleased] = React.useState(false);
 
-    if (loading) {
-        return <div>Loading...</div>;
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            if (loading) {
+                console.warn("[ADMIN-SHELL] Boot timeout. Forcing UI release.");
+                setSafetyReleased(true);
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [loading]);
+
+    if (loading && !safetyReleased) {
+        return (
+            <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617' }}>
+                <CircularProgress sx={{ color: '#DAA520' }} />
+            </Box>
+        );
     }
 
     return (
         <Routes>
+...
             <Route path="/login" element={<LoginPage />} />
 
             {isAuthenticated && (

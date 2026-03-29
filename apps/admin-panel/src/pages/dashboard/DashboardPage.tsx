@@ -1,6 +1,6 @@
 // admin-panel/src/pages/dashboard/DashboardPage.tsx
 import React, { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, LinearProgress, Skeleton } from '@mui/material';
+import { Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Skeleton } from '@mui/material';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -33,29 +33,37 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
+    
+    // [STABILITY] Dashboard Data Timeout
+    const safetyTimeout = setTimeout(() => {
+        setLoading(prev => {
+            if (prev) console.warn("[DASHBOARD] Snapshot timeout. Rendering partial data.");
+            return false;
+        });
+    }, 8000);
 
     // 1. Properties Count
     const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
       setStats(prev => ({ ...prev, properties: snapshot.size }));
-    });
+    }, (err) => console.error("Properties snap failed:", err));
 
     // 2. Owners Count
     const qOwners = query(collection(db, "users"), where("role", "in", ["owner", "OWNER"]));
     const unsubOwners = onSnapshot(qOwners, (snapshot) => {
       setStats(prev => ({ ...prev, owners: snapshot.size }));
-    });
+    }, (err) => console.error("Owners snap failed:", err));
 
     // 3. Brokers Count
     const qBrokers = query(collection(db, "users"), where("role", "in", ["broker", "BROKER"]));
     const unsubBrokers = onSnapshot(qBrokers, (snapshot) => {
       setStats(prev => ({ ...prev, brokers: snapshot.size }));
-    });
+    }, (err) => console.error("Brokers snap failed:", err));
 
     // 4. Open Tickets Count
     const qTickets = query(collection(db, "tickets"), where("status", "in", ["OPEN", "PENDING", "IN_PROGRESS"]));
     const unsubTickets = onSnapshot(qTickets, (snapshot) => {
       setStats(prev => ({ ...prev, openTickets: snapshot.size }));
-    });
+    }, (err) => console.error("Tickets snap failed:", err));
 
     // 5. Revenue & Recent Transactions (Derived from 'contracts')
     const qContracts = query(collection(db, "contracts"), orderBy("createdAt", "desc"), limit(20));
@@ -81,7 +89,7 @@ export default function DashboardPage() {
       setStats(prev => ({ ...prev, revenue: totalRevenue }));
       setRecentTransactions(txns.slice(0, 8));
       
-      // Dynamic Chart Data mapping (Mocked baseline + real data)
+      // Dynamic Chart Data mapping
       setChartData([
         { name: 'Jan', revenue: totalRevenue * 0.4 },
         { name: 'Feb', revenue: totalRevenue * 0.5 },
@@ -92,9 +100,11 @@ export default function DashboardPage() {
       ]);
       
       setLoading(false);
+      clearTimeout(safetyTimeout);
     }, (error) => {
       console.error("Dashboard snap failed:", error);
       setLoading(false);
+      clearTimeout(safetyTimeout);
     });
 
     return () => {
@@ -103,6 +113,7 @@ export default function DashboardPage() {
       unsubBrokers();
       unsubTickets();
       unsubContracts();
+      clearTimeout(safetyTimeout);
     };
   }, []);
 

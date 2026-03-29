@@ -12,6 +12,7 @@ import { useOnboardingStore, PropertyData } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
+import { formatNumber, formatAED } from '../../utils/formatters';
 import Papa from 'papaparse';
 
 const VisuallyHiddenInput = styled('input')({
@@ -212,7 +213,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             {/* Scale */}
                             <Grid item xs={12}><Divider sx={{ my: 1 }}><Chip label={t('onboarding.asset_scale')} size="small" /></Divider></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Units / Rooms" value={activeProperty.units} onChange={(e) => updateProperty(editingIndex!, { units: parseInt(e.target.value) || 0 })} /></Grid>
-                            <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Floors" value={activeProperty.floors} onChange={(e) => updateProperty(editingIndex!, { floors: parseInt(e.target.value) || 0 })} /></Grid>
+                            <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Floors" value={activeProperty.units} onChange={(e) => updateProperty(editingIndex!, { floors: parseInt(e.target.value) || 0 })} /></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="SqFt" value={activeProperty.sqft} onChange={(e) => updateProperty(editingIndex!, { sqft: parseInt(e.target.value) || 0 })} /></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Age" value={activeProperty.age} onChange={(e) => updateProperty(editingIndex!, { age: parseInt(e.target.value) || 0 })} /></Grid>
 
@@ -298,7 +299,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                         <Stack spacing={2.5}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_props')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary.totalProperties}</Typography></Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_units')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary.totalUnits}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_sqft')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary.totalSqFt.toLocaleString()}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_sqft')}</Typography><Typography variant="h6" fontWeight="900">{formatNumber(portfolioSummary.totalSqFt)}</Typography></Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" color="text.secondary">{t('summary.tier')}</Typography><Chip label={portfolioSummary.recommendedTier} size="small" sx={{ fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} /></Box>
                         </Stack>
                         <Button variant="contained" fullWidth size="large" onClick={handleProceed} endIcon={<ArrowRight style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />} disabled={properties.length === 0} sx={{ mt: 4, py: 2, fontWeight: 900, fontSize: '1.1rem' }}>{t('button.next_asset_analysis')}</Button>

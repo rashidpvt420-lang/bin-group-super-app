@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { formatAED } from '../../utils/formatters';
 
 const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNext, onBack }) => {
     const { propertyData, selectedAddOns, toggleAddOn } = useOnboardingStore();
@@ -262,7 +263,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                                         </Box>
                                         <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 3 }}>
                                             <Box>
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {addon.price.toLocaleString()}</Typography>
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(addon.price)}</Typography>
                                                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>ANNUAL</Typography>
                                             </Box>
                                             {isSelected ? (
@@ -294,16 +295,15 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                             {currentAddOns.filter(a => selectedAddOns.includes(a.id) || a.mandatory).map((a) => (
                                 <Box key={a.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{a.name}</Typography>
-                                    <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {a.price.toLocaleString()}</Typography>
+                                    <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(a.price)}</Typography>
                                 </Box>
                             ))}
                             <Box sx={{ pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography fontWeight="900" sx={{ color: binThemeTokens.textPrimary, letterSpacing: 1 }}>TOTAL MISSIONS</Typography>
                                 <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                                    AED {currentAddOns
+                                    AED {formatAED(currentAddOns
                                         .filter(a => selectedAddOns.includes(a.id) || a.mandatory)
-                                        .reduce((sum, a) => sum + a.price, 0)
-                                        .toLocaleString()}
+                                        .reduce((sum, a) => sum + a.price, 0))}
                                 </Typography>
                             </Box>
                         </Stack>

@@ -10,6 +10,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SecurityIcon from '@mui/icons-material/Security';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { formatAED } from '../utils/formatters';
 
 interface ValuationExplanationPanelProps {
     valuation: any;
@@ -26,8 +27,10 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
     onContinue,
     onAdjust
 }) => {
-    const isSale = propertyInfo.strategy === 'sale';
-    const isRent = propertyInfo.strategy === 'rent';
+    const isSale = propertyInfo?.strategy === 'sale';
+    const isRent = propertyInfo?.strategy === 'rent';
+
+    if (!valuation || !recommendation) return null;
 
     return (
         <Box sx={{ py: 2 }}>
@@ -36,7 +39,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                 <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 2 }}>
                     <Chip 
                         icon={<VerifiedIcon style={{ color: valuation.trustTier === 'INSTITUTIONAL_HIGH' ? '#059669' : '#0369a1' }} />}
-                        label={valuation.trustTier.replace('_', ' ')} 
+                        label={valuation.trustTier?.replace('_', ' ') || 'PRELIMINARY'} 
                         sx={{ 
                             fontWeight: 'bold',
                             bgcolor: valuation.trustTier === 'INSTITUTIONAL_HIGH' ? '#ecfdf5' : '#f0f9ff',
@@ -63,11 +66,11 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         </Typography>
                         <Stack spacing={1.5} sx={{ mt: 2 }}>
                             {Object.entries({
-                                'Location': propertyInfo.community,
-                                'Grade': propertyInfo.buildingGrade,
-                                'Condition': `${propertyInfo.conditionScore}/10`,
-                                'Age': `${propertyInfo.buildingAge} years`,
-                                'Strategy': propertyInfo.strategy.toUpperCase()
+                                'Location': propertyInfo?.community || 'UAE',
+                                'Grade': propertyInfo?.buildingGrade || 'Premium',
+                                'Condition': `${propertyInfo?.conditionScore || 7}/10`,
+                                'Age': `${propertyInfo?.buildingAge || 0} years`,
+                                'Strategy': propertyInfo?.strategy?.toUpperCase() || 'FM'
                             }).map(([key, value]) => (
                                 <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="body2" color="text.secondary">{key}</Typography>
@@ -96,7 +99,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         </Box>
 
                         <Grid container spacing={2}>
-                            {valuation.drivers.map((driver: string, index: number) => (
+                            {(valuation.drivers || []).map((driver: string, index: number) => (
                                 <Grid item xs={6} key={index}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         <TrendingUpIcon fontSize="small" color="primary" />
@@ -142,7 +145,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         <AutoAwesomeIcon color="primary" sx={{ fontSize: 20 }} /> CORE SERVICE MISSIONS PINNED TO ASSET
                     </Typography>
                     <Grid container spacing={2}>
-                        {valuation.addOns.map((addon: any, index: number) => (
+                        {(valuation.addOns || []).map((addon: any, index: number) => (
                             <Grid item xs={12} md={4} key={index}>
                                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%', borderColor: addon.isMandatory ? 'primary.light' : 'divider' }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -150,7 +153,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                                         {addon.isMandatory && <Chip label="MANDATORY" size="small" color="primary" sx={{ height: 16, fontSize: 8, fontWeight: 900 }} />}
                                     </Box>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{addon.description}</Typography>
-                                    <Typography variant="caption" fontWeight="bold">AED {addon.annualCost.toLocaleString()} / {addon.frequency}</Typography>
+                                    <Typography variant="caption" fontWeight="bold">AED {formatAED(addon.annualCost)} / {addon.frequency}</Typography>
                                 </Paper>
                             </Grid>
                         ))}
@@ -170,18 +173,18 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                                 <VerifiedIcon fontSize="small" />
                                 <Typography variant="overline" fontWeight="bold">Recommended Service Plan</Typography>
-                                <Chip label={`SOVEREIGN ESG: ${valuation.insights.esgRating}`} size="small" color="secondary" sx={{ height: 16, fontSize: 8, fontWeight: 900, ml: 'auto', bgcolor: 'white', color: 'primary.main' }} />
+                                <Chip label={`SOVEREIGN ESG: ${valuation.insights?.esgRating || 'A'}`} size="small" color="secondary" sx={{ height: 16, fontSize: 8, fontWeight: 900, ml: 'auto', bgcolor: 'white', color: 'primary.main' }} />
                             </Stack>
                             <Typography variant="h4" fontWeight="bold" gutterBottom>
                                 {recommendation.packageName}
                             </Typography>
                             <Typography variant="body1" sx={{ opacity: 0.9, mb: 3, maxWidth: '600px' }}>
-                                Optimized for {propertyInfo.buildingGrade} assets in {propertyInfo.community}. Protects your {isSale ? 'exit value' : 'yield'} through institutional-grade lifecycle management (Confidence: {valuation.insights.reserveConfidenceIndex}).
+                                Optimized for {propertyInfo?.buildingGrade || 'Premium'} assets in {propertyInfo?.community || 'UAE'}. Protects your {isSale ? 'exit value' : 'yield'} through institutional-grade lifecycle management (Confidence: {valuation.insights?.reserveConfidenceIndex || '95%'}).
                             </Typography>
 
                             <Box sx={{ display: 'flex', gap: 4, mb: 3 }}>
                                 <Box>
-                                    <Typography variant="h6" fontWeight="bold">AED {recommendation.annualPrice.toLocaleString()}</Typography>
+                                    <Typography variant="h6" fontWeight="bold">AED {formatAED(recommendation.annualPrice)}</Typography>
                                     <Typography variant="caption">Annualized Service Cost</Typography>
                                 </Box>
                                 <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)' }} />
@@ -232,14 +235,14 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         <Grid item xs={12} md={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.8 }}>
                                 • <b>Price Lock:</b> This valuation is version-pinned (v5.0-STABLE) and price-locked for 48 hours to secure current community multipliers.<br />
-                                • <b>Quote Validity:</b> Estimates expire in 7 days ({new Date(valuation.quoteExpiresAt).toLocaleDateString()}). Re-calculation is required after this window.<br />
+                                • <b>Quote Validity:</b> Estimates expire in 7 days ({valuation.quoteExpiresAt ? new Date(valuation.quoteExpiresAt).toLocaleDateString() : 'N/A'}). Re-calculation is required after this window.<br />
                                 • <b>Regulatory Note:</b> This digital analysis provided by <i>BIN Group Super App</i> is an institutional-grade estimate. High-precision physical appraisal is required for mortgage or bank-grade bankability.
                             </Typography>
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.8 }}>
                                 • <b>Privacy & Data:</b> All asset signals are processed in compliance with UAE Federal Decree-Law No. 45 of 2021 regarding the Protection of Personal Data.<br />
-                                • <b>No-Repudiation:</b> Snapshot hashes are uniquely generated for your property ID and strategy ( {valuation.trustTier} ).
+                                • <b>No-Repudiation:</b> Snapshot hashes are uniquely generated for your property ID and strategy ( {valuation.trustTier || 'PRELIMINARY'} ).
                             </Typography>
                         </Grid>
                     </Grid>

@@ -10,6 +10,7 @@ import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
+import { formatAED } from '../utils/formatters';
 
 export default function InvoiceDetailsPage() {
     const { id } = useParams();
@@ -37,8 +38,8 @@ export default function InvoiceDetailsPage() {
                     } else {
                         setInvoice({
                             id: snap.id,
-                            date: data.createdAt?.toDate().toLocaleDateString() || 'N/A',
-                            dueDate: data.dueDate?.toDate().toLocaleDateString() || 'N/A',
+                            date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() : 'N/A',
+                            dueDate: data.dueDate?.toDate ? data.dueDate.toDate().toLocaleDateString() : 'N/A',
                             owner: data.ownerName || 'Valued Partner',
                             entity: data.entityName || 'Authorized Asset',
                             campus: data.campus || 'Main Cluster',
@@ -93,7 +94,7 @@ export default function InvoiceDetailsPage() {
         );
     }
 
-    const total = invoice.items.reduce((sum: number, item: any) => sum + item.total, 0);
+    const total = (invoice.items || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
     const vat = Math.round(total * 0.05);
     const finalTotal = total + vat;
 
@@ -201,15 +202,15 @@ export default function InvoiceDetailsPage() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {invoice.items.map((item: any, i: number) => (
+                            {(invoice.items || []).map((item: any, i: number) => (
                                 <TableRow key={i} sx={{ '&:last-child td': { borderBottom: 0 } }}>
                                     <TableCell sx={{ py: 4, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{item.descEn}</Typography>
                                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5 }}>{item.descAr}</Typography>
                                     </TableCell>
                                     <TableCell align="right" sx={{ py: 4, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <Typography variant="h6" fontWeight="900" sx={{ color: item.total < 0 ? '#ff4d4d' : binThemeTokens.textPrimary }}>
-                                            {item.total < 0 ? `-${Math.abs(item.total).toLocaleString()}` : item.total.toLocaleString()} AED
+                                        <Typography variant="h6" fontWeight="900" sx={{ color: (item.total || 0) < 0 ? '#ff4d4d' : binThemeTokens.textPrimary }}>
+                                            {(item.total || 0) < 0 ? `-${formatAED(Math.abs(item.total))}` : formatAED(item.total)} AED
                                         </Typography>
                                     </TableCell>
                                 </TableRow>
@@ -223,16 +224,16 @@ export default function InvoiceDetailsPage() {
                         <Stack spacing={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>SUBTOTAL</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{total.toLocaleString()} AED</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(total)} AED</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>VAT (5%)</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{vat.toLocaleString()} AED</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(vat)} AED</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TOTAL DUE / إجمالي المستحق</Typography>
-                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{finalTotal.toLocaleString()} AED</Typography>
+                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{formatAED(finalTotal)} AED</Typography>
                             </Box>
                         </Stack>
                     </Box>
@@ -254,7 +255,7 @@ export default function InvoiceDetailsPage() {
                     </Stack>
                     <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="caption" sx={{ fontFamily: 'monospace', color: binThemeTokens.textSecondary, display: 'block', mb: 0.5 }}>MISSION-CRITICAL HASH</Typography>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 900, color: binThemeTokens.goldLight, letterSpacing: 1 }}>{invoice.integrityHash.slice(0, 32).toUpperCase()}...</Typography>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 900, color: binThemeTokens.goldLight, letterSpacing: 1 }}>{invoice?.integrityHash?.slice(0, 32).toUpperCase() || 'VIRTUAL'}...</Typography>
                     </Box>
                 </Box>
             </Paper>

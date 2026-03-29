@@ -5,6 +5,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { calculatePortfolioValuation } from '../../utils/uaePricingEngine';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatNumber } from '../../utils/formatters';
 
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 
@@ -92,7 +93,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                     {t('analysis.classified')}
                 </Typography>
                 <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 700, letterSpacing: 1.5 }}>
-                    {t('analysis.grade_assets', { tier: portfolioSummary.recommendedTier })}
+                    {t('analysis.grade_assets', { tier: portfolioSummary?.recommendedTier || 'STANDARD' })}
                 </Typography>
             </Box>
 
@@ -100,8 +101,8 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                 <Grid item xs={12} md={4}>
                     <PaperWithLabel label={t('analysis.scale')} icon={<Building2 size={24} />}>
                         <MetricRow label={t('summary.total_props')} value={properties.length} />
-                        <MetricRow label={t('summary.total_units')} value={portfolioSummary.totalUnits} />
-                        <MetricRow label={t('analysis.managed_area')} value={`${portfolioSummary.totalSqFt.toLocaleString()} ${t('common.sqft')}`} />
+                        <MetricRow label={t('summary.total_units')} value={portfolioSummary?.totalUnits || 0} />
+                        <MetricRow label={t('analysis.managed_area')} value={`${formatNumber(portfolioSummary?.totalSqFt)} ${t('common.sqft')}`} />
                     </PaperWithLabel>
                 </Grid>
                 
@@ -126,7 +127,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                             {t('analysis.efficiency_desc')}
                         </Typography>
-                        {portfolioSummary.isSovereignPortfolio && (
+                        {portfolioSummary?.isSovereignPortfolio && (
                             <Chip 
                                 icon={<Landmark size={14} />} 
                                 label={t('onboarding.sovereign_protocol')} 

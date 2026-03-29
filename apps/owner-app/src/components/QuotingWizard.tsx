@@ -19,6 +19,7 @@ import { ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { formatAED, formatNumber } from '../utils/formatters';
 
 // ─────────────── Types ───────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ const LiveSavingsPanel = ({ savings }: { savings: any }) => {
                 <Grid item xs={12} md={4}>
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1, display: 'block', mb: 0.5 }}>MARKET AVERAGE (REACTIVE)</Typography>
                     <Typography variant="h4" fontWeight="900" sx={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'line-through' }}>
-                        AED {savings.marketAverageAnnual?.toLocaleString()}
+                        AED {formatAED(savings.marketAverageAnnual)}
                     </Typography>
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>per year (unmanaged)</Typography>
                 </Grid>
@@ -117,7 +118,7 @@ const LiveSavingsPanel = ({ savings }: { savings: any }) => {
                     <Box sx={{ p: 2, bgcolor: 'rgba(198,167,94,0.08)', borderRadius: 4, border: `1px solid ${binThemeTokens.gold}44` }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5, display: 'block' }}>YOU SAVE ANNUALLY</Typography>
                         <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                            AED {savings.savingsAmount?.toLocaleString()}
+                            AED {formatAED(savings.savingsAmount)}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#4ADE80', fontWeight: 900 }}>
                             {savings.efficiencyGain} efficiency · {savings.complianceCoverageBoost} compliance coverage
@@ -127,7 +128,7 @@ const LiveSavingsPanel = ({ savings }: { savings: any }) => {
                 <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1, display: 'block', mb: 0.5 }}>BIN-GROUP TOTAL</Typography>
                     <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                        AED {savings.binGroupAnnual?.toLocaleString()}
+                        AED {formatAED(savings.binGroupAnnual)}
                     </Typography>
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>per year (fully managed)</Typography>
                 </Grid>
@@ -232,7 +233,7 @@ const UAEMarketAlignmentCard = ({ benchmark }: { benchmark: any }) => {
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block', mb: 1, fontWeight: 900, letterSpacing: 1 }}>MARKET BENCHMARK RANGE ({benchmark.benchmarkRegion})</Typography>
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
                         <Typography variant="h4" sx={{ color: '#FFFFFF', fontWeight: 900 }}>
-                            AED {benchmark.marketBenchmarkMin.toLocaleString()} - {benchmark.marketBenchmarkMax.toLocaleString()}
+                            AED {formatAED(benchmark?.marketBenchmarkMin)} - {formatAED(benchmark?.marketBenchmarkMax)}
                         </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 2, fontStyle: 'italic', maxWidth: 400 }}>
@@ -322,12 +323,12 @@ const PlanComparisonTable = ({ valuation, onSelect }: any) => {
                                     <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 2, fontWeight: 900, letterSpacing: 2 }}>{pkg.packageName.toUpperCase()}</Typography>
                                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
                                         <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF' }}>
-                                            AED {Math.round(pkg.annualPrice).toLocaleString()}
+                                            AED {formatAED(pkg.annualPrice)}
                                         </Typography>
                                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>/year</Typography>
                                     </Box>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 'bold', display: 'block', mb: 3 }}>
-                                        EST. MONTHLY: AED {Math.round(pkg.monthlyPrice).toLocaleString()}
+                                        EST. MONTHLY: AED {formatAED(pkg.monthlyPrice)}
                                     </Typography>
 
                                     <Stack spacing={2} sx={{ mb: 4 }}>
@@ -516,7 +517,7 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                     <Box sx={{ textAlign: 'center' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>ANNUAL VALUATION</Typography>
                         <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                            AED {valuationResult.packages?.[1]?.annualPrice?.toLocaleString()}
+                            AED {formatAED(valuationResult.packages?.[1]?.annualPrice)}
                         </Typography>
                     </Box>
                     <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(198,167,94,0.1)' }} />

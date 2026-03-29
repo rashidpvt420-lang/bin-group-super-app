@@ -11,7 +11,8 @@ import {
     Snackbar,
     Alert,
     Card,
-    CardContent
+    CardContent,
+    Chip
 } from '@mui/material';
 import { 
     Banknote, 
@@ -29,6 +30,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { createPaymentIntent, verifyPaymentStatus } from '../../lib/paymentService';
 import { auth } from '../../lib/firebase';
+import { formatAED } from '../../utils/formatters';
 
 const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNext, onBack }) => {
     const { 
@@ -53,7 +55,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
 
     const annualTotal = valuationResult?.portfolioIntelligence?.finalAnnualPrice || selectedPlan?.annualPrice || 0;
     const activationDeposit = Math.round(annualTotal * 0.15);
-    const totalProperties = properties.length;
+    const totalProperties = properties?.length || 0;
     const baseContractPrice = selectedPlan?.annualPrice || 0;
 
     const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER') => {
@@ -62,7 +64,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
         
         try {
             const ownerId = auth.currentUser?.uid || 'anonymous';
-            const propertyId = properties[0]?.id || 'P-PROT-1';
+            const propertyId = properties?.[0]?.id || 'P-PROT-1';
             
             const result = await createPaymentIntent(method, activationDeposit, propertyId, ownerId);
             
@@ -99,6 +101,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
     };
 
     const copyToClipboard = (text: string) => {
+        if (!text) return;
         navigator.clipboard.writeText(text);
         setSnackbar({ open: true, message: "Copied to Clipboard", severity: 'success' });
     };
@@ -118,21 +121,21 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     <Stack spacing={2}>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>BANK NAME</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.bankName}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.bankName || 'BIN-GROUP ESCROW'}</Typography>
                         </Box>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>ACCOUNT NAME</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.accountName}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.accountName || 'BIN-GROUP MANAGEMENT LLC'}</Typography>
                         </Box>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Box>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>IBAN</Typography>
-                                <Typography variant="body1" fontWeight={700} sx={{ letterSpacing: 1 }}>{paymentManifest.iban}</Typography>
+                                <Typography variant="body1" fontWeight={700} sx={{ letterSpacing: 1 }}>{paymentManifest.iban || 'AE00 0000 0000 0000 0000 000'}</Typography>
                             </Box>
-                            <Button size="small" onClick={() => copyToClipboard(paymentManifest.iban)} sx={{ color: binThemeTokens.gold }}><Copy size={16} /></Button>
+                            <Button size="small" onClick={() => copyToClipboard(paymentManifest.iban || '')} sx={{ color: binThemeTokens.gold }}><Copy size={16} /></Button>
                         </Box>
                         <Alert severity="info" icon={<Info size={20} />} sx={{ bgcolor: 'rgba(198,167,94,0.05)', color: binThemeTokens.textPrimary, border: '1px solid rgba(198,167,94,0.2)' }}>
-                            {paymentManifest.paymentReferenceInstruction}
+                            {paymentManifest.paymentReferenceInstruction || 'Please include your Contract ID in the transfer notes.'}
                         </Alert>
                     </Stack>
                 )}
@@ -141,14 +144,14 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     <Stack spacing={2}>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>PAYABLE TO</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.payableTo}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.payableTo || 'BIN-GROUP MANAGEMENT LLC'}</Typography>
                         </Box>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>DROP-OFF LOCATION</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.dropOffLocation}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.dropOffLocation || 'BIN-GROUP HQ, Dubai'}</Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mt: 1, display: 'block' }}>
-                            {paymentManifest.collectionPolicy}
+                            {paymentManifest.collectionPolicy || 'Cheques are verified within 2-3 business days.'}
                         </Typography>
                     </Stack>
                 )}
@@ -157,22 +160,22 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     <Stack spacing={2}>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>OFFICE LOCATION</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.officeLocation}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.officeLocation || 'BIN-GROUP HQ, Dubai'}</Typography>
                         </Box>
                         <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.1)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>COLLECTION HOURS</Typography>
-                            <Typography variant="body1" fontWeight={700}>{paymentManifest.acceptedHours}</Typography>
+                            <Typography variant="body1" fontWeight={700}>{paymentManifest.acceptedHours || '09:00 - 18:00'}</Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mt: 1, display: 'block' }}>
-                            {paymentManifest.contactInstruction}
+                            {paymentManifest.contactInstruction || 'Please contact our office to schedule a cash deposit.'}
                         </Typography>
                     </Stack>
                 )}
 
-                <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198,167,94,0.1)', borderRadius: 2, border: '1px solid binThemeTokens.gold' }}>
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198,167,94,0.1)', borderRadius: 2, border: '1px solid rgba(198,167,94,0.3)' }}>
                     <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 0.5 }}>FINAL VERIFICATION NOTICE</Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
-                        {paymentManifest.verificationNote}
+                        {paymentManifest.verificationNote || 'Activation occurs after manual settlement verification.'}
                     </Typography>
                 </Box>
             </Box>
@@ -192,16 +195,16 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                     <Stack spacing={3} divider={<Divider sx={{ borderColor: 'rgba(198,167,94,0.1)' }} />}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Box>
-                                <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{selectedPlan?.packageName}</Typography>
+                                <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{selectedPlan?.packageName || 'Asset AMC'}</Typography>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Base Annual Management Contract (AMC)</Typography>
                             </Box>
-                            <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {baseContractPrice.toLocaleString()}</Typography>
+                            <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(baseContractPrice)}</Typography>
                         </Box>
 
                         <Box sx={{ py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>TOTAL PORTFOLIO AMC</Typography>
                             <Box sx={{ textAlign: 'right' }}>
-                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>AED {annualTotal.toLocaleString()}</Typography>
+                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>AED {formatAED(annualTotal)}</Typography>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>VAT EXCL.</Typography>
                             </Box>
                         </Box>
@@ -231,7 +234,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                         <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>Official Settlement</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>15% ACTIVATION DEPOSIT (DUE NOW)</Typography>
                         <Typography variant="h2" fontWeight="900" sx={{ color: binThemeTokens.goldLight, mt: 1 }}>
-                            AED {activationDeposit.toLocaleString()}
+                            AED {formatAED(activationDeposit)}
                         </Typography>
                     </Box>
 
@@ -243,23 +246,6 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                         Select a manual payment method to generate your institutional manifest.
                                     </Typography>
                                     
-                                    <Button 
-                                        variant="outlined" 
-                                        fullWidth 
-                                        onClick={() => handleGenerateManifest('BANK_TRANSFER')}
-                                        disabled={isGenerating}
-                                        sx={{ 
-                                            py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', 
-                                            color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
-                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
-                                        }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Building2 size={24} color={binThemeTokens.gold} />
-                                            <Typography fontWeight={700}>BANK TRANSFER</Typography>
-                                        </Box>
-                                        <ChevronRight size={20} />
-                                    </Button>
 
                                     <Button 
                                         variant="outlined" 
@@ -274,7 +260,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                             <ReceiptText size={24} color={binThemeTokens.gold} />
-                                            <Typography fontWeight={700}>CHEQUE PAYMENT</Typography>
+                                            <Typography fontWeight={700}>Cheque</Typography>
                                         </Box>
                                         <ChevronRight size={20} />
                                     </Button>
@@ -292,7 +278,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                             <Banknote size={24} color={binThemeTokens.gold} />
-                                            <Typography fontWeight={700}>CASH DEPOSIT</Typography>
+                                            <Typography fontWeight={700}>Cash Deposit</Typography>
                                         </Box>
                                         <ChevronRight size={20} />
                                     </Button>

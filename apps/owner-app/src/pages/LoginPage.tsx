@@ -9,7 +9,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { db, auth, doc, getDoc, setDoc } from '../lib/firebase';
+import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, Building2, UserCircle } from 'lucide-react';
 
@@ -44,16 +44,39 @@ const LoginPage: React.FC = () => {
         const uid = result.user.uid;
         const email = (result.user.email || '').toLowerCase();
         
-        const snap = await getDoc(doc(db, "users", uid));
+        let snap = await getDoc(doc(db, "users", uid));
+        
+        // If profile doesn't exist (e.g. first-time non-admin user), create a default owner profile
+        if (!snap.exists()) {
+            console.log("[IAM] Creating default owner profile for:", email);
+            const newProfile = {
+                uid,
+                email,
+                displayName: result.user.displayName || "New User",
+                role: 'owner',
+                isAdmin: false,
+                godMode: false,
+                status: 'active',
+                createdAt: serverTimestamp()
+            };
+            await setDoc(doc(db, "users", uid), newProfile);
+            // Refresh snap after creation
+            snap = await getDoc(doc(db, "users", uid));
+        }
+
         if (snap.exists()) {
             const data = snap.data();
-            if (data.isAdmin || data.role === 'ceo' || data.role === 'owner') {
+            const role = (data.role || '').toLowerCase();
+            
+            if (role === 'admin') {
+                navigate('/admin');
+            } else if (data.isAdmin || data.role === 'ceo' || data.role === 'owner') {
                 navigate('/dashboard');
             } else {
-                navigate(data.role === 'tenant' ? '/tenant' : data.role === 'technician' ? '/tech' : '/');
+                navigate(role === 'tenant' ? '/tenant' : role === 'technician' ? '/tech' : '/');
             }
         } else {
-            setError("Identity confirmed but no Bin-Group profile found. Please contact HQ.");
+            setError("Identity confirmed but profile synchronization failed. Please refresh.");
         }
     };
 
@@ -66,6 +89,8 @@ const LoginPage: React.FC = () => {
             const provider = new GoogleAuthProvider();
             // Force Secure Flow (Authorization Code Flow) via Redirect
             await signInWithRedirect(auth, provider);
+            // In case the browser does not navigate away, clear the spinner
+            setLoading(false);
         } catch (err: any) {
             console.error("Google Login Error:", err);
             setError(err.message || "Failed to sign in with Google.");
@@ -81,6 +106,7 @@ const LoginPage: React.FC = () => {
         const cleanEmail = email.trim().toLowerCase();
         const cleanPassword = password.trim();
 
+        const timeout = setTimeout(() => setLoading(false), 8000);
         try {
             const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
             const uid = userCredential.user.uid;
@@ -116,6 +142,7 @@ const LoginPage: React.FC = () => {
                 setError(err.message || "Failed to sign in. Check your credentials.");
             }
         } finally {
+            clearTimeout(timeout);
             setLoading(false);
         }
     };
