@@ -16,6 +16,11 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 // Import Firestore from sovereign shared lib
 import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
 
+const formatAED = (value: unknown): string => {
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? n.toLocaleString("en-AE") : "0";
+};
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -154,7 +159,7 @@ export default function DashboardPage() {
                 <AccountBalanceWalletIcon fontSize="small" /> Gross Revenue
               </Typography>
               <Typography variant="h3" sx={{ color: 'white', fontWeight: '900', mt: 1, mb: 1 }}>
-                AED {stats.revenue.toLocaleString()}
+                AED {formatAED(stats.revenue)}
               </Typography>
               <Typography variant="caption" sx={{ color: '#94a3b8' }}>Verified Settlement Pipeline</Typography>
             </Paper>
@@ -255,7 +260,7 @@ export default function DashboardPage() {
                           <Typography variant="caption" sx={{ color: '#64748b' }}>{row.date}</Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'white', borderBottom: '1px solid #1e293b' }}>
-                          <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 'bold' }}>AED {row.total.toLocaleString()}</Typography>
+                          <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 'bold' }}>AED {formatAED(row.total)}</Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ borderBottom: '1px solid #1e293b' }}>
                           <Chip 

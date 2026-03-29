@@ -239,11 +239,25 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
         const snap = await transaction.get(contractRef);
         if (!snap.exists) throw new Error("CONTRACT_NOT_FOUND");
         
+        const contractData = snap.data();
+        const ownerId = contractData?.ownerId;
+
+        // 1. Update Contract Status
         transaction.update(contractRef, {
             paymentVerified: true, status: "AWAITING_ACTIVATION", settledMethod: method,
             settledReferenceId: referenceId, verifiedBy: caller.uid, verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
             amountReceived: amountReceived || snap.data()?.amount
         });
+
+        // 2. Unlock Owner Profile
+        if (ownerId) {
+            const userRef = db.collection("users").doc(ownerId);
+            transaction.update(userRef, { 
+                status: 'active',
+                activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                activatedBy: caller.uid
+            });
+        }
     });
 
     return { success: true };

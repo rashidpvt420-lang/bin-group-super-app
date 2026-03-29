@@ -247,41 +247,22 @@ export default function TurnoverEnginePage() {
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">
-                    Quote ID
-                  </Typography>
-                  <Typography variant="body2">{selectedQuote.quoteId}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="textSecondary">
-                    Unit
-                  </Typography>
-                  <Typography variant="body2">{selectedQuote.unitId}</Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="caption" color="textSecondary">
-                    Unit Type
-                  </Typography>
-                  <Typography variant="body2">{selectedQuote.unitType}</Typography>
-                </Grid>
-
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="textSecondary">
                     Painting
                   </Typography>
-                  <Typography variant="body2">AED {selectedQuote.paintingCost.toLocaleString()}</Typography>
+                  <Typography variant="body2">AED {formatAED(selectedQuote.paintingCost)}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">
                     Deep Cleaning
                   </Typography>
                   <Typography variant="body2">
-                    AED {selectedQuote.deepCleaningCost.toLocaleString()}
+                    AED {formatAED(selectedQuote.deepCleaningCost)}
                   </Typography>
                 </Grid>
 
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Total Quote: AED {selectedQuote.totalQuote.toLocaleString()}
+                    Total Quote: AED {formatAED(selectedQuote.totalQuote)}
                   </Typography>
                 </Grid>
 
@@ -292,13 +273,13 @@ export default function TurnoverEnginePage() {
                         Enterprise Discount (3.3%)
                       </Typography>
                       <Typography variant="body2" color="success.main">
-                        -AED {selectedQuote.discount.toLocaleString()}
+                        -AED {formatAED(selectedQuote.discount)}
                       </Typography>
                     </Grid>
 
                     <Grid item xs={12} sx={{ backgroundColor: '#e8f5e9', p: 1.5, borderRadius: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                        Final Price: AED {selectedQuote.finalPrice.toLocaleString()}
+                        Final Price: AED {formatAED(selectedQuote.finalPrice)}
                       </Typography>
                     </Grid>
                   </>

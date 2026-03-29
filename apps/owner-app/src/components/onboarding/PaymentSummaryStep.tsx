@@ -283,6 +283,23 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                         <ChevronRight size={20} />
                                     </Button>
 
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        disabled
+                                        sx={{ 
+                                            py: 2, borderRadius: 4, borderColor: 'rgba(255,255,255,0.05)', 
+                                            color: 'rgba(255,255,255,0.3)', display: 'flex', justifyContent: 'space-between',
+                                            '&.Mui-disabled': { borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <TrendingUp size={24} color="rgba(255,255,255,0.2)" />
+                                            <Typography fontWeight={700}>Bank Transfer</Typography>
+                                        </Box>
+                                        <Chip label="COMING SOON" size="small" sx={{ fontSize: '0.6rem', height: 16, bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }} />
+                                    </Button>
+
                                     {isGenerating && (
                                         <Box sx={{ mt: 2 }}>
                                             <LinearProgress sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { background: binThemeTokens.gold } }} />

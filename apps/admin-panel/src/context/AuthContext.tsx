@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             unsubscribe();
             clearTimeout(safetyTimeout);
         };
-    }, []);
+    }, [loading]);
 
     const login = async (credentials: any) => {
         // Handled in Login component
