@@ -49,7 +49,7 @@ export default function SOSFeedPage() {
   const fetchSOSFeed = async () => {
     try {
       const response = await apiClient.get('/api/admin/sos-feed');
-      setSOSEvents(response.data.sosEvents);
+      setSOSEvents(response?.data?.sosEvents || []);
     } catch (error) {
       console.error('Failed to fetch SOS feed:', error);
     } finally {
@@ -112,9 +112,9 @@ export default function SOSFeedPage() {
     return `${Math.floor(mins / 60)}h ago`;
   };
 
-  const activeCount = sosEvents.filter((e) => e.status === 'ACTIVE').length;
-  const respondedCount = sosEvents.filter((e) => e.status === 'RESPONDED').length;
-  const resolvedCount = sosEvents.filter((e) => e.status === 'RESOLVED').length;
+  const activeCount = (sosEvents || []).filter((e) => e.status === 'ACTIVE').length;
+  const respondedCount = (sosEvents || []).filter((e) => e.status === 'RESPONDED').length;
+  const resolvedCount = (sosEvents || []).filter((e) => e.status === 'RESOLVED').length;
 
   if (loading) {
     return <Typography>Loading SOS Feed...</Typography>;
@@ -168,7 +168,7 @@ export default function SOSFeedPage() {
 
       {/* SOS Events List */}
       <List>
-        {sosEvents.map((event) => (
+        {(sosEvents || []).map((event) => (
           <ListItem
             component={Paper}
             key={event.sosId}

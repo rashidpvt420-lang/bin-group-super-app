@@ -21,6 +21,10 @@
     ],
     "rewrites": [
       {
+        "source": "/login",
+        "destination": "/login.html"
+      },
+      {
         "source": "/privacy-policy",
         "destination": "/privacy-policy.html"
       },

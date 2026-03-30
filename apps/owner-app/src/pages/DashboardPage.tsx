@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Container, Grid, Card, CardContent, Typography, Box, Button,
   LinearProgress, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, Stack, Chip, Divider, CircularProgress
+  TableHead, TableRow, Paper, Stack, Chip, Divider, CircularProgress,
+  alpha
 } from '@mui/material';
 import SignalCellularAltIcon from '@mui/icons-material/SignalCellularAlt';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -23,6 +24,11 @@ import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { calculateComplianceScore } from '../utils/complianceScoreEngine';
 import { calculateESGRatings } from '../utils/esgRatingEngine';
 import { formatAED } from '../utils/formatters';
+import { getHistoricalContextForProperty, PortfolioData } from '../utils/portfolioAggregationEngine';
+import { generatePredictiveIntelligence, MissionGuidancePayload } from '../utils/predictiveIntelligence';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../lib/firebase';
+import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 
 export default function DashboardPage() {
     const { user, godMode } = useRole();
@@ -31,7 +37,9 @@ export default function DashboardPage() {
     const [properties, setProperties] = useState<any[]>([]);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [metrics, setMetrics] = useState<any>(null);
+    const [intelligence, setIntelligence] = useState<Record<string, MissionGuidancePayload>>({});
     const [loading, setLoading] = useState(true);
+    const [generatingAudit, setGeneratingAudit] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user) return;
@@ -52,6 +60,25 @@ export default function DashboardPage() {
                     esg: esgRating
                 });
 
+                // Compute Predictive Intelligence (Vertex AI Priority)
+                const intelMap: Record<string, MissionGuidancePayload> = {};
+                const getAiGuidance = httpsCallable(functions, 'getMissionGuidance');
+
+                for (const prop of portfolio.properties) {
+                    const ctx = getHistoricalContextForProperty(portfolio, prop.id);
+                    if (ctx) {
+                        try {
+                            console.log(`[AI-STRATEGY] Requesting Vertex AI guidance for ${prop.id}...`);
+                            const result = await getAiGuidance({ context: ctx });
+                            intelMap[prop.id] = result.data as MissionGuidancePayload;
+                        } catch (aiError) {
+                            console.warn(`[AI-STRATEGY] Vertex AI failed for ${prop.id}, falling back to local model:`, aiError);
+                            intelMap[prop.id] = await generatePredictiveIntelligence(ctx);
+                        }
+                    }
+                }
+                setIntelligence(intelMap);
+
                 const alertRef = collection(db, 'notifications');
                 const alertQuery = godMode 
                     ? query(alertRef, orderBy('createdAt', 'desc'), limit(10))
@@ -69,6 +96,24 @@ export default function DashboardPage() {
 
         fetchData();
     }, [user]);
+
+    const handleDownloadAudit = async (propId: string, area: string) => {
+        const intel = intelligence[propId];
+        if (!intel) return;
+
+        setGeneratingAudit(propId);
+        try {
+            const generateAudit = httpsCallable(functions, 'generateIntegrityAudit');
+            const result = await generateAudit({ intel, propertyName: area });
+            const { url } = result.data as { url: string };
+            window.open(url, '_blank');
+        } catch (error) {
+            console.error("Audit generation failed:", error);
+            alert("Sovereign Terminal Error: Failed to generate report.");
+        } finally {
+            setGeneratingAudit(null);
+        }
+    };
 
     if (loading) {
         return (
@@ -355,6 +400,100 @@ export default function DashboardPage() {
             </Stack>
         </Grid>
       </Grid>
+
+      {/* Sovereign Intelligence Deck — AI Pointers */}
+      <Box sx={{ mt: 10, mb: 10 }}>
+          <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 1 }}>
+              SOVEREIGN INTELLIGENCE DECK
+          </Typography>
+          <Grid container spacing={4}>
+              {properties.map((p) => {
+                  const intel = intelligence[p.id];
+                  if (!intel) return null;
+                  return (
+                      <Grid item xs={12} md={6} key={p.id}>
+                          <Card sx={{ 
+                              bgcolor: 'rgba(198, 167, 94, 0.02)', 
+                              borderRadius: 8, 
+                              border: '1px solid rgba(198, 167, 94, 0.15)',
+                              overflow: 'hidden'
+                          }}>
+                              <Box sx={{ p: 4, bgcolor: 'rgba(198, 167, 94, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <Typography variant="h6" fontWeight="900" sx={{ color: '#fff' }}>{p.area} • AI FORECAST</Typography>
+                                  <Chip label="PREDICTIVE" size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
+                              </Box>
+                              <CardContent sx={{ p: 4, position: 'relative' }}>
+                                  {/* Glassmorphism Background Accent */}
+                                  <Box sx={{ 
+                                      position: 'absolute', top: -50, right: -50, width: 200, height: 200, 
+                                      background: `radial-gradient(circle, ${alpha(binThemeTokens.gold, 0.15)} 0%, transparent 70%)`,
+                                      zIndex: 1
+                                  }} />
+
+                                  <Grid container spacing={4} sx={{ position: 'relative', zIndex: 2 }}>
+                                      <Grid item xs={6}>
+                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>INTEGRITY DECAY</Typography>
+                                              <TrendingUpIcon sx={{ fontSize: 14, color: binThemeTokens.danger, transform: 'rotate(180deg)' }} />
+                                          </Box>
+                                          <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>-{intel.assetResilience.predictedDecay12Months}%</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 700 }}>12-MONTH HORIZON</Typography>
+                                      </Grid>
+                                      <Grid item xs={6}>
+                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>PROJECTED YIELD</Typography>
+                                              <TrendingUpIcon sx={{ fontSize: 14, color: '#4ADE80' }} />
+                                          </Box>
+                                          <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>{intel.financialForecast.expectedNetROI}%</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>ANNUALIZED NET</Typography>
+                                      </Grid>
+                                  </Grid>
+                                  
+                                  <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+                                  
+                                  <Box sx={{ mb: 3 }}>
+                                      <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>STRATEGIC MISSION GUIDANCE</Typography>
+                                      <Typography variant="body1" sx={{ color: binThemeTokens.textPrimary, lineHeight: 1.8, fontStyle: 'italic', mt: 1 }}>
+                                          "{intel.financialForecast.guidance}"
+                                      </Typography>
+                                  </Box>
+
+                                  <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 3, display: 'block', mb: 1 }}>
+                                      SOVEREIGN PROTOCOL COMMANDS
+                                  </Typography>
+                                  
+                                  <MissionGuidanceFeed 
+                                    propertyId={p.id} 
+                                    intel={intel} 
+                                    onActionSuccess={() => {/* Optional: Refresh metrics here */}} 
+                                  />
+
+                                  <Box sx={{ mt: 4 }}>
+                                      <Button 
+                                        fullWidth 
+                                        variant="outlined"
+                                        disabled={generatingAudit === p.id}
+                                        startIcon={generatingAudit === p.id ? <CircularProgress size={16} color="inherit" /> : <AssignmentIcon />}
+                                        onClick={() => handleDownloadAudit(p.id, p.area)}
+                                        sx={{ 
+                                            borderColor: binThemeTokens.gold, 
+                                            color: binThemeTokens.gold,
+                                            fontWeight: 900,
+                                            py: 2,
+                                            borderRadius: 4,
+                                            '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.05), borderColor: binThemeTokens.goldLight }
+                                        }}
+                                      >
+                                          {generatingAudit === p.id ? 'GENERATING SOVEREIGN AUDIT...' : 'DOWNLOAD INTEGRITY AUDIT (PDF)'}
+                                      </Button>
+                                  </Box>
+                              </CardContent>
+                          </Card>
+                      </Grid>
+                  );
+              })}
+          </Grid>
+      </Box>
 
       {/* Sovereign Command Deck */}
       <Box sx={{ 

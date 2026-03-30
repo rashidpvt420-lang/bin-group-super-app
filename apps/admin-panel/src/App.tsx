@@ -27,6 +27,7 @@ import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import LiveMapPage from './pages/map/LiveMapPage';
 import OwnersPage from './pages/owners/OwnerManagementPage';
+import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -71,7 +72,6 @@ function AppContent() {
 
     return (
         <Routes>
-...
             <Route path="/login" element={<LoginPage />} />
 
             {isAuthenticated && (
@@ -82,6 +82,7 @@ function AppContent() {
                     <Route path="/financials" element={<ProtectedRoute adminOnly><FinancialTickerPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
+                    <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />

@@ -99,7 +99,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         </Box>
 
                         <Grid container spacing={2}>
-                            {(valuation.drivers || []).map((driver: string, index: number) => (
+                            {(Array.isArray(valuation.drivers) ? valuation.drivers : []).map((driver: string, index: number) => (
                                 <Grid item xs={6} key={index}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         <TrendingUpIcon fontSize="small" color="primary" />
@@ -145,7 +145,7 @@ const ValuationExplanationPanel: React.FC<ValuationExplanationPanelProps> = ({
                         <AutoAwesomeIcon color="primary" sx={{ fontSize: 20 }} /> CORE SERVICE MISSIONS PINNED TO ASSET
                     </Typography>
                     <Grid container spacing={2}>
-                        {(valuation.addOns || []).map((addon: any, index: number) => (
+                        {(Array.isArray(valuation.addOns) ? valuation.addOns : []).map((addon: any, index: number) => (
                             <Grid item xs={12} md={4} key={index}>
                                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%', borderColor: addon.isMandatory ? 'primary.light' : 'divider' }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>

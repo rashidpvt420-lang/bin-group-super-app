@@ -1,4 +1,4 @@
-// admin-panel/src/pages/technicians/TechniciansManagementPage.tsx
+// admin-panel/src/pages/tenants/TenantsManagementPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -14,6 +14,10 @@ import {
   TextField,
   Grid,
   Typography,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
   Button,
   Dialog,
   DialogTitle,
@@ -22,41 +26,39 @@ import {
 } from '@mui/material';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Add as AddIcon, Build as BuildIcon } from '@mui/icons-material';
+import { Add as AddIcon } from '@mui/icons-material';
 
-interface Technician {
+interface Tenant {
   uid: string;
   email: string;
   displayName: string;
   phoneNumber: string;
-  status: 'active' | 'pending' | 'inactive' | 'on-duty';
-  specialization: string;
-  role: 'technician';
+  status: 'active' | 'pending' | 'inactive';
+  unitId: string;
+  role: 'tenant';
 }
 
-export default function TechniciansManagementPage() {
-  const [techs, setTechs] = useState<Technician[]>([]);
+export default function TenantsManagementPage() {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
-  const [newTech, setNewTech] = useState({
+  const [newTenant, setNewTenant] = useState({
     email: '',
     displayName: '',
     phoneNumber: '',
-    specialization: '',
+    unitId: '',
   });
 
   useEffect(() => {
-    // We check both the technicians collection and the users collection with role technician
-    // For simplicity in this admin panel, we'll sync with the users collection where role=technician
-    const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+    const q = query(collection(db, 'users'), where('role', '==', 'tenant'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({
         uid: doc.id,
         ...doc.data()
-      })) as Technician[];
-      setTechs(fetched);
+      })) as Tenant[];
+      setTenants(fetched);
       setLoading(false);
     }, (error) => {
       console.error("Firestore error:", error);
@@ -66,42 +68,31 @@ export default function TechniciansManagementPage() {
     return () => unsubscribe();
   }, []);
 
-  const handleAddTech = async () => {
+  const handleAddTenant = async () => {
     try {
-      // Create in users collection
       await addDoc(collection(db, 'users'), {
-        ...newTech,
-        role: 'technician',
+        ...newTenant,
+        role: 'tenant',
         status: 'active',
         createdAt: serverTimestamp(),
       });
-      
-      // Also mirror in technicians collection for specific tech logic
-      await addDoc(collection(db, 'technicians'), {
-        ...newTech,
-        status: 'active',
-        currentLocation: null,
-        activeTickets: 0,
-        createdAt: serverTimestamp(),
-      });
-
       setOpenAdd(false);
-      setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
+      setNewTenant({ email: '', displayName: '', phoneNumber: '', unitId: '' });
     } catch (error) {
-      console.error("Error adding technician:", error);
+      console.error("Error adding tenant:", error);
     }
   };
 
-  const filteredTechs = techs.filter((tech) => 
-    tech.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tech.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tech.specialization?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTenants = tenants.filter((tenant) => 
+    tenant.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tenant.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tenant.unitId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
     return (
       <Container sx={{ py: 10, textAlign: 'center' }}>
-        <Typography variant="h6" className="animate-pulse">LOADING TECHNICIANS...</Typography>
+        <Typography variant="h6" className="animate-pulse">LOADING TENANTS...</Typography>
       </Container>
     );
   }
@@ -110,23 +101,23 @@ export default function TechniciansManagementPage() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Technician <Box component="span" sx={{ color: '#10b981' }}>Force</Box>
+          Tenant <Box component="span" sx={{ color: '#1976d2' }}>Registry</Box>
         </Typography>
         <Button 
           variant="contained" 
           startIcon={<AddIcon />} 
           onClick={() => setOpenAdd(true)}
-          sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
+          sx={{ borderRadius: 100, px: 3 }}
         >
-          Add Technician
+          Add Tenant
         </Button>
       </Box>
 
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid rgba(0,0,0,0.05)' }}>
         <TextField
           fullWidth
-          label="Search Force"
-          placeholder="Name, Email or Specialization..."
+          label="Search Tenants"
+          placeholder="Name, Email or Unit..."
           variant="outlined"
           size="small"
           value={searchTerm}
@@ -139,30 +130,23 @@ export default function TechniciansManagementPage() {
           <TableHead sx={{ backgroundColor: '#f8fafc' }}>
             <TableRow>
               <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Specialization</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Unit</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredTechs.map((tech) => (
-              <TableRow key={tech.uid} hover>
-                <TableCell sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BuildIcon sx={{ fontSize: 16, color: '#10b981' }} />
-                        {tech.displayName || 'N/A'}
-                    </Box>
-                </TableCell>
-                <TableCell>
-                    <Chip label={tech.specialization || 'General'} size="small" variant="outlined" />
-                </TableCell>
-                <TableCell>{tech.email}</TableCell>
-                <TableCell>{tech.phoneNumber || 'N/A'}</TableCell>
+            {filteredTenants.map((tenant) => (
+              <TableRow key={tenant.uid} hover>
+                <TableCell sx={{ fontWeight: 'bold' }}>{tenant.displayName || 'N/A'}</TableCell>
+                <TableCell>{tenant.email}</TableCell>
+                <TableCell>{tenant.unitId || 'Unassigned'}</TableCell>
+                <TableCell>{tenant.phoneNumber || 'N/A'}</TableCell>
                 <TableCell>
                   <Chip 
-                    label={tech.status?.toUpperCase() || 'ACTIVE'} 
-                    color={tech.status === 'on-duty' ? 'info' : 'success'} 
+                    label={tenant.status?.toUpperCase() || 'ACTIVE'} 
+                    color={tenant.status === 'inactive' ? 'error' : 'success'} 
                     size="small" 
                     sx={{ fontWeight: 'bold', fontSize: 10 }} 
                   />
@@ -174,38 +158,38 @@ export default function TechniciansManagementPage() {
       </TableContainer>
 
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Onboard New Technician</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>Register New Tenant</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
               label="Full Name" 
               fullWidth 
-              value={newTech.displayName} 
-              onChange={(e) => setNewTech({...newTech, displayName: e.target.value})} 
+              value={newTenant.displayName} 
+              onChange={(e) => setNewTenant({...newTenant, displayName: e.target.value})} 
             />
             <TextField 
               label="Email Address" 
               fullWidth 
-              value={newTech.email} 
-              onChange={(e) => setNewTech({...newTech, email: e.target.value})} 
+              value={newTenant.email} 
+              onChange={(e) => setNewTenant({...newTenant, email: e.target.value})} 
             />
             <TextField 
               label="Phone Number" 
               fullWidth 
-              value={newTech.phoneNumber} 
-              onChange={(e) => setNewTech({...newTech, phoneNumber: e.target.value})} 
+              value={newTenant.phoneNumber} 
+              onChange={(e) => setNewTenant({...newTenant, phoneNumber: e.target.value})} 
             />
             <TextField 
-              label="Specialization (e.g. Electrical, Plumbing)" 
+              label="Unit ID" 
               fullWidth 
-              value={newTech.specialization} 
-              onChange={(e) => setNewTech({...newTech, specialization: e.target.value})} 
+              value={newTenant.unitId} 
+              onChange={(e) => setNewTenant({...newTenant, unitId: e.target.value})} 
             />
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddTech} sx={{ borderRadius: 100, bgcolor: '#10b981' }}>Deploy Technician</Button>
+          <Button variant="contained" onClick={handleAddTenant} sx={{ borderRadius: 100 }}>Create Profile</Button>
         </DialogActions>
       </Dialog>
     </Container>

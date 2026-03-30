@@ -26,6 +26,7 @@ import { useRole } from '../context/RoleContext';
 import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { useLanguage } from '../context/LanguageContext';
+import { formatAED } from '../utils/formatters';
 
 interface Transaction {
     id: string;
@@ -35,24 +36,15 @@ interface Transaction {
     status?: string;
 }
 
-interface PortfolioContract {
-    annualContractValue: number;
-    // add other fields if needed
-}
-
 export default function FinancialDashboardPage() {
   const { user, godMode } = useRole();
   const { t, isRTL } = useLanguage();
   const [financials, setFinancials] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
-  const handleCloseSnackbar = (event?: React.SyntheticEvent | Event, reason?: string) => {
-    if (reason === 'clickaway') {
-      return;
-    }
+  const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
@@ -65,7 +57,8 @@ export default function FinancialDashboardPage() {
             const portfolio = await fetchPortfolioAggregation(user.uid, godMode);
             const yieldMetrics = calculateAnnualYieldMetrics(portfolio);
             
-            setTransactions(portfolio.transactions as Transaction[]);
+            const safeTransactions = Array.isArray(portfolio.transactions) ? portfolio.transactions : [];
+            setTransactions(safeTransactions as Transaction[]);
 
             // Group daily transactions for the trend chart
             const last7Days = [...Array(7)].map((_, i) => {
@@ -75,9 +68,9 @@ export default function FinancialDashboardPage() {
             });
 
             const dailyTrend = last7Days.map(date => {
-                const dayTxs = portfolio.transactions.filter(t => t.date === date);
-                const collected = dayTxs.filter(t => t.type === 'credit').reduce((s, t) => s + (t.amount || 0), 0);
-                const deducted = dayTxs.filter(t => t.type === 'debit').reduce((s, t) => s + (t.amount || 0), 0);
+                const dayTxs = safeTransactions.filter((t: any) => t.date === date);
+                const collected = dayTxs.filter((t: any) => t.type === 'credit').reduce((s: number, t: any) => s + (t.amount || 0), 0);
+                const deducted = dayTxs.filter((t: any) => t.type === 'debit').reduce((s: number, t: any) => s + (t.amount || 0), 0);
                 return {
                     date: date.split('-').slice(1).join('/'),
                     collected,
@@ -88,16 +81,16 @@ export default function FinancialDashboardPage() {
 
             // Aggregation for Dashboard UI
             setFinancials({
-                totalRentCollected: yieldMetrics.totalCollected,
+                totalRentCollected: yieldMetrics.totalCollected || 0,
                 breakdown: {
-                    binGroupFee: yieldMetrics.grossContractValue * 0.05,
-                    maintenanceInvoices: yieldMetrics.totalMaintenanceCosts,
-                    turnoverCosts: portfolio.transactions
-                        .filter(t => t.category === 'turnover')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0)
+                    binGroupFee: (yieldMetrics.grossContractValue || 0) * 0.05,
+                    maintenanceInvoices: yieldMetrics.totalMaintenanceCosts || 0,
+                    turnoverCosts: safeTransactions
+                        .filter((t: any) => t.category === 'turnover')
+                        .reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
                 },
-                netPayout: yieldMetrics.netIncome,
-                pendingPayments: yieldMetrics.grossContractValue - yieldMetrics.totalCollected,
+                netPayout: yieldMetrics.netIncome || 0,
+                pendingPayments: (yieldMetrics.grossContractValue || 0) - (yieldMetrics.totalCollected || 0),
                 overdueAmount: 0,
                 dailyTrend
             });
@@ -110,15 +103,15 @@ export default function FinancialDashboardPage() {
     };
 
     fetchFinancialData();
-  }, [user]);
+  }, [user, godMode]);
 
   const handleExportCSV = () => {
     if (!financials) return;
     const csv = [
       [t('fin.title')],
       [t('fin.kpi.total_collection'), financials.totalRentCollected],
-      [t('fin.deduction.fee'), financials.breakdown.binGroupFee],
-      [t('fin.deduction.maint'), financials.breakdown.maintenanceInvoices],
+      [t('fin.deduction.fee'), financials.breakdown?.binGroupFee || 0],
+      [t('fin.deduction.maint'), financials.breakdown?.maintenanceInvoices || 0],
       [t('fin.kpi.sovereign_payout'), financials.netPayout],
     ].map((row) => row.join(',')).join('\n');
 
@@ -143,6 +136,22 @@ export default function FinancialDashboardPage() {
     );
   }
 
+  const safeFinancials = financials || {
+      totalRentCollected: 0,
+      breakdown: { binGroupFee: 0, maintenanceInvoices: 0, turnoverCosts: 0 },
+      netPayout: 0,
+      pendingPayments: 0,
+      overdueAmount: 0,
+      dailyTrend: []
+  };
+
+  const kpis = [
+    { label: t('fin.kpi.total_collection'), val: safeFinancials.totalRentCollected, color: binThemeTokens.textPrimary, icon: <Wallet size={20} /> },
+    { label: t('fin.kpi.sovereign_payout'), val: safeFinancials.netPayout, color: binThemeTokens.gold, icon: <ShieldCheck size={20} /> },
+    { label: t('fin.kpi.pending_liquidity'), val: safeFinancials.pendingPayments, color: binThemeTokens.goldLight, icon: <Landmark size={20} /> },
+    { label: t('fin.kpi.overdue_deficit'), val: safeFinancials.overdueAmount, color: '#ff4d4d', icon: <TrendingUp size={20} /> },
+  ];
+
   return (
     <Container maxWidth="xl" sx={{ py: 6 }}>
       <Box sx={{ 
@@ -158,7 +167,6 @@ export default function FinancialDashboardPage() {
         </Box>
         <Button 
             variant="outlined" 
-            fullWidth={!!(typeof window !== 'undefined' && window.innerWidth < 600)}
             onClick={handleExportCSV}
             startIcon={<Download size={20} />}
             sx={{ 
@@ -177,12 +185,7 @@ export default function FinancialDashboardPage() {
 
       {/* KPI Cards */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
-        {[
-            { label: t('fin.kpi.total_collection'), val: financials.totalRentCollected, color: binThemeTokens.textPrimary, icon: <Wallet size={20} /> },
-            { label: t('fin.kpi.sovereign_payout'), val: financials.netPayout, color: binThemeTokens.gold, icon: <ShieldCheck size={20} /> },
-            { label: t('fin.kpi.pending_liquidity'), val: financials.pendingPayments, color: binThemeTokens.goldLight, icon: <Landmark size={20} /> },
-            { label: t('fin.kpi.overdue_deficit'), val: financials.overdueAmount, color: '#ff4d4d', icon: <TrendingUp size={20} /> },
-        ].map((kpi, i) => (
+        {kpis.map((kpi, i) => (
             <Grid item xs={12} sm={6} md={3} key={i}>
                 <Card sx={{ 
                     bgcolor: 'rgba(22, 22, 24, 0.7)', 
@@ -196,7 +199,7 @@ export default function FinancialDashboardPage() {
                             <Box sx={{ color: kpi.color }}>{kpi.icon}</Box>
                         </Box>
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1, letterSpacing: 1.5 }}>{kpi.label}</Typography>
-                        <Typography variant="h4" fontWeight="900" sx={{ color: kpi.color }}>AED {kpi.val.toLocaleString()}</Typography>
+                        <Typography variant="h4" fontWeight="900" sx={{ color: kpi.color }}>AED {formatAED(kpi.val)}</Typography>
                     </CardContent>
                 </Card>
             </Grid>
@@ -212,9 +215,9 @@ export default function FinancialDashboardPage() {
             <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>{t('fin.deductions_title')}</Typography>
             <Stack spacing={4} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />}>
                 {[
-                    { label: t('fin.deduction.fee'), desc: t('fin.deduction.fee_desc'), val: financials.breakdown.binGroupFee },
-                    { label: t('fin.deduction.maint'), desc: t('fin.deduction.maint_desc'), val: financials.breakdown.maintenanceInvoices },
-                    { label: t('fin.deduction.turnover'), desc: t('fin.deduction.turnover_desc'), val: financials.breakdown.turnoverCosts }
+                    { label: t('fin.deduction.fee'), desc: t('fin.deduction.fee_desc'), val: safeFinancials.breakdown.binGroupFee },
+                    { label: t('fin.deduction.maint'), desc: t('fin.deduction.maint_desc'), val: safeFinancials.breakdown.maintenanceInvoices },
+                    { label: t('fin.deduction.turnover'), desc: t('fin.deduction.turnover_desc'), val: safeFinancials.breakdown.turnoverCosts }
                 ].map((row, i) => (
                     <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box>
@@ -222,7 +225,7 @@ export default function FinancialDashboardPage() {
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{row.desc}</Typography>
                         </Box>
                         <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>
-                        AED {Math.abs(row.val).toLocaleString()}
+                        AED {formatAED(Math.abs(row.val))}
                         </Typography>
                     </Box>
                 ))}
@@ -232,7 +235,7 @@ export default function FinancialDashboardPage() {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{t('fin.total_deductions')}</Typography>
                 <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                  AED {(Object.values(financials.breakdown) as number[]).reduce((a, b) => a + b, 0).toLocaleString()}
+                  AED {formatAED((Object.values(safeFinancials.breakdown) as number[]).reduce((a, b) => a + b, 0))}
                 </Typography>
               </Box>
             </Box>
@@ -242,7 +245,7 @@ export default function FinancialDashboardPage() {
             <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>{t('fin.trends_title')}</Typography>
             <Box sx={{ height: { xs: 250, md: 350 }, width: '100%' }}>
                 <ResponsiveContainer>
-                    <BarChart data={financials.dailyTrend}>
+                    <BarChart data={safeFinancials.dailyTrend}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `AED ${value/1000}k`} />
@@ -296,19 +299,19 @@ export default function FinancialDashboardPage() {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {transactions.map((tx, idx) => (
+                    {(Array.isArray(transactions) ? transactions : []).map((tx, idx) => (
                         <TableRow key={idx} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                             <TableCell sx={{ color: binThemeTokens.textSecondary }}>{tx.date || 'UNSPECIFIED'}</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textPrimary, fontFamily: 'monospace' }}>{tx.id.substring(0, 12)}...</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textPrimary, fontFamily: 'monospace' }}>{tx.id?.substring(0, 12) || '---'}...</TableCell>
                             <TableCell sx={{ color: tx.type === 'debit' ? '#ff4d4d' : '#4ADE80', fontWeight: 900 }}>
-                                {tx.type === 'debit' ? '-' : '+'} AED {tx.amount?.toLocaleString()}
+                                {tx.type === 'debit' ? '-' : '+'} AED {formatAED(tx.amount)}
                             </TableCell>
                             <TableCell>
                                 <Chip label={t('status.settled')} size="small" sx={{ bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold, border: '1px solid rgba(198, 167, 94, 0.4)' }} />
                             </TableCell>
                         </TableRow>
                     ))}
-                    {transactions.length === 0 && (
+                    {(!transactions || transactions.length === 0) && (
                         <TableRow><TableCell colSpan={4} align="center" sx={{ py: 10, color: binThemeTokens.textSecondary }}>{t('fin.log.empty')}</TableCell></TableRow>
                     )}
                 </TableBody>
@@ -319,7 +322,7 @@ export default function FinancialDashboardPage() {
       <Snackbar 
         open={snackbar.open} 
         autoHideDuration={6000} 
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert severity={snackbar.severity} sx={{ width: '100%', borderRadius: 3, fontWeight: 700 }}>

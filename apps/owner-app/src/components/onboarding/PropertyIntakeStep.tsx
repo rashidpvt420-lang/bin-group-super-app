@@ -38,12 +38,14 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const autocompleteRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const safeProperties = Array.isArray(properties) ? properties : [];
+
     const handleProceed = async () => {
-        if (properties.length === 0) return;
+        if (safeProperties.length === 0) return;
         try {
             if (!intakeId) {
                 const docRef = await addDoc(collection(db, 'intake_submissions'), {
-                    properties, portfolioSummary, contactInfo: companyProfile,
+                    properties: safeProperties, portfolioSummary, contactInfo: companyProfile,
                     status: 'PENDING', createdAt: serverTimestamp(), source: 'frontend_wizard_v1.20'
                 });
                 setIntakeId(docRef.id);
@@ -55,9 +57,9 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     };
 
     const handleAddProperty = () => {
-        if (properties.length >= 500) return;
+        if (safeProperties.length >= 500) return;
         addProperty();
-        setEditingIndex(properties.length);
+        setEditingIndex(safeProperties.length);
     };
 
     const handleFileSelect = () => fileInputRef.current?.click();
@@ -69,7 +71,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
             header: true, skipEmptyLines: true,
             complete: (results) => {
                 const parsedData = results.data as any[];
-                if (parsedData.length === 0) return;
+                if (!Array.isArray(parsedData) || parsedData.length === 0) return;
                 const newProps: PropertyData[] = parsedData.slice(0, 500).map((row, i) => ({
                     id: `bulk-${i}-${Date.now()}`,
                     emirate: row.Emirate || 'Dubai',
@@ -111,7 +113,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         });
     };
 
-    const activeProperty = editingIndex !== null ? properties[editingIndex] : null;
+    const activeProperty = editingIndex !== null ? safeProperties[editingIndex] : null;
 
     return (
         <Grid container spacing={4} sx={{ mt: 2 }}>
@@ -121,7 +123,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                         <Typography variant="h3" fontWeight="900" sx={{ mb: 1, textTransform: 'uppercase' }}>{t('onboarding.bulk_intake')}</Typography>
                         <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 400 }}>{t('intake.identification')}</Typography>
                     </Box>
-                    <Chip icon={<Building2 size={16} />} label={`${properties.length} / 500 ${t('common.assets')}`} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 2, py: 2.5, borderRadius: 2 }} />
+                    <Chip icon={<Building2 size={16} />} label={`${safeProperties.length} / 500 ${t('common.assets')}`} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 2, py: 2.5, borderRadius: 2 }} />
                 </Box>
 
                 <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ mb: 3 }}>
@@ -142,7 +144,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {properties.map((prop, index) => (
+                                    {safeProperties.map((prop, index) => (
                                         <TableRow key={index} hover onClick={() => setEditingIndex(index)} sx={{ cursor: 'pointer', bgcolor: editingIndex === index ? alpha(binThemeTokens.gold, 0.1) : 'transparent' }}>
                                             <TableCell>
                                                 <Typography variant="body2" fontWeight="900">{prop.address || `${t('common.asset')} #${index + 1}`}</Typography>
@@ -213,7 +215,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             {/* Scale */}
                             <Grid item xs={12}><Divider sx={{ my: 1 }}><Chip label={t('onboarding.asset_scale')} size="small" /></Divider></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Units / Rooms" value={activeProperty.units} onChange={(e) => updateProperty(editingIndex!, { units: parseInt(e.target.value) || 0 })} /></Grid>
-                            <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Floors" value={activeProperty.units} onChange={(e) => updateProperty(editingIndex!, { floors: parseInt(e.target.value) || 0 })} /></Grid>
+                            <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Floors" value={activeProperty.floors} onChange={(e) => updateProperty(editingIndex!, { floors: parseInt(e.target.value) || 0 })} /></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="SqFt" value={activeProperty.sqft} onChange={(e) => updateProperty(editingIndex!, { sqft: parseInt(e.target.value) || 0 })} /></Grid>
                             <Grid item xs={12} sm={3}><TextField fullWidth type="number" label="Age" value={activeProperty.age} onChange={(e) => updateProperty(editingIndex!, { age: parseInt(e.target.value) || 0 })} /></Grid>
 
@@ -297,12 +299,12 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                         <Typography variant="h6" fontWeight="900" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Workflow size={20} color={binThemeTokens.gold} /> {t('onboarding.portfolio_intel')}</Typography>
                         <Divider sx={{ my: 2 }} />
                         <Stack spacing={2.5}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_props')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary.totalProperties}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_units')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary.totalUnits}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_sqft')}</Typography><Typography variant="h6" fontWeight="900">{formatNumber(portfolioSummary.totalSqFt)}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" color="text.secondary">{t('summary.tier')}</Typography><Chip label={portfolioSummary.recommendedTier} size="small" sx={{ fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} /></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_props')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary?.totalProperties || 0}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_units')}</Typography><Typography variant="h6" fontWeight="900">{portfolioSummary?.totalUnits || 0}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="text.secondary">{t('summary.total_sqft')}</Typography><Typography variant="h6" fontWeight="900">{formatNumber(portfolioSummary?.totalSqFt)}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="body2" color="text.secondary">{t('summary.tier')}</Typography><Chip label={portfolioSummary?.recommendedTier || 'Standard'} size="small" sx={{ fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} /></Box>
                         </Stack>
-                        <Button variant="contained" fullWidth size="large" onClick={handleProceed} endIcon={<ArrowRight style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />} disabled={properties.length === 0} sx={{ mt: 4, py: 2, fontWeight: 900, fontSize: '1.1rem' }}>{t('button.next_asset_analysis')}</Button>
+                        <Button variant="contained" fullWidth size="large" onClick={handleProceed} endIcon={<ArrowRight style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />} disabled={safeProperties.length === 0} sx={{ mt: 4, py: 2, fontWeight: 900, fontSize: '1.1rem' }}>{t('button.next_asset_analysis')}</Button>
                     </Paper>
                 </Stack>
             </Grid>

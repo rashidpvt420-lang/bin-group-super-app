@@ -64,7 +64,7 @@ const PredictiveRiskPanel = ({ input }: { input: QuoteInput }) => {
                 <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>PREDICTIVE MAINTENANCE TIMELINE (2026)</Typography>
             </Stack>
             <Stack spacing={2}>
-                {risks.map((risk, i) => (
+                {(Array.isArray(risks) ? risks : []).map((risk, i) => (
                     <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box>
                             <Typography variant="body2" fontWeight="700" sx={{ color: binThemeTokens.textPrimary }}>{risk.label}</Typography>
@@ -115,7 +115,7 @@ const LiveSavingsPanel = ({ savings }: { savings: any }) => {
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>per year (unmanaged)</Typography>
                 </Grid>
                 <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
-                    <Box sx={{ p: 2, bgcolor: 'rgba(198,167,94,0.08)', borderRadius: 4, border: `1px solid ${binThemeTokens.gold}44` }}>
+                    <Box sx={{ p: 2, bgcolor: 'rgba(198, 167, 94, 0.08)', borderRadius: 4, border: `1px solid ${binThemeTokens.gold}44` }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5, display: 'block' }}>YOU SAVE ANNUALLY</Typography>
                         <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
                             AED {formatAED(savings.savingsAmount)}
@@ -144,7 +144,7 @@ const ContractRecommendationBanner = ({ recommendation }: { recommendation: any 
     return (
         <Box sx={{
             mt: 4, mb: 2, p: 3,
-            bgcolor: 'rgba(198,167,94,0.04)',
+            bgcolor: 'rgba(198, 167, 94, 0.04)',
             borderRadius: 4,
             border: `1px solid ${binThemeTokens.gold}44`,
             display: 'flex', gap: 3, alignItems: 'flex-start'
@@ -155,10 +155,10 @@ const ContractRecommendationBanner = ({ recommendation }: { recommendation: any 
             <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block' }}>AI CONTRACT RECOMMENDATION</Typography>
                 <Typography variant="h6" fontWeight="900" sx={{ color: '#FFFFFF', mb: 1 }}>
-                    {recommendation.recommendedTier}
+                    {recommendation.recommendedTier || 'Standard'}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                    {(recommendation.recommendedReason || []).map((r: string, i: number) => (
+                    {(Array.isArray(recommendation.recommendedReason) ? recommendation.recommendedReason : []).map((r: string, i: number) => (
                         <Chip key={i} label={r} size="small" sx={{
                             bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.textPrimary,
                             border: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 600
@@ -166,7 +166,7 @@ const ContractRecommendationBanner = ({ recommendation }: { recommendation: any 
                     ))}
                 </Stack>
             </Box>
-            <Chip label={`Score: ${recommendation.score}/100`} size="small" sx={{
+            <Chip label={`Score: ${recommendation.score || 0}/100`} size="small" sx={{
                 ml: 'auto', bgcolor: `${binThemeTokens.gold}22`, color: binThemeTokens.gold,
                 border: `1px solid ${binThemeTokens.gold}44`, fontWeight: 900, flexShrink: 0
             }} />
@@ -213,7 +213,7 @@ const UAEMarketAlignmentCard = ({ benchmark }: { benchmark: any }) => {
                 </Box>
                 <Box>
                     <Typography variant="h6" sx={{ color: '#FFFFFF', fontWeight: 900, letterSpacing: 1 }}>UAE MARKET ALIGNMENT</Typography>
-                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, letterSpacing: 1.5 }}>{benchmark.benchmarkSource.toUpperCase()}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, letterSpacing: 1.5 }}>{String(benchmark.benchmarkSource || 'Source').toUpperCase()}</Typography>
                 </Box>
                 <Box sx={{ flexGrow: 1 }} />
                 <Chip 
@@ -287,7 +287,7 @@ const UAEMarketAlignmentCard = ({ benchmark }: { benchmark: any }) => {
 // ─────────────── Comparison Table ──────────────────────────────────────────
 
 const PlanComparisonTable = ({ valuation, onSelect }: any) => {
-    const packages = valuation.packages || [];
+    const packages = Array.isArray(valuation?.packages) ? valuation.packages : [];
 
     return (
         <Box sx={{ mt: 4 }}>
@@ -320,7 +320,7 @@ const PlanComparisonTable = ({ valuation, onSelect }: any) => {
                                     />
                                 )}
                                 <CardContent sx={{ p: 4 }}>
-                                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 2, fontWeight: 900, letterSpacing: 2 }}>{pkg.packageName.toUpperCase()}</Typography>
+                                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 2, fontWeight: 900, letterSpacing: 2 }}>{String(pkg.packageName || 'Package').toUpperCase()}</Typography>
                                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
                                         <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF' }}>
                                             AED {formatAED(pkg.annualPrice)}
@@ -332,7 +332,7 @@ const PlanComparisonTable = ({ valuation, onSelect }: any) => {
                                     </Typography>
 
                                     <Stack spacing={2} sx={{ mb: 4 }}>
-                                        {pkg.features.map((f: string, j: number) => (
+                                        {(Array.isArray(pkg.coverageScope) ? pkg.coverageScope : []).map((f: string, j: number) => (
                                             <Box key={j} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                                                 <CheckCircleIcon sx={{ fontSize: 18, color: binThemeTokens.gold }} />
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 600 }}>{f}</Typography>
@@ -526,7 +526,7 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                         <Stack direction="row" alignItems="center" spacing={1} justifyContent="center">
                             <TrendingUpIcon sx={{ color: '#4ADE80', fontSize: 20 }} />
                             <Typography variant="h4" fontWeight="900" sx={{ color: '#4ADE80' }}>
-                                {valuationResult.savingsSimulation?.efficiencyGain}
+                                {valuationResult.savingsSimulation?.efficiencyGain || '0%'}
                             </Typography>
                         </Stack>
                     </Box>
@@ -553,7 +553,7 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 1 }}
                         />
                     )}
-                    {valuationResult.portfolioIntelligence?.portfolioDiscount > 0 && (
+                    {(valuationResult.portfolioIntelligence?.portfolioDiscount || 0) > 0 && (
                         <Chip 
                             label={`${valuationResult.portfolioIntelligence.portfolioTier} — ${(valuationResult.portfolioIntelligence.portfolioDiscount * 100).toFixed(0)}% OFF`}
                             sx={{ bgcolor: 'rgba(74,222,128,0.1)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.3)', fontWeight: 900 }}
@@ -575,13 +575,13 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                 </Box>
 
                 {/* Compliance Missions */}
-                {valuationResult.complianceMissions?.length > 0 && (
+                {(Array.isArray(valuationResult.complianceMissions) && valuationResult.complianceMissions.length > 0) && (
                     <Box sx={{ mt: 4, p: 3, bgcolor: 'rgba(255,77,77,0.04)', borderRadius: 4, border: '1px solid rgba(255,77,77,0.15)' }}>
                         <Typography variant="overline" sx={{ color: '#ff4d4d', fontWeight: 900, letterSpacing: 2, display: 'block', mb: 2 }}>
                             MANDATORY COMPLIANCE MISSIONS DETECTED ({valuationResult.complianceMissions.filter((m: any) => m.mandatory).length})
                         </Typography>
                         <Stack spacing={1.5}>
-                            {valuationResult.complianceMissions.slice(0, 5).map((m: any, i: number) => (
+                            {(Array.isArray(valuationResult.complianceMissions) ? valuationResult.complianceMissions : []).slice(0, 5).map((m: any, i: number) => (
                                 <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Box>
                                         <Typography variant="body2" fontWeight="700" sx={{ color: '#FFFFFF' }}>{m.mission}</Typography>

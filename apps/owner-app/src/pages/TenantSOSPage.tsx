@@ -28,7 +28,7 @@ export default function TenantSOSPage() {
 
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'tickets'), {
+            await addDoc(collection(db, 'maintenanceTickets'), {
                 tenantId: user.uid,
                 trade: category.toUpperCase(),
                 description,

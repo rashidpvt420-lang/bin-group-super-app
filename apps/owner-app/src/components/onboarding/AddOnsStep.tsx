@@ -48,8 +48,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Water Tank Sterilization', 
             desc: 'Quarterly lab-tested sterilization and cleaning.', 
             price: 1200, 
-            mandatory: propertyData.tank,
-            showIf: propertyData.tank,
+            mandatory: propertyData?.tank || false,
+            showIf: propertyData?.tank || false,
             reason: 'Mandatory if tank exists.'
         },
         { 
@@ -58,8 +58,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Elevator / Lift AMC', 
             desc: 'Full-cycle lift maintenance, quarterly inspections & Dubai Mun. certifications.', 
             price: 3200, 
-            mandatory: propertyData.floors > 2 || propertyData.lifts > 0,
-            showIf: propertyData.floors > 2 || propertyData.lifts > 0,
+            mandatory: (propertyData?.floors || 0) > 2 || (propertyData?.lifts || 0) > 0,
+            showIf: (propertyData?.floors || 0) > 2 || (propertyData?.lifts || 0) > 0,
             reason: 'Mandatory for multi-floor assets per DM regulations.'
         },
         { 
@@ -69,7 +69,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Daily chemicals, vacuuming, and pump care.', 
             price: 6000, 
             mandatory: false,
-            showIf: propertyData.pool || propertyData.majlis,
+            showIf: propertyData?.pool || propertyData?.majlis || false,
             reason: 'Villa/Majlis specialty care.'
         },
         { 
@@ -78,8 +78,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'BMU / Façade Access Mission', 
             desc: 'Annual safety certification for rigging/BMU crane systems.', 
             price: 4500, 
-            mandatory: propertyData.bmu,
-            showIf: propertyData.bmu,
+            mandatory: propertyData?.bmu || false,
+            showIf: propertyData?.bmu || false,
             reason: 'Compliance for high-rise assets.'
         },
         { 
@@ -89,7 +89,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Energy management interface optimization.', 
             price: 3500, 
             mandatory: false,
-            showIf: propertyData.districtCooling,
+            showIf: propertyData?.districtCooling || false,
             reason: 'Recommended for utility savings.'
         },
         { 
@@ -98,8 +98,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'CCTV / SIRA Maintenance', 
             desc: 'SIRA-approved preventive care and renewals.', 
             price: 1800, 
-            mandatory: propertyData.sira,
-            showIf: propertyData.sira,
+            mandatory: propertyData?.sira || false,
+            showIf: propertyData?.sira || false,
             reason: 'SIRA regulatory requirement.'
         },
         { 
@@ -109,7 +109,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Monthly grease trap cleaning to Dubai Municipality standards.', 
             price: 900, 
             mandatory: false,
-            showIf: propertyData.propertyType === 'Commercial' || (['Hotel / Resort', 'Retail Mall / Shop'] as string[]).includes(propertyData.subType),
+            showIf: propertyData?.propertyType === 'Commercial' || (['Hotel / Resort', 'Retail Mall / Shop'] as string[]).includes(propertyData?.subType || ''),
             reason: 'Required for F&B / commercial kitchen tenancies.'
         },
         { 
@@ -118,7 +118,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'PCA Asset Audit', 
             desc: 'Professional engineering condition report.', 
             price: 5000, 
-            mandatory: propertyData.propertyType === 'Commercial' || propertyData.age > 15,
+            mandatory: propertyData?.propertyType === 'Commercial' || (propertyData?.age || 0) > 15,
             showIf: true,
             reason: 'Institutional asset requirement.'
         },
@@ -129,8 +129,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Deep Care Programme',
             desc: 'Monthly deep cleaning, joinery care, upholstery protection & guest-wear restoration.',
             price: 8400,
-            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
+            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
             reason: 'Required for high-footfall Government Majlis reception assets.'
         },
         {
@@ -139,8 +139,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Landscaping & Grounds AMC',
             desc: 'Fortnightly garden maintenance, irrigation systems, palm care & decorative lighting.',
             price: 6000,
-            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS' && propertyData.majlisGarden,
-            showIf: (propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis) && propertyData.majlisGarden,
+            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' && propertyData?.majlisGarden,
+            showIf: (propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false) && propertyData?.majlisGarden,
             reason: 'Mandatory for properties with landscaped grounds.'
         },
         {
@@ -150,7 +150,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Pressure washing, window cleaning, entrance gate & perimeter care.',
             price: 2800,
             mandatory: false,
-            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
+            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
             reason: 'Recommended for premium Majlis estates.'
         },
         {
@@ -159,8 +159,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Premium HVAC Service',
             desc: 'Enhanced cooling load management, filter care, seasonal balancing for large Majlis reception areas.',
             price: 4500,
-            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
+            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
             reason: 'Majlis cooling loads exceed standard residential specs.'
         },
         {
@@ -169,8 +169,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Hospitality Readiness Maintenance',
             desc: 'Pre-event deep inspection, on-call response, VIP guest standards compliance.',
             price: 3600,
-            mandatory: propertyData.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData.propertyType === 'GOVERNMENT_MAJLIS' || propertyData.majlis,
+            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
+            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
             reason: 'Sovereign Majlis VIP hosting standard.'
         },
         // ── INSTITUTIONAL SECTOR ADD-ONS ──────────────────────────────────
@@ -180,8 +180,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Hotel Guest Safety Audit',
             desc: 'Monthly DHA/Municipality compliance audits for guest-facing systems.',
             price: 12500,
-            mandatory: propertyData.propertyType === 'HOTEL',
-            showIf: propertyData.propertyType === 'HOTEL',
+            mandatory: propertyData?.propertyType === 'HOTEL',
+            showIf: propertyData?.propertyType === 'HOTEL',
             reason: 'Mandatory guest-facing health & safety compliance.'
         },
         {
@@ -190,13 +190,14 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Gov Property Compliance Pack',
             desc: 'Consolidated multi-departmental audit readiness and reporting.',
             price: 9500,
-            mandatory: propertyData.propertyType === 'GOVERNMENT_PROPERTY',
-            showIf: propertyData.propertyType === 'GOVERNMENT_PROPERTY',
+            mandatory: propertyData?.propertyType === 'GOVERNMENT_PROPERTY',
+            showIf: propertyData?.propertyType === 'GOVERNMENT_PROPERTY',
             reason: 'Departmental asset criticality and compliance stack.'
         }
     ];
 
     const currentAddOns = allAddOns.filter(a => a.showIf === undefined || a.showIf);
+    const safeSelectedAddOns = Array.isArray(selectedAddOns) ? selectedAddOns : [];
 
     return (
         <Box>
@@ -208,8 +209,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             <Grid container spacing={4}>
                 <Grid item xs={12} md={8}>
                     <Grid container spacing={2}>
-                        {currentAddOns.map((addon) => {
-                            const isSelected = selectedAddOns.includes(addon.id) || addon.mandatory;
+                        {(Array.isArray(currentAddOns) ? currentAddOns : []).map((addon) => {
+                            const isSelected = safeSelectedAddOns.includes(addon.id) || addon.mandatory;
                             const Icon = addon.icon as LucideIcon;
                             
                             return (
@@ -292,7 +293,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                         <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>SOVEREIGN TAILORING</Typography>
                         
                         <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.1)' }} />}>
-                            {currentAddOns.filter(a => selectedAddOns.includes(a.id) || a.mandatory).map((a) => (
+                            {(Array.isArray(currentAddOns) ? currentAddOns : []).filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory).map((a) => (
                                 <Box key={a.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{a.name}</Typography>
                                     <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(a.price)}</Typography>
@@ -301,8 +302,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                             <Box sx={{ pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography fontWeight="900" sx={{ color: binThemeTokens.textPrimary, letterSpacing: 1 }}>TOTAL MISSIONS</Typography>
                                 <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                                    AED {formatAED(currentAddOns
-                                        .filter(a => selectedAddOns.includes(a.id) || a.mandatory)
+                                    AED {formatAED((Array.isArray(currentAddOns) ? currentAddOns : [])
+                                        .filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory)
                                         .reduce((sum, a) => sum + a.price, 0))}
                                 </Typography>
                             </Box>

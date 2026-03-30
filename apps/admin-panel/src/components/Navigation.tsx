@@ -20,6 +20,8 @@ const Navigation = () => {
         { text: 'Live Operations', icon: <RadarIcon />, path: '/admin/live-ops' },
         { text: 'Owners', icon: <PeopleIcon />, path: '/owners' },
         { text: 'Brokers', icon: <PeopleIcon />, path: '/broker' },
+        { text: 'Tenants', icon: <PeopleIcon />, path: '/tenants' },
+        { text: 'Technicians', icon: <PeopleIcon />, path: '/technicians' },
         { text: 'Tickets', icon: <ReceiptIcon />, path: '/tickets' },
     ];
 

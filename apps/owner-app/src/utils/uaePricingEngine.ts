@@ -486,14 +486,21 @@ export const calculateUAEValuation = async (inputs: any): Promise<IntegratedInte
 };
 
 export const calculatePortfolioValuation = async (properties: any[]): Promise<IntegratedIntelligenceResponse> => {
-    const results = await Promise.all(properties.map(p => calculateUAEValuation(p)));
+    const safeProperties = Array.isArray(properties) ? properties : [];
+    const results = await Promise.all(safeProperties.map(p => calculateUAEValuation(p)));
+    
+    if (results.length === 0) {
+        // Fallback for empty results
+        return calculateUAEValuation({ propertyType: 'Residential', emirate: 'Dubai', sqft: 1200 });
+    }
+
     const totalAnnualPrice = results.reduce((sum, r) => sum + r.package.annualPrice, 0);
-    const hasSovereignAsset = properties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS');
-    let portfolioDiscount = hasSovereignAsset ? 0 : (properties.length >= 20 ? 0.15 : (properties.length >= 7 ? 0.10 : (properties.length >= 3 ? 0.05 : 0)));
+    const hasSovereignAsset = safeProperties.some(p => p.propertyType === 'GOVERNMENT_MAJLIS');
+    let portfolioDiscount = hasSovereignAsset ? 0 : (safeProperties.length >= 20 ? 0.15 : (safeProperties.length >= 7 ? 0.10 : (safeProperties.length >= 3 ? 0.05 : 0)));
     const finalAnnualPrice = Math.round(totalAnnualPrice * (1 - portfolioDiscount));
     const portfolioResult = { ...results[0] };
     portfolioResult.package = { ...portfolioResult.package, annualPrice: finalAnnualPrice, packageName: 'Institutional Portfolio Package' };
-    portfolioResult.portfolioIntelligence = { portfolioDiscount, portfolioTier: properties.length > 10 ? 'INSTITUTIONAL_ULTRA' : 'PORTFOLIO_ALPHA', portfolioDiscountAmount: Math.round(totalAnnualPrice * portfolioDiscount), institutionalFlag: properties.length >= 5 };
+    portfolioResult.portfolioIntelligence = { portfolioDiscount, portfolioTier: safeProperties.length > 10 ? 'INSTITUTIONAL_ULTRA' : 'PORTFOLIO_ALPHA', portfolioDiscountAmount: Math.round(totalAnnualPrice * portfolioDiscount), institutionalFlag: safeProperties.length >= 5 };
     return portfolioResult;
 };
 

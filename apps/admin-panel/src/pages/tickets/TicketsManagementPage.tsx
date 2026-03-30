@@ -47,24 +47,29 @@ export default function TicketsManagementPage() {
     const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(100));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ticketId: doc.id,
-          tenantId: data.tenantId || '',
-          unitId: data.unitId || '',
-          category: data.issueType || 'General',
-          description: data.description || '',
-          status: data.status || 'OPEN',
-          priority: data.priority || 'MEDIUM',
-          assignedTechnician: data.assignedTo || null,
-          createdAt: data.createdAt,
-          completedAt: data.completedAt || null,
-          emergencyCharge: data.emergencyCharge || 0
-        } as Ticket;
-      });
-      setTickets(fetched);
-      setLoading(false);
+      try {
+          const fetched = (snapshot.docs || []).map(doc => {
+            const data = doc.data() || {};
+            return {
+              ticketId: doc.id,
+              tenantId: data.tenantId || '',
+              unitId: data.unitId || '',
+              category: data.issueType || data.category || 'General',
+              description: data.description || '',
+              status: data.status || 'OPEN',
+              priority: data.priority || 'MEDIUM',
+              assignedTechnician: data.assignedTo || null,
+              createdAt: data.createdAt || null,
+              completedAt: data.completedAt || null,
+              emergencyCharge: data.emergencyCharge || 0
+            } as Ticket;
+          });
+          setTickets(fetched);
+          setLoading(false);
+      } catch (err) {
+          console.error("[TICKETS] Mapping failure:", err);
+          setLoading(false);
+      }
     }, (error) => {
       console.error("Firestore error:", error);
       setLoading(false);

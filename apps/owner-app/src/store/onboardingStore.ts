@@ -295,7 +295,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
 
             calculateSummary: () => {
-                const props = get().properties;
+                const props = Array.isArray(get().properties) ? get().properties : [];
                 const summary: PortfolioSummary = {
                     totalProperties: props.length,
                     totalUnits: props.reduce((acc, p) => acc + (p.units || 1), 0),

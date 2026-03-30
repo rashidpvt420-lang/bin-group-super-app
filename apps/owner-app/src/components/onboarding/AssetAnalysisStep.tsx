@@ -16,9 +16,11 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
     const [analysisLog, setAnalysisLog] = useState<string[]>([]);
     const { t } = useLanguage();
 
+    const safeProperties = Array.isArray(properties) ? properties : [];
+
     const logs = [
         t('analysis.log_init'),
-        t('analysis.log_batch', { count: properties.length }),
+        t('analysis.log_batch', { count: safeProperties.length }),
         t('analysis.log_benchmarks'),
         t('analysis.log_mixed'),
         t('analysis.log_compliance'),
@@ -44,7 +46,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
 
     const handleCompute = async () => {
         try {
-            const res = await calculatePortfolioValuation(properties);
+            const res = await calculatePortfolioValuation(safeProperties);
             setValuationResult(res);
             setAnalyzing(false);
         } catch (e) {
@@ -62,7 +64,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                         {t('onboarding.analysis')}
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                        {t('analysis.synthesizing', { count: properties.length })}
+                        {t('analysis.synthesizing', { count: safeProperties.length })}
                     </Typography>
                 </Box>
 
@@ -74,7 +76,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
 
                 <Box sx={{ bgcolor: 'rgba(0,0,0,0.4)', p: 4, borderRadius: 4, border: '1px solid rgba(198,167,94,0.1)', fontFamily: 'monospace', minHeight: 300 }}>
                     <Stack spacing={1}>
-                        {analysisLog.map((log, i) => (
+                        {(Array.isArray(analysisLog) ? analysisLog : []).map((log, i) => (
                             <Typography key={i} variant="body2" sx={{ color: i === analysisLog.length - 1 ? binThemeTokens.gold : 'rgba(255,255,255,0.6)' }}>
                                 <Box component="span" sx={{ mr: 2, color: binThemeTokens.gold }}>[{t('common.system')}]</Box>{log}
                             </Typography>
@@ -100,7 +102,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
             <Grid container spacing={4}>
                 <Grid item xs={12} md={4}>
                     <PaperWithLabel label={t('analysis.scale')} icon={<Building2 size={24} />}>
-                        <MetricRow label={t('summary.total_props')} value={properties.length} />
+                        <MetricRow label={t('summary.total_props')} value={safeProperties.length} />
                         <MetricRow label={t('summary.total_units')} value={portfolioSummary?.totalUnits || 0} />
                         <MetricRow label={t('analysis.managed_area')} value={`${formatNumber(portfolioSummary?.totalSqFt)} ${t('common.sqft')}`} />
                     </PaperWithLabel>
@@ -108,11 +110,11 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                 
                 <Grid item xs={12} md={4}>
                     <PaperWithLabel label={t('analysis.composition')} icon={<Workflow size={24} />}>
-                        <MetricRow label={t('type.residential')} value={properties.filter(p => p.propertyType === 'Residential').length} />
-                        <MetricRow label={t('type.commercial')} value={properties.filter(p => p.propertyType === 'Commercial' || p.propertyType === 'Mixed-Use').length} />
-                        <MetricRow label={t('type.majlis')} value={properties.filter(p => p.propertyType === 'GOVERNMENT_MAJLIS').length} />
-                        <MetricRow label={t('type.govt_property')} value={properties.filter(p => p.propertyType === 'GOVERNMENT_PROPERTY').length} />
-                        <MetricRow label={t('type.hotel')} value={properties.filter(p => p.propertyType === 'HOTEL').length} />
+                        <MetricRow label={t('type.residential')} value={safeProperties.filter(p => p.propertyType === 'Residential').length} />
+                        <MetricRow label={t('type.commercial')} value={safeProperties.filter(p => p.propertyType === 'Commercial' || p.propertyType === 'Mixed-Use').length} />
+                        <MetricRow label={t('type.majlis')} value={safeProperties.filter(p => p.propertyType === 'GOVERNMENT_MAJLIS').length} />
+                        <MetricRow label={t('type.govt_property')} value={safeProperties.filter(p => p.propertyType === 'GOVERNMENT_PROPERTY').length} />
+                        <MetricRow label={t('type.hotel')} value={safeProperties.filter(p => p.propertyType === 'HOTEL').length} />
                     </PaperWithLabel>
                 </Grid>
 
@@ -122,7 +124,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                             <Zap size={18} /> {t('analysis.efficiency')}
                         </Typography>
                         <Typography variant="h2" fontWeight="900" sx={{ mb: 2 }}>
-                            {properties.length >= 20 ? '15%' : properties.length >= 7 ? '10%' : properties.length >= 3 ? '5%' : '0%'}
+                            {safeProperties.length >= 20 ? '15%' : safeProperties.length >= 7 ? '10%' : safeProperties.length >= 3 ? '5%' : '0%'}
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                             {t('analysis.efficiency_desc')}

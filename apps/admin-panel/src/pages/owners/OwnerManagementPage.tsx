@@ -51,7 +51,7 @@ export default function OwnerManagementPage() {
     try {
       setLoading(true);
       const response = await apiClient.get('/api/admin/owners');
-      setOwners(response.data.owners);
+      setOwners(response?.data?.owners || []);
     } catch (error) {
       console.error('Failed to fetch owners:', error);
       alert('Failed to load owners');
@@ -113,13 +113,13 @@ export default function OwnerManagementPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {owners.map((owner) => (
+            {(owners || []).map((owner) => (
               <TableRow key={owner.ownerId}>
                 <TableCell>{owner.name}</TableCell>
                 <TableCell>{owner.email}</TableCell>
                 <TableCell align="center">{owner.totalBuildings}</TableCell>
                 <TableCell align="center">{owner.totalUnits}</TableCell>
-                <TableCell align="right">AED {owner.monthlyRentCollected.toLocaleString()}</TableCell>
+                <TableCell align="right">AED {(owner.monthlyRentCollected || 0).toLocaleString()}</TableCell>
                 <TableCell align="center">
                   <Chip
                     label={owner.unpaidInvoiceCount}

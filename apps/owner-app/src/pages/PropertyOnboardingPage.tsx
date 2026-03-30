@@ -13,154 +13,104 @@ import {
     Button,
     useTheme,
     useMediaQuery,
-    IconButton,
     alpha
 } from '@mui/material';
 import { 
+    CheckCircle2, 
+    ArrowRight, 
     ArrowLeft, 
-    ArrowRight,
-    Building2, 
-    HelpCircle,
-    ShieldCheck
+    ShieldCheck, 
+    TrendingUp,
+    Building2,
+    Gem,
+    Workflow,
+    Shield
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useOnboardingStore } from '../store/onboardingStore';
+import { useLanguage } from '../context/LanguageContext';
+import { binThemeTokens } from '../theme/binGroupTheme';
+
+// Steps
 import PropertyIntakeStep from '../components/onboarding/PropertyIntakeStep';
-import QuotingWizard from '../components/QuotingWizard';
-import AddOnsStep from '../components/onboarding/AddOnsStep';
-import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
-import AccountActivationStep from '../components/onboarding/AccountActivationStep';
 import AssetAnalysisStep from '../components/onboarding/AssetAnalysisStep';
 import QuoteModelingStep from '../components/onboarding/QuoteModelingStep';
 import ContractSelectionStep from '../components/onboarding/ContractSelectionStep';
-import { useOnboardingStore } from '../store/onboardingStore';
-import { binThemeTokens } from '../theme/binGroupTheme';
-import { useLanguage } from '../context/LanguageContext';
+import AddOnsStep from '../components/onboarding/AddOnsStep';
+import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
+import AccountActivationStep from '../components/onboarding/AccountActivationStep';
 
-const onboardingSteps = [
-    'onboarding.step.landing',
-    'onboarding.step.intake',
-    'onboarding.step.analysis',
-    'onboarding.step.quote',
-    'onboarding.step.selection',
-    'onboarding.step.tailoring',
-    'onboarding.step.deposit',
-    'onboarding.step.activation'
-];
-
-const PropertyOnboardingPage: React.FC = () => {
-    const navigate = useNavigate();
-    const { step, nextStep, prevStep, setSelectedPlan, reset } = useOnboardingStore();
+const PropertyOnboardingPage = () => {
+    const { step, nextStep, prevStep } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-    const handleExit = () => {
-        reset();
-        navigate('/');
-    };
-
-    const handlePlanSelect = (plan: any) => {
-        setSelectedPlan(plan);
-        nextStep();
-    };
+    const onboardingSteps = [
+        t('step.intake'),
+        t('step.analysis'),
+        t('step.quote'),
+        t('step.tier'),
+        t('step.addons'),
+        t('step.summary'),
+        t('step.account')
+    ];
 
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
-            case 0:
-                // This shouldn't really be visible as Landing is on its own page
-                return <Box sx={{ p: 4, textAlign: 'center' }}><Typography>Redirecting to Landing...</Typography></Box>;
-            case 1:
-                return <PropertyIntakeStep onNext={nextStep} />;
-            case 2:
-                return <AssetAnalysisStep onNext={nextStep} />;
-            case 3:
-                return <QuoteModelingStep onNext={nextStep} onBack={prevStep} />;
-            case 4:
-                return <ContractSelectionStep onNext={nextStep} onBack={prevStep} />;
-            case 5:
-                return <AddOnsStep onNext={nextStep} onBack={prevStep} />;
-            case 6:
-                return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
-            case 7:
-                return <AccountActivationStep />;
-            default:
-                return 'Unknown step';
+            case 1: return <PropertyIntakeStep onNext={nextStep} />;
+            case 2: return <AssetAnalysisStep onNext={nextStep} />;
+            case 3: return <QuoteModelingStep onNext={nextStep} onBack={prevStep} />;
+            case 4: return <ContractSelectionStep onNext={nextStep} onBack={prevStep} />;
+            case 5: return <AddOnsStep onNext={nextStep} onBack={prevStep} />;
+            case 6: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <AccountActivationStep />;
+            default: return <PropertyIntakeStep onNext={nextStep} />;
         }
     };
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary }}>
+        <Box sx={{ 
+            minHeight: '100vh', 
+            bgcolor: '#000', 
+            backgroundImage: 'radial-gradient(circle at 2% 2%, rgba(198, 167, 94, 0.05) 0%, transparent 40%), radial-gradient(circle at 98% 98%, rgba(198, 167, 94, 0.05) 0%, transparent 40%)'
+        }}>
             <CssBaseline />
-            {/* Onboarding Header */}
+            
+            {/* STICKY HEADER */}
             <Box sx={{ 
-                p: isMobile ? 2 : 4, 
-                bgcolor: 'rgba(11, 11, 12, 0.8)', 
-                borderBottom: `1px solid ${theme.palette.divider}`, 
-                backdropFilter: 'blur(30px)',
-                position: 'sticky',
-                top: 0,
-                zIndex: 1000
+                py: 3, px: 2, bgcolor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(15px)',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                position: 'sticky', top: 0, zIndex: 1100
             }}>
                 <Container maxWidth="lg">
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box component="img" src="/logo.png" sx={{ height: isMobile ? 32 : 40, filter: 'brightness(0) saturate(100%) invert(75%) sepia(21%) saturate(542%) hue-rotate(1deg) brightness(91%) contrast(83%)' }} />
-                            {!isMobile && (
-                                <Box sx={{ borderLeft: `1px solid ${theme.palette.divider}`, pl: 2 }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 2, color: binThemeTokens.gold }}>SOVEREIGN INTAKE</Typography>
-                                </Box>
-                            )}
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                            <IconButton sx={{ color: binThemeTokens.textSecondary }}><HelpCircle size={20} /></IconButton>
-                                <Button 
-                                    variant="text"
-                                    startIcon={<ArrowLeft style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />} 
-                                    onClick={handleExit}
-                                    sx={{ color: binThemeTokens.textSecondary }}
-                                >
-                                    {t('btn.exit')}
-                                </Button>
+                        <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
+                            BIN GROUP <Box component="span" sx={{ color: '#fff', ml: 1, fontWeight: 400, letterSpacing: 4 }}>SOVEREIGN</Box>
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <ShieldCheck color="#10b981" size={18} />
+                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>V1.20 SECURE PROTOCOL</Typography>
                         </Box>
                     </Box>
 
-                    {isMobile ? (
-                        <Box sx={{ py: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>
-                                    STEP {step}: {t(onboardingSteps[step]).toUpperCase()}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>
-                                    {Math.round((step / (onboardingSteps.length - 1)) * 100)}%
-                                </Typography>
-                            </Box>
-                            <Box sx={{ height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                                <Box sx={{ 
-                                    height: '100%', 
-                                    width: `${(step / (onboardingSteps.length - 1)) * 100}%`, 
-                                    bgcolor: binThemeTokens.gold, 
-                                    transition: 'width 0.5s ease' 
-                                }} />
-                            </Box>
-                        </Box>
-                    ) : (
-                        <Stepper activeStep={step} alternativeLabel 
-                            sx={{ 
-                                '& .MuiStepLabel-label': { color: '#2A2A2A', fontWeight: 900, mt: 1 },
-                                '& .MuiStepLabel-label.Mui-active': { color: binThemeTokens.gold },
-                                '& .MuiStepLabel-label.Mui-completed': { color: binThemeTokens.gold },
-                                '& .MuiStepIcon-root': { color: '#2A2A2A' },
-                                '& .MuiStepIcon-root.Mui-active': { color: binThemeTokens.gold },
-                                '& .MuiStepIcon-root.Mui-completed': { color: binThemeTokens.gold },
-                            }}
-                        >
-                            {onboardingSteps.map((label) => (
-                                <Step key={label}>
-                                    <StepLabel>{t(label)}</StepLabel>
-                                </Step>
-                            ))}
-                        </Stepper>
-                    )}
+                    <Stepper activeStep={step - 1} alternativeLabel={!isMobile}>
+                        {(Array.isArray(onboardingSteps) ? onboardingSteps : []).map((label) => (
+                            <Step key={label}>
+                                <StepLabel 
+                                    StepIconProps={{
+                                        sx: {
+                                            '&.Mui-active': { color: binThemeTokens.gold },
+                                            '&.Mui-completed': { color: '#4ADE80' }
+                                        }
+                                    }}
+                                >
+                                    <Typography variant="caption" fontWeight="700" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                                        {label}
+                                    </Typography>
+                                </StepLabel>
+                            </Step>
+                        ))}
+                    </Stepper>
                 </Container>
             </Box>
 

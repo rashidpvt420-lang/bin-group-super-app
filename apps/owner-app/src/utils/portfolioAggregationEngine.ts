@@ -37,3 +37,40 @@ export async function fetchPortfolioAggregation(ownerId: string, godMode: boolea
         throw error;
     }
 }
+
+/**
+ * Extracts a focused historical context for a specific asset to drive the Predictive Intelligence module.
+ */
+export function getHistoricalContextForProperty(portfolio: PortfolioData, propertyId: string): any {
+    const property = portfolio.properties.find(p => p.id === propertyId);
+    if (!property) return null;
+
+    return {
+        propertyId,
+        ownerId: property.ownerId,
+        propertyDetails: {
+            sqft: property.builtUpAreaSqFt || property.sqft || 1500,
+            grade: property.grade || 'A',
+            propertyType: property.propertyType || 'RESIDENTIAL',
+            emirate: property.emirate || 'DUBAI'
+        },
+        workOrderHistory: portfolio.tickets
+            .filter(t => t.propertyId === propertyId)
+            .map(t => ({
+                ticketId: t.id,
+                createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt),
+                category: t.trade || 'GENERAL',
+                cost: t.costAllocation || 0,
+                trade: t.trade || 'GENERAL',
+                priority: t.priority || 'OPEN'
+            })),
+        financialHistory: portfolio.transactions
+            .filter(tx => tx.propertyId === propertyId)
+            .map(tx => ({
+                date: tx.date ? new Date(tx.date) : new Date(),
+                type: tx.type || 'debit',
+                amount: tx.amount || 0,
+                category: tx.category || 'maintenance'
+            }))
+    };
+}

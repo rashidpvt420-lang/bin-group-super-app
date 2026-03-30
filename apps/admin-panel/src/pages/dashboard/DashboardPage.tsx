@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Skeleton } from '@mui/material';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell
 } from 'recharts';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
@@ -12,9 +13,13 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PeopleIcon from '@mui/icons-material/People';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import SpeedIcon from '@mui/icons-material/Speed';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
-// Import Firestore from sovereign shared lib
-import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
+// Import Firestore and Functions from sovereign shared lib
+import { db, collection, query, where, onSnapshot, orderBy, limit, functions } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const formatAED = (value: unknown): string => {
     const n = typeof value === "number" ? value : Number(value);
@@ -32,6 +37,8 @@ export default function DashboardPage() {
     maintenanceFloat: 45000,
     targetFloat: 50000
   });
+
+  const [sovereignStats, setSovereignStats] = useState<any>(null);
 
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -112,6 +119,20 @@ export default function DashboardPage() {
       clearTimeout(safetyTimeout);
     });
 
+    // 6. Sovereign System Intelligence (Aggregated AI Metrics)
+    const fetchSovereignStats = async () => {
+      try {
+        const getStats = httpsCallable(functions, 'getSovereignSystemStats');
+        const result = await getStats();
+        setSovereignStats(result.data);
+      } catch (err) {
+        console.error("Failed to fetch Sovereign intelligence:", err);
+      }
+    };
+
+    fetchSovereignStats();
+    const intelInterval = setInterval(fetchSovereignStats, 60000); // Heartbeat every 1m
+
     return () => {
       unsubProperties();
       unsubOwners();
@@ -119,6 +140,7 @@ export default function DashboardPage() {
       unsubTickets();
       unsubContracts();
       clearTimeout(safetyTimeout);
+      clearInterval(intelInterval);
     };
   }, []);
 
@@ -208,9 +230,123 @@ export default function DashboardPage() {
           </Grid>
         </Grid>
 
+        {/* SOVEREIGN COMMAND ROW: AI & OPERATIONAL INTELLIGENCE */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* AI PROTOCOL ADOPTION */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 4, height: '100%' }}>
+              <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PsychologyIcon sx={{ color: '#eab308' }} /> AI Protocol Adoption
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ width: '50%', height: 160 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Sanctioned', value: sovereignStats?.protocolStats?.sanctioned || 0 },
+                          { name: 'Proposed', value: sovereignStats?.protocolStats?.proposed || 0 },
+                          { name: 'Declined', value: sovereignStats?.protocolStats?.declined || 0 }
+                        ]}
+                        innerRadius={45}
+                        outerRadius={65}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#10b981" />
+                        <Cell fill="#eab308" />
+                        <Cell fill="#ef4444" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+                <Box sx={{ width: '45%' }}>
+                   <Typography variant="h4" sx={{ color: 'white', fontWeight: '900' }}>
+                     {sovereignStats?.protocolStats?.adoptionRate || 0}%
+                   </Typography>
+                   <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1 }}>
+                     Protocol Conversion Rate
+                   </Typography>
+                   <Chip label="SOVEREIGN AI" size="small" sx={{ bgcolor: 'rgba(234,179,8,0.1)', color: '#eab308', fontWeight: 'bold', fontSize: '10px' }} />
+                </Box>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                 <Typography variant="caption" sx={{ color: '#10b981' }}>● Sanctioned: {sovereignStats?.protocolStats?.sanctioned}</Typography>
+                 <Typography variant="caption" sx={{ color: '#eab308' }}>● Proposed: {sovereignStats?.protocolStats?.proposed}</Typography>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* LIQUIDITY BOUNDARY */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 4, height: '100%' }}>
+              <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SpeedIcon sx={{ color: '#3b82f6' }} /> Liquidity Boundary
+                {sovereignStats?.financials?.isCached && (
+                  <Chip 
+                    label="CACHED" 
+                    size="small" 
+                    sx={{ 
+                      ml: 'auto', 
+                      height: 16, 
+                      fontSize: '8px', 
+                      bgcolor: 'rgba(59,130,246,0.1)', 
+                      color: '#3b82f6', 
+                      border: '1px solid rgba(59,130,246,0.3)' 
+                    }} 
+                  />
+                )}
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                   <Typography variant="caption" sx={{ color: '#94a3b8' }}>Maintenance Float Pool</Typography>
+                   <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>AED {formatAED(sovereignStats?.financials?.availableFloat || 45000)}</Typography>
+                </Box>
+                <Box sx={{ height: 8, bgcolor: '#1e293b', borderRadius: 4, overflow: 'hidden', mb: 3 }}>
+                   <Box sx={{ 
+                     height: '100%', 
+                     width: `${Math.min(100, ((sovereignStats?.financials?.totalProjectedBudget || 0) / (sovereignStats?.financials?.availableFloat || 45000)) * 100)}%`, 
+                     bgcolor: (sovereignStats?.financials?.totalProjectedBudget || 0) > (sovereignStats?.financials?.availableFloat || 45000) ? '#ef4444' : '#3b82f6' 
+                   }} />
+                </Box>
+                <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+                  Projected AI Maintenance Cost:
+                </Typography>
+                <Typography variant="h5" sx={{ color: 'white', fontWeight: '900' }}>
+                  AED {formatAED(sovereignStats?.financials?.totalProjectedBudget || 0)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: (sovereignStats?.financials?.totalProjectedBudget || 0) > (sovereignStats?.financials?.availableFloat || 45000) ? '#ef4444' : '#10b981', mt: 1, display: 'block' }}>
+                  { (sovereignStats?.financials?.totalProjectedBudget || 0) > (sovereignStats?.financials?.availableFloat || 45000) ? "POOL DEFICIT DETECTED" : "LIQUIDITY SECURED" }
+                </Typography>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* TRIAGE VELOCITY */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 4, height: '100%' }}>
+              <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SpeedIcon sx={{ color: '#10b981' }} /> Triage Velocity
+              </Typography>
+              <Box sx={{ textAlign: 'center', py: 2 }}>
+                 <Typography variant="h2" sx={{ color: 'white', fontWeight: '900', mb: 0 }}>
+                   {sovereignStats?.performance?.avgTriageLatencyMinutes || '--'}
+                 </Typography>
+                 <Typography variant="h6" sx={{ color: '#10b981', fontWeight: 'bold' }}>MINUTES</Typography>
+                 <Typography variant="caption" sx={{ color: '#94a3b8', mt: 2, display: 'block' }}>
+                   Average latency from Owner Sanction to Technician Dispatch
+                 </Typography>
+                 <Chip label="OPTIMAL DISPATCH" size="small" sx={{ mt: 2, bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 'bold' }} />
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+
         {/* MIDDLE ROW: VELOCITY & AUDIT */}
-        <Grid container spacing={3}>
-          {/* CHART */}
+
+        {/* MIDDLE ROW: VELOCITY & RISK */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* GROWTH CHART */}
           <Grid item xs={12} lg={7}>
             <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
               <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 4, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -236,39 +372,39 @@ export default function DashboardPage() {
             </Paper>
           </Grid>
 
-          {/* AUDIT TRAIL */}
+          {/* ASSET RISK HEATMAP */}
           <Grid item xs={12} lg={5}>
             <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4, height: '100%', overflow: 'hidden' }}>
               <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ReceiptLongIcon sx={{ color: '#10b981' }} /> Settlement Audit (Live)
+                <WarningAmberIcon sx={{ color: '#f59e0b' }} /> Asset Risk Heatmap
               </Typography>
 
               <Box sx={{ overflowY: 'auto', maxHeight: 350 }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Txn / Contract</TableCell>
-                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Value</TableCell>
-                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Status</TableCell>
+                      <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Asset / Area</TableCell>
+                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Health Index</TableCell>
+                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Risk State</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {recentTransactions.map((row, index) => (
+                    {(sovereignStats?.riskHeatmap?.dangerZoneAssets || []).map((asset: any, index: number) => (
                       <TableRow key={index} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                         <TableCell sx={{ color: '#cbd5e1', borderBottom: '1px solid #1e293b' }}>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{row.id}...</Typography>
-                          <Typography variant="caption" sx={{ color: '#64748b' }}>{row.date}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{asset.id.substring(0, 8)}...</Typography>
+                          <Typography variant="caption" sx={{ color: '#64748b' }}>{asset.area}</Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'white', borderBottom: '1px solid #1e293b' }}>
-                          <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 'bold' }}>AED {formatAED(row.total)}</Typography>
+                          <Typography variant="body2" sx={{ color: asset.healthIndex < 70 ? '#ef4444' : '#eab308', fontWeight: 'bold' }}>{asset.healthIndex}%</Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ borderBottom: '1px solid #1e293b' }}>
                           <Chip 
-                            label={row.verified ? "VERIFIED" : (row.status || "PENDING")} 
+                            label={asset.healthIndex < 70 ? "CRITICAL" : "AT RISK"} 
                             size="small" 
                             sx={{ 
-                              bgcolor: row.verified ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)', 
-                              color: row.verified ? '#10b981' : '#f59e0b', 
+                              bgcolor: asset.healthIndex < 70 ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)', 
+                              color: asset.healthIndex < 70 ? '#ef4444' : '#eab308', 
                               fontWeight: 'bold', 
                               fontSize: '10px' 
                             }} 
@@ -276,10 +412,10 @@ export default function DashboardPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {recentTransactions.length === 0 && (
+                    {(sovereignStats?.riskHeatmap?.dangerZoneAssets || []).length === 0 && (
                       <TableRow>
                         <TableCell colSpan={3} sx={{ textAlign: 'center', py: 4, color: '#94a3b8' }}>
-                          No recent transactions detected in audit trail.
+                          All assets currently exceed health safety threshold.
                         </TableCell>
                       </TableRow>
                     )}
@@ -289,6 +425,57 @@ export default function DashboardPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* LOWER ROW: SETTLEMENT AUDIT */}
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
+              <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ReceiptLongIcon sx={{ color: '#10b981' }} /> Full Settlement Audit (Real-time)
+              </Typography>
+              <Box sx={{ overflowX: 'auto' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Transaction ID</TableCell>
+                      <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Date</TableCell>
+                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Value (AED)</TableCell>
+                      <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid #334155', fontWeight: 'bold' }}>Verification Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {recentTransactions.map((row, index) => (
+                      <TableRow key={index} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                        <TableCell sx={{ color: '#cbd5e1', borderBottom: '1px solid #1e293b', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                          {row.id}...
+                        </TableCell>
+                        <TableCell sx={{ color: '#64748b', borderBottom: '1px solid #1e293b' }}>
+                          {row.date}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: '#10b981', borderBottom: '1px solid #1e293b', fontWeight: '900' }}>
+                          {formatAED(row.total)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ borderBottom: '1px solid #1e293b' }}>
+                          <Chip 
+                            label={row.verified ? "VERIFIED" : (row.status || "PENDING")} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: row.verified ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)', 
+                              color: row.verified ? '#10b981' : '#f59e0b', 
+                              fontWeight: 'bold'
+                            }} 
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* COMPLIANCE FOOTER */}
 
         {/* COMPLIANCE FOOTER */}
         <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 2 }}>

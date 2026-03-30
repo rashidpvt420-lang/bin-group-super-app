@@ -169,7 +169,7 @@ export default function BrokerManagementPage() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {brokers.map((broker) => (
+                        {(brokers || []).map((broker) => (
                             <TableRow key={broker.id} hover>
                                 <TableCell>
                                     <Typography sx={{ fontWeight: 700 }}>{broker.displayName || 'Unknown Broker'}</Typography>

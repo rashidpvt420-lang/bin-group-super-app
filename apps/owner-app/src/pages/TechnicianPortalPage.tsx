@@ -24,7 +24,7 @@ export default function TechnicianPortalPage() {
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
-        const q = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'), limit(10));
+        const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(10));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const ticketData = snapshot.docs.map(doc => ({
                 id: doc.id,

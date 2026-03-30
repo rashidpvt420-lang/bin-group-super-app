@@ -218,7 +218,7 @@ export default function LiveMapPage() {
           </Box>
 
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {tickets.map((ticket) => (
+            {(tickets || []).map((ticket) => (
               <Box
                 key={ticket.id}
                 sx={{
@@ -436,7 +436,7 @@ export default function LiveMapPage() {
 
           <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>Available Near Property</Typography>
           <List>
-            {MOCK_TECHNICIANS.filter(tech => tech.status === 'Available').map((tech) => (
+            {(MOCK_TECHNICIANS || []).filter(tech => tech.status === 'Available').map((tech) => (
               <ListItem
                 key={tech.id}
                 sx={{
