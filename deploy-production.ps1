@@ -51,5 +51,5 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host '✅ [COMPLETE] Deployment successful.' -ForegroundColor Green
 Write-Host '🌍 Live surfaces:' -ForegroundColor White
-Write-Host "OWNER: https://bin-group-57c60.web.app/"
-Write-Host "ADMIN: https://bin-group-57c60.web.app/admin"
+Write-Host "OWNER: https://bin-groups.com/"
+Write-Host "ADMIN: https://bin-groups.com/admin"

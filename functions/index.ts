@@ -6,6 +6,7 @@ import PDFDocument from "pdfkit";
 import { getStorage } from "firebase-admin/storage";
 import { VertexAI } from '@google-cloud/vertexai';
 import { onRequest } from "firebase-functions/v2/https";
+import { OAuth2Client } from 'google-auth-library';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -1121,37 +1122,79 @@ export const syncLiquidityOnContractVerified = onDocumentUpdated("contracts/{con
  * It must be registered in the Google Cloud Console.
  */
 export const googleSecurityEvents = onRequest({ cors: true }, async (request, response) => {
-    // 1. Verify the Google RISC signature (In production, use google-auth-library to verify JWT)
-    // For now, we log the event and trigger a safety lockout if critical.
-    const event = request.body;
-    console.log("[RISC] Received Security Event:", JSON.stringify(event));
-
-    // Handle specific event types (e.g., https://schemas.google.com/risc/v1/account-disabled)
-    if (event.subject && event.subject.email) {
-        try {
-            const email = event.subject.email;
-            const user = await admin.auth().getUserByEmail(email);
-            const uid = user.uid;
-            
-            // Log the security incident in Firestore
-            await db.collection("security_incidents").add({
-                uid,
-                email,
-                type: event.event_type || "UNKNOWN_RISC_EVENT",
-                raw: event,
-                receivedAt: admin.firestore.FieldValue.serverTimestamp(),
-                status: "pending_review"
-            });
-
-            // Trigger safety lockout for high-severity events
-            if (event.event_type === "https://schemas.google.com/risc/v1/account-disabled") {
-                await admin.auth().updateUser(uid, { disabled: true });
-                console.warn(`[RISC] Account ${email} disabled due to Google Security Event.`);
-            }
-        } catch (e) {
-            console.error("[RISC] Error processing user for event:", e);
-        }
+    // 1. Verify the Google RISC signature
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.error("[RISC] Missing or invalid Authorization header");
+        response.status(401).send("Unauthorized");
+        return;
     }
 
-    response.status(202).send("Accepted");
+    const idToken = authHeader.split('Bearer ')[1];
+    const client = new OAuth2Client();
+
+    try {
+        // DISCOVERY: Google RISC tokens are signed by Google.
+        // We verify the token against Google's public certificates.
+        // The 'audience' for RISC is the receiver URL registered in Google Cloud.
+        const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "bin-group-super-app";
+        const region = "us-central1"; // Assuming default region, update if needed
+        const url = `https://${region}-${projectId}.cloudfunctions.net/googleSecurityEvents`;
+
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: url,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload) {
+            throw new Error("Invalid token payload");
+        }
+
+        console.log("[RISC] Verified Security Event Payload:", JSON.stringify(payload));
+
+        // The actual event data is usually in the 'events' claim of the RISC token
+        // Reference: https://developers.google.com/identity/protocols/risc
+        const events = (payload as any).events;
+        if (events) {
+            for (const [eventType, eventDetails] of Object.entries(events)) {
+                const details = eventDetails as any;
+                const subject = details.subject;
+                
+                if (subject && subject.email) {
+                    const email = subject.email;
+                    console.log(`[RISC] Processing ${eventType} for ${email}`);
+
+                    try {
+                        const user = await admin.auth().getUserByEmail(email);
+                        const uid = user.uid;
+
+                        // Log incident
+                        await db.collection("security_incidents").add({
+                            uid,
+                            email,
+                            type: eventType,
+                            raw: details,
+                            verifiedPayload: payload,
+                            receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+                            status: "pending_review"
+                        });
+
+                        // High-severity lockout
+                        if (eventType === "https://schemas.google.com/risc/v1/account-disabled") {
+                            await admin.auth().updateUser(uid, { disabled: true });
+                            console.warn(`[RISC] Account ${email} disabled via verified Google event.`);
+                        }
+                    } catch (authErr) {
+                        console.error(`[RISC] Auth lookup failed for ${email}:`, authErr);
+                    }
+                }
+            }
+        }
+
+        response.status(202).send("Accepted");
+    } catch (err) {
+        console.error("[RISC] Token verification failed:", err);
+        response.status(403).send("Forbidden");
+    }
 });

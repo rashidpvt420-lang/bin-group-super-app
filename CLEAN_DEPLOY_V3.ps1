@@ -11,6 +11,7 @@ firebase target:clear hosting technician-portal
 firebase target:clear hosting bin-group
 
 $ProjectID = "bin-group-57c60"
+firebase use $ProjectID
 firebase target:apply hosting admin-panel "studio-5724711541-8a962-admin"
 firebase target:apply hosting owner-portal "studio-5724711541-8a962-owner"
 firebase target:apply hosting tenant-portal "studio-5724711541-8a962-tenant"

@@ -105,6 +105,15 @@ const Navigation = () => {
                     ))}
                     <ListItem
                         component="a"
+                        href="mailto:support@bin-group.ae"
+                        target="_blank"
+                        sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#DAA520', 0.05) }}
+                    >
+                        <ListItemIcon sx={{ color: '#DAA520', minWidth: 40 }}><SecurityIcon /></ListItemIcon>
+                        <ListItemText primary="Support" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#DAA520' }} />
+                    </ListItem>
+                    <ListItem
+                        component="a"
                         href="http://localhost:3001"
                         target="_blank"
                         sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#10b981', 0.05) }}

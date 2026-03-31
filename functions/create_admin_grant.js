@@ -10,7 +10,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 async function createGrant() {
-  const email = "rashid.pvt420@gmail.com";
+  const email = "ceo@bin-groups.com";
   const docId = "rashid_pvt420_gmail_com";
 
   const grantData = {

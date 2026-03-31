@@ -21,7 +21,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
 
     if (!valuationResult) {
         return (
-            <Box sx={{ p: 10, textAlign: 'center' }}>
+            <Box sx={{ p: 10, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Typography color="error">{t('quote.no_result')}</Typography>
                 <Button onClick={onBack}>{t('btn.back')}</Button>
             </Box>
@@ -51,14 +51,14 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
     };
 
     return (
-        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+        <Box sx={{ maxWidth: 1200, mx: 'auto', direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Sparkles color={binThemeTokens.gold} size={28} />
-                <Typography variant={isMobile ? "h5" : "h4"} fontWeight="900" sx={{ color: '#FFFFFF' }}>
+                <Typography variant={isMobile ? "h5" : "h4"} fontWeight="900" sx={{ color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' }}>
                     {t('quote.summary_title')}
                 </Typography>
             </Box>
-            <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 6 }}>
+            <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 6, textAlign: isRTL ? 'right' : 'left' }}>
                 {t('quote.subtitle')}
             </Typography>
 
@@ -69,7 +69,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 borderRadius: 8, 
                 border: `1px solid ${binThemeTokens.gold}33`,
                 display: 'flex', 
-                flexDirection: isMobile ? 'column' : 'row',
+                flexDirection: isMobile ? 'column' : (isRTL ? 'row-reverse' : 'row'),
                 gap: isMobile ? 4 : 6, 
                 justifyContent: 'space-around',
                 boxShadow: '0 40px 80px rgba(0,0,0,0.5)',
@@ -83,7 +83,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('analysis.efficiency')}</Typography>
-                    <Stack direction="row" alignItems="center" spacing={1} justifyContent="center" sx={{ mt: 1 }}>
+                    <Stack direction={isRTL ? "row-reverse" : "row"} alignItems="center" spacing={1} justifyContent="center" sx={{ mt: 1 }}>
                         <TrendingUp color="#4ADE80" size={24} />
                         <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>
                             {savingsSimulation?.efficiencyGain || '0%'}
@@ -91,15 +91,15 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     </Stack>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>ASSET CLASS</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('onboarding.payment.asset_class') || 'ASSET CLASS'}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
-                        {propertyData?.propertyType === 'GOVERNMENT_MAJLIS' ? 'GOV MAJLIS' : (propertyData?.propertyType || 'ASSET').toUpperCase()}
+                        {propertyData?.propertyType === 'GOVERNMENT_MAJLIS' ? t('majlis.government').toUpperCase() : (propertyData?.propertyType || 'ASSET').toUpperCase()}
                     </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('field.grade')}</Typography>
                     <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: '#FFFFFF' }}>
-                        {(propertyData?.assetGrade || 'STANDARD').toUpperCase()}
+                        {t(`grade.${(propertyData?.assetGrade || 'standard').toLowerCase()}`).toUpperCase()}
                     </Typography>
                 </Box>
             </Box>
@@ -112,11 +112,11 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                 border: `2px solid ${binThemeTokens.gold}`,
                 boxShadow: `0 30px 60px rgba(198,167,94,0.1)`,
             }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 4, display: 'block', letterSpacing: 2 }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 4, display: 'block', letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
                     {t('quote.savings_simulation')}
                 </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: 4 }}>
-                    <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : (isRTL ? 'row-reverse' : 'row'), gap: 4 }}>
+                    <Box sx={{ width: isMobile ? '100%' : 'auto', textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.market_average')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through', fontWeight: 900 }}>
                             AED {formatAED(savingsSimulation?.marketAverageAnnual)}
@@ -128,7 +128,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                             AED {formatAED(savingsSimulation?.savingsAmount)}
                         </Typography>
                     </Box>
-                    <Box sx={{ textAlign: isMobile ? 'left' : 'right', width: isMobile ? '100%' : 'auto' }}>
+                    <Box sx={{ textAlign: isRTL ? 'left' : 'right', width: isMobile ? '100%' : 'auto' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.bin_group_total')}</Typography>
                         <Typography variant={isMobile ? "h5" : "h4"} sx={{ color: '#FFFFFF', fontWeight: 900 }}>
                             AED {formatAED(savingsSimulation?.binGroupAnnual)}
@@ -139,34 +139,35 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
 
             {/* MARKET ALIGNMENT */}
             <Box sx={{ mb: 6, p: 5, bgcolor: 'rgba(11, 11, 12, 0.95)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
+                <Stack direction={isRTL ? "row-reverse" : "row"} alignItems="center" spacing={2} sx={{ mb: 4 }}>
                     <ShieldCheck color={binThemeTokens.gold} size={28} />
-                    <Typography variant="h5" fontWeight="900">{t('quote.market_alignment')}</Typography>
+                    <Typography variant="h5" fontWeight="900" sx={{ textAlign: isRTL ? 'right' : 'left' }}>{t('quote.market_alignment')}</Typography>
                     <Box flexGrow={1} />
                     <Chip label={benchmark?.alignmentStatus || 'ALIGNED'} sx={{ bgcolor: 'rgba(74,222,128,0.1)', color: '#4ADE80', fontWeight: 900, border: '1px solid rgba(74,222,128,0.3)' }} />
             </Stack>
-            <Typography sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>
+            <Typography sx={{ color: binThemeTokens.textSecondary, mb: 4, textAlign: isRTL ? 'right' : 'left' }}>
                 {benchmark?.benchmarkJustification || 'Verified against institutional market data.'}
             </Typography>
-            <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : 'row', gap: 2 }}>
-                <Box>
+            <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.4)', borderRadius: 4, display: 'flex', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : (isRTL ? 'row-reverse' : 'row'), gap: 2 }}>
+                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('quote.benchmark_range')}</Typography>
                     <Typography variant="h5" fontWeight="700">AED {formatAED(benchmark?.marketBenchmarkMin)} - {formatAED(benchmark?.marketBenchmarkMax)}</Typography>
                 </Box>
-                    <Box sx={{ textAlign: 'right' }}>
+                    <Box sx={{ textAlign: isRTL ? 'left' : 'right' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('common.source')}</Typography>
                         <Typography variant="h5" fontWeight="700">{benchmark?.benchmarkSource || 'Sovereign Intelligence'}</Typography>
                     </Box>
                 </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2, mt: 10 }}>
+            <Box sx={{ display: 'flex', gap: 2, mt: 10, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button variant="text" onClick={onBack} size="large" sx={{ color: binThemeTokens.textSecondary, py: 2, px: 4, fontWeight: 700 }}>{t('btn.back_analysis')}</Button>
                 <Button 
                     variant="outlined" 
                     onClick={handleDownloadTender}
                     size="large"
-                    startIcon={<FileDown />}
+                    startIcon={isRTL ? null : <FileDown />}
+                    endIcon={isRTL ? <FileDown /> : null}
                     sx={{ 
                         color: binThemeTokens.gold, 
                         borderColor: binThemeTokens.gold,
@@ -182,7 +183,8 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     variant="contained" 
                     onClick={onNext}
                     size="large"
-                    endIcon={<ArrowRight />}
+                    startIcon={isRTL ? <ArrowLeft /> : null}
+                    endIcon={isRTL ? null : <ArrowRight />}
                     sx={{ 
                         background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
                         color: binThemeTokens.black,

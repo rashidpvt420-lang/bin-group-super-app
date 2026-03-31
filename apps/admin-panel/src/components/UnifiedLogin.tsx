@@ -58,7 +58,7 @@ export default function UnifiedLogin() {
                         window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-group-57c60-tech.web.app/';
                         break;
                     case 'OWNER':
-                        window.location.href = isLocal ? 'http://localhost:5175/dashboard' : 'https://bin-group-57c60.web.app/dashboard';
+                        window.location.href = isLocal ? 'http://localhost:5175/dashboard' : 'https://bin-groups.com/dashboard';
                         break;
                     case 'ADMIN':
                         window.location.href = isLocal ? 'http://localhost:3000/' : '/admin/';

@@ -4,46 +4,57 @@
 <head>
     <meta charset="utf-8" />
     <meta name="google-site-verification" content="mm_dIPIuegRkyjnI5sMjxWmzCOESKt3_I0CdG9oUwHg" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script>
-        (function () {
-            const meta = document.createElement('meta');
-            meta.name = 'theme-color';
-            meta.content = '#000000';
-            document.head.appendChild(meta);
-        })();
-    </script>
-    <meta name="description" content="BIN Group Owner Portal" />
+    
+    <!-- PWA & Mobile Polish -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sovereign" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- SEO & WhatsApp Sharing (Open Graph) -->
+    <title>BIN Group Sovereign | Institutional Asset OS</title>
+    <meta name="description" content="The No-Call Infrastructure for UAE Real Estate. 100% Data Sovereignty and Self-healing property management." />
+    <meta property="og:title" content="BIN Group Sovereign | Institutional Asset OS" />
+    <meta property="og:description" content="Direct-to-Bank Integrity. RERA Escrow Compliance. The Operating System for UAE Real Estate." />
+    <meta property="og:image" content="https://bin-groups.com/logo.png" />
+    <meta property="og:url" content="https://bin-groups.com" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <script
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCM6dAJQsdvTuHuRqbYlf-3ruvb4-CpfAs&libraries=places"></script>
-    <title>BIN Group | Owner Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCM6dAJQsdvTuHuRqbYlf-3ruvb4-CpfAs&libraries=places"></script>
+    <style>
+        body { background-color: #0B0B0C; color: #FFFFFF; margin: 0; font-family: 'Inter', 'Cairo', sans-serif; }
+        .compliance-wrapper { text-align: center; padding: 60px 20px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 100px; background: rgba(0,0,0,0.2); }
+        .compliance-header { color: #c6a75e; margin-bottom: 8px; font-weight: 900; letter-spacing: 1px; }
+        .compliance-text { font-size: 11px; color: #888; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.6; }
+        .compliance-links { font-size: 12px; font-weight: 700; }
+        .compliance-link { color: #c6a75e; text-decoration: none; margin: 0 12px; transition: color 0.2s; }
+        .compliance-link:hover { color: #E6C77A; }
+        .compliance-contact { font-size: 10px; color: #444; margin-top: 20px; }
+    </style>
 </head>
 
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+
     <!-- BIN GROUP INSTITUTIONAL COMPLIANCE -->
-    <style>
-        .compliance-wrapper { text-align: center; padding: 40px; font-family: sans-serif; border-top: 1px solid #111; margin-top: 100px; }
-        .compliance-header { color: #c6a75e; margin-bottom: 5px; }
-        .compliance-text { font-size: 11px; color: #666; max-width: 600px; margin: 0 auto 15px auto; }
-        .compliance-links { font-size: 12px; }
-        .compliance-link { color: #c6a75e; text-decoration: none; margin: 0 10px; }
-    </style>
     <div class="compliance-wrapper">
         <h4 class="compliance-header">INSTITUTIONAL DATA TRANSPARENCY</h4>
         <p class="compliance-text">
             BIN-GROUP utilizes Google OAuth to authenticate authorized asset administrators. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem.
         </p>
         <div class="compliance-links">
-            <a href="https://bin-group-57c60.web.app/privacy-policy" class="compliance-link">Privacy Policy</a> | 
-            <a href="https://bin-group-57c60.web.app/terms-of-service" class="compliance-link">Terms of Service</a> | 
-            <a href="https://bin-group-57c60.web.app/support" class="compliance-link">Support</a>
+            <a href="https://bin-groups.com/privacy-policy" class="compliance-link">Privacy Policy</a> | 
+            <a href="https://bin-groups.com/terms-of-service" class="compliance-link">Terms of Service</a> | 
+            <a href="https://bin-groups.com/support" class="compliance-link">Support</a>
         </div>
+        <p class="compliance-contact">Contact: ceo@bin-groups.com</p>
     </div>
 </body>
 
