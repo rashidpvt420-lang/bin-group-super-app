@@ -1,9 +1,10 @@
-import { FirebaseApp } from 'firebase/app';
-import { Auth } from 'firebase/auth';
-import { FirebaseStorage } from 'firebase/storage';
-import { Analytics } from 'firebase/analytics';
-import { Functions } from 'firebase/functions';
-import { collection, Firestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import type { FirebaseApp } from 'firebase/app';
+import type { Auth } from 'firebase/auth';
+import type { FirebaseStorage } from 'firebase/storage';
+import type { Analytics } from 'firebase/analytics';
+import type { Functions } from 'firebase/functions';
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 export declare const app: FirebaseApp;
 export declare const db: Firestore;
 export declare const auth: Auth;

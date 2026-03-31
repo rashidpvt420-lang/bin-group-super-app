@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.classifyProperty = void 0;
-const classifyProperty = (inputs) => {
+export const classifyProperty = (inputs) => {
     const pType = (inputs.propertyType || '').toUpperCase();
     if (pType === 'GOVERNMENT_MAJLIS')
         return 'GOVERNMENT_MAJLIS';
@@ -21,4 +18,3 @@ const classifyProperty = (inputs) => {
         return 'INSTITUTIONAL';
     return 'RESIDENTIAL';
 };
-exports.classifyProperty = classifyProperty;

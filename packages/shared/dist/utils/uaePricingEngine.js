@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.calculateUAEValuation = void 0;
-const calculateUAEValuation = async (inputs) => {
+export const calculateUAEValuation = async (inputs) => {
     const pType = inputs.propertyType;
     const ownerType = inputs.ownerType || (inputs.useType === 'Government' ? 'Government' : 'Private');
     const sqft = inputs.sqft || 1200;
@@ -44,4 +41,3 @@ const calculateUAEValuation = async (inputs) => {
         contractRecommendation: { recommendedTier: 'INSTITUTIONAL', contractTemplate }
     };
 };
-exports.calculateUAEValuation = calculateUAEValuation;

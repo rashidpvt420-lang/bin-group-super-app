@@ -1,12 +1,9 @@
-"use strict";
 /**
  * Building Health Intelligence Engine
  * Calculates multi-system health scores based on building age,
  * architectural complexity, and usage intensity.
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.calculateBuildingHealth = calculateBuildingHealth;
-function calculateBuildingHealth(data) {
+export function calculateBuildingHealth(data) {
     const systems = [];
     // 1. HVAC Health
     let hvacScore = Math.max(95 - (data.age * 2.5) - (data.hvacCount > 50 ? 5 : 0), 30);

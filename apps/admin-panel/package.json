@@ -16,6 +16,7 @@
         "react-router-dom": "^6.14.1",
         "react-scripts": "5.0.1",
         "recharts": "^2.7.2",
+        "framer-motion": "^10.12.0",
         "typescript": "^4.9.5"
     },
     "scripts": {

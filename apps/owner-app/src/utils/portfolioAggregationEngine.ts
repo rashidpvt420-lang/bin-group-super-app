@@ -15,7 +15,7 @@ export async function fetchPortfolioAggregation(ownerId: string, godMode: boolea
     try {
         const propRef = collection(db, 'properties');
         const contractRef = collection(db, 'contracts');
-        const ticketRef = collection(db, 'tickets');
+        const ticketRef = collection(db, 'maintenanceTickets');
         const txRef = collection(db, 'transactions');
 
         // Parallel fetching: If godMode is enabled, fetch ALL documents. Otherwise, filter by ownerId.

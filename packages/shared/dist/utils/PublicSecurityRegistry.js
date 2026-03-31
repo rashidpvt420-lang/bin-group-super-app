@@ -1,18 +1,15 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkPropertyUniqueness = exports.logSecurityEvent = void 0;
-const firestore_1 = require("firebase/firestore");
-const firebase_1 = require("../lib/firebase");
+import { collection, addDoc, serverTimestamp, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 /**
  * Public Security Registry - Scaling Protection for UAE Launch.
  * Tracks anonymous quote generations, OTP requests and blocked attempts.
  */
-const logSecurityEvent = async (type, metadata) => {
+export const logSecurityEvent = async (type, metadata) => {
     try {
-        await (0, firestore_1.addDoc)((0, firestore_1.collection)(firebase_1.db, 'security_audit_logs'), {
+        await addDoc(collection(db, 'security_audit_logs'), {
             type,
             metadata,
-            timestamp: (0, firestore_1.serverTimestamp)(),
+            timestamp: serverTimestamp(),
             severity: type === 'BOT_DETECTION' ? 'CRITICAL' : 'WARNING'
         });
     }
@@ -20,17 +17,15 @@ const logSecurityEvent = async (type, metadata) => {
         console.error('Security Logging Failed:', e);
     }
 };
-exports.logSecurityEvent = logSecurityEvent;
 /**
  * Checks for duplicate properties globally in the leads/contracts collections.
  */
-const checkPropertyUniqueness = async (unitNumber, community) => {
-    const q1 = (0, firestore_1.query)((0, firestore_1.collection)(firebase_1.db, 'active_contracts'), (0, firestore_1.where)('propertyInfo.unitNumber', '==', unitNumber), (0, firestore_1.where)('propertyInfo.community', '==', community), (0, firestore_1.limit)(1));
-    const snap1 = await (0, firestore_1.getDocs)(q1);
+export const checkPropertyUniqueness = async (unitNumber, community) => {
+    const q1 = query(collection(db, 'active_contracts'), where('propertyInfo.unitNumber', '==', unitNumber), where('propertyInfo.community', '==', community), limit(1));
+    const snap1 = await getDocs(q1);
     if (!snap1.empty)
         return false;
-    const q2 = (0, firestore_1.query)((0, firestore_1.collection)(firebase_1.db, 'onboarding_leads'), (0, firestore_1.where)('propertyInfo.unitNumber', '==', unitNumber), (0, firestore_1.where)('propertyInfo.community', '==', community), (0, firestore_1.limit)(1));
-    const snap2 = await (0, firestore_1.getDocs)(q2);
+    const q2 = query(collection(db, 'onboarding_leads'), where('propertyInfo.unitNumber', '==', unitNumber), where('propertyInfo.community', '==', community), limit(1));
+    const snap2 = await getDocs(q2);
     return snap2.empty;
 };
-exports.checkPropertyUniqueness = checkPropertyUniqueness;

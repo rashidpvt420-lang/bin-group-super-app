@@ -3,8 +3,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
-  Card,
-  CardContent,
   Typography,
   Chip,
   Grid,

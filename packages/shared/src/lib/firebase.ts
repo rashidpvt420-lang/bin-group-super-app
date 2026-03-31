@@ -1,18 +1,24 @@
 // packages/shared/src/lib/firebase.ts
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
-import { getStorage, connectStorageEmulator, FirebaseStorage } from 'firebase/storage';
-import { getAnalytics, Analytics } from 'firebase/analytics';
-import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import type { Auth } from 'firebase/auth';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import type { FirebaseStorage } from 'firebase/storage';
+import { getAnalytics } from 'firebase/analytics';
+import type { Analytics } from 'firebase/analytics';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import type { Functions } from 'firebase/functions';
 import { 
-    getFirestore, connectFirestoreEmulator, collection, enableIndexedDbPersistence, Firestore, CollectionReference,
+    getFirestore, connectFirestoreEmulator, collection, enableIndexedDbPersistence,
     doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.web.app",
+    authDomain: "bin-group-57c60.firebaseapp.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
     messagingSenderId: "123413252227",

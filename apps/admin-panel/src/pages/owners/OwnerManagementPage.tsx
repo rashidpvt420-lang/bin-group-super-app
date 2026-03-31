@@ -1,7 +1,6 @@
 // admin-panel/src/pages/owners/OwnerManagementPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
   Container,
   Paper,
   Table,
@@ -19,8 +18,6 @@ import {
   Chip,
   Grid,
   Typography,
-  Card,
-  CardContent,
 } from '@mui/material';
 import { apiClient } from '../../services/api';
 

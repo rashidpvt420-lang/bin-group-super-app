@@ -18,7 +18,7 @@ export default function TicketDetailPage() {
     useEffect(() => {
         if (!id) return;
         const fetchTicket = async () => {
-            const docRef = doc(db, 'tickets', id);
+            const docRef = doc(db, 'maintenanceTickets', id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 setTicket({ id: docSnap.id, ...docSnap.data() });
@@ -33,7 +33,7 @@ export default function TicketDetailPage() {
         if (!id) return;
         setUpdating(true);
         try {
-            const docRef = doc(db, 'tickets', id);
+            const docRef = doc(db, 'maintenanceTickets', id);
             await updateDoc(docRef, {
                 status: newStatus,
                 updatedAt: serverTimestamp(),
@@ -50,7 +50,7 @@ export default function TicketDetailPage() {
         if (!id) return;
         setUpdating(true);
         try {
-            const docRef = doc(db, 'tickets', id);
+            const docRef = doc(db, 'maintenanceTickets', id);
             await updateDoc(docRef, {
                 [field]: true,
                 updatedAt: serverTimestamp()
@@ -81,10 +81,10 @@ export default function TicketDetailPage() {
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
                     <Box>
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('tech.ticket_id')}: {ticket.id.substring(0, 8)}</Typography>
-                        <Typography variant="h4" fontWeight="900" sx={{ color: '#FFFFFF', mb: 1 }}>{ticket.trade}</Typography>
+                        <Typography variant="h4" fontWeight="900" sx={{ color: '#FFFFFF', mb: 1 }}>{ticket.trade || 'GENERAL'}</Typography>
                         <Stack direction="row" spacing={2} alignItems="center">
                             <MapPin size={16} color={binThemeTokens.gold} />
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.propertyId}</Typography>
+                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.propertyId || 'PORTFOLIO ASSET'}</Typography>
                         </Stack>
                     </Box>
                     <Chip 
@@ -139,7 +139,7 @@ export default function TicketDetailPage() {
                 />
 
                 <Stack spacing={2}>
-                    {ticket.status === 'OPEN' && (
+                    {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED') && (
                         <Button 
                             fullWidth 
                             variant="contained" 

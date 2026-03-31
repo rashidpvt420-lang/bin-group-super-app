@@ -72,7 +72,7 @@ export default function DashboardPage() {
     }, (err) => console.error("Brokers snap failed:", err));
 
     // 4. Open Tickets Count
-    const qTickets = query(collection(db, "tickets"), where("status", "in", ["OPEN", "PENDING", "IN_PROGRESS"]));
+    const qTickets = query(collection(db, "maintenanceTickets"), where("status", "in", ["OPEN", "PENDING", "IN_PROGRESS"]));
     const unsubTickets = onSnapshot(qTickets, (snapshot) => {
       setStats(prev => ({ ...prev, openTickets: snapshot.size }));
     }, (err) => console.error("Tickets snap failed:", err));

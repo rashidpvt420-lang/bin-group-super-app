@@ -1,4 +1,3 @@
-// apps/owner-app/src/context/LanguageContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { Box } from "@mui/material";
 
@@ -126,6 +125,41 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.payment.base_amc': 'Base Annual Management Contract (AMC)',
         'onboarding.payment.generating_manifest': 'GENERATING DEPOSIT MANIFEST...',
         'onboarding.payment.awaiting_verification': 'Verification Pending: Awaiting Administrative Settlement.',
+        'onboarding.payment.verified_success': 'PAYMENT VERIFIED: Institutional Registry Updated.',
+        'onboarding.payment.verification_note': 'Verification Note',
+        'onboarding.payment.contact_instruction': 'Contact Instruction',
+        'onboarding.payment.initiation_desc': 'Once you have initiated the payment, our administrative team will verify the settlement.',
+        'activation.title': 'SECURITY VERIFIED',
+        'activation.subtitle': 'Provisioning Sovereign Infrastructure...',
+        'activation.sovereign_access': 'SOVEREIGN ACCESS',
+        'activation.benefit1.title': 'Real-time ROI Engine',
+        'activation.benefit1.desc': 'Track institutional appreciation & asset integrity metrics live.',
+        'activation.benefit2.title': 'Global BMS-Link™',
+        'activation.benefit2.desc': 'Proprietary integration between our intelligence layers and your asset.',
+        'activation.selected_contract': 'SELECTED ASSET CONTRACT',
+        'activation.node_status': 'ACTIVE PORTFOLIO NODE',
+        'activation.identity_creation': 'OWNER IDENTITY CREATION',
+        'activation.pending_handshake': 'Pending Sovereign Handshake: Your contract identity is pending payment verification from the registry.',
+        'activation.field.name': 'Full Corporate / Individual Name',
+        'activation.field.name_placeholder': 'BIN-GROUP Holding L.L.C',
+        'activation.field.name_helper': 'Ensure this matches your trade license or identity.',
+        'activation.field.locked_helper': 'Protocol Locked: Verify payment to unlock identity binding.',
+        'activation.field.portfolio_id': 'Primary Portfolio ID (Email)',
+        'activation.field.encryption_guard': 'Secure Encryption Guard (Password)',
+        'activation.field.contact_phone': 'Mission-Critical Contact (Phone)',
+        'activation.btn.activate': 'ACTIVATE SOVEREIGN HUB',
+        'activation.btn.awaiting': 'AWAITING PAYMENT',
+        'activation.progress.establishing': 'Establishing Secure Link...',
+        'activation.progress.encryption': 'Generating encryption keys and linking mission-critical property BMS assets.',
+        'activation.progress.sync': 'BIN-IDENTITY™ SYNC: PROXY LAYER 4',
+        'activation.error.name': 'Sovereign Protocol: Please enter a valid Corporate or Individual Name (3-50 characters).',
+        'activation.error.credentials': 'Profile Error: Missing identity credentials.',
+        'activation.error.phone': 'Identity Alert: Invalid UAE Contact Format. Use +971-50-XXX-XXXX.',
+        'activation.error.contract_id': 'Sovereign Protocol Error: Missing Contract ID.',
+        'activation.error.payment_failed': 'SECURITY ALERT: Payment verification failed in registry. Cannot provision account.',
+        'activation.info.existing_detected': '💎 [SOVEREIGN-RECOGNITION] Existing Portfolio Detected. Verifying credentials...',
+        'activation.error.existing_rejection': 'RECOGNITION_FAILED: Credentials rejected for existing sovereign profile.',
+        'activation.error.generic': 'Provisioning Error: {message}',
         'dash.kpi.gross_val': 'GROSS CONTRACT VALUE',
         'dash.kpi.annual_yield': 'ANNUAL YIELD (EST)',
         'dash.kpi.radius': 'PORTFOLIO RADIUS',
@@ -446,7 +480,7 @@ const translations: Record<Language, Record<string, string>> = {
         'landing.feature.maintenance_desc': 'إدارة دورة الحياة التنبؤية للأنظمة عالية المخاطر.',
         'landing.feature.yield_title': 'تعظيم العائد',
         'landing.feature.yield_desc': 'استراتيجية مدفوعة بالبيانات لأصحاب الأصول في الخليج.',
-        'landing.footer': '© 2026 مجموعة بن | هندست للإمارات السبع',
+        'landing.footer': '© 2026 مجموعة بن الإمارات | هندست للإمارات السبع',
         'login.or_sso': 'أو الدخول الموحد للمؤسسات',
         'login.troubleshoot': '[إعادة توجيه سيادي] هل تواجه مشكلة في النافذة المنبثقة؟ اضغط هنا.',
         'login.iso_secure': 'آمن بمعيار ISO 27001',
@@ -547,30 +581,64 @@ const translations: Record<Language, Record<string, string>> = {
         'field.district_cooling': 'تبريد المناطق',
         'field.solar': 'طاقة شمسية',
         'field.ev': 'شحن سيارات كهربائية',
-        'contract.govt_majlis.title': 'اتفاقية صيانة وبروتوكول المجلس الحكومي',
-        'contract.govt_majlis.body': 'تغطي هذه الاتفاقية الصيانة المتميزة وجاهزية بروتوكول VIP للمجالس الحكومية. تضمن مجموعة بن الجاهزية على مدار الساعة، وإدارة حساسية التراث، ودعم التكييف والضيافة المتخصص. تخضع جميع الخدمات لبروتوكول سيادي ألفا-4.',
-        'contract.govt_property.title': 'عقد إدارة مرافق شامل للعقارات الحكومية',
-        'contract.govt_property.body': 'يوفر هذا العقد إدارة مرافق شاملة للعقارات الحكومية، مع التركيز على الامتثال الإداري، والتكامل الأمني، وكفاءة العمليات متعددة المستأجرين. يشمل النطاق الدفاع المدني، وSIRA، وشهادات الصحة والسلامة البلدية.',
-        'contract.hotel.title': 'اتفاقية صيانة وعمليات الضيافة',
-        'contract.hotel.body': 'إدارة مرافق متخصصة للفنادق، تشمل الأنظمة المواجهة للضيوف، والدعم الفني على مدار الساعة، وصيانة المسابح والمنتجعات الصحية، وإدارة تعقيدات المناطق الخلفية. تشمل تدقيق جاهزية الضيوف ومراقبة دورة حياة البنية التحتية الحرجة.',
-        'contract.standard.title': 'اتفاقية الخدمة الرئيسية',
-        'contract.standard.body': 'تغطي اتفاقية الخدمة الرئيسية هذه الصيانة العامة وخدمات إدارة المرافق للعقارات السكنية والتجارية ومختلطة الاستخدام. يشمل النطاق الصيانة الوقائية، والبلاغات الطارئة، وإدارة الامتثال الأساسية.',
+        'onboarding.payment.verified_success': 'تم التحقق من الدفع: تم تحديث السجل المؤسسي.',
+        'onboarding.payment.verification_note': 'ملاحظة التحقق',
+        'onboarding.payment.contact_instruction': 'تعليمات التواصل',
+        'onboarding.payment.initiation_desc': 'بمجرد بدء عملية الدفع، سيقوم فريقنا الإداري بالتحقق من التسوية.',
+        'activation.title': 'تم التحقق من الأمان',
+        'activation.subtitle': 'جاري تهيئة البنية التحتية السيادية...',
+        'activation.sovereign_access': 'الوصول السيادي',
+        'activation.benefit1.title': 'محرك العائد على الاستثمار في الوقت الفعلي',
+        'activation.benefit1.desc': 'تتبع التقدير المؤسسي ومقاييس سلامة الأصول مباشرة.',
+        'activation.benefit2.title': 'Global BMS-Link™',
+        'activation.benefit2.desc': 'تكامل حصري بين طبقات الاستخبارات لدينا وأصولك.',
+        'activation.selected_contract': 'عقد الأصول المختار',
+        'activation.node_status': 'عقدة المحفظة النشطة',
+        'activation.identity_creation': 'إنشاء هوية المالك',
+        'activation.pending_handshake': 'في انتظار المصافحة السيادية: هوية عقدك معلقة بانتظار التحقق من الدفع من السجل.',
+        'activation.field.name': 'الاسم الكامل للشركة / الفرد',
+        'activation.field.name_placeholder': 'مجموعة بن القابضة ذ.م.م',
+        'activation.field.name_helper': 'تأكد من مطابقة ذلك لرخصتك التجارية أو هويتك.',
+        'activation.field.locked_helper': 'البروتوكول مقفل: تحقق من الدفع لفتح ربط الهوية.',
+        'activation.field.portfolio_id': 'معرف المحفظة الأساسي (البريد الإلكتروني)',
+        'activation.field.encryption_guard': 'حارس التشفير الآمن (كلمة المرور)',
+        'activation.field.contact_phone': 'جهة اتصال المهام الحرجة (الهاتف)',
+        'activation.btn.activate': 'تفعيل المركز السيادي',
+        'activation.btn.awaiting': 'بانتظار الدفع',
+        'activation.progress.establishing': 'جاري إنشاء ارتباط آمن...',
+        'activation.progress.encryption': 'جاري إنشاء مفاتيح التشفير وربط أصول BMS العقارية ذات المهام الحرجة.',
+        'activation.progress.sync': 'مزامنة BIN-IDENTITY™: طبقة الوكيل 4',
+        'activation.error.name': 'البروتوكول السيادي: يرجى إدخال اسم شركة أو فرد صالح (3-50 حرفاً).',
+        'activation.error.credentials': 'خطأ في الملف الشخصي: بيانات الاعتماد مفقودة.',
+        'activation.error.phone': 'تنبيه الهوية: تنسيق الاتصال في الإمارات غير صالح. استخدم +971-50-XXX-XXXX.',
+        'activation.error.contract_id': 'خطأ في البروتوكول السيادي: معرف العقد مفقود.',
+        'activation.error.payment_failed': 'تنبيه أمني: فشل التحقق من الدفع في السجل. لا يمكن تزويد الحساب.',
+        'activation.info.existing_detected': '💎 [التعرف السيادي] تم اكتشاف محفظة موجودة. جاري التحقق من بيانات الاعتماد...',
+        'activation.error.existing_rejection': 'فشل التعرف: تم رفض بيانات الاعتماد للملف السيادي الموجود.',
+        'activation.error.generic': 'خطأ في التزويد: {message}',
     }
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
     const [lang, setLangState] = useState<Language>(() => {
-        return (localStorage.getItem('app_lang') as Language) || 'en';
+        if (typeof window !== 'undefined') {
+            return (localStorage.getItem('app_lang') as Language) || 'en';
+        }
+        return 'en';
     });
 
     const setLang = (newLang: Language) => {
         setLangState(newLang);
-        localStorage.setItem('app_lang', newLang);
-        document.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('app_lang', newLang);
+            document.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+        }
     };
 
     useEffect(() => {
-        document.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        if (typeof window !== 'undefined') {
+            document.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        }
     }, [lang]);
 
     const t = (key: string, variables?: Record<string, any>) => {
@@ -591,7 +659,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
                 minHeight: '100vh',
                 fontFamily: "'Cairo', 'Inter', sans-serif"
             }}>
-                {children as any}
+                {children}
             </Box>
         </LanguageContext.Provider>
     );

@@ -25,10 +25,10 @@ import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestor
 interface Ticket {
   ticketId: string;
   tenantId: string;
-  unitId: string;
+  unit: string;
   category: string;
   description: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED';
+  status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'ASSIGNED' | 'EN_ROUTE';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
   assignedTechnician: string | null;
   createdAt: any;
@@ -52,13 +52,13 @@ export default function TicketsManagementPage() {
             const data = doc.data() || {};
             return {
               ticketId: doc.id,
-              tenantId: data.tenantId || '',
-              unitId: data.unitId || '',
-              category: data.issueType || data.category || 'General',
+              tenantId: data.tenantId || data.userId || '',
+              unit: data.unit || data.unitId || 'N/A',
+              category: data.trade || data.issueType || data.category || 'General',
               description: data.description || '',
               status: data.status || 'OPEN',
               priority: data.priority || 'MEDIUM',
-              assignedTechnician: data.assignedTo || null,
+              assignedTechnician: data.assignedTechnician || data.technicianAssigned || data.assignedTo || null,
               createdAt: data.createdAt || null,
               completedAt: data.completedAt || null,
               emergencyCharge: data.emergencyCharge || 0
@@ -81,7 +81,7 @@ export default function TicketsManagementPage() {
   const getStatusColor = (status: string) => {
     const s = status.toUpperCase();
     if (s === 'OPEN') return 'error';
-    if (s === 'IN_PROGRESS') return 'warning';
+    if (s === 'ASSIGNED' || s === 'EN_ROUTE' || s === 'IN_PROGRESS') return 'warning';
     if (s === 'COMPLETED') return 'success';
     if (s === 'DELAYED') return 'error';
     return 'default';
@@ -99,7 +99,7 @@ export default function TicketsManagementPage() {
   const filteredTickets = tickets.filter((ticket) => {
     const matchesSearch = searchTerm === '' || 
         ticket.ticketId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ticket.category.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === '' || ticket.status === filterStatus;
@@ -150,6 +150,7 @@ export default function TicketsManagementPage() {
               <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} label="Status">
                 <MenuItem value="">All Statuses</MenuItem>
                 <MenuItem value="OPEN">Open</MenuItem>
+                <MenuItem value="ASSIGNED">Assigned</MenuItem>
                 <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
                 <MenuItem value="COMPLETED">Completed</MenuItem>
               </Select>
@@ -174,7 +175,7 @@ export default function TicketsManagementPage() {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <StatCard label="Live Feed" value={tickets.length} color="textPrimary" />
         <StatCard label="Open" value={tickets.filter(t => t.status === 'OPEN').length} color="#ef4444" />
-        <StatCard label="Active" value={tickets.filter(t => t.status === 'IN_PROGRESS').length} color="#f59e0b" />
+        <StatCard label="Active" value={tickets.filter(t => ['ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'].includes(t.status)).length} color="#f59e0b" />
         <StatCard label="Resolved" value={tickets.filter(t => t.status === 'COMPLETED').length} color="#10b981" />
       </Grid>
 
@@ -200,13 +201,13 @@ export default function TicketsManagementPage() {
                     #{ticket.ticketId.slice(0, 10).toUpperCase()}
                   </Typography>
                 </TableCell>
-                <TableCell sx={{ color: '#64748b' }}>{ticket.unitId}</TableCell>
+                <TableCell sx={{ color: '#64748b' }}>{ticket.unit}</TableCell>
                 <TableCell>{ticket.category}</TableCell>
                 <TableCell>
-                  <Chip label={ticket.status} color={getStatusColor(ticket.status)} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                  <Chip label={ticket.status} color={getStatusColor(ticket.status) as any} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
                 </TableCell>
                 <TableCell>
-                  <Chip label={ticket.priority} color={getPriorityColor(ticket.priority)} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                  <Chip label={ticket.priority} color={getPriorityColor(ticket.priority) as any} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
                 </TableCell>
                 <TableCell sx={{ color: '#1e293b', fontWeight: 'bold' }}>{getResponseTime(ticket.createdAt, ticket.completedAt)}</TableCell>
                 <TableCell align="right" sx={{ color: '#64748b', fontSize: 12 }}>

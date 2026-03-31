@@ -91,7 +91,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
             const isConfirmed = await verifyPaymentStatus(contractId);
             if (isConfirmed) {
                 setPaymentVerified(true);
-                setSnackbar({ open: true, message: "PAYMENT VERIFIED: Institutional Registry Updated.", severity: 'success' });
+                setSnackbar({ open: true, message: t('onboarding.payment.verified_success'), severity: 'success' });
             } else {
                 setSnackbar({ open: true, message: t('onboarding.payment.awaiting_verification'), severity: 'info' });
             }
@@ -125,7 +125,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
 
                         {method === 'CHEQUE' && (
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>Verification Note</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>{t('onboarding.payment.verification_note')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
                                     {t('onboarding.payment.cheque_desc')}
                                 </Typography>
@@ -134,7 +134,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
 
                         {method === 'CASH' && (
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>Contact Instruction</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>{t('onboarding.payment.contact_instruction')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
                                     {t('onboarding.payment.cash_desc')}
                                 </Typography>
@@ -284,7 +284,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                     <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
 
                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>
-                                        Once you have initiated the payment, our administrative team will verify the settlement.
+                                        {t('onboarding.payment.initiation_desc')}
                                     </Typography>
 
                                     <Button 

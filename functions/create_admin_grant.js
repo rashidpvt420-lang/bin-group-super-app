@@ -11,7 +11,7 @@ const db = admin.firestore();
 
 async function createGrant() {
   const email = "ceo@bin-groups.com";
-  const docId = "rashid_pvt420_gmail_com";
+  const docId = "ceo_bin_groups_com";
 
   const grantData = {
     email: email,

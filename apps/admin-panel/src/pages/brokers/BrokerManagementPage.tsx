@@ -16,7 +16,6 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    TextField,
     Grid,
     Card,
     CardContent,
@@ -26,13 +25,12 @@ import {
     CheckCircle as CheckCircleIcon,
     Cancel as CancelIcon,
     Visibility as VisibilityIcon,
-    Edit as EditIcon,
     AccountBalance as BankIcon,
     Badge as BadgeIcon,
     TrendingUp as TrendingUpIcon,
     People as PeopleIcon
 } from '@mui/icons-material';
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
 interface Broker {

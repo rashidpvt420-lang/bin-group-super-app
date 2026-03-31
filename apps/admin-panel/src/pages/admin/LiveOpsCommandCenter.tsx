@@ -23,7 +23,7 @@ import {
 import { motion } from 'framer-motion';
 
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, limit, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
 
 // Helper for type-safe icons in React 18
 const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (

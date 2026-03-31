@@ -129,7 +129,7 @@ export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
     const now = admin.firestore.Timestamp.now();
     const fourHoursAgo = new Date(now.toDate().getTime() - 4 * 60 * 60 * 1000);
 
-    const staleTickets = await db.collection("tickets")
+    const staleTickets = await db.collection("maintenanceTickets")
         .where("status", "!=", "RESOLVED")
         .where("priority", "==", "EMERGENCY")
         .where("createdAt", "<", admin.firestore.Timestamp.fromDate(fourHoursAgo))
@@ -155,11 +155,23 @@ export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
     await batch.commit();
 });
 
-// Trigger 2: Ticket Creation Assignment
-export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (event) => {
+// Trigger 2: Ticket Creation Assignment (Unified Sovereign Dispatch)
+export const onTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
     const snap = event.data;
     if (!snap) return;
     const ticket = snap.data();
+
+    // ── STAGE 0: BASIC PRIORITY HEURISTIC ──
+    const text = ((ticket.description || "") + (ticket.issueType || "")).toLowerCase();
+    const urgentKeywords = ["flood", "fire", "smoke", "burst", "leak", "danger", "sos", "electricity", "water"];
+    const basePriority = urgentKeywords.some(key => text.includes(key)) ? "EMERGENCY" : (ticket.priority || "MEDIUM");
+    
+    await snap.ref.update({ 
+        priority: basePriority, 
+        intelligenceFlag: "ACTIVE", 
+        createdAt: ticket.createdAt || admin.firestore.FieldValue.serverTimestamp() 
+    });
+
     // ── STAGE 1: WAIT FOR AI TRIAGE ──
     const maxRetries = 10; // Wait up to 30 seconds
     let triageData: any = null;
@@ -178,7 +190,7 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
                 break;
             } catch (e) {
                 console.error("[Triage] JSON Parse Error:", e);
-                triageData = { trade: "GENERAL", priority: data.priority || "OPEN" };
+                triageData = { trade: "GENERAL", priority: data.priority || basePriority };
                 break;
             }
         }
@@ -187,20 +199,20 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
         retries++;
     }
 
-    const detectedTrade = (triageData?.trade || "GENERAL").toUpperCase();
-    const priority = (triageData?.priority || "OPEN").toUpperCase();
+    const detectedTrade = (triageData?.trade || ticket.trade || "GENERAL").toUpperCase();
+    const finalPriority = (triageData?.priority || basePriority).toUpperCase();
 
     await snap.ref.update({ 
-        priority, 
+        priority: finalPriority, 
         trade: detectedTrade, 
         intelligenceFlag: "V1.5_GEMINI_ACTIVE",
         triageStatus: triageData ? "COMPLETED" : "FAILED"
     });
+
     // ── STAGE 2: GEOGRAPHIC DISPATCH ──
     const propertyLat = ticket.locationLat || 25.2048;
     const propertyLon = ticket.locationLon || 55.2708;
 
-    
     const techs = await db.collection("technicians").where("active", "==", true).where("status", "==", "AVAILABLE").get();
     let bestTech: any = null;
     let minDistance = Infinity;
@@ -216,6 +228,7 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
     if (bestTech) {
         const assignmentUpdate = {
             assignedTechnician: bestTech.id,
+            technicianAssigned: bestTech.id, // Support both legacy and new field names
             status: "ASSIGNED",
             dispatchDistanceKm: parseFloat(minDistance.toFixed(2)),
             assignedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -226,13 +239,13 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
         if (bestTech.fcmToken) {
             const message = {
                 notification: {
-                    title: `New ${priority} Ticket Assigned!`,
+                    title: `New ${finalPriority} Ticket Assigned!`,
                     body: `${detectedTrade} issue at ${ticket.unit || 'Property'}. Distance: ${minDistance.toFixed(1)}km`
                 },
                 data: {
                     ticketId: event.params.ticketId,
                     type: "NEW_ASSIGNMENT",
-                    priority: priority
+                    priority: finalPriority
                 },
                 token: bestTech.fcmToken
             };
@@ -247,6 +260,7 @@ export const onTicketCreated = onDocumentCreated("tickets/{ticketId}", async (ev
         console.log(`[Dispatch] No available technicians for ${detectedTrade} within range.`);
     }
 });
+
 
 // Trigger 3: Manual Payment Handshake
 export const createPaymentIntent = onCall({ enforceAppCheck: true }, async (request) => {
@@ -378,7 +392,7 @@ export const onTurnoverQuoteApproved = onDocumentUpdated("turnover-quotes/{quote
     
     for (const task of tasks) {
         if (after?.[task.key] > 0) {
-            const ticketRef = db.collection("tickets").doc();
+            const ticketRef = db.collection("maintenanceTickets").doc();
             batch.set(ticketRef, {
                 ownerId,
                 propertyId,
@@ -655,7 +669,7 @@ export const proactiveMaintenanceCron = onSchedule("every 48 hours", async (even
 
     try {
         const propertiesSnap = await db.collection("properties").get();
-        const ticketsRef = db.collection("tickets");
+        const ticketsRef = db.collection("maintenanceTickets");
 
         for (const propDoc of propertiesSnap.docs) {
             const property = propDoc.data();
@@ -889,7 +903,7 @@ export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) 
     const { propertyId, title, description, trade, priority } = request.data;
     if (!propertyId) throw new HttpsError("invalid-argument", "Property ID required.");
 
-    const ticketRef = await db.collection("tickets").add({
+    const ticketRef = await db.collection("maintenanceTickets").add({
         propertyId,
         ownerId: request.auth.uid,
         title,
@@ -916,7 +930,7 @@ export const approveMaintenanceProposal = onCall({ cors: true }, async (request)
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
-    const ticketRef = db.collection("tickets").doc(ticketId);
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
     const snap = await ticketRef.get();
 
     if (!snap.exists) throw new HttpsError("not-found", "Proposal not found.");
@@ -948,7 +962,7 @@ export const getSovereignSystemStats = onCall({ cors: true }, async (request) =>
     }
 
     try {
-        const ticketsRef = db.collection("tickets");
+        const ticketsRef = db.collection("maintenanceTickets");
         const propertiesRef = db.collection("properties");
         const cacheRef = db.collection("system_cache").doc("liquidity_summary");
 

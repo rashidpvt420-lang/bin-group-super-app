@@ -52,10 +52,10 @@ export default function UnifiedLogin() {
 
                 switch (role?.toUpperCase()) {
                     case 'TENANT':
-                        window.location.href = isLocal ? 'http://localhost:5173/' : 'https://bin-group-57c60-tenant.web.app/';
+                        window.location.href = isLocal ? 'http://localhost:5173/' : 'https://bin-groups.com/tenant';
                         break;
                     case 'TECHNICIAN':
-                        window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-group-57c60-tech.web.app/';
+                        window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-groups.com/tech';
                         break;
                     case 'OWNER':
                         window.location.href = isLocal ? 'http://localhost:5175/dashboard' : 'https://bin-groups.com/dashboard';

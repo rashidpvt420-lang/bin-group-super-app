@@ -28,7 +28,7 @@ import {
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.web.app",
+    authDomain: "bin-group-57c60.firebaseapp.com",
     databaseURL: "https://bin-group-57c60-default-rtdb.firebaseio.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",

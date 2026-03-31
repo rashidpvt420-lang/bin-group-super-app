@@ -1,5 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Simple client-side Rate Limiter for Abu Dhabi/Dubai traffic hardening.
  * Prevents bot-driven quote generation and anonymous session abuse.
@@ -33,4 +31,4 @@ class RateLimiter {
         return Math.max(0, limit - currentWindow.length);
     }
 }
-exports.default = RateLimiter;
+export default RateLimiter;

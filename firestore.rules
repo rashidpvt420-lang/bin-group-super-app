@@ -145,6 +145,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Sovereign maintenanceTickets collection
+    match /maintenanceTickets/{ticketId} {
+      allow read: if isAuth() && isActive() && (
+                    isAdmin() ||
+                    isOwner() ||
+                    (isTechnician() && (resource.data.technicianAssigned == uid() || resource.data.assignedTechnician == uid())) ||
+                    (isTenant() && (resource.data.tenantId == uid() || resource.data.userId == uid()))
+                  );
+      allow create: if isAuth() && isActive();
+      allow update: if isAuth() && isActive() && (
+                      isAdmin() ||
+                      (isTechnician() && (resource.data.technicianAssigned == uid() || resource.data.assignedTechnician == uid())) ||
+                      (isTenant() && (resource.data.tenantId == uid() || resource.data.userId == uid())) ||
+                      isOwner()
+                    );
+      allow delete: if false;
+    }
+
     // ─── 4. MOVE-OUT REQUESTS ────────────────────────────────────────────────
     match /move_out_requests/{requestId} {
       allow create: if isAuth() && isActive();

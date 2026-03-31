@@ -4,16 +4,12 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase
 import { 
   Brain, 
   Activity, 
-  Map as MapIcon, 
   Radio, 
   Zap, 
   ShieldAlert, 
   Layers, 
-  LineChart, 
   Cpu,
-  Fingerprint,
-  Waves,
-  LucideIcon
+  Waves
 } from 'lucide-react';
 
 import { 
@@ -23,7 +19,6 @@ import {
   Typography, 
   Button, 
   IconButton, 
-  Chip, 
   Avatar, 
   Dialog, 
   DialogTitle, 
@@ -40,8 +35,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 // Helper for type-safe icons in React 18
 const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
@@ -61,7 +54,7 @@ export default function LiveMapPage() {
   const [generatePass, setGeneratePass] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "maintenanceTickets"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (querySnapshot: any) => {
       const ticketData: any[] = [];
       querySnapshot.forEach((doc: any) => {
@@ -87,7 +80,7 @@ export default function LiveMapPage() {
   const handleDispatch = (tech: any) => {
     // 1. Update the actual ticket in Firestore to DISPATCHED
     if (selectedTicket) {
-      const ticketRef = doc(db, "tickets", selectedTicket.id);
+      const ticketRef = doc(db, "maintenanceTickets", selectedTicket.id);
       updateDoc(ticketRef, {
         status: 'DISPATCHED',
         assignedTechId: tech.id,

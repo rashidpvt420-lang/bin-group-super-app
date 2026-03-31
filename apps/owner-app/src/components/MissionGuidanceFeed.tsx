@@ -40,7 +40,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
     // ── PROPOSALS SUBSCRIPTION ───────────────────────────────────────────────
     React.useEffect(() => {
         const q = query(
-            collection(db, "tickets"),
+            collection(db, "maintenanceTickets"),
             where("propertyId", "==", propertyId),
             where("status", "==", "PREVENTIVE_PROPOSAL")
         );

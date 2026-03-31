@@ -29,10 +29,12 @@ import { auth, db, doc, setDoc, getDoc, addDoc, serverTimestamp, collection, upd
 import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword } from 'firebase/auth';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { verifyPaymentStatus } from '../../lib/paymentService';
+import { useLanguage } from '../../context/LanguageContext';
 
 
 const AccountActivationStep: React.FC = () => {
     const navigate = useNavigate();
+    const { t, isRTL } = useLanguage();
     const { 
         properties, 
         valuationResult, 
@@ -52,32 +54,32 @@ const AccountActivationStep: React.FC = () => {
     const handleActivate = async () => {
         const namePattern = /^[a-zA-Z\s]{3,50}$/;
         if (!formData.name || !namePattern.test(formData.name)) {
-            setSnackbar({ open: true, message: "Sovereign Protocol: Please enter a valid Corporate or Individual Name (3-50 characters).", severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.name'), severity: 'error' });
             return;
         }
 
         if (!formData.email || !formData.password) {
-            setSnackbar({ open: true, message: "Profile Error: Missing identity credentials.", severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.credentials'), severity: 'error' });
             return;
         }
 
         const phonePattern = /^(\+971|0)?5[024568]\d{7}$/;
         if (formData.phone && !phonePattern.test(formData.phone.replace(/\s/g, ''))) {
-            setSnackbar({ open: true, message: "Identity Alert: Invalid UAE Contact Format. Use +971-50-XXX-XXXX.", severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.phone'), severity: 'error' });
             return;
         }
 
         // 🚨 HARDENED SECURITY CHECK:
         // Must verify against Firestore source of truth, not just local store state.
         if (!contractId) {
-            setSnackbar({ open: true, message: "Sovereign Protocol Error: Missing Contract ID.", severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.contract_id'), severity: 'error' });
             return;
         }
 
         setIsActivating(true);
         const isVerified = await verifyPaymentStatus(contractId);
         if (!isVerified) {
-            setSnackbar({ open: true, message: "SECURITY ALERT: Payment verification failed in registry. Cannot provision account.", severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.payment_failed'), severity: 'error' });
             setIsActivating(false);
             return;
         }
@@ -91,13 +93,13 @@ const AccountActivationStep: React.FC = () => {
                 ownerId = user.uid;
             } catch (authError: any) {
                 if (authError.code === 'auth/email-already-in-use') {
-                    setSnackbar({ open: true, message: "💎 [SOVEREIGN-RECOGNITION] Existing Portfolio Detected. Verifying credentials...", severity: 'info' });
+                    setSnackbar({ open: true, message: t('activation.info.existing_detected'), severity: 'info' });
                     
                     try {
                         const signInResult = await signInWithEmailAndPassword(auth, formData.email, formData.password);
                         ownerId = signInResult.user.uid;
                     } catch (signInError: any) {
-                        throw new Error("RECOGNITION_FAILED: Credentials rejected for existing sovereign profile.");
+                        throw new Error(t('activation.error.existing_rejection'));
                     }
                 } else {
                     throw authError;
@@ -196,7 +198,7 @@ const AccountActivationStep: React.FC = () => {
 
         } catch (error: any) {
             console.error("Activation failed:", error);
-            setSnackbar({ open: true, message: "Provisioning Error: " + error.message, severity: 'error' });
+            setSnackbar({ open: true, message: t('activation.error.generic', { message: error.message }), severity: 'error' });
             setIsActivating(false);
         }
     };
@@ -206,7 +208,8 @@ const AccountActivationStep: React.FC = () => {
             <Paper sx={{ 
                 p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.6)', backdropFilter: 'blur(40px)',
                 border: '1px solid rgba(198, 167, 94, 0.2)', position: 'relative',
-                boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)'
+                boxShadow: '0 50px 100px -20px rgba(0,0,0,0.7)',
+                direction: isRTL ? 'rtl' : 'ltr'
             }}>
                 <Box sx={{ textAlign: 'center', mb: { xs: 4, md: 6 } }}>
                     <Box sx={{ 
@@ -218,28 +221,28 @@ const AccountActivationStep: React.FC = () => {
                     }}>
                         <ShieldCheck color={binThemeTokens.gold} size={48} />
                     </Box>
-                    <Typography variant="h3" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, letterSpacing: 2 }}>SECURITY VERIFIED</Typography>
-                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>Provisioning Sovereign Infrastructure...</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, letterSpacing: 2 }}>{t('activation.title')}</Typography>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{t('activation.subtitle')}</Typography>
                 </Box>
 
                 <Divider sx={{ mb: 6, borderColor: 'rgba(198, 167, 94, 0.1)' }} />
 
-                <Grid container spacing={6}>
+                <Grid container spacing={6} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Grid item xs={12} md={5}>
-                        <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>SOVEREIGN ACCESS</Typography>
+                        <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.textPrimary, letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>{t('activation.sovereign_access')}</Typography>
                         <Stack spacing={4}>
-                            <Box sx={{ display: 'flex', gap: 2.5 }}>
+                            <Box sx={{ display: 'flex', gap: 2.5, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left' }}>
                                 <Trophy size={24} color={binThemeTokens.gold} />
                                 <Box>
-                                    <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>Real-time ROI Engine</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>Track institutional appreciation & asset integrity metrics live.</Typography>
+                                    <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{t('activation.benefit1.title')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>{t('activation.benefit1.desc')}</Typography>
                                 </Box>
                             </Box>
-                            <Box sx={{ display: 'flex', gap: 2.5 }}>
+                            <Box sx={{ display: 'flex', gap: 2.5, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left' }}>
                                 <CheckCircle2 size={24} color={binThemeTokens.gold} />
                                 <Box>
-                                    <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>Global BMS-Link™</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>Proprietary integration between our intelligence layers and your asset.</Typography>
+                                    <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{t('activation.benefit2.title')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>{t('activation.benefit2.desc')}</Typography>
                                 </Box>
                             </Box>
                         </Stack>
@@ -247,18 +250,19 @@ const AccountActivationStep: React.FC = () => {
                         <Paper sx={{ 
                             p: 3, mt: 8, borderRadius: 5, 
                             bgcolor: 'rgba(198, 167, 94, 0.05)', 
-                            border: '1px solid rgba(198, 167, 94, 0.1)' 
+                            border: '1px solid rgba(198, 167, 94, 0.1)',
+                            textAlign: isRTL ? 'right' : 'left'
                         }}>
-                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>SELECTED ASSET CONTRACT</Typography>
+                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('activation.selected_contract')}</Typography>
                              <Typography variant="h6" fontWeight="900" sx={{ mt: 1, color: binThemeTokens.textPrimary }}>{selectedPlan?.packageName}</Typography>
-                             <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontWeight: 800, mt: 0.5 }}>ACTIVE PORTFOLIO NODE</Typography>
+                             <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontWeight: 800, mt: 0.5 }}>{t('activation.node_status')}</Typography>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} md={7}>
                         {!isActivating ? (
                             <Box>
-                                <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>OWNER IDENTITY CREATION</Typography>
+                                <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.textPrimary, letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>{t('activation.identity_creation')}</Typography>
                                 
                                 {!paymentVerified && (
                                     <Alert 
@@ -268,25 +272,27 @@ const AccountActivationStep: React.FC = () => {
                                             bgcolor: 'rgba(198, 167, 94, 0.05)', 
                                             color: binThemeTokens.gold,
                                             border: '1px solid rgba(198, 167, 94, 0.2)',
-                                            '& .MuiAlert-icon': { color: binThemeTokens.gold }
+                                            '& .MuiAlert-icon': { color: binThemeTokens.gold },
+                                            flexDirection: isRTL ? 'row-reverse' : 'row',
+                                            textAlign: isRTL ? 'right' : 'left'
                                         }}
                                     >
-                                        Pending Sovereign Handshake: Your contract identity is pending payment verification from the registry.
+                                        {t('activation.pending_handshake')}
                                     </Alert>
                                 )}
 
                                 <Stack spacing={3} sx={{ opacity: paymentVerified ? 1 : 0.5, pointerEvents: paymentVerified ? 'auto' : 'none' }}>
                                     <TextField 
-                                        fullWidth label="Full Corporate / Individual Name" 
+                                        fullWidth label={t('activation.field.name')} 
                                         variant="outlined" disabled={!paymentVerified}
-                                        placeholder="BIN-GROUP Holding L.L.C"
+                                        placeholder={t('activation.field.name_placeholder')}
                                         value={formData.name} 
                                         onChange={(e) => setFormData(prev => ({...prev, name: e.target.value}))}
-                                        helperText={paymentVerified ? "Ensure this matches your trade license or identity." : "Protocol Locked: Verify payment to unlock identity binding."}
+                                        helperText={paymentVerified ? t('activation.field.name_helper') : t('activation.field.locked_helper')}
                                         sx={{
-                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
-                                            '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 600 },
-                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                            '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
+                                            '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 600, textAlign: isRTL ? 'right' : 'left' },
+                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)', left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', transformOrigin: isRTL ? 'right' : 'left' },
                                             '& .MuiOutlinedInput-root': {
                                                 background: 'rgba(255,255,255,0.04)',
                                                 '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
@@ -294,15 +300,18 @@ const AccountActivationStep: React.FC = () => {
                                                 '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
                                             },
                                         }}
-                                        InputProps={{ startAdornment: <User size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }}
+                                        InputProps={{ 
+                                            startAdornment: isRTL ? null : <User size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
+                                            endAdornment: isRTL ? <User size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                        }}
                                     />
                                     <TextField 
-                                        fullWidth label="Primary Portfolio ID (Email)" 
+                                        fullWidth label={t('activation.field.portfolio_id')} 
                                         variant="outlined" disabled={!paymentVerified}
                                         value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
                                         sx={{
-                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
-                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                            '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
+                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)', left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', transformOrigin: isRTL ? 'right' : 'left'  },
                                             '& .MuiOutlinedInput-root': {
                                                 background: 'rgba(255,255,255,0.04)',
                                                 '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
@@ -310,15 +319,18 @@ const AccountActivationStep: React.FC = () => {
                                                 '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
                                             },
                                         }}
-                                        InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }}
+                                        InputProps={{ 
+                                            startAdornment: isRTL ? null : <Mail size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
+                                            endAdornment: isRTL ? <Mail size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                        }}
                                     />
                                     <TextField 
-                                        fullWidth label="Secure Encryption Guard (Password)" type="password"
+                                        fullWidth label={t('activation.field.encryption_guard')} type="password"
                                         variant="outlined" disabled={!paymentVerified}
                                         value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
                                         sx={{
-                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
-                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                            '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
+                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)', left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', transformOrigin: isRTL ? 'right' : 'left'  },
                                             '& .MuiOutlinedInput-root': {
                                                 background: 'rgba(255,255,255,0.04)',
                                                 '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
@@ -326,15 +338,18 @@ const AccountActivationStep: React.FC = () => {
                                                 '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
                                             },
                                         }}
-                                        InputProps={{ startAdornment: <Lock size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }}
+                                        InputProps={{ 
+                                            startAdornment: isRTL ? null : <Lock size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
+                                            endAdornment: isRTL ? <Lock size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                        }}
                                     />
                                     <TextField 
-                                        fullWidth label="Mission-Critical Contact (Phone)" 
+                                        fullWidth label={t('activation.field.contact_phone')} 
                                         variant="outlined" disabled={!paymentVerified}
                                         value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
                                         sx={{
-                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
-                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                            '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
+                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)', left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', transformOrigin: isRTL ? 'right' : 'left'  },
                                             '& .MuiOutlinedInput-root': {
                                                 background: 'rgba(255,255,255,0.04)',
                                                 '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
@@ -342,7 +357,10 @@ const AccountActivationStep: React.FC = () => {
                                                 '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
                                             },
                                         }}
-                                        InputProps={{ startAdornment: <Phone size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }}
+                                        InputProps={{ 
+                                            startAdornment: isRTL ? null : <Phone size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
+                                            endAdornment: isRTL ? <Phone size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                        }}
                                     />
 
                                     <Button 
@@ -363,14 +381,14 @@ const AccountActivationStep: React.FC = () => {
                                             '&:hover': { transform: paymentVerified ? 'scale(1.02)' : 'none' }
                                         }}
                                     >
-                                        {paymentVerified ? 'ACTIVATE SOVEREIGN HUB' : 'AWAITING PAYMENT'}
+                                        {paymentVerified ? t('activation.btn.activate') : t('activation.btn.awaiting')}
                                     </Button>
                                 </Stack>
                             </Box>
                         ) : (
                             <Box sx={{ textAlign: 'center', py: 6 }}>
-                                <Typography variant="h5" fontWeight="900" sx={{ mb: 2, color: binThemeTokens.gold }}>Establishing Secure Link...</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 5 }}>Generating encryption keys and linking mission-critical property BMS assets.</Typography>
+                                <Typography variant="h5" fontWeight="900" sx={{ mb: 2, color: binThemeTokens.gold }}>{t('activation.progress.establishing')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 5 }}>{t('activation.progress.encryption')}</Typography>
                                 <LinearProgress 
                                     sx={{ 
                                         height: 16, borderRadius: 8, mb: 3,
@@ -379,7 +397,7 @@ const AccountActivationStep: React.FC = () => {
                                     }} 
                                 />
                                 <Typography variant="caption" sx={{ fontWeight: 900, letterSpacing: 4, color: binThemeTokens.goldLight, display: 'block' }}>
-                                    BIN-IDENTITY™ SYNC: PROXY LAYER 4
+                                    {t('activation.progress.sync')}
                                 </Typography>
                             </Box>
                         )}
