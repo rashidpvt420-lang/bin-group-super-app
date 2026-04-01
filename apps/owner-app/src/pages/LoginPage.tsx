@@ -11,7 +11,7 @@ import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
-import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, Building2, UserCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
     const { t, isRTL } = useLanguage();
@@ -55,8 +55,7 @@ const LoginPage: React.FC = () => {
                 displayName: result.user.displayName || "New User",
                 role: 'owner',
                 isAdmin: false,
-                godMode: false,
-                status: 'active',
+                status: 'pending',
                 createdAt: serverTimestamp()
             };
             await setDoc(doc(db, "users", uid), newProfile);
@@ -117,7 +116,7 @@ const LoginPage: React.FC = () => {
                 const data = snap.data();
                 const role = data.role;
                 
-                if (data.isAdmin || data.godMode || role === 'ceo' || role === 'owner') {
+                if (data.isAdmin || role === 'owner') {
                     navigate('/dashboard');
                 } else {
                     switch(role) {
@@ -311,24 +310,6 @@ const LoginPage: React.FC = () => {
                                     {t('login.google')}
                                 </Button>
 
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography 
-                                        variant="caption" 
-                                        sx={{ 
-                                            color: 'rgba(255,255,255,0.3)', 
-                                            cursor: 'pointer',
-                                            textDecoration: 'underline',
-                                            '&:hover': { color: binThemeTokens.gold }
-                                        }}
-                                        onClick={async () => {
-                                            const provider = new GoogleAuthProvider();
-                                            const { signInWithRedirect } = await import('firebase/auth');
-                                            await signInWithRedirect(auth, provider);
-                                        }}
-                                    >
-                                        {t('login.troubleshoot')}
-                                    </Typography>
-                                </Box>
                             </Stack>
                         </form>
                     </CardContent>
@@ -337,7 +318,7 @@ const LoginPage: React.FC = () => {
                 <Grid container spacing={2} sx={{ mt: 6 }}>
                     <Grid item xs={4}>
                         <Box sx={{ textAlign: 'center' }}>
-                            <ShieldCheck size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
+                            <Shield size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
                             <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.iso_secure')}</Typography>
                         </Box>
                     </Grid>
@@ -349,7 +330,7 @@ const LoginPage: React.FC = () => {
                     </Grid>
                     <Grid item xs={4}>
                         <Box sx={{ textAlign: 'center' }}>
-                            <Building2 size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
+                            <Building size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
                             <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.uae_ops')}</Typography>
                         </Box>
                     </Grid>

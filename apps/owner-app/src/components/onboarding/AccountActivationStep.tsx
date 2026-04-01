@@ -14,13 +14,15 @@ import {
     Snackbar
 } from '@mui/material';
 import { 
-    CheckCircle2, 
+    Shield, 
+    CheckCircle as CheckCircleIcon,
     User,
     Mail,
-    Lock,
+    Lock as LockIcon,
     Phone,
     Trophy,
-    ShieldCheck
+    ArrowRight,
+    ArrowLeft
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -43,6 +45,7 @@ const AccountActivationStep: React.FC = () => {
         selectedPlan, 
         selectedAddOns, 
         paymentVerified, 
+        paymentMethod,
         contractId, 
         setContractId, 
         reset 
@@ -50,6 +53,8 @@ const AccountActivationStep: React.FC = () => {
     const [isActivating, setIsActivating] = useState(false);
     const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
+
+    const isOfflineMethod = paymentMethod === 'CASH' || paymentMethod === 'CHEQUE';
 
     const handleActivate = async () => {
         const namePattern = /^[a-zA-Z\s]{3,50}$/;
@@ -78,7 +83,8 @@ const AccountActivationStep: React.FC = () => {
 
         setIsActivating(true);
         const isVerified = await verifyPaymentStatus(contractId);
-        if (!isVerified) {
+
+        if (!isVerified && !isOfflineMethod) {
             setSnackbar({ open: true, message: t('activation.error.payment_failed'), severity: 'error' });
             setIsActivating(false);
             return;
@@ -133,6 +139,8 @@ const AccountActivationStep: React.FC = () => {
 
             // 2. Update Contract
             const contractDocRef = doc(db, 'contracts', contractId);
+            const finalStatus = isVerified ? 'ACTIVE' : 'PENDING_APPROVAL';
+            
             batch.update(contractDocRef, {
                 propertyIds,
                 primaryPropertyId: propertyIds[0],
@@ -142,14 +150,14 @@ const AccountActivationStep: React.FC = () => {
                 activationTimestamp,
                 packageName: selectedPlan?.packageName || 'Institutional Package',
                 planType: selectedPlan?.tier || 'institutional',
-                activationStatus: 'ACTIVE',
-                depositPaid: true,
+                activationStatus: finalStatus,
+                depositPaid: isVerified,
                 depositAmount,
                 annualContractValue: annualTotal,
                 selectedAddOns: selectedAddOns || [],
                 portfolioSummary,
                 startDate: serverTimestamp(),
-                status: 'ACTIVE',
+                status: finalStatus,
                 updatedAt: serverTimestamp()
             });
 
@@ -160,8 +168,8 @@ const AccountActivationStep: React.FC = () => {
                 name: formData.name,
                 email: formData.email,
                 phone: formData.phone,
-                status: 'ACTIVE',
-                dashboardUnlocked: true,
+                status: finalStatus,
+                dashboardUnlocked: isVerified,
                 propertyIds,
                 activeContractId: contractId,
                 createdAt: serverTimestamp()
@@ -174,7 +182,7 @@ const AccountActivationStep: React.FC = () => {
                 contractId,
                 type: 'DEPOSIT',
                 amount: depositAmount,
-                status: 'SUCCESS',
+                status: isVerified ? 'SUCCESS' : 'PENDING',
                 description: `Institutional Activation Deposit (15%) — Portfolio of ${properties.length} Assets`,
                 timestamp: serverTimestamp()
             });
@@ -184,6 +192,7 @@ const AccountActivationStep: React.FC = () => {
             batch.set(userRef, {
                 email: formData.email,
                 role: 'owner',
+                status: finalStatus,
                 createdAt: serverTimestamp()
             }, { merge: true });
 
@@ -219,10 +228,14 @@ const AccountActivationStep: React.FC = () => {
                         border: '1px solid rgba(198,167,94,0.3)',
                         boxShadow: '0 0 30px rgba(198, 167, 94, 0.2)'
                     }}>
-                        <ShieldCheck color={binThemeTokens.gold} size={48} />
+                        <Shield color={binThemeTokens.gold} size={48} />
                     </Box>
-                    <Typography variant="h3" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, letterSpacing: 2 }}>{t('activation.title')}</Typography>
-                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{t('activation.subtitle')}</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, letterSpacing: 2 }}>
+                        {paymentVerified ? t('activation.title') : t('activation.title_pending')}
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
+                        {paymentVerified ? t('activation.subtitle') : t('activation.subtitle_pending')}
+                    </Typography>
                 </Box>
 
                 <Divider sx={{ mb: 6, borderColor: 'rgba(198, 167, 94, 0.1)' }} />
@@ -239,7 +252,7 @@ const AccountActivationStep: React.FC = () => {
                                 </Box>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 2.5, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left' }}>
-                                <CheckCircle2 size={24} color={binThemeTokens.gold} />
+                                <CheckCircleIcon size={24} color={binThemeTokens.gold} />
                                 <Box>
                                     <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{t('activation.benefit2.title')}</Typography>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>{t('activation.benefit2.desc')}</Typography>
@@ -267,6 +280,7 @@ const AccountActivationStep: React.FC = () => {
                                 {!paymentVerified && (
                                     <Alert 
                                         severity="info" 
+                                        icon={paymentVerified ? <LockIcon size={18} color={binThemeTokens.gold} /> : <LockIcon size={18} color="rgba(255,255,255,0.7)" />}
                                         sx={{ 
                                             mb: 4, 
                                             bgcolor: 'rgba(198, 167, 94, 0.05)', 
@@ -281,14 +295,14 @@ const AccountActivationStep: React.FC = () => {
                                     </Alert>
                                 )}
 
-                                <Stack spacing={3} sx={{ opacity: paymentVerified ? 1 : 0.5, pointerEvents: paymentVerified ? 'auto' : 'none' }}>
+                                <Stack spacing={3} sx={{ opacity: (paymentVerified || isOfflineMethod) ? 1 : 0.5, pointerEvents: (paymentVerified || isOfflineMethod) ? 'auto' : 'none' }}>
                                     <TextField 
                                         fullWidth label={t('activation.field.name')} 
-                                        variant="outlined" disabled={!paymentVerified}
+                                        variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
                                         placeholder={t('activation.field.name_placeholder')}
                                         value={formData.name} 
                                         onChange={(e) => setFormData(prev => ({...prev, name: e.target.value}))}
-                                        helperText={paymentVerified ? t('activation.field.name_helper') : t('activation.field.locked_helper')}
+                                        helperText={(paymentVerified || isOfflineMethod) ? t('activation.field.name_helper') : t('activation.field.locked_helper')}
                                         sx={{
                                             '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
                                             '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 600, textAlign: isRTL ? 'right' : 'left' },
@@ -307,7 +321,7 @@ const AccountActivationStep: React.FC = () => {
                                     />
                                     <TextField 
                                         fullWidth label={t('activation.field.portfolio_id')} 
-                                        variant="outlined" disabled={!paymentVerified}
+                                        variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
                                         value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
                                         sx={{
                                             '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
@@ -326,7 +340,7 @@ const AccountActivationStep: React.FC = () => {
                                     />
                                     <TextField 
                                         fullWidth label={t('activation.field.encryption_guard')} type="password"
-                                        variant="outlined" disabled={!paymentVerified}
+                                        variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
                                         value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
                                         sx={{
                                             '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
@@ -339,13 +353,13 @@ const AccountActivationStep: React.FC = () => {
                                             },
                                         }}
                                         InputProps={{ 
-                                            startAdornment: isRTL ? null : <Lock size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
-                                            endAdornment: isRTL ? <Lock size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                            startAdornment: isRTL ? null : <LockIcon size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
+                                            endAdornment: isRTL ? <LockIcon size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
                                         }}
                                     />
                                     <TextField 
                                         fullWidth label={t('activation.field.contact_phone')} 
-                                        variant="outlined" disabled={!paymentVerified}
+                                        variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
                                         value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
                                         sx={{
                                             '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
@@ -368,20 +382,20 @@ const AccountActivationStep: React.FC = () => {
                                         fullWidth 
                                         size="large"
                                         onClick={handleActivate}
-                                        disabled={!paymentVerified}
+                                        disabled={!(paymentVerified || isOfflineMethod)}
                                         sx={{ 
-                                            background: paymentVerified ? 'linear-gradient(135deg, #C6A75E, #E6C77A)' : 'rgba(255,255,255,0.1)', 
-                                            color: paymentVerified ? '#0B0B0C' : 'rgba(255,255,255,0.3)', 
+                                            background: (paymentVerified || isOfflineMethod) ? 'linear-gradient(135deg, #C6A75E, #E6C77A)' : 'rgba(255,255,255,0.1)', 
+                                            color: (paymentVerified || isOfflineMethod) ? '#0B0B0C' : 'rgba(255,255,255,0.3)', 
                                             py: 2.5, 
                                             fontWeight: 900, 
                                             borderRadius: 4, 
                                             mt: 2,
                                             fontSize: '1.2rem',
-                                            boxShadow: paymentVerified ? '0 20px 40px rgba(198, 167, 94, 0.3)' : 'none',
-                                            '&:hover': { transform: paymentVerified ? 'scale(1.02)' : 'none' }
+                                            boxShadow: (paymentVerified || isOfflineMethod) ? '0 20px 40px rgba(198, 167, 94, 0.3)' : 'none',
+                                            '&:hover': { transform: (paymentVerified || isOfflineMethod) ? 'scale(1.02)' : 'none' }
                                         }}
                                     >
-                                        {paymentVerified ? t('activation.btn.activate') : t('activation.btn.awaiting')}
+                                        {(paymentVerified || isOfflineMethod) ? t('activation.btn.activate') : t('activation.btn.awaiting')}
                                     </Button>
                                 </Stack>
                             </Box>

@@ -16,15 +16,14 @@ import {
     alpha
 } from '@mui/material';
 import { 
-    CheckCircle2, 
+    CheckCircle, 
     ArrowRight, 
     ArrowLeft, 
-    ShieldCheck, 
+    Shield, 
     TrendingUp,
-    Building2,
-    Gem,
-    Workflow,
-    Shield
+    Building,
+    MousePointer as WorkflowIcon,
+    Shield as ShieldIcon
 } from 'lucide-react';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { useLanguage } from '../context/LanguageContext';
@@ -88,7 +87,7 @@ const PropertyOnboardingPage = () => {
                             BIN GROUP <Box component="span" sx={{ color: '#fff', ml: 1, fontWeight: 400, letterSpacing: 4 }}>SOVEREIGN</Box>
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ShieldCheck color="#10b981" size={18} />
+                            <ShieldIcon color="#10b981" size={18} />
                             <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>V1.20 SECURE PROTOCOL</Typography>
                         </Box>
                     </Box>

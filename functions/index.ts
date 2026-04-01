@@ -48,8 +48,7 @@ export const autoGrantAdminOnFirstLogin = beforeUserCreated(async (event) => {
             const grant = grantDoc.data()!;
             const claims: Record<string, unknown> = {
                 admin: grant.isAdmin ?? false,
-                role: grant.role ?? "technical",
-                godMode: grant.godMode ?? false,
+                role: grant.role ?? "technical"
             };
 
             // Apply claims immediately
@@ -62,7 +61,6 @@ export const autoGrantAdminOnFirstLogin = beforeUserCreated(async (event) => {
                 displayName: grant.displayName || user.displayName || "Team Member",
                 role: grant.role || "technical",
                 isAdmin: grant.isAdmin || false,
-                godMode: grant.godMode || false,
                 status: "active",
                 grantedBy: grant.grantedBy || "system",
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -91,12 +89,12 @@ export const autoGrantAdminOnFirstLogin = beforeUserCreated(async (event) => {
 
 export const setAdminRole = onCall({ enforceAppCheck: true }, async (request) => {
     const caller = request.auth;
-    if (!caller?.token?.godMode) {
-        throw new HttpsError("permission-denied", "Only God-Mode accounts can promote users.");
+    if (!caller?.token?.admin) {
+        throw new HttpsError("permission-denied", "Institutional access required. Only active administrators can modify roles.");
     }
 
-    const { email, role, isAdmin, godMode: grantGodMode } = request.data as {
-        email: string; role: string; isAdmin: boolean; godMode: boolean;
+    const { email, role, isAdmin } = request.data as {
+        email: string; role: string; isAdmin: boolean;
     };
 
     if (!email) throw new HttpsError("invalid-argument", "Email is required.");
@@ -105,15 +103,15 @@ export const setAdminRole = onCall({ enforceAppCheck: true }, async (request) =>
     try {
         const existing = await admin.auth().getUserByEmail(email);
         uid = existing.uid;
-        await admin.auth().setCustomUserClaims(uid, { admin: isAdmin, role, godMode: grantGodMode ?? false });
+        await admin.auth().setCustomUserClaims(uid, { admin: isAdmin, role });
         await db.collection("users").doc(uid).set({
-            isAdmin, role, godMode: grantGodMode ?? false,
+            isAdmin, role,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
     } catch {
         const emailKey = email.replace(/\./g, "_").replace(/@/g, "_");
         await db.collection("pending_admin_grants").doc(emailKey).set({
-            email, role, isAdmin, godMode: grantGodMode ?? false,
+            email, role, isAdmin,
             displayName: "Team Member",
             grantedBy: caller.token.email || caller.uid,
             grantedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -286,9 +284,17 @@ export const createPaymentIntent = onCall({ enforceAppCheck: true }, async (requ
         paymentManifest = { ...paymentManifest, officeLocation: "Office 101, Business Tower, Dubai", contactInstruction: "Call +971-50-000-0000", verificationNote: "Instant activation after receipt." };
     }
 
+    // [SOVEREIGN-AUDIT] Set owner status to pending_approval for offline methods
+    if (ownerId && (method === 'CASH' || method === 'CHEQUE')) {
+        await db.collection("users").doc(ownerId).set({ 
+            status: 'pending_approval',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    }
+
     const paymentId = `pmt_${admin.firestore.Timestamp.now().toMillis()}`;
     const contractRef = await db.collection("contracts").add({
-        paymentId, ownerId, propertyId, status: "AWAITING_VERIFICATION", paymentVerified: false,
+        paymentId, ownerId, propertyId, status: "PENDING_APPROVAL", paymentVerified: false,
         amount, currency: currency || "AED", provider: method, paymentManifest,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -312,12 +318,12 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
 
         // 1. Update Contract Status
         transaction.update(contractRef, {
-            paymentVerified: true, status: "AWAITING_ACTIVATION", settledMethod: method,
+            paymentVerified: true, status: "ACTIVE", settledMethod: method,
             settledReferenceId: referenceId, verifiedBy: caller.uid, verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
             amountReceived: amountReceived || snap.data()?.amount
         });
 
-        // 2. Unlock Owner Profile
+        // 2. Unlock Owner Profile - Set to active
         if (ownerId) {
             const userRef = db.collection("users").doc(ownerId);
             transaction.update(userRef, { 
@@ -325,29 +331,19 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
                 activatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 activatedBy: caller.uid
             });
+            
+            const ownerRef = db.collection("owners").doc(ownerId);
+            transaction.update(ownerRef, {
+                status: 'active',
+                dashboardUnlocked: true
+            });
         }
     });
 
     return { success: true };
 });
 
-export const elevateUserToAdmin_Secure = onCall({ enforceAppCheck: true }, async (request) => {
-    const caller = request.auth;
-    // Strictly requires godMode to use this bootstrap tool
-    if (!caller?.token?.godMode) {
-        throw new HttpsError("permission-denied", "Sovereign protocol violation: Unauthorized elevation attempt.");
-    }
 
-    const { email } = request.data as { email: string };
-    if (!email) throw new HttpsError("invalid-argument", "Target email required.");
-
-    try {
-        const user = await admin.auth().getUserByEmail(email);
-        await admin.auth().setCustomUserClaims(user.uid, { admin: true, godMode: true, role: 'admin' });
-        await db.collection("users").doc(user.uid).set({ isAdmin: true, godMode: true, role: 'admin', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-        return { success: true };
-    } catch (err: any) { throw new HttpsError("internal", err.message); }
-});
 
 export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
     const snap = event.data;

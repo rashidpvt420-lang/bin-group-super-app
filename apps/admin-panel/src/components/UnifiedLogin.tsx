@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
-    signInWithEmailAndPassword, 
     GoogleAuthProvider, 
     signInWithRedirect, 
     getRedirectResult,
@@ -10,24 +9,20 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 
 export default function UnifiedLogin() {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // [SOVEREIGN-AUDIT] Handle Secure Authorization Code Flow Result
         const handleRedirect = async () => {
             try {
-                // Ensure auth instance is initialized via standard getAuth protocol
                 const result = await getRedirectResult(auth);
                 if (result) {
-                    console.info("🔒 [SSO-GATEWAY] Secure handshake verified. Finalizing credential chain...");
+                    setLoading(true);
                     await handleAuthSuccess(result);
                 }
             } catch (err: any) {
-                console.error("🚨 [SSO-GATEWAY] Redirect Handshake Failed:", err);
-                setError(`SSO Handshake Rejection: ${err.message || 'Verification Error'}`);
+                console.error("🚨 [ADMIN-AUTH] Redirect Failed:", err);
+                setError(`Authentication Error: ${err.message || 'Verification Failed'}`);
             }
         };
         handleRedirect();
@@ -38,42 +33,37 @@ export default function UnifiedLogin() {
         const uid = user.uid;
         
         try {
+            // [STRICT-AUTH] Check Custom Claims First (Fastest/Secured)
+            const tokenResult = await user.getIdTokenResult(true);
+            const claims = tokenResult.claims;
+            
             const docRef = doc(db, 'users', uid);
             const docSnap = await getDoc(docRef);
+            let hasAccess = false;
 
-            if (docSnap.exists()) {
-                const role = docSnap.data().role;
-                const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                
-                console.info(`🔒 [SSO-GATEWAY] Routing verified identity (Role: ${role})`);
-
-                // Set a short timeout to clear loading in case redirect is slow
-                setTimeout(() => setLoading(false), 3000);
-
-                switch (role?.toUpperCase()) {
-                    case 'TENANT':
-                        window.location.href = isLocal ? 'http://localhost:5173/' : 'https://bin-groups.com/tenant';
-                        break;
-                    case 'TECHNICIAN':
-                        window.location.href = isLocal ? 'http://localhost:5174/' : 'https://bin-groups.com/tech';
-                        break;
-                    case 'OWNER':
-                        window.location.href = isLocal ? 'http://localhost:5175/dashboard' : 'https://bin-groups.com/dashboard';
-                        break;
-                    case 'ADMIN':
-                        window.location.href = isLocal ? 'http://localhost:3000/' : '/admin/';
-                        break;
-                    default:
-                        setError('Account role not recognized.');
-                        setLoading(false);
+            if (claims.role === 'admin' || claims.isAdmin === true) {
+                hasAccess = true;
+            } else if (docSnap.exists()) {
+                const data = docSnap.data();
+                const role = data.role?.toUpperCase();
+                const isAdmin = data.isAdmin === true;
+                if (role === 'ADMIN' || isAdmin) {
+                    hasAccess = true;
                 }
+            }
+
+            if (hasAccess) {
+                console.info("🔒 [ADMIN-AUTH] Access Granted for:", user.email);
+                window.location.href = '/admin/dashboard';
             } else {
-                setError('No sovereign profile found. Contact BIN-GROUP HQ.');
+                console.warn("🚫 [ADMIN-AUTH] Access Denied for:", user.email);
+                setError('ACCESS DENIED: Administrative privileges required.');
                 setLoading(false);
+                await auth.signOut();
             }
         } catch (err: any) {
-            console.error("Auth Success Error:", err);
-            setError("Profile sync failed. Please try again.");
+            console.error("Profile sync failed:", err);
+            setError("Security clearance failed. Please try again.");
             setLoading(false);
         }
     };
@@ -81,111 +71,76 @@ export default function UnifiedLogin() {
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setError('');
-        // Safety timeout for the "Handshaking" button
-        const timeout = setTimeout(() => setLoading(false), 8000);
         try {
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ 
-                prompt: 'select_account',
-                auth_type: 'rerequest'
+                prompt: 'select_account'
             });
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
-            clearTimeout(timeout);
-            console.error("🚨 [SSO-GATEWAY] Initiation Failure:", err);
-            setError(err.message || 'Failed to initiate secure handshake.');
-            setLoading(false);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            await handleAuthSuccess(userCredential);
-        } catch (err: any) {
-            setError(err.message || 'Failed to login');
+            console.error("🚨 [ADMIN-AUTH] Initiation Failure:", err);
+            setError(err.message || 'Failed to initiate secure login.');
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md bg-[#1e293b] rounded-[24px] overflow-hidden border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
-                <div className="p-8">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter">BIN Group OS</h2>
-                        <p className="text-[#94a3b8] text-sm mt-1">Unified Authentication Gateway</p>
+        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-md bg-[#0f172a] rounded-[32px] overflow-hidden border border-emerald-500/10 shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+                
+                <div className="p-10">
+                    <div className="text-center mb-10">
+                        <div className="inline-block p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 mb-6">
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">BIN GROUP</h2>
+                            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Administry OS</p>
+                        </div>
+                        <p className="text-[#94a3b8] text-sm font-bold">SECURE COMMAND GATEWAY</p>
                     </div>
 
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-[#ef4444] text-sm font-bold p-4 rounded-xl mb-6 text-center">
+                        <div className="bg-red-500/10 border border-red-500/20 text-[#ef4444] text-[11px] font-black uppercase tracking-wider p-4 rounded-xl mb-8 text-center animate-pulse">
                             {error}
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                        <div className="group">
-                            <label className="block text-[#94a3b8] text-[10px] font-black uppercase tracking-widest mb-2 group-focus-within:text-emerald-500 transition-colors">Institutional Email</label>
-                            <input
-                                type="email"
-                                placeholder="ceo@bingroup.ae"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-[#0f172a]/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 transition-all placeholder:text-slate-700"
-                            />
-                        </div>
-                        <div className="group">
-                            <label className="block text-[#94a3b8] text-[10px] font-black uppercase tracking-widest mb-2 group-focus-within:text-emerald-500 transition-colors">Access Key</label>
-                            <input
-                                type="password"
-                                placeholder="••••••••"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-[#0f172a]/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-emerald-500/50 transition-all placeholder:text-slate-700"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-emerald-500 text-slate-900 font-black text-lg p-4 rounded-xl uppercase tracking-widest mt-4 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Handshaking...' : 'Secure Login'}
-                        </button>
-                    </form>
-
-                    <div className="mt-6 flex flex-col gap-4">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
-                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#1e293b] px-2 text-[#94a3b8]">Or Sovereign SSO</span></div>
-                        </div>
-
+                    <div className="flex flex-col gap-6">
                         <button
                             onClick={handleGoogleSignIn}
                             disabled={loading}
-                            className="w-full bg-white/5 border border-white/10 text-white font-bold p-4 rounded-xl uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-white text-slate-950 font-black text-sm p-5 rounded-2xl uppercase tracking-widest transition-all hover:bg-emerald-50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_10px_20px_rgba(255,255,255,0.05)]"
                         >
-                            <svg className="w-5 h-5" viewBox="0 0 24 24">
-                                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
-                                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                            </svg>
-                            Sign in with Google
+                            {loading ? (
+                                <span className="flex items-center gap-2">
+                                    <svg className="animate-spin h-5 w-5 text-slate-950" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Verifying...
+                                </span>
+                            ) : (
+                                <>
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                                        <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                        <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                        <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                                        <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                                    </svg>
+                                    Sign in with Google
+                                </>
+                            )}
                         </button>
+                        
+                        <p className="text-[10px] text-[#475569] font-bold text-center px-4 leading-relaxed">
+                            UNAUTHORIZED ACCESS TO THIS SOVEREIGN INTERFACE IS PROHIBITED AND SUBJECT TO INSTITUTIONAL AUDIT.
+                        </p>
                     </div>
                 </div>
             </div>
             
-            {/* Branding Footer */}
-            <div className="mt-8 text-center">
-                <p className="text-[10px] text-[#94a3b8] font-black uppercase tracking-[0.2em]">
-                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | <a href="/privacy-policy" className="text-[#DAA520] no-underline ml-2 font-bold">Privacy Policy</a>
+            <div className="mt-8 text-center opacity-40">
+                <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
+                    BIN GROUP SOVEREIGN CORE v1.21
                 </p>
             </div>
         </div>

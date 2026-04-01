@@ -129,8 +129,10 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.payment.verification_note': 'Verification Note',
         'onboarding.payment.contact_instruction': 'Contact Instruction',
         'onboarding.payment.initiation_desc': 'Once you have initiated the payment, our administrative team will verify the settlement.',
-        'activation.title': 'SECURITY VERIFIED',
+        'activation.title': 'SETTLEMENT VERIFIED',
+        'activation.title_pending': 'SETTLEMENT PROVISIONING',
         'activation.subtitle': 'Provisioning Sovereign Infrastructure...',
+        'activation.subtitle_pending': 'Binding identity to offline settlement manifest...',
         'activation.sovereign_access': 'SOVEREIGN ACCESS',
         'activation.benefit1.title': 'Real-time ROI Engine',
         'activation.benefit1.desc': 'Track institutional appreciation & asset integrity metrics live.',
@@ -271,7 +273,6 @@ const translations: Record<Language, Record<string, string>> = {
         'landing.feature.yield_desc': 'Data-driven strategy for GCC asset holders.',
         'landing.footer': '© 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES',
         'login.or_sso': 'OR INSTITUTIONAL SSO',
-        'login.troubleshoot': '[SOVEREIGN-REDIRECT] Troubleshoot Popup? Click here.',
         'login.iso_secure': 'ISO 27001 SECURE',
         'login.inst_grade': 'INSTITUTIONAL GRADE',
         'login.uae_ops': 'UAE PORTFOLIO OPS',
@@ -482,7 +483,6 @@ const translations: Record<Language, Record<string, string>> = {
         'landing.feature.yield_desc': 'استراتيجية مدفوعة بالبيانات لأصحاب الأصول في الخليج.',
         'landing.footer': '© 2026 مجموعة بن الإمارات | هندست للإمارات السبع',
         'login.or_sso': 'أو الدخول الموحد للمؤسسات',
-        'login.troubleshoot': '[إعادة توجيه سيادي] هل تواجه مشكلة في النافذة المنبثقة؟ اضغط هنا.',
         'login.iso_secure': 'آمن بمعيار ISO 27001',
         'login.inst_grade': 'درجة مؤسسية',
         'login.uae_ops': 'عمليات المحفظة في الإمارات',
@@ -581,12 +581,42 @@ const translations: Record<Language, Record<string, string>> = {
         'field.district_cooling': 'تبريد المناطق',
         'field.solar': 'طاقة شمسية',
         'field.ev': 'شحن سيارات كهربائية',
+        'onboarding.payment.title': 'تفعيل المحفظة المؤسسية',
+        'onboarding.payment.agreement_summary': 'ملخص الاتفاقية المؤسسية',
+        'onboarding.payment.official_settlement': 'التسوية الرسمية',
+        'onboarding.payment.cheque': 'شيك',
+        'onboarding.payment.cash': 'إيداع نقدي',
+        'onboarding.payment.bank_transfer': 'تحويل مصرفي',
+        'onboarding.payment.coming_soon': 'قريباً',
+        'onboarding.payment.instructions': 'تعليمات التسوية الرسمية',
+        'onboarding.payment.due_now': 'إيداع التفعيل بنسبة 15% (مستحق الآن)',
+        'onboarding.payment.generate_manifest': 'اختر طريقة دفع يدوية لإنشاء بيان الإيداع المؤسسي الخاص بك.',
+        'onboarding.payment.verifying': 'جاري التحقق من السجل...',
+        'onboarding.payment.verify_btn': 'التحقق من حالة الدفع',
+        'onboarding.payment.change_method': 'تغيير طريقة الدفع',
+        'onboarding.payment.verified_title': 'تم التحقق من التسوية',
+        'onboarding.payment.verified_desc': 'تم تأكيد إيداع التفعيل الخاص بك من قبل إدارة مجموعة بن.',
+        'onboarding.payment.proceed_btn': 'المتابعة لقفل الحساب',
+        'onboarding.payment.secure_note': 'تسوية سيادية آمنة',
+        'onboarding.payment.total_amc': 'إجمالي عقد الصيانة السنوي للمحفظة',
+        'onboarding.payment.vat_excl': 'غير شامل ضريبة القيمة المضافة',
+        'onboarding.payment.appreciation_title': 'مضاعف تقدير الأصول',
+        'onboarding.payment.appreciation_desc': 'من خلال تفعيل هذا العقد، تتأهل محفظتك للحصول على وضع BIN-CERTIFIED™. تضمن التسوية الإدارية اليدوية الامتثال لتدقيق الدرجة السيادية لسجلاتك المؤسسية.',
+        'onboarding.payment.manifest_prefix': 'البيان:',
+        'onboarding.payment.cheque_desc': 'يتم التحقق من الشيكات خلال 2-3 أيام عمل.',
+        'onboarding.payment.cash_desc': 'يرجى الاتصال بمكتبنا لتحديد موعد للإيداع النقدي.',
+        'onboarding.payment.portfolio_agreement': 'اتفاقية خدمة لمحفظة مكونة من {count} أصل مختلط الاستخدام.',
+        'onboarding.payment.base_amc': 'عقد الصيانة السنوي الأساسي (AMC)',
+        'onboarding.payment.generating_manifest': 'جاري إنشاء بيان الإيداع...',
+        'onboarding.payment.awaiting_verification': 'في انتظار التحقق: بانتظار التسوية الإدارية.',
         'onboarding.payment.verified_success': 'تم التحقق من الدفع: تم تحديث السجل المؤسسي.',
         'onboarding.payment.verification_note': 'ملاحظة التحقق',
         'onboarding.payment.contact_instruction': 'تعليمات التواصل',
         'onboarding.payment.initiation_desc': 'بمجرد بدء عملية الدفع، سيقوم فريقنا الإداري بالتحقق من التسوية.',
-        'activation.title': 'تم التحقق من الأمان',
+        'activation.title': 'تم التحقق من التسوية',
+        'activation.title_pending': 'تزويد التسوية',
         'activation.subtitle': 'جاري تهيئة البنية التحتية السيادية...',
+        'activation.subtitle_pending': 'ربط الهوية ببيان التسوية اليدوية...',
         'activation.sovereign_access': 'الوصول السيادي',
         'activation.benefit1.title': 'محرك العائد على الاستثمار في الوقت الفعلي',
         'activation.benefit1.desc': 'تتبع التقدير المؤسسي ومقاييس سلامة الأصول مباشرة.',
@@ -654,13 +684,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     return (
         <LanguageContext.Provider value={{ lang, setLang, t, isRTL }}>
-            <Box sx={{ 
-                direction: isRTL ? 'rtl' : 'ltr', 
-                minHeight: '100vh',
-                fontFamily: "'Cairo', 'Inter', sans-serif"
-            }}>
+            <div 
+                dir={isRTL ? 'rtl' : 'ltr'}
+                style={{ 
+                    direction: isRTL ? 'rtl' : 'ltr', 
+                    minHeight: '100vh',
+                    fontFamily: "'Cairo', 'Inter', sans-serif",
+                    backgroundColor: '#000',
+                    color: '#fff'
+                }}
+            >
                 {children}
-            </Box>
+            </div>
         </LanguageContext.Provider>
     );
 }

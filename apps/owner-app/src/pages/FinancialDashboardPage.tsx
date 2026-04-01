@@ -37,7 +37,7 @@ interface Transaction {
 }
 
 export default function FinancialDashboardPage() {
-  const { user, godMode } = useRole();
+  const { user } = useRole();
   const { t, isRTL } = useLanguage();
   const [financials, setFinancials] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -54,7 +54,7 @@ export default function FinancialDashboardPage() {
     const fetchFinancialData = async () => {
         try {
             // Fetch Portfolio via Aggregation Engine
-            const portfolio = await fetchPortfolioAggregation(user.uid, godMode);
+            const portfolio = await fetchPortfolioAggregation(user.uid);
             const yieldMetrics = calculateAnnualYieldMetrics(portfolio);
             
             const safeTransactions = Array.isArray(portfolio.transactions) ? portfolio.transactions : [];
@@ -103,7 +103,7 @@ export default function FinancialDashboardPage() {
     };
 
     fetchFinancialData();
-  }, [user, godMode]);
+  }, [user]);
 
   const handleExportCSV = () => {
     if (!financials) return;

@@ -51,8 +51,7 @@ interface PropertyHealth {
 }
 
 export default function HealthScorePage() {
-  const { user, godMode } = useRole();
-  const [selectedProperty, setSelectedProperty] = useState('');
+  const { user, isAdmin } = useRole();
   const [healthData, setHealthData] = useState<PropertyHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
@@ -64,9 +63,7 @@ export default function HealthScorePage() {
         try {
             // Check if portfolioMetrics exist for this owner
             const metricsRef = collection(db, 'portfolioMetrics');
-            const q = godMode 
-                ? query(metricsRef, limit(1))
-                : query(metricsRef, where('ownerId', '==', user.uid), limit(1));
+            const q = query(metricsRef, where('ownerId', '==', user.uid), limit(1));
             
             const snap = await getDocs(q);
             
@@ -100,7 +97,7 @@ export default function HealthScorePage() {
     }
 
     fetchHealth();
-  }, [user, godMode]);
+  }, [user]);
 
   if (loading) {
     return (

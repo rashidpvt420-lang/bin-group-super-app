@@ -27,7 +27,7 @@ const PrivacyPage: React.FC = () => {
 
                     <Typography variant="h5" sx={{ color: binThemeTokens.gold, mt: 4, mb: 2 }}>3. Contact</Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                        For privacy inquiries, contact: compliance@bin-group.ae
+                        For privacy inquiries, contact: ceo@bin-groups.com
                     </Typography>
                 </Paper>
             </Container>

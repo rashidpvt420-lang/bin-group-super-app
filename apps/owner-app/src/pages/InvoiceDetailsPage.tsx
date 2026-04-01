@@ -14,7 +14,7 @@ import { formatAED } from '../utils/formatters';
 
 export default function InvoiceDetailsPage() {
     const { id } = useParams();
-    const { user, godMode } = useRole();
+    const { user } = useRole();
     const [invoice, setInvoice] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -32,8 +32,8 @@ export default function InvoiceDetailsPage() {
 
                 if (snap.exists()) {
                     const data = snap.data();
-                    // Basic security check: owner must own the contract unless godMode
-                    if (!godMode && data.ownerId !== user?.uid) {
+                    // Basic security check: owner must own the contract.
+                    if (data.ownerId !== user?.uid) {
                         setInvoice(null);
                     } else {
                         setInvoice({
@@ -59,7 +59,7 @@ export default function InvoiceDetailsPage() {
         }
 
         fetchInvoice();
-    }, [id, user, godMode]);
+    }, [id, user]);
 
     if (loading) {
         return (

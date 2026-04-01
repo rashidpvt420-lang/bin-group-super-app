@@ -31,7 +31,7 @@ import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 
 export default function DashboardPage() {
-    const { user, godMode } = useRole();
+    const { user } = useRole();
     const { t, isRTL } = useLanguage();
     const [contracts, setContracts] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
         const fetchData = async () => {
             try {
-                const portfolio = await fetchPortfolioAggregation(user.uid, godMode);
+                const portfolio = await fetchPortfolioAggregation(user.uid);
                 setContracts(portfolio.contracts);
                 setProperties(portfolio.properties);
 
@@ -80,9 +80,7 @@ export default function DashboardPage() {
                 setIntelligence(intelMap);
 
                 const alertRef = collection(db, 'notifications');
-                const alertQuery = godMode 
-                    ? query(alertRef, orderBy('createdAt', 'desc'), limit(10))
-                    : query(alertRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(4));
+                const alertQuery = query(alertRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(4));
                 
                 const alertSnap = await getDocs(alertQuery);
                 setNotifications(alertSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));

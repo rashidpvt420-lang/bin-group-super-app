@@ -19,7 +19,7 @@ const SupportPage: React.FC = () => {
                             <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 2, textAlign: 'center' }}>
                                 <Mail size={32} color={binThemeTokens.gold} style={{ marginBottom: '16px' }} />
                                 <Typography variant="h6" color="white" fontWeight="700">Email</Typography>
-                                <Typography variant="body2" color="textSecondary">support@bin-group.ae</Typography>
+                                <Typography variant="body2" color="textSecondary">ceo@bin-groups.com</Typography>
                             </Box>
                         </Grid>
                         <Grid item xs={12} md={4}>

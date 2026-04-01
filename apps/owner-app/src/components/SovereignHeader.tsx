@@ -11,7 +11,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 const SovereignHeader: React.FC = () => {
     const { lang, setLang, t, isRTL } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
-    const { user, role, godMode } = useRole();
+    const { user, role } = useRole();
 
     const toggleLanguage = () => {
         setLang(lang === 'en' ? 'ar' : 'en');
@@ -44,12 +44,12 @@ const SovereignHeader: React.FC = () => {
                     {role && (
                         <Box sx={{ 
                             px: 1.5, py: 0.5, borderRadius: 2, 
-                            bgcolor: godMode ? binThemeTokens.gold : alpha(binThemeTokens.gold, 0.1),
-                            color: godMode ? '#000' : binThemeTokens.gold,
+                            bgcolor: alpha(binThemeTokens.gold, 0.1),
+                            color: binThemeTokens.gold,
                             fontSize: '0.75rem', fontWeight: 900,
                             display: { xs: 'none', md: 'block' }
                         }}>
-                            {role.toUpperCase()} {godMode ? 'GOD-MODE' : ''}
+                            {role.toUpperCase()}
                         </Box>
                     )}
 

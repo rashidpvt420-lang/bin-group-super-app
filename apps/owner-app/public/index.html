@@ -36,23 +36,28 @@
         .compliance-link { color: #c6a75e; text-decoration: none; margin: 0 12px; transition: color 0.2s; }
         .compliance-link:hover { color: #E6C77A; }
         .compliance-contact { font-size: 10px; color: #444; margin-top: 20px; }
+        .system-loader { height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #C6A75E; font-family: sans-serif; font-weight: 900; letter-spacing: 4px; }
     </style>
 </head>
 
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <div id="root">
+        <div class="system-loader">
+            LOADING SOVEREIGN OS...
+        </div>
+    </div>
 
     <!-- BIN GROUP INSTITUTIONAL COMPLIANCE -->
     <div class="compliance-wrapper">
         <h4 class="compliance-header">INSTITUTIONAL DATA TRANSPARENCY</h4>
         <p class="compliance-text">
-            BIN-GROUP utilizes Google OAuth to authenticate authorized asset administrators. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem.
+            BIN-GROUP utilizes Google OAuth to authenticate authorized asset owners and institutional partners. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem.
         </p>
         <div class="compliance-links">
-            <a href="https://bin-groups.com/privacy-policy" class="compliance-link">Privacy Policy</a> | 
-            <a href="https://bin-groups.com/terms-of-service" class="compliance-link">Terms of Service</a> | 
-            <a href="https://bin-groups.com/support" class="compliance-link">Support</a>
+            <a href="/privacy-policy" class="compliance-link">Privacy Policy</a> | 
+            <a href="/terms-of-service" class="compliance-link">Terms of Service</a> | 
+            <a href="/support" class="compliance-link">Support</a>
         </div>
         <p class="compliance-contact">Contact: ceo@bin-groups.com</p>
     </div>

@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db, functions } from '../lib/firebase';
 import { 
-  collection, query, where, onSnapshot, doc 
+  collection, query, where, onSnapshot 
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
-  TableHead, TableRow, Button, IconButton, Chip, Modal, CircularProgress,
+  TableHead, TableRow, Button, Chip, CircularProgress,
   TextField, Stack, Dialog, DialogTitle, DialogContent, DialogActions,
   alpha, Grid
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import CloseIcon from '@mui/icons-material/Close';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import { HandHelping, Receipt, History } from 'lucide-react';
+import { Receipt, History } from 'lucide-react';
 
 interface Contract {
   id: string;
@@ -45,7 +43,7 @@ export default function AdminPaymentApproval() {
     // We listen to contracts that are awaiting verification
     const q = query(
       collection(db, 'contracts'),
-      where('status', '==', 'AWAITING_VERIFICATION'),
+      where('status', '==', 'PENDING_APPROVAL'),
       where('paymentVerified', '==', false)
     );
 

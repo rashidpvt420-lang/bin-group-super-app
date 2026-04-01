@@ -4,8 +4,8 @@ import { db, auth, doc, getDoc } from "../lib/firebase";
 
 interface RoleContextType {
     role: string | null;
+    status: string | null;
     isAdmin: boolean;
-    godMode: boolean;
     loading: boolean;
     user: User | null;
     propertyId: string | null;
@@ -15,8 +15,8 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
     const [role, setRole] = useState<string | null>(null);
+    const [status, setStatus] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [godMode, setGodMode] = useState(false);
     const [user, setUser] = useState<User | null>(null);
     const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -43,8 +43,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     
                     if (claims.role) {
                         setRole(String(claims.role).toLowerCase());
+                        setStatus(String(claims.status || 'active').toLowerCase());
                         setIsAdmin(claims.role === 'admin' || claims.isAdmin === true);
-                        setGodMode(claims.godMode === true);
                     } else {
                         // FALLBACK TO FIRESTORE SECURED ROLE DATA
                         const snapPromise = getDoc(doc(db, "users", currentUser.uid));
@@ -53,27 +53,28 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         if (snap.exists()) {
                             const data = snap.data();
                             setRole(data.role?.toLowerCase() || 'owner');
+                            setStatus(data.status?.toLowerCase() || 'pending');
                             setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                            setGodMode(data.godMode === true);
                             setPropertyId(data.propertyId || null);
                         } else {
                             setRole('owner');
+                            setStatus('pending');
                             setIsAdmin(false);
-                            setGodMode(false);
                             setPropertyId(null);
                         }
                     }
                 } catch (err) {
                     console.error("Critical role/claim lookup failure:", err);
                     setRole('owner'); // Resilient fallback
+                    setStatus('pending');
                 } finally {
                     setLoading(false);
                     clearTimeout(safetyTimeout);
                 }
             } else {
                 setRole(null);
+                setStatus(null);
                 setIsAdmin(false);
-                setGodMode(false);
                 setPropertyId(null);
                 setLoading(false);
                 clearTimeout(safetyTimeout);
@@ -87,7 +88,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, isAdmin, godMode, loading, user, propertyId }}>
+        <RoleContext.Provider value={{ role, status, isAdmin, loading, user, propertyId }}>
             {children}
         </RoleContext.Provider>
     );

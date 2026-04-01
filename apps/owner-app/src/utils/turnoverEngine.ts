@@ -13,10 +13,10 @@ export interface TurnoverStats {
  * Turnover Engine v1.0
  * Calculates statistics for quote restoration and turnover cycles.
  */
-export async function fetchTurnoverStats(ownerId: string, godMode: boolean = false): Promise<TurnoverStats> {
+export async function fetchTurnoverStats(ownerId: string): Promise<TurnoverStats> {
     try {
         const quoteRef = collection(db, 'turnover-quotes');
-        const quoteSnap = await getDocs(godMode ? quoteRef : query(quoteRef, where('ownerId', '==', ownerId)));
+        const quoteSnap = await getDocs(query(quoteRef, where('ownerId', '==', ownerId)));
         const quotes = quoteSnap.docs.map(doc => doc.data() as any);
 
         return {

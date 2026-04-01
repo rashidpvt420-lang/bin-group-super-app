@@ -1,4 +1,3 @@
-// Admin Panel - Main Structure (React + TypeScript)
 // admin-panel/src/App.tsx
 
 import React from 'react';
@@ -34,7 +33,6 @@ import SettingsPage from './pages/settings/SettingsPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import PricingPage from './pages/pricing/PricingPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
-import GodModeDashboard from './pages/admin/GodModeDashboard';
 import PartsStorePage from './pages/procurement/PartsStorePage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
@@ -89,7 +87,6 @@ function AppContent() {
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><TechnicianMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
-                    <Route path="/god-mode" element={<ProtectedRoute adminOnly><GodModeDashboard /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
                     <Route path="/pricing" element={<ProtectedRoute adminOnly><PricingPage /></ProtectedRoute>} />
                     <Route path="/pricing/audit/:id" element={<ProtectedRoute adminOnly><PricingAuditViewer /></ProtectedRoute>} />

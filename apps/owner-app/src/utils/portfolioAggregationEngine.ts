@@ -11,19 +11,19 @@ export interface PortfolioData {
 /**
  * Aggregates all sovereign data points for a specific owner to drive the BIN-GENESIS™ analytics engine.
  */
-export async function fetchPortfolioAggregation(ownerId: string, godMode: boolean = false): Promise<PortfolioData> {
+export async function fetchPortfolioAggregation(ownerId: string): Promise<PortfolioData> {
     try {
         const propRef = collection(db, 'properties');
         const contractRef = collection(db, 'contracts');
         const ticketRef = collection(db, 'maintenanceTickets');
         const txRef = collection(db, 'transactions');
 
-        // Parallel fetching: If godMode is enabled, fetch ALL documents. Otherwise, filter by ownerId.
+        // Parallel fetching: All docs mandatory filtered by ownerId in production.
         const [propSnap, contractSnap, ticketSnap, txSnap] = await Promise.all([
-            getDocs(godMode ? propRef : query(propRef, where('ownerId', '==', ownerId))),
-            getDocs(godMode ? contractRef : query(contractRef, where('ownerId', '==', ownerId))),
-            getDocs(godMode ? ticketRef : query(ticketRef, where('ownerId', '==', ownerId))),
-            getDocs(godMode ? txRef : query(txRef, where('ownerId', '==', ownerId)))
+            getDocs(query(propRef, where('ownerId', '==', ownerId))),
+            getDocs(query(contractRef, where('ownerId', '==', ownerId))),
+            getDocs(query(ticketRef, where('ownerId', '==', ownerId))),
+            getDocs(query(txRef, where('ownerId', '==', ownerId)))
         ]);
 
         return {

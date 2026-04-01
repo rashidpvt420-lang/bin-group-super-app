@@ -77,7 +77,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
             setSnackbar({ open: true, message: `${t('onboarding.payment.manifest_prefix')} ${method}`, severity: 'success' });
         } catch (error: any) {
             console.error("Manifest Error:", error);
-            setSnackbar({ open: true, message: "Protocol Error: Handshake Rejected by Settlement Engine.", severity: 'error' });
+            setSnackbar({ open: true, message: t('onboarding.payment.initiation_error'), severity: 'error' });
         } finally {
             setIsGenerating(false);
         }
@@ -300,6 +300,20 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                     >
                                         {checkingStatus ? t('onboarding.payment.verifying') : t('onboarding.payment.verify_btn')}
                                     </Button>
+
+                                    {(paymentMethod === 'CASH' || paymentMethod === 'CHEQUE') && (
+                                        <Button 
+                                            fullWidth 
+                                            variant="outlined" 
+                                            onClick={onNext}
+                                            sx={{ 
+                                                py: 2, borderRadius: 4, borderColor: binThemeTokens.gold, 
+                                                color: binThemeTokens.gold, fontWeight: 950, mb: 2
+                                            }}
+                                        >
+                                            {t('onboarding.payment.proceed_manual_btn') || 'CONTINUE TO ACTIVATION'}
+                                        </Button>
+                                    )}
 
                                     <Button 
                                         fullWidth 

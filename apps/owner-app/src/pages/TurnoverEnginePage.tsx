@@ -49,7 +49,7 @@ interface TurnoverQuote {
 }
 
 export default function TurnoverEnginePage() {
-  const { user, godMode } = useRole();
+  const { user } = useRole();
   const [quotes, setQuotes] = useState<TurnoverQuote[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -69,17 +69,17 @@ export default function TurnoverEnginePage() {
       setLoading(true);
       
       const quoteRef = collection(db, 'turnover-quotes');
-      const quoteQuery = godMode ? query(quoteRef) : query(quoteRef, where('ownerId', '==', user.uid));
+      const quoteQuery = query(quoteRef, where('ownerId', '==', user.uid));
       const quoteSnap = await getDocs(quoteQuery);
       const fetchedQuotes = quoteSnap.docs.map(doc => ({ quoteId: doc.id, ...doc.data() } as TurnoverQuote));
       setQuotes(fetchedQuotes);
 
-      const turnoverStats = await fetchTurnoverStats(user.uid, godMode);
+      const turnoverStats = await fetchTurnoverStats(user.uid);
       setStats(turnoverStats);
 
     } catch (error) {
       console.error('Failed to fetch turnover quotes:', error);
-      setSnackbar({ open: true, message: 'Protocol Error: Failed to load turnover quotes.', severity: 'error' });
+      setSnackbar({ open: true, message: 'Failed to load turnover quotes.', severity: 'error' });
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export default function TurnoverEnginePage() {
       fetchQuotes();
       setDetailsOpen(false);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Protocol Error: Approval failed.', severity: 'error' });
+      setSnackbar({ open: true, message: 'Approval failed. Please contact support.', severity: 'error' });
     }
   };
 
@@ -103,7 +103,7 @@ export default function TurnoverEnginePage() {
       fetchQuotes();
       setDetailsOpen(false);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Protocol Error: Rejection failed.', severity: 'error' });
+      setSnackbar({ open: true, message: 'Rejection failed. Please try again.', severity: 'error' });
     }
   };
 

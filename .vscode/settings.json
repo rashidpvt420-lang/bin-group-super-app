@@ -4,7 +4,9 @@
         "**/node_modules/**",
         "**/.idea/**",
         "**/build/**",
-        "**/dist/**"
+        "**/dist/**",
+        "**/.settings/**",
+        "**/workspaceStorage/**"
     ],
     "java.configuration.updateBuildConfiguration": "disabled",
     "java.autobuild.enabled": false,

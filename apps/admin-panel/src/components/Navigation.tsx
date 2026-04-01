@@ -105,7 +105,7 @@ const Navigation = () => {
                     ))}
                     <ListItem
                         component="a"
-                        href="mailto:support@bin-group.ae"
+                        href="mailto:ceo@bin-groups.com"
                         target="_blank"
                         sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#DAA520', 0.05) }}
                     >
@@ -114,7 +114,7 @@ const Navigation = () => {
                     </ListItem>
                     <ListItem
                         component="a"
-                        href="http://localhost:3001"
+                        href="https://bin-group-57c60.web.app"
                         target="_blank"
                         sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#10b981', 0.05) }}
                     >

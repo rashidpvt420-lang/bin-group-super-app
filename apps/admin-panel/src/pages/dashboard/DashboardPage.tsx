@@ -1,6 +1,10 @@
 // admin-panel/src/pages/dashboard/DashboardPage.tsx
 import React, { useState, useEffect } from 'react';
-import { Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Skeleton } from '@mui/material';
+import { 
+  Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, 
+  TableCell, TableHead, TableRow, Skeleton, Button, Stack,
+  CircularProgress, Alert, Snackbar
+} from '@mui/material';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -28,6 +32,9 @@ const formatAED = (value: unknown): string => {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  
   const [stats, setStats] = useState({
     revenue: 0,
     properties: 0,
@@ -39,7 +46,7 @@ export default function DashboardPage() {
   });
 
   const [sovereignStats, setSovereignStats] = useState<any>(null);
-
+  const [pendingOwners, setPendingOwners] = useState<any[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
@@ -77,7 +84,14 @@ export default function DashboardPage() {
       setStats(prev => ({ ...prev, openTickets: snapshot.size }));
     }, (err) => console.error("Tickets snap failed:", err));
 
-    // 5. Revenue & Recent Transactions (Derived from 'contracts')
+    // 5. Pending Owner Approvals
+    const qPending = query(collection(db, "users"), where("status", "==", "pending_approval"));
+    const unsubPending = onSnapshot(qPending, (snapshot) => {
+      const owners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPendingOwners(owners);
+    });
+
+    // 6. Revenue & Recent Transactions (Derived from 'contracts')
     const qContracts = query(collection(db, "contracts"), orderBy("createdAt", "desc"), limit(20));
     const unsubContracts = onSnapshot(qContracts, (snapshot) => {
       let totalRevenue = 0;
@@ -90,16 +104,19 @@ export default function DashboardPage() {
         }
         
         txns.push({
-          id: doc.id.substring(0, 8),
+          id: doc.id,
+          displayId: doc.id.substring(0, 8),
           total: data.amount || 0,
           date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString() : 'Recent',
           status: data.status,
-          verified: data.paymentVerified
+          verified: data.paymentVerified,
+          ownerId: data.ownerId,
+          method: data.provider || 'OFFLINE'
         });
       });
 
       setStats(prev => ({ ...prev, revenue: totalRevenue }));
-      setRecentTransactions(txns.slice(0, 8));
+      setRecentTransactions(txns);
       
       // Dynamic Chart Data mapping
       setChartData([
@@ -119,7 +136,7 @@ export default function DashboardPage() {
       clearTimeout(safetyTimeout);
     });
 
-    // 6. Sovereign System Intelligence (Aggregated AI Metrics)
+    // 7. Sovereign System Intelligence (Aggregated AI Metrics)
     const fetchSovereignStats = async () => {
       try {
         const getStats = httpsCallable(functions, 'getSovereignSystemStats');
@@ -138,11 +155,35 @@ export default function DashboardPage() {
       unsubOwners();
       unsubBrokers();
       unsubTickets();
+      unsubPending();
       unsubContracts();
       clearTimeout(safetyTimeout);
       clearInterval(intelInterval);
     };
   }, []);
+
+  const handleApproveAccount = async (ownerId: string) => {
+    setApprovingId(ownerId);
+    try {
+      const txn = recentTransactions.find(t => t.ownerId === ownerId && !t.verified);
+      if (!txn) throw new Error("No pending contract found for this owner.");
+
+      const verifyFn = httpsCallable(functions, 'adminVerifyPayment');
+      await verifyFn({ 
+        contractId: txn.id, 
+        method: txn.method,
+        referenceId: 'OFFLINE_VERIFIED',
+        amountReceived: txn.total
+      });
+
+      setSnackbar({ open: true, message: 'Account successfully approved and unlocked.', severity: 'success' });
+    } catch (err: any) {
+      console.error("Approval failed:", err);
+      setSnackbar({ open: true, message: `Approval failed: ${err.message}`, severity: 'error' });
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
   if (loading && stats.revenue === 0 && stats.properties === 0) {
     return (
@@ -171,6 +212,50 @@ export default function DashboardPage() {
             sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 'bold', border: '1px solid #10b981' }} 
           />
         </Box>
+
+        {/* PENDING APPROVALS SECTION */}
+        {pendingOwners.length > 0 && (
+          <Paper sx={{ p: 3, bgcolor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: 4, mb: 4 }}>
+            <Typography variant="h6" sx={{ color: '#f59e0b', fontWeight: 'bold', mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <WarningAmberIcon /> Pending Owner Approvals ({pendingOwners.length})
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid rgba(245, 158, 11, 0.1)', fontWeight: 'bold' }}>Owner Email</TableCell>
+                  <TableCell sx={{ color: '#94a3b8', borderBottom: '1px solid rgba(245, 158, 11, 0.1)', fontWeight: 'bold' }}>Registration Date</TableCell>
+                  <TableCell align="right" sx={{ color: '#94a3b8', borderBottom: '1px solid rgba(245, 158, 11, 0.1)', fontWeight: 'bold' }}>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pendingOwners.map((owner) => (
+                  <TableRow key={owner.id}>
+                    <TableCell sx={{ color: '#cbd5e1', borderBottom: '1px solid rgba(245, 158, 11, 0.05)' }}>
+                      {owner.email}
+                    </TableCell>
+                    <TableCell sx={{ color: '#64748b', borderBottom: '1px solid rgba(245, 158, 11, 0.05)' }}>
+                      {owner.createdAt?.toDate ? owner.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                    </TableCell>
+                    <TableCell align="right" sx={{ borderBottom: '1px solid rgba(245, 158, 11, 0.05)' }}>
+                      <Button 
+                        variant="contained" 
+                        size="small" 
+                        disabled={approvingId === owner.id}
+                        onClick={() => handleApproveAccount(owner.id)}
+                        sx={{ 
+                          bgcolor: '#f59e0b', color: '#000', fontWeight: 'bold',
+                          '&:hover': { bgcolor: '#d97706' }
+                        }}
+                      >
+                        {approvingId === owner.id ? <CircularProgress size={20} color="inherit" /> : 'APPROVE ACCOUNT'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Paper>
+        )}
 
         {/* TOP ROW: CORE PERFORMANCE */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -342,8 +427,6 @@ export default function DashboardPage() {
           </Grid>
         </Grid>
 
-        {/* MIDDLE ROW: VELOCITY & AUDIT */}
-
         {/* MIDDLE ROW: VELOCITY & RISK */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* GROWTH CHART */}
@@ -447,7 +530,7 @@ export default function DashboardPage() {
                     {recentTransactions.map((row, index) => (
                       <TableRow key={index} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                         <TableCell sx={{ color: '#cbd5e1', borderBottom: '1px solid #1e293b', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                          {row.id}...
+                          {row.displayId}...
                         </TableCell>
                         <TableCell sx={{ color: '#64748b', borderBottom: '1px solid #1e293b' }}>
                           {row.date}
@@ -476,8 +559,6 @@ export default function DashboardPage() {
         </Grid>
 
         {/* COMPLIANCE FOOTER */}
-
-        {/* COMPLIANCE FOOTER */}
         <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 2 }}>
           <SecurityIcon sx={{ color: '#f59e0b' }} />
           <Typography variant="caption" sx={{ color: '#94a3b8' }}>
@@ -485,6 +566,16 @@ export default function DashboardPage() {
           </Typography>
         </Box>
       </Container>
+
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.severity} sx={{ width: '100%', fontWeight: 'bold' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

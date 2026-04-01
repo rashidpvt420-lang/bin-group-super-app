@@ -3,7 +3,7 @@ import { Box, Typography, Button, Container, Stack, Grid, alpha } from '@mui/mat
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
-import { ArrowRight, ShieldCheck, Globe, Building2, TrendingUp } from 'lucide-react';
+import { ArrowRight, Shield, Globe, Building, TrendingUp } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
     const navigate = useNavigate();
@@ -103,8 +103,8 @@ const LandingPage: React.FC = () => {
 
                     <Grid container spacing={4} sx={{ mt: 10, maxWidth: 1000 }}>
                         {[
-                            { icon: <ShieldCheck size={28} />, title: t('landing.feature.risk_title'), desc: t('landing.feature.risk_desc') },
-                            { icon: <Building2 size={28} />, title: t('landing.feature.maintenance_title'), desc: t('landing.feature.maintenance_desc') },
+                            { icon: <Shield size={28} />, title: t('landing.feature.risk_title'), desc: t('landing.feature.risk_desc') },
+                            { icon: <Building size={28} />, title: t('landing.feature.maintenance_title'), desc: t('landing.feature.maintenance_desc') },
                             { icon: <TrendingUp size={28} />, title: t('landing.feature.yield_title'), desc: t('landing.feature.yield_desc') }
                         ].map((item, i) => (
                             <Grid item xs={12} md={4} key={i}>
@@ -128,7 +128,7 @@ const LandingPage: React.FC = () => {
                             INSTITUTIONAL DATA TRANSPARENCY
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                            BIN-GROUP utilizes Google OAuth to authenticate authorized asset administrators. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem. Your data is never shared with third parties and is used exclusively for secure session management and cross-portal authorization.
+                            BIN-GROUP utilizes Google OAuth to authenticate authorized asset owners and institutional partners. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem. Your data is never shared with third parties and is used exclusively for secure session management and cross-portal authorization.
                         </Typography>
                     </Box>
                 </Stack>
