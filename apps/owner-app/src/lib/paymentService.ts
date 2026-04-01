@@ -71,7 +71,8 @@ export const verifyPaymentStatus = async (contractId: string): Promise<boolean> 
         const contractSnap = await getDoc(doc(db, 'contracts', contractId));
         if (contractSnap.exists()) {
             const data = contractSnap.data();
-            return data.status === 'AWAITING_ACTIVATION' && data.paymentVerified === true;
+            // Standardized: Admin approval sets status to ACTIVE and paymentVerified to true.
+            return data.status === 'ACTIVE' && data.paymentVerified === true;
         }
         return false;
     } catch (error) {

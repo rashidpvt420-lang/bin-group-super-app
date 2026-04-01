@@ -15,8 +15,6 @@ import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
 import PricingAuditViewer from './components/pricing/PricingAuditViewer';
-import PilotCommandCenter from './components/pilot/PilotCommandCenter';
-import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
 import MarketIntelligenceDashboard from './components/market/MarketIntelligenceDashboard';
 import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';

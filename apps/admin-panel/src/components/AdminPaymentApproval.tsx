@@ -43,7 +43,7 @@ export default function AdminPaymentApproval() {
     // We listen to contracts that are awaiting verification
     const q = query(
       collection(db, 'contracts'),
-      where('status', '==', 'PENDING_APPROVAL'),
+      where('status', '==', 'pending_approval'),
       where('paymentVerified', '==', false)
     );
 
@@ -86,7 +86,7 @@ export default function AdminPaymentApproval() {
         receivedAt: new Date().toISOString()
       });
 
-      console.log("Verification Success:", result);
+      
       alert("Payment Settled. Contract activated for property onboarding.");
     } catch (error: any) {
       console.error("Verification failed:", error);

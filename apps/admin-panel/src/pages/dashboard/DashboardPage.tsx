@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Container, Grid, Paper, Typography, Box, Chip, Table, TableBody, 
-  TableCell, TableHead, TableRow, Skeleton, Button, Stack,
+  TableCell, TableHead, TableRow, Skeleton, Button,
   CircularProgress, Alert, Snackbar
 } from '@mui/material';
 import {
@@ -111,6 +111,7 @@ export default function DashboardPage() {
           status: data.status,
           verified: data.paymentVerified,
           ownerId: data.ownerId,
+          paymentId: data.paymentId || '',
           method: data.provider || 'OFFLINE'
         });
       });
@@ -171,6 +172,7 @@ export default function DashboardPage() {
       const verifyFn = httpsCallable(functions, 'adminVerifyPayment');
       await verifyFn({ 
         contractId: txn.id, 
+        paymentId: txn.paymentId,
         method: txn.method,
         referenceId: 'OFFLINE_VERIFIED',
         amountReceived: txn.total
@@ -231,7 +233,12 @@ export default function DashboardPage() {
                 {pendingOwners.map((owner) => (
                   <TableRow key={owner.id}>
                     <TableCell sx={{ color: '#cbd5e1', borderBottom: '1px solid rgba(245, 158, 11, 0.05)' }}>
-                      {owner.email}
+                      <Typography variant="body2" fontWeight="900" sx={{ color: '#fff' }}>
+                        {owner.displayName || 'Unnamed Owner'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                        {owner.email}
+                      </Typography>
                     </TableCell>
                     <TableCell sx={{ color: '#64748b', borderBottom: '1px solid rgba(245, 158, 11, 0.05)' }}>
                       {owner.createdAt?.toDate ? owner.createdAt.toDate().toLocaleDateString() : 'Recent'}

@@ -18,7 +18,7 @@ import type { Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.firebaseapp.com",
+    authDomain: "bin-groups.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
     messagingSenderId: "123413252227",
@@ -36,24 +36,41 @@ const _db: Firestore = getFirestore(_app);
 if (!_db) {
     console.error("🚨 [BIN-INIT] FATAL: Firestore instance is undefined after getFirestore()");
 } else {
-    console.log("💎 [BIN-INIT] Firestore instance secured.");
+console.log("💎 [BIN-INIT] Firestore instance secured.");
 }
 
 // Global exposure for debugging (Production safe as it only attaches to window)
 if (typeof window !== 'undefined') {
+    console.log("💎 [BIN-INIT] Setting window globals...");
     (window as any)._firestoreDb = _db;
     (window as any)._firebaseApp = _app;
+    console.log("💎 [BIN-INIT] Window globals set.");
 }
 
+console.log("💎 [BIN-INIT] Exporting app/db...");
 export const app = _app;
 export const db = _db;
-export const auth: Auth = getAuth(_app);
-export const storage: FirebaseStorage = getStorage(_app);
-export const functions: Functions = getFunctions(_app);
 
+console.log("💎 [BIN-INIT] Initializing Auth...");
+export const auth: Auth = getAuth(_app);
+console.log("💎 [BIN-INIT] Auth secured.");
+
+console.log("💎 [BIN-INIT] Initializing Storage...");
+export const storage: FirebaseStorage = getStorage(_app);
+console.log("💎 [BIN-INIT] Storage secured.");
+
+console.log("💎 [BIN-INIT] Initializing Functions...");
+export const functions: Functions = getFunctions(_app);
+console.log("💎 [BIN-INIT] Functions secured.");
+
+console.log("💎 [BIN-INIT] Starting persistence check...");
 // 🌐 Offline Persistence
 if (typeof window !== 'undefined') {
-    enableIndexedDbPersistence(_db).catch((err) => {
+    console.log("💎 [BIN-INIT] Enabling IndexedDB Persistence...");
+    enableIndexedDbPersistence(_db).then(() => {
+        console.log("💎 [BIN-INIT] Persistence enabled.");
+    }).catch((err) => {
+        console.log("💎 [BIN-INIT] Persistence skipped/error:", err.code);
         if (err.code === 'failed-precondition') {
             console.warn('⚠️ [FIREBASE] Persistence locked (multiple tabs)');
         } else if (err.code === 'unimplemented') {
@@ -61,6 +78,7 @@ if (typeof window !== 'undefined') {
         }
     });
 }
+console.log("💎 [BIN-INIT] Script evaluation reaching emulator section...");
 
 // ✅ Emulator Mesh
 const shouldUseEmulator = typeof window !== 'undefined' && window.location.search.includes('useEmulator=true');
@@ -79,7 +97,17 @@ if (typeof window !== 'undefined' &&
     }
 }
 
-export const analytics: Analytics | null = typeof window !== 'undefined' ? getAnalytics(_app) : null;
+// 📊 Analytics (Resilient)
+let _analytics: Analytics | null = null;
+if (typeof window !== 'undefined') {
+    try {
+        _analytics = getAnalytics(_app);
+        console.log("💎 [BIN-INIT] Analytics secured.");
+    } catch (err) {
+        console.warn("⚠️ [BIN-INIT] Analytics initialization skipped (Safe).");
+    }
+}
+export const analytics = _analytics;
 
 export { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc };
 

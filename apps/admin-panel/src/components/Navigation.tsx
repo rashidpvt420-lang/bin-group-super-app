@@ -114,7 +114,7 @@ const Navigation = () => {
                     </ListItem>
                     <ListItem
                         component="a"
-                        href="https://bin-group-57c60.web.app"
+                        href="https://bin-groups.com"
                         target="_blank"
                         sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#10b981', 0.05) }}
                     >

@@ -167,7 +167,7 @@ export default function LiveMapPage() {
           </div>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>
-              BIN-GOD™ <Box component="span" sx={{ color: '#10b981' }}>MISSION CONTROL</Box>
+              BIN-GROUP <Box component="span" sx={{ color: '#10b981' }}>MISSION CONTROL</Box>
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold' }}>VERSION 3.0 • DUBAI-HQ PORTFOLIO</Typography>
           </Box>
@@ -367,7 +367,7 @@ export default function LiveMapPage() {
 
           </Box>
 
-          {/* Legend: God-Mode Indicators */}
+          {/* Dynamic Map Indicators */}
           <Paper sx={{
             position: 'absolute', bottom: 32, left: 32, right: 32, p: 2.5,
             bgcolor: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,

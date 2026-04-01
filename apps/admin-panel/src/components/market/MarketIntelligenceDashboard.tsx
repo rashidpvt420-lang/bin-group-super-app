@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import { 
-  Globe, TrendingUp, Target, AlertCircle, Map, 
-  ChevronRight, BarChart3, Database, Search,
-  LucideIcon
+  Globe, Target, Map, 
+  ChevronRight, Database, Search
 } from 'lucide-react';
 
 // Use a cast to any for the component to bypass complex type mismatches between React versions

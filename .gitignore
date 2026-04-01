@@ -73,6 +73,18 @@ build/
 dist/
 apps/*/build/
 apps/*/dist/
+releases/
+DRAG_THIS_FOLDER_TO_NETLIFY/
+
+# IDE & Metadata
+.gradle/
+.idea/
+*.iml
+local.properties
+.DS_Store
+captures/
+*.jks
+*.keystore
 
 # Hosting target (production artifacts)
 hosting/public/

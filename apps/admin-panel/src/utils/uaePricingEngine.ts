@@ -98,7 +98,7 @@ export interface IntegratedIntelligenceResponse {
 }
 
 export const calculateUAEValuation = async (inputs: any): Promise<IntegratedIntelligenceResponse> => {
-    console.log("🚀 BIN-GROUP [DECISION ENGINE v5.0-STABLE]:", inputs);
+    
 
     // ── 1. Asset Intelligence Layer ──────────────────────────────────────────
     const communityMultipliers: Record<string, number> = {

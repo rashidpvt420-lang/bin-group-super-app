@@ -28,7 +28,6 @@ import {
     Building2, 
     User,
     Calendar,
-    ArrowRight,
     ShieldCheck,
     Gem
 } from 'lucide-react';

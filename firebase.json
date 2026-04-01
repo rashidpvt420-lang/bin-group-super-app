@@ -21,44 +21,47 @@
       ]
     }
   ],
-  "hosting": {
-    "public": "hosting/public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "/login",
-        "destination": "/index.html"
-      },
-      {
-        "source": "/admin/**",
-        "destination": "/admin/index.html"
-      },
-      {
-        "source": "/support",
-        "destination": "/support.html"
-      },
-      {
-        "source": "/privacy-policy",
-        "destination": "/privacy-policy.html"
-      },
-      {
-        "source": "/terms-of-service",
-        "destination": "/terms-of-service.html"
-      },
-      {
-        "source": "/",
-        "destination": "/site.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "target": "owner-app",
+      "public": "hosting/public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/login",
+          "destination": "/index.html"
+        },
+        {
+          "source": "/admin/**",
+          "destination": "/admin/index.html"
+        },
+        {
+          "source": "/support",
+          "destination": "/support.html"
+        },
+        {
+          "source": "/privacy-policy",
+          "destination": "/privacy-policy.html"
+        },
+        {
+          "source": "/terms-of-service",
+          "destination": "/terms-of-service.html"
+        },
+        {
+          "source": "/",
+          "destination": "/site.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   },

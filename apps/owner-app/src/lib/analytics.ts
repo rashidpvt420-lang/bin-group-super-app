@@ -19,7 +19,7 @@ export const trackEvent = async (metric: string, purpose: string, metadata: any 
                 viewport: `${window.innerWidth}x${window.innerHeight}`
             }
         });
-        console.log(`[Telemetry] ${metric} tracked.`);
+        
     } catch (e) {
         console.error("Telemetry failure:", e);
     }

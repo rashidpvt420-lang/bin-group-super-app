@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 
 // Import Firestore from sovereign shared lib
-import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 
 const Icon = ({ icon: IconComponent, size = 16, className = "" }: { icon: any, size?: number, className?: string }) => (
   <IconComponent size={size} className={className} />

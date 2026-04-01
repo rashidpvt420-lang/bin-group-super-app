@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box, Grid, Card, Typography, Stack,
-    Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, Paper, Chip, Alert,
+    Chip, Alert,
     AlertTitle, LinearProgress, Divider, IconButton
 } from '@mui/material';
 import ShieldIcon from '@mui/icons-material/Shield';

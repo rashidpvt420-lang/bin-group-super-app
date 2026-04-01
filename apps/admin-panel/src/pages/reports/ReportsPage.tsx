@@ -13,7 +13,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   FormControl,
@@ -21,7 +20,7 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../services/api';
 
 interface ReportData {
@@ -147,7 +146,7 @@ export default function ReportsPage() {
         <>
           {/* Summary Cards */}
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography color="textSecondary" gutterBottom>
@@ -157,7 +156,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography color="textSecondary" gutterBottom>
@@ -167,7 +166,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography color="textSecondary" gutterBottom>
@@ -179,13 +178,23 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
                   <Typography color="textSecondary" gutterBottom>
                     Total Tickets
                   </Typography>
                   <Typography variant="h5">{totalTickets}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card>
+                <CardContent sx={{ textAlign: 'center' }}>
+                  <Typography color="textSecondary" gutterBottom>
+                    Completed Jobs
+                  </Typography>
+                  <Typography variant="h5" color="secondary">{totalCompleted}</Typography>
                 </CardContent>
               </Card>
             </Grid>

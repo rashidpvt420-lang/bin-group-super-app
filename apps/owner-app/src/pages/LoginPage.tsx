@@ -27,14 +27,21 @@ const LoginPage: React.FC = () => {
     React.useEffect(() => {
         const checkRedirect = async () => {
             try {
+                setLoading(true);
+                setRedirectHandling(true);
                 const result = await getRedirectResult(auth);
                 if (result) {
-                    setRedirectHandling(true);
-                    handleAuthResult(result);
+                    
+                    await handleAuthResult(result);
+                } else {
+                    setRedirectHandling(false);
+                    setLoading(false);
                 }
             } catch (err: any) {
                 console.error("Redirect Auth Error:", err);
                 setError("Institutional Redirect Failed: " + (err.message || "Credential rejection."));
+                setRedirectHandling(false);
+                setLoading(false);
             }
         };
         checkRedirect();
@@ -48,7 +55,7 @@ const LoginPage: React.FC = () => {
         
         // If profile doesn't exist (e.g. first-time non-admin user), create a default owner profile
         if (!snap.exists()) {
-            console.log("[IAM] Creating default owner profile for:", email);
+            
             const newProfile = {
                 uid,
                 email,
@@ -116,7 +123,7 @@ const LoginPage: React.FC = () => {
                 const data = snap.data();
                 const role = data.role;
                 
-                if (data.isAdmin || role === 'owner') {
+                if (data.isAdmin || role === 'owner' || role === 'ceo') {
                     navigate('/dashboard');
                 } else {
                     switch(role) {
@@ -145,6 +152,24 @@ const LoginPage: React.FC = () => {
             setLoading(false);
         }
     };
+
+    if (redirectHandling) {
+        return (
+            <Box sx={{ 
+                height: '100vh', 
+                bgcolor: '#000', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+            }}>
+                <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold, mb: 4 }} />
+                <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
+                    SYNCHRONIZING SOVEREIGN CREDENTIALS...
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ 

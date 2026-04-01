@@ -2,7 +2,7 @@
 import { db, collection, addDoc, getDocs, query, where, serverTimestamp } from '../lib/firebase';
 
 async function testBrokerCSVReconciliation() {
-    console.log("[AUDIT] Starting Broker CSV Import Verification...");
+    
     
     // 1. Mock Valid Data
     const row = {
@@ -20,7 +20,7 @@ async function testBrokerCSVReconciliation() {
             createdAt: serverTimestamp(),
             source: 'AUDIT_PROOF_TEST'
         });
-        console.log(`[PASS] Valid CSV Row Written to intake_submissions. ID: ${docRef.id}`);
+        
     } catch (err) {
         console.error("[FAIL] Valid CSV rejection. Possible security rule mismatch.", err);
     }
@@ -33,7 +33,7 @@ async function testBrokerCSVReconciliation() {
         });
         console.error("[FAIL] Malformed CSV ALLOWED. Critical security rule gap detected.");
     } catch (err) {
-        console.log("[PASS] Malformed Status 'ACTIVE' correctly blocked by firestore.rules.");
+        
     }
 }
 

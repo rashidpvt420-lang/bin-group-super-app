@@ -124,11 +124,11 @@ const LandingPage: React.FC = () => {
 
                     {/* OAuth Compliance Section: Data Transparency */}
                     <Box sx={{ mt: 8, p: 4, bgcolor: 'rgba(198,167,94,0.03)', borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, maxWidth: 800 }}>
-                        <Typography variant="h6" color={binThemeTokens.gold} fontWeight="900" gutterBottom>
-                            INSTITUTIONAL DATA TRANSPARENCY
+                        <Typography variant="h6" color={binThemeTokens.gold} fontWeight="900" gutterBottom sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            {t('landing.transparency_title')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                            BIN-GROUP utilizes Google OAuth to authenticate authorized asset owners and institutional partners. We request access to your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem. Your data is never shared with third parties and is used exclusively for secure session management and cross-portal authorization.
+                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6, textAlign: isRTL ? 'right' : 'left' }}>
+                            {t('landing.transparency_desc')}
                         </Typography>
                     </Box>
                 </Stack>
@@ -139,13 +139,13 @@ const LandingPage: React.FC = () => {
                 <Container maxWidth="md">
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} justifyContent="center" alignItems="center" sx={{ mb: 2 }}>
                         {[
-                            { label: 'Home', href: '/' },
-                            { label: 'Privacy Policy', href: '/privacy-policy' },
-                            { label: 'Terms of Service', href: '/terms-of-service' },
-                            { label: 'Support', href: '/support' }
+                            { label: t('footer.home'), href: '/' },
+                            { label: t('footer.privacy'), href: '/privacy-policy' },
+                            { label: t('footer.terms'), href: '/terms-of-service' },
+                            { label: t('footer.support'), href: '/support' }
                         ].map((link) => (
                             <Typography 
-                                key={link.label}
+                                key={link.href}
                                 component="a" 
                                 href={link.href}
                                 sx={{ 
@@ -160,7 +160,7 @@ const LandingPage: React.FC = () => {
                         ))}
                     </Stack>
                     <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900, display: 'block', mt: 1 }}>
-                        © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | DUBAI, UAE
+                        {t('footer.copyright')}
                     </Typography>
                 </Container>
             </Box>

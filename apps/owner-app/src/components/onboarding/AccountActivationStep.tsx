@@ -139,7 +139,7 @@ const AccountActivationStep: React.FC = () => {
 
             // 2. Update Contract
             const contractDocRef = doc(db, 'contracts', contractId);
-            const finalStatus = isVerified ? 'ACTIVE' : 'PENDING_APPROVAL';
+            const finalStatus = isVerified ? 'ACTIVE' : 'pending_approval';
             
             batch.update(contractDocRef, {
                 propertyIds,
@@ -152,6 +152,7 @@ const AccountActivationStep: React.FC = () => {
                 planType: selectedPlan?.tier || 'institutional',
                 activationStatus: finalStatus,
                 depositPaid: isVerified,
+                paymentVerified: isVerified, // Added explicitly for paymentService consistency
                 depositAmount,
                 annualContractValue: annualTotal,
                 selectedAddOns: selectedAddOns || [],
@@ -191,6 +192,7 @@ const AccountActivationStep: React.FC = () => {
             const userRef = doc(db, 'users', ownerId);
             batch.set(userRef, {
                 email: formData.email,
+                displayName: formData.name,
                 role: 'owner',
                 status: finalStatus,
                 createdAt: serverTimestamp()
@@ -199,11 +201,28 @@ const AccountActivationStep: React.FC = () => {
             // COMMIT BATCH
             await batch.commit();
 
-            setTimeout(() => {
-                setIsActivating(false);
-                reset();
-                navigate('/dashboard');
-            }, 3000);
+            if (isVerified) {
+                setTimeout(() => {
+                    setIsActivating(false);
+                    reset();
+                    navigate('/dashboard');
+                }, 3000);
+            } else {
+                // For offline methods, stay on page but show success/holding state
+                setTimeout(() => {
+                    setIsActivating(false);
+                    setSnackbar({ 
+                        open: true, 
+                        message: "Your payment method has been recorded. An admin will contact you shortly to collect payment and verify your account.", 
+                        severity: 'success' 
+                    });
+                    // After a short delay, move them to dashboard where ProtectedRoute will catch the lock
+                    setTimeout(() => {
+                        reset();
+                        navigate('/dashboard');
+                    }, 5000);
+                }, 3000);
+            }
 
         } catch (error: any) {
             console.error("Activation failed:", error);

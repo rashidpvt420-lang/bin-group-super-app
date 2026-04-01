@@ -68,7 +68,7 @@ export default function DashboardPage() {
                     const ctx = getHistoricalContextForProperty(portfolio, prop.id);
                     if (ctx) {
                         try {
-                            console.log(`[AI-STRATEGY] Requesting Vertex AI guidance for ${prop.id}...`);
+                            
                             const result = await getAiGuidance({ context: ctx });
                             intelMap[prop.id] = result.data as MissionGuidancePayload;
                         } catch (aiError) {

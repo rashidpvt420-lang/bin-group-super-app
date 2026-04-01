@@ -63,7 +63,11 @@ service cloud.firestore {
                       isAdmin() ||
                       (isOwner() && resource.data.ownerId == uid())
                     );
-      allow create: if isAuth() && isActive(); // New owner checkout flow
+      // HARDENING: Only Owners can create properties for themselves, or Admins.
+      allow create: if isAuth() && isActive() && (
+                      isAdmin() ||
+                      (isOwner() && request.resource.data.ownerId == uid())
+                    );
       allow update: if isAuth() && isActive() && (
                       isAdmin() ||
                       (isOwner() && resource.data.ownerId == uid())
@@ -106,7 +110,12 @@ service cloud.firestore {
                     (isTechnician() && resource.data.technicianAssigned == uid()) ||
                     (isTenant() && resource.data.tenantId == uid())
                   );
-      allow create: if isAuth() && isActive(); // any user can open a work order
+      // HARDENING: Must own the property or be the tenant of the unit to create
+      allow create: if isAuth() && isActive() && (
+                      isAdmin() ||
+                      (isOwner() && get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId == uid()) ||
+                      (isTenant() && get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)/units/$(request.resource.data.unitId)).data.tenantId == uid())
+                    );
       allow update: if isAuth() && isActive() && (
                       isAdmin() ||
                       (isTechnician() && resource.data.technicianAssigned == uid()) ||

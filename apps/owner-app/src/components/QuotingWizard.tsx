@@ -476,7 +476,7 @@ export default function QuotingWizard({ prefillSqft, prefillType, onPlanSelected
                 timestamp: serverTimestamp(),
             });
 
-            console.log('Contract activated and saved to Firebase!');
+            
             // Optionally, navigate or show a success message
         } catch (error) {
             console.error('Error activating contract:', error);

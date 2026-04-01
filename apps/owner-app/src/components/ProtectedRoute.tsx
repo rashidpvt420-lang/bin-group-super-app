@@ -40,14 +40,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
 
     // [SOVEREIGN ENFORCEMENT] Lock account if status is pending
     // Bypass lock for admins
-    if ((status === 'pending' || status === 'PENDING_APPROVAL') && !isAdmin && role === 'owner') {
+    const currentStatus = (status || '').toLowerCase();
+    if ((currentStatus === 'pending' || currentStatus === 'pending_approval') && !isAdmin && role === 'owner') {
         // If they are in onboarding, let them continue?
         // Actually, if they haven't finished onboarding, status is 'pending' in users collection.
         // But once they finish and pay, status is still 'pending' until admin verifies.
         // So we should only lock them out of the DASHBOARD, but allow ONBOARDING.
         
         if (!location.pathname.startsWith('/onboarding')) {
-            const isPendingApproval = status === 'PENDING_APPROVAL';
+            const isPendingApproval = status === 'pending_approval';
 
             return (
                 <Box sx={{ 
@@ -107,7 +108,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
         }
     }
 
-    const isAccessAllowed = !allowedRoles || (role && allowedRoles.includes(role.toLowerCase())) || isAdmin;
+    const normalizedRole = (role || '').toLowerCase();
+    const isAccessAllowed = !allowedRoles || 
+        (role && (
+            allowedRoles.includes(normalizedRole) || 
+            (normalizedRole === 'ceo' && allowedRoles.includes('owner'))
+        )) || 
+        isAdmin;
 
     if (!isAccessAllowed) {
         return (

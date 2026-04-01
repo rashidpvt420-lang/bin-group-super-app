@@ -28,7 +28,7 @@ import {
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.firebaseapp.com",
+    authDomain: "bin-groups.com",
     databaseURL: "https://bin-group-57c60-default-rtdb.firebaseio.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
@@ -37,13 +37,16 @@ const firebaseConfig = {
     measurementId: "G-63X8EKNMF5"
 };
 
+// 💎 [BIN-BOOT] Local Firebase Evaluation Started
 // 💎 Local App Singleton
+// Singleton initialized on default app
 const _app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const _db = getFirestore(_app);
 
+// [STABILITY] Removing redundant persistence call that deadlocks evaluated bundle. 
+// Persistence is now managed exclusively by @bin/shared to ensure atomic initialization.
 if (typeof window !== 'undefined') {
     (window as any)._firestoreDb = _db;
-    enableIndexedDbPersistence(_db).catch(() => {});
 }
 
 export const app = _app;
@@ -61,7 +64,7 @@ if (typeof window !== 'undefined') {
         window.location.hostname.endsWith('.local');
 
     // [RESILIENCY] App Check bypassed for production stability verification
-    console.log('[BIN-SECURITY] Protocol bypassing AppCheck for production stabilization.');
+    
 }
 
 // ─── FireStore Primitives ────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, Box, TextField, 
-    InputAdornment, IconButton, Card, Grid
+    InputAdornment, IconButton, Grid
 } from '@mui/material';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';

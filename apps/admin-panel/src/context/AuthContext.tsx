@@ -40,22 +40,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
 
                     if (userDoc.exists()) {
-                        setUser({ ...usr, ...userDoc.data() });
+                        const data = userDoc.data();
+                        if (data.role === 'admin' || data.isAdmin === true) {
+                            setUser({ ...usr, ...data });
+                            setIsAuthenticated(true);
+                        } else {
+                            console.warn("[AUTH] Denying access: Not an admin", usr.email);
+                            await auth.signOut();
+                            setIsAuthenticated(false);
+                            setUser(null);
+                        }
                     } else {
-                        // FALLBACK: User exists in Auth but no profile in Firestore
-                        console.log("[AUTH] Creating minimal admin profile for:", usr.email);
-                        const fallbackProfile = { 
-                            uid: usr.uid, 
-                            email: usr.email, 
-                            role: 'admin', 
-                            isAdmin: true, 
-                            status: 'active' 
-                        };
-                        setUser({ ...usr, ...fallbackProfile });
-                        // Silently attempt to create it
-                        setDoc(doc(db, 'users', usr.uid), fallbackProfile, { merge: true }).catch(() => {});
+                        // STRICT: No profile means no access
+                        console.warn("[AUTH] Denying access: No profile found for", usr.email);
+                        await auth.signOut();
+                        setIsAuthenticated(false);
+                        setUser(null);
                     }
-                    setIsAuthenticated(true);
                 } catch (error) {
                     console.error('Error fetching user metadata:', error);
                     setUser(usr); // Resilient fallback to Auth user

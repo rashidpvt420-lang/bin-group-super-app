@@ -1,5 +1,11 @@
+console.log("⚡ [SHARED-LOAD] Starting evaluation...");
 export * from './lib/firebase';
+console.log("⚡ [SHARED-LOAD] Exported Firebase.");
 export * from './utils/uaePricingEngine';
+console.log("⚡ [SHARED-LOAD] Exported Pricing Engine.");
 export * from './utils/RateLimiter';
+console.log("⚡ [SHARED-LOAD] Exported Rate Limiter.");
 export * from './theme/binGroupTheme';
+console.log("⚡ [SHARED-LOAD] Exported Theme Tokens.");
 export * from './context/LanguageContext';
+console.log("⚡ [SHARED-LOAD] Evaluation Complete.");
