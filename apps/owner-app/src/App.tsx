@@ -88,11 +88,31 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const { loading: roleLoading } = useRole();
+  const { loading: roleLoading, error: roleError, user } = useRole();
 
   // [STRICT BLOCK]
   if (roleLoading) {
     return <LoadingScreen />;
+  }
+
+  if (roleError && !user) {
+    return (
+      <Box sx={{ 
+        height: '100vh', 
+        width: '100vw', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        bgcolor: '#000',
+        p: 4,
+        textAlign: 'center'
+      }}>
+        <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>IDENTITY FAULT</Typography>
+        <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{roleError}</Typography>
+        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>RELOAD SYSTEM</Button>
+      </Box>
+    );
   }
 
   return (

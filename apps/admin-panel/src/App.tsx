@@ -3,10 +3,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import CircularProgress from '@mui/material/CircularProgress';
+import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -50,7 +47,7 @@ import { adminTheme } from './theme/adminTheme';
 
 // Removed legacy primary theme definition to use centralized adminTheme.ts
 function AppContent() {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, error } = useAuth();
     const [safetyReleased, setSafetyReleased] = React.useState(false);
 
     React.useEffect(() => {
@@ -65,8 +62,21 @@ function AppContent() {
 
     if (loading && !safetyReleased) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617' }}>
-                <CircularProgress sx={{ color: '#DAA520' }} />
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4 }}>
+                <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
+                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2 }}>
+                    INITIALIZING SOVEREIGN ADMIN TERMINAL...
+                </Typography>
+            </Box>
+        );
+    }
+
+    if (error && !isAuthenticated) {
+        return (
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>SYSTEM INITIALIZATION FAULT</Typography>
+                <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{error}</Typography>
+                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>RELOAD SYSTEM</Button>
             </Box>
         );
     }

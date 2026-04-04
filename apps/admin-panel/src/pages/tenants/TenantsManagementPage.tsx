@@ -21,11 +21,10 @@ import {
   IconButton,
   Tooltip,
   LinearProgress,
-  Alert,
   Grid,
 } from '@mui/material';
 import { db, auth } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, UploadFile as UploadIcon } from '@mui/icons-material';
 import Papa from 'papaparse';
 import axios from 'axios';
@@ -403,7 +402,9 @@ export default function TenantsManagementPage() {
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddTenant} sx={{ borderRadius: 100 }}>Create Profile</Button>
+          <Button variant="contained" onClick={handleAddTenant} disabled={submitting} sx={{ borderRadius: 100 }}>
+            {submitting ? 'Creating...' : 'Create Profile'}
+          </Button>
         </DialogActions>
       </Dialog>
 

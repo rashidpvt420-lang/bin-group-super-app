@@ -9,7 +9,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../lib/firebase';
+import { db, auth, doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, deleteDoc } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
 
@@ -57,30 +57,8 @@ const LoginPage: React.FC = () => {
             const userDocRef = doc(db, "users", uid);
             let snap = await getDoc(userDocRef);
             
-            // [IAM] UID-First Migration Protocol
-            if (!snap.exists() && email) {
-                console.info("🔍 [IAM] Probing for legacy profiles for:", email);
-                const q = query(collection(db, "users"), where("email", "==", email));
-                const querySnap = await getDocs(q);
-
-                if (!querySnap.empty) {
-                    const legacyDoc = querySnap.docs[0];
-                    if (legacyDoc.id !== uid) {
-                        console.info("⚡ [IAM] Migrating pre-provisioned data from", legacyDoc.id, "to", uid);
-                        const legacyData = legacyDoc.data();
-                        
-                        await setDoc(userDocRef, {
-                            ...legacyData,
-                            uid: uid,
-                            migratedAt: serverTimestamp(),
-                            migrationSource: legacyDoc.id
-                        }, { merge: true });
-
-                        await deleteDoc(legacyDoc.ref);
-                        snap = await getDoc(userDocRef);
-                    }
-                }
-            }
+            // [IAM] Strict Identity Verification
+            // Note: Migration logic removed due to Security Rule constraints on collection queries.
 
             if (!snap.exists()) {
                 const newProfile = {

@@ -19,9 +19,9 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
-    // Live role lookup (cached by Firestore SDK after first read per session)
+    // Live role lookup (resilient to missing documents)
     function role() {
-      return get(/databases/$(database)/documents/users/$(uid())).data.role;
+      return get(/databases/$(database)/documents/users/$(uid())).get('role', 'pending');
     }
 
     function isAdmin()      { return isAuth() && (role() == 'admin' || role() == 'ADMIN'); }
@@ -31,11 +31,12 @@ service cloud.firestore {
 
     // Check if a user is NOT suspended
     function isActive() {
-      return get(/databases/$(database)/documents/users/$(uid())).data.isSuspended != true;
+      return !exists(/databases/$(database)/documents/users/$(uid())) || 
+             get(/databases/$(database)/documents/users/$(uid())).get('isSuspended', false) != true;
     }
 
     // ─── 1. USERS & PROFILES ────────────────────────────────────────────────
-    // Admins: full access. Users: read/write own profile only.
+    // Baseline: Authenticated users can ALWAYS read their own profile to resolve their role.
     match /users/{userId} {
       allow read:   if isAuth() && (uid() == userId || isAdmin());
       // Users can only create their own profile. admin/godMode MUST be false by default if client-side created.
@@ -57,13 +58,11 @@ service cloud.firestore {
     }
 
     // ─── 2. PROPERTIES ──────────────────────────────────────────────────────
-    // Owners see only THEIR properties. Techs/Tenants: NO property-level access.
     match /properties/{propertyId} {
       allow read:   if isAuth() && isActive() && (
                       isAdmin() ||
                       (isOwner() && resource.data.ownerId == uid())
                     );
-      // HARDENING: Only Owners can create properties for themselves, or Admins.
       allow create: if isAuth() && isActive() && (
                       isAdmin() ||
                       (isOwner() && request.resource.data.ownerId == uid())
@@ -74,7 +73,6 @@ service cloud.firestore {
                     );
       allow delete: if false;
 
-      // Units — owners see their own, techs see assigned, tenants see own unit only
       match /units/{unitId} {
         allow read: if isAuth() && isActive() && (
                       isAdmin() ||
@@ -87,7 +85,6 @@ service cloud.firestore {
                        (isOwner() && get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == uid())
                      );
 
-        // Assets — owners and techs can see, tenants cannot
         match /assets/{assetId} {
           allow read: if isAuth() && isActive() && (
                         isAdmin() || isOwner() || isTechnician()
@@ -102,15 +99,13 @@ service cloud.firestore {
     }
 
     // ─── 3. WORK ORDERS (Tickets / Jobs) ────────────────────────────────────
-    // Strict isolation: tenants see only their tickets, techs see only assigned.
     match /workOrders/{workOrderId} {
       allow read: if isAuth() && isActive() && (
                     isAdmin() ||
-                    isOwner() ||   // owner can see all tickets in their buildings
+                    isOwner() ||
                     (isTechnician() && resource.data.technicianAssigned == uid()) ||
                     (isTenant() && resource.data.tenantId == uid())
                   );
-      // HARDENING: Must own the property or be the tenant of the unit to create
       allow create: if isAuth() && isActive() && (
                       isAdmin() ||
                       (isOwner() && get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId == uid()) ||
@@ -125,7 +120,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Legacy tickets collection — same rules as workOrders
     match /tickets/{ticketId} {
       allow read: if isAuth() && isActive() && (
                     isAdmin() ||
@@ -133,7 +127,6 @@ service cloud.firestore {
                     (isTechnician() && resource.data.technicianAssigned == uid()) ||
                     (isTenant() && (resource.data.tenantId == uid() || resource.data.userId == uid()))
                   );
-      // HARDENING: Ensure client provides their own UID on creation
       allow create: if isAuth() && isActive() && (
                       isAdmin() ||
                       (request.resource.data.tenantId == uid() || request.resource.data.userId == uid())
@@ -141,11 +134,9 @@ service cloud.firestore {
       allow update: if isAuth() && isActive() && (
                       isAdmin() ||
                       (isTechnician() && (
-                        // If completing, MUST have evidence
                         (request.resource.data.status == 'COMPLETED' && 
                          resource.data.hasBeforePhoto == true && 
                          resource.data.hasAfterPhoto == true) ||
-                        // Otherwise allow status changes or notes updates
                         (request.resource.data.status != 'COMPLETED')
                       )) ||
                       (isTenant() && (resource.data.tenantId == uid() || resource.data.userId == uid())) ||
@@ -154,7 +145,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Sovereign maintenanceTickets collection
     match /maintenanceTickets/{ticketId} {
       allow read: if isAuth() && isActive() && (
                     isAdmin() ||
@@ -184,13 +174,11 @@ service cloud.firestore {
     }
 
     // ─── 5. CONTRACTS ────────────────────────────────────────────────────────
-    // Owners see only their contracts. Finance data isolated from Tenants/Techs.
     match /contracts/{contractId} {
       allow read:   if isAuth() && isActive() && (
                       isAdmin() ||
                       (isOwner() && resource.data.ownerId == uid())
                     );
-      // HARDENING: Initial contracts must be UNVERIFIED. Only backend can verify.
       allow create: if isAuth() && isActive() && (
                       isAdmin() || (
                         isOwner() && 
@@ -198,7 +186,6 @@ service cloud.firestore {
                         request.resource.data.paymentVerified == false
                       )
                     );
-      // HARDENING: Clients CANNOT toggle paymentVerified or status away from unverified/pending
       allow update: if isAuth() && isActive() && (
                       isAdmin() || (
                         isOwner() && 
@@ -211,20 +198,18 @@ service cloud.firestore {
     }
 
     // ─── 6. BILLING EVENTS ───────────────────────────────────────────────────
-    // Read-only for owners. Only Cloud Functions (backend) can write.
     match /billingEvents/{billingId} {
       allow read: if isAuth() && isActive() && (
                     isAdmin() ||
                     (isOwner() && get(/databases/$(database)/documents/contracts/$(resource.data.contractId)).data.ownerId == uid())
                   );
-      allow write: if false; // Backend triggers only
+      allow write: if false;
     }
 
     // ─── 7. PROFITABILITY / FINANCIAL LEDGERS ───────────────────────────────
-    // Admin-only read. Never writable by clients.
     match /profitability/{docId} {
       allow read:  if isAdmin();
-      allow write: if false; // Cloud Functions only
+      allow write: if false;
     }
 
     match /financial_ledgers/{ledgerId} {
@@ -232,7 +217,7 @@ service cloud.firestore {
                      isAdmin() ||
                      (isOwner() && resource.data.ownerId == uid())
                    );
-      allow write: if false; // Cloud Functions only
+      allow write: if false;
     }
 
     // ─── 8. TECHNICIANS ──────────────────────────────────────────────────────
@@ -248,18 +233,16 @@ service cloud.firestore {
     }
 
     // ─── 10. INSTITUTIONAL AUDIT (AuditShield™) ─────────────────────────────
-    // APPEND-ONLY LEDGER: No client-side updates/deletes.
-    // Only 'governanceAudit' sub-collection that reflects critical state.
     match /governanceAudit/{auditId} {
       allow read:   if isAuth() && (isAdmin() || isOwner()); 
-      allow create: if false; // Only Cloud Functions (Server Admin SDK) can write
-      allow update: if false; // Immutable
-      allow delete: if false; // Forever append-only
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /aiQueryLogs/{queryId} {
       allow read:   if isAuth() && (isAdmin() || (isOwner() && resource.data.ownerId == uid()));
-      allow create: if false; // System generated
+      allow create: if false;
     }
 
     // ─── 11. KYC & SECURE CUSTODY (BIN-SECURE™) ──────────────────────────────
@@ -273,22 +256,21 @@ service cloud.firestore {
     // ─── 12. TELEMETRY (BIN-LIVE™) ──────────────────────────────────────────
     match /technicianTelemetry/{techId} {
       allow read:   if isAuth() && (isAdmin() || uid() == techId);
-      allow create, update: if false; // Ingested via Cloud Function validator
+      allow create, update: if false;
     }
 
     match /technicianTelemetryHistory/{packetId} {
       allow read:   if isAdmin();
-      allow write:  if false; // Forensic historical data
+      allow write:  if false;
     }
 
     // ─── 13. PORTFOLIO METRICS ──────────────────────────────────────────────
     match /portfolioMetrics/{metricId} {
       allow read:   if isAuth() && (isAdmin() || isOwner());
-      allow write:  if false; // Pre-calculated by backend
+      allow write:  if false;
     }
 
     // ─── 14. PUBLIC VERIFICATION (Sovereign Integration) ──────────────────
-    // Allow public read on exact matches for invoice/certificate hashes
     match /invoice_registry/{hash} {
       allow get: if true; 
       allow list: if isAdmin();
@@ -300,20 +282,14 @@ service cloud.firestore {
     }
 
     // ─── 15. CONVERSION TELEMETRY (V1.12) ──────────────────────────────────
-    // Allow public creation for landing-to-activation tracking
     match /analytics_events/{eventId} {
       allow create: if true; 
       allow read, update, delete: if isAdmin();
     }
 
     // ─── 16. INTUITIVE INTAKE VAULT (V1.15) ────────────────────────────────
-    // Requirement 2: public intake submission flow
     match /intake_submissions/{intakeId} {
-      // Public users can create new submissions. 
-      // We enforce 'PENDING' status on all new entries.
       allow create: if request.resource.data.status in ['PENDING', 'PENDING_REVIEW'];
-      
-      // Reading, updating, or deleting intakes is strictly restricted to Admins.
       allow read, update, delete: if isAdmin();
     }
 

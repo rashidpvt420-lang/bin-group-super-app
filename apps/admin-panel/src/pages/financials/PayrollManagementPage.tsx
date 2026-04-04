@@ -20,12 +20,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Alert,
 } from '@mui/material';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, addDoc, serverTimestamp, getDocs, writeBatch, doc } from 'firebase/firestore';
-import { Wallet, CheckCircle, Clock } from 'lucide-react';
+import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { Wallet, Clock } from 'lucide-react';
 
 interface Technician {
   uid: string;
@@ -48,7 +47,6 @@ interface PayrollRecord {
 export default function PayrollManagementPage() {
   const [techs, setTechs] = useState<Technician[]>([]);
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [openProcess, setOpenAdd] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -63,7 +61,6 @@ export default function PayrollManagementPage() {
     const qPayroll = query(collection(db, 'payroll'));
     const unsubscribePayroll = onSnapshot(qPayroll, (snap) => {
       setPayroll(snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollRecord)));
-      setLoading(false);
     });
 
     return () => {

@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { getDoc, setDoc, doc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { getDoc, doc } from 'firebase/firestore';
 
 interface AuthContextType {
     isAuthenticated: boolean;
     loading: boolean;
+    error: string | null;
     user: any;
     login: (credentials: any) => Promise<void>;
     logout: () => void;
@@ -16,51 +17,74 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
+    const loadingRef = useRef(loading);
 
     useEffect(() => {
-        // [STABILITY] Tight 3-second safety catch
+        loadingRef.current = loading;
+    }, [loading]);
+
+    useEffect(() => {
         const safetyTimeout = setTimeout(() => {
-            if (loading) {
-                console.warn("[AUTH] Admin Panel Stability Catch (3s): Forcing loading=false");
+            if (loadingRef.current) {
+                console.error("[AUTH] BIN-CRITICAL: Auth initialization stalled.");
+                setError("Sovereign Identity initialization timed out.");
                 setLoading(false);
             }
-        }, 3000);
+        }, 10000);
 
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
             if (usr) {
                 try {
-                    // Force refresh claims with a tight 2s timeout
-                    const refreshPromise = usr.getIdTokenResult(true);
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("REFRESH_TIMEOUT")), 2000));
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 5000));
                     
-                    await Promise.race([refreshPromise, timeoutPromise]);
-                    
-                    const userDocPromise = getDoc(doc(db, 'users', usr.uid));
-                    const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
+                    try {
+                        const userDocPromise = getDoc(doc(db, 'users', usr.uid));
+                        const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
 
-                    if (userDoc.exists()) {
-                        const data = userDoc.data();
-                        if (data.role === 'admin' || data.isAdmin === true) {
-                            setUser({ ...usr, ...data });
-                            setIsAuthenticated(true);
+                        if (userDoc.exists()) {
+                            const data = userDoc.data();
+                            if (data.role === 'admin' || data.isAdmin === true) {
+                                setUser({ ...usr, ...data });
+                                setIsAuthenticated(true);
+                                setError(null);
+                            } else {
+                                console.warn("[AUTH] Denying access: Not an admin", usr.email);
+                                setError("Access Denied: Administrative credentials required.");
+                                await signOut(auth);
+                                setIsAuthenticated(false);
+                                setUser(null);
+                            }
                         } else {
-                            console.warn("[AUTH] Denying access: Not an admin", usr.email);
-                            await auth.signOut();
+                            console.warn("[AUTH] Denying access: No profile found", usr.email);
+                            setError("Sovereign Profile not found.");
+                            await signOut(auth);
                             setIsAuthenticated(false);
                             setUser(null);
                         }
-                    } else {
-                        // STRICT: No profile means no access
-                        console.warn("[AUTH] Denying access: No profile found for", usr.email);
-                        await auth.signOut();
-                        setIsAuthenticated(false);
-                        setUser(null);
+                    } catch (firestoreErr: any) {
+                        console.error("[AUTH] Firestore Fetch Error:", firestoreErr);
+                        if (firestoreErr.code === 'permission-denied') {
+                            setError("Access Denied: Missing or insufficient permissions.");
+                            await signOut(auth);
+                            setIsAuthenticated(false);
+                            setUser(null);
+                        } else {
+                            throw firestoreErr;
+                        }
                     }
-                } catch (error) {
-                    console.error('Error fetching user metadata:', error);
-                    setUser(usr); // Resilient fallback to Auth user
-                    setIsAuthenticated(true);
+                } catch (err: any) {
+                    console.error('Error in Auth sequence:', err);
+                    const isPermissionError = err.code === 'permission-denied' || (err.message && err.message.includes('permission'));
+                    if (isPermissionError) {
+                        setError("Sovereign Protocol Violation: Your account has insufficient clearance for this administrative portal. Authenticated session cleared.");
+                        await signOut(auth);
+                    } else {
+                        setError(err.message || "Identity synchronization failed.");
+                    }
+                    setIsAuthenticated(false);
+                    setUser(null);
                 } finally {
                     setLoading(false);
                     clearTimeout(safetyTimeout);
@@ -71,26 +95,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setLoading(false);
                 clearTimeout(safetyTimeout);
             }
+        }, (err) => {
+            console.error("[AUTH] Fatal Auth Observer Error:", err);
+            setError("Fatal Authentication Fault: " + err.message);
+            setLoading(false);
+            clearTimeout(safetyTimeout);
         });
 
         return () => {
             unsubscribe();
             clearTimeout(safetyTimeout);
         };
-    }, [loading]);
+    }, []);
 
     const login = async (credentials: any) => {
-        // Handled in Login component
     };
 
     const logout = async () => {
-        await auth.signOut();
+        await signOut(auth);
         setIsAuthenticated(false);
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, loading, user, login, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, loading, error, user, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

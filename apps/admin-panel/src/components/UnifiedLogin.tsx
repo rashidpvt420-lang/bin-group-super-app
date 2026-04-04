@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
     GoogleAuthProvider, 
     signInWithPopup, 
     UserCredential
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, query, collection, where, getDocs, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function UnifiedLogin() {
     const [error, setError] = useState('');
@@ -18,35 +18,9 @@ export default function UnifiedLogin() {
         
         try {
             // [STRICT-AUTH] UID-First Architecture Validation
+            // We rely solely on direct document fetch. Collection-wide email queries are disallowed for non-admins.
             const docRef = doc(db, 'users', uid);
-            let docSnap = await getDoc(docRef);
-
-            // 1. Migration Logic: If doc(uid) missing, check for pre-provisioned email match
-            if (!docSnap.exists() && email) {
-                console.info("🔍 [IAM] UID profile missing. Checking for legacy/pre-provisioned email match...");
-                const q = query(collection(db, 'users'), where('email', '==', email));
-                const querySnap = await getDocs(q);
-
-                if (!querySnap.empty) {
-                    const legacyDoc = querySnap.docs[0];
-                    if (legacyDoc.id !== uid) {
-                        console.info("⚡ [IAM] Migration Triggered: Moving legacy profile", legacyDoc.id, "to proper UID", uid);
-                        const legacyData = legacyDoc.data();
-                        
-                        // Atomic Migration
-                        await setDoc(docRef, {
-                            ...legacyData,
-                            uid: uid,
-                            migratedFrom: legacyDoc.id,
-                            updatedAt: serverTimestamp()
-                        }, { merge: true });
-
-                        await deleteDoc(legacyDoc.ref);
-                        console.info("✅ [IAM] Migration Complete. Legacy document purged.");
-                        docSnap = await getDoc(docRef); // Refresh local snap
-                    }
-                }
-            }
+            const docSnap = await getDoc(docRef);
 
             // 2. Role Verification
             const tokenResult = await user.getIdTokenResult(true);

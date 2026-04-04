@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { db, auth, doc, getDoc } from "../lib/firebase";
 
 interface RoleContextType {
@@ -7,6 +7,7 @@ interface RoleContextType {
     status: string | null;
     isAdmin: boolean;
     loading: boolean;
+    error: string | null;
     user: User | null;
     propertyId: string | null;
 }
@@ -20,62 +21,100 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const loadingRef = useRef(loading);
 
     useEffect(() => {
+        loadingRef.current = loading;
+    }, [loading]);
+
+    useEffect(() => {
+        const safetyTimeout = setTimeout(() => {
+            if (loadingRef.current) {
+                console.error("[ROLE-SYNC] BIN-CRITICAL: Role synchronization stalled.");
+                setError("Role synchronization timed out.");
+                setLoading(false);
+            }
+        }, 10000);
+
+        console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            // [CRITICAL] Block rendering until identity and role are 100% resolved
-            setLoading(true); 
             setUser(currentUser);
 
             if (currentUser) {
                 try {
-                    // 1. First check Custom Claims (Fastest)
-                    const tokenResult = await currentUser.getIdTokenResult(true);
-                    const claims = tokenResult.claims;
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("ROLE_SYNC_TIMEOUT")), 5000));
                     
-                    if (claims.role) {
-                        setRole(String(claims.role).toLowerCase());
-                        setStatus(String(claims.status || 'active').toLowerCase());
-                        setIsAdmin(claims.role === 'admin' || claims.isAdmin === true);
-                        setLoading(false);
-                    } else {
-                        // 2. Fallback to Firestore (Authoritative for non-claim roles)
-                        const snap = await getDoc(doc(db, "users", currentUser.uid));
-                        
-                        if (snap.exists()) {
-                            const data = snap.data();
-                            setRole(data.role?.toLowerCase() || null);
-                            setStatus(data.status?.toLowerCase() || 'pending');
-                            setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                            setPropertyId(data.propertyId || null);
-                        } else {
-                            // User exists in Auth but has no Firestore profile yet
-                            setRole(null);
-                            setStatus('pending');
-                            setIsAdmin(false);
+                    const fetchRoles = async () => {
+                        try {
+                            const snap = await getDoc(doc(db, "users", currentUser.uid));
+                            if (snap.exists()) {
+                                const data = snap.data();
+                                setRole(data.role?.toLowerCase() || null);
+                                setStatus(data.status?.toLowerCase() || 'pending');
+                                setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
+                                setPropertyId(data.propertyId || null);
+                                setError(null);
+                            } else {
+                                setRole(null);
+                                setStatus('pending');
+                                setIsAdmin(false);
+                            }
+                        } catch (firestoreErr: any) {
+                            console.error("[ROLE-SYNC] Firestore Fetch Error:", firestoreErr);
+                            if (firestoreErr.code === 'permission-denied') {
+                                setError("Access Denied: Missing or insufficient permissions.");
+                                await signOut(auth);
+                                setRole(null);
+                                setUser(null);
+                            } else {
+                                throw firestoreErr;
+                            }
                         }
-                        setLoading(false);
-                    }
-                } catch (err) {
+                    };
+
+                    await Promise.race([fetchRoles(), timeoutPromise]);
+                } catch (err: any) {
                     console.error("[ROLE-SYNC] Critical resolution failure:", err);
-                    setRole(null);
+                    const isPermissionError = err.code === 'permission-denied' || (err.message && err.message.includes('permission'));
+                    if (isPermissionError) {
+                         setError("Sovereign Integrity Breach: Identity verified but authorization was explicitly denied. Session cleared.");
+                         await signOut(auth);
+                         setRole(null);
+                         setUser(null);
+                    } else {
+                        setError(err.message || "Authorization fault.");
+                        setRole(null);
+                    }
+                } finally {
                     setLoading(false);
+                    clearTimeout(safetyTimeout);
                 }
             } else {
-                // No user authenticated
                 setRole(null);
                 setStatus(null);
                 setIsAdmin(false);
                 setPropertyId(null);
+                setError(null);
                 setLoading(false);
+                clearTimeout(safetyTimeout);
             }
+        }, (err) => {
+            console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
+            setError("Fatal Authorization Fault: " + err.message);
+            setLoading(false);
+            clearTimeout(safetyTimeout);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            clearTimeout(safetyTimeout);
+        };
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, status, isAdmin, loading, user, propertyId }}>
+        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId }}>
             {children}
         </RoleContext.Provider>
     );

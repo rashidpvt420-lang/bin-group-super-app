@@ -1,6 +1,6 @@
-console.log("⚡ [SHARED-LOAD] Starting evaluation...");
-export * from './lib/firebase';
-console.log("⚡ [SHARED-LOAD] Exported Firebase.");
+// packages/shared/src/index.ts
+// console.log("⚡ [SHARED-LOAD] Exported Firebase."); (DISABLED TO PREVENT POISONING)
+// export * from './lib/firebase';
 export * from './utils/uaePricingEngine';
 console.log("⚡ [SHARED-LOAD] Exported Pricing Engine.");
 export * from './utils/RateLimiter';
