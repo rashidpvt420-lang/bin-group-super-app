@@ -10,7 +10,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -25,78 +25,107 @@ const LoginPage: React.FC = () => {
     const [redirectHandling, setRedirectHandling] = useState(false);
 
     React.useEffect(() => {
-        const checkRedirect = async () => {
-            try {
+        // [SOVEREIGN-AUTO-REDIRECT]
+        // If already authenticated, bypass login screen immediately
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user && !redirectHandling) {
                 setLoading(true);
                 setRedirectHandling(true);
-                const result = await getRedirectResult(auth);
-                if (result) {
-                    
-                    await handleAuthResult(result);
+                const snap = await getDoc(doc(db, "users", user.uid));
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const role = (data.role || '').toLowerCase();
+                    if (role === 'tenant') navigate('/tenant');
+                    else if (role === 'technician') navigate('/tech');
+                    else if (role === 'admin' || data.isAdmin) window.location.href = '/admin';
+                    else navigate('/dashboard');
                 } else {
-                    setRedirectHandling(false);
-                    setLoading(false);
+                    // Fallback for missing profile
+                    navigate('/dashboard');
                 }
-            } catch (err: any) {
-                console.error("Redirect Auth Error:", err);
-                setError("Institutional Redirect Failed: " + (err.message || "Credential rejection."));
-                setRedirectHandling(false);
-                setLoading(false);
             }
-        };
-        checkRedirect();
-    }, []);
+        });
+
+        return () => unsubscribe();
+    }, [navigate, redirectHandling]);
 
     const handleAuthResult = async (result: any) => {
         const uid = result.user.uid;
         const email = (result.user.email || '').toLowerCase();
         
-        let snap = await getDoc(doc(db, "users", uid));
-        
-        // If profile doesn't exist (e.g. first-time non-admin user), create a default owner profile
-        if (!snap.exists()) {
+        try {
+            const userDocRef = doc(db, "users", uid);
+            let snap = await getDoc(userDocRef);
             
-            const newProfile = {
-                uid,
-                email,
-                displayName: result.user.displayName || "New User",
-                role: 'owner',
-                isAdmin: false,
-                status: 'pending',
-                createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, "users", uid), newProfile);
-            // Refresh snap after creation
-            snap = await getDoc(doc(db, "users", uid));
-        }
+            // [IAM] UID-First Migration Protocol
+            if (!snap.exists() && email) {
+                console.info("🔍 [IAM] Probing for legacy profiles for:", email);
+                const q = query(collection(db, "users"), where("email", "==", email));
+                const querySnap = await getDocs(q);
 
-        if (snap.exists()) {
-            const data = snap.data();
-            const role = (data.role || '').toLowerCase();
-            
-            if (role === 'admin') {
-                navigate('/admin');
-            } else if (data.isAdmin || data.role === 'ceo' || data.role === 'owner') {
-                navigate('/dashboard');
-            } else {
-                navigate(role === 'tenant' ? '/tenant' : role === 'technician' ? '/tech' : '/');
+                if (!querySnap.empty) {
+                    const legacyDoc = querySnap.docs[0];
+                    if (legacyDoc.id !== uid) {
+                        console.info("⚡ [IAM] Migrating pre-provisioned data from", legacyDoc.id, "to", uid);
+                        const legacyData = legacyDoc.data();
+                        
+                        await setDoc(userDocRef, {
+                            ...legacyData,
+                            uid: uid,
+                            migratedAt: serverTimestamp(),
+                            migrationSource: legacyDoc.id
+                        }, { merge: true });
+
+                        await deleteDoc(legacyDoc.ref);
+                        snap = await getDoc(userDocRef);
+                    }
+                }
             }
-        } else {
-            setError("Identity confirmed but profile synchronization failed. Please refresh.");
+
+            if (!snap.exists()) {
+                const newProfile = {
+                    uid,
+                    email,
+                    displayName: result.user.displayName || "New User",
+                    role: 'owner', 
+                    isAdmin: false,
+                    status: 'pending',
+                    createdAt: serverTimestamp()
+                };
+                await setDoc(userDocRef, newProfile);
+                snap = await getDoc(userDocRef);
+            }
+
+            if (snap.exists()) {
+                const data = snap.data();
+                const role = (data.role || '').toLowerCase();
+                
+                if (role === 'tenant') {
+                    navigate('/tenant');
+                } else if (role === 'technician') {
+                    navigate('/tech');
+                } else if (role === 'admin' || data.isAdmin) {
+                    window.location.href = '/admin';
+                } else {
+                    navigate('/dashboard');
+                }
+            } else {
+                setError("Identity confirmed but profile synchronization failed. Please refresh.");
+            }
+        } catch (err: any) {
+            console.error("🚨 Auth Result Fault:", err);
+            setError("Synchronization failed. System integrity check required.");
         }
     };
-
-    const from = (location.state as any)?.from?.pathname || '/';
 
     const handleGoogleLogin = async () => {
         setLoading(true);
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            // Force Secure Flow (Authorization Code Flow) via Redirect
-            await signInWithRedirect(auth, provider);
-            // In case the browser does not navigate away, clear the spinner
-            setLoading(false);
+            const result = await signInWithPopup(auth, provider);
+            setRedirectHandling(true);
+            await handleAuthResult(result);
         } catch (err: any) {
             console.error("Google Login Error:", err);
             setError(err.message || "Failed to sign in with Google.");
@@ -112,43 +141,31 @@ const LoginPage: React.FC = () => {
         const cleanEmail = email.trim().toLowerCase();
         const cleanPassword = password.trim();
 
-        const timeout = setTimeout(() => setLoading(false), 8000);
         try {
             const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
             const uid = userCredential.user.uid;
             
-            // Fetch role to redirect correctly
             const snap = await getDoc(doc(db, "users", uid));
             if (snap.exists()) {
                 const data = snap.data();
-                const role = data.role;
+                const role = (data.role || '').toLowerCase();
                 
-                if (data.isAdmin || role === 'owner' || role === 'ceo') {
-                    navigate('/dashboard');
+                if (role === 'tenant') {
+                    navigate('/tenant');
+                } else if (role === 'technician') {
+                    navigate('/tech');
+                } else if (role === 'admin' || data.isAdmin) {
+                    window.location.href = '/admin';
                 } else {
-                    switch(role) {
-                        case 'tenant': navigate('/tenant'); break;
-                        case 'technician': navigate('/tech'); break;
-                        case 'broker': navigate('/broker'); break;
-                        case 'admin': navigate('/admin'); break;
-                        case 'auditor': navigate('/auditor'); break;
-                        default: navigate(from);
-                    }
+                    navigate('/dashboard');
                 }
             } else {
                 setError("User profile not found. Please contact support.");
             }
         } catch (err: any) {
             console.error("Login Error:", err);
-            if (err.code === 'auth/invalid-email') {
-                setError("Invalid email format. Please check for trailing spaces.");
-            } else if (err.code === 'auth/user-not-found') {
-                setError("No institutional account found with this email.");
-            } else {
-                setError(err.message || "Failed to sign in. Check your credentials.");
-            }
+            setError(err.message || "Failed to sign in. Check your credentials.");
         } finally {
-            clearTimeout(timeout);
             setLoading(false);
         }
     };

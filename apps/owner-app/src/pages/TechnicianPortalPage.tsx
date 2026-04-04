@@ -1,9 +1,11 @@
 import React from 'react';
-import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip } from '@mui/material';
-import { Wrench, Clock, ShieldCheck, Activity, MapPin } from 'lucide-react';
-import { db, collection, query, orderBy, onSnapshot, limit } from '../lib/firebase';
+import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip, alpha, CircularProgress } from '@mui/material';
+import { Wrench, Clock, ShieldCheck, Activity, MapPin, Navigation, ArrowRight, Calendar } from 'lucide-react';
+import { db, collection, query, orderBy, onSnapshot, limit, where } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Ticket {
     id: string;
@@ -13,18 +15,35 @@ interface Ticket {
     priority: string;
     propertyId: string;
     createdAt: any;
+    assignedTechnicianId?: string;
+    preferredTiming?: string;
+    propertyLocation?: {
+        unitNumber: string;
+        propertyType: string;
+        address: string;
+        location?: { lat: number; lng: number };
+        propertyName: string;
+    };
 }
-
-import { useNavigate } from 'react-router-dom';
 
 export default function TechnicianPortalPage() {
     const { t } = useLanguage();
+    const { user } = useRole();
     const navigate = useNavigate();
     const [tickets, setTickets] = React.useState<Ticket[]>([]);
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
-        const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(10));
+        if (!user?.uid) return;
+
+        // Query tickets assigned to this technician
+        const q = query(
+            collection(db, 'maintenanceTickets'), 
+            where('assignedTechnicianId', '==', user.uid),
+            orderBy('createdAt', 'desc'), 
+            limit(20)
+        );
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const ticketData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -32,16 +51,68 @@ export default function TechnicianPortalPage() {
             } as Ticket));
             setTickets(ticketData);
             setLoading(false);
+        }, (error) => {
+            console.error("Failed to fetch assigned tickets:", error);
+            setLoading(false);
         });
+
         return () => unsubscribe();
-    }, []);
+    }, [user]);
+
+    const activeDispatches = tickets.filter(t => t.status === 'assigned');
+    const recentMissions = tickets.filter(t => t.status !== 'assigned');
+
+    const handleNavigate = (ticket: Ticket) => {
+        if (!ticket.propertyLocation) return;
+        const loc = ticket.propertyLocation;
+        let query = '';
+        
+        // Handle both simple objects and Firestore GeoPoints
+        if (loc.location) {
+            const lat = (loc.location as any).lat ?? (loc.location as any).latitude;
+            const lng = (loc.location as any).lng ?? (loc.location as any).longitude;
+            if (lat !== undefined && lng !== undefined) {
+                query = `${lat},${lng}`;
+            }
+        }
+        
+        if (!query) {
+            query = encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
+        }
+        
+        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+    };
+
+    const formatPreferredTime = (timing?: string) => {
+        if (!timing || timing === 'ASAP') return 'ASAP (Immediate)';
+        try {
+            const date = new Date(timing);
+            return date.toLocaleString('en-AE', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        } catch (e) {
+            return timing;
+        }
+    };
 
     const kpis = [
-        { label: t('tech.active_tickets'), val: tickets.filter(t => t.status !== 'CLOSED').length.toString(), trend: t('tech.trend.live'), icon: <Wrench size={24} />, color: binThemeTokens.gold },
+        { label: t('tech.active_tickets'), val: tickets.filter(t => t.status !== 'CLOSED' && t.status !== 'RESOLVED').length.toString(), trend: t('tech.trend.live'), icon: <Wrench size={24} />, color: binThemeTokens.gold },
         { label: t('tech.kpi.mttr'), val: '1.2h', trend: t('tech.trend.optimal'), icon: <Clock size={24} />, color: binThemeTokens.goldLight },
         { label: t('tech.kpi.sla'), val: '99.2%', trend: t('tech.trend.sovereign'), icon: <ShieldCheck size={24} />, color: binThemeTokens.textPrimary },
         { label: t('tech.kpi.uptime'), val: '100%', trend: t('tech.trend.stable'), icon: <Activity size={24} />, color: binThemeTokens.textPrimary },
     ];
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#0B0B0C' }}>
+                <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            </Box>
+        );
+    }
 
     return (
         <Container maxWidth="xl" sx={{ py: { xs: 4, md: 8 } }}>
@@ -55,6 +126,110 @@ export default function TechnicianPortalPage() {
                 </Box>
                 <Chip label={t('tech.protocol')} sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} />
             </Box>
+
+            {/* ACTIVE DISPATCH CARD - HIGH VISIBILITY */}
+            {activeDispatches.length > 0 && (
+                <Box sx={{ mb: 8, position: 'relative', zIndex: 1 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 2, display: 'block' }}>
+                        ● LIVE FIELD OPERATIONS
+                    </Typography>
+                    <Stack spacing={3}>
+                        {activeDispatches.map((ticket) => (
+                            <Paper 
+                                key={ticket.id}
+                                sx={{ 
+                                    p: 0, 
+                                    overflow: 'hidden',
+                                    bgcolor: alpha(binThemeTokens.gold, 0.05), 
+                                    border: `2px solid ${binThemeTokens.gold}`,
+                                    borderRadius: 6,
+                                    boxShadow: `0 0 40px ${alpha(binThemeTokens.gold, 0.1)}`
+                                }}
+                            >
+                                <Grid container>
+                                    <Grid item xs={12} md={8} sx={{ p: { xs: 3, md: 4 } }}>
+                                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                                            <Chip 
+                                                label="URGENT DISPATCH" 
+                                                size="small" 
+                                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 1 }} 
+                                            />
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>
+                                                ID: {ticket.id.toUpperCase()}
+                                            </Typography>
+                                        </Stack>
+                                        
+                                        <Typography variant="h4" fontWeight="900" sx={{ color: '#FFF', mb: 1, fontSize: { xs: '1.75rem', md: '2.125rem' } }}>
+                                            {ticket.description}
+                                        </Typography>
+                                        
+                                        <Grid container spacing={3} sx={{ mt: 1 }}>
+                                            <Grid item xs={6} md={4}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block' }}>ASSET</Typography>
+                                                <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 900 }}>
+                                                    {ticket.propertyLocation?.propertyType || 'Villa'} {ticket.propertyLocation?.unitNumber || ticket.propertyId}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={6} md={8}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block' }}>ADDRESS</Typography>
+                                                <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>
+                                                    {ticket.propertyLocation?.address || 'Navigate for details'}
+                                                </Typography>
+                                            </Grid>
+                                        </Grid>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={4} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), p: { xs: 3, md: 4 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
+                                        {/* PREFERRED TIME SECTION */}
+                                        <Box sx={{ mb: 1, p: 2, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), border: `1px dashed ${alpha(binThemeTokens.gold, 0.3)}` }}>
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                <Calendar size={16} color={binThemeTokens.gold} />
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>PREFERRED TIME</Typography>
+                                            </Stack>
+                                            <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 900, mt: 0.5 }}>
+                                                {formatPreferredTime(ticket.preferredTiming)}
+                                            </Typography>
+                                        </Box>
+
+                                        <Button 
+                                            variant="contained" 
+                                            fullWidth
+                                            size="large"
+                                            startIcon={<Navigation size={20} />}
+                                            onClick={() => handleNavigate(ticket)}
+                                            sx={{ 
+                                                bgcolor: binThemeTokens.gold, 
+                                                color: '#000', 
+                                                fontWeight: 900, 
+                                                py: 2,
+                                                borderRadius: 3,
+                                                '&:hover': { bgcolor: binThemeTokens.goldLight }
+                                            }}
+                                        >
+                                            Navigate to Asset
+                                        </Button>
+                                        <Button 
+                                            variant="outlined" 
+                                            fullWidth
+                                            endIcon={<ArrowRight size={20} />}
+                                            onClick={() => navigate(`/tech/ticket/${ticket.id}`)}
+                                            sx={{ 
+                                                borderColor: alpha(binThemeTokens.gold, 0.5), 
+                                                color: binThemeTokens.gold, 
+                                                fontWeight: 900, 
+                                                py: 1.5,
+                                                borderRadius: 3
+                                            }}
+                                        >
+                                            Open Mission Brief
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Paper>
+                        ))}
+                    </Stack>
+                </Box>
+            )}
 
             {/* Performance Grid */}
             <Grid container spacing={3} sx={{ mb: 8, position: 'relative', zIndex: 1 }}>
@@ -73,7 +248,7 @@ export default function TechnicianPortalPage() {
             {/* Mission Log */}
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: '#FFFFFF', letterSpacing: 1, position: 'relative', zIndex: 1 }}>{t('tech.mission_dispatch')}</Typography>
             <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
-                {(tickets || []).length > 0 ? (tickets || []).map((ticket, i) => (
+                {recentMissions.length > 0 ? recentMissions.map((ticket, i) => (
                     <Grid item xs={12} key={i}>
                         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(22, 22, 24, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, '&:hover': { border: '1px solid rgba(198,167,94,0.3)', bgcolor: 'rgba(22, 22, 24, 0.6)' } }}>
                             <Grid container alignItems="center" spacing={3}>
@@ -85,7 +260,7 @@ export default function TechnicianPortalPage() {
                                     <Stack direction="row" spacing={2} alignItems="center">
                                         <MapPin size={18} color={binThemeTokens.textSecondary} />
                                         <Box>
-                                            <Typography variant="subtitle1" fontWeight="900" sx={{ color: '#FFFFFF' }}>{ticket.propertyId || t('tech.unknown_unit')}</Typography>
+                                            <Typography variant="subtitle1" fontWeight="900" sx={{ color: '#FFFFFF' }}>{ticket.propertyLocation?.propertyName || ticket.propertyId || t('tech.unknown_unit')}</Typography>
                                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.trade}: {ticket.description}</Typography>
                                         </Box>
                                     </Stack>
@@ -109,7 +284,7 @@ export default function TechnicianPortalPage() {
                             </Grid>
                         </Paper>
                     </Grid>
-                )) : (
+                )) : activeDispatches.length === 0 && (
                     <Box sx={{ width: '100%', textAlign: 'center', py: 8 }}>
                          <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>{t('tech.empty')}</Typography>
                     </Box>

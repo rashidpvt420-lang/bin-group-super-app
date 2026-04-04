@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db, functions } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { 
   collection, query, where, onSnapshot 
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Chip, CircularProgress,
@@ -13,6 +12,7 @@ import {
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Receipt, History } from 'lucide-react';
+import axios from 'axios';
 
 interface Contract {
   id: string;
@@ -47,8 +47,8 @@ export default function AdminPaymentApproval() {
       where('paymentVerified', '==', false)
     );
 
-    return onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({
+    return onSnapshot(q, (snapshot: any) => {
+      const fetched = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       } as Contract));
@@ -75,22 +75,39 @@ export default function AdminPaymentApproval() {
     setVerifyDialogOpen(false);
     
     try {
-      const adminVerifyFunc = httpsCallable(functions, 'adminVerifyPayment');
-      const result = await adminVerifyFunc({
-        contractId: selectedContract.id,
-        paymentId: selectedContract.paymentId,
-        method: selectedContract.provider,
-        referenceId,
-        amountReceived: amountReceived || selectedContract.amount,
-        notes: notes || "Standard manual verification via Admin Hub.",
-        receivedAt: new Date().toISOString()
+      const user = auth.currentUser;
+      if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
+
+      const token = await user.getIdToken(true);
+      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
+      const functionUrl = 'https://adminverifypayment-sc33mcrduq-uc.a.run.app';
+      
+      const response = await axios.post(functionUrl, {
+        data: {
+          contractId: selectedContract.id,
+          paymentId: selectedContract.paymentId,
+          method: selectedContract.provider,
+          referenceId,
+          amountReceived: amountReceived || selectedContract.amount,
+          notes: notes || "Standard manual verification via Admin Hub.",
+          receivedAt: new Date().toISOString()
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      
-      alert("Payment Settled. Contract activated for property onboarding.");
+      if (response.data?.result?.success) {
+        alert("Payment Settled. Contract activated for property onboarding.");
+      } else {
+        throw new Error(response.data?.result?.message || "Payment verification rejected.");
+      }
     } catch (error: any) {
-      console.error("Verification failed:", error);
-      alert(`Settlement Error: ${error.message}`);
+      console.error("🚨 [ADMIN-AUTH] Verification Failure:", error);
+      const errorMsg = error.response?.data?.error?.message || error.message || "Failed to verify settlement.";
+      alert(errorMsg);
     } finally {
       setProcessingId(null);
       setSelectedContract(null);
@@ -137,7 +154,7 @@ export default function AdminPaymentApproval() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pendingContracts.map((contract) => (
+                  pendingContracts.map((contract: any) => (
                     <TableRow key={contract.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>
@@ -239,7 +256,7 @@ export default function AdminPaymentApproval() {
                 required
                 variant="outlined"
                 value={referenceId}
-                onChange={(e) => setReferenceId(e.target.value)}
+                onChange={(e: any) => setReferenceId(e.target.value)}
                 placeholder="e.g. UTN-123456789"
                 sx={{ 
                   mt: 1,
@@ -263,7 +280,7 @@ export default function AdminPaymentApproval() {
                 type="number"
                 variant="outlined"
                 value={amountReceived}
-                onChange={(e) => setAmountReceived(Number(e.target.value))}
+                onChange={(e: any) => setAmountReceived(Number(e.target.value))}
                 sx={{ 
                   mt: 1,
                   '& .MuiOutlinedInput-root': {
@@ -285,7 +302,7 @@ export default function AdminPaymentApproval() {
                 rows={3}
                 variant="outlined"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e: any) => setNotes(e.target.value)}
                 placeholder="Internal reconciliation details..."
                 sx={{ 
                   mt: 1,

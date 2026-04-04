@@ -19,10 +19,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Tooltip,
+  CircularProgress,
 } from '@mui/material';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Add as AddIcon, Build as BuildIcon } from '@mui/icons-material';
+import { db, auth } from '../../lib/firebase';
+import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import axios from 'axios';
 
 interface Technician {
   uid: string;
@@ -37,8 +41,12 @@ interface Technician {
 export default function TechniciansManagementPage() {
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [selectedTech, setSelectedTech] = useState<Technician | null>(null);
+
   const [newTech, setNewTech] = useState({
     email: '',
     displayName: '',
@@ -46,9 +54,14 @@ export default function TechniciansManagementPage() {
     specialization: '',
   });
 
+  const [editTech, setEditTech] = useState({
+    displayName: '',
+    phoneNumber: '',
+    specialization: '',
+    status: 'active' as 'active' | 'pending' | 'inactive' | 'on-duty',
+  });
+
   useEffect(() => {
-    // We check both the technicians collection and the users collection with role technician
-    // For simplicity in this admin panel, we'll sync with the users collection where role=technician
     const q = query(collection(db, 'users'), where('role', '==', 'technician'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -67,28 +80,85 @@ export default function TechniciansManagementPage() {
   }, []);
 
   const handleAddTech = async () => {
+    setSubmitting(true);
     try {
-      // Create in users collection
-      await addDoc(collection(db, 'users'), {
-        ...newTech,
-        role: 'technician',
-        status: 'active',
-        createdAt: serverTimestamp(),
-      });
+      const user = auth.currentUser;
+      if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
+
+      const token = await user.getIdToken(true);
+      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
+      const functionUrl = 'https://admincreateuser-sc33mcrduq-uc.a.run.app'; // Production URL for the region
       
-      // Also mirror in technicians collection for specific tech logic
-      await addDoc(collection(db, 'technicians'), {
-        ...newTech,
-        status: 'active',
-        currentLocation: null,
-        activeTickets: 0,
-        createdAt: serverTimestamp(),
+      const response = await axios.post(functionUrl, {
+        data: {
+          ...newTech,
+          role: 'technician',
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      setOpenAdd(false);
-      setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
+      if (response.data?.result?.success) {
+        setOpenAdd(false);
+        setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
+      } else {
+        throw new Error(response.data?.result?.message || "Identity provisioning rejected.");
+      }
+    } catch (error: any) {
+      console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
+      const errorMsg = error.response?.data?.error?.message || error.message || "Failed to provision technician.";
+      alert(errorMsg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditOpen = (tech: Technician) => {
+    setSelectedTech(tech);
+    setEditTech({
+      displayName: tech.displayName || '',
+      phoneNumber: tech.phoneNumber || '',
+      specialization: tech.specialization || '',
+      status: tech.status || 'active',
+    });
+    setOpenEdit(true);
+  };
+
+  const handleUpdateTech = async () => {
+    if (!selectedTech) return;
+    try {
+      const userRef = doc(db, 'users', selectedTech.uid);
+      await updateDoc(userRef, {
+        ...editTech,
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Update in technicians collection
+      const techRef = doc(db, 'technicians', selectedTech.uid);
+      await updateDoc(techRef, {
+        displayName: editTech.displayName,
+        phoneNumber: editTech.phoneNumber,
+        specialization: editTech.specialization,
+        status: editTech.status,
+      }).catch(() => {/* tech doc might not exist yet */});
+
+      setOpenEdit(false);
     } catch (error) {
-      console.error("Error adding technician:", error);
+      console.error("Error updating technician:", error);
+    }
+  };
+
+  const handleDeleteTech = async (uid: string) => {
+    if (window.confirm("Are you sure you want to decommission this technician?")) {
+      try {
+        await deleteDoc(doc(db, 'users', uid));
+        await deleteDoc(doc(db, 'technicians', uid)).catch(() => {});
+      } catch (error) {
+        console.error("Error deleting technician:", error);
+      }
     }
   };
 
@@ -143,6 +213,7 @@ export default function TechniciansManagementPage() {
               <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -167,12 +238,25 @@ export default function TechniciansManagementPage() {
                     sx={{ fontWeight: 'bold', fontSize: 10 }} 
                   />
                 </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit Technician">
+                    <IconButton onClick={() => handleEditOpen(tech)} size="small" sx={{ color: '#10b981' }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete Technician">
+                    <IconButton onClick={() => handleDeleteTech(tech.uid)} size="small" color="error">
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
 
+      {/* Add Dialog */}
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm">
         <DialogTitle sx={{ fontWeight: 900 }}>Onboard New Technician</DialogTitle>
         <DialogContent>
@@ -205,7 +289,45 @@ export default function TechniciansManagementPage() {
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddTech} sx={{ borderRadius: 100, bgcolor: '#10b981' }}>Deploy Technician</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleAddTech} 
+            disabled={submitting}
+            sx={{ borderRadius: 100, bgcolor: '#10b981', minWidth: 150 }}
+          >
+            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Deploy Technician'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontWeight: 900 }}>Update Technician Profile</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField 
+              label="Full Name" 
+              fullWidth 
+              value={editTech.displayName} 
+              onChange={(e) => setEditTech({...editTech, displayName: e.target.value})} 
+            />
+            <TextField 
+              label="Phone Number" 
+              fullWidth 
+              value={editTech.phoneNumber} 
+              onChange={(e) => setEditTech({...editTech, phoneNumber: e.target.value})} 
+            />
+            <TextField 
+              label="Specialization" 
+              fullWidth 
+              value={editTech.specialization} 
+              onChange={(e) => setEditTech({...editTech, specialization: e.target.value})} 
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setOpenEdit(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleUpdateTech} sx={{ borderRadius: 100, bgcolor: '#10b981' }}>Save Changes</Button>
         </DialogActions>
       </Dialog>
     </Container>

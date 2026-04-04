@@ -18,6 +18,8 @@ import PricingAuditViewer from './components/pricing/PricingAuditViewer';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
 import MarketIntelligenceDashboard from './components/market/MarketIntelligenceDashboard';
 import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';
+import PilotCommandCenter from './components/pilot/PilotCommandCenter';
+import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -39,6 +41,9 @@ import CompliancePage from './pages/admin/CompliancePage';
 import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
 import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
+import PropertyManagementPage from './pages/admin/PropertyManagementPage';
+import PayrollManagementPage from './pages/financials/PayrollManagementPage';
+import TransactionsPage from './pages/financials/TransactionsPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import { FinancialTickerPage, TechnicianMapPage } from './pages/Placeholders';
 import { adminTheme } from './theme/adminTheme';
@@ -75,7 +80,8 @@ function AppContent() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                     <Route path="/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
-                    <Route path="/financials" element={<ProtectedRoute adminOnly><FinancialTickerPage /></ProtectedRoute>} />
+                    <Route path="/admin/financials" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
+                    <Route path="/admin/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />

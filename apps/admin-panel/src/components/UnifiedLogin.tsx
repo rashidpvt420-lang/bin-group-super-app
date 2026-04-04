@@ -2,43 +2,56 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
     GoogleAuthProvider, 
-    signInWithRedirect, 
-    getRedirectResult,
+    signInWithPopup, 
     UserCredential
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, query, collection, where, getDocs, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function UnifiedLogin() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        const handleRedirect = async () => {
-            try {
-                const result = await getRedirectResult(auth);
-                if (result) {
-                    setLoading(true);
-                    await handleAuthSuccess(result);
-                }
-            } catch (err: any) {
-                console.error("🚨 [ADMIN-AUTH] Redirect Failed:", err);
-                setError(`Authentication Error: ${err.message || 'Verification Failed'}`);
-            }
-        };
-        handleRedirect();
-    }, []);
-
     const handleAuthSuccess = async (userCredential: UserCredential) => {
         const user = userCredential.user;
         const uid = user.uid;
+        const email = user.email?.toLowerCase();
         
         try {
-            // [STRICT-AUTH] Check Custom Claims First (Fastest/Secured)
+            // [STRICT-AUTH] UID-First Architecture Validation
+            const docRef = doc(db, 'users', uid);
+            let docSnap = await getDoc(docRef);
+
+            // 1. Migration Logic: If doc(uid) missing, check for pre-provisioned email match
+            if (!docSnap.exists() && email) {
+                console.info("🔍 [IAM] UID profile missing. Checking for legacy/pre-provisioned email match...");
+                const q = query(collection(db, 'users'), where('email', '==', email));
+                const querySnap = await getDocs(q);
+
+                if (!querySnap.empty) {
+                    const legacyDoc = querySnap.docs[0];
+                    if (legacyDoc.id !== uid) {
+                        console.info("⚡ [IAM] Migration Triggered: Moving legacy profile", legacyDoc.id, "to proper UID", uid);
+                        const legacyData = legacyDoc.data();
+                        
+                        // Atomic Migration
+                        await setDoc(docRef, {
+                            ...legacyData,
+                            uid: uid,
+                            migratedFrom: legacyDoc.id,
+                            updatedAt: serverTimestamp()
+                        }, { merge: true });
+
+                        await deleteDoc(legacyDoc.ref);
+                        console.info("✅ [IAM] Migration Complete. Legacy document purged.");
+                        docSnap = await getDoc(docRef); // Refresh local snap
+                    }
+                }
+            }
+
+            // 2. Role Verification
             const tokenResult = await user.getIdTokenResult(true);
             const claims = tokenResult.claims;
             
-            const docRef = doc(db, 'users', uid);
-            const docSnap = await getDoc(docRef);
             let hasAccess = false;
 
             if (claims.role === 'admin' || claims.isAdmin === true) {
@@ -53,16 +66,16 @@ export default function UnifiedLogin() {
             }
 
             if (hasAccess) {
-                console.info("🔒 [ADMIN-AUTH] Access Granted for:", user.email);
+                console.info("🔒 [ADMIN-AUTH] Access Granted for:", email);
                 window.location.href = '/admin/dashboard';
             } else {
-                console.warn("🚫 [ADMIN-AUTH] Access Denied for:", user.email);
+                console.warn("🚫 [ADMIN-AUTH] Access Denied for:", email);
                 setError('ACCESS DENIED: Administrative privileges required.');
                 setLoading(false);
                 await auth.signOut();
             }
         } catch (err: any) {
-            console.error("Profile sync failed:", err);
+            console.error("🚨 Security Clearance Protocol Failed:", err);
             setError("Security clearance failed. Please try again.");
             setLoading(false);
         }
@@ -76,7 +89,8 @@ export default function UnifiedLogin() {
             provider.setCustomParameters({ 
                 prompt: 'select_account'
             });
-            await signInWithRedirect(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            await handleAuthSuccess(result);
         } catch (err: any) {
             console.error("🚨 [ADMIN-AUTH] Initiation Failure:", err);
             setError(err.message || 'Failed to initiate secure login.');

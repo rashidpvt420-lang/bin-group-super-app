@@ -122,6 +122,136 @@ export const setAdminRole = onCall({ enforceAppCheck: true }, async (request) =>
     return { success: true, message: `Access granted to ${email} as ${role}.` };
 });
 
+/**
+ * [SOVEREIGN-DISPATCH] Hardened User Provisioning Protocol
+ * Decodes manual Axios Bearer tokens and enforces Strict UID-First Firestore Architecture.
+ */
+export const adminCreateUser = onRequest({ cors: true }, async (req, res) => {
+    // 1. Manual Token Verification
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.error("[IAM] Provisioning attempt blocked: Missing Auth Header");
+        res.status(401).send({ error: { message: "Unauthenticated: Missing Authorization Header" } });
+        return;
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        if (!decodedToken.admin) {
+            console.error(`[IAM] Access Denied: ${decodedToken.email} attempted admin provisioning without privileges.`);
+            res.status(403).send({ error: { message: "Permission Denied: Administrative Clearance Required" } });
+            return;
+        }
+
+        // 2. Parse Provisioning Payload
+        // Note: axios sends as { data: { ... } } if we use the default onCall format on frontend
+        // But we handle both raw body and wrapped data for maximum compatibility
+        const payload = req.body.data || req.body;
+        const { email, displayName, phoneNumber, role, unitId, specialization, floorNumber, emiratesID } = payload as {
+            email: string;
+            displayName: string;
+            phoneNumber: string;
+            role: 'tenant' | 'technician';
+            unitId?: string;
+            specialization?: string;
+            floorNumber?: string;
+            emiratesID?: string;
+        };
+
+        if (!email || !role) {
+            res.status(400).send({ error: { message: "Invalid Argument: Email and role are required." } });
+            return;
+        }
+
+        // 3. Resolve Auth UID (UID-First Protocol)
+        let uid: string;
+        let tempPassword: string | null = null;
+
+        try {
+            const existingUser = await admin.auth().getUserByEmail(email);
+            uid = existingUser.uid;
+            console.log(`[IAM] Resolved existing Auth UID for ${email}: ${uid}`);
+        } catch (err: any) {
+            if (err.code === 'auth/user-not-found') {
+                tempPassword = `BinGroup${Math.floor(1000 + Math.random() * 9000)}!`;
+                const newUser = await admin.auth().createUser({
+                    email,
+                    password: tempPassword,
+                    displayName,
+                    phoneNumber: phoneNumber || undefined,
+                });
+                uid = newUser.uid;
+                console.log(`[IAM] Created new Auth UID for ${email}: ${uid}`);
+            } else {
+                throw err;
+            }
+        }
+
+        // 4. Enforce Custom Claims
+        await admin.auth().setCustomUserClaims(uid, { role, status: 'active' });
+
+        // 5. Atomic Firestore Provisioning (Strict uid doc reference)
+        const userProfile: any = {
+            uid,
+            email: email.toLowerCase(),
+            displayName: displayName || "New User",
+            phoneNumber: phoneNumber || null,
+            role,
+            status: "active",
+            floorNumber: floorNumber || null,
+            emiratesID: emiratesID || null,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        if (role === 'tenant') userProfile.unitId = unitId || null;
+        if (role === 'technician') userProfile.specialization = specialization || "General";
+
+        await db.collection("users").doc(uid).set(userProfile, { merge: true });
+
+        // 6. Technician Force Synchronization
+        if (role === 'technician') {
+            await db.collection("technicians").doc(uid).set({
+                uid,
+                email: email.toLowerCase(),
+                displayName,
+                phoneNumber: phoneNumber || null,
+                specialization: specialization || "General",
+                status: "active",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+
+        // 7. Welcome Protocol
+        if (tempPassword) {
+            await db.collection("mail").add({
+                to: email,
+                message: {
+                    subject: `Welcome to BIN GROUP — Sovereign Access Active`,
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; border: 1px solid #EEE; border-radius: 8px;">
+                            <h1 style="color: #C6A75E; text-align: center;">BIN GROUP</h1>
+                            <p>An institutional profile has been provisioned for you.</p>
+                            <div style="background: #F9F9F9; padding: 20px; border-radius: 4px;">
+                                <p><strong>Portal:</strong> <a href="https://bin-groups.com/login" style="color: #C6A75E;">Terminal Login</a></p>
+                                <p><strong>Email:</strong> ${email}</p>
+                                <p><strong>Temp Password:</strong> <code>${tempPassword}</code></p>
+                            </div>
+                        </div>
+                    `
+                }
+            });
+        }
+
+        res.status(200).send({ result: { success: true, uid, message: "Sovereign provisioning complete." } });
+
+    } catch (error: any) {
+        console.error("[IAM] Critical Provisioning Fault:", error);
+        res.status(500).send({ error: { message: error.message || "Internal Protocol Error" } });
+    }
+});
+
 // Trigger 1: SLA Monitoring CRON
 export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
     const now = admin.firestore.Timestamp.now();
@@ -1206,5 +1336,111 @@ export const googleSecurityEvents = onRequest({ cors: true }, async (request, re
     } catch (err) {
         console.error("[RISC] Token verification failed:", err);
         response.status(403).send("Forbidden");
+    }
+});
+
+/**
+ * [AUTOMATION] Ticket Auto-Routing Engine
+ * Triggers on new maintenance tickets to automatically assign technicians
+ * and enrich the ticket with precise location data.
+ */
+export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const ticketData = snap.data();
+    const ticketId = event.params.ticketId;
+
+    // 1. Extract identification & category
+    // Supporting both 'issueCategory' (requested) and 'trade' (current frontend)
+    const category = (ticketData.issueCategory || ticketData.trade || "GENERAL").toUpperCase();
+    const tenantId = ticketData.tenantId;
+
+    if (!tenantId) {
+        console.warn(`[AutoRoute] Ticket ${ticketId} missing tenantId. Aborting dispatch.`);
+        return;
+    }
+
+    try {
+        console.log(`[AutoRoute] Processing ticket ${ticketId} for tenant ${tenantId} [Category: ${category}]`);
+
+        // 2. Locate Tenant Residence (Unit & Property)
+        const unitsSnap = await db.collection("units").where("tenantId", "==", tenantId).limit(1).get();
+        if (unitsSnap.empty) {
+            console.warn(`[AutoRoute] No unit found for tenant ${tenantId}`);
+            return;
+        }
+
+        const unitDoc = unitsSnap.docs[0];
+        const unitData = unitDoc.data();
+        const propertyId = unitData.propertyId;
+        const unitNumber = unitData.unitNumber || "N/A";
+
+        if (!propertyId) {
+            console.warn(`[AutoRoute] Unit ${unitDoc.id} has no associated propertyId`);
+            return;
+        }
+
+        const propertyDoc = await db.collection("properties").doc(propertyId).get();
+        if (!propertyDoc.exists) {
+            console.warn(`[AutoRoute] Property ${propertyId} does not exist`);
+            return;
+        }
+
+        const propertyData = propertyDoc.data()!;
+        const residenceInfo = {
+            unitId: unitDoc.id,
+            unitNumber: unitNumber,
+            propertyId: propertyId,
+            propertyType: propertyData.propertyType || "Residential",
+            address: propertyData.address || "No address provided",
+            location: propertyData.location || null, // GeoPoint
+            propertyName: propertyData.propertyName || "Unnamed Property"
+        };
+
+        // 3. Match Technician
+        // Logic: active tech + matching specialization. Fallback: active tech + 'general' specialization.
+        let techQuery = await db.collection("technicians")
+            .where("status", "==", "active")
+            .where("specialization", "==", category)
+            .limit(1)
+            .get();
+
+        if (techQuery.empty) {
+            console.log(`[AutoRoute] No specialized tech for ${category}. Searching for general maintenance...`);
+            techQuery = await db.collection("technicians")
+                .where("status", "==", "active")
+                .where("specialization", "==", "GENERAL")
+                .limit(1)
+                .get();
+        }
+
+        if (techQuery.empty) {
+            console.warn(`[AutoRoute] No active technicians available for dispatch.`);
+            // Update ticket with residence info anyway to help manual routing
+            await snap.ref.update({ 
+                propertyLocation: residenceInfo,
+                autoDispatchStatus: "NO_TECH_AVAILABLE"
+            });
+            return;
+        }
+
+        const techDoc = techQuery.docs[0];
+        const techId = techDoc.id;
+        const techData = techDoc.data();
+
+        // 4. Update Ticket with Assignment & Location Payload
+        await snap.ref.update({
+            assignedTechnicianId: techId,
+            assignedTechnicianName: techData.displayName || "Technician",
+            status: "assigned",
+            propertyLocation: residenceInfo,
+            autoDispatchStatus: "SUCCESS",
+            dispatchedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log(`[AutoRoute] Ticket ${ticketId} successfully routed to tech ${techId} at ${residenceInfo.propertyName}`);
+
+    } catch (error) {
+        console.error(`[AutoRoute] Critical Engine Failure for ticket ${ticketId}:`, error);
     }
 });

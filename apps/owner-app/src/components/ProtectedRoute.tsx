@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
 import { Box, Typography, CircularProgress, Button, Stack } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { ShieldAlert, Lock, LogOut } from 'lucide-react';
+import { Lock, LogOut } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 interface ProtectedRouteProps {
@@ -16,37 +16,29 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     const location = useLocation();
 
     if (loading) {
-        return (
-            <Box sx={{ 
-                height: '100vh', 
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center', 
-                justifyContent: 'center',
-                bgcolor: '#000',
-                color: binThemeTokens.gold
-            }}>
-                <CircularProgress color="inherit" />
-                <Typography sx={{ mt: 2, fontWeight: 900, letterSpacing: 2 }}>
-                    AUTHENTICATING SECURE ACCESS...
-                </Typography>
-            </Box>
-        );
+        return null; // Parent (AppContent) handles full-screen loading
     }
 
     if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // [SOVEREIGN ENFORCEMENT] Lock account if status is pending
-    // Bypass lock for admins
     const currentStatus = (status || '').toLowerCase();
-    if ((currentStatus === 'pending' || currentStatus === 'pending_approval') && !isAdmin && role === 'owner') {
-        // If they are in onboarding, let them continue?
-        // Actually, if they haven't finished onboarding, status is 'pending' in users collection.
-        // But once they finish and pay, status is still 'pending' until admin verifies.
-        // So we should only lock them out of the DASHBOARD, but allow ONBOARDING.
-        
+    const normalizedRole = (role || '').toLowerCase();
+
+    // 1. [STRICT ROLE ENFORCEMENT]
+    // If a user doesn't have the required role, bounce them to their specific portal
+    if (allowedRoles && !allowedRoles.includes(normalizedRole) && !isAdmin) {
+        if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
+        if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
+        if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    // 2. [OWNER LOCK PROTOCOL]
+    // Only lock out owners who are pending or haven't paid. 
+    // Tenants/Technicians bypass this as their status is managed differently.
+    if (normalizedRole === 'owner' && (currentStatus === 'pending' || currentStatus === 'pending_approval') && !isAdmin) {
         if (!location.pathname.startsWith('/onboarding')) {
             const isPendingApproval = status === 'pending_approval';
 
@@ -99,52 +91,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                             </Button>
                         )}
                     </Stack>
-
-                    <Box sx={{ mt: 8, opacity: 0.3 }}>
-                        <Box component="img" src="/logo.png" sx={{ width: 80, filter: 'grayscale(1)' }} />
-                    </Box>
                 </Box>
             );
         }
-    }
-
-    const normalizedRole = (role || '').toLowerCase();
-    const isAccessAllowed = !allowedRoles || 
-        (role && (
-            allowedRoles.includes(normalizedRole) || 
-            (normalizedRole === 'ceo' && allowedRoles.includes('owner'))
-        )) || 
-        isAdmin;
-
-    if (!isAccessAllowed) {
-        return (
-            <Box sx={{ 
-                height: '100vh', 
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center', 
-                justifyContent: 'center',
-                bgcolor: '#000',
-                color: '#fff',
-                textAlign: 'center',
-                p: 4
-            }}>
-                <ShieldAlert size={80} color="#ff4d4d" style={{ marginBottom: 24 }} />
-                <Typography variant="h2" sx={{ color: '#ff4d4d', fontWeight: 900, mb: 2 }}>
-                    ACCESS VIOLATION
-                </Typography>
-                <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, fontWeight: 700 }}>
-                    Your account role ({(role || 'unknown').toUpperCase()}) does not have permission to view this sector.
-                </Typography>
-                <Button 
-                    variant="contained" 
-                    onClick={() => window.location.href = '/'}
-                    sx={{ bgcolor: '#ff4d4d', color: '#fff', fontWeight: 900, px: 6, py: 1.5 }}
-                >
-                    RETURN TO TERMINAL
-                </Button>
-            </Box>
-        );
     }
 
     return <>{children}</>;

@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
-        "target": "es5",
+        "baseUrl": ".",
+        "target": "esnext",
         "lib": [
             "dom",
             "dom.iterable",
@@ -18,9 +19,13 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
-        "jsx": "react-jsx"
+        "jsx": "react-jsx",
+        "paths": {
+            "@bin/shared": ["../../packages/shared/src"]
+        }
     },
     "include": [
-        "src"
+        "src",
+        "../../packages/shared/src"
     ]
 }

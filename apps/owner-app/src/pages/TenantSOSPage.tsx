@@ -1,16 +1,23 @@
 // apps/owner-app/src/pages/TenantSOSPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Box, TextField, Button, 
     Paper, Grid, MenuItem, Select, InputLabel, FormControl, 
     Stack, Alert, CircularProgress, Chip, Divider
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Home, Camera, ShieldAlert, Send, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
+import { AlertTriangle, Home, Camera, ShieldAlert, Send, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
+import { db, collection, addDoc, serverTimestamp, getDoc, doc, getDocs, query, where } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
+
+interface UnitData {
+    id: string;
+    propertyId?: string;
+    unitNumber?: string;
+    tenantId?: string;
+}
 
 export default function TenantSOSPage() {
     const { t, isRTL } = useLanguage();
@@ -18,9 +25,46 @@ export default function TenantSOSPage() {
     const { user, propertyId: sessionPropertyId } = useRole();
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
+    const [preferredTiming, setPreferredTiming] = useState('');
     const [image, setImage] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    
+    const [propertyData, setPropertyData] = useState<any>(null);
+    const [unitData, setUnitData] = useState<UnitData | null>(null);
+
+    useEffect(() => {
+        const fetchResidence = async () => {
+            if (!user?.uid) return;
+            
+            // 1. Find the unit assigned to this tenant
+            const q = query(collection(db, "units"), where("tenantId", "==", user.uid));
+            const unitSnap = await getDocs(q);
+            
+            if (!unitSnap.empty) {
+                const docData = unitSnap.docs[0].data();
+                const uData: UnitData = { id: unitSnap.docs[0].id, ...docData };
+                setUnitData(uData);
+
+                // 2. Fetch the property details
+                if (uData.propertyId) {
+                    const propRef = doc(db, "properties", uData.propertyId);
+                    const propSnap = await getDoc(propRef);
+                    if (propSnap.exists()) {
+                        setPropertyData(propSnap.data());
+                    }
+                }
+            } else if (sessionPropertyId && sessionPropertyId !== 'UNASSOCIATED') {
+                // Fallback to session property if no specific unit link found
+                const propRef = doc(db, "properties", sessionPropertyId);
+                const propSnap = await getDoc(propRef);
+                if (propSnap.exists()) {
+                    setPropertyData(propSnap.data());
+                }
+            }
+        };
+        fetchResidence();
+    }, [user, sessionPropertyId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,13 +74,25 @@ export default function TenantSOSPage() {
         try {
             await addDoc(collection(db, 'maintenanceTickets'), {
                 tenantId: user.uid,
+                tenantName: user.displayName || 'Anonymous Tenant',
                 trade: category.toUpperCase(),
                 description,
+                preferredTiming: preferredTiming || 'ASAP',
                 hasImage: !!image,
                 status: 'OPEN',
                 priority: (category === 'ac_failure' || category === 'plumbing' || category === 'electrical') ? 'EMERGENCY' : 'MEDIUM',
-                propertyId: sessionPropertyId || 'UNASSOCIATED', // Strictly use session info
-                createdAt: serverTimestamp()
+                propertyId: unitData?.propertyId || sessionPropertyId || 'UNASSOCIATED',
+                unitId: unitData?.id || '',
+                unitNumber: unitData?.unitNumber || '',
+
+                // AUTO-INJECT GEOGRAPHY
+                propertyType: propertyData?.propertyType || 'Residential',
+                address: propertyData?.address || 'See registry',
+                location: propertyData?.location || null,
+                propertyName: propertyData?.name || 'Assigned Property',
+
+                createdAt: serverTimestamp(),
+                source: 'TENANT_APP_SOS'
             });
             setSubmitted(true);
         } catch (err) {
@@ -106,6 +162,17 @@ export default function TenantSOSPage() {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             required
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' } }}
+                        />
+
+                        <TextField
+                            fullWidth
+                            label={t('sos.preferred_time') || "Preferred Appointment Time"}
+                            type="datetime-local"
+                            value={preferredTiming}
+                            onChange={(e) => setPreferredTiming(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            placeholder="Select window..."
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' } }}
                         />
 

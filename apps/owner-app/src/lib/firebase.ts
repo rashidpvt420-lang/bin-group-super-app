@@ -54,7 +54,16 @@ export const db = _db;
 export const auth = getAuth(_app);
 export const storage = getStorage(_app);
 export const functions = getFunctions(_app);
-export const analytics = typeof window !== 'undefined' ? getAnalytics(_app) : null;
+// [RESILIENCY] Analytics initialization wrapped to prevent 403 config fetch deadlock
+let _analytics = null;
+if (typeof window !== 'undefined') {
+    try {
+        _analytics = getAnalytics(_app);
+    } catch (e) {
+        console.warn("⚠️ [BIN-INIT] Analytics blocked (Sovereign Safe Mode)");
+    }
+}
+export const analytics = _analytics;
 
 if (typeof window !== 'undefined') {
     const isLocalhost = 

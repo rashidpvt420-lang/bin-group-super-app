@@ -7,11 +7,13 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RadarIcon from '@mui/icons-material/Radar';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { binThemeTokens } from '../theme/adminTheme';
 
 const Navigation = () => {
     const primaryMenu = [
         { text: 'DASHBOARD', icon: <DashboardIcon />, path: '/dashboard' },
+        { text: 'FINANCIALS & PAYROLL', icon: <AccountBalanceWalletIcon />, path: '/admin/financials', color: binThemeTokens.gold },
         { text: 'INTAKE VAULT', icon: <SecurityIcon />, path: '/admin/vault', color: binThemeTokens.gold },
         { text: 'PAYMENT APPROVALS', icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
     ];

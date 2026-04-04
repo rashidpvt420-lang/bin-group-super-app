@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid } from '@mui/material';
-import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock } from 'lucide-react';
+import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha } from '@mui/material';
+import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation } from 'lucide-react';
 import { db, doc, getDoc, updateDoc, serverTimestamp } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
@@ -28,6 +28,26 @@ export default function TicketDetailPage() {
         };
         fetchTicket();
     }, [id]);
+
+    const handleNavigate = () => {
+        if (!ticket?.propertyLocation) return;
+        const loc = ticket.propertyLocation;
+        let query = '';
+        
+        if (loc.location) {
+            const lat = (loc.location as any).lat ?? (loc.location as any).latitude;
+            const lng = (loc.location as any).lng ?? (loc.location as any).longitude;
+            if (lat !== undefined && lng !== undefined) {
+                query = `${lat},${lng}`;
+            }
+        }
+        
+        if (!query) {
+            query = encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
+        }
+        
+        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+    };
 
     const updateStatus = async (newStatus: string) => {
         if (!id) return;
@@ -78,19 +98,33 @@ export default function TicketDetailPage() {
             </Button>
 
             <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(198,167,94,0.15)', borderRadius: 6 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4 }}>
                     <Box>
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('tech.ticket_id')}: {ticket.id.substring(0, 8)}</Typography>
                         <Typography variant="h4" fontWeight="900" sx={{ color: '#FFFFFF', mb: 1 }}>{ticket.trade || 'GENERAL'}</Typography>
                         <Stack direction="row" spacing={2} alignItems="center">
                             <MapPin size={16} color={binThemeTokens.gold} />
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.propertyId || 'PORTFOLIO ASSET'}</Typography>
+                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                                {ticket.propertyLocation?.propertyName || ticket.propertyId || 'PORTFOLIO ASSET'} ({ticket.propertyLocation?.unitNumber || 'N/A'})
+                            </Typography>
                         </Stack>
                     </Box>
-                    <Chip 
-                        label={ticket.status} 
-                        sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} 
-                    />
+                    <Stack spacing={1} alignItems="flex-end">
+                        <Chip 
+                            label={ticket.status} 
+                            sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} 
+                        />
+                        {ticket.propertyLocation && (
+                            <Button 
+                                size="small"
+                                startIcon={<Navigation size={14} />}
+                                onClick={handleNavigate}
+                                sx={{ color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.7rem', border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}
+                            >
+                                Navigate
+                            </Button>
+                        )}
+                    </Stack>
                 </Stack>
 
                 <Typography variant="body1" sx={{ color: '#FFFFFF', mb: 4, p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -139,7 +173,7 @@ export default function TicketDetailPage() {
                 />
 
                 <Stack spacing={2}>
-                    {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED') && (
+                    {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED' || ticket.status === 'assigned') && (
                         <Button 
                             fullWidth 
                             variant="contained" 

@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
-import { Box, Button, Typography, CssBaseline } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
 
 import LandingPage from './pages/LandingPage';
@@ -32,69 +32,102 @@ import SupportPage from './pages/public/SupportPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SovereignHeader from './components/SovereignHeader';
 
-import { RoleProvider } from './context/RoleContext';
+import { RoleProvider, useRole } from './context/RoleContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
+/**
+ * [CRITICAL] FULL-SCREEN BLOCKING LOADER
+ * Prevents any UI bleed or incorrect route rendering during role resolution.
+ */
+function LoadingScreen() {
+  return (
+    <Box sx={{ 
+      height: '100vh', 
+      width: '100vw', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      bgcolor: '#000',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      zIndex: 9999
+    }}>
+      <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
+      <Typography variant="h6" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 4, textTransform: 'uppercase' }}>
+        Authenticating Sovereign Identity...
+      </Typography>
+    </Box>
+  );
+}
+
+/**
+ * [INSTITUTIONAL ROUTER]
+ * Handles strict redirection for authenticated users who land on the root or login pages.
+ */
+function RoleRedirector({ children }: { children: React.ReactNode }) {
+  const { user, role, loading } = useRole();
+  const location = useLocation();
+
+  if (loading) return <LoadingScreen />;
+
+  // Only redirect if on login or root landing page
+  if (user && (location.pathname === '/' || location.pathname === '/login')) {
+    const normalizedRole = (role || '').toLowerCase();
+    if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
+    if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
+    if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
+    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function AppContent() {
-  const [safetyReleased, setSafetyReleased] = React.useState(false);
+  const { loading: roleLoading } = useRole();
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      console.warn('⚠️ [APP-CONTENT] Global mount safety threshold (5s) reached. Forcing UI release.');
-      setSafetyReleased(true);
-    }, 5000);
-    
-    // [BIN-STABILITY] Signal root mount success to index logic
-    if (typeof window !== 'undefined' && (window as any)._BIN_MOUNT_SUCCESS) {
-        (window as any)._BIN_MOUNT_SUCCESS();
-    }
-    
-    return () => {
-        
-        clearTimeout(timer);
-    };
-  }, []);
-
-  // [SOVEREIGN-STABILITY] Forcing release if providers hang longer than 5s
-  if (safetyReleased) {
-    console.warn('⚡ [BOOT] Safety released. Forcing render of global routes.');
+  // [STRICT BLOCK]
+  if (roleLoading) {
+    return <LoadingScreen />;
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/terms-of-service" element={<TermsPage />} />
-      <Route path="/privacy-policy" element={<PrivacyPage />} />
-      <Route path="/support" element={<SupportPage />} />
-      
-      {/* Property Lifecycle Portals */}
-      <Route path="/onboarding/*" element={<ProtectedRoute allowedRoles={['owner']}><PropertyOnboardingPage /></ProtectedRoute>} />
-      <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
-      <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
-      <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
-      <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
-      <Route path="/invoices/:id" element={<ProtectedRoute allowedRoles={['owner']}><InvoiceDetailsPage /></ProtectedRoute>} />
-      
-      {/* Sector Portals */}
-      <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantSOSPage /></ProtectedRoute>} />
-      <Route path="/tech/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianPortalPage /></ProtectedRoute>} />
-      <Route path="/tech/ticket/:id" element={<ProtectedRoute allowedRoles={['technician']}><TicketDetailPage /></ProtectedRoute>} />
-      <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerPortalPage /></ProtectedRoute>} />
-      <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
+    <RoleRedirector>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/terms-of-service" element={<TermsPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        
+        {/* Property Lifecycle Portals */}
+        <Route path="/onboarding/*" element={<ProtectedRoute allowedRoles={['owner']}><PropertyOnboardingPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
+        <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
+        <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
+        <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
+        <Route path="/invoices/:id" element={<ProtectedRoute allowedRoles={['owner']}><InvoiceDetailsPage /></ProtectedRoute>} />
+        
+        {/* Sector Portals */}
+        <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantSOSPage /></ProtectedRoute>} />
+        <Route path="/tech/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianPortalPage /></ProtectedRoute>} />
+        <Route path="/tech/ticket/:id" element={<ProtectedRoute allowedRoles={['technician']}><TicketDetailPage /></ProtectedRoute>} />
+        <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerPortalPage /></ProtectedRoute>} />
+        <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
 
-      {/* Public Protocol Validators */}
-      <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
-      <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
+        {/* Public Protocol Validators */}
+        <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
+        <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
 
-      {/* Institutional Recovery Redirects */}
-      <Route path="/home" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Institutional Recovery Redirects */}
+        <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </RoleRedirector>
   );
 }
 

@@ -69,7 +69,7 @@ if (typeof window !== 'undefined') {
     console.log("💎 [BIN-INIT] Enabling IndexedDB Persistence...");
     enableIndexedDbPersistence(_db).then(() => {
         console.log("💎 [BIN-INIT] Persistence enabled.");
-    }).catch((err) => {
+    }).catch((err: any) => {
         console.log("💎 [BIN-INIT] Persistence skipped/error:", err.code);
         if (err.code === 'failed-precondition') {
             console.warn('⚠️ [FIREBASE] Persistence locked (multiple tabs)');
