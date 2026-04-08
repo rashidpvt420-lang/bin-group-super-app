@@ -25,6 +25,7 @@ import {
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { Wallet, Clock } from 'lucide-react';
+import { useLanguage } from '@bin/shared';
 
 interface Technician {
   uid: string;
@@ -45,6 +46,7 @@ interface PayrollRecord {
 }
 
 export default function PayrollManagementPage() {
+  const { t, lang, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
   const [openProcess, setOpenAdd] = useState(false);
@@ -105,7 +107,7 @@ export default function PayrollManagementPage() {
       }
 
       await batch.commit();
-      alert("Payroll batch generated for " + currentMonth);
+      alert(t('fin.payroll_gen_success', { month: currentMonth }));
       setOpenAdd(false);
     } catch (err) {
       console.error("Payroll failure:", err);
@@ -118,11 +120,15 @@ export default function PayrollManagementPage() {
     .filter(p => p.month === currentMonth)
     .reduce((sum, p) => sum + p.amount, 0);
 
+  const formatAED = (val: number) => {
+    return val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
+  };
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Technician <Box component="span" sx={{ color: '#6366f1' }}>Payroll</Box>
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+          {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>
         </Typography>
         <Button 
           variant="contained" 
@@ -130,27 +136,27 @@ export default function PayrollManagementPage() {
           onClick={() => setOpenAdd(true)}
           sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}
         >
-          Generate Monthly Payroll
+          {t('fin.gen_payroll_btn')}
         </Button>
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
         <Grid item xs={12} md={4}>
           <Card sx={{ borderRadius: 4, bgcolor: '#6366f1', color: '#fff' }}>
-            <CardContent>
-              <Typography variant="overline" sx={{ fontWeight: 'bold', opacity: 0.8 }}>Active Liabilities ({currentMonth})</Typography>
-              <Typography variant="h3" sx={{ fontWeight: 900 }}>AED {totalPayroll.toLocaleString()}</Typography>
+            <CardContent sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+              <Typography variant="overline" sx={{ fontWeight: 'bold', opacity: 0.8 }}>{t('fin.active_liabilities', { month: currentMonth })}</Typography>
+              <Typography variant="h3" sx={{ fontWeight: 900 }}>{t('common.currency_aed')} {formatAED(totalPayroll)}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, borderRadius: 4, height: '100%', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Paper sx={{ p: 3, borderRadius: 4, height: '100%', display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
             <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
               <Clock size={24} />
             </Box>
-            <Box>
-              <Typography variant="overline" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Pending Disbursement</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 900 }}>{payroll.filter(p => p.status === 'pending').length} Technicians</Typography>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+              <Typography variant="overline" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>{t('fin.pending_disbursement')}</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 900 }}>{t('fin.tech_count', { count: payroll.filter(p => p.status === 'pending').length })}</Typography>
             </Box>
           </Paper>
         </Grid>
@@ -159,21 +165,21 @@ export default function PayrollManagementPage() {
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 4 }}>
         <Table>
           <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Technician</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Month</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Amount (AED)</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+            <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.technician')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.month')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.amount')} ({t('common.currency_aed')})</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.log.status')}</TableCell>
+              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {payroll.sort((a,b) => b.month.localeCompare(a.month)).map((record) => (
-              <TableRow key={record.id} hover>
-                <TableCell sx={{ fontWeight: 'bold' }}>{record.techName}</TableCell>
-                <TableCell>{record.month}</TableCell>
-                <TableCell sx={{ fontWeight: 900 }}>{record.amount.toLocaleString()}</TableCell>
-                <TableCell>
+              <TableRow key={record.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{record.techName}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{record.month}</TableCell>
+                <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{formatAED(record.amount)}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   <Chip 
                     label={record.status.toUpperCase()} 
                     color={record.status === 'paid' ? 'success' : 'warning'} 
@@ -181,9 +187,9 @@ export default function PayrollManagementPage() {
                     sx={{ fontWeight: 'bold', fontSize: 10 }} 
                   />
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align={isRTL ? 'left' : 'right'}>
                   {record.status === 'pending' && (
-                    <Button size="small" variant="outlined" color="success">Settle Payment</Button>
+                    <Button size="small" variant="outlined" color="success">{t('fin.settle_payment')}</Button>
                   )}
                 </TableCell>
               </TableRow>
@@ -192,25 +198,25 @@ export default function PayrollManagementPage() {
         </Table>
       </TableContainer>
 
-      <Dialog open={openProcess} onClose={() => setOpenAdd(false)}>
-        <DialogTitle sx={{ fontWeight: 900 }}>Generate Payroll: {currentMonth}</DialogTitle>
+      <Dialog open={openProcess} onClose={() => setOpenAdd(false)} dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('fin.gen_payroll_title', { month: currentMonth })}</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            This will calculate salaries for all active technicians and add them to the financial ledger as pending debits.
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('fin.gen_payroll_desc')}
           </Typography>
-          <Alert severity="info">
-            Targeting {techs.length} technicians for a total liability of AED {(techs.length * 3500).toLocaleString()}.
+          <Alert severity="info" sx={{ textAlign: isRTL ? 'right' : 'left', direction: isRTL ? 'rtl' : 'ltr' }}>
+            {t('fin.gen_payroll_info', { count: techs.length, currency: t('common.currency_aed'), amount: formatAED(techs.length * 3500) })}
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>
           <Button 
             variant="contained" 
             onClick={handleProcessPayroll} 
             disabled={processing}
             sx={{ borderRadius: 100, bgcolor: '#6366f1' }}
           >
-            Confirm & Execute
+            {t('fin.confirm_execute')}
           </Button>
         </DialogActions>
       </Dialog>

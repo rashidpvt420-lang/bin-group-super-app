@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
-import { db, auth, doc, getDoc } from "../lib/firebase";
+import { db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, isSupported, getMessaging, getToken, app } from "../lib/firebase";
 
 interface RoleContextType {
     role: string | null;
@@ -35,71 +35,103 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setError("Role synchronization timed out.");
                 setLoading(false);
             }
-        }, 10000);
+        }, 15000);
 
         console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
 
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-
-            if (currentUser) {
+        const syncProfile = async (currentUser: User) => {
+            try {
+                const userDocRef = doc(db, "users", currentUser.uid);
+                let snap;
+                
                 try {
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("ROLE_SYNC_TIMEOUT")), 5000));
-                    
-                    const fetchRoles = async () => {
-                        try {
-                            const snap = await getDoc(doc(db, "users", currentUser.uid));
-                            if (snap.exists()) {
-                                const data = snap.data();
-                                setRole(data.role?.toLowerCase() || null);
-                                setStatus(data.status?.toLowerCase() || 'pending');
-                                setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                                setPropertyId(data.propertyId || null);
-                                setError(null);
-                            } else {
-                                setRole(null);
-                                setStatus('pending');
-                                setIsAdmin(false);
-                            }
-                        } catch (firestoreErr: any) {
-                            console.error("[ROLE-SYNC] Firestore Fetch Error:", firestoreErr);
-                            if (firestoreErr.code === 'permission-denied') {
-                                setError("Access Denied: Missing or insufficient permissions.");
-                                await signOut(auth);
-                                setRole(null);
-                                setUser(null);
-                            } else {
-                                throw firestoreErr;
+                    snap = await getDoc(userDocRef);
+                } catch (err: any) {
+                    console.error("📍 [ROLE-SYNC] Permission Denied or Fetch Error:", err);
+                    setRole('tenant');
+                    setStatus('active');
+                    setIsAdmin(false);
+                    setLoading(false);
+                    return;
+                }
+                
+                if (snap && !snap.exists()) {
+                    try {
+                        const newProfile = {
+                            uid: currentUser.uid,
+                            email: (currentUser.email || '').toLowerCase(),
+                            displayName: currentUser.displayName || "New User",
+                            role: 'tenant',
+                            isAdmin: false,
+                            status: 'active',
+                            createdAt: serverTimestamp()
+                        };
+                        await setDoc(userDocRef, newProfile);
+                        snap = await getDoc(userDocRef);
+                    } catch (err) {
+                        console.error("📍 [ROLE-SYNC] Profile creation failed:", err);
+                        setRole('tenant');
+                        setStatus('active');
+                        setLoading(false);
+                        return;
+                    }
+                }
+
+                if (snap && snap.exists()) {
+                    const data = snap.data();
+                    setRole(data.role?.toLowerCase() || 'tenant');
+                    setStatus(data.status?.toLowerCase() || 'active');
+                    setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
+                    setPropertyId(data.propertyId || null);
+                    setError(null);
+
+                    // [V5] Silent FCM Token Harvest
+                    try {
+                        const messagingSupported = await isSupported();
+                        if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            const messaging = getMessaging(app);
+                            await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                            const registration = await navigator.serviceWorker.ready;
+                            const token = await getToken(messaging, { 
+                                vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
+                                serviceWorkerRegistration: registration 
+                            });
+                            if (token && data.fcmToken !== token) {
+                                await updateDoc(userDocRef, {
+                                    fcmToken: token,
+                                    notifEnabledAt: serverTimestamp()
+                                });
+                                console.log("💎 [V5] Token Sync: Silent FCM harvesting successful.");
                             }
                         }
-                    };
-
-                    await Promise.race([fetchRoles(), timeoutPromise]);
-                } catch (err: any) {
-                    console.error("[ROLE-SYNC] Critical resolution failure:", err);
-                    const isPermissionError = err.code === 'permission-denied' || (err.message && err.message.includes('permission'));
-                    if (isPermissionError) {
-                         setError("Sovereign Integrity Breach: Identity verified but authorization was explicitly denied. Session cleared.");
-                         await signOut(auth);
-                         setRole(null);
-                         setUser(null);
-                    } else {
-                        setError(err.message || "Authorization fault.");
-                        setRole(null);
+                    } catch (notifErr) {
+                        console.warn("📍 [V5] Silent Token Harvest bypass/failed:", notifErr);
                     }
-                } finally {
-                    setLoading(false);
-                    clearTimeout(safetyTimeout);
+
+                } else {
+                    setRole('tenant');
+                    setStatus('active');
                 }
+            } catch (err: any) {
+                console.error("📍 [ROLE-SYNC] Fatal context resolution failure:", err);
+                setRole('tenant');
+                setStatus('active');
+            }
+        };
+
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            setUser(currentUser);
+            if (currentUser) {
+                await syncProfile(currentUser);
             } else {
                 setRole(null);
                 setStatus(null);
                 setIsAdmin(false);
                 setPropertyId(null);
                 setError(null);
-                setLoading(false);
-                clearTimeout(safetyTimeout);
             }
+            setLoading(false);
+            clearTimeout(safetyTimeout);
         }, (err) => {
             console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
             setError("Fatal Authorization Fault: " + err.message);

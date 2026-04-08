@@ -6,10 +6,13 @@ import { db, doc, getDoc, updateDoc, serverTimestamp } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
 
+import { useRole } from '../context/RoleContext';
+
 export default function TicketDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const { user } = useRole();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
@@ -50,36 +53,55 @@ export default function TicketDetailPage() {
     };
 
     const updateStatus = async (newStatus: string) => {
-        if (!id) return;
+        if (!id || !user?.uid) return;
         setUpdating(true);
         try {
             const docRef = doc(db, 'maintenanceTickets', id);
-            await updateDoc(docRef, {
+            const updateData: any = {
                 status: newStatus,
                 updatedAt: serverTimestamp(),
                 notes: notes
-            });
-            setTicket({ ...ticket, status: newStatus, notes });
+            };
+
+            // If technician is taking an OPEN ticket, assign them
+            if ((ticket.status === 'OPEN' || ticket.status === 'assigned' || ticket.status === 'ASSIGNED') && (newStatus === 'EN_ROUTE' || newStatus === 'IN_PROGRESS')) {
+                updateData.assignedTechnicianId = user.uid;
+                updateData.technicianName = user.displayName || 'Maintenance Specialist';
+                updateData.assignedAt = serverTimestamp();
+            }
+
+            await updateDoc(docRef, updateData);
+            setTicket({ ...ticket, ...updateData, status: newStatus });
         } catch (err) {
             console.error("Status Update Failed:", err);
         }
         setUpdating(false);
     };
 
-    const simulatePhotoUpload = async (field: string) => {
-        if (!id) return;
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+        const file = e.target.files?.[0];
+        if (!file || !id) return;
+
         setUpdating(true);
+        // Simulate upload latency and success
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
         try {
             const docRef = doc(db, 'maintenanceTickets', id);
             await updateDoc(docRef, {
                 [field]: true,
                 updatedAt: serverTimestamp()
             });
-            setTicket({ ...ticket, [field]: true });
+            setTicket((prev: any) => prev ? { ...prev, [field]: true } : null);
         } catch (err) {
             console.error("Photo Upload Failed:", err);
         }
         setUpdating(false);
+    }
+
+    const triggerCamera = (field: string) => {
+        const input = document.getElementById(`camera-input-${field}`) as HTMLInputElement;
+        if (input) input.click();
     }
 
     if (loading) return <Container sx={{ py: 8 }}><Typography color="white">STABILIZING NODE DATA...</Typography></Container>;
@@ -133,11 +155,22 @@ export default function TicketDetailPage() {
 
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     <Grid item xs={6}>
+                        <Box
+                            component="input"
+                            type="file" 
+                            accept="image/*" 
+                            capture="environment" 
+                            sx={{ display: 'none' }} 
+                            id="camera-input-hasBeforePhoto"
+                            title={t('tech.photo.upload_before')}
+                            aria-label={t('tech.photo.upload_before')}
+                            onChange={(e: any) => handlePhotoUpload(e, 'hasBeforePhoto')}
+                        />
                         <Button 
                             fullWidth 
                             variant="outlined" 
                             startIcon={<Camera />}
-                            onClick={() => simulatePhotoUpload('hasBeforePhoto')}
+                            onClick={() => triggerCamera('hasBeforePhoto')}
                             disabled={updating || ticket.hasBeforePhoto}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasBeforePhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasBeforePhoto ? '#4ade80' : binThemeTokens.gold }}
                         >
@@ -145,11 +178,22 @@ export default function TicketDetailPage() {
                         </Button>
                     </Grid>
                     <Grid item xs={6}>
+                        <Box
+                            component="input"
+                            type="file" 
+                            accept="image/*" 
+                            capture="environment" 
+                            sx={{ display: 'none' }} 
+                            id="camera-input-hasAfterPhoto"
+                            title={t('tech.photo.upload_after')}
+                            aria-label={t('tech.photo.upload_after')}
+                            onChange={(e: any) => handlePhotoUpload(e, 'hasAfterPhoto')}
+                        />
                         <Button 
                             fullWidth 
                             variant="outlined" 
                             startIcon={<Camera />}
-                            onClick={() => simulatePhotoUpload('hasAfterPhoto')}
+                            onClick={() => triggerCamera('hasAfterPhoto')}
                             disabled={updating || ticket.hasAfterPhoto}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasAfterPhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasAfterPhoto ? '#4ade80' : binThemeTokens.gold }}
                         >

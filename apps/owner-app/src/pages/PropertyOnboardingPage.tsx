@@ -84,11 +84,11 @@ const PropertyOnboardingPage = () => {
                 <Container maxWidth="lg">
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                         <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                            BIN GROUP <Box component="span" sx={{ color: '#fff', ml: 1, fontWeight: 400, letterSpacing: 4 }}>SOVEREIGN</Box>
+                            BIN-Groups
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <ShieldIcon color="#10b981" size={18} />
-                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>V1.20 SECURE PROTOCOL</Typography>
+                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>V1.22 SECURE PROTOCOL</Typography>
                         </Box>
                     </Box>
 

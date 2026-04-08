@@ -9,8 +9,10 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import { ShieldCheck } from 'lucide-react';
 import { db, doc, getDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function CertificateVerificationPage() {
+    const { t } = useLanguage();
     const [certId, setCertId] = useState('');
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -37,12 +39,12 @@ export default function CertificateVerificationPage() {
             <Container maxWidth="sm">
                 <Box sx={{ textAlign: 'center', mb: 8 }}>
                     <ShieldCheck size={72} color={binThemeTokens.gold} style={{ marginBottom: 24 }} />
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>National Compliance Hub</Typography>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, letterSpacing: 4, fontWeight: 900 }}>SOVEREIGN VALIDATION NODE</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>{t('cert.registry_title')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, letterSpacing: 4, fontWeight: 900 }}>{t('cert.sovereign_protocol')}</Typography>
                 </Box>
 
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: '#161618', border: `1px solid ${binThemeTokens.gold}44`, boxShadow: '0 40px 100px rgba(0,0,0,0.8)' }}>
-                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, mb: 2, fontWeight: 900, letterSpacing: 1 }}>ENTER CERTIFICATE ID / ASSET REF</Typography>
+                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, mb: 2, fontWeight: 900, letterSpacing: 1 }}>{t('cert.enter_id')}</Typography>
                     <TextField 
                         fullWidth 
                         variant="outlined" 
@@ -83,7 +85,7 @@ export default function CertificateVerificationPage() {
                         }}
                         disabled={loading}
                     >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : 'VALIDATE CERTIFICATION'}
+                        {loading ? <CircularProgress size={24} color="inherit" /> : t('cert.validate_btn')}
                     </Button>
 
                     {status && (
@@ -102,15 +104,15 @@ export default function CertificateVerificationPage() {
                                             mb: 3
                                         }}
                                     >
-                                        <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>CERTIFICATE AUTHENTIC</Typography>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Verified against Sovereign National Registry.</Typography>
+                                        <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{t('cert.authentic')}</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('cert.verified_msg')}</Typography>
                                     </Alert>
                                     <Box sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
                                         <Stack direction="row" spacing={3} alignItems="center">
                                             <DescriptionIcon sx={{ color: binThemeTokens.gold }} />
                                             <Box>
-                                                <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#FFFFFF' }}>{status.data?.type || 'Standard'} Certificate</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Score: {status.data?.score || '100'}/100 | Active Status</Typography>
+                                                <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#FFFFFF' }}>{t('cert.type_label', { type: status.data?.type || 'Standard' })}</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('cert.score_label', { score: status.data?.score || '100' })}</Typography>
                                             </Box>
                                         </Stack>
                                     </Box>
@@ -126,8 +128,8 @@ export default function CertificateVerificationPage() {
                                         border: '1px solid rgba(255, 77, 77, 0.2)'
                                     }}
                                 >
-                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#ff4d4d' }}>INVALID IDENTIFIER</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>No matching certificate found in the sovereign cluster.</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#ff4d4d' }}>{t('cert.invalid')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('cert.invalid_msg')}</Typography>
                                 </Alert>
                             )}
                         </Box>

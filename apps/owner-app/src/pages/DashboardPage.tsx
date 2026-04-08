@@ -182,10 +182,10 @@ export default function DashboardPage() {
             {/* Economic Powergrid */}
       <Grid container spacing={4} sx={{ mb: 8 }}>
         {[
-            { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(metrics?.yield?.grossContractValue)}`, trend: 'LIVE', icon: <AccountBalanceWalletIcon /> },
+            { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(metrics?.yield?.grossContractValue)}`, trend: t('dash.kpi.trend.live'), icon: <AccountBalanceWalletIcon /> },
             { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield || 0}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
-            { label: t('dash.kpi.radius'), val: properties?.[0]?.emirate || 'UAE', trend: 'ACTIVE', icon: <SignalCellularAltIcon /> },
-            { label: t('dash.kpi.majlis_readiness'), val: properties?.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: 'OPTIMAL', icon: <Crown size={20} color={binThemeTokens.gold} /> },
+            { label: t('dash.kpi.radius'), val: properties?.[0]?.emirate || 'UAE', trend: t('dash.kpi.trend.active'), icon: <SignalCellularAltIcon /> },
+            { label: t('dash.kpi.majlis_readiness'), val: properties?.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: t('dash.kpi.trend.optimal'), icon: <Crown size={20} color={binThemeTokens.gold} /> },
         ].map((kpi, i) => (
             <Grid item xs={12} md={3} key={i}>
                 <Card sx={{ 
@@ -401,10 +401,10 @@ export default function DashboardPage() {
 
       {/* Sovereign Intelligence Deck — AI Pointers */}
       <Box sx={{ mt: 10, mb: 10 }}>
-          <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 1 }}>
-              SOVEREIGN INTELLIGENCE DECK
+          <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>
+              {t('dash.intel.deck')}
           </Typography>
-          <Grid container spacing={4}>
+          <Grid container spacing={4} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
               {properties.map((p) => {
                   const intel = intelligence[p.id];
                   if (!intel) return null;
@@ -416,8 +416,8 @@ export default function DashboardPage() {
                               border: '1px solid rgba(198, 167, 94, 0.15)',
                               overflow: 'hidden'
                           }}>
-                              <Box sx={{ p: 4, bgcolor: 'rgba(198, 167, 94, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <Typography variant="h6" fontWeight="900" sx={{ color: '#fff' }}>{p.area} • AI FORECAST</Typography>
+                              <Box sx={{ p: 4, bgcolor: 'rgba(198, 167, 94, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                  <Typography variant="h6" fontWeight="900" sx={{ color: '#fff' }}>{p.area} • {t('dash.intel.forecast')}</Typography>
                                   <Chip label="PREDICTIVE" size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                               </Box>
                               <CardContent sx={{ p: 4, position: 'relative' }}>
@@ -428,36 +428,36 @@ export default function DashboardPage() {
                                       zIndex: 1
                                   }} />
 
-                                  <Grid container spacing={4} sx={{ position: 'relative', zIndex: 2 }}>
-                                      <Grid item xs={6}>
-                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>INTEGRITY DECAY</Typography>
+                                  <Grid container spacing={4} sx={{ position: 'relative', zIndex: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                      <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('dash.intel.integrity_decay')}</Typography>
                                               <TrendingUpIcon sx={{ fontSize: 14, color: binThemeTokens.danger, transform: 'rotate(180deg)' }} />
                                           </Box>
                                           <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>-{intel.assetResilience.predictedDecay12Months}%</Typography>
-                                          <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 700 }}>12-MONTH HORIZON</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 700 }}>{t('dash.intel.horizon')}</Typography>
                                       </Grid>
-                                      <Grid item xs={6}>
-                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>PROJECTED YIELD</Typography>
+                                      <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('dash.intel.projected_yield')}</Typography>
                                               <TrendingUpIcon sx={{ fontSize: 14, color: '#4ADE80' }} />
                                           </Box>
                                           <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>{intel.financialForecast.expectedNetROI}%</Typography>
-                                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>ANNUALIZED NET</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{t('dash.intel.annualized_net')}</Typography>
                                       </Grid>
                                   </Grid>
                                   
                                   <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
                                   
-                                  <Box sx={{ mb: 3 }}>
-                                      <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>STRATEGIC MISSION GUIDANCE</Typography>
+                                  <Box sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
+                                      <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{t('dash.intel.guidance_title')}</Typography>
                                       <Typography variant="body1" sx={{ color: binThemeTokens.textPrimary, lineHeight: 1.8, fontStyle: 'italic', mt: 1 }}>
                                           "{intel.financialForecast.guidance}"
                                       </Typography>
                                   </Box>
 
-                                  <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 3, display: 'block', mb: 1 }}>
-                                      SOVEREIGN PROTOCOL COMMANDS
+                                  <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 3, display: 'block', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>
+                                      {t('dash.intel.protocol_commands')}
                                   </Typography>
                                   
                                   <MissionGuidanceFeed 
@@ -482,7 +482,7 @@ export default function DashboardPage() {
                                             '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.05), borderColor: binThemeTokens.goldLight }
                                         }}
                                       >
-                                          {generatingAudit === p.id ? 'GENERATING SOVEREIGN AUDIT...' : 'DOWNLOAD INTEGRITY AUDIT (PDF)'}
+                                          {generatingAudit === p.id ? t('dash.intel.generating_audit') : t('dash.intel.download_audit')}
                                       </Button>
                                   </Box>
                               </CardContent>

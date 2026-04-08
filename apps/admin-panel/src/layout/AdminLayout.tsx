@@ -27,8 +27,11 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Home as HomeIcon,
+  AccountBalance as TreasuryIcon,
+  History as AuditIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@bin/shared';
 
 const DRAWER_WIDTH = 260;
 
@@ -38,6 +41,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, currentPage }: AdminLayoutProps) {
+  const { t, isRTL, lang } = useLanguage();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [sosCount] = useState(3); // Mock SOS count
@@ -51,35 +55,38 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   };
 
   const handleLogout = () => {
-    alert('Logged out');
+    alert(t('nav.logout'));
     navigate('/login');
   };
 
   const menuItems = [
-    { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { label: 'Live Map', icon: <MapIcon />, path: '/live-map' },
-    { label: 'Owners', icon: <PeopleIcon />, path: '/owners' },
-    { label: 'Tickets', icon: <BuildIcon />, path: '/tickets' },
-    { label: 'Technicians', icon: <PeopleIcon />, path: '/technicians' },
-    { label: 'SOS Feed', icon: <Badge badgeContent={sosCount} color="error"><WarningIcon /></Badge>, path: '/sos' },
-    { label: 'Reports', icon: <BarChartIcon />, path: '/reports' },
-    { label: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+    { label: t('nav.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+    { label: t('nav.live_map'), icon: <MapIcon />, path: '/live-map' },
+    { label: t('nav.tenants'), icon: <PeopleIcon />, path: '/owners' },
+    { label: t('nav.tickets'), icon: <BuildIcon />, path: '/tickets' },
+    { label: t('nav.technicians'), icon: <PeopleIcon />, path: '/technicians' },
+    { label: t('nav.financials'), icon: <TreasuryIcon />, path: '/financials' },
+    { label: t('nav.sos_feed'), icon: <Badge badgeContent={sosCount} color="error"><WarningIcon /></Badge>, path: '/sos' },
+    { label: t('nav.audit'), icon: <AuditIcon />, path: '/audit' },
+    { label: t('nav.reports'), icon: <BarChartIcon />, path: '/reports' },
+    { label: t('nav.settings'), icon: <SettingsIcon />, path: '/settings' },
   ];
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', direction: isRTL ? 'rtl' : 'ltr' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
         sx={{
           width: `calc(100% - ${DRAWER_WIDTH}px)`,
-          ml: `${DRAWER_WIDTH}px`,
+          ml: isRTL ? 0 : `${DRAWER_WIDTH}px`,
+          mr: isRTL ? `${DRAWER_WIDTH}px` : 0,
           backgroundColor: '#1976d2',
         }}
       >
-        <Toolbar>
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6">HOME OS Admin Panel</Typography>
+        <Toolbar sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Box sx={{ flexGrow: 1, textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography variant="h6">{t('nav.admin_panel_title')}</Typography>
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
               {currentPage}
             </Typography>
@@ -92,15 +99,15 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
           >
             AD
           </Avatar>
-          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-            <MenuItem>👤 Admin User</MenuItem>
-            <MenuItem>admin@homeOS.com</MenuItem>
+          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose} dir={isRTL ? 'rtl' : 'ltr'}>
+            <MenuItem sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>👤 {t('nav.admin_user')}</MenuItem>
+            <MenuItem sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>admin@bin-groups.com</MenuItem>
             <Divider />
-            <MenuItem onClick={() => { navigate('/settings'); handleMenuClose(); }}>
-              ⚙ Settings
+            <MenuItem onClick={() => { navigate('/settings'); handleMenuClose(); }} sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
+              ⚙ {t('nav.settings')}
             </MenuItem>
-            <MenuItem onClick={handleLogout}>
-              <LogoutIcon sx={{ mr: 1 }} /> Logout
+            <MenuItem onClick={handleLogout} sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
+              <LogoutIcon sx={{ mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 }} /> {t('nav.logout')}
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -116,16 +123,18 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
             boxSizing: 'border-box',
             backgroundColor: '#263238',
             color: '#fff',
+            left: isRTL ? 'auto' : 0,
+            right: isRTL ? 0 : 'auto',
           },
         }}
         variant="permanent"
-        anchor="left"
+        anchor={isRTL ? 'right' : 'left'}
       >
         {/* Logo */}
-        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <HomeIcon sx={{ fontSize: 32, color: '#00bcd4' }} />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            HOME OS
+            BIN-GROUP
           </Typography>
         </Box>
 
@@ -137,8 +146,9 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
             <ListItem key={item.path} disablePadding>
               <ListItemButton
                 onClick={() => navigate(item.path)}
-                selected={currentPage.includes(item.label.toLowerCase())}
+                selected={currentPage.toLowerCase().includes(item.label.toLowerCase())}
                 sx={{
+                  flexDirection: isRTL ? 'row-reverse' : 'row',
                   '&.Mui-selected': {
                     backgroundColor: '#00bcd4',
                     color: '#000',
@@ -151,10 +161,10 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
                   },
                 }}
               >
-                <ListItemIcon sx={{ color: '#00bcd4', minWidth: 40 }}>
+                <ListItemIcon sx={{ color: '#00bcd4', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText primary={item.label} />
+                <ListItemText primary={item.label} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
               </ListItemButton>
             </ListItem>
           ))}
@@ -163,9 +173,9 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
         <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
 
         {/* Footer */}
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: 2, textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="caption" sx={{ opacity: 0.7 }}>
-            v1.0.0 | Go-Live: Jun 6, 2026
+            {t('nav.version_info')}
           </Typography>
         </Box>
       </Drawer>
@@ -174,7 +184,8 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
       <Box
         sx={{
           flex: 1,
-          ml: 0,
+          ml: isRTL ? 0 : 0,
+          mr: isRTL ? 0 : 0,
           mt: '64px',
           backgroundColor: '#fafafa',
           minHeight: 'calc(100vh - 64px)',

@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { apiClient } from '../../services/api';
+import { useLanguage } from '@bin/shared';
 
 interface Owner {
   ownerId: string;
@@ -34,6 +35,7 @@ interface Owner {
 }
 
 export default function OwnerManagementPage() {
+  const { t, isRTL } = useLanguage();
   const [owners, setOwners] = useState<Owner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
@@ -42,6 +44,7 @@ export default function OwnerManagementPage() {
 
   useEffect(() => {
     fetchOwners();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchOwners = async () => {
@@ -51,7 +54,7 @@ export default function OwnerManagementPage() {
       setOwners(response?.data?.owners || []);
     } catch (error) {
       console.error('Failed to fetch owners:', error);
-      alert('Failed to load owners');
+      alert(t('admin.load_owners_failed'));
     } finally {
       setLoading(false);
     }
@@ -65,58 +68,58 @@ export default function OwnerManagementPage() {
         reason: suspensionReason,
       });
 
-      alert(`Owner ${selectedOwner.name} has been suspended`);
+      alert(t('admin.owner_suspended', { name: selectedOwner.name }));
       setSuspendDialogOpen(false);
       fetchOwners();
     } catch (error) {
       console.error('Failed to suspend owner:', error);
-      alert('Failed to suspend owner');
+      alert(t('admin.suspend_owner_failed'));
     }
   };
 
   const handleResume = async (ownerId: string) => {
     try {
       await apiClient.post(`/api/admin/owners/${ownerId}/resume`);
-      alert('Owner has been re-activated');
+      alert(t('admin.owner_resumed'));
       fetchOwners();
     } catch (error) {
       console.error('Failed to resume owner:', error);
-      alert('Failed to resume owner');
+      alert(t('admin.resume_owner_failed'));
     }
   };
 
   if (loading) {
-    return <Typography>Loading owners...</Typography>;
+    return <Typography sx={{ p: 4 }}>{t('onboarding.payment.verifying')}</Typography>;
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        Owner Management
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Typography variant="h4" sx={{ mb: 4, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+        {t('admin.owner_management')}
       </Typography>
 
       <TableContainer component={Paper}>
         <Table>
           <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell align="center">Buildings</TableCell>
-              <TableCell align="center">Units</TableCell>
-              <TableCell align="right">Monthly Rent</TableCell>
-              <TableCell align="center">Unpaid Invoices</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="center">Actions</TableCell>
+              <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>{t('field.name')}</TableCell>
+              <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>{t('login.email')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>{t('onboarding.property_details')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>{t('field.units')}</TableCell>
+              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('admin.monthly_rent')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>{t('admin.unpaid_invoices')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>{t('fin.log.status')}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {(owners || []).map((owner) => (
-              <TableRow key={owner.ownerId}>
-                <TableCell>{owner.name}</TableCell>
-                <TableCell>{owner.email}</TableCell>
+              <TableRow key={owner.ownerId} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.name}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.email}</TableCell>
                 <TableCell align="center">{owner.totalBuildings}</TableCell>
                 <TableCell align="center">{owner.totalUnits}</TableCell>
-                <TableCell align="right">AED {(owner.monthlyRentCollected || 0).toLocaleString()}</TableCell>
+                <TableCell align="right">{t('common.currency_aed')} {(owner.monthlyRentCollected || 0).toLocaleString()}</TableCell>
                 <TableCell align="center">
                   <Chip
                     label={owner.unpaidInvoiceCount}
@@ -142,7 +145,7 @@ export default function OwnerManagementPage() {
                         }}
                         disabled={owner.suspensionStatus === 'SUSPENDED'}
                       >
-                        Suspend
+                        {t('admin.suspend_owner')}
                       </Button>
                     </Grid>
                     <Grid item>
@@ -153,7 +156,7 @@ export default function OwnerManagementPage() {
                           color="success"
                           onClick={() => handleResume(owner.ownerId)}
                         >
-                          Resume
+                          {t('admin.resume_owner')}
                         </Button>
                       )}
                     </Grid>
@@ -166,29 +169,29 @@ export default function OwnerManagementPage() {
       </TableContainer>
 
       {/* Suspension Dialog */}
-      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Suspend Owner</DialogTitle>
+      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.suspend_owner')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ mb: 2 }}>
-            Are you sure you want to suspend <strong>{selectedOwner?.name}</strong>?
+          <Typography sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('admin.suspend_confirm', { name: selectedOwner?.name })}
           </Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Suspended owners will have their app access blocked and emergency services disabled.
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('admin.suspend_desc')}
           </Typography>
           <TextField
             fullWidth
-            label="Suspension Reason"
+            label={t('admin.suspend_reason')}
             multiline
             rows={4}
             value={suspensionReason}
             onChange={(e) => setSuspensionReason(e.target.value)}
-            placeholder="Enter reason for suspension..."
+            placeholder={t('admin.suspend_reason')}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSuspendDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSuspend} variant="contained" color="error">
-            Suspend Owner
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setSuspendDialogOpen(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSuspend} variant="contained" color="error" sx={{ borderRadius: 100 }}>
+            {t('admin.suspend_owner')}
           </Button>
         </DialogActions>
       </Dialog>

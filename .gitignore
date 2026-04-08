@@ -76,19 +76,26 @@ out/
 bin/
 
 # Documentation Staging (Root)
-ADMIN_COMMAND_CENTER.md
-AI_CONCIERGE_SPEC.md
-AI_RISK_PREDICTION.md
-API_SPECIFICATION.md
-ASSET_TAG_SCHEMA.md
-BIN_Group_Enterprise_Pitch.md
-BIN_Group_Master_Agreement_v1.md
-BIN_Group_Technical_Specification_v3_0.md
-BUILD_SUMMARY.md
-COMMUNICATION_MATRIX.md
-COMPETITIVE_EDGE_2026.md
-CLEAN_DEPLOY.ps1
-CLEAN_DEPLOY_V3.ps1
+*.md
+!README.md
+*.ps1
+!deploy-production.ps1
+!FORCE_BIN_RECOVERY.ps1
+*.js
+!copy_script.js
+!patch-routes.js
+*.html
+!index.html
+*.json
+!package.json
+!package-lock.json
+!firebase.json
+!firestore.indexes.json
+!database.rules.json
+!manifest.json
+!DATA_COMMUNITY_BENCHMARKS.json
+*.txt
+*.bat
 
 # IDE & Metadata
 .vscode/

@@ -10,12 +10,14 @@ import {
 
 // Import Firestore from sovereign shared lib
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { useLanguage } from '@bin/shared';
 
 const Icon = ({ icon: IconComponent, size = 16, className = "" }: { icon: any, size?: number, className?: string }) => (
   <IconComponent size={size} className={className} />
 );
 
 const TechnicianCommandCenter: React.FC = () => {
+  const { t, isRTL } = useLanguage();
   const [techList, setTechList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -69,22 +71,22 @@ const TechnicianCommandCenter: React.FC = () => {
   }, []);
 
   const metricCards = [
-    { label: 'Active Technicians', value: `${stats.active}/${stats.totalCount}`, icon: Users },
-    { label: 'Avg Feedback', value: '4.85', icon: Activity },
-    { label: 'Evidence Compliance', value: `${stats.compliance}%`, icon: ShieldCheck },
-    { label: 'Total Jobs Today', value: stats.jobsToday.toString(), icon: Clock }
+    { label: t('tech.active_technicians'), value: `${stats.active}/${stats.totalCount}`, icon: Users },
+    { label: t('tech.avg_feedback'), value: '4.85', icon: Activity },
+    { label: t('tech.evidence_compliance'), value: `${stats.compliance}%`, icon: ShieldCheck },
+    { label: t('tech.total_jobs_today'), value: stats.jobsToday.toString(), icon: Clock }
   ];
 
-  if (loading && techList.length === 0) return <div className="p-8 text-center text-emerald-400 font-mono tracking-widest animate-pulse">BOOTING TECHNICIAN_COMMAND_LAYER_V1.1...</div>;
+  if (loading && techList.length === 0) return <div className="p-8 text-center text-emerald-400 font-mono tracking-widest animate-pulse">{t('tech.booting_msg')}</div>;
 
   return (
-    <div className="p-8 bg-[#0a0a0b] text-white min-h-screen font-sans">
+    <div className={`p-8 bg-[#0a0a0b] text-white min-h-screen font-sans ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
-        <div>
+        <div className={isRTL ? 'text-right' : 'text-left'}>
           <h1 className="text-3xl font-black tracking-tighter uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-500">
-             Command Center
+             {t('tech.command_center')}
           </h1>
-          <p className="text-gray-500 text-xs font-bold tracking-widest mt-1">REAL-TIME EXECUTION LAYER MONITORING (FIRESTORE)</p>
+          <p className="text-gray-500 text-xs font-bold tracking-widest mt-1">{t('tech.exec_layer_monitoring')}</p>
         </div>
         <div className="flex items-center gap-6">
            {metricCards.map(s => (
@@ -92,7 +94,7 @@ const TechnicianCommandCenter: React.FC = () => {
                 <div className="text-gray-600 bg-white/5 p-2 rounded-lg">
                    <Icon icon={s.icon} size={18} />
                 </div>
-                <div>
+                <div className={isRTL ? 'text-right' : 'text-left'}>
                    <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest">{s.label}</div>
                    <div className="text-sm font-bold">{s.value}</div>
                 </div>
@@ -104,12 +106,12 @@ const TechnicianCommandCenter: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 space-y-4">
            {techList.map(tech => (
-             <TechCard key={tech.id} tech={tech} />
+             <TechCard key={tech.id} tech={tech} t={t} isRTL={isRTL} />
            ))}
            
            {techList.length === 0 && (
              <div className="bg-[#141417] p-8 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-600 text-sm font-bold">
-                NO TECHNICIANS ONLINE IN SOVEREIGN CLOUD
+                {t('tech.no_techs_online')}
              </div>
            )}
         </div>
@@ -117,7 +119,7 @@ const TechnicianCommandCenter: React.FC = () => {
         <div className="space-y-8">
            <div className="bg-[#141417] p-6 rounded-2xl border border-white/5 shadow-2xl">
               <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
-                 <Icon icon={Activity} size={16} /> Job Intensity
+                 <Icon icon={Activity} size={16} /> {t('tech.job_intensity')}
               </h2>
               <div className="h-[200px]">
                  <ResponsiveContainer width="100%" height="100%">
@@ -133,12 +135,12 @@ const TechnicianCommandCenter: React.FC = () => {
 
            <div className="bg-[#141417] p-6 rounded-2xl border border-white/5 shadow-2xl">
               <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
-                 <Icon icon={Smartphone} size={16} /> Device Health
+                 <Icon icon={Smartphone} size={16} /> {t('tech.device_health')}
               </h2>
               <div className="space-y-4 text-xs font-bold uppercase tracking-widest text-gray-500">
-                 <div className="flex justify-between"><span>Online</span> <span className="text-emerald-400">{stats.active}/{stats.totalCount}</span></div>
-                 <div className="flex justify-between"><span>GPS Drift</span> <span className="text-blue-400">± 5m</span></div>
-                 <div className="flex justify-between"><span>Evidence Sync</span> <span className="text-emerald-400">Stable</span></div>
+                 <div className="flex justify-between"><span>{t('tech.online')}</span> <span className="text-emerald-400">{stats.active}/{stats.totalCount}</span></div>
+                 <div className="flex justify-between"><span>{t('tech.gps_drift')}</span> <span className="text-blue-400">± 5m</span></div>
+                 <div className="flex justify-between"><span>{t('tech.evidence_sync')}</span> <span className="text-emerald-400">{t('tech.stable')}</span></div>
               </div>
            </div>
         </div>
@@ -147,7 +149,7 @@ const TechnicianCommandCenter: React.FC = () => {
   );
 };
 
-const TechCard = ({ tech }: any) => {
+const TechCard = ({ tech, t, isRTL }: any) => {
   const isCharging = tech.status === 'ON_SITE' || tech.status === 'On-Job';
   const isTravel = tech.status === 'TRAVELING' || tech.status === 'Available';
 
@@ -161,7 +163,7 @@ const TechCard = ({ tech }: any) => {
                    isCharging ? 'bg-blue-500' : isTravel ? 'bg-emerald-500' : 'bg-gray-600'
                 }`} />
              </div>
-             <div>
+             <div className={isRTL ? 'text-right' : 'text-left'}>
                 <div className="text-lg font-bold">{tech.name || 'Unknown Tech'}</div>
                 <div className="text-xs text-gray-500 font-bold flex items-center gap-1.5 uppercase tracking-widest">
                    <Icon icon={MapPin} size={12} className="text-emerald-400" /> {tech.zone || 'Unknown Zone'}
@@ -171,12 +173,12 @@ const TechCard = ({ tech }: any) => {
 
           <div className="flex items-center gap-12">
              <div className="hidden md:block text-right">
-                <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Status</div>
+                <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">{t('tech.status')}</div>
                 <div className="text-sm font-bold flex items-center gap-2 justify-end">
                    {isCharging ? (
-                      <div className="text-blue-400 flex items-center gap-1"><Icon icon={Activity} size={16} /> ON_SITE</div>
+                      <div className="text-blue-400 flex items-center gap-1"><Icon icon={Activity} size={16} /> {t('tech.on_site')}</div>
                    ) : isTravel ? (
-                      <div className="text-emerald-400 flex items-center gap-1"><Icon icon={Navigation} size={16} /> READY</div>
+                      <div className="text-emerald-400 flex items-center gap-1"><Icon icon={Navigation} size={16} /> {t('tech.ready')}</div>
                    ) : (
                       <div className="text-gray-500 flex items-center gap-1">OFFLINE</div>
                    )}
@@ -184,13 +186,13 @@ const TechCard = ({ tech }: any) => {
              </div>
 
              <div className="text-center">
-                <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Reliability</div>
+                <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">{t('tech.reliability')}</div>
                 <div className="text-xl font-bold font-mono text-emerald-400">{tech.reliability || 95}%</div>
              </div>
 
              <div className="text-right flex items-center gap-4">
                 <div className="hidden lg:block">
-                   <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Battery</div>
+                   <div className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">{t('tech.battery')}</div>
                    <div className="text-xs font-bold text-gray-400">{tech.battery || 100}%</div>
                 </div>
                 <div className="bg-white/5 p-2 rounded-lg group-hover:bg-blue-500/20 text-gray-600 group-hover:text-blue-400 transition-all">

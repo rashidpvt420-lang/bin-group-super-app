@@ -18,23 +18,23 @@ export async function fetchPortfolioAggregation(ownerId: string): Promise<Portfo
         const ticketRef = collection(db, 'maintenanceTickets');
         const txRef = collection(db, 'transactions');
 
-        // Parallel fetching: All docs mandatory filtered by ownerId in production.
+        // [BULLETPROOF] Individual catch blocks per query to prevent total aggregate failure
         const [propSnap, contractSnap, ticketSnap, txSnap] = await Promise.all([
-            getDocs(query(propRef, where('ownerId', '==', ownerId))),
-            getDocs(query(contractRef, where('ownerId', '==', ownerId))),
-            getDocs(query(ticketRef, where('ownerId', '==', ownerId))),
-            getDocs(query(txRef, where('ownerId', '==', ownerId)))
+            getDocs(query(propRef, where('ownerId', '==', ownerId))).catch(e => { console.warn("📍 [AGG-ENGINE] Properties restricted:", e); return { docs: [] }; }),
+            getDocs(query(contractRef, where('ownerId', '==', ownerId))).catch(e => { console.warn("📍 [AGG-ENGINE] Contracts restricted:", e); return { docs: [] }; }),
+            getDocs(query(ticketRef, where('ownerId', '==', ownerId))).catch(e => { console.warn("📍 [AGG-ENGINE] Tickets restricted:", e); return { docs: [] }; }),
+            getDocs(query(txRef, where('ownerId', '==', ownerId))).catch(e => { console.warn("📍 [AGG-ENGINE] Transactions restricted:", e); return { docs: [] }; })
         ]);
 
         return {
-            properties: propSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-            contracts: contractSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-            tickets: ticketSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-            transactions: txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            properties: propSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+            contracts: contractSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+            tickets: ticketSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+            transactions: txSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
         };
     } catch (error) {
         console.error("Aggregation Engine Failure:", error);
-        throw error;
+        return { properties: [], contracts: [], tickets: [], transactions: [] };
     }
 }
 

@@ -12,6 +12,7 @@ import { MissionGuidancePayload } from '../utils/predictiveIntelligence';
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { useLanguage } from '../context/LanguageContext';
 
 interface MaintenanceProposal {
     id: string;
@@ -33,6 +34,7 @@ interface MissionGuidanceFeedProps {
  * Transforms AI predictive alerts into actionable protocol commands.
  */
 export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess }: MissionGuidanceFeedProps) {
+    const { t, isRTL } = useLanguage();
     const [executingAlert, setExecutingAlert] = useState<string | null>(null);
     const [proposals, setProposals] = useState<MaintenanceProposal[]>([]);
     const [loadingProposals, setLoadingProposals] = useState(true);
@@ -117,7 +119,9 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                             '&::before': {
                                 content: '""',
                                 position: 'absolute',
-                                top: 0, left: 0, bottom: 0,
+                                top: 0, 
+                                [isRTL ? 'right' : 'left']: 0, 
+                                bottom: 0,
                                 width: 4,
                                 bgcolor: alert.type === 'CRITICAL' ? binThemeTokens.danger : binThemeTokens.gold
                             }
@@ -146,20 +150,20 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                             />
                         </Stack>
 
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 3, pl: 5, lineHeight: 1.6 }}>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 3, [isRTL ? 'pr' : 'pl']: 5, lineHeight: 1.6 }}>
                             {alert.recommendation}
                         </Typography>
 
                         <Divider sx={{ mb: 2, borderColor: alpha('#fff', 0.05) }} />
 
                         <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
-                            <Button 
-                                size="small"
-                                sx={{ color: binThemeTokens.textTertiary, fontWeight: 700 }}
+                            <Box
+                                component="button"
+                                sx={{ background: 'none', border: 'none', color: binThemeTokens.textTertiary, fontWeight: 700, cursor: 'pointer', fontSize: '0.8125rem' }}
                                 onClick={() => {/* Dismiss logic */}}
                             >
-                                DISMISS
-                            </Button>
+                                {t('tech.dismiss')}
+                            </Box>
                             <Button
                                 variant="contained"
                                 size="small"
@@ -177,7 +181,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                                     borderRadius: 3
                                 }}
                             >
-                                {alert.type === 'CRITICAL' ? 'SANCTION EMERGENCY PROTOCOL' : 'SANCTION PREVENTIVE PROTOCOL'}
+                                {alert.type === 'CRITICAL' ? t('tech.sanction_emergency') : t('tech.sanction_preventive')}
                             </Button>
                         </Stack>
                     </Paper>
@@ -197,7 +201,9 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                             '&::before': {
                                 content: '""',
                                 position: 'absolute',
-                                top: 0, left: 0, bottom: 0,
+                                top: 0, 
+                                [isRTL ? 'right' : 'left']: 0, 
+                                bottom: 0,
                                 width: 4,
                                 bgcolor: binThemeTokens.gold
                             }
@@ -211,7 +217,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                                 </Typography>
                             </Stack>
                             <Chip 
-                                label="AI PROPOSAL" 
+                                label={t('tech.ai_proposal')} 
                                 size="small" 
                                 sx={{ 
                                     fontWeight: 900, fontSize: '0.65rem',
@@ -221,26 +227,26 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                             />
                         </Stack>
 
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 1, pl: 5, lineHeight: 1.6 }}>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 1, [isRTL ? 'pr' : 'pl']: 5, lineHeight: 1.6 }}>
                             {proposal.description}
                         </Typography>
 
-                        <Box sx={{ pl: 5, mb: 3 }}>
+                        <Box sx={{ [isRTL ? 'pr' : 'pl']: 5, mb: 3 }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
-                                SUGGESTED BUDGET: AED {proposal.suggestedBudget || 450}
+                                {t('tech.budget_label')} {proposal.suggestedBudget || 450}
                             </Typography>
                         </Box>
 
                         <Divider sx={{ mb: 2, borderColor: alpha('#fff', 0.05) }} />
 
                         <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
-                            <Button 
-                                size="small"
-                                sx={{ color: binThemeTokens.textTertiary, fontWeight: 700 }}
+                            <Box
+                                component="button"
+                                sx={{ background: 'none', border: 'none', color: binThemeTokens.textTertiary, fontWeight: 700, cursor: 'pointer', fontSize: '0.8125rem' }}
                                 onClick={() => {/* Decline logic */}}
                             >
-                                DECLINE
-                            </Button>
+                                {t('tech.decline')}
+                            </Box>
                             <Button
                                 variant="contained"
                                 size="small"
@@ -256,7 +262,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                                     borderRadius: 3
                                 }}
                             >
-                                {executingAlert === proposal.id ? 'PROCESSING...' : 'APPROVE PROTOCOL'}
+                                {executingAlert === proposal.id ? t('tech.processing') : t('tech.approve_protocol')}
                             </Button>
                         </Stack>
                     </Paper>
@@ -266,7 +272,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                     <Box sx={{ py: 4, textAlign: 'center', opacity: 0.5 }}>
                         <CheckCircle size={40} color={binThemeTokens.gold} style={{ marginBottom: 12, opacity: 0.3 }} />
                         <Typography variant="body2" sx={{ color: binThemeTokens.textTertiary }}>
-                            All systems operating within nominal Sovereign thresholds.
+                            {t('tech.nominal_status')}
                         </Typography>
                     </Box>
                 )}
@@ -278,7 +284,7 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                     <Box>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <TrendingDown size={14} color={binThemeTokens.danger} />
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>DECAY (12M)</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('tech.decay_label')}</Typography>
                         </Stack>
                         <Typography variant="h6" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>
                             -{intel.assetResilience.predictedDecay12Months}%
@@ -287,15 +293,15 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                     <Box>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Zap size={14} color={binThemeTokens.gold} />
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>RISK VECTOR</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('tech.risk_vector')}</Typography>
                         </Stack>
                         <Typography variant="h6" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>
-                            {intel.assetResilience.criticalFailureWindows[0]?.assetCategory} SURGE
+                            {intel.assetResilience.criticalFailureWindows[0]?.assetCategory} {t('tech.surge')}
                         </Typography>
                     </Box>
-                    <Box sx={{ flexGrow: 1, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <Box sx={{ flexGrow: 1, textAlign: isRTL ? 'left' : 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1 }}>
-                            VIEW INTEGRITY REPORT <ArrowRight size={14} />
+                            {t('tech.integrity_report')} <ArrowRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                         </Typography>
                     </Box>
                 </Stack>

@@ -169,8 +169,8 @@ export default function PilotCommandCenter() {
                                 <Typography variant="h6" fontWeight="bold">Revenue Readiness Dashboard</Typography>
                             </Stack>
                             <Box sx={{ display: 'flex', gap: 2 }}>
-                                <Chip icon={<MapIcon />} label="Heatmap" onClick={() => {}} clickable size="small" />
-                                <Chip label="Strategy Dist" onClick={() => {}} clickable size="small" />
+                                <Chip icon={<MapIcon />} label="Heatmap" size="small" />
+                                <Chip label="Strategy Dist" size="small" />
                             </Box>
                         </Box>
                         <TableContainer>

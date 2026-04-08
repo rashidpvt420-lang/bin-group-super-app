@@ -11,43 +11,46 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
-import PricingAuditViewer from './components/pricing/PricingAuditViewer';
+// import PricingAuditViewer from './components/pricing/PricingAuditViewer';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
-import MarketIntelligenceDashboard from './components/market/MarketIntelligenceDashboard';
+// import MarketIntelligenceDashboard from './components/market/MarketIntelligenceDashboard';
 import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
+import { LanguageProvider, useLanguage } from '@bin/shared';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
-import LiveMapPage from './pages/map/LiveMapPage';
+// import LiveMapPage from './pages/map/LiveMapPage';
 import OwnersPage from './pages/owners/OwnerManagementPage';
 import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import ReportsPage from './pages/reports/ReportsPage';
-import PricingPage from './pages/pricing/PricingPage';
+// import PricingPage from './pages/pricing/PricingPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
 import PartsStorePage from './pages/procurement/PartsStorePage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
 import ProfitabilityPage from './pages/admin/ProfitabilityPage';
 import CompliancePage from './pages/admin/CompliancePage';
-import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
+// import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
 import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
-import PropertyManagementPage from './pages/admin/PropertyManagementPage';
 import PayrollManagementPage from './pages/financials/PayrollManagementPage';
 import TransactionsPage from './pages/financials/TransactionsPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
-import { FinancialTickerPage, TechnicianMapPage } from './pages/Placeholders';
+import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
+import { TechnicianMapPage } from './pages/Placeholders';
 import { adminTheme } from './theme/adminTheme';
 
 // Removed legacy primary theme definition to use centralized adminTheme.ts
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
+    const { t, isRTL } = useLanguage();
     const [safetyReleased, setSafetyReleased] = React.useState(false);
 
     React.useEffect(() => {
@@ -62,10 +65,10 @@ function AppContent() {
 
     if (loading && !safetyReleased) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4 }}>
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
                 <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
-                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2 }}>
-                    INITIALIZING SOVEREIGN ADMIN TERMINAL...
+                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                    {t('dash.command_subtitle')}
                 </Typography>
             </Box>
         );
@@ -73,10 +76,10 @@ function AppContent() {
 
     if (error && !isAuthenticated) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>SYSTEM INITIALIZATION FAULT</Typography>
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
+                <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.sys_init_fault')}</Typography>
                 <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{error}</Typography>
-                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>RELOAD SYSTEM</Button>
+                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
             </Box>
         );
     }
@@ -89,7 +92,7 @@ function AppContent() {
                 <Route element={<Layout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <Route path="/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
+                    {/* <Route path="/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} /> */}
                     <Route path="/admin/financials" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
                     <Route path="/admin/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
@@ -102,21 +105,22 @@ function AppContent() {
                     <Route path="/technicians/map" element={<ProtectedRoute><TechnicianMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
-                    <Route path="/pricing" element={<ProtectedRoute adminOnly><PricingPage /></ProtectedRoute>} />
-                    <Route path="/pricing/audit/:id" element={<ProtectedRoute adminOnly><PricingAuditViewer /></ProtectedRoute>} />
+                    {/* <Route path="/pricing" element={<ProtectedRoute adminOnly><PricingPage /></ProtectedRoute>} />
+                    <Route path="/pricing/audit/:id" element={<ProtectedRoute adminOnly><PricingAuditViewer /></ProtectedRoute>} /> */}
                     <Route path="/procurement" element={<ProtectedRoute adminOnly><PartsStorePage /></ProtectedRoute>} />
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
                     <Route path="/admin/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
                     <Route path="/admin/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
                     <Route path="/admin/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
-                    <Route path="/admin/live-ops" element={<ProtectedRoute adminOnly><LiveOpsCommandCenter /></ProtectedRoute>} />
+                    {/* <Route path="/admin/live-ops" element={<ProtectedRoute adminOnly><LiveOpsCommandCenter /></ProtectedRoute>} /> */}
                     <Route path="/admin/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/admin/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
                     <Route path="/admin/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
-                    <Route path="/admin/market-intel" element={<ProtectedRoute adminOnly><MarketIntelligenceDashboard /></ProtectedRoute>} />
+                    {/* <Route path="/admin/market-intel" element={<ProtectedRoute adminOnly><MarketIntelligenceDashboard /></ProtectedRoute>} /> */}
                     <Route path="/admin/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianCommandCenter /></ProtectedRoute>} />
                     <Route path="/admin/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
+                    <Route path="/admin/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                 </Route>
             )}
@@ -128,23 +132,41 @@ function AppContent() {
 
 
 function Layout() {
+    const { t, isRTL } = useLanguage();
+    
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', bgcolor: '#020617' }}>
-            <Box sx={{ display: 'flex', flexGrow: 1 }}>
+        <Box sx={{ 
+            display: 'flex', 
+            minHeight: '100vh', 
+            flexDirection: 'column', 
+            bgcolor: '#020617',
+            direction: isRTL ? 'rtl' : 'ltr'
+        }}>
+            <Box sx={{ display: 'flex', flexGrow: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Navigation />
                 <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'auto' }}>
+                    <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', bgcolor: 'rgba(255,255,255,0.02)' }}>
+                        <LanguageSwitcher />
+                    </Box>
                     <Outlet />
                 </Box>
             </Box>
-            <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center' }}>
+            <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                    © 2026 BIN GROUP | ARCHITECTED FOR THE SEVEN EMIRATES | 
+                    © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | 
                     <Typography 
                         component="a" 
-                        href="/privacy-policy" 
+                        href="https://bin-groups.com/privacy-policy" 
                         sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
                     >
-                        Privacy Policy
+                        {t('footer.privacy')}
+                    </Typography>
+                    <Typography 
+                        component="a" 
+                        href="https://bin-groups.com/terms-of-service" 
+                        sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
+                    >
+                        {t('footer.terms')}
                     </Typography>
                 </Typography>
             </Box>
@@ -156,11 +178,13 @@ export default function App() {
     return (
         <ThemeProvider theme={adminTheme}>
             <CssBaseline />
-            <Router basename="/admin">
-                <AuthProvider>
-                    <AppContent />
-                </AuthProvider>
-            </Router>
+            <LanguageProvider>
+                <Router basename="/admin">
+                    <AuthProvider>
+                        <AppContent />
+                    </AuthProvider>
+                </Router>
+            </LanguageProvider>
         </ThemeProvider>
     );
 }

@@ -9,8 +9,10 @@ import { db } from '../lib/firebase';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import HistoryIcon from '@mui/icons-material/History';
+import { useLanguage } from '@bin/shared';
 
 export default function AuditLogPage() {
+    const { t, lang, isRTL } = useLanguage();
     const [logs, setLogs] = useState<any[]>([]);
     const [search, setSearch] = useState('');
 
@@ -34,15 +36,15 @@ export default function AuditLogPage() {
     };
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                    <Typography variant="h4" fontWeight="black" gutterBottom>Systemic Audit Log</Typography>
-                    <Typography variant="body2" color="text.secondary">Real-time trace of the BIN-GROUP Intelligence Layer (V1.3)</Typography>
+        <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                    <Typography variant="h4" fontWeight="black" gutterBottom>{t('audit.title')}</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('audit.subtitle')}</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <TextField 
-                        placeholder="Search Trace ID..." 
+                        placeholder={t('audit.search_placeholder')} 
                         size="small" 
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -63,13 +65,13 @@ export default function AuditLogPage() {
                     <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 3 }}>
                         <Table sx={{ minWidth: 650 }}>
                             <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Timestamp</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Event Type</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Resource ID</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Actor</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                                <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.timestamp')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.event_type')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.resource_id')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.actor')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.description')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('audit.table.status')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -77,20 +79,20 @@ export default function AuditLogPage() {
                                     <TableRow>
                                         <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                                             <HistoryIcon sx={{ fontSize: 40, color: '#94a3b8', mb: 1, display: 'block', mx: 'auto' }} />
-                                            <Typography color="text.secondary">No systemic events captured in current window.</Typography>
+                                            <Typography color="text.secondary">{t('audit.no_events')}</Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : logs.map((log) => (
-                                    <TableRow key={log.id} hover>
-                                        <TableCell>{log.timestamp?.toDate().toLocaleString()}</TableCell>
-                                        <TableCell>
+                                    <TableRow key={log.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{log.timestamp?.toDate().toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE')}</TableCell>
+                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                             <Chip label={log.type} size="small" color={getSeverityColor(log.type)} sx={{ fontWeight: 'bold' }} />
                                         </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{log.resourceId}</TableCell>
-                                        <TableCell>{log.actor}</TableCell>
-                                        <TableCell sx={{ fontWeight: 500 }}>{log.message}</TableCell>
-                                        <TableCell>
-                                            <Chip label="VERIFIED" size="small" variant="outlined" sx={{ color: '#10b981', borderColor: '#10b981' }} />
+                                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }}>{log.resourceId}</TableCell>
+                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{log.actor}</TableCell>
+                                        <TableCell sx={{ fontWeight: 500, textAlign: isRTL ? 'right' : 'left' }}>{log.message}</TableCell>
+                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                            <Chip label={t('audit.verified')} size="small" variant="outlined" sx={{ color: '#10b981', borderColor: '#10b981' }} />
                                         </TableCell>
                                     </TableRow>
                                 ))}

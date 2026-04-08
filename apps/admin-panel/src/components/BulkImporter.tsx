@@ -10,8 +10,10 @@ import {
 import { CloudUpload } from '@mui/icons-material';
 import { db } from '../lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
+import { useLanguage } from '@bin/shared';
 
 const BulkImporter: React.FC = () => {
+    const { t, isRTL } = useLanguage();
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -40,12 +42,12 @@ const BulkImporter: React.FC = () => {
     const startImport = async () => {
         if (!file) return;
         setUploading(true);
-        setLogs(['Reading file...']);
+        setLogs([t('admin.reading_file')]);
 
         try {
             const text = await file.text();
             const rows = parseCSV(text);
-            setLogs(prev => [...prev, `Found ${rows.length} records. Starting batch upload...`]);
+            setLogs(prev => [...prev, t('admin.found_records', { count: rows.length })]);
 
             const BATCH_SIZE = 500;
             let processed = 0;
@@ -55,7 +57,6 @@ const BulkImporter: React.FC = () => {
                 const chunk = rows.slice(i, i + BATCH_SIZE);
 
                 chunk.forEach(row => {
-                    // V2 Mapping: Bldg_Name -> properties.name, Bldg_Zone -> properties.zone
                     const propRef = doc(collection(db, 'properties'));
                     batch.set(propRef, {
                         name: row.Bldg_Name || 'Unnamed Building',
@@ -74,10 +75,10 @@ const BulkImporter: React.FC = () => {
                 processed = newlyProcessed;
                 
                 setProgress((newlyProcessed / rows.length) * 100);
-                setLogs(prev => [...prev, `Committed batch ${currentBatchIndex} (${newlyProcessed}/${rows.length})`]);
+                setLogs(prev => [...prev, t('admin.committed_batch', { index: currentBatchIndex, current: newlyProcessed, total: rows.length })]);
             }
 
-            setLogs(prev => [...prev, 'Import Successful! 500+ Properties Ready.']);
+            setLogs(prev => [...prev, t('admin.import_success_msg')]);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -86,19 +87,20 @@ const BulkImporter: React.FC = () => {
     };
 
     return (
-        <Box p={4}>
-            <Typography variant="h4" gutterBottom className="font-bold text-[#1a237e]">
-                V2 Bulk Property Importer
+        <Box p={4} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 900, color: '#1a237e', textAlign: isRTL ? 'right' : 'left' }}>
+                {t('admin.v2_bulk_importer')}
             </Typography>
-            <Typography variant="body1" color="textSecondary" mb={3}>
-                Scale BIN Construction portfolio to 500+ properties instantly via CSV.
+            <Typography variant="body1" color="textSecondary" mb={3} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                {t('admin.bulk_importer_desc')}
             </Typography>
 
-            <Paper variant="outlined" className="p-8 text-center border-2 border-dashed border-[#ccc]">
+            <Paper variant="outlined" sx={{ p: 8, textAlign: 'center', border: '2px dashed #ccc' }}>
                 <input
                     accept=".csv"
                     className="hidden"
                     id="raised-button-file"
+                    style={{ display: 'none' }}
                     type="file"
                     onChange={handleFileChange}
                 />
@@ -107,22 +109,24 @@ const BulkImporter: React.FC = () => {
                         variant="contained"
                         component="span"
                         startIcon={<CloudUpload />}
-                        className="mb-4 bg-[#1a237e]"
+                        sx={{ mb: 4, bgcolor: '#1a237e' }}
                     >
-                        Select Property CSV
+                        {t('admin.select_csv_btn')}
                     </Button>
                 </label>
-                {file && <Typography variant="subtitle1">{file.name}</Typography>}
+                {file && <Typography variant="subtitle1" sx={{ textAlign: 'center' }}>{file.name}</Typography>}
             </Paper>
 
             {uploading && (
                 <Box mt={3}>
-                    <LinearProgress variant="determinate" value={progress} className="h-[10px] rounded-[5px]" />
-                    <Typography variant="caption" mt={1} display="block">Uploading... {Math.round(progress)}%</Typography>
+                    <LinearProgress variant="determinate" value={progress} sx={{ h: '10px', borderRadius: '5px' }} />
+                    <Typography variant="caption" mt={1} display="block" sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                        {t('onboarding.payment.verifying')} {Math.round(progress)}%
+                    </Typography>
                 </Box>
             )}
 
-            {error && <Alert severity="error" className="mt-4">{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mt: 4, textAlign: isRTL ? 'right' : 'left' }}>{error}</Alert>}
 
             <Box mt={4}>
                 <Button
@@ -132,15 +136,16 @@ const BulkImporter: React.FC = () => {
                     onClick={startImport}
                     fullWidth
                     size="large"
+                    sx={{ fontWeight: 900 }}
                 >
-                    {uploading ? 'Processing Architecture...' : 'EXECUTE PRODUCTION LOAD'}
+                    {uploading ? t('admin.proc_arch') : t('admin.exec_prod_load')}
                 </Button>
             </Box>
 
             {logs.length > 0 && (
-                <Paper variant="outlined" className="mt-8 p-4 bg-[#f5f5f5] max-h-[200px] overflow-auto">
+                <Paper variant="outlined" sx={{ mt: 8, p: 4, bgcolor: '#f5f5f5', maxHeight: '200px', overflow: 'auto' }}>
                     {logs.map((log, i) => (
-                        <Typography key={i} variant="caption" display="block" className="font-mono">
+                        <Typography key={i} variant="caption" display="block" sx={{ fontStyle: 'monospace', textAlign: isRTL ? 'right' : 'left' }}>
                             {`> ${log}`}
                         </Typography>
                     ))}

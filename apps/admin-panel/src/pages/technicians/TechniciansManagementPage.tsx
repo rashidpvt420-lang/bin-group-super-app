@@ -26,6 +26,7 @@ import { db, auth } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { useLanguage } from '@bin/shared';
 
 interface Technician {
   uid: string;
@@ -38,6 +39,7 @@ interface Technician {
 }
 
 export default function TechniciansManagementPage() {
+  const { t, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -104,11 +106,11 @@ export default function TechniciansManagementPage() {
         setOpenAdd(false);
         setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
       } else {
-        throw new Error(response.data?.result?.message || "Identity provisioning rejected.");
+        throw new Error(response.data?.result?.message || t('admin.tech.provision_failed'));
       }
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || "Failed to provision technician.";
+      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.tech.provision_failed');
       alert(errorMsg);
     } finally {
       setSubmitting(false);
@@ -151,7 +153,7 @@ export default function TechniciansManagementPage() {
   };
 
   const handleDeleteTech = async (uid: string) => {
-    if (window.confirm("Are you sure you want to decommission this technician?")) {
+    if (window.confirm(t('admin.tech.delete_confirm'))) {
       try {
         await deleteDoc(doc(db, 'users', uid));
         await deleteDoc(doc(db, 'technicians', uid)).catch(() => {});
@@ -170,16 +172,16 @@ export default function TechniciansManagementPage() {
   if (loading) {
     return (
       <Container sx={{ py: 10, textAlign: 'center' }}>
-        <Typography variant="h6" className="animate-pulse">LOADING TECHNICIANS...</Typography>
+        <Typography variant="h6" className="animate-pulse">{t('admin.tech.loading')}</Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Technician <Box component="span" sx={{ color: '#10b981' }}>Force</Box>
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+          {t('nav.technicians')} <Box component="span" sx={{ color: '#10b981' }}>{t('admin.tech.force')}</Box>
         </Typography>
         <Button 
           variant="contained" 
@@ -187,49 +189,50 @@ export default function TechniciansManagementPage() {
           onClick={() => setOpenAdd(true)}
           sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
         >
-          Add Technician
+          {t('admin.tech.add_btn')}
         </Button>
       </Box>
 
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid rgba(0,0,0,0.05)' }}>
         <TextField
           fullWidth
-          label="Search Force"
-          placeholder="Name, Email or Specialization..."
+          label={t('admin.tech.search_label')}
+          placeholder={t('admin.tech.search_placeholder')}
           variant="outlined"
           size="small"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ textAlign: isRTL ? 'right' : 'left' }}
         />
       </Paper>
 
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 4 }}>
         <Table>
           <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Specialization</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Phone</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+            <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.table.name')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.table.specialization')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.table.email')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.table.phone')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.table.status')}</TableCell>
+              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('admin.tech.table.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredTechs.map((tech) => (
-              <TableRow key={tech.uid} hover>
-                <TableCell sx={{ fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TableRow key={tech.uid} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <BuildIcon sx={{ fontSize: 16, color: '#10b981' }} />
                         {tech.displayName || 'N/A'}
                     </Box>
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Chip label={tech.specialization || 'General'} size="small" variant="outlined" />
                 </TableCell>
-                <TableCell>{tech.email}</TableCell>
-                <TableCell>{tech.phoneNumber || 'N/A'}</TableCell>
-                <TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tech.email}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tech.phoneNumber || 'N/A'}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   <Chip 
                     label={tech.status?.toUpperCase() || 'ACTIVE'} 
                     color={tech.status === 'on-duty' ? 'info' : 'success'} 
@@ -237,13 +240,13 @@ export default function TechniciansManagementPage() {
                     sx={{ fontWeight: 'bold', fontSize: 10 }} 
                   />
                 </TableCell>
-                <TableCell align="right">
-                  <Tooltip title="Edit Technician">
+                <TableCell align={isRTL ? 'left' : 'right'}>
+                  <Tooltip title={t('admin.tech.edit_tooltip')}>
                     <IconButton onClick={() => handleEditOpen(tech)} size="small" sx={{ color: '#10b981' }}>
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Delete Technician">
+                  <Tooltip title={t('admin.tech.delete_tooltip')}>
                     <IconButton onClick={() => handleDeleteTech(tech.uid)} size="small" color="error">
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -256,77 +259,77 @@ export default function TechniciansManagementPage() {
       </TableContainer>
 
       {/* Add Dialog */}
-      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Onboard New Technician</DialogTitle>
+      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.onboard_title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
-              label="Full Name" 
+              label={t('admin.tech.field.fullname')} 
               fullWidth 
               value={newTech.displayName} 
               onChange={(e) => setNewTech({...newTech, displayName: e.target.value})} 
             />
             <TextField 
-              label="Email Address" 
+              label={t('admin.tech.field.email')} 
               fullWidth 
               value={newTech.email} 
               onChange={(e) => setNewTech({...newTech, email: e.target.value})} 
             />
             <TextField 
-              label="Phone Number" 
+              label={t('admin.tech.field.phone')} 
               fullWidth 
               value={newTech.phoneNumber} 
               onChange={(e) => setNewTech({...newTech, phoneNumber: e.target.value})} 
             />
             <TextField 
-              label="Specialization (e.g. Electrical, Plumbing)" 
+              label={t('admin.tech.field.specialization')} 
               fullWidth 
               value={newTech.specialization} 
               onChange={(e) => setNewTech({...newTech, specialization: e.target.value})} 
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>
           <Button 
             variant="contained" 
             onClick={handleAddTech} 
             disabled={submitting}
             sx={{ borderRadius: 100, bgcolor: '#10b981', minWidth: 150 }}
           >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'Deploy Technician'}
+            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tech.deploy_btn')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Update Technician Profile</DialogTitle>
+      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.update_title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
-              label="Full Name" 
+              label={t('admin.tech.field.fullname')} 
               fullWidth 
               value={editTech.displayName} 
               onChange={(e) => setEditTech({...editTech, displayName: e.target.value})} 
             />
             <TextField 
-              label="Phone Number" 
+              label={t('admin.tech.field.phone')} 
               fullWidth 
               value={editTech.phoneNumber} 
               onChange={(e) => setEditTech({...editTech, phoneNumber: e.target.value})} 
             />
             <TextField 
-              label="Specialization" 
+              label={t('admin.tech.field.specialization')} 
               fullWidth 
               value={editTech.specialization} 
               onChange={(e) => setEditTech({...editTech, specialization: e.target.value})} 
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenEdit(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleUpdateTech} sx={{ borderRadius: 100, bgcolor: '#10b981' }}>Save Changes</Button>
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setOpenEdit(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={handleUpdateTech} sx={{ borderRadius: 100, bgcolor: '#10b981' }}>{t('common.save_changes')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -23,11 +23,11 @@ import {
   LinearProgress,
   Grid,
 } from '@mui/material';
-import { db, auth } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch, addDoc } from 'firebase/firestore';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, UploadFile as UploadIcon } from '@mui/icons-material';
 import Papa from 'papaparse';
-import axios from 'axios';
+import { useLanguage } from '@bin/shared';
 
 interface Tenant {
   uid: string;
@@ -42,6 +42,7 @@ interface Tenant {
 }
 
 export default function TenantsManagementPage() {
+  const { t, isRTL } = useLanguage();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -58,9 +59,11 @@ export default function TenantsManagementPage() {
     email: '',
     displayName: '',
     phoneNumber: '',
-    unitId: '',
+    propertyId: '',
+    unitNumber: '',
     floorNumber: '',
-    emiratesID: '',
+    emirate: '',
+    serviceZone: '',
   });
 
   const [editTenant, setEditTenant] = useState({
@@ -93,35 +96,23 @@ export default function TenantsManagementPage() {
   const handleAddTenant = async () => {
     setSubmitting(true);
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
-
-      const token = await user.getIdToken(true);
-      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
-      const functionUrl = 'https://admincreateuser-sc33mcrduq-uc.a.run.app'; // Production URL for the region
-      
-      const response = await axios.post(functionUrl, {
-        data: {
+      // [V4 INTAKE] Direct Provisioning to Pending Tenants Registry
+      await addDoc(collection(db, 'pending_tenants'), {
           ...newTenant,
-          role: 'tenant',
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          tenantName: newTenant.displayName,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+          source: 'ADMIN_MANUAL_INTAKE'
       });
-
-      if (response.data?.result?.success) {
-        setOpenAdd(false);
-        setNewTenant({ email: '', displayName: '', phoneNumber: '', unitId: '', floorNumber: '', emiratesID: '' });
-      } else {
-        throw new Error(response.data?.result?.message || "Identity provisioning rejected.");
-      }
+      setOpenAdd(false);
+      setNewTenant({ 
+          email: '', displayName: '', phoneNumber: '', 
+          propertyId: '', unitNumber: '', floorNumber: '', 
+          emirate: '', serviceZone: '' 
+      });
     } catch (error: any) {
-      console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || "Failed to provision tenant profile.";
-      alert(errorMsg);
+      console.error("🚨 [ADMIN-INTAKE] Provisioning Failure:", error);
+      alert("Failed to provision tenant invitation.");
     } finally {
       setSubmitting(false);
     }
@@ -187,7 +178,7 @@ export default function TenantsManagementPage() {
           }
 
           await batch.commit();
-          alert(`Successfully ingested ${total} tenants and linked units into registry.`);
+          alert(t('admin.import_success', { count: total }));
         } catch (err) {
           console.error("Bulk ingestion failed:", err);
           alert("Ingestion protocol failed. Check CSV schema.");
@@ -228,7 +219,7 @@ export default function TenantsManagementPage() {
   };
 
   const handleDeleteTenant = async (uid: string) => {
-    if (window.confirm("Are you sure you want to delete this tenant profile?")) {
+    if (window.confirm(t('admin.delete_confirm'))) {
       try {
         await deleteDoc(doc(db, 'users', uid));
       } catch (error) {
@@ -246,18 +237,18 @@ export default function TenantsManagementPage() {
   if (loading) {
     return (
       <Container sx={{ py: 10, textAlign: 'center' }}>
-        <Typography variant="h6" className="animate-pulse">LOADING TENANTS...</Typography>
+        <Typography variant="h6" className="animate-pulse">{t('onboarding.payment.verifying')}</Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
-          Tenant <Box component="span" sx={{ color: '#1976d2' }}>Registry</Box>
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+          {t('admin.tenant_registry').split(' ')[0]} <Box component="span" sx={{ color: '#1976d2' }}>{t('admin.tenant_registry').split(' ')[1] || ''}</Box>
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <input
             type="file"
             accept=".csv"
@@ -272,7 +263,7 @@ export default function TenantsManagementPage() {
             disabled={uploading}
             sx={{ borderRadius: 100, px: 3 }}
           >
-            Bulk CSV Upload
+            {t('admin.bulk_upload')}
           </Button>
           <Button 
             variant="contained" 
@@ -280,15 +271,15 @@ export default function TenantsManagementPage() {
             onClick={() => setOpenAdd(true)}
             sx={{ borderRadius: 100, px: 3 }}
           >
-            Add Tenant
+            {t('admin.add_tenant')}
           </Button>
         </Box>
       </Box>
 
       {uploading && (
         <Box sx={{ mb: 4 }}>
-          <Typography variant="caption" sx={{ fontWeight: 900, mb: 1, display: 'block' }}>
-            INGESTING BULK DATA: {uploadProgress}%
+          <Typography variant="caption" sx={{ fontWeight: 900, mb: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>
+            {t('admin.ingesting_data')}: {uploadProgress}%
           </Typography>
           <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 8, borderRadius: 5 }} />
         </Box>
@@ -297,8 +288,8 @@ export default function TenantsManagementPage() {
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid rgba(0,0,0,0.05)' }}>
         <TextField
           fullWidth
-          label="Search Tenants"
-          placeholder="Name, Email or Unit..."
+          label={t('admin.search_tenants')}
+          placeholder={t('field.name') + ", " + t('login.email') + "..."}
           variant="outlined"
           size="small"
           value={searchTerm}
@@ -310,36 +301,36 @@ export default function TenantsManagementPage() {
         <Table>
           <TableHead sx={{ backgroundColor: '#f8fafc' }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Unit</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Floor</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('field.name')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('login.email')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('onboarding.property_details')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('field.floors')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.log.status')}</TableCell>
+              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredTenants.map((tenant: any) => (
-              <TableRow key={tenant.uid} hover>
-                <TableCell sx={{ fontWeight: 'bold' }}>{tenant.displayName || 'N/A'}</TableCell>
-                <TableCell>{tenant.email}</TableCell>
-                <TableCell>{tenant.unitId || 'Unassigned'}</TableCell>
-                <TableCell>{tenant.floorNumber || '—'}</TableCell>
-                <TableCell>
+              <TableRow key={tenant.uid} hover sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{tenant.displayName || 'N/A'}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tenant.email}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tenant.unitId || t('admin.unit_unassigned')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tenant.floorNumber || '—'}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   <Chip 
-                    label={tenant.status?.toUpperCase() || 'ACTIVE'} 
+                    label={(tenant.status || 'active').toUpperCase()} 
                     color={tenant.status === 'inactive' ? 'error' : 'success'} 
                     size="small" 
                     sx={{ fontWeight: 'bold', fontSize: 10 }} 
                   />
                 </TableCell>
-                <TableCell align="right">
-                  <Tooltip title="Edit Tenant">
+                <TableCell align={isRTL ? 'left' : 'right'}>
+                  <Tooltip title={t('admin.update_profile')}>
                     <IconButton onClick={() => handleEditOpen(tenant)} size="small" color="primary">
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Delete Tenant">
+                  <Tooltip title={t('common.action')}>
                     <IconButton onClick={() => handleDeleteTenant(tenant.uid)} size="small" color="error">
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -352,75 +343,87 @@ export default function TenantsManagementPage() {
       </TableContainer>
 
       {/* Add Dialog */}
-      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Register New Tenant</DialogTitle>
+      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.register_new')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
-              label="Full Name" 
+              label={t('field.name')} 
               fullWidth 
               value={newTenant.displayName} 
               onChange={(e: any) => setNewTenant({...newTenant, displayName: e.target.value})} 
             />
             <TextField 
-              label="Email Address" 
+              label={t('login.email')} 
               fullWidth 
               value={newTenant.email} 
               onChange={(e: any) => setNewTenant({...newTenant, email: e.target.value})} 
             />
             <TextField 
-              label="Phone Number" 
+              label={t('common.phone')} 
               fullWidth 
               value={newTenant.phoneNumber} 
               onChange={(e: any) => setNewTenant({...newTenant, phoneNumber: e.target.value})} 
             />
+            <TextField 
+              label={t('field.emirate')} 
+              fullWidth 
+              value={newTenant.emirate} 
+              onChange={(e: any) => setNewTenant({...newTenant, emirate: e.target.value})} 
+            />
+            <TextField 
+              label="Service Zone" 
+              fullWidth 
+              value={newTenant.serviceZone} 
+              onChange={(e: any) => setNewTenant({...newTenant, serviceZone: e.target.value})} 
+            />
             <Grid container spacing={2}>
                 <Grid item xs={6}>
                     <TextField 
-                        label="Unit ID" 
+                        label="Property ID" 
                         fullWidth 
-                        value={newTenant.unitId} 
-                        onChange={(e: any) => setNewTenant({...newTenant, unitId: e.target.value})} 
+                        value={newTenant.propertyId} 
+                        onChange={(e: any) => setNewTenant({...newTenant, propertyId: e.target.value})} 
                     />
                 </Grid>
                 <Grid item xs={6}>
                     <TextField 
-                        label="Floor Number" 
+                        label="Unit Number" 
                         fullWidth 
-                        value={newTenant.floorNumber} 
-                        onChange={(e: any) => setNewTenant({...newTenant, floorNumber: e.target.value})} 
+                        value={newTenant.unitNumber} 
+                        onChange={(e: any) => setNewTenant({...newTenant, unitNumber: e.target.value})} 
                     />
                 </Grid>
             </Grid>
             <TextField 
-              label="Emirates ID" 
-              fullWidth 
-              value={newTenant.emiratesID} 
-              onChange={(e: any) => setNewTenant({...newTenant, emiratesID: e.target.value})} 
+                label={t('field.floors')} 
+                fullWidth 
+                value={newTenant.floorNumber} 
+                onChange={(e: any) => setNewTenant({...newTenant, floorNumber: e.target.value})} 
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleAddTenant} disabled={submitting} sx={{ borderRadius: 100 }}>
-            {submitting ? 'Creating...' : 'Create Profile'}
+            {submitting ? t('admin.creating') : t('admin.create_profile')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Update Tenant Profile</DialogTitle>
+      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.update_profile')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
-              label="Full Name" 
+              label={t('field.name')} 
               fullWidth 
               value={editTenant.displayName} 
               onChange={(e: any) => setEditTenant({...editTenant, displayName: e.target.value})} 
             />
             <TextField 
-              label="Phone Number" 
+              label={t('common.phone')} 
               fullWidth 
               value={editTenant.phoneNumber} 
               onChange={(e: any) => setEditTenant({...editTenant, phoneNumber: e.target.value})} 
@@ -428,7 +431,7 @@ export default function TenantsManagementPage() {
             <Grid container spacing={2}>
                 <Grid item xs={6}>
                     <TextField 
-                        label="Unit ID" 
+                        label={t('onboarding.property_details')} 
                         fullWidth 
                         value={editTenant.unitId} 
                         onChange={(e: any) => setEditTenant({...editTenant, unitId: e.target.value})} 
@@ -436,7 +439,7 @@ export default function TenantsManagementPage() {
                 </Grid>
                 <Grid item xs={6}>
                     <TextField 
-                        label="Floor Number" 
+                        label={t('field.floors')} 
                         fullWidth 
                         value={editTenant.floorNumber} 
                         onChange={(e: any) => setEditTenant({...editTenant, floorNumber: e.target.value})} 
@@ -444,16 +447,16 @@ export default function TenantsManagementPage() {
                 </Grid>
             </Grid>
             <TextField 
-              label="Emirates ID" 
+              label={t('field.emirate') + " ID"} 
               fullWidth 
               value={editTenant.emiratesID} 
               onChange={(e: any) => setEditTenant({...editTenant, emiratesID: e.target.value})} 
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenEdit(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleUpdateTenant} sx={{ borderRadius: 100 }}>Save Changes</Button>
+        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setOpenEdit(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={handleUpdateTenant} sx={{ borderRadius: 100 }}>{t('admin.save_changes')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

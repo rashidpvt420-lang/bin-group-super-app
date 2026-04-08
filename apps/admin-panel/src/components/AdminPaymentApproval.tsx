@@ -13,6 +13,7 @@ import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Receipt, History } from 'lucide-react';
 import axios from 'axios';
+import { useLanguage } from '@bin/shared';
 
 interface Contract {
   id: string;
@@ -29,6 +30,7 @@ interface Contract {
 }
 
 export default function AdminPaymentApproval() {
+  const { t, lang, isRTL } = useLanguage();
   const [pendingContracts, setPendingContracts] = useState<Contract[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
@@ -67,7 +69,7 @@ export default function AdminPaymentApproval() {
   const handleVerify = async () => {
     if (!selectedContract) return;
     if (!referenceId) {
-      alert("Reference ID is mandatory for sovereign audit.");
+      alert(t('admin.ref_mandatory'));
       return;
     }
 
@@ -100,13 +102,13 @@ export default function AdminPaymentApproval() {
       });
 
       if (response.data?.result?.success) {
-        alert("Payment Settled. Contract activated for property onboarding.");
+        alert(t('admin.payment_settled'));
       } else {
-        throw new Error(response.data?.result?.message || "Payment verification rejected.");
+        throw new Error(response.data?.result?.message || t('admin.payment_rejected'));
       }
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Verification Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || "Failed to verify settlement.";
+      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.failed_verify_settlement');
       alert(errorMsg);
     } finally {
       setProcessingId(null);
@@ -115,30 +117,30 @@ export default function AdminPaymentApproval() {
   };
 
   return (
-    <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white' }}>
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
+    <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white', direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ mb: 4 }}>
         <SecurityIcon sx={{ color: '#C6A75E', fontSize: 40 }} />
-        <Box>
+        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: -1 }}>
-            SOVEREIGN SETTLEMENT VAULT
+            {t('admin.settlement_vault')}
           </Typography>
           <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 700 }}>
-            BIN-GROUP Institutional Payment Verification Authority
+            {t('admin.payment_authority')}
           </Typography>
         </Box>
       </Stack>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={4} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
         <Grid item xs={12} lg={9}>
           <TableContainer component={Paper} sx={{ bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4, overflow: 'hidden' }}>
             <Table>
               <TableHead sx={{ bgcolor: alpha('#C6A75E', 0.1) }}>
-                <TableRow>
-                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>INTENT ID</TableCell>
-                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>METHOD</TableCell>
-                  <TableCell align="right" sx={{ color: '#C6A75E', fontWeight: 900 }}>VALUE</TableCell>
-                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900 }}>ENTITY</TableCell>
-                  <TableCell align="right" sx={{ color: '#C6A75E', fontWeight: 900 }}>ACTION</TableCell>
+                <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.intent_id')}</TableCell>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.table.month')}</TableCell>
+                  <TableCell align={isRTL ? 'left' : 'right'} sx={{ color: '#C6A75E', fontWeight: 900 }}>{t('admin.value')}</TableCell>
+                  <TableCell sx={{ color: '#C6A75E', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('dt.table.status')}</TableCell>
+                  <TableCell align={isRTL ? 'left' : 'right'} sx={{ color: '#C6A75E', fontWeight: 900 }}>{t('common.action')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -148,23 +150,23 @@ export default function AdminPaymentApproval() {
                       <Stack alignItems="center" spacing={2}>
                         <Receipt size={48} color="#1e293b" />
                         <Typography variant="body2" sx={{ color: '#64748b', fontStyle: 'italic' }}>
-                          Settlement queue is clear. All sovereign funds are matched.
+                          {t('admin.queue_clear')}
                         </Typography>
                       </Stack>
                     </TableCell>
                   </TableRow>
                 ) : (
                   pendingContracts.map((contract: any) => (
-                    <TableRow key={contract.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                      <TableCell>
+                    <TableRow key={contract.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                      <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="body2" sx={{ fontWeight: 900, color: '#fff', fontFamily: 'monospace' }}>
                           {contract.paymentId}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#64748b' }}>
-                          Contract: {contract.id.slice(0, 8)}...
+                          {t('onboarding.quote')}: {contract.id.slice(0, 8)}...
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                         <Chip 
                           label={contract.provider} 
                           size="small" 
@@ -176,17 +178,17 @@ export default function AdminPaymentApproval() {
                           }} 
                         />
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align={isRTL ? 'left' : 'right'}>
                         <Typography variant="body1" sx={{ color: '#10b981', fontWeight: 900 }}>
-                          {contract.currency} {contract.amount.toLocaleString()}
+                          {t('common.currency_aed')} {contract.amount.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE')}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 700 }}>
-                          Owner: {contract.ownerId.slice(0, 8)}...
+                          {t('common.asset')}: {contract.ownerId.slice(0, 8)}...
                         </Typography>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align={isRTL ? 'left' : 'right'}>
                         <Button
                           variant="contained"
                           disabled={processingId === contract.id}
@@ -200,7 +202,7 @@ export default function AdminPaymentApproval() {
                             borderRadius: 2
                           }}
                         >
-                          Verify Settlement
+                          {t('admin.verify_settlement')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -213,21 +215,21 @@ export default function AdminPaymentApproval() {
 
         <Grid item xs={12} lg={3}>
            <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <History size={20} color="#C6A75E" /> SETTLEMENT POLICY
+              <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <History size={20} color="#C6A75E" /> {t('admin.settlement_policy')}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
-                1. Reference ID must match bank/cheque record.
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                {t('admin.policy_1')}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
-                2. Reconciliation is permanent and irreversible once submitted.
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                {t('admin.policy_2')}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
-                3. Activation triggers immediate property onboarding emails.
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                {t('admin.policy_3')}
               </Typography>
               <Box sx={{ mt: 4, p: 2, bgcolor: alpha('#ef4444', 0.1), border: '1px solid #ef4444', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900 }}>
-                  WARNING: AUDIT LOGS ACTIVE
+                <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900, display: 'block', textAlign: 'center' }}>
+                  {t('admin.warning_audit')}
                 </Typography>
               </Box>
            </Paper>
@@ -238,18 +240,19 @@ export default function AdminPaymentApproval() {
       <Dialog 
         open={verifyDialogOpen} 
         onClose={() => !processingId && setVerifyDialogOpen(false)}
+        dir={isRTL ? 'rtl' : 'ltr'}
         PaperProps={{
           sx: { bgcolor: '#0f172a', color: 'white', borderRadius: 4, border: '1px solid #1e293b', width: '100%', maxWidth: 500 }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 900, borderBottom: '1px solid #1e293b' }}>
-          CONFIRM SETTLEMENT
+        <DialogTitle sx={{ fontWeight: 900, borderBottom: '1px solid #1e293b', textAlign: isRTL ? 'right' : 'left' }}>
+          {t('admin.confirm_settlement')}
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
           <Stack spacing={3}>
-            <Box>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
-                Verification Reference (UTN / Cheque #)
+                {t('admin.verif_ref_label')}
               </Typography>
               <TextField
                 fullWidth
@@ -271,9 +274,9 @@ export default function AdminPaymentApproval() {
               />
             </Box>
 
-            <Box>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
-                Confirmed Amount Received (AED)
+                {t('admin.confirmed_amount')}
               </Typography>
               <TextField
                 fullWidth
@@ -292,9 +295,9 @@ export default function AdminPaymentApproval() {
               />
             </Box>
 
-            <Box>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>
-                Audit Notes
+                {t('admin.audit_notes')}
               </Typography>
               <TextField
                 fullWidth
@@ -303,7 +306,7 @@ export default function AdminPaymentApproval() {
                 variant="outlined"
                 value={notes}
                 onChange={(e: any) => setNotes(e.target.value)}
-                placeholder="Internal reconciliation details..."
+                placeholder={t('admin.internal_recon')}
                 sx={{ 
                   mt: 1,
                   '& .MuiOutlinedInput-root': {
@@ -316,8 +319,8 @@ export default function AdminPaymentApproval() {
             </Box>
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 3, borderTop: '1px solid #1e293b' }}>
-          <Button onClick={() => setVerifyDialogOpen(false)} sx={{ color: '#64748b', fontWeight: 900 }}>CANCEL</Button>
+        <DialogActions sx={{ p: 3, borderTop: '1px solid #1e293b', justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={() => setVerifyDialogOpen(false)} sx={{ color: '#64748b', fontWeight: 900 }}>{t('common.cancel')}</Button>
           <Button 
             onClick={handleVerify} 
             variant="contained" 
@@ -328,7 +331,7 @@ export default function AdminPaymentApproval() {
               '&:hover': { bgcolor: '#059669' }
             }}
           >
-            CONFIRM & ACTIVATE
+            {t('admin.confirm_activate')}
           </Button>
         </DialogActions>
       </Dialog>

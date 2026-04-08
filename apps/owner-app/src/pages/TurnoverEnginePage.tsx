@@ -30,6 +30,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { Package, CheckCircle, TrendingUp, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
 import { db, collection, query, where, getDocs, doc, updateDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
+import { useLanguage } from '../context/LanguageContext';
 import { fetchTurnoverStats } from '../utils/turnoverEngine';
 import { formatAED } from '../utils/formatters';
 
@@ -50,6 +51,7 @@ interface TurnoverQuote {
 
 export default function TurnoverEnginePage() {
   const { user } = useRole();
+  const { t } = useLanguage();
   const [quotes, setQuotes] = useState<TurnoverQuote[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +81,7 @@ export default function TurnoverEnginePage() {
 
     } catch (error) {
       console.error('Failed to fetch turnover quotes:', error);
-      setSnackbar({ open: true, message: 'Failed to load turnover quotes.', severity: 'error' });
+      setSnackbar({ open: true, message: t('turnover.msg.load_failed'), severity: 'error' });
     } finally {
       setLoading(false);
     }
@@ -88,22 +90,22 @@ export default function TurnoverEnginePage() {
   const handleApprove = async (quoteId: string) => {
     try {
       await updateDoc(doc(db, 'turnover-quotes', quoteId), { status: 'APPROVED' });
-      setSnackbar({ open: true, message: 'Institutional Quote Approved. Work order initiated.', severity: 'success' });
+      setSnackbar({ open: true, message: t('turnover.msg.approved'), severity: 'success' });
       fetchQuotes();
       setDetailsOpen(false);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Approval failed. Please contact support.', severity: 'error' });
+      setSnackbar({ open: true, message: t('turnover.msg.approve_failed'), severity: 'error' });
     }
   };
 
   const handleReject = async (quoteId: string) => {
     try {
       await updateDoc(doc(db, 'turnover-quotes', quoteId), { status: 'REJECTED' });
-      setSnackbar({ open: true, message: 'Quote rejected. Asset record updated.', severity: 'info' });
+      setSnackbar({ open: true, message: t('turnover.msg.rejected'), severity: 'info' });
       fetchQuotes();
       setDetailsOpen(false);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Rejection failed. Please try again.', severity: 'error' });
+      setSnackbar({ open: true, message: t('turnover.msg.reject_failed'), severity: 'error' });
     }
   };
 
@@ -131,27 +133,27 @@ export default function TurnoverEnginePage() {
   const completedCount = stats?.completed || 0;
 
   if (loading) {
-    return <Typography>Loading turnover engine...</Typography>;
+    return <Typography>{t('turnover.loading')}</Typography>;
   }
 
   return (
     <Container maxWidth="xl" sx={{ py: 6 }}>
       <Box sx={{ mb: 8 }}>
         <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1, fontSize: { xs: '2.4rem', md: '3.5rem' } }}>
-            TURNOVER ENGINE
+            {t('turnover.title')}
         </Typography>
         <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>
-            Asset restoration and high-frequency restoration cycles.
+            {t('turnover.subtitle')}
         </Typography>
       </Box>
 
       {/* Statistics */}
       <Grid container spacing={isMobile ? 2 : 4} sx={{ mb: 8 }}>
         {[
-            { label: 'PENDING QUOTES', val: pendingCount, icon: <Clock size={24} />, color: binThemeTokens.gold },
-            { label: 'APPROVED WORKS', val: approvedCount, icon: <CheckCircle size={24} />, color: '#4ADE80' },
-            { label: 'IN PROGRESS', val: inProgressCount, icon: <TrendingUp size={24} />, color: '#60A5FA' },
-            { label: 'COMPLETED ASSETS', val: completedCount, icon: <Package size={24} />, color: binThemeTokens.goldLight },
+            { label: t('turnover.pending_quotes'), val: pendingCount, icon: <Clock size={24} />, color: binThemeTokens.gold },
+            { label: t('turnover.approved_works'), val: approvedCount, icon: <CheckCircle size={24} />, color: '#4ADE80' },
+            { label: t('turnover.in_progress'), val: inProgressCount, icon: <TrendingUp size={24} />, color: '#60A5FA' },
+            { label: t('turnover.completed_assets'), val: completedCount, icon: <Package size={24} />, color: binThemeTokens.goldLight },
         ].map((stat, i) => (
             <Grid item xs={12} sm={6} md={3} key={i}>
                 <Card sx={{ 
@@ -175,14 +177,14 @@ export default function TurnoverEnginePage() {
         <Table>
           <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
             <TableRow>
-              <TableCell>Quote ID</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell>Unit Type</TableCell>
-              <TableCell align="right">Quote Amount</TableCell>
-              <TableCell align="right">After Discount</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>{t('turnover.quote_id')}</TableCell>
+              <TableCell>{t('turnover.unit')}</TableCell>
+              <TableCell>{t('turnover.unit_type')}</TableCell>
+              <TableCell align="right">{t('turnover.quote_amount')}</TableCell>
+              <TableCell align="right">{t('turnover.after_discount')}</TableCell>
+              <TableCell>{t('fin.log.status')}</TableCell>
+              <TableCell>{t('turnover.expires')}</TableCell>
+              <TableCell>{t('common.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -228,7 +230,7 @@ export default function TurnoverEnginePage() {
                         setDetailsOpen(true);
                       }}
                     >
-                      Review
+                      {t('common.review')}
                     </Button>
                   )}
                 </TableCell>
@@ -242,18 +244,18 @@ export default function TurnoverEnginePage() {
       <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="sm" fullWidth>
         {selectedQuote && (
           <>
-            <DialogTitle>Turnover Quote Details</DialogTitle>
+            <DialogTitle>{t('turnover.quote_details')}</DialogTitle>
             <DialogContent sx={{ pt: 2 }}>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">
-                    Painting
+                    {t('turnover.painting')}
                   </Typography>
                   <Typography variant="body2">AED {formatAED(selectedQuote.paintingCost)}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">
-                    Deep Cleaning
+                    {t('turnover.deep_cleaning')}
                   </Typography>
                   <Typography variant="body2">
                     AED {formatAED(selectedQuote.deepCleaningCost)}
@@ -262,7 +264,7 @@ export default function TurnoverEnginePage() {
 
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Total Quote: AED {formatAED(selectedQuote.totalQuote)}
+                    {t('turnover.total_quote')}: AED {formatAED(selectedQuote.totalQuote)}
                   </Typography>
                 </Grid>
 
@@ -270,7 +272,7 @@ export default function TurnoverEnginePage() {
                   <>
                     <Grid item xs={12}>
                       <Typography variant="caption" color="textSecondary">
-                        Enterprise Discount (3.3%)
+                        {t('turnover.enterprise_discount')} (3.3%)
                       </Typography>
                       <Typography variant="body2" color="success.main">
                         -AED {formatAED(selectedQuote.discount)}
@@ -279,7 +281,7 @@ export default function TurnoverEnginePage() {
 
                     <Grid item xs={12} sx={{ backgroundColor: '#e8f5e9', p: 1.5, borderRadius: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                        Final Price: AED {formatAED(selectedQuote.finalPrice)}
+                        {t('turnover.final_price')}: AED {formatAED(selectedQuote.finalPrice)}
                       </Typography>
                     </Grid>
                   </>
@@ -287,13 +289,13 @@ export default function TurnoverEnginePage() {
 
                 <Grid item xs={12}>
                   <Typography variant="caption" color="textSecondary">
-                    Expires: {new Date(selectedQuote.expiryDate).toLocaleDateString()}
+                    {t('turnover.expires')}: {new Date(selectedQuote.expiryDate).toLocaleDateString()}
                   </Typography>
                 </Grid>
               </Grid>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+              <Button onClick={() => setDetailsOpen(false)}>{t('common.close')}</Button>
               {selectedQuote.status === 'PENDING' && (
                 <>
                   <Button
@@ -301,14 +303,14 @@ export default function TurnoverEnginePage() {
                     variant="outlined"
                     color="error"
                   >
-                    Reject
+                    {t('common.reject')}
                   </Button>
                   <Button
                     onClick={() => handleApprove(selectedQuote.quoteId)}
                     variant="contained"
                     color="success"
                   >
-                    Approve & Create Work Order
+                    {t('turnover.approve_btn')}
                   </Button>
                 </>
               )}

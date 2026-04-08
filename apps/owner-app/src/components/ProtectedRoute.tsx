@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Box, Typography, CircularProgress, Button, Stack } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { Lock, LogOut } from 'lucide-react';
@@ -13,6 +14,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
     const { user, role, status, isAdmin, loading } = useRole();
+    const { t } = useLanguage();
     const location = useLocation();
 
     if (loading) {
@@ -63,13 +65,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                         <Lock size={64} color={binThemeTokens.gold} />
                     </Box>
                     <Typography variant="h3" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, letterSpacing: -1 }}>
-                        {isPendingApproval ? 'OFFLINE SETTLEMENT RECORDED' : 'PROTOCOL LOCKED'}
+                        {isPendingApproval ? t('lock.title_offline') : t('lock.title')}
                     </Typography>
                     <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, maxWidth: 600, fontWeight: 700 }}>
-                        {isPendingApproval 
-                            ? "Your payment method has been recorded. An admin will contact you shortly to collect payment and verify your account."
-                            : "Your institutional profile is awaiting final administrative verification. Access to the sovereign dashboard will be granted once your activation settlement is confirmed."
-                        }
+                        {isPendingApproval ? t('lock.desc_offline') : t('lock.desc')}
                     </Typography>
                     
                     <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
@@ -79,7 +78,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                             onClick={() => auth.signOut()}
                             sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800, px: 4 }}
                         >
-                            SIGN OUT
+                            {t('lock.signout')}
                         </Button>
                         {!isPendingApproval && (
                             <Button 
@@ -87,7 +86,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
                                 href="/onboarding"
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, '&:hover': { bgcolor: '#b59410' } }}
                             >
-                                RESUME ONBOARDING
+                                {t('lock.resume')}
                             </Button>
                         )}
                     </Stack>

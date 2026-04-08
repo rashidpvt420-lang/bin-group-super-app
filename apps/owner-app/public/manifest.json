@@ -1,6 +1,6 @@
 {
-  "short_name": "Sovereign",
-  "name": "BIN Group Sovereign",
+  "short_name": "BIN-Groups",
+  "name": "BIN-Groups Property Management OS",
   "icons": [
     {
       "src": "/logo.png",
@@ -16,5 +16,6 @@
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#0B0B0C",
-  "background_color": "#0B0B0C"
+  "background_color": "#0B0B0C",
+  "gcm_sender_id": "103953800507"
 }

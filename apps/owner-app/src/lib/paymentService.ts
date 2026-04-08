@@ -1,5 +1,4 @@
-import { db, collection, addDoc, doc, getDoc, setDoc, serverTimestamp, functions, auth } from './firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db, doc, getDoc, functions, httpsCallable } from './firebase';
 
 /**
  * ── BIN-IDENTITY™ PRODUCTION PAYMENT SERVICE ──────────────────────────────────
@@ -80,4 +79,3 @@ export const verifyPaymentStatus = async (contractId: string): Promise<boolean> 
         return false;
     }
 };
-

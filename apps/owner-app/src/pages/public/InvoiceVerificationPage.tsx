@@ -9,8 +9,10 @@ import WarningIcon from '@mui/icons-material/Warning';
 import { ShieldCheck } from 'lucide-react';
 import { db, doc, getDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function InvoiceVerificationPage() {
+    const { t } = useLanguage();
     const [hash, setHash] = useState('');
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -37,12 +39,12 @@ export default function InvoiceVerificationPage() {
             <Container maxWidth="sm">
                 <Box sx={{ textAlign: 'center', mb: 8 }}>
                     <ShieldCheck size={72} color={binThemeTokens.gold} style={{ marginBottom: 24 }} />
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>National Invoice Registry</Typography>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, letterSpacing: 4, fontWeight: 900 }}>SOVEREIGN VERIFICATION PROTOCOL</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>{t('invoice.registry_title')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, letterSpacing: 4, fontWeight: 900 }}>{t('invoice.sovereign_protocol')}</Typography>
                 </Box>
 
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: '#161618', border: `1px solid ${binThemeTokens.gold}44`, boxShadow: '0 40px 100px rgba(0,0,0,0.8)' }}>
-                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, mb: 2, fontWeight: 900, letterSpacing: 1 }}>ENTER INVOICE HASH (SHA-256)</Typography>
+                    <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, mb: 2, fontWeight: 900, letterSpacing: 1 }}>{t('invoice.enter_hash')}</Typography>
                     <TextField
                         fullWidth
                         variant="outlined"
@@ -83,7 +85,7 @@ export default function InvoiceVerificationPage() {
                         }}
                         disabled={loading}
                     >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : 'VERIFY INTEGRITY'}
+                        {loading ? <CircularProgress size={24} color="inherit" /> : t('invoice.verify_btn')}
                     </Button>
 
                     {status && (
@@ -100,8 +102,8 @@ export default function InvoiceVerificationPage() {
                                         border: `1px solid ${binThemeTokens.gold}33`
                                     }}
                                 >
-                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>DOCUMENT AUTHENTIC</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Verified against National Sovereign Registry. Issued for: {status.data?.entityId || 'BIN_CLIENT'}</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{t('invoice.authentic')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('invoice.verified_msg', { entity: status.data?.entityId || 'BIN_CLIENT' })}</Typography>
                                 </Alert>
                             ) : (
                                 <Alert 
@@ -114,8 +116,8 @@ export default function InvoiceVerificationPage() {
                                         border: '1px solid rgba(255, 77, 77, 0.2)'
                                     }}
                                 >
-                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#ff4d4d' }}>INVALID DOCUMENT</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>No matching record found in the sovereign cluster. Caution: Repudiation possible.</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#ff4d4d' }}>{t('invoice.invalid')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('invoice.invalid_msg')}</Typography>
                                 </Alert>
                             )}
                         </Box>

@@ -1,134 +1,157 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
     GoogleAuthProvider, 
-    signInWithPopup, 
-    UserCredential
+    signInWithPopup
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { Shield, Lock, ArrowRight, Globe } from 'lucide-react';
 
 export default function UnifiedLogin() {
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleAuthSuccess = async (userCredential: UserCredential) => {
-        const user = userCredential.user;
-        const uid = user.uid;
-        const email = user.email?.toLowerCase();
-        
+    useEffect(() => {
+        // Just check if already signed in
+        if (auth.currentUser) {
+            handleUserRole(auth.currentUser.uid);
+        } else {
+            setLoading(false);
+        }
+    }, []);
+
+    const handleUserRole = async (uid: string) => {
         try {
-            // [STRICT-AUTH] UID-First Architecture Validation
-            // We rely solely on direct document fetch. Collection-wide email queries are disallowed for non-admins.
-            const docRef = doc(db, 'users', uid);
-            const docSnap = await getDoc(docRef);
-
-            // 2. Role Verification
-            const tokenResult = await user.getIdTokenResult(true);
-            const claims = tokenResult.claims;
-            
-            let hasAccess = false;
-
-            if (claims.role === 'admin' || claims.isAdmin === true) {
-                hasAccess = true;
-            } else if (docSnap.exists()) {
-                const data = docSnap.data();
-                const role = data.role?.toUpperCase();
-                const isAdmin = data.isAdmin === true;
-                if (role === 'ADMIN' || isAdmin) {
-                    hasAccess = true;
+            const userDoc = await getDoc(doc(db, 'users', uid));
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                if (data.role === 'admin' || data.isAdmin) {
+                    window.location.href = '/admin/dashboard';
+                } else {
+                    setError("ACCESS DENIED: Administrative credentials required.");
+                    setLoading(false);
                 }
-            }
-
-            if (hasAccess) {
-                console.info("🔒 [ADMIN-AUTH] Access Granted for:", email);
-                window.location.href = '/admin/dashboard';
             } else {
-                console.warn("🚫 [ADMIN-AUTH] Access Denied for:", email);
-                setError('ACCESS DENIED: Administrative privileges required.');
+                setError("IDENTITY FAULT: Administrative profile not found.");
                 setLoading(false);
-                await auth.signOut();
             }
-        } catch (err: any) {
-            console.error("🚨 Security Clearance Protocol Failed:", err);
-            setError("Security clearance failed. Please try again.");
+        } catch (err) {
+            setError("DATABASE_OFFLINE: Could not verify permissions.");
             setLoading(false);
         }
     };
 
-    const handleGoogleSignIn = async () => {
+    const handleGoogleLogin = async () => {
+        localStorage.clear();
         setLoading(true);
-        setError('');
+        setError(null);
+        const provider = new GoogleAuthProvider();
         try {
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ 
-                prompt: 'select_account'
-            });
             const result = await signInWithPopup(auth, provider);
-            await handleAuthSuccess(result);
+            if (result.user) {
+                await handleUserRole(result.user.uid);
+            }
         } catch (err: any) {
-            console.error("🚨 [ADMIN-AUTH] Initiation Failure:", err);
-            setError(err.message || 'Failed to initiate secure login.');
+            if (err.code === 'auth/popup-closed-by-user') {
+                setLoading(false);
+                return;
+            }
+            console.error("Auth popup error:", err);
+            setError("IDENTITY_FAULT: Administrative identity verification failed.");
             setLoading(false);
         }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
+                <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6"></div>
+                <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">
+                    Authenticating Sovereign Identity...
+                </p>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md bg-[#0f172a] rounded-[32px] overflow-hidden border border-emerald-500/10 shadow-[0_40px_100px_-15px_rgba(0,0,0,0.8)] relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-                
-                <div className="p-10">
-                    <div className="text-center mb-10">
-                        <div className="inline-block p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 mb-6">
-                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">BIN GROUP</h2>
-                            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Administry OS</p>
-                        </div>
-                        <p className="text-[#94a3b8] text-sm font-bold">SECURE COMMAND GATEWAY</p>
+        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30">
+            {/* Background Branding */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
+            </div>
+
+            <div className="w-full max-w-[420px] relative z-10">
+                {/* Branding Section */}
+                <div className="text-center mb-12">
+                    <div className="inline-block p-4 rounded-3xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-[#C6A75E]/20 shadow-2xl mb-6">
+                        <Shield className="w-12 h-12 text-[#C6A75E]" strokeWidth={1.5} />
+                    </div>
+                    <h1 className="text-4xl font-black text-white tracking-tighter mb-2 italic">
+                        BIN-ADMINISTRY<span className="text-[#C6A75E]">™</span>
+                    </h1>
+                    <p className="text-[#94a3b8] font-bold tracking-[0.2em] text-[10px] uppercase">
+                        Sovereign Command & Control Center
+                    </p>
+                </div>
+
+                {/* Login Card */}
+                <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-white/5 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
+                    
+                    <div className="mb-8">
+                        <h2 className="text-xl font-black text-white mb-2">Institutional Access</h2>
+                        <p className="text-sm text-[#64748b] leading-relaxed">
+                            Authorized personnel only. All access attempts are logged under the Sovereign Audit Protocol.
+                        </p>
                     </div>
 
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-[#ef4444] text-[11px] font-black uppercase tracking-wider p-4 rounded-xl mb-8 text-center animate-pulse">
+                        <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></div>
                             {error}
                         </div>
                     )}
 
-                    <div className="flex flex-col gap-6">
-                        <button
-                            onClick={handleGoogleSignIn}
-                            disabled={loading}
-                            className="w-full bg-white text-slate-950 font-black text-sm p-5 rounded-2xl uppercase tracking-widest transition-all hover:bg-emerald-50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_10px_20px_rgba(255,255,255,0.05)]"
-                        >
-                            {loading ? (
-                                <span className="flex items-center gap-2">
-                                    <svg className="animate-spin h-5 w-5 text-slate-950" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Verifying...
-                                </span>
-                            ) : (
-                                <>
-                                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                                        <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                                        <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                        <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
-                                        <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                                    </svg>
-                                    Sign in with Google
-                                </>
-                            )}
-                        </button>
-                        
-                        <p className="text-[10px] text-[#475569] font-bold text-center px-4 leading-relaxed">
-                            UNAUTHORIZED ACCESS TO THIS SOVEREIGN INTERFACE IS PROHIBITED AND SUBJECT TO INSTITUTIONAL AUDIT.
-                        </p>
+                    <button 
+                        onClick={handleGoogleLogin}
+                        className="w-full group relative flex items-center justify-between bg-white text-black font-black py-5 px-8 rounded-2xl transition-all duration-300 hover:bg-[#C6A75E] hover:scale-[1.02] active:scale-[0.98] shadow-xl overflow-hidden"
+                    >
+                        <div className="flex items-center gap-4">
+                            <Globe className="w-6 h-6" />
+                            <span className="uppercase tracking-widest text-sm">Verify Identity</span>
+                        </div>
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </button>
+
+                    <div className="mt-8 flex items-center justify-center gap-2 opacity-40">
+                        <Lock className="w-3 h-3 text-[#94a3b8]" />
+                        <span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
+                            256-bit Encrypted Node
+                        </span>
+                    </div>
+                </div>
+
+                {/* Footer Security Marks */}
+                <div className="mt-12 grid grid-cols-3 gap-4 opacity-30 grayscale hover:opacity-100 transition-opacity duration-700">
+                    <div className="text-center">
+                        <div className="text-[8px] text-white font-black uppercase mb-1">Status</div>
+                        <div className="text-[10px] text-[#C6A75E] font-black italic">PROD_ACTIVE</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-[8px] text-white font-black uppercase mb-1">Protocol</div>
+                        <div className="text-[10px] text-[#C6A75E] font-black italic">ALFA_4</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-[8px] text-white font-black uppercase mb-1">Region</div>
+                        <div className="text-[10px] text-[#C6A75E] font-black italic">UAE_SOV</div>
                     </div>
                 </div>
             </div>
-            
+
             <div className="mt-8 text-center opacity-40">
                 <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
-                    BIN GROUP SOVEREIGN CORE v1.21
+                    BIN-Groups CORE v1.23-STABLE
                 </p>
             </div>
         </div>

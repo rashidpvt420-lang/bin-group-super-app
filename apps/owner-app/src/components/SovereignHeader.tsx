@@ -7,8 +7,11 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import TranslateIcon from '@mui/icons-material/Translate';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
+import LogoutIcon from '@mui/icons-material/Logout';
 
-const SovereignHeader: React.FC = () => {
+const BinGroupHeader: React.FC = () => {
     const { lang, setLang, t, isRTL } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
     const { user, role } = useRole();
@@ -35,7 +38,7 @@ const SovereignHeader: React.FC = () => {
                         onError={(e: any) => e.target.style.display = 'none'}
                     />
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
-                        BIN-GROUP <Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>SOVEREIGN</Typography>
+                        BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
                     </Typography>
                 </Box>
 
@@ -67,6 +70,27 @@ const SovereignHeader: React.FC = () => {
                         {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
                     </IconButton>
 
+                    {/* Prominent Global Logout */}
+                    {user && (
+                        <Button 
+                            variant="contained"
+                            size="small"
+                            onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
+                            sx={{ 
+                                bgcolor: alpha('#ef4444', 0.1), 
+                                color: '#ef4444',
+                                fontWeight: 900,
+                                minWidth: '40px',
+                                px: { xs: 1, sm: 2 },
+                                ml: 1,
+                                '&:hover': { bgcolor: alpha('#ef4444', 0.2) }
+                            }}
+                        >
+                            <LogoutIcon sx={{ mr: { xs: 0, sm: 1 }, fontSize: '1.25rem' }} />
+                            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{t('nav.logout') || 'Sign Out'}</Box>
+                        </Button>
+                    )}
+
                     {/* App Links (Responsive) */}
                     <Box sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
                         <Button color="inherit" href="/dashboard">{t('nav.dashboard')}</Button>
@@ -79,4 +103,4 @@ const SovereignHeader: React.FC = () => {
     );
 };
 
-export default SovereignHeader;
+export default BinGroupHeader;

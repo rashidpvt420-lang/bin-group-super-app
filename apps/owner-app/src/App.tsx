@@ -30,7 +30,7 @@ import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 
 import ProtectedRoute from './components/ProtectedRoute';
-import SovereignHeader from './components/SovereignHeader';
+import BinGroupHeader from './components/SovereignHeader';
 
 import { RoleProvider, useRole } from './context/RoleContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -59,7 +59,7 @@ function LoadingScreen() {
     }}>
       <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
       <Typography variant="h6" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 4, textTransform: 'uppercase' }}>
-        Authenticating Sovereign Identity...
+        Authenticating BIN-Groups Identity...
       </Typography>
     </Box>
   );
@@ -161,7 +161,7 @@ export default function App() {
             <RoleProvider>
               <CssBaseline />
               <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
-                <SovereignHeader />
+                <BinGroupHeader />
                 <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
                    <AppContent />
                 </Box>

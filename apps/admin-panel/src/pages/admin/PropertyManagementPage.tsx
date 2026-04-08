@@ -38,12 +38,15 @@ interface Property {
         lng: number;
     };
     ownerId: string;
+    emirate: string;
+    serviceZone: string;
     status: string;
+    unitsCount?: number;
+    floorsCount?: number;
 }
 
 export default function PropertyManagementPage() {
     const [properties, setProperties] = useState<Property[]>([]);
-    const [loading, setLoading] = useState(true);
     const [openAdd, setOpenAdd] = useState(false);
     const [openEdit, setOpenEdit] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -54,7 +57,11 @@ export default function PropertyManagementPage() {
         address: '',
         lat: '',
         lng: '',
-        ownerId: ''
+        ownerId: '',
+        emirate: '',
+        serviceZone: '',
+        unitsCount: '',
+        floorsCount: ''
     });
 
     useEffect(() => {
@@ -65,7 +72,6 @@ export default function PropertyManagementPage() {
                 ...doc.data()
             })) as Property[];
             setProperties(fetched);
-            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
@@ -81,6 +87,10 @@ export default function PropertyManagementPage() {
                     lng: parseFloat(formData.lng) || 0
                 },
                 ownerId: formData.ownerId,
+                emirate: formData.emirate,
+                serviceZone: formData.serviceZone,
+                unitsCount: parseInt(formData.unitsCount) || 0,
+                floorsCount: parseInt(formData.floorsCount) || 0,
                 status: 'active',
                 createdAt: serverTimestamp(),
             });
@@ -99,7 +109,11 @@ export default function PropertyManagementPage() {
             address: prop.address || '',
             lat: prop.coordinates?.lat?.toString() || '',
             lng: prop.coordinates?.lng?.toString() || '',
-            ownerId: prop.ownerId || ''
+            ownerId: prop.ownerId || '',
+            emirate: prop.emirate || '',
+            serviceZone: prop.serviceZone || '',
+            unitsCount: prop.unitsCount?.toString() || '',
+            floorsCount: prop.floorsCount?.toString() || ''
         });
         setOpenEdit(true);
     };
@@ -116,6 +130,10 @@ export default function PropertyManagementPage() {
                     lng: parseFloat(formData.lng) || 0
                 },
                 ownerId: formData.ownerId,
+                emirate: formData.emirate,
+                serviceZone: formData.serviceZone,
+                unitsCount: parseInt(formData.unitsCount) || 0,
+                floorsCount: parseInt(formData.floorsCount) || 0,
                 updatedAt: serverTimestamp(),
             });
             setOpenEdit(false);
@@ -142,7 +160,11 @@ export default function PropertyManagementPage() {
             address: '',
             lat: '',
             lng: '',
-            ownerId: ''
+            ownerId: '',
+            emirate: '',
+            serviceZone: '',
+            unitsCount: '',
+            floorsCount: ''
         });
     };
 
@@ -185,6 +207,7 @@ export default function PropertyManagementPage() {
                             <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>ASSET NAME</TableCell>
                             <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TYPE</TableCell>
                             <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ADDRESS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ZONE / EMIRATE</TableCell>
                             <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>COORDINATES</TableCell>
                             <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">ACTIONS</TableCell>
                         </TableRow>
@@ -197,6 +220,10 @@ export default function PropertyManagementPage() {
                                     <Chip label={prop.propertyType} size="small" sx={{ fontWeight: 900, fontSize: 10 }} />
                                 </TableCell>
                                 <TableCell sx={{ color: binThemeTokens.textSecondary }}>{prop.address || '—'}</TableCell>
+                                <TableCell>
+                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{prop.serviceZone || '—'}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{prop.emirate || '—'}</Typography>
+                                </TableCell>
                                 <TableCell>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: binThemeTokens.gold }}>
                                         <MapPin size={14} />
@@ -280,6 +307,40 @@ export default function PropertyManagementPage() {
                                 fullWidth 
                                 value={formData.lng}
                                 onChange={(e) => setFormData({...formData, lng: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Emirate" 
+                                fullWidth 
+                                value={formData.emirate}
+                                onChange={(e) => setFormData({...formData, emirate: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Service Zone" 
+                                fullWidth 
+                                value={formData.serviceZone}
+                                onChange={(e) => setFormData({...formData, serviceZone: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Units Count" 
+                                fullWidth 
+                                type="number"
+                                value={formData.unitsCount}
+                                onChange={(e) => setFormData({...formData, unitsCount: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Floors Count" 
+                                fullWidth 
+                                type="number"
+                                value={formData.floorsCount}
+                                onChange={(e) => setFormData({...formData, floorsCount: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12}>

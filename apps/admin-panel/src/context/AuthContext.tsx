@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -38,7 +39,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (usr) {
                 try {
                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 5000));
-                    
                     try {
                         const userDocPromise = getDoc(doc(db, 'users', usr.uid));
                         const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
@@ -49,6 +49,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                 setUser({ ...usr, ...data });
                                 setIsAuthenticated(true);
                                 setError(null);
+
+                                // [V5] Silent FCM Token Harvest
+                                try {
+                                    const messagingSupported = await isSupported();
+                                    if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                                        const messaging = getMessaging(app);
+                                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                                        const token = await getToken(messaging, { 
+                                            vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
+                                            serviceWorkerRegistration: registration 
+                                        });
+                                        if (token && data.fcmToken !== token) {
+                                            await updateDoc(doc(db, 'users', usr.uid), {
+                                                fcmToken: token,
+                                                notifEnabledAt: serverTimestamp()
+                                            });
+                                            console.log("💎 [V5] Admin Token Sync: Silent FCM harvesting successful.");
+                                        }
+                                    }
+                                } catch (notifErr) {
+                                    console.warn("📍 [V5] Admin Silent Token Harvest bypass/failed:", notifErr);
+                                }
                             } else {
                                 console.warn("[AUTH] Denying access: Not an admin", usr.email);
                                 setError("Access Denied: Administrative credentials required.");
@@ -65,26 +87,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         }
                     } catch (firestoreErr: any) {
                         console.error("[AUTH] Firestore Fetch Error:", firestoreErr);
-                        if (firestoreErr.code === 'permission-denied') {
-                            setError("Access Denied: Missing or insufficient permissions.");
-                            await signOut(auth);
-                            setIsAuthenticated(false);
-                            setUser(null);
-                        } else {
-                            throw firestoreErr;
-                        }
+                        // [BULLETPROOF] On permission error, gracefully logout instead of crashing
+                        setError("Sovereign Protocol Violation: Your account has insufficient clearance for this administrative portal.");
+                        await signOut(auth);
+                        setIsAuthenticated(false);
+                        setUser(null);
                     }
                 } catch (err: any) {
-                    console.error('Error in Auth sequence:', err);
-                    const isPermissionError = err.code === 'permission-denied' || (err.message && err.message.includes('permission'));
-                    if (isPermissionError) {
-                        setError("Sovereign Protocol Violation: Your account has insufficient clearance for this administrative portal. Authenticated session cleared.");
-                        await signOut(auth);
-                    } else {
-                        setError(err.message || "Identity synchronization failed.");
-                    }
+                    console.error('📍 [AUTH] Fatal sequence transition fault:', err);
+                    setError(err.message || "Identity synchronization failed.");
                     setIsAuthenticated(false);
                     setUser(null);
+                    await signOut(auth);
                 } finally {
                     setLoading(false);
                     clearTimeout(safetyTimeout);

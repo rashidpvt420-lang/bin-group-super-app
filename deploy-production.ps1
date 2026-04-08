@@ -35,7 +35,12 @@ $FUNCTIONS_DIR = Join-Path $PSScriptRoot "functions"
 $DEPLOY_FLAGS = "hosting,firestore:rules,firestore:indexes,storage"
 
 if (Test-Path $FUNCTIONS_DIR) {
-    Write-Host '✅ Functions source detected. Including in deployment.' -ForegroundColor Gray
+    Write-Host '✅ Functions source detected. Building backend...' -ForegroundColor Gray
+    $prevCwd = (Get-Location).Path
+    Set-Location $FUNCTIONS_DIR
+    npm run build
+    Set-Location $prevCwd
+    if ($LASTEXITCODE -ne 0) { Write-Host '❌ Functions Build Failed' -ForegroundColor Red; exit 1 }
     $DEPLOY_FLAGS += ",functions"
 } else {
     Write-Host '⚠️ WARNING: functions directory NOT FOUND. Deployment will proceed without backend triggers.' -ForegroundColor Yellow
