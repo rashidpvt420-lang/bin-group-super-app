@@ -55,17 +55,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                     const messagingSupported = await isSupported();
                                     if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                                         const messaging = getMessaging(app);
-                                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-                                        const token = await getToken(messaging, { 
+                                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                                        await navigator.serviceWorker.ready;
+                                        const currentToken = await getToken(messaging, { 
                                             vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
                                             serviceWorkerRegistration: registration 
                                         });
-                                        if (token && data.fcmToken !== token) {
+                                        if (currentToken) {
+                                            // YOU MUST WRITE THE TOKEN TO FIRESTORE
                                             await updateDoc(doc(db, 'users', usr.uid), {
-                                                fcmToken: token,
-                                                notifEnabledAt: serverTimestamp()
+                                                fcmToken: currentToken,
+                                                updatedAt: new Date().toISOString()
                                             });
-                                            console.log("💎 [V5] Admin Token Sync: Silent FCM harvesting successful.");
+                                            console.log("Token saved to user profile.");
                                         }
                                     }
                                 } catch (notifErr) {

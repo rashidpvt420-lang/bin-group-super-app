@@ -22,6 +22,8 @@ import {
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
+import { db } from '../../lib/firebase';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 
 
 interface PartApproval {
@@ -41,31 +43,16 @@ export default function PartsStorePage() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     useEffect(() => {
-        // Mocking the pending approvals data
-        setApprovals([
-            {
-                id: 'APP_101',
-                ticketId: 'TKT-7782',
-                ownerName: 'Khalifa Al Mansouri',
-                partName: 'AC Compressor (2.0 Ton)',
-                wholesaleCost: 900,
-                markupPercent: 20,
-                finalPrice: 1080,
-                status: 'PENDING',
-                photoUrl: 'https://via.placeholder.com/300?text=Broken+Compressor'
-            },
-            {
-                id: 'APP_102',
-                ticketId: 'TKT-8812',
-                ownerName: 'Sarah Jenkins',
-                partName: 'Water Heater (80L)',
-                wholesaleCost: 650,
-                markupPercent: 15,
-                finalPrice: 747.5,
-                status: 'APPROVED',
-                photoUrl: 'https://via.placeholder.com/300?text=Leaking+Heater'
-            }
-        ]);
+        const q = query(collection(db, "part_approvals"));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const data: PartApproval[] = [];
+            querySnapshot.forEach((doc) => {
+                data.push({ id: doc.id, ...doc.data() } as PartApproval);
+            });
+            setApprovals(data);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     const getStatusChip = (status: string) => {

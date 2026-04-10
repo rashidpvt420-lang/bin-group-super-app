@@ -13,44 +13,36 @@ const db = admin.firestore();
 /**
  * master utility to dispatch notifications across Push and Email channels.
  */
-async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: { subject?: string, template?: string } | null = null) {
+async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: { subject?: string, template?: string } | null = null, extraData: Record<string, string> = {}) {
     try {
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) return false;
-        
+
         const userData = userDoc.data();
         const fcmToken = userData?.fcmToken;
         const userEmail = userData?.email;
 
         // 1. Dispatch Push Notification if Token exists
         if (fcmToken) {
-            const message: admin.messaging.Message = {
+            const payload: admin.messaging.Message = {
                 token: fcmToken,
                 notification: { title, body },
-                data: { userId, click_action: "FLUTTER_NOTIFICATION_CLICK" },
-                apns: {
-                    headers: { 'apns-priority': '10' },
-                    payload: { aps: { alert: { title, body }, sound: 'default', badge: 1, 'content-available': 1 } }
-                },
-                android: { 
-                    priority: 'high',
-                    notification: {
-                        sound: 'default',
-                        channelId: 'high_importance_channel'
-                    }
-                },
                 webpush: {
                     headers: { Urgency: 'high' },
-                    notification: {
-                        requireInteraction: true,
-                        vibrate: [500, 250, 500, 250, 500]
+                    notification: { 
+                        requireInteraction: true, 
+                        vibrate: [500, 250, 500, 250, 500] 
                     }
+                },
+                data: { 
+                    ticketId: String(extraData.ticketId || ''), 
+                    click_action: "FLUTTER_NOTIFICATION_CLICK" 
                 }
             };
-            await admin.messaging().send(message);
+            
+            await admin.messaging().send(payload);
             console.log(`[V5 Omni] Push delivered to user ${userId}`);
         }
-
         // 2. Dispatch Email if requested
         if (emailOptions && userEmail) {
             await db.collection("mail").add({
@@ -97,7 +89,8 @@ export const onTicketStatusUpdate = onDocumentUpdated("maintenanceTickets/{ticke
             after.assignedTechnicianId,
             "NEW MISSION ASSIGNED",
             `Mission: ${after.trade || 'General'} at ${after.propertyName || 'Portfolio Asset'}.`,
-            { subject: `New Dispatch Assignment: #${ticketId.substring(0,8)}` }
+            { subject: `New Dispatch Assignment: #${ticketId.substring(0,8)}` },
+            { ticketId, url: `/tech/ticket/${ticketId}` }
         );
     }
 
@@ -434,6 +427,14 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
         }
 
         if (techQuery.empty) {
+            techQuery = await db.collection("users")
+                .where("role", "==", "technician")
+                .where("isOffDuty", "==", false)
+                .where("assignedZones", "array-contains", "Global Operations")
+                .get();
+        }
+
+        if (techQuery.empty) {
             await snap.ref.update({ autoDispatchStatus: "NO_TECH_IN_TERRITORY" });
             return;
         }
@@ -463,7 +464,8 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
                 bestTech.id,
                 `NEW MISSION: ${ticketData.tenantName || 'Resident'} - ${serviceZone}`,
                 `${ticketData.trade || 'Issue'} at Floor ${ticketData.floorNumber || 'N/A'}, Unit ${ticketData.unitNumber || 'N/A'}. Tap for details.`,
-                { subject: "Urgent Duty Assignment - BIN GROUP" }
+                { subject: "Urgent Duty Assignment - BIN GROUP" },
+                { ticketId: snap.id, url: `/tech/ticket/${snap.id}` }
             );
         }
     } catch (error) {

@@ -92,16 +92,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                             const messaging = getMessaging(app);
                             await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
                             const registration = await navigator.serviceWorker.ready;
-                            const token = await getToken(messaging, { 
+                            const currentToken = await getToken(messaging, { 
                                 vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
                                 serviceWorkerRegistration: registration 
                             });
-                            if (token && data.fcmToken !== token) {
-                                await updateDoc(userDocRef, {
-                                    fcmToken: token,
-                                    notifEnabledAt: serverTimestamp()
+                            if (currentToken) {
+                                // YOU MUST WRITE THE TOKEN TO FIRESTORE
+                                await updateDoc(doc(db, 'users', currentUser.uid), {
+                                    fcmToken: currentToken,
+                                    updatedAt: new Date().toISOString()
                                 });
-                                console.log("💎 [V5] Token Sync: Silent FCM harvesting successful.");
+                                console.log("Token saved to user profile.");
                             }
                         }
                     } catch (notifErr) {

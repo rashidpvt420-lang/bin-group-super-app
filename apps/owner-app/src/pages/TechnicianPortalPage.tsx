@@ -18,6 +18,14 @@ interface Ticket {
     createdAt: any;
     assignedTechnicianId?: string;
     preferredTiming?: string;
+    // Top-level fields from SOS submission
+    unitNumber?: string;
+    floorNumber?: string;
+    propertyName?: string;
+    address?: string;
+    tenantName?: string;
+    emirate?: string;
+    serviceZone?: string;
     propertyLocation?: {
         unitNumber: string;
         propertyType: string;
@@ -52,36 +60,49 @@ export default function TechnicianPortalPage() {
         try {
             const messagingSupported = await isSupported();
             if (!messagingSupported) {
-                throw new Error("This browser does not support Sovereign Push protocols.");
+                throw new Error("UNSUPPORTED_BROWSER");
             }
 
-            const messaging = getMessaging(app);
             const permission = await Notification.requestPermission();
             setNotifStatus(permission);
             
             if (permission === 'granted') {
-                await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                const registration = await navigator.serviceWorker.ready;
-                const token = await getFcmToken(messaging, { 
+                // Ensure service worker is registered and active
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                
+                // Wait for the service worker to be active
+                await new Promise<void>((resolve) => {
+                    if (registration.active) {
+                        resolve();
+                    } else {
+                        registration.addEventListener('activate', () => resolve(), { once: true });
+                    }
+                });
+
+                const messaging = getMessaging(app);
+                const currentToken = await getFcmToken(messaging, { 
                     vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
                     serviceWorkerRegistration: registration 
                 });
                 
-                if (token) {
+                if (currentToken) {
+                    // YOU MUST WRITE THE TOKEN TO FIRESTORE
                     await updateDoc(doc(db, 'users', user.uid), {
-                        fcmToken: token,
-                        notifEnabledAt: serverTimestamp()
+                        fcmToken: currentToken,
+                        updatedAt: new Date().toISOString()
                     });
+                    console.log("Token saved to user profile.");
                     alert(t('tech.notif_handshake_success'));
                 } else {
-                    throw new Error("FCM_TOKEN_GENERATION_FAILED: Check VAPID key configuration.");
+                    throw new Error("EMPTY_TOKEN");
                 }
             } else {
-                throw new Error("PERMISSION_DENIED: Apple/User blocked the communication link.");
+                throw new Error("PERMISSION_DENIED");
             }
         } catch (err: any) {
-            console.error("📍 [V3-PATCH] Notification Failure bypass:", err);
-            setNotifError("Notifications could not be enabled right now. Please try again after refreshing the app. If the issue continues, contact admin support.");
+            console.error("📍 [V3-PATCH] Notification Failure:", err);
+            // Section 4: Clean Production Error UI
+            setNotifError("Notifications could not be enabled right now. Please refresh the app and try again. If the problem continues, contact BIN GROUP support.");
         } finally {
             setNotifLoading(false);
         }
@@ -169,7 +190,15 @@ export default function TechnicianPortalPage() {
                                             <Grid item xs={12} md={8} sx={{ p: 4 }}>
                                                 <Chip label={t('tech.urgent_dispatch')} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, mb: 2 }} />
                                                 <Typography variant="h4" fontWeight="900" sx={{ color: '#FFF', mb: 1 }}>{ticket.description}</Typography>
-                                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.propertyLocation?.propertyName} ({ticket.propertyLocation?.unitNumber})</Typography>
+                                                <Typography variant="body1" sx={{ color: binThemeTokens.gold, fontWeight: 700, mb: 1 }}>
+                                                    {ticket.tenantName || 'Resident'} | {ticket.propertyName || ticket.propertyLocation?.propertyName || 'Asset'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                                                    {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ color: alpha('#FFF', 0.5), mt: 1 }}>
+                                                    {ticket.address || ticket.propertyLocation?.address || 'Location details in Navigator'}
+                                                </Typography>
                                             </Grid>
                                             <Grid item xs={12} md={4} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                                 <Button variant="contained" fullWidth startIcon={<Navigation />} onClick={() => handleNavigate(ticket)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{t('tech.navigate')}</Button>
@@ -191,6 +220,9 @@ export default function TechnicianPortalPage() {
                                         <Box>
                                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('tech.pool_id')}: {ticket.id.substring(0,8)}</Typography>
                                             <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.description}</Typography>
+                                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                                                {ticket.propertyName} | {t('field.units')} {ticket.unitNumber || 'N/A'} ({t('field.floors')} {ticket.floorNumber || 'N/A'})
+                                            </Typography>
                                         </Box>
                                         <Button variant="outlined" onClick={() => navigate(`/tech/ticket/${ticket.id}`)} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{t('tech.accept')}</Button>
                                     </Stack>

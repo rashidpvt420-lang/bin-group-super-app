@@ -41,14 +41,11 @@ const Icon = ({ icon: IconComponent, size = 16, className = "", color = "current
     <IconComponent size={size} className={className} color={color} />
 );
 
-const MOCK_TECHNICIANS = [
-  { id: 'TECH-01', name: 'Omar', distance: '2km', rating: 4.9, avatar: 'O', status: 'Available' },
-  { id: 'TECH-02', name: 'Ahmed', distance: '5km', rating: 4.7, avatar: 'A', status: 'Available' },
-  { id: 'TECH-03', name: 'Sajid', distance: '8km', rating: 4.8, avatar: 'S', status: 'Busy' },
-];
+
 
 export default function LiveMapPage() {
   const [tickets, setTickets] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
   const [generatePass, setGeneratePass] = useState(true);
@@ -69,7 +66,30 @@ export default function LiveMapPage() {
       setTickets(ticketData);
     });
 
-    return () => unsubscribe();
+    const qTech = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    const unsubscribeTech = onSnapshot(qTech, (querySnapshot: any) => {
+      const techData: any[] = [];
+      querySnapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.role === 'technician') {
+          techData.push({
+            id: doc.id,
+            name: data.displayName || 'Technician',
+            distance: 'N/A', // Can be calculated if coordinates exist
+            rating: data.rating || 5.0,
+            avatar: (data.displayName || 'T').charAt(0).toUpperCase(),
+            status: data.isOffDuty ? 'Busy' : 'Available',
+            ...data
+          });
+        }
+      });
+      setTechnicians(techData);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeTech();
+    };
   }, []);
 
   const handleAssignClick = (ticket: any) => {
@@ -429,7 +449,7 @@ export default function LiveMapPage() {
 
           <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>Available Near Property</Typography>
           <List>
-            {(MOCK_TECHNICIANS || []).filter(tech => tech.status === 'Available').map((tech) => (
+            {(technicians || []).filter(tech => tech.status === 'Available').map((tech) => (
               <ListItem
                 key={tech.id}
                 sx={{
