@@ -6,7 +6,7 @@ import {
     Stack, Alert, CircularProgress, Chip, Divider, alpha
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Home, Camera, ShieldAlert, Send, ArrowLeft, CheckCircle2, MapPin, Navigation, Clock, Phone, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Home, Camera, ShieldAlert, Send, ArrowLeft, CheckCircle2, MapPin, Navigation, Clock, Phone, MessageSquare, Activity, ShieldCheck, Timer } from 'lucide-react';
 import { db, collection, addDoc, serverTimestamp, getDoc, doc, getDocs, query, where, updateDoc, onSnapshot, orderBy, limit } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -101,12 +101,12 @@ export default function TenantSOSPage() {
             collection(db, 'maintenanceTickets'),
             where('tenantId', '==', user.uid),
             where('status', 'not-in', ['COMPLETED', 'RESOLVED', 'CLOSED']),
-            orderBy('status'), // This is a bit tricky with not-in, usually requires composite index
+            orderBy('status'), 
             limit(5)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const tickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            const tickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setActiveTickets(tickets);
             
             // Calculate distances for all en-route tickets
@@ -117,7 +117,6 @@ export default function TenantSOSPage() {
             });
         }, (err) => {
             console.warn("V5 SOS Subscription Fallback:", err);
-            // Simple fallback if composite index is missing
             const fallbackQ = query(collection(db, 'maintenanceTickets'), where('tenantId', '==', user.uid), limit(5));
             onSnapshot(fallbackQ, (snap) => {
                 const filtered = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((t: any) => !['COMPLETED', 'RESOLVED', 'CLOSED'].includes(t.status));
@@ -183,12 +182,49 @@ export default function TenantSOSPage() {
         }
     };
 
+    const renderReportCard = () => (
+        <Paper sx={{ p: 4, mb: 6, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3, mb: 3, display: 'block' }}>
+                {t('report.tenant_summary') || 'RESIDENCY HEALTH AUDIT'}
+            </Typography>
+            <Grid container spacing={4}>
+                <Grid item xs={12} md={4}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><ShieldCheck color={binThemeTokens.gold} /></Box>
+                        <Box>
+                            <Typography variant="h4" fontWeight="950" color="#FFF">100%</Typography>
+                            <Typography variant="caption" color="rgba(255,255,255,0.5)">{t('report.safety_index') || 'Safety Index'}</Typography>
+                        </Box>
+                    </Stack>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><Timer color={binThemeTokens.gold} /></Box>
+                        <Box>
+                            <Typography variant="h4" fontWeight="950" color="#FFF">42m</Typography>
+                            <Typography variant="caption" color="rgba(255,255,255,0.5)">{t('report.avg_response') || 'Avg. Response'}</Typography>
+                        </Box>
+                    </Stack>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><Activity color={binThemeTokens.gold} /></Box>
+                        <Box>
+                            <Typography variant="h4" fontWeight="950" color="#FFF">{activeTickets.length}</Typography>
+                            <Typography variant="caption" color="rgba(255,255,255,0.5)">{t('report.active_sos') || 'Active SOS'}</Typography>
+                        </Box>
+                    </Stack>
+                </Grid>
+            </Grid>
+        </Paper>
+    );
+
     if (submitted) {
         return (
             <Container maxWidth="sm" sx={{ py: 12, textAlign: 'center' }}>
                 <Paper sx={{ p: 8, bgcolor: 'rgba(76, 175, 80, 0.05)', border: '1px solid #4CAF50', borderRadius: 10 }}>
                     <CheckCircle2 color="#4CAF50" size={64} style={{ margin: '0 auto' }} />
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#4CAF50', mt: 4, mb: 2 }}>{t('sos.success_title')}</Typography>
+                    <Typography variant="h3" fontWeight="950" sx={{ color: '#4CAF50', mt: 4, mb: 2 }}>{t('sos.success_title')}</Typography>
                     <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, mb: 6 }}>
                         {t('sos.success_subtitle')}
                     </Typography>
@@ -200,10 +236,12 @@ export default function TenantSOSPage() {
 
     return (
         <Container maxWidth="md" sx={{ py: { xs: 4, md: 8 } }}>
+            {renderReportCard()}
+
             {/* [V5] ACTIVE DISPATCH MONITOR */}
             {activeTickets.length > 0 && (
                 <Box sx={{ mb: 8 }}>
-                    <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 4, letterSpacing: -1 }}>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 4, letterSpacing: -1 }}>
                         {t('tech.live_ops')} — {t('dash.terminal')}
                     </Typography>
                     <Stack spacing={4}>
@@ -218,7 +256,7 @@ export default function TenantSOSPage() {
                                             />
                                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>REF: {ticket.id.substring(0,8)}</Typography>
                                         </Stack>
-                                        <Typography variant="h4" fontWeight="900" sx={{ color: '#FFF', mb: 2 }}>{ticket.description}</Typography>
+                                        <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>{ticket.description}</Typography>
                                         
                                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
                                         
@@ -274,7 +312,7 @@ export default function TenantSOSPage() {
                     <ShieldAlert color="#DC2626" size={24} />
                     <Typography variant="overline" sx={{ color: '#DC2626', fontWeight: 900, letterSpacing: 3 }}>{t('sos.emergency_protocol')}</Typography>
                 </Stack>
-                <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>{t('sos.title')}</Typography>
+                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFFFFF', letterSpacing: -1, mb: 1 }}>{t('sos.title')}</Typography>
                 <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>{t('sos.subtitle')}</Typography>
             </Box>
 
