@@ -159,7 +159,7 @@ export default function TicketDetailPage() {
             setTicket({ ...ticket, ...updateData, status: newStatus });
         } catch (err) {
             console.warn("Status Update Failed - Queuing for Offline Sync:", err);
-            queueMutation('maintenanceTickets', id, updateData);
+            await queueMutation('maintenanceTickets', id, updateData);
             setTicket({ ...ticket, ...updateData, status: newStatus });
         }
         setUpdating(false);
@@ -179,9 +179,13 @@ export default function TicketDetailPage() {
             await updateDoc(doc(db, 'maintenanceTickets', id!), updateData);
             setShowCompleteModal(false);
         } catch (err) {
-            console.warn("Completion sync failed - offline queue active.");
-            queueMutation('maintenanceTickets', id!, updateData);
-            setShowCompleteModal(false);
+            console.warn("Completion sync failed - securing signature in offline vault.");
+            const secured = await queueMutation('maintenanceTickets', id!, updateData);
+            if (secured) {
+                setShowCompleteModal(false);
+            } else {
+                alert("Critical System Error: Unable to secure signature locally. Please check device storage.");
+            }
         }
         setUpdating(false);
     };
@@ -191,18 +195,36 @@ export default function TicketDetailPage() {
         if (!file || !id) return;
 
         setUpdating(true);
-        // Simulate upload latency and success
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Read file for potential offline staging
+        const reader = new FileReader();
+        const filePromise = new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+        });
+        const base64Data = await filePromise;
 
         try {
             const docRef = doc(db, 'maintenanceTickets', id);
-            await updateDoc(docRef, {
+            const updateData = {
                 [field]: true,
+                [`${field}Data`]: base64Data, // Store evidence payload
                 updatedAt: serverTimestamp()
-            });
+            };
+            
+            await updateDoc(docRef, updateData);
             setTicket((prev: any) => prev ? { ...prev, [field]: true } : null);
         } catch (err) {
-            console.error("Photo Upload Failed:", err);
+            console.warn("Photo upload failed - staging in offline vault.");
+            const updateData = {
+                [field]: true,
+                [`${field}Data`]: base64Data,
+                updatedAt: serverTimestamp()
+            };
+            const secured = await queueMutation('maintenanceTickets', id!, updateData);
+            if (secured) {
+                setTicket((prev: any) => prev ? { ...prev, [field]: true } : null);
+            }
         }
         setUpdating(false);
     }
