@@ -9,7 +9,8 @@ import {
     alpha, 
     Divider,
     Card,
-    CardContent
+    CardContent,
+    Paper
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -24,7 +25,10 @@ import {
     CheckCircle2,
     Users,
     Briefcase,
-    BadgeCheck
+    BadgeCheck,
+    Mail,
+    Phone,
+    MapPin
 } from 'lucide-react';
 import BinGroupHeader from '../components/SovereignHeader';
 
@@ -178,7 +182,6 @@ const OwnerLandingPage: React.FC = () => {
                                     background: `linear-gradient(45deg, #111, #222)`,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
-                                   {/* CEO Placeholder Image - Would be real asset */}
                                    <Users size={120} color={binThemeTokens.gold} strokeWidth={1} />
                                 </Box>
                                 <Box sx={{ 
@@ -193,14 +196,43 @@ const OwnerLandingPage: React.FC = () => {
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 2, display: 'block' }}>
                                 LEADERSHIP PROFILE
                             </Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3 }}>Message from the Founder & CEO</Typography>
+                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3 }}>Rashid <br />Founder & CEO</Typography>
                             <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', mb: 4, lineHeight: 1.8 }}>
                                 "At BIN GROUP, we don't just manage buildings; we stabilize infrastructure. Our mission is to ensure that UAE property owners have unshakeable confidence in their portfolio's integrity and financial velocity. We prioritize data sovereignty and zero-hold capital flows above all else."
                             </Typography>
                             <Box>
                                 <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>Institutional Excellence</Typography>
-                                <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>BIN GROUP L.L.C Registry</Typography>
+                                <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>BIN GROUP L.L.C Registry · UAE</Typography>
                             </Box>
+                        </Grid>
+                    </Grid>
+                </Container>
+            </Box>
+
+            {/* Company Contact Section (V6 Upgrade) */}
+            <Box sx={{ py: 15, bgcolor: '#0B0B0C', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <Container maxWidth="lg">
+                    <Grid container spacing={6}>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Mail color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
+                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Institutional Inquiries</Typography>
+                                <Typography variant="body1" color="rgba(255,255,255,0.6)">CEO@bin-groups.com</Typography>
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Phone color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
+                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Direct Support</Typography>
+                                <Typography variant="body1" color="rgba(255,255,255,0.6)">+971 [REDACTED]</Typography>
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <MapPin color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
+                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Global HQ</Typography>
+                                <Typography variant="body1" color="rgba(255,255,255,0.6)">Dubai, United Arab Emirates</Typography>
+                            </Paper>
                         </Grid>
                     </Grid>
                 </Container>

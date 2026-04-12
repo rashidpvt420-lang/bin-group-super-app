@@ -12,7 +12,8 @@ import {
     Fab,
     Tooltip,
     Zoom,
-    Fade
+    Fade,
+    Chip
 } from '@mui/material';
 import { 
     MessageSquare, 
@@ -24,7 +25,10 @@ import {
     ShieldCheck, 
     TrendingUp, 
     User,
-    AlertCircle
+    AlertCircle,
+    Building2,
+    Calendar,
+    Phone
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
@@ -57,15 +61,38 @@ const SovereignAiBox: React.FC = () => {
     const getInitialMessage = () => {
         switch (role?.toUpperCase()) {
             case 'TENANT':
-                return "Sovereign Assistant Online. How is your residence today? I can help with ticket status or basic maintenance troubleshooting.";
+                return t('ai.init.tenant') || "Sovereign Assistant Online. How is your residence today? I can help with ticket status or basic maintenance troubleshooting.";
             case 'TECHNICIAN':
-                return "Mission Guidance Node Active. Provide a Ticket ID or ask about part availability for your current assignment.";
+                return t('ai.init.tech') || "Mission Guidance Node Active. Provide a Ticket ID or ask about part availability for your current assignment.";
             case 'OWNER':
             case 'ADMIN':
-                return "Strategic Terminal Active. Analysis of financial velocity and system health is available. What do you wish to audit?";
+                return t('ai.init.owner') || "Strategic Terminal Active. Analysis of financial velocity and system health is available. What do you wish to audit?";
             default:
-                return "BIN GROUP Sovereign AI Initialized. How can I assist you today?";
+                return t('ai.init.default') || "BIN GROUP Sovereign AI Initialized. How can I assist you today?";
         }
+    };
+
+    const getQuickActions = () => {
+        const actions = [];
+        switch (role?.toUpperCase()) {
+            case 'TENANT':
+                actions.push({ label: 'Check SOS Status', icon: <AlertCircle size={14} /> });
+                actions.push({ label: 'Maintenance Tips', icon: <Wrench size={14} /> });
+                break;
+            case 'TECHNICIAN':
+                actions.push({ label: 'Mission Guidance', icon: <ShieldCheck size={14} /> });
+                actions.push({ label: 'Route Help', icon: <Navigation size={14} /> });
+                break;
+            case 'OWNER':
+                actions.push({ label: 'Audit ROI', icon: <TrendingUp size={14} /> });
+                actions.push({ label: 'Property Health', icon: <Building2 size={14} /> });
+                break;
+            case 'ADMIN':
+                actions.push({ label: 'Queue Summary', icon: <Calendar size={14} /> });
+                actions.push({ label: 'System Alerts', icon: <ShieldCheck size={14} /> });
+                break;
+        }
+        return actions;
     };
 
     useEffect(() => {
@@ -74,17 +101,18 @@ const SovereignAiBox: React.FC = () => {
         }
     }, [isOpen]);
 
-    const handleSend = async () => {
-        if (!inputValue.trim()) return;
+    const handleSend = async (textOverride?: string) => {
+        const text = textOverride || inputValue;
+        if (!text.trim()) return;
 
-        const userMsg: Message = { id: Date.now().toString(), text: inputValue, sender: 'user', timestamp: new Date() };
+        const userMsg: Message = { id: Date.now().toString(), text, sender: 'user', timestamp: new Date() };
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
         setIsTyping(true);
 
         try {
             const getAiGuidance = httpsCallable(functions, 'getMissionGuidance');
-            const result = await getAiGuidance({ input: inputValue, role });
+            const result = await getAiGuidance({ input: text, role });
             const data = result.data as { guidance: string };
             
             const aiMsg: Message = { id: Date.now().toString(), text: data.guidance, sender: 'ai', timestamp: new Date() };
@@ -123,20 +151,21 @@ const SovereignAiBox: React.FC = () => {
                     width: { xs: 'calc(100vw - 64px)', sm: 400 }, height: 550, zIndex: 2000,
                     bgcolor: '#0B0B0C', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6,
                     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                    boxShadow: '0 40px 100px rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)'
+                    boxShadow: '0 40px 100px rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)',
+                    direction: isRTL ? 'rtl' : 'ltr'
                 }}>
                     {/* Header */}
                     <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}><Bot size={20} /></Avatar>
                         <Box sx={{ flexGrow: 1 }}>
                             <Typography variant="subtitle1" fontWeight="950" color="#FFF">SOVEREIGN AI</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>INSTITUTIONAL ASSISTANT</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{role?.toUpperCase()} ASSISTANT</Typography>
                         </Box>
                         <IconButton size="small" onClick={() => setIsOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X /></IconButton>
                     </Box>
 
                     {/* Messages Area */}
-                    <Box ref={scrollRef} sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 2, bgcolor: 'rgba(255,255,255,1).01' }}>
+                    <Box ref={scrollRef} sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 2, bgcolor: 'rgba(255,255,255,0.01)' }}>
                         {messages.map((msg) => (
                             <Box key={msg.id} sx={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                                 <Paper sx={{ 
@@ -160,23 +189,37 @@ const SovereignAiBox: React.FC = () => {
                         )}
                     </Box>
 
+                    {/* Quick Actions */}
+                    <Box sx={{ p: 1.5, display: 'flex', gap: 1, overflowX: 'auto', bgcolor: 'rgba(255,255,255,0.02)', '&::-webkit-scrollbar': { display: 'none' } }}>
+                        {getQuickActions().map((action, i) => (
+                            <Chip 
+                                key={i} 
+                                label={action.label} 
+                                icon={action.icon}
+                                onClick={() => handleSend(action.label)}
+                                sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF', borderColor: 'rgba(198,167,94,0.2)', border: '1px solid', '&:hover': { bgcolor: 'rgba(198,167,94,0.1)' } }} 
+                            />
+                        ))}
+                    </Box>
+
                     {/* Input Area */}
                     <Box sx={{ p: 2, borderTop: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, bgcolor: 'rgba(255,255,255,0.02)' }}>
                         <Stack direction="row" spacing={1}>
                             <TextField 
                                 fullWidth 
                                 size="small" 
-                                placeholder="Type your directive..." 
+                                placeholder={t('ai.directive_placeholder') || "Type your directive..."} 
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                                 sx={{ 
                                     '& .MuiOutlinedInput-root': { borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' },
-                                    '& fieldset': { borderColor: 'rgba(198,167,94,0.2)' }
+                                    '& fieldset': { borderColor: 'rgba(198,167,94,0.2)' },
+                                    '& input': { textAlign: isRTL ? 'right' : 'left' }
                                 }}
                             />
-                            <IconButton onClick={handleSend} sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#E6C77A' } }}>
-                                <Send size={18} />
+                            <IconButton onClick={() => handleSend()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#E6C77A' } }}>
+                                <Send size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                             </IconButton>
                         </Stack>
                     </Box>
