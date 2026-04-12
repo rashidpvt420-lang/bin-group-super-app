@@ -48,34 +48,15 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="error-boundary-fallback" style={{ 
-            height: '100vh', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            background: '#0B0B0C',
-            color: '#FFF',
-            fontFamily: 'Inter, sans-serif',
-            textAlign: 'center',
-            padding: '2rem'
-        }}>
-          <div style={{ color: '#C6A75E', fontSize: '12px', fontWeight: 900, letterSpacing: '8px', marginBottom: '24px' }}>SOVEREIGN_FAILURE</div>
-          <h1 style={{ fontSize: '3rem', fontWeight: 950, marginBottom: '16px', letterSpacing: '-2px' }}>System Interruption</h1>
-          <p style={{ color: 'rgba(255,255,255,0.6)', maxWidth: '500px', lineHeight: 1.6, marginBottom: '40px' }}>
+        <div className="error-boundary-fallback">
+          <div className="error-boundary-tag">SOVEREIGN_FAILURE</div>
+          <h1 className="error-boundary-title">System Interruption</h1>
+          <p className="error-boundary-desc">
             A critical anomaly was detected in the frontend engine. BIN-GENESIS has sequestered the error and pushed telemetry to compliance.
           </p>
           <button 
+            className="error-boundary-btn"
             onClick={() => window.location.assign('/')}
-            style={{ 
-                background: '#C6A75E', 
-                color: '#000', 
-                border: 'none', 
-                padding: '16px 48px', 
-                borderRadius: '100px', 
-                fontWeight: 900, 
-                cursor: 'pointer' 
-            }}
           >
             REBOOT SYSTEM
           </button>
