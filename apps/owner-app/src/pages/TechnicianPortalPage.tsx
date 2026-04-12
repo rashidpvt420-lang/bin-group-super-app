@@ -68,8 +68,16 @@ export default function TechnicianPortalPage() {
             
             if (permission === 'granted') {
                 // Ensure service worker is registered and active
-                await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                const registration = await navigator.serviceWorker.ready;
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+
+                // Wait for the service worker to be active
+                await new Promise<void>((resolve) => {
+                    if (registration.active) {
+                        resolve();
+                    } else {
+                        registration.addEventListener('activate', () => resolve(), { once: true });
+                    }
+                });
 
                 const messaging = getMessaging(app);
                 const currentToken = await getFcmToken(messaging, { 

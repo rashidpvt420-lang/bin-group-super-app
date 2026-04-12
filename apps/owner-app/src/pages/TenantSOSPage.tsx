@@ -18,6 +18,10 @@ interface UnitData {
     unitNumber?: string;
     floorNumber?: string;
     tenantId?: string;
+    propertyName?: string;
+    address?: string;
+    emirate?: string;
+    serviceZone?: string;
 }
 
 export default function TenantSOSPage() {
@@ -95,6 +99,7 @@ export default function TenantSOSPage() {
             await addDoc(collection(db, 'maintenanceTickets'), {
                 tenantId: user.uid,
                 tenantName: user.displayName || 'Anonymous Tenant',
+                tenantEmail: user.email || '',
                 trade: category.toUpperCase(),
                 description,
                 preferredTiming: preferredTiming || 'ASAP',
@@ -105,7 +110,7 @@ export default function TenantSOSPage() {
                 unitId: unitData?.id || '',
                 unitNumber: unitData?.unitNumber || '',
                 floorNumber: unitData?.floorNumber || '',
-
+                
                 // V4 AUTOPULLED GEO-CONTEXT
                 emirate,
                 serviceZone,
