@@ -38,7 +38,7 @@
     color: #000;
     border: none;
     padding: 16px 48px;
-    borderRadius: 100px;
+    border-radius: 100px;
     font-weight: 900;
     cursor: pointer;
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
