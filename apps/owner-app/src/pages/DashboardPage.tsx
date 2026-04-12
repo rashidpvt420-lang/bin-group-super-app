@@ -13,12 +13,11 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SpeedIcon from '@mui/icons-material/Speed';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ShieldAlert, Crown, Tent, AlertCircle, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ShieldAlert, Crown, Tent } from 'lucide-react';
 import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { calculateComplianceScore } from '../utils/complianceScoreEngine';
@@ -32,7 +31,7 @@ import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 
 export default function DashboardPage() {
-    const { user } = useRole();
+    const { user, role } = useRole();
     const { t, isRTL } = useLanguage();
     const [contracts, setContracts] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
@@ -81,6 +80,12 @@ export default function DashboardPage() {
                 }
                 setIntelligence(intelMap);
 
+                const alertQuery = query(
+                    collection(db, 'notifications'),
+                    where('userId', '==', user.uid),
+                    orderBy('createdAt', 'desc'),
+                    limit(5)
+                );
                 const alertSnap = await getDocs(alertQuery);
                 setNotifications(alertSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 

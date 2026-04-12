@@ -34,7 +34,6 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 // Helper for type-safe icons in React 18
 const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
