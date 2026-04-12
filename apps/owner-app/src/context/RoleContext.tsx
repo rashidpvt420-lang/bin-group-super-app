@@ -85,7 +85,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         setRole(data.role?.toLowerCase() || 'owner');
                         setStatus('PENDING_APPROVAL');
                         setIsAdmin(false);
-                        setError("ACCOUNT PENDING APPROVAL: Your contract and bank details are currently being verified by BIN GROUP compliance. You will receive an email once your dashboard is unlocked.");
+                        setError("ACCOUNT PENDING APPROVAL: Your contract and bank details are currently being verified by BIN GROUP compliance. Please contact support@bin-groups.com if this persists for > 24 hours.");
                         setLoading(false);
                         return;
                     }
@@ -101,7 +101,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         const enrolledFactors = (currentUser as any).multiFactor?.enrolledFactors || [];
                         if (enrolledFactors.length === 0) {
                             console.warn("🛡️ [MFA-ENFORCEMENT] High-privilege access attempt without second factor.");
-                            setError("INSTITUTIONAL MFA REQUIRED: Your account role (ADMIN/OWNER) requires Multi-Factor Authentication. Please enable 2FA in your security settings to unlock this dashboard.");
+                            setError("INSTITUTIONAL MFA REQUIRED: Your account role (ADMIN/OWNER) requires Multi-Factor Authentication for UAE PDPL compliance. Please visit your Account Security settings or contact hq@bin-groups.com to enable 2FA.");
                             setLoading(false);
                             return;
                         }

@@ -521,19 +521,25 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
     await db.collection("mail").add({
         to: data.email,
         message: {
-            subject: "Institutional Access Granted: BIN GROUP Portal",
+            subject: "Institutional Access: BIN GROUP Portal | دخول مؤسسي: بوابة مجموعة بن",
             html: `
-                <div style="font-family: sans-serif; padding: 40px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 0 auto;">
-                    <h1 style="color: #C6A75E; font-size: 24px; margin-bottom: 20px;">Institutional Onboarding</h1>
-                    <p style="font-size: 16px; line-height: 1.6;">You have been granted access to the BIN GROUP institutional asset management platform.</p>
-                    <div style="background: #F8FAFC; padding: 20px; border-radius: 4px; margin: 24px 0;">
-                        <p style="margin: 0; font-size: 14px; color: #64748B;"><b>Property:</b> ${data.propertyName || 'Institutional Asset'}</p>
-                        <p style="margin: 8px 0 0; font-size: 14px; color: #64748B;"><b>Unit:</b> ${data.unitNumber || 'N/A'}</p>
+                <div dir="ltr" style="font-family: sans-serif; padding: 20px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 0 auto; text-align: left;">
+                    <h1 style="color: #C6A75E; font-size: 22px;">Institutional Onboarding</h1>
+                    <p>You have been granted access to the BIN GROUP institutional asset management platform.</p>
+                    <div style="background: #F8FAFC; padding: 15px; border-radius: 4px; margin: 15px 0;">
+                        <p style="margin: 0;"><b>Property:</b> ${data.propertyName || 'Portfolio Asset'}</p>
+                        <p style="margin: 5px 0 0;"><b>Unit:</b> ${data.unitNumber || 'N/A'}</p>
                     </div>
-                    <p style="font-size: 16px; line-height: 1.6;">Please sign up using your email (<b>${data.email}</b>) to claim your dashboard and access SOS dispatch services.</p>
-                    <a href="https://bin-group-57c60.web.app/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 14px 32px; text-decoration: none; font-weight: 900; border-radius: 100px; margin-top: 20px;">Sign Up Now</a>
-                    <hr style="border: 0; border-top: 1px solid #EEE; margin: 32px 0;">
-                    <p style="font-size: 12px; color: #94A3B8;">This is a sovereign institutional communication. Unauthorized access is monitored.</p>
+                    <a href="https://bin-group-57c60.web.app/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 12px 24px; text-decoration: none; font-weight: 900; border-radius: 4px;">Sign Up Now</a>
+                </div>
+                <div dir="rtl" style="font-family: sans-serif; padding: 20px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 20px auto 0 auto; text-align: right;">
+                    <h1 style="color: #C6A75E; font-size: 22px;">التسجيل المؤسسي</h1>
+                    <p>لقد تم منحك حق الوصول إلى منصة مجموعة بن لإدارة الأصول المؤسسية.</p>
+                    <div style="background: #F8FAFC; padding: 15px; border-radius: 4px; margin: 15px 0;">
+                        <p style="margin: 0;"><b>العقار:</b> ${data.propertyName || 'محفظة الأصول'}</p>
+                        <p style="margin: 5px 0 0;"><b>الوحدة:</b> ${data.unitNumber || 'غير محدد'}</p>
+                    </div>
+                    <a href="https://bin-group-57c60.web.app/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 12px 24px; text-decoration: none; font-weight: 900; border-radius: 4px;">سجل الآن</a>
                 </div>
             `
         },

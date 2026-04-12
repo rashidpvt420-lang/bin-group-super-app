@@ -3,20 +3,40 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() { return request.auth != null; }
     function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
-    function isAdmin() { return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function isAdmin() { 
+      return isAuth() && (
+        request.auth.token.admin == true || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      ); 
+    }
     
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      // Role-Lock: Users cannot change their own roles or status upon account creation
+      allow create: if isOwner(userId) && request.resource.data.role == 'tenant';
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
     }
+
     match /maintenanceTickets/{ticketId} {
       allow create: if isAuth();
       allow read, update: if isAuth(); 
       allow delete: if isAdmin();
     }
+
     match /properties/{propertyId} {
       allow read: if isAuth(); 
       allow write: if isAdmin();
     }
+
+    match /contracts/{contractId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /telemetry_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }

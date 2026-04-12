@@ -396,11 +396,10 @@ export default function LiveMapPage() {
                             </div>
                         )}
                     </Box>
-                 );
-             })}/Box>
+                    );
+                    })}
 
-          </Box>
-
+                    </Box>
           {/* Dynamic Map Indicators */}
           <Paper sx={{
             position: 'absolute', bottom: 32, left: 32, right: 32, p: 2.5,

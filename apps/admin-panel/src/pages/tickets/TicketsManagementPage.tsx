@@ -184,40 +184,46 @@ export default function TicketsManagementPage() {
       {/* Tickets Table */}
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 4 }}>
         <Table>
-          <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-            <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.sovereign_id')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.unit')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.discipline')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.status')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.priority')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.res_time')}</TableCell>
-              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('tech.table.created')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredTickets.map((ticket) => (
-              <TableRow key={ticket.ticketId} hover sx={{ cursor: 'pointer', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 900, color: '#1e293b' }}>
-                    #{ticket.ticketId.slice(0, 10).toUpperCase()}
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ color: '#64748b', textAlign: isRTL ? 'right' : 'left' }}>{ticket.unit}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{ticket.category}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Chip label={ticket.status} color={getStatusColor(ticket.status) as any} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
-                </TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Chip label={ticket.priority} color={getPriorityColor(ticket.priority) as any} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
-                </TableCell>
-                <TableCell sx={{ color: '#1e293b', fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{getResponseTime(ticket.createdAt, ticket.completedAt)}</TableCell>
-                <TableCell align={isRTL ? 'left' : 'right'} sx={{ color: '#64748b', fontSize: 12 }}>
-                  {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') : 'N/A'}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+              <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.sovereign_id')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.asset') || 'Property'}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.unit')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.floor') || 'Floor'}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.discipline')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.status')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.priority')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.res_time')}</TableCell>
+                  <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('tech.table.created')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredTickets.map((ticket: any) => (
+                  <TableRow key={ticket.ticketId} hover sx={{ cursor: 'pointer', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 900, color: '#1e293b' }}>
+                        #{ticket.ticketId.slice(0, 10).toUpperCase()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ color: '#1e293b', fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>
+                        {ticket.propertyName || ticket.propertyId || 'Unknown Asset'}
+                    </TableCell>
+                    <TableCell sx={{ color: '#64748b', textAlign: isRTL ? 'right' : 'left' }}>{ticket.unitNumber || ticket.unit || 'N/A'}</TableCell>
+                    <TableCell sx={{ color: '#64748b', textAlign: isRTL ? 'right' : 'left' }}>{ticket.floorNumber || 'N/A'}</TableCell>
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{ticket.category}</TableCell>
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                      <Chip label={ticket.status} color={getStatusColor(ticket.status) as any} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                    </TableCell>
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                      <Chip label={ticket.priority} color={getPriorityColor(ticket.priority) as any} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                    </TableCell>
+                    <TableCell sx={{ color: '#1e293b', fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{getResponseTime(ticket.createdAt, ticket.completedAt)}</TableCell>
+                    <TableCell align={isRTL ? 'left' : 'right'} sx={{ color: '#64748b', fontSize: 12 }}>
+                      {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
         </Table>
       </TableContainer>
 
