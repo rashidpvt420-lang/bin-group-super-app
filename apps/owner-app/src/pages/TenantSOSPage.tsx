@@ -221,12 +221,13 @@ export default function TenantSOSPage() {
                             />
 
                             <Box sx={{ p: 2, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 4, textAlign: 'center' }}>
-                                <input
+                                <Box
+                                    component="input"
                                     accept="image/*"
-                                    style={{ display: 'none' }}
+                                    sx={{ display: 'none' }}
                                     id="icon-button-file"
                                     type="file"
-                                    onChange={(e) => {
+                                    onChange={(e: any) => {
                                         if (e.target.files && e.target.files[0]) setImage(e.target.files[0]);
                                     }}
                                 />
