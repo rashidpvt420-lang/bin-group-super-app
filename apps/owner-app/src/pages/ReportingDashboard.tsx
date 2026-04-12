@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { 
     Box, 
     Container, 
@@ -10,7 +12,9 @@ import {
     CircularProgress,
     Divider,
     Card,
-    CardContent
+    CardContent,
+    Button,
+    Chip
 } from '@mui/material';
 import { 
     TrendingUp, 
@@ -21,7 +25,8 @@ import {
     Activity, 
     Timer, 
     CreditCard,
-    PieChart
+    PieChart,
+    Download
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { db, collection, getDocs, query, where, orderBy } from '../lib/firebase';
@@ -73,6 +78,60 @@ const ReportingDashboard: React.FC = () => {
         fetchAggregates();
     }, []);
 
+    const exportToPdf = () => {
+        if (!stats) return;
+        const doc = new jsPDF();
+        
+        // Institutional Header
+        doc.setFillColor(11, 11, 12);
+        doc.rect(0, 0, 210, 40, 'F');
+        doc.setTextColor(198, 167, 94);
+        doc.setFontSize(22);
+        doc.text("BIN-GENESIS™ SOVEREIGN REPORT", 105, 25, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`AUDIT DATE: ${new Date().toLocaleString()}`, 105, 33, { align: 'center' });
+
+        // Content
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(16);
+        doc.text("Operational Summary", 20, 60);
+        
+        (doc as any).autoTable({
+            startY: 70,
+            head: [['KPI Indicator', 'Value', 'Status']],
+            body: [
+                ['Operational Velocity', stats.velocity, 'OPTIMAL'],
+                ['Financial Integrity', `AED ${formatAED(stats.totalSettled)}`, 'VERIFIED'],
+                ['Asset Density', `${stats.assetDensity}%`, 'STABLE'],
+                ['Active Missions', stats.activeMissions.toString(), 'MONITORED']
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [198, 167, 94] }
+        });
+
+        doc.text("Territorial Uptime", 20, (doc as any).lastAutoTable.finalY + 20);
+        (doc as any).autoTable({
+            startY: (doc as any).lastAutoTable.finalY + 30,
+            head: [['Emirate', 'Uptime', 'Security Level']],
+            body: [
+                ['Abu Dhabi', '100%', 'P.1 Sovereign'],
+                ['Dubai', '100%', 'P.1 Sovereign'],
+                ['Al Ain', '100%', 'P.1 Sovereign']
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [11, 11, 12] }
+        });
+
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text("This document is a certified institutional export. BIN GROUP Dubai HQ.", 105, 280, { align: 'center' });
+
+        doc.save(`Sovereign_Report_${Date.now()}.pdf`);
+    };
+
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
@@ -81,7 +140,26 @@ const ReportingDashboard: React.FC = () => {
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 1, display: 'block' }}>
                     INSTITUTIONAL AUDIT
                 </Typography>
-                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -2 }}>Reporting <Box component="span" sx={{ color: binThemeTokens.gold }}>Dashboard</Box></Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
+                    <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -2 }}>
+                        Reporting <Box component="span" sx={{ color: binThemeTokens.gold }}>Dashboard</Box>
+                    </Typography>
+                    <Button 
+                        variant="contained" 
+                        startIcon={<Download size={18} />}
+                        onClick={exportToPdf}
+                        sx={{ 
+                            bgcolor: binThemeTokens.gold, 
+                            color: '#000', 
+                            fontWeight: 950, 
+                            borderRadius: 4, 
+                            px: 4, py: 1.5,
+                            '&:hover': { bgcolor: '#E6C77A' }
+                        }}
+                    >
+                        EXPORT PDF
+                    </Button>
+                </Stack>
             </Box>
 
             <Grid container spacing={4}>
