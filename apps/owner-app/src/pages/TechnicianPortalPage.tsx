@@ -70,14 +70,15 @@ export default function TechnicianPortalPage() {
                 // Ensure service worker is registered and active
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
 
-                // Wait for the service worker to be active
-                await new Promise<void>((resolve) => {
-                    if (registration.active) {
-                        resolve();
-                    } else {
-                        registration.addEventListener('activate', () => resolve(), { once: true });
-                    }
-                });
+                // Safely wait for the service worker to become active without using navigator.serviceWorker.ready which deadlocks on iOS
+                const sw = registration.installing || registration.waiting || registration.active;
+                if (sw && sw.state !== 'activated') {
+                    await new Promise<void>((resolve) => {
+                        sw.addEventListener('statechange', (e: any) => {
+                            if (e.target.state === 'activated') resolve();
+                        });
+                    });
+                }
 
                 const messaging = getMessaging(app);
                 const currentToken = await getFcmToken(messaging, { 

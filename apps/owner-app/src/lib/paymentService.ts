@@ -1,11 +1,11 @@
-import { db, doc, getDoc, functions, httpsCallable } from './firebase';
+import { db, doc, getDoc, collection, addDoc, serverTimestamp } from './firebase';
 
 /**
  * ── BIN-IDENTITY™ PRODUCTION PAYMENT SERVICE ──────────────────────────────────
  * Hardened Institutional Handshake protocol for Sovereign Asset Onboarding.
- * 
- * DESIGN PRINCIPLE: 
- * Frontend is strictly READ-ONLY for payment status. 
+ *
+ * DESIGN PRINCIPLE:
+ * Frontend is strictly READ-ONLY for payment status.
  * Verification happens via independent Backend-to-Backend (B2B) Webhooks.
  */
 
@@ -36,25 +36,39 @@ export interface PaymentIntentResult {
 
 /**
  * 1. createPaymentIntent()
- * - Registers a manual payment intention with the BIN-BACKEND™.
+ * - Registers a manual payment intention directly in Firestore.
+ * - Architecture Decision: adminVerifyPayment is the singular source of truth. 
+ * - The frontend simply logs the intention and waits for admin backend verification.
  */
 export const createPaymentIntent = async (
     method: string,
-    amount: number, 
+    amount: number,
     propertyId: string,
     ownerId: string
 ): Promise<PaymentIntentResult> => {
     try {
-        const initiateFn = httpsCallable(functions, 'createPaymentIntent');
-        const result = await initiateFn({
+        const contractRef = await addDoc(collection(db, 'contracts'), {
+            ownerId,
+            propertyId,
             amount,
             method,
-            propertyId,
-            ownerId,
-            currency: 'AED'
+            currency: 'AED',
+            status: 'PENDING_VERIFICATION',
+            paymentVerified: false,
+            createdAt: serverTimestamp()
         });
 
-        return result.data as PaymentIntentResult;
+        return {
+            paymentId: `PAY-${contractRef.id.substring(0, 8).toUpperCase()}`,
+            contractId: contractRef.id,
+            paymentManifest: {
+                method: method as 'CASH' | 'CHEQUE' | 'BANK_TRANSFER',
+                verificationNote: "Please complete the payment and provide the reference ID to the administrative team.",
+                bankName: "BIN GROUP Institutional Partner",
+                iban: "AE000000000000000000000",
+                payableTo: "BIN GROUP LLC"
+            }
+        };
     } catch (error) {
         console.error('[PAYMENT-ENGINE] Intent Creation Failed:', error);
         throw new Error("MANIFEST_GENERATION_FAILURE: Resource protocol rejected.");
@@ -79,3 +93,4 @@ export const verifyPaymentStatus = async (contractId: string): Promise<boolean> 
         return false;
     }
 };
+
