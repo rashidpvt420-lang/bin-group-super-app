@@ -28,7 +28,8 @@ import {
     AlertCircle,
     Building2,
     Calendar,
-    Phone
+    Phone,
+    Navigation
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
