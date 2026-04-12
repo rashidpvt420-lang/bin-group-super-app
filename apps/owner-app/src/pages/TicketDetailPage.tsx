@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha } from '@mui/material';
 import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation } from 'lucide-react';
-import { db, doc, getDoc, updateDoc, serverTimestamp } from '../lib/firebase';
+import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -12,7 +12,7 @@ export default function TicketDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { t } = useLanguage();
-    const { user } = useRole();
+    const { user, role } = useRole();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
@@ -23,7 +23,7 @@ export default function TicketDetailPage() {
     useEffect(() => {
         if (!id) return;
         const docRef = doc(db, 'maintenanceTickets', id);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        const unsubscribe = onSnapshot(docRef, (docSnap: any) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setTicket({ id: docSnap.id, ...data });
@@ -43,14 +43,14 @@ export default function TicketDetailPage() {
 
     useEffect(() => {
         // Broadcaster Logic for Technicians
-        if (ticket?.status === 'EN_ROUTE' && user?.role === 'technician' && !geoWatcher) {
+        if (ticket?.status === 'EN_ROUTE' && role === 'technician' && !geoWatcher) {
             startGeoBroadcasting();
         } else if (ticket?.status !== 'EN_ROUTE' && geoWatcher) {
             stopGeoBroadcasting();
         }
 
         return () => stopGeoBroadcasting();
-    }, [ticket?.status, user?.role]);
+    }, [ticket?.status, role]);
 
     const startGeoBroadcasting = () => {
         if (!navigator.geolocation) {
@@ -130,7 +130,8 @@ export default function TicketDetailPage() {
             query = encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
         }
         
-        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+        // Use Google Maps Direction API for seamless native deep-linking
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, '_blank');
     };
 
     const updateStatus = async (newStatus: string) => {
@@ -232,19 +233,41 @@ export default function TicketDetailPage() {
 
                 {ticket.status === 'EN_ROUTE' && (
                     <Box sx={{ mb: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4 }}>
-                        <Stack direction="row" spacing={3} alignItems="center">
-                            <Box sx={{ position: 'relative' }}>
-                                <Navigation size={32} color={binThemeTokens.gold} className="animate-pulse" />
-                            </Box>
-                            <Box sx={{ flexGrow: 1 }}>
-                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TECHNICIAN EN ROUTE</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Live tracking active via Sovereign GPS Engine.</Typography>
-                            </Box>
-                            {distanceInfo && (
-                                <Box sx={{ textAlign: 'right' }}>
-                                    <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{distanceInfo.eta}</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{distanceInfo.distance} AWAY</Typography>
+                        <Stack spacing={3}>
+                            <Stack direction="row" spacing={3} alignItems="center">
+                                <Box sx={{ position: 'relative' }}>
+                                    <Navigation size={32} color={binThemeTokens.gold} className="animate-pulse" />
                                 </Box>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TECHNICIAN EN ROUTE</Typography>
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Live tracking active via Sovereign GPS Engine.</Typography>
+                                </Box>
+                                {distanceInfo && (
+                                    <Box sx={{ textAlign: 'right' }}>
+                                        <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{distanceInfo.eta}</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{distanceInfo.distance} AWAY</Typography>
+                                    </Box>
+                                )}
+                            </Stack>
+                            {role === 'technician' && (
+                                <Button 
+                                    fullWidth 
+                                    variant="contained" 
+                                    size="large"
+                                    startIcon={<Navigation size={20} />}
+                                    onClick={handleNavigate}
+                                    sx={{ 
+                                        py: 2, 
+                                        bgcolor: binThemeTokens.gold, 
+                                        color: '#000', 
+                                        fontWeight: 950, 
+                                        borderRadius: 4,
+                                        boxShadow: `0 10px 20px ${alpha(binThemeTokens.gold, 0.3)}`,
+                                        '&:hover': { bgcolor: '#E6C77A' }
+                                    }}
+                                >
+                                    NAVIGATE TO PROPERTY
+                                </Button>
                             )}
                         </Stack>
                     </Box>

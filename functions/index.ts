@@ -1,6 +1,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
+import { generateAndEmailInvoice } from "./BillingService";
 import { beforeUserCreated } from "firebase-functions/v2/identity";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
@@ -409,7 +410,6 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
             amountReceived: amountReceived || snap.data()?.amount,
             fintechPolicy: 'DIRECT_TRANSFER_VERIFIED'
         });
-        
         if (ownerId) {
             transaction.update(db.collection("users").doc(ownerId), { 
                 status: 'active', 
@@ -428,6 +428,12 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
                     approvedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             }
+        }
+
+        // V6.1 Polish: Auto-generate BIN GROUP management fee invoice
+        const feeAmount = (amountReceived || snap.data()?.amount || 0) * 0.05; // Assuming 5% management fee
+        if (feeAmount > 0 && ownerId) {
+            generateAndEmailInvoice(contractId, ownerId, feeAmount).catch(e => console.error("Billing Failed:", e));
         }
     });
     return { success: true };
@@ -475,4 +481,3 @@ export const generateIntegrityAudit = onCall({ cors: true }, async () => ({ url:
 export const proactiveMaintenanceCron = onSchedule("every 48 hours", async () => {});
 export const createAiMaintenanceTicket = onCall({ cors: true }, async () => ({ ticketId: "" }));
 export const approveMaintenanceProposal = onCall({ cors: true }, async () => ({ success: true }));
-.
