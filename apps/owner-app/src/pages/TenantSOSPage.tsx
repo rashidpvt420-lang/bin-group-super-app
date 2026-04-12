@@ -106,7 +106,7 @@ export default function TenantSOSPage() {
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const tickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const tickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
             setActiveTickets(tickets);
             
             // Calculate distances for all en-route tickets

@@ -139,15 +139,14 @@ export default function TicketDetailPage() {
 
     const updateStatus = async (newStatus: string) => {
         if (!id || !user?.uid) return;
-        setUpdating(true);
-        try {
-            const docRef = doc(db, 'maintenanceTickets', id);
-            const updateData: any = {
-                status: newStatus,
-                updatedAt: serverTimestamp(),
-                notes: notes
-            };
+        const docRef = doc(db, 'maintenanceTickets', id);
+        const updateData: any = {
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+            notes: notes
+        };
 
+        try {
             // If technician is taking an OPEN ticket, assign them
             if ((ticket.status === 'OPEN' || ticket.status === 'assigned' || ticket.status === 'ASSIGNED') && (newStatus === 'EN_ROUTE' || newStatus === 'IN_PROGRESS')) {
                 updateData.assignedTechnicianId = user.uid;
