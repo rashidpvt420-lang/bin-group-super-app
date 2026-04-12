@@ -156,7 +156,7 @@ const QuotingWizard: React.FC<{ onResult: (result: any) => void }> = ({ onResult
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
                             <Box sx={{ textAlign: 'center', py: 2 }}>
-                                <Typography variant="caption" color={binThemeTokens.gold} fontWeight: 900}>ESTIMATED ANNUAL YIELD PROTECTION</Typography>
+                                <Typography variant="caption" color={binThemeTokens.gold} fontWeight={900}>ESTIMATED ANNUAL YIELD PROTECTION</Typography>
                                 <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mt: 1 }}>
                                     {serviceType === 'maintenance' ? 'AED 12,000+' : 'AED 25,000+'}
                                 </Typography>

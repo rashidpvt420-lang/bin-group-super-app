@@ -36,7 +36,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 
 import { RoleProvider, useRole } from './context/RoleContext';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 
 import ErrorBoundary from './components/ErrorBoundary';
@@ -46,6 +46,7 @@ import ErrorBoundary from './components/ErrorBoundary';
  * Prevents any UI bleed or incorrect route rendering during role resolution.
  */
 function LoadingScreen() {
+  const { t } = useLanguage();
   return (
     <Box sx={{ 
       height: '100vh', 
@@ -62,7 +63,7 @@ function LoadingScreen() {
     }}>
       <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
       <Typography variant="h6" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 4, textTransform: 'uppercase' }}>
-        Authenticating BIN-Groups Identity...
+        {t('common.auth_sync') || 'Authenticating BIN-Groups Identity...'}
       </Typography>
     </Box>
   );
@@ -111,9 +112,9 @@ function AppContent() {
         p: 4,
         textAlign: 'center'
       }}>
-        <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>IDENTITY FAULT</Typography>
-        <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{roleError}</Typography>
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>RELOAD SYSTEM</Button>
+        <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.identity_fault') || 'IDENTITY FAULT'}</Typography>
+        <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{t('common.role_error_prefix') || roleError}</Typography>
+        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>{t('common.reload_sys') || 'RELOAD SYSTEM'}</Button>
       </Box>
     );
   }

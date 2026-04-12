@@ -3,8 +3,12 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { generateAndEmailInvoice } from "./BillingService";
 import { beforeUserCreated } from "firebase-functions/v2/identity";
+import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
+
+// [V7] Multi-Region Enterprise Mesh
+setGlobalOptions({ region: ["me-central1", "europe-west3"] });
 
 admin.initializeApp();
 const db = admin.firestore();

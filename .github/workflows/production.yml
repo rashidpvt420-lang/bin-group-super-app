@@ -1,0 +1,57 @@
+name: V7 Enterprise Grid Production Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm install
+
+      - name: Full Spectrum Linting
+        run: |
+          npm run lint || (echo "❌ LINTING FAILURE: Blocked by V7 Security Policy" && exit 1)
+
+      - name: Build Shared Services
+        run: npm run build --workspace=@bin/shared
+
+      - name: Build Owner Terminal
+        run: npm run build --workspace=home-os-owner-app
+
+      - name: Build Admin Panel
+        run: npm run build --workspace=home-os-admin-panel
+
+      - name: Build Sovereign Backend (Functions)
+        run: |
+          cd functions
+          npm install
+          npm run build
+
+      - name: Assemble Unified Hosting Bundle
+        run: |
+          mkdir -p hosting/public/admin
+          cp -r apps/owner-app/build/* hosting/public/
+          cp -r apps/admin-panel/build/* hosting/public/admin/
+
+      - name: Institutional Firebase Deployment
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: bin-group-57c60
+          channelId: live
+        env:
+          FIREBASE_CLI_PREVIEWS: hostingchannels
