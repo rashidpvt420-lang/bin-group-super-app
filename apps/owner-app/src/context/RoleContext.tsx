@@ -79,8 +79,19 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                 if (snap && snap.exists()) {
                     const data = snap.data();
+                    const currentStatus = (data.status || 'active').toUpperCase();
+                    
+                    if (currentStatus === 'PENDING_APPROVAL') {
+                        setRole(data.role?.toLowerCase() || 'owner');
+                        setStatus('PENDING_APPROVAL');
+                        setIsAdmin(false);
+                        setError("ACCOUNT PENDING APPROVAL: Your contract and bank details are currently being verified by BIN GROUP compliance. You will receive an email once your dashboard is unlocked.");
+                        setLoading(false);
+                        return;
+                    }
+
                     setRole(data.role?.toLowerCase() || 'tenant');
-                    setStatus(data.status?.toLowerCase() || 'active');
+                    setStatus(currentStatus.toLowerCase());
                     setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
                     setPropertyId(data.propertyId || null);
                     setError(null);

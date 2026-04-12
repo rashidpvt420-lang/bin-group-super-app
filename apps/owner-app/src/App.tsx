@@ -6,6 +6,7 @@ import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/mat
 
 
 import LandingPage from './pages/LandingPage';
+import OwnerLandingPage from './pages/OwnerLandingPage';
 
 import LoginPage from './pages/LoginPage';
 
@@ -118,7 +119,8 @@ function AppContent() {
   return (
     <RoleRedirector>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<OwnerLandingPage />} />
+        <Route path="/v1" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />

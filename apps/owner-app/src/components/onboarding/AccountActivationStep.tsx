@@ -51,7 +51,16 @@ const AccountActivationStep: React.FC = () => {
         reset 
     } = useOnboardingStore();
     const [isActivating, setIsActivating] = useState(false);
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
+    const [formData, setFormData] = useState({ 
+        name: '', 
+        email: '', 
+        password: '', 
+        phone: '',
+        bankName: '',
+        iban: '',
+        accountHolderName: '',
+        swiftCode: ''
+    });
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
     const isOfflineMethod = paymentMethod === 'CASH' || paymentMethod === 'CHEQUE';
@@ -139,7 +148,8 @@ const AccountActivationStep: React.FC = () => {
 
             // 2. Update Contract
             const contractDocRef = doc(db, 'contracts', contractId);
-            const finalStatus = isVerified ? 'ACTIVE' : 'pending_approval';
+            // V6 Expansion Rule: All new owners start as PENDING_APPROVAL
+            const finalStatus = 'PENDING_APPROVAL';
             
             batch.update(contractDocRef, {
                 propertyIds,
@@ -170,7 +180,14 @@ const AccountActivationStep: React.FC = () => {
                 email: formData.email,
                 phone: formData.phone,
                 status: finalStatus,
-                dashboardUnlocked: isVerified,
+                bankDetails: {
+                    bankName: formData.bankName,
+                    iban: formData.iban,
+                    accountHolderName: formData.accountHolderName,
+                    swiftCode: formData.swiftCode,
+                    routingPolicy: 'DIRECT_TRANSFER_ZERO_ESCROW'
+                },
+                dashboardUnlocked: false, // Force false until admin approval
                 propertyIds,
                 activeContractId: contractId,
                 createdAt: serverTimestamp()
@@ -201,28 +218,19 @@ const AccountActivationStep: React.FC = () => {
             // COMMIT BATCH
             await batch.commit();
 
-            if (isVerified) {
+            // For ALL owners in V6, we show the holding state
+            setTimeout(() => {
+                setIsActivating(false);
+                setSnackbar({ 
+                    open: true, 
+                    message: "Identity created. Your account is now PENDING_APPROVAL. An admin will verify your contract and bank details before activating your dashboard.", 
+                    severity: 'success' 
+                });
                 setTimeout(() => {
-                    setIsActivating(false);
                     reset();
                     navigate('/dashboard');
-                }, 3000);
-            } else {
-                // For offline methods, stay on page but show success/holding state
-                setTimeout(() => {
-                    setIsActivating(false);
-                    setSnackbar({ 
-                        open: true, 
-                        message: "Your payment method has been recorded. An admin will contact you shortly to collect payment and verify your account.", 
-                        severity: 'success' 
-                    });
-                    // After a short delay, move them to dashboard where ProtectedRoute will catch the lock
-                    setTimeout(() => {
-                        reset();
-                        navigate('/dashboard');
-                    }, 5000);
-                }, 3000);
-            }
+                }, 5000);
+            }, 3000);
 
         } catch (error: any) {
             console.error("Activation failed:", error);
@@ -376,23 +384,56 @@ const AccountActivationStep: React.FC = () => {
                                             endAdornment: isRTL ? <LockIcon size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
                                         }}
                                     />
+                                    <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>FINTECH DIRECT-TRANSFER DETAILS</Typography>
+                                    </Divider>
+
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mb: 1, display: 'block' }}>
+                                        Zero-Escrow Policy: Rendered yields are routed directly to this account.
+                                    </Typography>
+
                                     <TextField 
-                                        fullWidth label={t('activation.field.contact_phone')} 
+                                        fullWidth label="Account Holder Name" 
                                         variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
-                                        value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        value={formData.accountHolderName} onChange={(e) => setFormData({...formData, accountHolderName: e.target.value})}
                                         sx={{
-                                            '& .MuiInputBase-input': { color: '#FFFFFF', textAlign: isRTL ? 'right' : 'left' },
-                                            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)', left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', transformOrigin: isRTL ? 'right' : 'left'  },
-                                            '& .MuiOutlinedInput-root': {
-                                                background: 'rgba(255,255,255,0.04)',
-                                                '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
-                                                '&:hover fieldset': { borderColor: '#C6A75E' },
-                                                '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
-                                            },
+                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                            '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' } }
                                         }}
-                                        InputProps={{ 
-                                            startAdornment: isRTL ? null : <Phone size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} />,
-                                            endAdornment: isRTL ? <Phone size={18} style={{ marginLeft: 12, color: binThemeTokens.gold }} /> : null
+                                    />
+
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} md={6}>
+                                            <TextField 
+                                                fullWidth label="Bank Name" 
+                                                variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
+                                                value={formData.bankName} onChange={(e) => setFormData({...formData, bankName: e.target.value})}
+                                                sx={{
+                                                    '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                                    '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' } }
+                                                }}
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                            <TextField 
+                                                fullWidth label="Swift/BIC Code" 
+                                                variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
+                                                value={formData.swiftCode} onChange={(e) => setFormData({...formData, swiftCode: e.target.value})}
+                                                sx={{
+                                                    '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                                    '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' } }
+                                                }}
+                                            />
+                                        </Grid>
+                                    </Grid>
+
+                                    <TextField 
+                                        fullWidth label="IBAN (UAE Format)" 
+                                        variant="outlined" disabled={!(paymentVerified || isOfflineMethod)}
+                                        value={formData.iban} onChange={(e) => setFormData({...formData, iban: e.target.value})}
+                                        sx={{
+                                            '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                            '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' } }
                                         }}
                                     />
 

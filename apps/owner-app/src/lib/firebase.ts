@@ -27,3 +27,4 @@ export {
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or
 };
 export default app;
+
