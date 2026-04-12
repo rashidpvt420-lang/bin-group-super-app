@@ -330,60 +330,74 @@ export default function LiveMapPage() {
 
           {/* Map Pins & Telemetry Labels */}
           <Box sx={{ position: 'relative', zIndex: 1, height: '100%', pointerEvents: 'none' }}>
-            
-             {/* TECH 1: OMAR */}
-             <Box sx={{ position: 'absolute', top: '25%', left: '20%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Box sx={{ 
-                  bgcolor: '#10b981', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                  boxShadow: '0 10px 30px rgba(16,185,129,0.3)', border: '1px solid rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', gap: 1
-                }}>
-                  <Icon icon={Zap} size={12} />
-                  <Typography sx={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>OMAR (SYNCING FORENSIC DATA)</Typography>
-                </Box>
-                <div className="p-1 rounded-full bg-emerald-500 shadow-2xl animate-bounce">
-                  <PersonPinCircleIcon sx={{ color: '#fff', fontSize: 32 }} />
-                </div>
-             </Box>
+                      {/* DYNAMIC TECH MARKERS */}
+             {tickets.filter(t => t.status === 'EN_ROUTE' && t.techLocation).map((ticket) => {
+                const loc = ticket.techLocation;
+                // Simple projection for Dubai Marina / Downtown area
+                // Mapping Lat [25.0, 25.3] -> [100% to 0%] (Top is North)
+                // Mapping Lng [55.12, 55.42] -> [0% to 100%]
+                const top = ((25.3 - loc.lat) / 0.3) * 100;
+                const left = ((loc.lng - 55.12) / 0.3) * 100;
 
-             {/* CLUSTER MARKER: MARINA HEIGHTS (8 ACTIVE JOBS) */}
-             <Box sx={{ position: 'absolute', top: '55%', left: '42%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Box sx={{ 
-                  bgcolor: 'rgba(59, 130, 246, 0.95)', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1,
-                  boxShadow: '0 0 40px rgba(59, 130, 246, 0.4)', border: '1px solid rgba(255,255,255,0.1)',
-                  backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1
-                }}>
-                  <Typography sx={{ fontSize: '11px', fontWeight: 900 }}>TOWER CLUSTER: 8 ACTIVE TIC</Typography>
-                </Box>
-                <Box sx={{ 
-                  w: 48, h: 48, borderRadius: '50%', border: '4px solid rgba(59, 130, 246, 0.5)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  bgcolor: 'rgba(37, 99, 235, 0.2)', color: '#60a5fa', fontWeight: 'black', fontSize: '20px',
-                  animation: 'pulse 2s infinite'
-                }}>
-                   8
-                </Box>
-                <Typography sx={{ color: '#64748b', fontSize: 9, mt: 1, fontWeight: 'bold' }}>MARINA HEIGHTS TOWER</Typography>
-             </Box>
+                return (
+                  <Box 
+                    key={ticket.id} 
+                    sx={{ 
+                      position: 'absolute', 
+                      top: `${Math.min(Math.max(top, 5), 95)}%`, 
+                      left: `${Math.min(Math.max(left, 5), 95)}%`, 
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      transition: 'all 0.5s ease-in-out' // Smooth movement
+                    }}
+                  >
+                    <Box sx={{ 
+                      bgcolor: '#10b981', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
+                      boxShadow: '0 10px 30px rgba(16,185,129,0.3)', border: '1px solid rgba(255,255,255,0.2)',
+                      display: 'flex', alignItems: 'center', gap: 1, whiteSpace: 'nowrap'
+                    }}>
+                      <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+                      <Typography sx={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>
+                        {ticket.assignedTechnician || 'TEC'} • {ticket.unit || 'LOC'}
+                      </Typography>
+                    </Box>
+                    <div className="p-1 rounded-full bg-emerald-500 shadow-2xl">
+                      <PersonPinCircleIcon sx={{ color: '#fff', fontSize: 32 }} />
+                    </div>
+                  </Box>
+                );
+             })}
 
-             {/* EMERGENCY CLUSTER */}
-             <Box sx={{ position: 'absolute', top: '35%', left: '75%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Box sx={{ 
-                  bgcolor: '#ef4444', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                  boxShadow: '0 10px 30px rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.2)',
-                }}>
-                  <Typography sx={{ fontSize: '10px', fontWeight: 900 }}>CRITICAL RISK: AC FAILURE</Typography>
-                </Box>
-                <Icon icon={ShieldAlert} className="text-red-500 drop-shadow-2xl" size={48} />
-             </Box>
-
-             {/* PREDICTIVE MARKER */}
-             <Box sx={{ position: 'absolute', top: '20%', left: '80%', display: 'flex', flexDirection: 'column', alignItems: 'center', opacity: 0.6 }}>
-                <div className="bg-slate-800 p-2 rounded-xl mb-1 border border-slate-700">
-                  <Typography sx={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8' }}>PREDICTED FAILURE IN 48H</Typography>
-                </div>
-                <LocationOnIcon sx={{ color: '#f59e0b', fontSize: 24 }} />
-             </Box>
+             {/* CLUSTER MARKERS FOR PENDING JOBS */}
+             {tickets.filter(t => t.status === 'OPEN' || t.status === 'assigned').slice(0, 3).map((ticket, i) => {
+                 // Place at random or semi-fixed locations if no unit coords
+                 const positions = [
+                     { top: '55%', left: '42%' },
+                     { top: '35%', left: '75%' },
+                     { top: '20%', left: '80%' }
+                 ];
+                 const pos = positions[i] || { top: '50%', left: '50%' };
+                 return (
+                    <Box key={ticket.id} sx={{ position: 'absolute', top: pos.top, left: pos.left, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <Box sx={{ 
+                        bgcolor: i === 1 ? '#ef4444' : 'rgba(59, 130, 246, 0.95)', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
+                        boxShadow: i === 1 ? '0 10px 30px rgba(239,68,68,0.3)' : '0 0 40px rgba(59, 130, 246, 0.4)', 
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1
+                        }}>
+                        <Typography sx={{ fontSize: '10px', fontWeight: 900 }}>
+                            {i === 1 ? 'CRITICAL RISK' : 'PENDING DISPATCH'}
+                        </Typography>
+                        </Box>
+                        {i === 1 ? (
+                            <Icon icon={ShieldAlert} className="text-red-500 drop-shadow-2xl animate-pulse" size={40} />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center text-blue-500 font-black text-xs">
+                                {i + 1}
+                            </div>
+                        )}
+                    </Box>
+                 );
+             })}/Box>
 
           </Box>
 

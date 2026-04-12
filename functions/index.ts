@@ -475,3 +475,4 @@ export const generateIntegrityAudit = onCall({ cors: true }, async () => ({ url:
 export const proactiveMaintenanceCron = onSchedule("every 48 hours", async () => {});
 export const createAiMaintenanceTicket = onCall({ cors: true }, async () => ({ ticketId: "" }));
 export const approveMaintenanceProposal = onCall({ cors: true }, async () => ({ success: true }));
+.

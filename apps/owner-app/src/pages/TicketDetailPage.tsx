@@ -17,20 +17,101 @@ export default function TicketDetailPage() {
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
     const [updating, setUpdating] = useState(false);
+    const [geoWatcher, setGeoWatcher] = useState<number | null>(null);
+    const [distanceInfo, setDistanceInfo] = useState<{ distance: string, eta: string } | null>(null);
 
     useEffect(() => {
         if (!id) return;
-        const fetchTicket = async () => {
-            const docRef = doc(db, 'maintenanceTickets', id);
-            const docSnap = await getDoc(docRef);
+        const docRef = doc(db, 'maintenanceTickets', id);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
-                setTicket({ id: docSnap.id, ...docSnap.data() });
-                setNotes(docSnap.data().notes || '');
+                const data = docSnap.data();
+                setTicket({ id: docSnap.id, ...data });
+                setNotes(data.notes || '');
+                
+                // Calculate distance if techLocation exists and user is tenant or same technician
+                if (data.status === 'EN_ROUTE' && data.techLocation && data.propertyLocation?.location) {
+                    calculateDistance(data.techLocation, data.propertyLocation.location);
+                } else {
+                    setDistanceInfo(null);
+                }
             }
-            setLoading(false);
-        };
-        fetchTicket();
+        });
+        setLoading(false);
+        return () => unsubscribe();
     }, [id]);
+
+    useEffect(() => {
+        // Broadcaster Logic for Technicians
+        if (ticket?.status === 'EN_ROUTE' && user?.role === 'technician' && !geoWatcher) {
+            startGeoBroadcasting();
+        } else if (ticket?.status !== 'EN_ROUTE' && geoWatcher) {
+            stopGeoBroadcasting();
+        }
+
+        return () => stopGeoBroadcasting();
+    }, [ticket?.status, user?.role]);
+
+    const startGeoBroadcasting = () => {
+        if (!navigator.geolocation) {
+            console.error("Geolocation is not supported by this browser.");
+            return;
+        }
+
+        const watcherId = navigator.geolocation.watchPosition(
+            async (position) => {
+                const { latitude, longitude, heading } = position.coords;
+                try {
+                    const ticketRef = doc(db, 'maintenanceTickets', id!);
+                    await updateDoc(ticketRef, {
+                        techLocation: {
+                            lat: latitude,
+                            lng: longitude,
+                            heading: heading || 0,
+                            timestamp: Date.now()
+                        }
+                    });
+                } catch (err) {
+                    console.error("Failed to update tech location:", err);
+                }
+            },
+            (error) => {
+                console.warn("Geolocation permission/error:", error);
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 10000,
+                timeout: 5000
+            }
+        );
+        setGeoWatcher(watcherId);
+    };
+
+    const stopGeoBroadcasting = () => {
+        if (geoWatcher !== null) {
+            navigator.geolocation.clearWatch(geoWatcher);
+            setGeoWatcher(null);
+        }
+    };
+
+    const calculateDistance = (techLoc: any, propLoc: any) => {
+        const R = 6371; // Earth radius in km
+        const dLat = (propLoc.lat - techLoc.lat) * Math.PI / 180;
+        const dLon = (propLoc.lng - techLoc.lng) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(techLoc.lat * Math.PI / 180) * Math.cos(propLoc.lat * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const d = R * c;
+        
+        const distStr = d < 1 ? `${(d * 1000).toFixed(0)}m` : `${d.toFixed(1)}km`;
+        const etaMin = Math.ceil(d * 5); // Rough estimate: 5 min per km
+        setDistanceInfo({
+            distance: distStr,
+            eta: `${etaMin}-${etaMin + 2} mins`
+        });
+    };
 
     const handleNavigate = () => {
         if (!ticket?.propertyLocation) return;
@@ -148,6 +229,26 @@ export default function TicketDetailPage() {
                         )}
                     </Stack>
                 </Stack>
+
+                {ticket.status === 'EN_ROUTE' && (
+                    <Box sx={{ mb: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4 }}>
+                        <Stack direction="row" spacing={3} alignItems="center">
+                            <Box sx={{ position: 'relative' }}>
+                                <Navigation size={32} color={binThemeTokens.gold} className="animate-pulse" />
+                            </Box>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TECHNICIAN EN ROUTE</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Live tracking active via Sovereign GPS Engine.</Typography>
+                            </Box>
+                            {distanceInfo && (
+                                <Box sx={{ textAlign: 'right' }}>
+                                    <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{distanceInfo.eta}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{distanceInfo.distance} AWAY</Typography>
+                                </Box>
+                            )}
+                        </Stack>
+                    </Box>
+                )}
 
                 <Typography variant="body1" sx={{ color: '#FFFFFF', mb: 4, p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
                     {ticket.description}

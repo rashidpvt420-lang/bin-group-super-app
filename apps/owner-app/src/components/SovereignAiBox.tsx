@@ -1,0 +1,189 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+    Box, 
+    Paper, 
+    Typography, 
+    IconButton, 
+    TextField, 
+    Stack, 
+    Avatar, 
+    alpha, 
+    CircularProgress, 
+    Fab,
+    Tooltip,
+    Zoom,
+    Fade
+} from '@mui/material';
+import { 
+    MessageSquare, 
+    X, 
+    Send, 
+    Bot, 
+    Sparkles, 
+    Wrench, 
+    ShieldCheck, 
+    TrendingUp, 
+    User,
+    AlertCircle
+} from 'lucide-react';
+import { binThemeTokens } from '../theme/binGroupTheme';
+import { useRole } from '../context/RoleContext';
+import { useLanguage } from '../context/LanguageContext';
+
+interface Message {
+    id: string;
+    text: string;
+    sender: 'user' | 'ai';
+    timestamp: Date;
+}
+
+const SovereignAiBox: React.FC = () => {
+    const { user, role } = useRole();
+    const { t, isRTL } = useLanguage();
+    const [isOpen, setIsOpen] = useState(false);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [inputValue, setInputValue] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, isTyping]);
+
+    const getInitialMessage = () => {
+        switch (role?.toUpperCase()) {
+            case 'TENANT':
+                return "Sovereign Assistant Online. How is your residence today? I can help with ticket status or basic maintenance troubleshooting.";
+            case 'TECHNICIAN':
+                return "Mission Guidance Node Active. Provide a Ticket ID or ask about part availability for your current assignment.";
+            case 'OWNER':
+            case 'ADMIN':
+                return "Strategic Terminal Active. Analysis of financial velocity and system health is available. What do you wish to audit?";
+            default:
+                return "BIN GROUP Sovereign AI Initialized. How can I assist you today?";
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen && messages.length === 0) {
+            setMessages([{ id: '1', text: getInitialMessage(), sender: 'ai', timestamp: new Date() }]);
+        }
+    }, [isOpen]);
+
+    const handleSend = async () => {
+        if (!inputValue.trim()) return;
+
+        const userMsg: Message = { id: Date.now().toString(), text: inputValue, sender: 'user', timestamp: new Date() };
+        setMessages(prev => [...prev, userMsg]);
+        setInputValue('');
+        setIsTyping(true);
+
+        // Simulate AI Logic based on role context
+        setTimeout(() => {
+            let response = "I am processing your request through the BIN GROUP Sovereign Engine...";
+            const input = inputValue.toLowerCase();
+
+            if (role === 'tenant') {
+                if (input.includes('ac') || input.includes('cooling')) response = "AC troubleshooting protocol initiated: Please check your thermostat batteries and Ensure the breaker is ON. If the issue persists, I can escalate your SOS priority.";
+                if (input.includes('status') || input.includes('ticket')) response = "I have scanned the ledger. Your active maintenance mission is currently EN_ROUTE. The specialist is approximately 4km away.";
+            } else if (role === 'technician') {
+                if (input.includes('guidance') || input.includes('help')) response = "Mission Guidance: This issue type (PLUMBING_BURST) typically requires a generic shut-off at the main riser before internal inspection.";
+                if (input.includes('parts') || input.includes('stock')) response = "Inventory Sync: We have 12 AC Filter Units and 5 Pump Gaskets available in the Dubai Central Hub.";
+            } else {
+                if (input.includes('finance') || input.includes('money')) response = "Financial Summary: Yield velocity is currently at 7.4% ROI. Direct-to-Owner transfers totaling AED 142,500 are pending settlement.";
+                if (input.includes('health')) response = "System Integrity: All nodes online. User profile completion at 94%. Missing IBAN detected in 2 Owner profiles.";
+            }
+
+            const aiMsg: Message = { id: (Date.now() + 1).toString(), text: response, sender: 'ai', timestamp: new Date() };
+            setMessages(prev => [...prev, aiMsg]);
+            setIsTyping(false);
+        }, 1500);
+    };
+
+    return (
+        <>
+            <Zoom in={true}>
+                <Fab 
+                    onClick={() => setIsOpen(!isOpen)}
+                    sx={{ 
+                        position: 'fixed', bottom: 32, right: isRTL ? 'auto' : 32, left: isRTL ? 32 : 'auto',
+                        bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#E6C77A' },
+                        boxShadow: `0 10px 30px ${alpha(binThemeTokens.gold, 0.4)}`, zIndex: 2000
+                    }}
+                >
+                    {isOpen ? <X /> : <Sparkles />}
+                </Fab>
+            </Zoom>
+
+            <Fade in={isOpen}>
+                <Paper sx={{ 
+                    position: 'fixed', bottom: 100, right: isRTL ? 'auto' : 32, left: isRTL ? 32 : 'auto',
+                    width: { xs: 'calc(100vw - 64px)', sm: 400 }, height: 550, zIndex: 2000,
+                    bgcolor: '#0B0B0C', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6,
+                    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                    boxShadow: '0 40px 100px rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)'
+                }}>
+                    {/* Header */}
+                    <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}><Bot size={20} /></Avatar>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="subtitle1" fontWeight="950" color="#FFF">SOVEREIGN AI</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>INSTITUTIONAL ASSISTANT</Typography>
+                        </Box>
+                        <IconButton size="small" onClick={() => setIsOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X /></IconButton>
+                    </Box>
+
+                    {/* Messages Area */}
+                    <Box ref={scrollRef} sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 2, bgcolor: 'rgba(255,255,255,1).01' }}>
+                        {messages.map((msg) => (
+                            <Box key={msg.id} sx={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                                <Paper sx={{ 
+                                    p: 2, borderRadius: 4, 
+                                    bgcolor: msg.sender === 'user' ? binThemeTokens.gold : 'rgba(255,255,255,0.05)',
+                                    color: msg.sender === 'user' ? '#000' : '#FFF',
+                                    border: msg.sender === 'user' ? 'none' : '1px solid rgba(255,255,255,0.05)'
+                                }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.6 }}>{msg.text}</Typography>
+                                </Paper>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 0.5, display: 'block', textAlign: msg.sender === 'user' ? 'right' : 'left' }}>
+                                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Typography>
+                            </Box>
+                        ))}
+                        {isTyping && (
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                <CircularProgress size={12} sx={{ color: binThemeTokens.gold }} />
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Sovereign AI Thinking...</Typography>
+                            </Box>
+                        )}
+                    </Box>
+
+                    {/* Input Area */}
+                    <Box sx={{ p: 2, borderTop: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, bgcolor: 'rgba(255,255,255,0.02)' }}>
+                        <Stack direction="row" spacing={1}>
+                            <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="Type your directive..." 
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                                sx={{ 
+                                    '& .MuiOutlinedInput-root': { borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' },
+                                    '& fieldset': { borderColor: 'rgba(198,167,94,0.2)' }
+                                }}
+                            />
+                            <IconButton onClick={handleSend} sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#E6C77A' } }}>
+                                <Send size={18} />
+                            </IconButton>
+                        </Stack>
+                    </Box>
+                </Paper>
+            </Fade>
+        </>
+    );
+};
+
+export default SovereignAiBox;

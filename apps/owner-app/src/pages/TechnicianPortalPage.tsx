@@ -164,6 +164,17 @@ export default function TechnicianPortalPage() {
         return join <= oneYearAgo;
     };
 
+    const handleStatusUpdate = async (ticketId: string, newStatus: string) => {
+        try {
+            await updateDoc(doc(db, 'maintenanceTickets', ticketId), {
+                status: newStatus,
+                updatedAt: serverTimestamp()
+            });
+        } catch (err) {
+            console.error("Status Update Failed:", err);
+        }
+    };
+
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#0B0B0C' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
@@ -203,6 +214,15 @@ export default function TechnicianPortalPage() {
                                             </Grid>
                                             <Grid item xs={12} md={4} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                                 <Button variant="contained" fullWidth startIcon={<Navigation />} onClick={() => handleNavigate(ticket)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{t('tech.navigate')}</Button>
+                                                <Stack direction="row" spacing={1}>
+                                                    {ticket.status === 'assigned' || ticket.status === 'ASSIGNED' ? (
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'EN_ROUTE')} sx={{ bgcolor: '#3b82f6', color: '#fff', fontWeight: 900 }}>{t('tech.action.en_route')}</Button>
+                                                    ) : ticket.status === 'EN_ROUTE' ? (
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'ARRIVED')} sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 900 }}>{t('tech.action.arrived')}</Button>
+                                                    ) : ticket.status === 'ARRIVED' ? (
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'IN_PROGRESS')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{t('tech.action.start_work')}</Button>
+                                                    ) : null}
+                                                </Stack>
                                                 <Button variant="outlined" fullWidth onClick={() => navigate(`/tech/ticket/${ticket.id}`)} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{t('tech.open_node')}</Button>
                                             </Grid>
                                         </Grid>
