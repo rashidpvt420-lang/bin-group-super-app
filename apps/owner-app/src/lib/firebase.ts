@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -18,7 +18,7 @@ const firebaseConfig = {
 };
 
 // [V7] ENTERPRISE FAILOVER MESH
-let app;
+let app: FirebaseApp;
 try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 } catch (e) {
