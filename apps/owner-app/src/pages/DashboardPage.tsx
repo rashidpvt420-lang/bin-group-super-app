@@ -24,6 +24,7 @@ import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { calculateComplianceScore } from '../utils/complianceScoreEngine';
 import { calculateESGRatings } from '../utils/esgRatingEngine';
 import { formatAED } from '../utils/formatters';
+import { checkProfileIntegrity, ProfileHealth } from '../utils/IntegrityEngine';
 import { getHistoricalContextForProperty, PortfolioData } from '../utils/portfolioAggregationEngine';
 import { generatePredictiveIntelligence, MissionGuidancePayload } from '../utils/predictiveIntelligence';
 import { httpsCallable } from 'firebase/functions';
@@ -40,6 +41,7 @@ export default function DashboardPage() {
     const [intelligence, setIntelligence] = useState<Record<string, MissionGuidancePayload>>({});
     const [loading, setLoading] = useState(true);
     const [generatingAudit, setGeneratingAudit] = useState<string | null>(null);
+    const [integrity, setIntegrity] = useState<ProfileHealth | null>(null);
 
     useEffect(() => {
         if (!user) return;
@@ -79,11 +81,13 @@ export default function DashboardPage() {
                 }
                 setIntelligence(intelMap);
 
-                const alertRef = collection(db, 'notifications');
-                const alertQuery = query(alertRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(4));
-                
                 const alertSnap = await getDocs(alertQuery);
                 setNotifications(alertSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+                // Context Audit: Profile Integrity
+                if (user && role) {
+                    setIntegrity(checkProfileIntegrity(user, role));
+                }
 
             } catch (err) {
                 console.error("Dashboard sync error:", err);
@@ -178,6 +182,27 @@ export default function DashboardPage() {
             {t('dash.onboard_cta')}
         </Button>
       </Box>
+
+      {/* Profile Integrity Alert */}
+      {integrity && !integrity.isComplete && (
+          <Box sx={{ mb: 6 }}>
+              <Paper sx={{ 
+                  p: 3, bgcolor: alpha('#DC2626', 0.05), border: '1px solid #DC2626', borderRadius: 4,
+                  display: 'flex', alignItems: 'center', gap: 3
+              }}>
+                  <AlertCircle color="#DC2626" size={32} />
+                  <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="h6" sx={{ color: '#F87171', fontWeight: 900 }}>MISSING CRITICAL REQUIREMENTS</Typography>
+                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                          Your Sovereign Protocol is incomplete. Missing: {integrity.missingFields.join(', ')}
+                      </Typography>
+                  </Box>
+                  <Button variant="contained" sx={{ bgcolor: '#DC2626', color: '#FFF', fontWeight: 900 }} onClick={() => window.location.href='/settings'}>
+                      Sync Profile
+                  </Button>
+              </Paper>
+          </Box>
+      )}
 
             {/* Economic Powergrid */}
       <Grid container spacing={4} sx={{ mb: 8 }}>

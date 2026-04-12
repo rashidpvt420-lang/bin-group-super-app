@@ -23,6 +23,8 @@ import InvoiceDetailsPage from './pages/InvoiceDetailsPage';
 import TenantSOSPage from './pages/TenantSOSPage';
 import TechnicianPortalPage from './pages/TechnicianPortalPage';
 import TicketDetailPage from './pages/TicketDetailPage';
+import ReportingDashboard from './pages/ReportingDashboard';
+import SovereignAiBox from './components/SovereignAiBox';
 import BrokerPortalPage from './pages/BrokerPortalPage';
 import AuditorPortalPage from './pages/public/AuditorPortalPage';
 
@@ -121,6 +123,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<OwnerLandingPage />} />
         <Route path="/v1" element={<LandingPage />} />
+        <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'owner']}><ReportingDashboard /></ProtectedRoute>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
@@ -149,6 +152,7 @@ function AppContent() {
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <SovereignAiBox />
     </RoleRedirector>
   );
 }
