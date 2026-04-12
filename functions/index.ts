@@ -469,7 +469,31 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
 });
 
 // STUBS FOR REMAINING FUNCTIONS
-export const getMissionGuidance = onCall({ cors: true }, async () => ({ status: "V5_ONLINE" }));
+export const getMissionGuidance = onCall({ cors: true }, async (request) => {
+    const caller = request.auth;
+    if (!caller) throw new HttpsError("unauthenticated", "Auth required.");
+    
+    // AI Financial Governor: Strict Rate Limiting (20 queries / 24h)
+    const statsRef = db.collection("users").doc(caller.uid).collection("aiStats").doc("current");
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+
+    const statsSnap = await statsRef.get();
+    let stats = statsSnap.exists ? statsSnap.data() : { queries: [] };
+
+    // Clean old queries
+    const recentQueries = (stats?.queries || []).filter((q: number) => q > dayAgo);
+    
+    if (recentQueries.length >= 20) {
+        throw new HttpsError("resource-exhausted", "AI Operational Limit Reached. Please contact BIN GROUP Admin.");
+    }
+
+    recentQueries.push(now);
+    await statsRef.set({ queries: recentQueries });
+
+    return { status: "V5_ONLINE", guidance: "Sovereign protocol active. Mission parameters optimal." };
+});
+
 export const getSovereignSystemStats = onCall({ cors: true }, async () => ({ status: "OK" }));
 export const googleSecurityEvents = onRequest({ cors: true }, async (req, res) => { res.status(202).send("Accepted"); });
 export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async () => {});
