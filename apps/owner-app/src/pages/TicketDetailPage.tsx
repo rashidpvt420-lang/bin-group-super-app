@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool } from 'lucide-react';
+import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions, Divider } from '@mui/material';
+import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool, Phone, MessageSquare, User } from 'lucide-react';
 import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from '../lib/firebase';
 import { queueMutation } from '../lib/offlineSync';
 import SignaturePad from '../components/SignaturePad';
@@ -12,7 +12,7 @@ import { useRole } from '../context/RoleContext';
 export default function TicketDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { t } = useLanguage();
+    const { t, isRTL } = useLanguage();
     const { user, role } = useRole();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -133,24 +133,24 @@ export default function TicketDetailPage() {
             query = encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
         }
         
-        // Use Google Maps Direction API for seamless native deep-linking
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, '_blank');
     };
 
     const updateStatus = async (newStatus: string) => {
         if (!id || !user?.uid) return;
-        const docRef = doc(db, 'maintenanceTickets', id);
-        const updateData: any = {
-            status: newStatus,
-            updatedAt: serverTimestamp(),
-            notes: notes
-        };
-
+        setUpdating(true);
         try {
+            const docRef = doc(db, 'maintenanceTickets', id);
+            const updateData: any = {
+                status: newStatus,
+                updatedAt: serverTimestamp(),
+                notes: notes
+            };
+
             // If technician is taking an OPEN ticket, assign them
-            if ((ticket.status === 'OPEN' || ticket.status === 'assigned' || ticket.status === 'ASSIGNED') && (newStatus === 'EN_ROUTE' || newStatus === 'IN_PROGRESS')) {
+            if ((ticket.status === 'OPEN' || ticket.status === 'assigned' || ticket.status === 'ASSIGNED') && (newStatus === 'EN_ROUTE' || newStatus === 'IN_PROGRESS' || newStatus === 'ARRIVED')) {
                 updateData.assignedTechnicianId = user.uid;
-                updateData.technicianName = user.displayName || 'Maintenance Specialist';
+                updateData.assignedTechnicianName = user.displayName || 'Maintenance Specialist';
                 updateData.assignedAt = serverTimestamp();
             }
 
@@ -220,7 +220,7 @@ export default function TicketDetailPage() {
         <Container maxWidth="md" sx={{ py: 6 }}>
             <Button 
                 startIcon={<ArrowLeft size={18} />} 
-                onClick={() => navigate('/tech')}
+                onClick={() => navigate(role === 'technician' ? '/tech' : '/tenant')}
                 sx={{ color: binThemeTokens.gold, mb: 4, fontWeight: 900 }}
             >
                 {t('common.back')}
@@ -234,13 +234,13 @@ export default function TicketDetailPage() {
                         <Stack direction="row" spacing={2} alignItems="center">
                             <MapPin size={16} color={binThemeTokens.gold} />
                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                                {ticket.propertyLocation?.propertyName || ticket.propertyId || 'PORTFOLIO ASSET'} ({ticket.propertyLocation?.unitNumber || 'N/A'})
+                                {ticket.propertyLocation?.propertyName || ticket.propertyName || ticket.propertyId || 'PORTFOLIO ASSET'} ({ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'})
                             </Typography>
                         </Stack>
                     </Box>
                     <Stack spacing={1} alignItems="flex-end">
                         <Chip 
-                            label={ticket.status} 
+                            label={ticket.status.replace('_', ' ')} 
                             sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} 
                         />
                         {ticket.propertyLocation && (
@@ -256,15 +256,16 @@ export default function TicketDetailPage() {
                     </Stack>
                 </Stack>
 
+                {/* Technician Info for Tenant or ETA for Technician */}
                 {ticket.status === 'EN_ROUTE' && (
-                    <Box sx={{ mb: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4 }}>
+                    <Box sx={{ mb: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), border: `2px solid ${binThemeTokens.gold}`, borderRadius: 4 }}>
                         <Stack spacing={3}>
                             <Stack direction="row" spacing={3} alignItems="center">
                                 <Box sx={{ position: 'relative' }}>
                                     <Navigation size={32} color={binThemeTokens.gold} className="animate-pulse" />
                                 </Box>
                                 <Box sx={{ flexGrow: 1 }}>
-                                    <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TECHNICIAN EN ROUTE</Typography>
+                                    <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{role === 'technician' ? 'EN ROUTE TO TARGET' : 'SPECIALIST EN ROUTE'}</Typography>
                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Live tracking active via Sovereign GPS Engine.</Typography>
                                 </Box>
                                 {distanceInfo && (
@@ -274,26 +275,28 @@ export default function TicketDetailPage() {
                                     </Box>
                                 )}
                             </Stack>
-                            {role === 'technician' && (
-                                <Button 
-                                    fullWidth 
-                                    variant="contained" 
-                                    size="large"
-                                    startIcon={<Navigation size={20} />}
-                                    onClick={handleNavigate}
-                                    sx={{ 
-                                        py: 2, 
-                                        bgcolor: binThemeTokens.gold, 
-                                        color: '#000', 
-                                        fontWeight: 950, 
-                                        borderRadius: 4,
-                                        boxShadow: `0 10px 20px ${alpha(binThemeTokens.gold, 0.3)}`,
-                                        '&:hover': { bgcolor: '#E6C77A' }
-                                    }}
-                                >
-                                    NAVIGATE TO PROPERTY
-                                </Button>
-                            )}
+                        </Stack>
+                    </Box>
+                )}
+
+                {/* [V5] TECHNICIAN-ONLY TENANT CARD */}
+                {role === 'technician' && (
+                    <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{t('status.tenant_contact')}</Typography>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: '50%' }}>
+                                    <User size={24} color={binThemeTokens.gold} />
+                                </Box>
+                                <Box>
+                                    <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.tenantName || 'Anonymous Resident'}</Typography>
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{t('field.units')} {ticket.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}</Typography>
+                                </Box>
+                            </Stack>
+                            <Stack direction="row" spacing={1}>
+                                <Button variant="outlined" sx={{ minWidth: 0, p: 1.5, borderRadius: 2, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}><MessageSquare size={20} /></Button>
+                                <Button variant="contained" sx={{ minWidth: 0, p: 1.5, borderRadius: 2, bgcolor: '#10b981', color: '#FFF' }}><Phone size={20} /></Button>
+                            </Stack>
                         </Stack>
                     </Box>
                 )}
@@ -320,7 +323,7 @@ export default function TicketDetailPage() {
                             variant="outlined" 
                             startIcon={<Camera />}
                             onClick={() => triggerCamera('hasBeforePhoto')}
-                            disabled={updating || ticket.hasBeforePhoto}
+                            disabled={updating || ticket.hasBeforePhoto || role !== 'technician'}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasBeforePhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasBeforePhoto ? '#4ade80' : binThemeTokens.gold }}
                         >
                             {ticket.hasBeforePhoto ? t('tech.photo.before_uploaded') : t('tech.photo.upload_before')}
@@ -343,7 +346,7 @@ export default function TicketDetailPage() {
                             variant="outlined" 
                             startIcon={<Camera />}
                             onClick={() => triggerCamera('hasAfterPhoto')}
-                            disabled={updating || ticket.hasAfterPhoto}
+                            disabled={updating || ticket.hasAfterPhoto || role !== 'technician'}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasAfterPhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasAfterPhoto ? '#4ade80' : binThemeTokens.gold }}
                         >
                             {ticket.hasAfterPhoto ? t('tech.photo.after_uploaded') : t('tech.photo.upload_after')}
@@ -351,56 +354,71 @@ export default function TicketDetailPage() {
                     </Grid>
                 </Grid>
 
-                <TextField
-                    fullWidth
-                    multiline
-                    rows={4}
-                    label={t('tech.completion_notes')}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    sx={{ 
-                        mb: 4,
-                        '& .MuiOutlinedInput-root': { color: '#FFFFFF', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' },
-                        '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary }
-                    }}
-                />
+                {role === 'technician' && (
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={4}
+                        label={t('tech.completion_notes')}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        sx={{ 
+                            mb: 4,
+                            '& .MuiOutlinedInput-root': { color: '#FFFFFF', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' },
+                            '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary }
+                        }}
+                    />
+                )}
 
-                <Stack spacing={2}>
-                    {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED' || ticket.status === 'assigned') && (
-                        <Button 
-                            fullWidth 
-                            variant="contained" 
-                            onClick={() => updateStatus('EN_ROUTE')}
-                            disabled={updating}
-                            sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
-                        >
-                            {t('tech.action.en_route')}
-                        </Button>
-                    )}
-                    {ticket.status === 'EN_ROUTE' && (
-                        <Button 
-                            fullWidth 
-                            variant="contained" 
-                            onClick={() => updateStatus('IN_PROGRESS')}
-                            disabled={updating}
-                            sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
-                        >
-                            {t('tech.action.start_work')}
-                        </Button>
-                    )}
-                    {ticket.status === 'IN_PROGRESS' && (
-                        <Button 
-                            fullWidth 
-                            variant="contained" 
-                            onClick={() => setShowCompleteModal(true)}
-                            disabled={updating || !canComplete}
-                            startIcon={<CheckCircle2 />}
-                            sx={{ py: 2, bgcolor: '#4ade80', color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
-                        >
-                            {canComplete ? t('tech.action.complete_mission') : t('tech.action.evidence_required')}
-                        </Button>
-                    )}
-                </Stack>
+                {role === 'technician' && (
+                    <Stack spacing={2}>
+                        {(ticket.status === 'OPEN' || ticket.status === 'ASSIGNED' || ticket.status === 'assigned') && (
+                            <Button 
+                                fullWidth 
+                                variant="contained" 
+                                onClick={() => updateStatus('EN_ROUTE')}
+                                disabled={updating}
+                                sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
+                            >
+                                {t('tech.action.en_route')}
+                            </Button>
+                        )}
+                        {ticket.status === 'EN_ROUTE' && (
+                            <Button 
+                                fullWidth 
+                                variant="contained" 
+                                onClick={() => updateStatus('ARRIVED')}
+                                disabled={updating}
+                                sx={{ py: 2, bgcolor: '#3b82f6', color: '#FFF', fontWeight: 900, borderRadius: 3 }}
+                            >
+                                {t('tech.action.arrived')}
+                            </Button>
+                        )}
+                        {ticket.status === 'ARRIVED' && (
+                            <Button 
+                                fullWidth 
+                                variant="contained" 
+                                onClick={() => updateStatus('IN_PROGRESS')}
+                                disabled={updating}
+                                sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
+                            >
+                                {t('tech.action.start_work')}
+                            </Button>
+                        )}
+                        {ticket.status === 'IN_PROGRESS' && (
+                            <Button 
+                                fullWidth 
+                                variant="contained" 
+                                onClick={() => setShowCompleteModal(true)}
+                                disabled={updating || !canComplete}
+                                startIcon={<CheckCircle2 />}
+                                sx={{ py: 2, bgcolor: '#4ade80', color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
+                            >
+                                {canComplete ? t('tech.action.complete_mission') : t('tech.action.evidence_required')}
+                            </Button>
+                        )}
+                    </Stack>
+                )}
             </Paper>
 
             {/* Proof of Work Modal */}
