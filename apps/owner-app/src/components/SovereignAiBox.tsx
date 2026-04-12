@@ -26,6 +26,8 @@ import {
     User,
     AlertCircle
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -80,26 +82,24 @@ const SovereignAiBox: React.FC = () => {
         setInputValue('');
         setIsTyping(true);
 
-        // Simulate AI Logic based on role context
-        setTimeout(() => {
-            let response = "I am processing your request through the BIN GROUP Sovereign Engine...";
-            const input = inputValue.toLowerCase();
-
-            if (role === 'tenant') {
-                if (input.includes('ac') || input.includes('cooling')) response = "AC troubleshooting protocol initiated: Please check your thermostat batteries and Ensure the breaker is ON. If the issue persists, I can escalate your SOS priority.";
-                if (input.includes('status') || input.includes('ticket')) response = "I have scanned the ledger. Your active maintenance mission is currently EN_ROUTE. The specialist is approximately 4km away.";
-            } else if (role === 'technician') {
-                if (input.includes('guidance') || input.includes('help')) response = "Mission Guidance: This issue type (PLUMBING_BURST) typically requires a generic shut-off at the main riser before internal inspection.";
-                if (input.includes('parts') || input.includes('stock')) response = "Inventory Sync: We have 12 AC Filter Units and 5 Pump Gaskets available in the Dubai Central Hub.";
-            } else {
-                if (input.includes('finance') || input.includes('money')) response = "Financial Summary: Yield velocity is currently at 7.4% ROI. Direct-to-Owner transfers totaling AED 142,500 are pending settlement.";
-                if (input.includes('health')) response = "System Integrity: All nodes online. User profile completion at 94%. Missing IBAN detected in 2 Owner profiles.";
-            }
-
-            const aiMsg: Message = { id: (Date.now() + 1).toString(), text: response, sender: 'ai', timestamp: new Date() };
+        try {
+            const getAiGuidance = httpsCallable(functions, 'getMissionGuidance');
+            const result = await getAiGuidance({ input: inputValue, role });
+            const data = result.data as { guidance: string };
+            
+            const aiMsg: Message = { id: Date.now().toString(), text: data.guidance, sender: 'ai', timestamp: new Date() };
             setMessages(prev => [...prev, aiMsg]);
+        } catch (err: any) {
+            let errorText = "The Sovereign Engine is momentarily offline. Synchronizing with headquarters...";
+            if (err.code === 'resource-exhausted' || err.message?.includes('Limit Reached')) {
+                errorText = "AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.";
+            }
+            
+            const aiMsg: Message = { id: Date.now().toString(), text: errorText, sender: 'ai', timestamp: new Date() };
+            setMessages(prev => [...prev, aiMsg]);
+        } finally {
             setIsTyping(false);
-        }, 1500);
+        }
     };
 
     return (

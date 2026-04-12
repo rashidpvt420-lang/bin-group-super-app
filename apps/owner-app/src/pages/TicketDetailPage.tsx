@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha } from '@mui/material';
-import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation } from 'lucide-react';
+import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool } from 'lucide-react';
 import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from '../lib/firebase';
+import { queueMutation } from '../lib/offlineSync';
+import SignaturePad from '../components/SignaturePad';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
-
 import { useRole } from '../context/RoleContext';
 
 export default function TicketDetailPage() {
@@ -19,6 +20,8 @@ export default function TicketDetailPage() {
     const [updating, setUpdating] = useState(false);
     const [geoWatcher, setGeoWatcher] = useState<number | null>(null);
     const [distanceInfo, setDistanceInfo] = useState<{ distance: string, eta: string } | null>(null);
+    const [showCompleteModal, setShowCompleteModal] = useState(false);
+    const [signature, setSignature] = useState<string | null>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -155,7 +158,30 @@ export default function TicketDetailPage() {
             await updateDoc(docRef, updateData);
             setTicket({ ...ticket, ...updateData, status: newStatus });
         } catch (err) {
-            console.error("Status Update Failed:", err);
+            console.warn("Status Update Failed - Queuing for Offline Sync:", err);
+            queueMutation('maintenanceTickets', id, updateData);
+            setTicket({ ...ticket, ...updateData, status: newStatus });
+        }
+        setUpdating(false);
+    };
+
+    const handleFinalizeCompletion = async () => {
+        if (!signature || !ticket.hasBeforePhoto || !ticket.hasAfterPhoto) return;
+        setUpdating(true);
+        const updateData = {
+            status: 'COMPLETED',
+            tenantSignature: signature,
+            completedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        };
+        
+        try {
+            await updateDoc(doc(db, 'maintenanceTickets', id!), updateData);
+            setShowCompleteModal(false);
+        } catch (err) {
+            console.warn("Completion sync failed - offline queue active.");
+            queueMutation('maintenanceTickets', id!, updateData);
+            setShowCompleteModal(false);
         }
         setUpdating(false);
     };
@@ -367,7 +393,7 @@ export default function TicketDetailPage() {
                         <Button 
                             fullWidth 
                             variant="contained" 
-                            onClick={() => updateStatus('COMPLETED')}
+                            onClick={() => setShowCompleteModal(true)}
                             disabled={updating || !canComplete}
                             startIcon={<CheckCircle2 />}
                             sx={{ py: 2, bgcolor: '#4ade80', color: '#0B0B0C', fontWeight: 900, borderRadius: 3 }}
@@ -377,6 +403,55 @@ export default function TicketDetailPage() {
                     )}
                 </Stack>
             </Paper>
+
+            {/* Proof of Work Modal */}
+            <Dialog 
+                open={showCompleteModal} 
+                onClose={() => !updating && setShowCompleteModal(false)}
+                fullWidth
+                maxWidth="sm"
+                PaperProps={{ sx: { borderRadius: 6, bgcolor: '#FFF' } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 4 }}>
+                    <ShieldCheck color={binThemeTokens.gold} />
+                    <Typography variant="h5" fontWeight="950">Mission Completion Lock</Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={3} sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="textSecondary">
+                            Confirm the resolution of this sovereign mission. The following attributes are required for institutional protocol compliance.
+                        </Typography>
+
+                        <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 4 }}>
+                            <Stack spacing={1}>
+                                <Typography variant="caption" fontWeight="950">EVIDENCE CHECKLIST</Typography>
+                                <Stack direction="row" spacing={2}>
+                                    <Chip label="Before Photo" color={ticket.hasBeforePhoto ? "success" : "default"} size="small" />
+                                    <Chip label="After Photo" color={ticket.hasAfterPhoto ? "success" : "default"} size="small" />
+                                </Stack>
+                            </Stack>
+                        </Box>
+
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <PenTool size={16} /> TENANT SIGN-OFF (DIGITAL)
+                            </Typography>
+                            <SignaturePad onSave={(sig) => setSignature(sig)} />
+                        </Box>
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 4 }}>
+                    <Button onClick={() => setShowCompleteModal(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
+                    <Button 
+                        onClick={handleFinalizeCompletion}
+                        disabled={!signature || !canComplete || updating}
+                        variant="contained"
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 100, px: 4 }}
+                    >
+                        FINALISE MISSION
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }
