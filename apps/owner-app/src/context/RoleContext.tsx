@@ -1,13 +1,12 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
-import { onAuthStateChanged, User, signOut } from "firebase/auth";
-import { db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, isSupported, getMessaging, getToken, app } from "../lib/firebase";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { db, auth, doc, getDoc } from "../lib/firebase";
 
 interface RoleContextType {
     role: string | null;
-    status: string | null;
     isAdmin: boolean;
+    godMode: boolean;
     loading: boolean;
-    error: string | null;
     user: User | null;
     propertyId: string | null;
 }
@@ -16,128 +15,69 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
     const [role, setRole] = useState<string | null>(null);
-    const [status, setStatus] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [godMode, setGodMode] = useState(false);
     const [user, setUser] = useState<User | null>(null);
     const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const loadingRef = useRef(loading);
 
     useEffect(() => {
-        loadingRef.current = loading;
-    }, [loading]);
-
-    useEffect(() => {
+        // [STABILITY] Tight 3-second safety catch
         const safetyTimeout = setTimeout(() => {
-            if (loadingRef.current) {
-                console.error("[ROLE-SYNC] BIN-CRITICAL: Role synchronization stalled.");
-                setError("Role synchronization timed out.");
+            if (loading) {
+                console.warn("[ROLE] Global Stability Timeout (3s): Releasing UI.");
                 setLoading(false);
             }
-        }, 15000);
-
-        console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
-
-        const syncProfile = async (currentUser: User) => {
-            try {
-                const userDocRef = doc(db, "users", currentUser.uid);
-                let snap;
-                
-                try {
-                    snap = await getDoc(userDocRef);
-                } catch (err: any) {
-                    console.error("📍 [ROLE-SYNC] Permission Denied or Fetch Error:", err);
-                    setRole('tenant');
-                    setStatus('active');
-                    setIsAdmin(false);
-                    setLoading(false);
-                    return;
-                }
-                
-                if (snap && !snap.exists()) {
-                    try {
-                        const newProfile = {
-                            uid: currentUser.uid,
-                            email: (currentUser.email || '').toLowerCase(),
-                            displayName: currentUser.displayName || "New User",
-                            role: 'tenant',
-                            isAdmin: false,
-                            status: 'active',
-                            createdAt: serverTimestamp()
-                        };
-                        await setDoc(userDocRef, newProfile);
-                        snap = await getDoc(userDocRef);
-                    } catch (err) {
-                        console.error("📍 [ROLE-SYNC] Profile creation failed:", err);
-                        setRole('tenant');
-                        setStatus('active');
-                        setLoading(false);
-                        return;
-                    }
-                }
-
-                if (snap && snap.exists()) {
-                    const data = snap.data();
-                    setRole(data.role?.toLowerCase() || 'tenant');
-                    setStatus(data.status?.toLowerCase() || 'active');
-                    setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                    setPropertyId(data.propertyId || null);
-                    setError(null);
-
-                    // [V5] Silent FCM Token Harvest
-                    try {
-                        const messagingSupported = await isSupported();
-                        if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            const messaging = getMessaging(app);
-                            await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                            const registration = await navigator.serviceWorker.ready;
-                            const currentToken = await getToken(messaging, { 
-                                vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                                serviceWorkerRegistration: registration 
-                            });
-                            if (currentToken) {
-                                // YOU MUST WRITE THE TOKEN TO FIRESTORE
-                                await updateDoc(doc(db, 'users', currentUser.uid), {
-                                    fcmToken: currentToken,
-                                    updatedAt: new Date().toISOString()
-                                });
-                                console.log("Token saved to user profile.");
-                            }
-                        }
-                    } catch (notifErr) {
-                        console.warn("📍 [V5] Silent Token Harvest bypass/failed:", notifErr);
-                    }
-
-                } else {
-                    setRole('tenant');
-                    setStatus('active');
-                }
-            } catch (err: any) {
-                console.error("📍 [ROLE-SYNC] Fatal context resolution failure:", err);
-                setRole('tenant');
-                setStatus('active');
-            }
-        };
+        }, 3000);
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
-                await syncProfile(currentUser);
+                try {
+                    // [SECURITY] Tight timeout for claim lookup
+                    const tokenPromise = currentUser.getIdTokenResult(true);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 2000));
+                    
+                    const tokenResult = await Promise.race([tokenPromise, timeoutPromise]) as any;
+                    const claims = tokenResult.claims;
+                    
+                    if (claims.role) {
+                        setRole(String(claims.role).toLowerCase());
+                        setIsAdmin(claims.role === 'admin' || claims.isAdmin === true);
+                        setGodMode(claims.godMode === true);
+                    } else {
+                        // FALLBACK TO FIRESTORE SECURED ROLE DATA
+                        const snapPromise = getDoc(doc(db, "users", currentUser.uid));
+                        const snap = await Promise.race([snapPromise, timeoutPromise]) as any;
+                        
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            setRole(data.role?.toLowerCase() || 'owner');
+                            setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
+                            setGodMode(data.godMode === true);
+                            setPropertyId(data.propertyId || null);
+                        } else {
+                            setRole('owner');
+                            setIsAdmin(false);
+                            setGodMode(false);
+                            setPropertyId(null);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Critical role/claim lookup failure:", err);
+                    setRole('owner'); // Resilient fallback
+                } finally {
+                    setLoading(false);
+                    clearTimeout(safetyTimeout);
+                }
             } else {
                 setRole(null);
-                setStatus(null);
                 setIsAdmin(false);
+                setGodMode(false);
                 setPropertyId(null);
-                setError(null);
+                setLoading(false);
+                clearTimeout(safetyTimeout);
             }
-            setLoading(false);
-            clearTimeout(safetyTimeout);
-        }, (err) => {
-            console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
-            setError("Fatal Authorization Fault: " + err.message);
-            setLoading(false);
-            clearTimeout(safetyTimeout);
         });
 
         return () => {
@@ -147,7 +87,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId }}>
+        <RoleContext.Provider value={{ role, isAdmin, godMode, loading, user, propertyId }}>
             {children}
         </RoleContext.Provider>
     );

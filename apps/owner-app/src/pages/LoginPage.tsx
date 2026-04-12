@@ -1,81 +1,151 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Box, Button, Card, CardContent, Container,
-    Divider, IconButton, TextField, Typography, InputAdornment,
-    Alert, CircularProgress, Stack, Chip, Grid
+    Divider, FormControl, Grid, IconButton, InputLabel,
+    MenuItem, Select, TextField, Typography, InputAdornment,
+    Alert, CircularProgress, Stack, Chip
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
-import { useNavigate } from 'react-router-dom';
-import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, Building2, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
-    const { t } = useLanguage();
+    const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
-    const { role, isAdmin, loading: roleLoading } = useRole();
+    const location = useLocation();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [localLoading, setLocalLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [redirectHandling, setRedirectHandling] = useState(false);
 
-    useEffect(() => {
-        if (!roleLoading && role) {
-            if (role === 'tenant') navigate('/tenant');
-            else if (role === 'technician') navigate('/tech');
-            else if (role === 'admin' || isAdmin) window.location.href = '/admin';
-            else navigate('/dashboard');
+    React.useEffect(() => {
+        const checkRedirect = async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (result) {
+                    setRedirectHandling(true);
+                    handleAuthResult(result);
+                }
+            } catch (err: any) {
+                console.error("Redirect Auth Error:", err);
+                setError("Institutional Redirect Failed: " + (err.message || "Credential rejection."));
+            }
+        };
+        checkRedirect();
+    }, []);
+
+    const handleAuthResult = async (result: any) => {
+        const uid = result.user.uid;
+        const email = (result.user.email || '').toLowerCase();
+        
+        let snap = await getDoc(doc(db, "users", uid));
+        
+        // If profile doesn't exist (e.g. first-time non-admin user), create a default owner profile
+        if (!snap.exists()) {
+            console.log("[IAM] Creating default owner profile for:", email);
+            const newProfile = {
+                uid,
+                email,
+                displayName: result.user.displayName || "New User",
+                role: 'owner',
+                isAdmin: false,
+                godMode: false,
+                status: 'active',
+                createdAt: serverTimestamp()
+            };
+            await setDoc(doc(db, "users", uid), newProfile);
+            // Refresh snap after creation
+            snap = await getDoc(doc(db, "users", uid));
         }
-    }, [role, isAdmin, roleLoading, navigate]);
+
+        if (snap.exists()) {
+            const data = snap.data();
+            const role = (data.role || '').toLowerCase();
+            
+            if (role === 'admin') {
+                navigate('/admin');
+            } else if (data.isAdmin || data.role === 'ceo' || data.role === 'owner') {
+                navigate('/dashboard');
+            } else {
+                navigate(role === 'tenant' ? '/tenant' : role === 'technician' ? '/tech' : '/');
+            }
+        } else {
+            setError("Identity confirmed but profile synchronization failed. Please refresh.");
+        }
+    };
+
+    const from = (location.state as any)?.from?.pathname || '/';
 
     const handleGoogleLogin = async () => {
-        setLocalLoading(true);
+        setLoading(true);
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
-            // RoleContext will handle redirection
+            // Force Secure Flow (Authorization Code Flow) via Redirect
+            await signInWithRedirect(auth, provider);
+            // In case the browser does not navigate away, clear the spinner
+            setLoading(false);
         } catch (err: any) {
-            if (err.code === 'auth/popup-closed-by-user') {
-                setLocalLoading(false);
-                return;
-            }
-            console.error("Google Auth Error:", err);
-            setError("Identity verification failed. Please use email access.");
-            setLocalLoading(false);
+            console.error("Google Login Error:", err);
+            setError(err.message || "Failed to sign in with Google.");
+            setLoading(false);
         }
     };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLocalLoading(true);
+        setLoading(true);
         setError(null);
 
+        const cleanEmail = email.trim().toLowerCase();
+        const cleanPassword = password.trim();
+
+        const timeout = setTimeout(() => setLoading(false), 8000);
         try {
-            await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
-            // RoleContext will handle redirection
+            const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+            const uid = userCredential.user.uid;
+            
+            // Fetch role to redirect correctly
+            const snap = await getDoc(doc(db, "users", uid));
+            if (snap.exists()) {
+                const data = snap.data();
+                const role = data.role;
+                
+                if (data.isAdmin || data.godMode || role === 'ceo' || role === 'owner') {
+                    navigate('/dashboard');
+                } else {
+                    switch(role) {
+                        case 'tenant': navigate('/tenant'); break;
+                        case 'technician': navigate('/tech'); break;
+                        case 'broker': navigate('/broker'); break;
+                        case 'admin': navigate('/admin'); break;
+                        case 'auditor': navigate('/auditor'); break;
+                        default: navigate(from);
+                    }
+                }
+            } else {
+                setError("User profile not found. Please contact support.");
+            }
         } catch (err: any) {
             console.error("Login Error:", err);
-            setError(err.message || "Failed to sign in. Check your credentials.");
-            setLocalLoading(true);
+            if (err.code === 'auth/invalid-email') {
+                setError("Invalid email format. Please check for trailing spaces.");
+            } else if (err.code === 'auth/user-not-found') {
+                setError("No institutional account found with this email.");
+            } else {
+                setError(err.message || "Failed to sign in. Check your credentials.");
+            }
         } finally {
-            setLocalLoading(false);
+            clearTimeout(timeout);
+            setLoading(false);
         }
     };
-
-    if (roleLoading) {
-        return (
-            <Box sx={{ height: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold, mb: 4 }} />
-                <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
-                    AUTHORIZING BIN-GROUPS ACCESS...
-                </Typography>
-            </Box>
-        );
-    }
 
     return (
         <Box sx={{ 
@@ -90,24 +160,47 @@ const LoginPage: React.FC = () => {
             <Container maxWidth="sm">
                 <Box sx={{ textAlign: 'center', mb: 6 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
-                        <Box sx={{ p: 2, borderRadius: 4, bgcolor: 'rgba(198, 167, 94, 0.1)', border: `1px solid ${binThemeTokens.gold}22` }}>
+                        <Box sx={{ 
+                            p: 2, 
+                            borderRadius: 4, 
+                            bgcolor: 'rgba(198, 167, 94, 0.1)', 
+                            border: `1px solid ${binThemeTokens.gold}22` 
+                        }}>
                              <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -2 }}>
-                                 BIN-Groups
+                                BIN
+                                <Box component="span" sx={{ color: '#fff', ml: 1, letterSpacing: 4 }}>GROUP</Box>
                             </Typography>
                         </Box>
                     </Box>
                     <Typography variant="h4" fontWeight="900" sx={{ color: '#fff', mb: 1 }}>{t('login.portal')}</Typography>
-                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>{t('login.auth_access')} <Chip label="v1.23-STABLE" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
+                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>{t('login.auth_access')} <Chip label="v1.21-SOVEREIGN" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
                 </Box>
 
-                <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.8)', backdropFilter: 'blur(20px)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 8, boxShadow: '0 40px 100px rgba(0,0,0,0.6)', overflow: 'visible', position: 'relative' }}>
-                    <Box sx={{ position: 'absolute', top: -1, left: '10%', right: '10%', height: '2px', background: `linear-gradient(90deg, transparent, ${binThemeTokens.gold}, transparent)` }} />
+                <Card sx={{ 
+                    bgcolor: 'rgba(22, 22, 24, 0.8)', 
+                    backdropFilter: 'blur(20px)',
+                    border: `1px solid rgba(255,255,255,0.05)`,
+                    borderRadius: 8,
+                    boxShadow: '0 40px 100px rgba(0,0,0,0.6)',
+                    overflow: 'visible',
+                    position: 'relative'
+                }}>
+                    <Box sx={{ 
+                        position: 'absolute', 
+                        top: -1, 
+                        left: '10%', 
+                        right: '10%', 
+                        height: '2px', 
+                        background: `linear-gradient(90deg, transparent, ${binThemeTokens.gold}, transparent)` 
+                    }} />
+
                     <CardContent sx={{ p: { xs: 4, md: 6 } }}>
                         {error && (
                             <Alert severity="error" sx={{ mb: 4, bgcolor: 'rgba(211, 47, 47, 0.1)', color: '#ffb74d', border: '1px solid rgba(211, 47, 47, 0.2)' }}>
                                 {error}
                             </Alert>
                         )}
+
                         <form onSubmit={handleLogin}>
                             <Stack spacing={3}>
                                 <TextField
@@ -118,11 +211,25 @@ const LoginPage: React.FC = () => {
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
                                     InputProps={{
-                                        startAdornment: (<InputAdornment position="start"><Mail size={20} color={binThemeTokens.gold} /></InputAdornment>),
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Mail size={20} color={binThemeTokens.gold} />
+                                            </InputAdornment>
+                                        ),
                                         sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }
                                     }}
-                                    sx={{ '& .MuiInputBase-input': { color: '#FFFFFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' }, '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' }, '&:hover fieldset': { borderColor: '#C6A75E' }, '&.Mui-focused fieldset': { borderColor: '#E6C77A' } } }}
+                                    sx={{
+                                        '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                        '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                        '& .MuiOutlinedInput-root': {
+                                            background: 'rgba(255,255,255,0.04)',
+                                            '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
+                                            '&:hover fieldset': { borderColor: '#C6A75E' },
+                                            '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
+                                        },
+                                    }}
                                 />
+
                                 <TextField
                                     fullWidth
                                     label={t('login.password')}
@@ -132,45 +239,125 @@ const LoginPage: React.FC = () => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     InputProps={{
-                                        startAdornment: (<InputAdornment position="start"><Lock size={20} color={binThemeTokens.gold} /></InputAdornment>),
-                                        endAdornment: (<InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: binThemeTokens.textSecondary }}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</IconButton></InputAdornment>),
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Lock size={20} color={binThemeTokens.gold} />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: binThemeTokens.textSecondary }}>
+                                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
                                         sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }
                                     }}
-                                    sx={{ '& .MuiInputBase-input': { color: '#FFFFFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' }, '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' }, '&:hover fieldset': { borderColor: '#C6A75E' }, '&.Mui-focused fieldset': { borderColor: '#E6C77A' } } }}
+                                    sx={{
+                                        '& .MuiInputBase-input': { color: '#FFFFFF' },
+                                        '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.75)' },
+                                        '& .MuiOutlinedInput-root': {
+                                            background: 'rgba(255,255,255,0.04)',
+                                            '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' },
+                                            '&:hover fieldset': { borderColor: '#C6A75E' },
+                                            '&.Mui-focused fieldset': { borderColor: '#E6C77A' },
+                                        },
+                                    }}
                                 />
+
                                 <Button
                                     type="submit"
                                     fullWidth
                                     variant="contained"
-                                    disabled={localLoading}
-                                    sx={{ py: 2, borderRadius: 4, fontWeight: 900, letterSpacing: 2, background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, boxShadow: `0 10px 20px ${binThemeTokens.gold}33`, '&:hover': { background: `linear-gradient(135deg, #E6C77A, ${binThemeTokens.gold})`, transform: 'translateY(-2px)' } }}
+                                    disabled={loading}
+                                    sx={{ 
+                                        py: 2, 
+                                        borderRadius: 4, 
+                                        fontWeight: 900, 
+                                        letterSpacing: 2,
+                                        background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`,
+                                        boxShadow: `0 10px 20px ${binThemeTokens.gold}33`,
+                                        '&:hover': {
+                                            background: `linear-gradient(135deg, #E6C77A, ${binThemeTokens.gold})`,
+                                            transform: 'translateY(-2px)'
+                                        }
+                                    }}
                                 >
-                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
+                                    {loading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
                                 </Button>
+
                                 <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }}>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, px: 2 }}>{t('login.or_sso')}</Typography>
                                 </Divider>
+
                                 <Button
                                     fullWidth
                                     variant="outlined"
                                     onClick={handleGoogleLogin}
-                                    disabled={localLoading}
+                                    disabled={loading}
                                     startIcon={<UserCircle size={20} />}
-                                    sx={{ py: 1.5, borderRadius: 4, fontWeight: 800, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' } }}
+                                    sx={{ 
+                                        py: 1.5, 
+                                        borderRadius: 4, 
+                                        fontWeight: 800, 
+                                        borderColor: 'rgba(255,255,255,0.1)',
+                                        color: '#FFF',
+                                        '&:hover': {
+                                            borderColor: binThemeTokens.gold,
+                                            bgcolor: 'rgba(198,167,94,0.05)'
+                                        }
+                                    }}
                                 >
                                     {t('login.google')}
                                 </Button>
+
+                                <Box sx={{ textAlign: 'center' }}>
+                                    <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                            color: 'rgba(255,255,255,0.3)', 
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline',
+                                            '&:hover': { color: binThemeTokens.gold }
+                                        }}
+                                        onClick={async () => {
+                                            const provider = new GoogleAuthProvider();
+                                            const { signInWithRedirect } = await import('firebase/auth');
+                                            await signInWithRedirect(auth, provider);
+                                        }}
+                                    >
+                                        {t('login.troubleshoot')}
+                                    </Typography>
+                                </Box>
                             </Stack>
                         </form>
                     </CardContent>
                 </Card>
 
                 <Grid container spacing={2} sx={{ mt: 6 }}>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Shield size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.iso_secure')}</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><TrendingUp size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.inst_grade')}</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Building size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.uae_ops')}</Typography></Box></Grid>
+                    <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                            <ShieldCheck size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.iso_secure')}</Typography>
+                        </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                            <TrendingUp size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.inst_grade')}</Typography>
+                        </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                            <Building2 size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} />
+                            <Typography variant="caption" display="block" color={binThemeTokens.textSecondary} fontWeight="700">{t('login.uae_ops')}</Typography>
+                        </Box>
+                    </Grid>
                 </Grid>
-                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>{t('login.footer')}</Typography>
+
+                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>
+                    {t('login.footer')}
+                </Typography>
             </Container>
         </Box>
     );
