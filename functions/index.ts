@@ -31,12 +31,17 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                     headers: { Urgency: 'high' },
                     notification: { 
                         requireInteraction: true, 
-                        vibrate: [500, 250, 500, 250, 500] 
+                        vibrate: [500, 250, 500, 250, 500],
+                        data: {
+                            url: extraData.url || '/tech'
+                        }
                     }
                 },
                 data: { 
+                    userId,
                     ticketId: String(extraData.ticketId || ''), 
-                    click_action: "FLUTTER_NOTIFICATION_CLICK" 
+                    click_action: "FLUTTER_NOTIFICATION_CLICK",
+                    ...extraData
                 }
             };
             
@@ -134,7 +139,7 @@ export const onUnitStateChange = onDocumentUpdated("units/{unitId}", async (even
     if (after.leaseStatus === 'EXPIRED' && before.leaseStatus !== 'EXPIRED' && after.ownerId) {
         await dispatchOmniNotification(
             after.ownerId,
-            "ACTION REQUIRED: Lease Expired",
+            "ACTION REQUIRED: Lease Expiry",
             `The lease for Unit ${after.unitNumber} has expired. Automated turnover engine initiated.`,
             { subject: "CRITICAL: Lease Expiry Notification" }
         );
@@ -337,7 +342,7 @@ export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) 
             from: '"BIN GROUP" <CEO@bin-groups.com>',
             to: data.to,
             subject: data.message?.subject || data.subject || "BIN GROUP Notification",
-            text: htmlBody.replace(/<[^>]*>?/gm, ''), // Strip HTML for plain text fallback (CRITICAL FOR INBOX DELIVERABILITY)
+            text: htmlBody.replace(/<[^>]*>?/gm, ''), // Strip HTML for plain text fallback
             html: htmlBody
         };
 
@@ -384,7 +389,7 @@ export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
     await batch.commit();
 });
 
-export const onTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
+export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
     const snap = event.data;
     if (!snap) return;
     const ticket = snap.data();
@@ -524,6 +529,7 @@ export const generateIntegrityAudit = onCall({ cors: true }, async (request) => 
 export const proactiveMaintenanceCron = onSchedule("every 48 hours", async (event) => {});
 export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) => { return { ticketId: "" }; });
 export const approveMaintenanceProposal = onCall({ cors: true }, async (request) => { return { success: true }; });
+
 export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenantId}", async (event) => {
     const snap = event.data;
     if (!snap) return;
