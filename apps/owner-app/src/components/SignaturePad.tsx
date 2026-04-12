@@ -81,11 +81,12 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onClear }) => {
                     cursor: 'crosshair'
                 }}
             >
-                <canvas
+                <Box
+                    component="canvas"
                     ref={canvasRef}
                     width={500}
                     height={200}
-                    style={{ width: '100%', height: '100%' }}
+                    sx={{ width: '100%', height: '100%' }}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
