@@ -13,6 +13,38 @@ setGlobalOptions({ region: ["me-central1", "europe-west3"] });
 admin.initializeApp();
 const db = admin.firestore();
 
+// ── [V7.1] SOVEREIGN PRESTIGE INFRASTRUCTURE ──────────────────────────────────
+const PRESTIGE_FOOTER = `
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #333; font-size: 10px; color: #888; text-align: center;">
+        <p>BINCONSTRUCTION™ UAE | Trade License: 1029432 | DEWA Approved Asset Manager</p>
+        <p>Level 88, Sovereign Tower, Sheikh Zayed Road, Dubai, UAE</p>
+        <p style="margin-top: 10px; color: #666;">DATA PRIVACY NOTICE: This communication contains sovereign institutional information. Unauthorized disclosure or reproduction is strictly prohibited under UAE PDPL Federal Law No. 45/2021.</p>
+    </div>
+`;
+
+function wrapInLuxuryTemplate(content: string, subject: string) {
+    return `
+        <div style="background-color: #0B0B0C; color: #FFFFFF; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; border: 1px solid #D4AF37; border-radius: 12px; overflow: hidden; background: #161618;">
+                <div style="background: linear-gradient(135deg, #C6A75E, #D4AF37); padding: 30px; text-align: center;">
+                    <h1 style="color: #0B0B0C; margin: 0; font-size: 24px; letter-spacing: 2px; text-transform: uppercase; font-weight: 900;">BIN GROUP</h1>
+                </div>
+                <div style="padding: 40px;">
+                    <h2 style="color: #D4AF37; margin-top: 0; font-weight: 700;">${subject}</h2>
+                    <div style="color: #E0E0E0;">${content}</div>
+                    \${PRESTIGE_FOOTER}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function notifyCEO(event: string, details: string) {
+    const WEBHOOK_URL = process.env.CEO_WEBHOOK_URL || "https://hooks.slack.com/services/STAGED_PRESENCE";
+    console.log(`[CEO-HEARTBEAT] High-Value Event Tracked: \${event} | \${details}`);
+    // Webhook dispatch logic staged for production token injection
+}
+
 // ── [V5] OMNI-CHANNEL NOTIFICATION ENGINE ──────────────────────────────────────
 async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: any = null, extraData: any = {}) {
     try {
@@ -54,14 +86,11 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                 to: userEmail,
                 message: {
                     subject: emailOptions.subject || title,
-                    html: emailOptions.template || `
-                        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #EEE; border-radius: 8px;">
-                            <h2 style="color: #C6A75E;">BIN-GROUP Update</h2>
-                            <p>${body}</p>
-                            <hr style="border: 0; border-top: 1px solid #EEE; margin: 20px 0;">
-                            <p style="font-size: 12px; color: #777;">This is an automated Sovereign Notification.</p>
-                        </div>
-                    `
+                    html: emailOptions.template || wrapInLuxuryTemplate(`
+                        <h2 style="color: #C6A75E;">BIN-GROUP Update</h2>
+                        <p>\${body}</p>
+                        <p style="font-size: 14px; opacity: 0.8;">Action required or information received regarding your institutional account.</p>
+                    `, title)
                 },
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
@@ -338,12 +367,17 @@ export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) 
             auth: { user: 'CEO@bin-groups.com', pass: 'uqrkyuvsozsvxhyn' }
         });
 
-        const htmlBody = data.message?.html || data.html || "<p>Notification from BIN GROUP.</p>";
+        const rawHtml = data.message?.html || data.html;
+        const subject = data.message?.subject || data.subject || "BIN GROUP Notification";
+        
+        // Auto-wrap any plain-html emails in the Luxury Template if they don't have it
+        const finalHtml = rawHtml?.includes('BIN GROUP') ? rawHtml : wrapInLuxuryTemplate(rawHtml || "<p>Notification from BIN GROUP.</p>", subject);
+
         await transporter.sendMail({
             from: '"BIN GROUP" <CEO@bin-groups.com>',
             to: data.to,
-            subject: data.message?.subject || data.subject || "BIN GROUP Notification",
-            html: htmlBody
+            subject: subject,
+            html: finalHtml
         });
 
         await snap.ref.update({ delivery: { state: 'SUCCESS', sentAt: admin.firestore.FieldValue.serverTimestamp() } });
@@ -449,11 +483,16 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 
             await dispatchOmniNotification(
                 bestTech.id,
-                `NEW MISSION: ${ticketData.tenantName || 'Resident'} - ${serviceZone}`,
-                `${ticketData.trade || 'Issue'} at Floor ${ticketData.floorNumber || 'N/A'}, Unit ${ticketData.unitNumber || 'N/A'}. Tap for details.`,
+                `NEW MISSION: \${ticketData.tenantName || 'Resident'} - \${serviceZone}`,
+                `\${ticketData.trade || 'Issue'} at Floor \${ticketData.floorNumber || 'N/A'}, Unit \${ticketData.unitNumber || 'N/A'}. Tap for details.`,
                 { subject: "Urgent Duty Assignment - BIN GROUP" },
-                { ticketId: snap.id, url: `/tech/ticket/${snap.id}` }
+                { ticketId: snap.id, url: \`/tech/ticket/\${snap.id}\` }
             );
+
+            // [CEO-HEARTBEAT]
+            if (ticketData.priority === 'EMERGENCY') {
+                notifyCEO("EMERGENCY_DISPATCH", \`MISSION #\${snap.id.substring(0,8)} | TECH: \${bestTech.displayName} | AREA: \${serviceZone}\`);
+            }
         }
     } catch (error) {
         console.error(`[V5 Dispatch] Failure:`, error);
@@ -508,6 +547,9 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
         if (feeAmount > 0 && ownerId) {
             generateAndEmailInvoice(contractId, ownerId, feeAmount).catch(e => console.error("Billing Failed:", e));
         }
+
+        // [CEO-HEARTBEAT]
+        notifyCEO("OWNER_ACTIVATED", \`CONTRACT #\${contractId} | VALUE: \${amountReceived} | FEE: \${feeAmount}\`);
     });
     return { success: true };
 });
