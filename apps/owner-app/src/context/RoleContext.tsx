@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, isSupported, getMessaging, getToken, app } from "../lib/firebase";
+import LegalModal from "../components/LegalModal";
 
 interface RoleContextType {
     role: string | null;
@@ -10,6 +11,7 @@ interface RoleContextType {
     error: string | null;
     user: User | null;
     propertyId: string | null;
+    legalAccepted: boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -22,6 +24,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [legalAccepted, setLegalAccepted] = useState(true);
     const loadingRef = useRef(loading);
 
     useEffect(() => {
@@ -95,6 +98,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     const isHighPrivilege = data.role?.toLowerCase() === 'admin' || data.isAdmin === true || data.role?.toLowerCase() === 'owner';
                     setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
                     setPropertyId(data.propertyId || null);
+                    setLegalAccepted(!!data.legalAcceptedAt);
 
                     // [V6.4] Institutional MFA/2FA Enforcement
                     if (isHighPrivilege) {
@@ -154,6 +158,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setIsAdmin(false);
                 setPropertyId(null);
                 setError(null);
+                setLegalAccepted(true);
             }
             setLoading(false);
             clearTimeout(safetyTimeout);
@@ -171,7 +176,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId }}>
+        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId, legalAccepted }}>
+            {user && !legalAccepted && !loading && !error && (
+                <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />
+            )}
             {children}
         </RoleContext.Provider>
     );

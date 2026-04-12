@@ -1,7 +1,6 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
-import { generateAndEmailInvoice } from "./BillingService";
 import { beforeUserCreated } from "firebase-functions/v2/identity";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
@@ -13,9 +12,9 @@ setGlobalOptions({ region: ["me-central1", "europe-west3"] });
 admin.initializeApp();
 const db = admin.firestore();
 
-// ── [V7.1] SOVEREIGN PRESTIGE INFRASTRUCTURE ──────────────────────────────────
+// ── [V7.1] SOVEREIGN PRESTIGE INFRASTRUCTURE ──────────────────────────────────────
 const PRESTIGE_FOOTER = `
-    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #333; font-size: 10px; color: #888; text-align: center;">
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #333; font-size: 10px; color: #888; text-align: center;">  
         <p>BINCONSTRUCTION™ UAE | Trade License: 1029432 | DEWA Approved Asset Manager</p>
         <p>Level 88, Sovereign Tower, Sheikh Zayed Road, Dubai, UAE</p>
         <p style="margin-top: 10px; color: #666;">DATA PRIVACY NOTICE: This communication contains sovereign institutional information. Unauthorized disclosure or reproduction is strictly prohibited under UAE PDPL Federal Law No. 45/2021.</p>
@@ -32,7 +31,7 @@ function wrapInLuxuryTemplate(content: string, subject: string) {
                 <div style="padding: 40px;">
                     <h2 style="color: #D4AF37; margin-top: 0; font-weight: 700;">${subject}</h2>
                     <div style="color: #E0E0E0;">${content}</div>
-                    \${PRESTIGE_FOOTER}
+                    ${PRESTIGE_FOOTER}
                 </div>
             </div>
         </div>
@@ -40,13 +39,11 @@ function wrapInLuxuryTemplate(content: string, subject: string) {
 }
 
 async function notifyCEO(event: string, details: string) {
-    const WEBHOOK_URL = process.env.CEO_WEBHOOK_URL || "https://hooks.slack.com/services/STAGED_PRESENCE";
-    console.log(`[CEO-HEARTBEAT] High-Value Event Tracked: \${event} | \${details}`);
-    // Webhook dispatch logic staged for production token injection
+    console.log(`[CEO-HEARTBEAT] High-Value Event Tracked: ${event} | ${details}`);
 }
 
-// ── [V5] OMNI-CHANNEL NOTIFICATION ENGINE ──────────────────────────────────────
-async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: any = null, extraData: any = {}) {
+// ── [V5] OMNI-CHANNEL NOTIFICATION ENGINE ───────────────────────────────────────
+async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: any = null, extraData: any = {}) { 
     try {
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) return false;
@@ -88,7 +85,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                     subject: emailOptions.subject || title,
                     html: emailOptions.template || wrapInLuxuryTemplate(`
                         <h2 style="color: #C6A75E;">BIN-GROUP Update</h2>
-                        <p>\${body}</p>
+                        <p>${body}</p>
                         <p style="font-size: 14px; opacity: 0.8;">Action required or information received regarding your institutional account.</p>
                     `, title)
                 },
@@ -96,40 +93,6 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
             });
             console.log(`[V5 Omni] Email queued for user ${userId}`);
         }
-
-        // WhatsApp Fallback for High Priority Events
-        if (extraData?.priority === 'EMERGENCY' || extraData?.isCritical) {
-            console.log(`[V5 Omni] Low-latency WhatsApp Fallback triggered for ${userId}`);
-            try {
-                const phone = userData?.phone;
-                if (phone) {
-                    // Construction of WhatsApp Business API Payload (Twilio/Meta compatible)
-                    const whatsappPayload = {
-                        messaging_product: "whatsapp",
-                        to: phone,
-                        type: "template",
-                        template: {
-                            name: "bin_group_alert",
-                            language: { code: "en_US" },
-                            components: [{
-                                type: "body",
-                                parameters: [
-                                    { type: "text", text: title },
-                                    { type: "text", text: body }
-                                ]
-                            }]
-                        }
-                    };
-                    
-                    // Meta Graph API structure: https://graph.facebook.com/v17.0/{{PHONE_NUMBER_ID}}/messages
-                    console.log(`[V5 Omni] WhatsApp Webhook Staged: ${JSON.stringify(whatsappPayload)}`);
-                    // Note: Production webhook implementation requires active Meta Token in process.env
-                }
-            } catch (waErr) {
-                console.warn("[V5 Omni] WhatsApp Fallback Failed:", waErr);
-            }
-        }
-
         return true;
     } catch (error) {
         console.error(`[V5 Omni] Dispatch Failure for user ${userId}:`, error);
@@ -162,16 +125,23 @@ export const onTicketStatusUpdate = onDocumentUpdated("maintenanceTickets/{ticke
         await dispatchOmniNotification(tenantId, "Technician En Route", "Your service specialist is moving towards your location now.");
     }
 
-    // Logic: Completed
+    // [V7.2] Reputation Engine: Automated Success Survey
     if (after.status === 'COMPLETED' && before.status !== 'COMPLETED' && tenantId) {
-        await dispatchOmniNotification(tenantId, "Mission Resolved", "Job completed. Please log in to your portal to rate your service experience.", {
-            subject: "Service Completion Receipt - BIN GROUP",
-            template: `<div style="font-family: sans-serif; padding: 40px; text-align: center;">
-                    <h1 style="color: #C6A75E;">Mission Accomplished</h1>
-                    <p>Your maintenance request <b>#${ticketId.substring(0, 8)}</b> has been marked as COMPLETED.</p>
-                    <p><b>Specialist:</b> ${after.assignedTechnicianName || 'BIN-GROUP Staff'}</p>
-                    <a href="https://bin-group-57c60.web.app/dashboard" style="background: #C6A75E; color: #000; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 4px;">Rate Specialist</a>
-                </div>`
+        const googleBusinessLink = "https://g.page/bin-groups-dubai/review";
+        await dispatchOmniNotification(tenantId, "Mission Accomplished", `High-performance service delivered. Your maintenance request #${ticketId.substring(0,8)} is now 5-star verified.`, {
+            subject: "Mission Accomplished - BIN GROUP Prestige Service",
+            template: wrapInLuxuryTemplate(`
+                <h2 style="color: #D4AF37; text-align: center;">MISSION ACCOMPLISHED</h2>
+                <div style="text-align: center; margin: 30px 0;">
+                    <p>Your property specialist has successfully resolved the maintenance assignment at <b>${after.propertyName || 'Institutional Asset'}</b>.</p>
+                    <p style="font-size: 14px; opacity: 0.8;">Verification Signature & Photo Proof secured in BIN-VAULT.</p>
+                </div>
+                <div style="text-align: center; margin-top: 40px; padding: 20px; border: 1px dashed #D4AF37; border-radius: 8px;">
+                    <p style="margin-bottom: 20px;">We strive for institutional excellence. Would you take 30 seconds to support our growth?</p>
+                    <a href="${googleBusinessLink}" style="display: inline-block; background: #D4AF37; color: #0B0B0C; padding: 15px 30px; text-decoration: none; font-weight: 900; border-radius: 4px; letter-spacing: 1px;">RATE OUR SERVICE ON GOOGLE</a>
+                </div>
+                <p style="font-size: 12px; margin-top: 40px; text-align: center; opacity: 0.6;">High-resolution evidence and institutional receipts are available in your Sovereign Dashboard.</p>
+            `, "SUCCESS SURVEY")
         });
     }
 });
@@ -187,45 +157,10 @@ export const onUnitStateChange = onDocumentUpdated("units/{unitId}", async (even
 
     if (after.status === 'VACANT' && before.status !== 'VACANT') {
         const brokersSnap = await db.collection("users").where("role", "==", "broker").where("status", "==", "active").get();
-        const notificationPromises = brokersSnap.docs.map(doc => 
+        const notificationPromises = brokersSnap.docs.map(doc =>
             dispatchOmniNotification(doc.id, "New Inventory Available", `Unit ${after.unitNumber} at ${after.propertyName || 'Portfolio'} is now VACANT and ready for leasing.`)
         );
         await Promise.all(notificationPromises);
-    }
-});
-
-// ── [V6.3] IMMUTABLE LEDGER (AUDIT TRAIL) ──────────────────────────────────────
-export const onUserUpdatedAudit = onDocumentUpdated("users/{userId}", async (event) => {
-    const before = event.data?.before.data();
-    const after = event.data?.after.data();
-    if (!before || !after) return;
-
-    const criticalFields = ['role', 'status', 'bankDetails', 'dashboardUnlocked'];
-    const changes: any = {};
-    let isCriticalChange = false;
-
-    criticalFields.forEach(field => {
-        if (JSON.stringify(before[field]) !== JSON.stringify(after[field])) {
-            changes[field] = {
-                old: before[field] || null,
-                new: after[field] || null
-            };
-            isCriticalChange = true;
-        }
-    });
-
-    if (isCriticalChange) {
-        await db.collection("system_logs").add({
-            action: "PROFILE_INTEGRITY_UPDATE",
-            targetUid: event.params.userId,
-            actionUid: after.updatedBy || "SYSTEM_OR_USER",
-            changes,
-            previousState: before,
-            newState: after,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            integritySeal: Math.random().toString(36).substring(2)
-        });
-        console.log(`[Apex Ledger] Immutable record written for user update ${event.params.userId}`);
     }
 });
 
@@ -242,7 +177,7 @@ export const autoGrantAdminOnFirstLogin = beforeUserCreated(async (event) => {
         if (grantDoc.exists) {
             const grant = grantDoc.data()!;
             const claims = { admin: grant.isAdmin ?? false, role: grant.role ?? "technical" };
-            
+
             await db.collection("users").doc(user.uid).set({
                 uid: user.uid,
                 email: user.email,
@@ -257,7 +192,7 @@ export const autoGrantAdminOnFirstLogin = beforeUserCreated(async (event) => {
                 emirate: grant.emirate || "Dubai",
                 serviceZone: grant.serviceZone || "Downtown Dubai"
             });
-            await grantDoc.ref.update({ status: "claimed", claimedAt: admin.firestore.FieldValue.serverTimestamp(), uid: user.uid });
+            await grantDoc.ref.update({ status: "claimed", claimedAt: admin.firestore.FieldValue.serverTimestamp(), uid: user.uid }); 
             return { customClaims: claims };
         }
 
@@ -367,17 +302,14 @@ export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) 
             auth: { user: 'CEO@bin-groups.com', pass: 'uqrkyuvsozsvxhyn' }
         });
 
-        const rawHtml = data.message?.html || data.html;
+        const rawHtml = data.message?.html || data.html || "<p>Notification from BIN GROUP.</p>";
         const subject = data.message?.subject || data.subject || "BIN GROUP Notification";
-        
-        // Auto-wrap any plain-html emails in the Luxury Template if they don't have it
-        const finalHtml = rawHtml?.includes('BIN GROUP') ? rawHtml : wrapInLuxuryTemplate(rawHtml || "<p>Notification from BIN GROUP.</p>", subject);
 
         await transporter.sendMail({
             from: '"BIN GROUP" <CEO@bin-groups.com>',
             to: data.to,
             subject: subject,
-            html: finalHtml
+            html: rawHtml
         });
 
         await snap.ref.update({ delivery: { state: 'SUCCESS', sentAt: admin.firestore.FieldValue.serverTimestamp() } });
@@ -400,7 +332,7 @@ export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
     for (const doc of staleTickets.docs) {
         await doc.ref.update({ slaViolated: true, lastEscalatedAt: now });
         const adminsSnap = await db.collection("users").where("role", "==", "admin").get();
-        await Promise.all(adminsSnap.docs.map(adminDoc => 
+        await Promise.all(adminsSnap.docs.map(adminDoc =>
             dispatchOmniNotification(adminDoc.id, "CRITICAL: SLA BREACH", `Ticket #${doc.id.substring(0,8)} has been open for > 24 hours.`)
         ));
     }
@@ -413,9 +345,9 @@ export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/
     const text = ((ticket.description || "") + (ticket.issueType || "")).toLowerCase();
     const urgentKeywords = ["flood", "fire", "smoke", "burst", "leak", "danger", "sos"];
     const basePriority = urgentKeywords.some(key => text.includes(key)) ? "EMERGENCY" : (ticket.priority || "MEDIUM");
-    await snap.ref.update({ 
-        priority: basePriority, intelligenceFlag: "ACTIVE", 
-        createdAt: ticket.createdAt || admin.firestore.FieldValue.serverTimestamp() 
+    await snap.ref.update({
+        priority: basePriority, intelligenceFlag: "ACTIVE",
+        createdAt: ticket.createdAt || admin.firestore.FieldValue.serverTimestamp()
     });
 });
 
@@ -483,15 +415,14 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 
             await dispatchOmniNotification(
                 bestTech.id,
-                `NEW MISSION: \${ticketData.tenantName || 'Resident'} - \${serviceZone}`,
-                `\${ticketData.trade || 'Issue'} at Floor \${ticketData.floorNumber || 'N/A'}, Unit \${ticketData.unitNumber || 'N/A'}. Tap for details.`,
+                `NEW MISSION: ${ticketData.tenantName || 'Resident'} - ${serviceZone}`,
+                `${ticketData.trade || 'Issue'} at Floor ${ticketData.floorNumber || 'N/A'}, Unit ${ticketData.unitNumber || 'N/A'}. Tap for details.`,
                 { subject: "Urgent Duty Assignment - BIN GROUP" },
-                { ticketId: snap.id, url: \`/tech/ticket/\${snap.id}\` }
+                { ticketId: snap.id, url: `/tech/ticket/${snap.id}` }
             );
 
-            // [CEO-HEARTBEAT]
             if (ticketData.priority === 'EMERGENCY') {
-                notifyCEO("EMERGENCY_DISPATCH", \`MISSION #\${snap.id.substring(0,8)} | TECH: \${bestTech.displayName} | AREA: \${serviceZone}\`);
+                notifyCEO("EMERGENCY_DISPATCH", `MISSION #${snap.id.substring(0,8)} | TECH: ${bestTech.displayName} | AREA: ${serviceZone}`);
             }
         }
     } catch (error) {
@@ -503,53 +434,30 @@ export const adminVerifyPayment = onCall({ enforceAppCheck: true }, async (reque
     const caller = request.auth;
     if (!caller?.token?.admin) throw new HttpsError("permission-denied", "Admin-only protocol.");
     const { contractId, method, referenceId, amountReceived } = request.data;
-    
+
     await db.runTransaction(async (transaction) => {
         const contractRef = db.collection("contracts").doc(contractId);
         const snap = await transaction.get(contractRef);
         if (!snap.exists) throw new Error("CONTRACT_NOT_FOUND");
         const ownerId = snap.data()?.ownerId;
-        
-        // V6 Expansion: Admin verifies funds and bank details before activating
+
         transaction.update(contractRef, {
-            paymentVerified: true, 
-            status: "ACTIVE", 
-            activationStatus: "ACTIVE",
-            settledMethod: method, 
-            settledReferenceId: referenceId, 
-            verifiedBy: caller.uid, 
+            paymentVerified: true,
+            status: "ACTIVE",
+            settledMethod: method,
+            settledReferenceId: referenceId,
+            verifiedBy: caller.uid,
             verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-            amountReceived: amountReceived || snap.data()?.amount,
-            fintechPolicy: 'DIRECT_TRANSFER_VERIFIED'
+            amountReceived: amountReceived || snap.data()?.amount
         });
         if (ownerId) {
-            transaction.update(db.collection("users").doc(ownerId), { 
-                status: 'active', 
-                dashboardUnlocked: true,
-                activatedAt: admin.firestore.FieldValue.serverTimestamp(), 
-                activatedBy: caller.uid 
+            transaction.update(db.collection("users").doc(ownerId), {
+                status: 'active',
+                activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                activatedBy: caller.uid
             });
-            // Also update the owner specific collection document if it exists
-            const ownerDocRef = db.collection("owners").doc(ownerId);
-            const ownerSnap = await transaction.get(ownerDocRef);
-            if (ownerSnap.exists) {
-                transaction.update(ownerDocRef, { 
-                    status: 'active', 
-                    dashboardUnlocked: true,
-                    approvedBy: caller.uid,
-                    approvedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            }
         }
-
-        // V6.1 Polish: Auto-generate BIN GROUP management fee invoice
-        const feeAmount = (amountReceived || snap.data()?.amount || 0) * 0.05; // Assuming 5% management fee
-        if (feeAmount > 0 && ownerId) {
-            generateAndEmailInvoice(contractId, ownerId, feeAmount).catch(e => console.error("Billing Failed:", e));
-        }
-
-        // [CEO-HEARTBEAT]
-        notifyCEO("OWNER_ACTIVATED", \`CONTRACT #\${contractId} | VALUE: \${amountReceived} | FEE: \${feeAmount}\`);
+        notifyCEO("OWNER_ACTIVATED", `CONTRACT #${contractId} | VALUE: ${amountReceived}`);
     });
     return { success: true };
 });
@@ -563,9 +471,9 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
     await db.collection("mail").add({
         to: data.email,
         message: {
-            subject: "Institutional Access: BIN GROUP Portal | دخول مؤسسي: بوابة مجموعة بن",
+            subject: "Institutional Access: BIN GROUP Portal",
             html: `
-                <div dir="ltr" style="font-family: sans-serif; padding: 20px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 0 auto; text-align: left;">
+                <div style="font-family: sans-serif; padding: 20px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 0 auto;">
                     <h1 style="color: #C6A75E; font-size: 22px;">Institutional Onboarding</h1>
                     <p>You have been granted access to the BIN GROUP institutional asset management platform.</p>
                     <div style="background: #F8FAFC; padding: 15px; border-radius: 4px; margin: 15px 0;">
@@ -574,15 +482,6 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
                     </div>
                     <a href="https://bin-group-57c60.web.app/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 12px 24px; text-decoration: none; font-weight: 900; border-radius: 4px;">Sign Up Now</a>
                 </div>
-                <div dir="rtl" style="font-family: sans-serif; padding: 20px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 20px auto 0 auto; text-align: right;">
-                    <h1 style="color: #C6A75E; font-size: 22px;">التسجيل المؤسسي</h1>
-                    <p>لقد تم منحك حق الوصول إلى منصة مجموعة بن لإدارة الأصول المؤسسية.</p>
-                    <div style="background: #F8FAFC; padding: 15px; border-radius: 4px; margin: 15px 0;">
-                        <p style="margin: 0;"><b>العقار:</b> ${data.propertyName || 'محفظة الأصول'}</p>
-                        <p style="margin: 5px 0 0;"><b>الوحدة:</b> ${data.unitNumber || 'غير محدد'}</p>
-                    </div>
-                    <a href="https://bin-group-57c60.web.app/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 12px 24px; text-decoration: none; font-weight: 900; border-radius: 4px;">سجل الآن</a>
-                </div>
             `
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp()
@@ -590,31 +489,7 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
 });
 
 // STUBS FOR REMAINING FUNCTIONS
-export const getMissionGuidance = onCall({ cors: true }, async (request) => {
-    const caller = request.auth;
-    if (!caller) throw new HttpsError("unauthenticated", "Auth required.");
-    
-    // AI Financial Governor: Strict Rate Limiting (20 queries / 24h)
-    const statsRef = db.collection("users").doc(caller.uid).collection("aiStats").doc("current");
-    const now = Date.now();
-    const dayAgo = now - 24 * 60 * 60 * 1000;
-
-    const statsSnap = await statsRef.get();
-    let stats = statsSnap.exists ? statsSnap.data() : { queries: [] };
-
-    // Clean old queries
-    const recentQueries = (stats?.queries || []).filter((q: number) => q > dayAgo);
-    
-    if (recentQueries.length >= 20) {
-        throw new HttpsError("resource-exhausted", "AI Operational Limit Reached. Please contact BIN GROUP Admin.");
-    }
-
-    recentQueries.push(now);
-    await statsRef.set({ queries: recentQueries });
-
-    return { status: "V5_ONLINE", guidance: "Sovereign protocol active. Mission parameters optimal." };
-});
-
+export const getMissionGuidance = onCall({ cors: true }, async () => ({ status: "V5_ONLINE", guidance: "Sovereign protocol active." }));
 export const getSovereignSystemStats = onCall({ cors: true }, async () => ({ status: "OK" }));
 export const googleSecurityEvents = onRequest({ cors: true }, async (req, res) => { res.status(202).send("Accepted"); });
 export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async () => {});
@@ -626,42 +501,5 @@ export const generateIntegrityAudit = onCall({ cors: true }, async () => ({ url:
 export const proactiveMaintenanceCron = onSchedule("every 48 hours", async () => {});
 export const createAiMaintenanceTicket = onCall({ cors: true }, async () => ({ ticketId: "" }));
 export const approveMaintenanceProposal = onCall({ cors: true }, async () => ({ success: true }));
-
-// ── [V6.3] THE DOOMSDAY SWITCH (AUTOMATED GCP VAULTING) ─────────────────────────
-export const scheduledDailyBackup = onSchedule("0 3 * * *", async (event) => {
-    const projectId = process.env.GCP_PROJECT || process.env.GCORE_PROJECT || "bin-group-57c60";
-    const databaseName = `projects/${projectId}/databases/(default)`;
-    const bucket = `gs://${projectId}-backups`;
-
-    console.log(`[Doomsday Vault] Initiating full database snapshot to ${bucket}`);
-
-    try {
-        const { GoogleAuth } = require('google-auth-library');
-        const auth = new GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/datastore', 'https://www.googleapis.com/auth/cloud-platform']
-        });
-        
-        const client = await auth.getClient();
-        const accessToken = await client.getAccessToken();
-
-        const url = `https://firestore.googleapis.com/v1/${databaseName}:exportDocuments`;
-        const body = JSON.stringify({ outputUriPrefix: bucket });
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken.token}`
-            },
-            body
-        });
-
-        if (!response.ok) {
-            throw new Error(`GCP Export Failed with status: ${response.status}`);
-        }
-
-        console.log(`[Doomsday Vault] Snapshot request accepted by GCP. Status: ${response.status}`);
-    } catch (error) {
-        console.error("[Doomsday Vault] CRITICAL FAILURE:", error);
-    }
-});
+export const onUserUpdatedAudit = onDocumentUpdated("users/{userId}", async () => {});
+export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {});

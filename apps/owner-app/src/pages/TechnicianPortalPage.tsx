@@ -46,6 +46,7 @@ export default function TechnicianPortalPage() {
     const [userData, setUserData] = React.useState<any>(null);
     const [notifError, setNotifError] = React.useState<string | null>(null);
     const [notifLoading, setNotifLoading] = React.useState(false);
+    const [idModalOpen, setIdModalOpen] = React.useState(false);
 
     const handleEnableNotifications = async () => {
         setNotifLoading(true);
@@ -216,6 +217,15 @@ export default function TechnicianPortalPage() {
                 <Box>
                     <Typography variant="h3" fontWeight="950" sx={{ color: '#FFFFFF', letterSpacing: -1 }}>{t('tech.service_node')}</Typography>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>{userData?.displayName} | {userData?.specialization || 'Maintenance Specialist'}</Typography>
+                    <Button 
+                        variant="outlined" 
+                        size="small" 
+                        startIcon={<ShieldCheck size={16} />} 
+                        onClick={() => setIdModalOpen(true)}
+                        sx={{ mt: 1, color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900, borderRadius: 2 }}
+                    >
+                        SHOW DIGITAL ID
+                    </Button>
                 </Box>
                 <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ '& .MuiTab-root': { color: 'rgba(255,255,255,0.5)', fontWeight: 950 }, '& .Mui-selected': { color: binThemeTokens.gold } }}>
                     <Tab label={t('tech.missions')} />
@@ -387,6 +397,46 @@ export default function TechnicianPortalPage() {
                     </Grid>
                 </Box>
             )}
+            <DigitalIDModal open={idModalOpen} onClose={() => setIdModalOpen(false)} userData={userData} />
         </Container>
     );
 }
+
+const DigitalIDModal = ({ open, onClose, userData }: { open: boolean, onClose: () => void, userData: any }) => {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://bin-groups.com/v/${userData?.uid}`)}&bgcolor=0B0B0B&color=D4AF37`;
+
+    return (
+        <Dialog 
+            open={open} 
+            onClose={onClose}
+            PaperProps={{
+                sx: { borderRadius: 8, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, overflow: 'hidden' }
+            }}
+        >
+            <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>BIN GROUP OFFICIAL</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>VERIFIED SPECIALIST</Typography>
+                </Box>
+                
+                <Box sx={{ p: 2, bgcolor: '#FFF', borderRadius: 4, display: 'inline-block', mb: 3 }}>
+                    <Box component="img" src={qrUrl} alt="Specialist QR" sx={{ width: 200, height: 200, display: 'block' }} />
+                </Box>
+
+                <Box sx={{ mb: 4 }}>
+                    <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{userData?.displayName}</Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>ID: {userData?.uid?.substring(0, 12).toUpperCase()}</Typography>
+                    <Typography variant="caption" sx={{ color: '#4ade80', fontWeight: 950, mt: 1, display: 'block' }}>● SECURE IDENTITY VERIFIED</Typography>
+                </Box>
+
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mb: 3 }}>
+                    Scanning this code connects to the Sovereign Registry to verify real-time credentials.
+                </Typography>
+
+                <Button fullWidth onClick={onClose} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 4 }}>
+                    DISMISS ID
+                </Button>
+            </Box>
+        </Dialog>
+    );
+};

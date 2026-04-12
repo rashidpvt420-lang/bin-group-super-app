@@ -318,7 +318,14 @@ export default function TicketDetailPage() {
                             </Stack>
                             <Stack direction="row" spacing={1}>
                                 <Button variant="outlined" sx={{ minWidth: 0, p: 1.5, borderRadius: 2, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}><MessageSquare size={20} /></Button>
-                                <Button variant="contained" sx={{ minWidth: 0, p: 1.5, borderRadius: 2, bgcolor: '#10b981', color: '#FFF' }}><Phone size={20} /></Button>
+                                <Button 
+                                    component="a"
+                                    href={`tel:${ticket.tenantPhone || ticket.tenantPhoneNumber || ''}`}
+                                    variant="contained" 
+                                    sx={{ minWidth: 0, p: 1.5, borderRadius: 2, bgcolor: '#10b981', color: '#FFF', visibility: (ticket.status === 'EN_ROUTE' || ticket.status === 'ARRIVED' || ticket.status === 'IN_PROGRESS') ? 'visible' : 'hidden' }}
+                                >
+                                    <Phone size={20} />
+                                </Button>
                             </Stack>
                         </Stack>
                     </Box>
