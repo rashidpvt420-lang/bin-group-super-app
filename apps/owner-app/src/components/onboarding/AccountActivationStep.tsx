@@ -59,8 +59,11 @@ const AccountActivationStep: React.FC = () => {
         bankName: '',
         iban: '',
         accountHolderName: '',
-        swiftCode: ''
+        swiftCode: '',
+        emiratesIdUrl: '',
+        passportUrl: ''
     });
+    const [kycFiles, setKycFiles] = useState<{ emiratesId: File | null, passport: File | null }>({ emiratesId: null, passport: null });
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
     const isOfflineMethod = paymentMethod === 'CASH' || paymentMethod === 'CHEQUE';
@@ -87,6 +90,11 @@ const AccountActivationStep: React.FC = () => {
         // Must verify against Firestore source of truth, not just local store state.
         if (!contractId) {
             setSnackbar({ open: true, message: t('activation.error.contract_id'), severity: 'error' });
+            return;
+        }
+
+        if (!kycFiles.emiratesId || !kycFiles.passport) {
+            setSnackbar({ open: true, message: "KYC REJECTION: You must upload your Emirates ID and Passport to establish a sovereign institutional identity.", severity: 'error' });
             return;
         }
 
@@ -186,6 +194,12 @@ const AccountActivationStep: React.FC = () => {
                     accountHolderName: formData.accountHolderName,
                     swiftCode: formData.swiftCode,
                     routingPolicy: 'DIRECT_TRANSFER_ZERO_ESCROW'
+                },
+                kyc: {
+                    emiratesIdStatus: 'PENDING',
+                    passportStatus: 'PENDING',
+                    verified: false,
+                    submittedAt: serverTimestamp()
                 },
                 dashboardUnlocked: false, // Force false until admin approval
                 propertyIds,
@@ -436,6 +450,31 @@ const AccountActivationStep: React.FC = () => {
                                             '& .MuiOutlinedInput-root': { background: 'rgba(255,255,255,0.04)', '& fieldset': { borderColor: 'rgba(198,167,94,0.35)' } }
                                         }}
                                     />
+
+                                    <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>SOVEREIGN KYC IDENTITY</Typography>
+                                    </Divider>
+
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} md={6}>
+                                            <Button
+                                                fullWidth variant="outlined" component="label"
+                                                sx={{ py: 2, borderRadius: 3, borderColor: kycFiles.emiratesId ? '#4CAF50' : 'rgba(198,167,94,0.5)', color: '#FFF' }}
+                                            >
+                                                {kycFiles.emiratesId ? 'Emirates ID Uploaded' : 'Upload Emirates ID'}
+                                                <input type="file" hidden accept="image/*,.pdf" onChange={(e) => setKycFiles(prev => ({ ...prev, emiratesId: e.target.files?.[0] || null }))} />
+                                            </Button>
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                            <Button
+                                                fullWidth variant="outlined" component="label"
+                                                sx={{ py: 2, borderRadius: 3, borderColor: kycFiles.passport ? '#4CAF50' : 'rgba(198,167,94,0.5)', color: '#FFF' }}
+                                            >
+                                                {kycFiles.passport ? 'Passport Uploaded' : 'Upload Passport'}
+                                                <input type="file" hidden accept="image/*,.pdf" onChange={(e) => setKycFiles(prev => ({ ...prev, passport: e.target.files?.[0] || null }))} />
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
 
                                     <Button 
                                         variant="contained" 

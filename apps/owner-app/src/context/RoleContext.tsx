@@ -92,8 +92,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                     setRole(data.role?.toLowerCase() || 'tenant');
                     setStatus(currentStatus.toLowerCase());
+                    const isHighPrivilege = data.role?.toLowerCase() === 'admin' || data.isAdmin === true || data.role?.toLowerCase() === 'owner';
                     setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
                     setPropertyId(data.propertyId || null);
+
+                    // [V6.4] Institutional MFA/2FA Enforcement
+                    if (isHighPrivilege) {
+                        const enrolledFactors = (currentUser as any).multiFactor?.enrolledFactors || [];
+                        if (enrolledFactors.length === 0) {
+                            console.warn("🛡️ [MFA-ENFORCEMENT] High-privilege access attempt without second factor.");
+                            setError("INSTITUTIONAL MFA REQUIRED: Your account role (ADMIN/OWNER) requires Multi-Factor Authentication. Please enable 2FA in your security settings to unlock this dashboard.");
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
                     setError(null);
 
                     // [V5] Silent FCM Token Harvest
