@@ -275,47 +275,47 @@ export const setAdminRole = onCall({ enforceAppCheck: true }, async (request) =>
     return { success: true };
 });
 
-export const adminCreateUser = onRequest({ cors: true }, async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).send({ error: { message: "Unauthenticated" } });
-        return;
+export const adminCreateUser = onCall({ enforceAppCheck: true }, async (request) => {
+    const caller = request.auth;
+    if (!caller?.token?.admin) throw new HttpsError("permission-denied", "Institutional access required.");
+    
+    const payload = request.data;
+    const { email, displayName, role, emirate, serviceZone, assignedZones } = payload as any;
+    
+    if (!email || !role) {
+        throw new HttpsError("invalid-argument", "Invalid Argument");
     }
-    const idToken = authHeader.split('Bearer ')[1];
+    
+    let uid: string;
     try {
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        if (!decodedToken.admin) {
-            res.status(403).send({ error: { message: "Permission Denied" } });
-            return;
+        const existingUser = await admin.auth().getUserByEmail(email);
+        uid = existingUser.uid;
+    } catch (err: any) {
+        if (err.code === 'auth/user-not-found') {
+            const newUser = await admin.auth().createUser({ email, displayName });
+            uid = newUser.uid;
+        } else { 
+            throw new HttpsError("internal", err.message); 
         }
-        const payload = req.body.data || req.body;
-        const { email, displayName, role, emirate, serviceZone, assignedZones } = payload as any;
-        if (!email || !role) {
-            res.status(400).send({ error: { message: "Invalid Argument" } });
-            return;
-        }
-        let uid: string;
-        try {
-            const existingUser = await admin.auth().getUserByEmail(email);
-            uid = existingUser.uid;
-        } catch (err: any) {
-            if (err.code === 'auth/user-not-found') {
-                const newUser = await admin.auth().createUser({ email, displayName });
-                uid = newUser.uid;
-            } else { throw err; }
-        }
-        await admin.auth().setCustomUserClaims(uid, { role, status: 'active' });
-        const userProfile: any = {
-            uid, email: email.toLowerCase(), displayName: displayName || "New User",
-            role, status: "active", emirate: emirate || null, serviceZone: serviceZone || null,
-            assignedZones: assignedZones || [], updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            isOffDuty: false, joinDate: admin.firestore.FieldValue.serverTimestamp()
-        };
-        await db.collection("users").doc(uid).set(userProfile, { merge: true });
-        res.status(200).send({ result: { success: true, uid } });
-    } catch (error: any) {
-        res.status(500).send({ error: { message: error.message } });
     }
+    
+    await admin.auth().setCustomUserClaims(uid, { role, status: 'active' });
+    const userProfile: any = {
+        uid, 
+        email: email.toLowerCase(), 
+        displayName: displayName || "New User",
+        role, 
+        status: "active", 
+        emirate: emirate || null, 
+        serviceZone: serviceZone || null,
+        assignedZones: assignedZones || [], 
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        isOffDuty: false, 
+        joinDate: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection("users").doc(uid).set(userProfile, { merge: true });
+    return { success: true, uid };
 });
 
 // ── MAIL QUEUE PROCESSOR ──────────────────────────────────────────────────
