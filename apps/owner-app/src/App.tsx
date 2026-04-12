@@ -93,6 +93,7 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const { loading: roleLoading, error: roleError, user } = useRole();
+  const { t } = useLanguage();
 
   // [STRICT BLOCK]
   if (roleLoading) {

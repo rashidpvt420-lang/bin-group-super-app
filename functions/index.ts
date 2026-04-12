@@ -7,7 +7,7 @@ import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 
 // [V7] Multi-Region Enterprise Mesh
-setGlobalOptions({ region: ["me-central1", "europe-west3"] });
+setGlobalOptions({ region: "europe-west3" });
 
 admin.initializeApp();
 const db = admin.firestore();
