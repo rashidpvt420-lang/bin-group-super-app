@@ -33,7 +33,7 @@ import {
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
-import { UserCheck, Wrench, AlertCircle } from 'lucide-react';
+import { UserCheck, Wrench } from 'lucide-react';
 
 interface Ticket {
   ticketId: string;
@@ -63,7 +63,7 @@ interface Technician {
 }
 
 export default function TicketsManagementPage() {
-  const { t, lang, isRTL } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('');
