@@ -18,10 +18,22 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  CircularProgress
 } from '@mui/material';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
+import { UserCheck, Wrench, AlertCircle } from 'lucide-react';
 
 interface Ticket {
   ticketId: string;
@@ -31,10 +43,23 @@ interface Ticket {
   description: string;
   status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'ASSIGNED' | 'EN_ROUTE';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
+  assignedTechnicianId?: string;
+  assignedTechnicianName?: string;
   assignedTechnician: string | null;
   createdAt: any;
   completedAt: any | null;
   emergencyCharge: number;
+  propertyName?: string;
+  propertyId?: string;
+  unitNumber?: string;
+  floorNumber?: string;
+}
+
+interface Technician {
+    id: string;
+    displayName: string;
+    specialization?: string;
+    isOffDuty?: boolean;
 }
 
 export default function TicketsManagementPage() {
@@ -44,6 +69,11 @@ export default function TicketsManagementPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Assignment State
+  const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [techLoading, setTechLoading] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(100));
@@ -55,15 +85,20 @@ export default function TicketsManagementPage() {
             return {
               ticketId: doc.id,
               tenantId: data.tenantId || data.userId || '',
-              unit: data.unit || data.unitId || 'N/A',
+              unit: data.unitNumber || data.unit || data.unitId || 'N/A',
               category: data.trade || data.issueType || data.category || 'General',
               description: data.description || '',
               status: data.status || 'OPEN',
               priority: data.priority || 'MEDIUM',
-              assignedTechnician: data.assignedTechnician || data.technicianAssigned || data.assignedTo || null,
+              assignedTechnicianId: data.assignedTechnicianId,
+              assignedTechnicianName: data.assignedTechnicianName,
+              assignedTechnician: data.assignedTechnicianName || data.assignedTechnician || data.technicianAssigned || data.assignedTo || null,
               createdAt: data.createdAt || null,
               completedAt: data.completedAt || null,
-              emergencyCharge: data.emergencyCharge || 0
+              emergencyCharge: data.emergencyCharge || 0,
+              propertyName: data.propertyName,
+              propertyId: data.propertyId,
+              floorNumber: data.floorNumber
             } as Ticket;
           });
           setTickets(fetched);
@@ -79,6 +114,42 @@ export default function TicketsManagementPage() {
 
     return () => unsubscribe();
   }, []);
+
+  const fetchTechnicians = async () => {
+      setTechLoading(true);
+      try {
+          const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+          const snap = await getDocs(q);
+          const techs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
+          setTechnicians(techs);
+      } catch (err) {
+          console.error("Failed to fetch technicians:", err);
+      }
+      setTechLoading(false);
+  };
+
+  const handleOpenAssign = (ticket: Ticket) => {
+      setAssigningTicket(ticket);
+      fetchTechnicians();
+  };
+
+  const handleAssign = async (tech: Technician) => {
+      if (!assigningTicket) return;
+      try {
+          const ticketRef = doc(db, 'maintenanceTickets', assigningTicket.ticketId);
+          await updateDoc(ticketRef, {
+              assignedTechnicianId: tech.id,
+              assignedTechnicianName: tech.displayName,
+              status: 'ASSIGNED',
+              updatedAt: serverTimestamp(),
+              assignedAt: serverTimestamp()
+          });
+          setAssigningTicket(null);
+      } catch (err) {
+          console.error("Assignment failed:", err);
+          alert("Institutional Error: Failed to lock technician assignment.");
+      }
+  };
 
   const getStatusColor = (status: string) => {
     const s = status.toUpperCase();
@@ -194,12 +265,13 @@ export default function TicketsManagementPage() {
                   <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.status')}</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.priority')}</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.res_time')}</TableCell>
-                  <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('tech.table.created')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('tech.table.tech') || 'Specialist'}</TableCell>
+                  <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('common.action') || 'Action'}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredTickets.map((ticket: any) => (
-                  <TableRow key={ticket.ticketId} hover sx={{ cursor: 'pointer', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                {filteredTickets.map((ticket: Ticket) => (
+                  <TableRow key={ticket.ticketId} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                       <Typography variant="body2" sx={{ fontWeight: 900, color: '#1e293b' }}>
                         #{ticket.ticketId.slice(0, 10).toUpperCase()}
@@ -218,8 +290,23 @@ export default function TicketsManagementPage() {
                       <Chip label={ticket.priority} color={getPriorityColor(ticket.priority) as any} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
                     </TableCell>
                     <TableCell sx={{ color: '#1e293b', fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{getResponseTime(ticket.createdAt, ticket.completedAt)}</TableCell>
-                    <TableCell align={isRTL ? 'left' : 'right'} sx={{ color: '#64748b', fontSize: 12 }}>
-                      {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') : 'N/A'}
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                        {ticket.assignedTechnicianName ? (
+                            <Chip icon={<UserCheck size={14} />} label={ticket.assignedTechnicianName} size="small" color="primary" variant="outlined" />
+                        ) : (
+                            <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'error.main' }}>UNASSIGNED</Typography>
+                        )}
+                    </TableCell>
+                    <TableCell align={isRTL ? 'left' : 'right'}>
+                      <Button 
+                        size="small" 
+                        variant="contained" 
+                        onClick={() => handleOpenAssign(ticket)}
+                        disabled={ticket.status === 'COMPLETED'}
+                        sx={{ fontSize: '0.7rem', fontWeight: 900 }}
+                      >
+                          {ticket.assignedTechnicianId ? 'REASSIGN' : 'ASSIGN'}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -232,6 +319,46 @@ export default function TicketsManagementPage() {
           <Typography color="textSecondary" sx={{ fontStyle: 'italic' }}>{t('tech.no_incidents')}</Typography>
         </Paper>
       )}
+
+      {/* Assignment Dialog */}
+      <Dialog open={!!assigningTicket} onClose={() => setAssigningTicket(null)} fullWidth maxWidth="xs">
+          <DialogTitle sx={{ fontWeight: 900 }}>MANUAL SPECIALIST ASSIGNMENT</DialogTitle>
+          <DialogContent>
+              <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
+                  Select a verified specialist from the Technician Corps to handle Mission #{assigningTicket?.ticketId.substring(0,8).toUpperCase()}.
+              </Typography>
+              {techLoading ? (
+                  <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box>
+              ) : (
+                  <List>
+                      {technicians.map(tech => (
+                          <ListItem 
+                            button 
+                            key={tech.id} 
+                            onClick={() => handleAssign(tech)}
+                            sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 2, mb: 1 }}
+                          >
+                              <ListItemAvatar>
+                                  <Avatar sx={{ bgcolor: tech.isOffDuty ? 'grey.400' : 'success.main' }}>
+                                      <Wrench size={20} />
+                                  </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText 
+                                primary={tech.displayName} 
+                                secondary={tech.specialization || 'General Maintenance'} 
+                                primaryTypographyProps={{ fontWeight: 900 }}
+                              />
+                              {tech.isOffDuty && <Chip label="OFF DUTY" size="small" />}
+                          </ListItem>
+                      ))}
+                      {technicians.length === 0 && <Typography variant="body2" sx={{ textAlign: 'center', py: 2, fontStyle: 'italic' }}>No specialists found in this sector.</Typography>}
+                  </List>
+              )}
+          </DialogContent>
+          <DialogActions>
+              <Button onClick={() => setAssigningTicket(null)}>CANCEL</Button>
+          </DialogActions>
+      </Dialog>
     </Container>
   );
 }

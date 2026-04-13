@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions, Divider } from '@mui/material';
-import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool, Phone, MessageSquare, User } from 'lucide-react';
-import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot } from '../lib/firebase';
+import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions, Divider, CircularProgress } from '@mui/material';
+import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool, Phone, MessageSquare, User, ImageIcon } from 'lucide-react';
+import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot, storage, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
 import { queueMutation } from '../lib/offlineSync';
 import SignaturePad from '../components/SignaturePad';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -168,9 +168,24 @@ export default function TicketDetailPage() {
     const handleFinalizeCompletion = async () => {
         if (!signature || !ticket.hasBeforePhoto || !ticket.hasAfterPhoto) return;
         setUpdating(true);
+        
+        // If signature is base64, try uploading to Storage too
+        let signatureUrl = signature;
+        if (signature.startsWith('data:image')) {
+            try {
+                const response = await fetch(signature);
+                const blob = await response.blob();
+                const sigRef = ref(storage, `evidence/${id}/signature_${Date.now()}.png`);
+                await uploadBytes(sigRef, blob);
+                signatureUrl = await getDownloadURL(sigRef);
+            } catch (err) {
+                console.warn("Signature Storage upload failed, using local base64.");
+            }
+        }
+
         const updateData = {
             status: 'COMPLETED',
-            tenantSignature: signature,
+            tenantSignature: signatureUrl,
             completedAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         };
@@ -196,31 +211,37 @@ export default function TicketDetailPage() {
 
         setUpdating(true);
         
-        // Read file for potential offline staging
-        const reader = new FileReader();
-        const filePromise = new Promise<string>((resolve) => {
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-        });
-        const base64Data = await filePromise;
-
         try {
+            // 1. Try Real Storage Upload
+            const storageRef = ref(storage, `evidence/${id}/${field}_${Date.now()}.jpg`);
+            await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(storageRef);
+
             const docRef = doc(db, 'maintenanceTickets', id);
             const updateData = {
                 [field]: true,
-                [`${field}Data`]: base64Data, // Store evidence payload
+                [`${field}Url`]: downloadUrl,
                 updatedAt: serverTimestamp()
             };
             
             await updateDoc(docRef, updateData);
-            setTicket((prev: any) => prev ? { ...prev, [field]: true } : null);
+            setTicket((prev: any) => prev ? { ...prev, [field]: true, [`${field}Url`]: downloadUrl } : null);
         } catch (err) {
-            console.warn("Photo upload failed - staging in offline vault.");
+            console.warn("Storage upload failed - falling back to offline vault with base64.");
+            
+            const reader = new FileReader();
+            const filePromise = new Promise<string>((resolve) => {
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(file);
+            });
+            const base64Data = await filePromise;
+
             const updateData = {
                 [field]: true,
-                [`${field}Data`]: base64Data,
+                [`${field}Data`]: base64Data, // Store evidence payload for later sync
                 updatedAt: serverTimestamp()
             };
+            
             const secured = await queueMutation('maintenanceTickets', id!, updateData);
             if (secured) {
                 setTicket((prev: any) => prev ? { ...prev, [field]: true } : null);
@@ -234,7 +255,7 @@ export default function TicketDetailPage() {
         if (input) input.click();
     }
 
-    if (loading) return <Container sx={{ py: 8 }}><Typography color="white">STABILIZING NODE DATA...</Typography></Container>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress color="inherit" sx={{ color: binThemeTokens.gold }} /></Box>;
     if (!ticket) return <Container sx={{ py: 8 }}><Typography color="white">NODE NOT FOUND.</Typography></Container>;
 
     const canComplete = ticket.hasBeforePhoto && ticket.hasAfterPhoto;
@@ -278,6 +299,24 @@ export default function TicketDetailPage() {
                         )}
                     </Stack>
                 </Stack>
+
+                {/* Photo Evidence Preview */}
+                {(ticket.hasBeforePhoto || ticket.hasAfterPhoto) && (
+                    <Box sx={{ mb: 4, display: 'flex', gap: 2 }}>
+                        {ticket.hasBeforePhoto && (
+                            <Box sx={{ flex: 1, position: 'relative' }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', mb: 1, fontWeight: 900 }}>BEFORE</Typography>
+                                <Box component="img" src={ticket.hasBeforePhotoUrl || ticket.hasBeforePhotoData} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)' }} />
+                            </Box>
+                        )}
+                        {ticket.hasAfterPhoto && (
+                            <Box sx={{ flex: 1, position: 'relative' }}>
+                                <Typography variant="caption" sx={{ color: '#4ade80', display: 'block', mb: 1, fontWeight: 900 }}>AFTER</Typography>
+                                <Box component="img" src={ticket.hasAfterPhotoUrl || ticket.hasAfterPhotoData} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)' }} />
+                            </Box>
+                        )}
+                    </Box>
+                )}
 
                 {/* Technician Info for Tenant or ETA for Technician */}
                 {ticket.status === 'EN_ROUTE' && (
@@ -351,7 +390,7 @@ export default function TicketDetailPage() {
                         <Button 
                             fullWidth 
                             variant="outlined" 
-                            startIcon={<Camera />}
+                            startIcon={updating ? <CircularProgress size={20} color="inherit" /> : <Camera />}
                             onClick={() => triggerCamera('hasBeforePhoto')}
                             disabled={updating || ticket.hasBeforePhoto || role !== 'technician'}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasBeforePhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasBeforePhoto ? '#4ade80' : binThemeTokens.gold }}
@@ -374,7 +413,7 @@ export default function TicketDetailPage() {
                         <Button 
                             fullWidth 
                             variant="outlined" 
-                            startIcon={<Camera />}
+                            startIcon={updating ? <CircularProgress size={20} color="inherit" /> : <Camera />}
                             onClick={() => triggerCamera('hasAfterPhoto')}
                             disabled={updating || ticket.hasAfterPhoto || role !== 'technician'}
                             sx={{ py: 4, borderRadius: 4, borderColor: ticket.hasAfterPhoto ? '#4ade80' : 'rgba(198,167,94,0.3)', color: ticket.hasAfterPhoto ? '#4ade80' : binThemeTokens.gold }}

@@ -260,6 +260,12 @@ const translations: Record<Language, Record<string, string>> = {
         'support.phone': 'Direct Hotline',
         'support.office': 'Headquarters',
         'support.office_address': 'Binconstruction HQ, Level 88, Sovereign Tower, Sheikh Zayed Road, Dubai, UAE',
+        'tech.table.floor': 'Floor',
+        'tech.table.tech': 'Specialist',
+        'common.action': 'Action',
+        'tech.action.evidence_required': 'Evidence Required',
+        'tech.photo.before_uploaded': 'Before Photo Uploaded',
+        'tech.photo.after_uploaded': 'After Photo Uploaded',
     },
     ar: {
         'nav.dashboard': 'لوحة القيادة',
