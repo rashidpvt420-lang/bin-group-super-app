@@ -111,23 +111,43 @@ export default function TechnicianPortalPage() {
             if (snap.exists()) setUserData(snap.data());
         });
 
-        const q = query(
+        // Query 1: Mission Pool (All Open Tickets)
+        const poolQuery = query(
             collection(db, 'maintenanceTickets'), 
-            or(
-                where('status', '==', 'OPEN'),
-                where('assignedTechnicianId', '==', user?.uid)
-            ),
+            where('status', '==', 'OPEN'),
             orderBy('createdAt', 'desc'),
-            limit(100)
+            limit(50)
         );
 
-        const ticketsUnsub = onSnapshot(q, (snapshot) => {
-            const ticketData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket));
-            setTickets(ticketData);
+        // Query 2: Active Dispatches (Specifically assigned to this tech)
+        const assignedQuery = query(
+            collection(db, 'maintenanceTickets'),
+            where('assignedTechnicianId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+        );
+
+        const poolUnsub = onSnapshot(poolQuery, (snapshot) => {
+            const poolData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket));
+            setTickets(prev => {
+                const assigned = prev.filter(t => t.assignedTechnicianId === user.uid);
+                const combined = [...assigned, ...poolData];
+                // Remove duplicates by ID
+                return Array.from(new Map(combined.map(item => [item.id, item])).values());
+            });
             setLoading(false);
         });
 
-        return () => { userUnsub(); ticketsUnsub(); };
+        const assignedUnsub = onSnapshot(assignedQuery, (snapshot) => {
+            const assignedData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket));
+            setTickets(prev => {
+                const pool = prev.filter(t => t.status === 'OPEN');
+                const combined = [...assignedData, ...pool];
+                return Array.from(new Map(combined.map(item => [item.id, item])).values());
+            });
+        });
+
+        return () => { userUnsub(); poolUnsub(); assignedUnsub(); };
     }, [user]);
 
     const toggleDutyStatus = async () => {

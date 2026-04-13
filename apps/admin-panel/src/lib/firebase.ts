@@ -6,7 +6,7 @@ import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-groups.com",
+    authDomain: "bin-group-57c60.firebaseapp.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
     messagingSenderId: "123413252227",

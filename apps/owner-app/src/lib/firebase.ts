@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
@@ -10,7 +10,7 @@ const SECONDARY_REGION = "europe-west3";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-groups.com",
+    authDomain: "bin-group-57c60.firebaseapp.com",
     projectId: "bin-group-57c60",
     storageBucket: "bin-group-57c60.firebasestorage.app",
     messagingSenderId: "123413252227",
@@ -35,17 +35,19 @@ let functions = getFunctions(app, PRIMARY_REGION);
 
 // Connectivity Watchdog
 const connectionWatchdog = setTimeout(() => {
-    console.warn("⚠️ [V7-CIRCUIT-BREAKER] Primary UAE Region Latency > 4s. Activating Passive Failover (EU).");
+    console.warn("âš ï¸ [V7-CIRCUIT-BREAKER] Primary UAE Region Latency > 4s. Activating Passive Failover (EU).");
     functions = getFunctions(app, SECONDARY_REGION);
 }, 4000);
 
-// Clear watchdog on first successful interaction if possible, 
+// Clear watchdog on first successful interaction if possible,
 // but for now, we follow the strict 4000ms requirement.
 
 // Explicit Exports
 export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
+    ref, uploadBytes, getDownloadURL,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or
 };
+
 export default app;
 
