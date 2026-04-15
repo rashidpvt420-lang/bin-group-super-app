@@ -50,29 +50,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                 setIsAuthenticated(true);
                                 setError(null);
 
-                                // [V5] Silent FCM Token Harvest
-                                try {
-                                    const messagingSupported = await isSupported();
-                                    if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                                        const messaging = getMessaging(app);
-                                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                                        await navigator.serviceWorker.ready;
-                                        const currentToken = await getToken(messaging, { 
-                                            vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                                            serviceWorkerRegistration: registration 
-                                        });
-                                        if (currentToken) {
-                                            // YOU MUST WRITE THE TOKEN TO FIRESTORE
-                                            await updateDoc(doc(db, 'users', usr.uid), {
-                                                fcmToken: currentToken,
-                                                updatedAt: new Date().toISOString()
-                                            });
-                                            console.log("Token saved to user profile.");
+                                // [V5] Silent FCM Token Harvest - NON-BLOCKING
+                                (async () => {
+                                    try {
+                                        const messagingSupported = await isSupported();
+                                        if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                                            const messaging = getMessaging(app);
+                                            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                                            
+                                            // Using a timeout for service worker ready to prevent indefinite hangs
+                                            const swReadyPromise = navigator.serviceWorker.ready;
+                                            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_READY_TIMEOUT")), 5000));
+
+                                            try {
+                                                await Promise.race([swReadyPromise, timeoutPromise]);
+                                                const currentToken = await getToken(messaging, { 
+                                                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
+                                                    serviceWorkerRegistration: registration 
+                                                });
+                                                if (currentToken) {
+                                                    await updateDoc(doc(db, 'users', usr.uid), {
+                                                        fcmToken: currentToken,
+                                                        updatedAt: new Date().toISOString()
+                                                    });
+                                                    console.log("Token saved to user profile.");
+                                                }
+                                            } catch (raceErr) {
+                                                console.warn("📍 [V5] Admin SW Ready timeout or getToken failed:", raceErr);
+                                            }
                                         }
+                                    } catch (notifErr) {
+                                        console.warn("📍 [V5] Admin Silent Token Harvest bypass/failed:", notifErr);
                                     }
-                                } catch (notifErr) {
-                                    console.warn("📍 [V5] Admin Silent Token Harvest bypass/failed:", notifErr);
-                                }
+                                })();
                             } else {
                                 console.warn("[AUTH] Denying access: Not an admin", usr.email);
                                 setError("Access Denied: Administrative credentials required.");

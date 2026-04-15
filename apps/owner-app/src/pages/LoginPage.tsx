@@ -44,7 +44,7 @@ const LoginPage: React.FC = () => {
                 return;
             }
             console.error("Google Auth Error:", err);
-            setError("Identity verification failed. Please use email access.");
+            setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
             setLocalLoading(false);
         }
     };

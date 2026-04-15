@@ -57,7 +57,7 @@ export default function UnifiedLogin() {
                 return;
             }
             console.error("Auth popup error:", err);
-            setError("IDENTITY_FAULT: Administrative identity verification failed.");
+            setError(`IDENTITY_FAULT: ${err.message || 'Verification failed.'}`);
             setLoading(false);
         }
     };
