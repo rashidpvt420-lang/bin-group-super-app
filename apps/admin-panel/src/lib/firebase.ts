@@ -5,6 +5,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
+
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
     authDomain: "bin-group-57c60.firebaseapp.com",

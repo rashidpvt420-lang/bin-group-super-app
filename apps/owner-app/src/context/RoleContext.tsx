@@ -123,7 +123,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setStatus(currentStatus.toLowerCase());
                     const isHighPrivilege = data.role?.toLowerCase() === 'admin' || data.isAdmin === true || data.role?.toLowerCase() === 'owner';
                     setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                    setPropertyId(data.propertyId || null);
+                    setPropertyId(data.propertyId || data.unitId || null); // [FIX] Handle unitId fallback for tenants
                     setLegalAccepted(!!data.legalAcceptedAt);
 
                     // [V6.4] Institutional MFA/2FA Enforcement
@@ -180,6 +180,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 console.error("📍 [ROLE-SYNC] Fatal context resolution failure:", err);
                 setRole('tenant');
                 setStatus('active');
+                setLoading(false);
             }
         };
 
