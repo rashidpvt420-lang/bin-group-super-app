@@ -1,165 +1,254 @@
-import React from 'react';
-import { 
-    Box, 
-    Typography, 
-    Button, 
-    Container, 
-    Stack, 
-    Grid, 
-    alpha, 
-    Divider,
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    Box,
+    Typography,
+    Button,
+    Container,
+    Stack,
+    Grid,
+    alpha,
     Card,
     CardContent,
-    Paper
+    Divider,
+    Paper,
+    AppBar,
+    Toolbar,
+    TextField,
+    InputAdornment,
+    IconButton,
+    Alert,
+    CircularProgress,
+    Chip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
-import { 
-    ArrowRight, 
-    ShieldCheck, 
-    Globe, 
-    Building2, 
-    Zap, 
-    Navigation, 
+import { useRole } from '../context/RoleContext';
+import { auth } from '../lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import {
+    ArrowRight,
+    ShieldCheck,
+    Globe,
+    Building2,
+    Zap,
+    Navigation,
     CheckCircle2,
-    Users,
     Briefcase,
     BadgeCheck,
     Mail,
-    Phone,
-    MapPin
+    Lock,
+    Eye,
+    EyeOff,
+    TrendingUp,
+    UserCircle,
+    Smartphone,
+    Database,
+    Droplets,
+    Lightbulb,
+    Home,
+    AlertTriangle
 } from 'lucide-react';
-import BinGroupHeader from '../components/SovereignHeader';
 
 const OwnerLandingPage: React.FC = () => {
     const navigate = useNavigate();
     const { t, isRTL } = useLanguage();
+    const { role, isAdmin, loading: roleLoading } = useRole();
+    const loginRef = useRef<HTMLDivElement>(null);
+
+    // Login Form State (Preserving Logic)
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [localLoading, setLocalLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!roleLoading && role) {
+            const normalizedRole = role.toLowerCase();
+            if (normalizedRole === 'tenant') navigate('/tenant');
+            else if (normalizedRole === 'technician') navigate('/tech');
+            else if (normalizedRole === 'admin' || isAdmin) window.location.href = '/admin';
+            else navigate('/dashboard');
+        }
+    }, [role, isAdmin, roleLoading, navigate]);
+
+    const scrollToLogin = () => {
+        loginRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const handleGoogleLogin = async () => {
+        setLocalLoading(true);
+        setError(null);
+        try {
+            const provider = new GoogleAuthProvider();
+            await signInWithRedirect(auth, provider);
+        } catch (err: any) {
+            console.error("Google Auth Error:", err);
+            setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
+            setLocalLoading(false);
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLocalLoading(true);
+        setError(null);
+
+        try {
+            await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
+        } catch (err: any) {
+            console.error("Login Error:", err);
+            setError(err.message || "Failed to sign in. Check your credentials.");
+            setLocalLoading(false);
+        }
+    };
+
+    if (roleLoading) {
+        return (
+            <Box sx={{ height: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold, mb: 4 }} size={60} />
+                <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
+                    AUTHENTICATING SECURE PROTOCOL...
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
-        <Box sx={{ 
-            minHeight: '100vh', 
-            bgcolor: '#000', 
+        <Box sx={{
+            minHeight: '100vh',
+            bgcolor: '#000',
             direction: isRTL ? 'rtl' : 'ltr',
             position: 'relative',
             overflowX: 'hidden'
         }}>
-            <BinGroupHeader />
+            {/* 1. The Top Navigation Bar */}
+            <AppBar position="sticky" sx={{ bgcolor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(30px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: 'none', zIndex: 1200 }}>
+                <Container maxWidth="xl">
+                    <Toolbar sx={{ justifyContent: 'space-between', py: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ p: 0.8, borderRadius: 1.5, bgcolor: binThemeTokens.gold }}>
+                                <ShieldCheck size={24} color="#000" />
+                            </Box>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1.5, display: 'flex', alignItems: 'center' }}>
+                                BIN GROUP<Box component="span" sx={{ color: binThemeTokens.gold, ml: 0.5 }}>™</Box>
+                            </Typography>
+                        </Box>
+                        <Button 
+                            variant="contained" 
+                            onClick={scrollToLogin}
+                            sx={{ 
+                                bgcolor: 'transparent', 
+                                border: `1px solid ${binThemeTokens.gold}`,
+                                color: binThemeTokens.gold, 
+                                fontWeight: 950, 
+                                px: 3, 
+                                py: 1,
+                                borderRadius: 100,
+                                fontSize: '0.9rem',
+                                '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: '#FFF', color: '#FFF' }
+                            }}
+                        >
+                            Institutional Login
+                        </Button>
+                    </Toolbar>
+                </Container>
+            </AppBar>
 
-            {/* Premium Hero Section */}
+            {/* 2. The Hero Section (First Impression) */}
             <Box sx={{ 
-                pt: { xs: 15, md: 25 }, 
-                pb: 12, 
+                pt: { xs: 15, md: 20 }, 
+                pb: { xs: 10, md: 15 },
                 position: 'relative',
-                '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: '-10%',
-                    right: '-10%',
-                    width: '600px',
-                    height: '600px',
-                    background: `radial-gradient(circle, ${binThemeTokens.gold}15 0%, transparent 70%)`,
-                    filter: 'blur(100px)',
-                    zIndex: 0
-                }
+                textAlign: 'center'
             }}>
                 <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
-                    <Grid container spacing={8} alignItems="center">
-                        <Grid item xs={12} md={7}>
-                            <Stack spacing={4}>
-                                <Box>
-                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 2, display: 'block' }}>
-                                        VAE REGIONAL HEADQUARTERS
-                                    </Typography>
-                                    <Typography variant="h1" sx={{ 
-                                        fontSize: { xs: '3.5rem', md: '5.5rem' }, 
-                                        fontWeight: 950, 
-                                        lineHeight: 0.9,
-                                        letterSpacing: -3,
-                                        color: '#FFF',
-                                        mb: 3
-                                    }}>
-                                        BIN GROUP <br />
-                                        <Box component="span" sx={{ color: binThemeTokens.gold }}>SOVEREIGN ASSET</Box>
-                                    </Typography>
-                                    <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.7)', maxWidth: 600, fontWeight: 400, lineHeight: 1.6 }}>
-                                        High-frequency property management and institutional maintenance for UAE portfolio owners. From Abu Dhabi to Dubai and Al Ain, we define the standard of mission-critical asset stability.
-                                    </Typography>
-                                </Box>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 8, mb: 3, display: 'block' }}>
+                        THE NEW STANDARD of UAE REAL ESTATE
+                    </Typography>
+                    <Typography variant="h1" sx={{ 
+                        fontSize: { xs: '3rem', md: '5.5rem' }, 
+                        fontWeight: 950, 
+                        lineHeight: 1,
+                        letterSpacing: -4,
+                        color: '#FFF',
+                        mb: 4
+                    }}>
+                        Redefining Property Management <br />
+                        <Box component="span" sx={{ color: binThemeTokens.gold }}>Across the UAE</Box>
+                    </Typography>
+                    <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 850, mx: 'auto', fontWeight: 400, lineHeight: 1.6, fontSize: { xs: '1.2rem', md: '1.6rem' }, mb: 8 }}>
+                        Elite, end-to-end maintenance and asset stability for institutional property portfolios. Covering Dubai, Abu Dhabi, Al Ain, and the entire United Arab Emirates.
+                    </Typography>
+                    <Button 
+                        variant="contained" 
+                        size="large"
+                        onClick={() => navigate('/onboarding')}
+                        sx={{ 
+                            background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, 
+                            color: '#000', px: 8, py: 2.5, fontWeight: 950, borderRadius: 3, fontSize: '1.2rem',
+                            boxShadow: `0 20px 40px ${alpha(binThemeTokens.gold, 0.3)}`,
+                            '&:hover': { transform: 'translateY(-4px)' }
+                        }}
+                    >
+                        Onboard Premium Asset
+                    </Button>
+                </Container>
+            </Box>
 
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
-                                    <Button 
-                                        variant="contained" 
-                                        size="large"
-                                        onClick={() => navigate('/onboarding')}
-                                        endIcon={<Navigation size={20} />}
-                                        sx={{ 
-                                            background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, 
-                                            color: '#000', px: 5, py: 2.5, fontWeight: 900, borderRadius: 100, fontSize: '1.2rem',
-                                            boxShadow: `0 20px 40px ${alpha(binThemeTokens.gold, 0.4)}`,
-                                            '&:hover': { transform: 'translateY(-4px)' }
-                                        }}
-                                    >
-                                        Inbound Portal
-                                    </Button>
-                                    <Button 
-                                        variant="outlined" 
-                                        size="large"
-                                        onClick={() => navigate('/login')}
-                                        sx={{ 
-                                            borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', px: 5, py: 2.5, fontWeight: 900, borderRadius: 100,
-                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
-                                        }}
-                                    >
-                                        Institutional Sign In
-                                    </Button>
-                                </Stack>
-                            </Stack>
-                        </Grid>
-                        <Grid item xs={12} md={5}>
-                             <Box sx={{ 
-                                p: 4, borderRadius: 10, bgcolor: 'rgba(22, 22, 24, 0.6)', 
-                                border: '1px solid rgba(198, 167, 94, 0.2)', backdropFilter: 'blur(30px)',
-                                position: 'relative'
-                            }}>
-                                <Typography variant="h6" fontWeight="950" sx={{ mb: 4, color: binThemeTokens.gold }}>NATIONWIDE PRESENCE</Typography>
-                                <Stack spacing={3}>
-                                    {['Dubai (HQ)', 'Abu Dhabi', 'Al Ain'].map((loc) => (
-                                        <Box key={loc} sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(198,167,94,0.1)', color: binThemeTokens.gold }}><Globe size={24} /></Box>
-                                            <Typography variant="h5" fontWeight="900" color="#FFF">{loc}</Typography>
-                                        </Box>
-                                    ))}
-                                </Stack>
-                            </Box>
-                        </Grid>
+            {/* 3. The 'Why BIN Group?' Section */}
+            <Box sx={{ py: 20, bgcolor: 'rgba(255,255,255,0.02)', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <Container maxWidth="lg">
+                    <Box sx={{ textAlign: 'center', mb: 12 }}>
+                        <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', mb: 2, letterSpacing: -2 }}>The Headache Solved</Typography>
+                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 700, mx: 'auto' }}>We eliminate the friction of traditional maintenance, moving at the speed of your portfolio.</Typography>
+                    </Box>
+
+                    <Grid container spacing={4}>
+                        {[
+                            { title: 'Zero Friction', desc: 'No manual coordination. Everything from ticketing to invoicing is digitally handled within the Sovereign OS.', icon: <Zap /> },
+                            { title: 'Real-Time GPS Dispatch', desc: 'Watch your service order fulfill in real-time. Our technicians are dispatched immediately via GPS routing.', icon: <Navigation /> },
+                            { title: 'Automated Financials', desc: 'Rental yields and maintenance fees are routed through mathematically precise automated protocols.', icon: <Database /> },
+                            { title: '100% Transparency', desc: 'Immutable portfolio tracking. No hidden costs. No administrative delays. Just absolute visibility.', icon: <TrendingUp /> }
+                        ].map((point, i) => (
+                            <Grid item xs={12} sm={6} md={3} key={i}>
+                                <Box sx={{ p: 4, textAlign: 'center' }}>
+                                    <Box sx={{ color: binThemeTokens.gold, mb: 3, display: 'flex', justifyContent: 'center', '& svg': { size: 48 } }}>{point.icon}</Box>
+                                    <Typography variant="h5" fontWeight="950" color="#FFF" gutterBottom>{point.title}</Typography>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ lineHeight: 1.7 }}>{point.desc}</Typography>
+                                </Box>
+                            </Grid>
+                        ))}
                     </Grid>
                 </Container>
             </Box>
 
-            {/* Core Capability Section */}
-            <Box sx={{ py: 15, bgcolor: '#0B0B0C' }}>
+            {/* 4. The Services Grid */}
+            <Box sx={{ py: 20 }}>
                 <Container maxWidth="lg">
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 2, display: 'block', textAlign: 'center' }}>
-                        MISSION DEPLOYMENT
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4, mb: 2, display: 'block', textAlign: 'center' }}>
+                        MISSION DEPLOYMENT CAPABILITIES
                     </Typography>
-                    <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', mb: 8, textAlign: 'center', letterSpacing: -2 }}>The Sovereign <Box component="span" sx={{ color: binThemeTokens.gold }}>Standard</Box></Typography>
+                    <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', textAlign: 'center', mb: 10, letterSpacing: -2 }}>Elite Infrastructure Maintenance</Typography>
 
-                    <Grid container spacing={4}>
+                    <Grid container spacing={3}>
                         {[
-                            { title: "Proprietary MEP Nodes", desc: "Real-time health monitoring of all mechanical, electrical, and plumbing infrastructure across your assets.", icon: <Zap size={40} /> },
-                            { title: "Institutional Maintenance", desc: "4-hour rapid response dispatch with 100% resolution guarantee on all mission-critical tickets.", icon: <Building2 size={40} /> },
-                            { title: "Yield Direct-Reroute", desc: "Zero-Escrow Policy. All rental income and yields are routed directly to your verified UAE bank account.", icon: <Briefcase size={40} /> }
-                        ].map((node, i) => (
-                            <Grid item xs={12} md={4} key={i}>
+                            { title: "Elite HVAC", desc: "Precision climate control maintenance for high-value properties.", icon: <Zap /> },
+                            { title: "Plumbing", desc: "Institutional-grade hydraulic & water system integrity.", icon: <Droplets /> },
+                            { title: "Electrical", desc: "Advanced power grid stability and preventative maintenance.", icon: <Lightbulb /> },
+                            { title: "Smart Home IoT", desc: "Full automation stack integration and node monitoring.", icon: <Home /> },
+                            { title: "24/7 Emergency SOS", desc: "Instant response for mission-critical infrastructure failure.", icon: <AlertTriangle /> }
+                        ].map((service, i) => (
+                            <Grid item xs={12} sm={6} md={4} key={i} lg={i === 4 ? 12 : 3}>
                                 <Card sx={{ 
-                                    height: '100%', bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', 
-                                    borderRadius: 8, transition: '0.3s', '&:hover': { transform: 'translateY(-10px)', borderColor: binThemeTokens.gold }
+                                    height: '100%', bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', 
+                                    borderRadius: 6, transition: '0.3s', '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-8px)' }
                                 }}>
-                                    <CardContent sx={{ p: 5 }}>
-                                        <Box sx={{ color: binThemeTokens.gold, mb: 4 }}>{node.icon}</Box>
-                                        <Typography variant="h4" fontWeight="900" sx={{ color: '#FFF', mb: 2 }}>{node.title}</Typography>
-                                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.8 }}>{node.desc}</Typography>
+                                    <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                                        <Box sx={{ color: binThemeTokens.gold, mb: 3, display: 'flex', justifyContent: 'center' }}>{service.icon}</Box>
+                                        <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>{service.title}</Typography>
+                                        <Typography variant="body2" color="rgba(255,255,255,0.5)">{service.desc}</Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
@@ -168,105 +257,123 @@ const OwnerLandingPage: React.FC = () => {
                 </Container>
             </Box>
 
-            {/* Leadership & CEO Section */}
-            <Box sx={{ py: 20, position: 'relative' }}>
+            {/* 5. Executive Access & Footer */}
+            <Box sx={{ py: 20, bgcolor: 'rgba(198, 167, 94, 0.03)', borderTop: '1px solid rgba(198, 167, 94, 0.1)' }}>
                 <Container maxWidth="lg">
-                    <Grid container spacing={12} alignItems="center">
-                        <Grid item xs={12} md={6}>
-                            <Box sx={{ 
-                                position: 'relative', 
-                                '&::before': { content: '""', position: 'absolute', inset: -20, border: `2px solid ${binThemeTokens.gold}`, opacity: 0.1, borderRadius: 10 }
-                            }}>
-                                <Box sx={{ 
-                                    aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', 
-                                    background: `linear-gradient(45deg, #111, #222)`,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}>
-                                   <Users size={120} color={binThemeTokens.gold} strokeWidth={1} />
-                                </Box>
-                                <Box sx={{ 
-                                    position: 'absolute', bottom: -30, right: -30, p: 4, bgcolor: binThemeTokens.gold, 
-                                    borderRadius: 6, boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
-                                }}>
-                                    <BadgeCheck size={32} color="#000" />
-                                </Box>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 2, display: 'block' }}>
-                                LEADERSHIP PROFILE
+                    <Grid container spacing={10} alignItems="center">
+                        <Grid item xs={12} md={7}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4, mb: 2, display: 'block' }}>
+                                DIRECT PARTNERSHIP
                             </Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3 }}>Rashid <br />Founder & CEO</Typography>
-                            <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', mb: 4, lineHeight: 1.8 }}>
-                                "At BIN GROUP, we don't just manage buildings; we stabilize infrastructure. Our mission is to ensure that UAE property owners have unshakeable confidence in their portfolio's integrity and financial velocity. We prioritize data sovereignty and zero-hold capital flows above all else."
+                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3, letterSpacing: -1.5 }}>Direct Executive Access</Typography>
+                            <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400, mb: 6, lineHeight: 1.8 }}>
+                                Institutional Partnerships require direct communication. For high-value asset onboarding or regional collaboration, connect directly with our leadership.
                             </Typography>
-                            <Box>
-                                <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>Institutional Excellence</Typography>
-                                <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>BIN GROUP L.L.C Registry · UAE</Typography>
-                            </Box>
+                            <Button 
+                                variant="contained" 
+                                size="large"
+                                startIcon={<Smartphone size={24} />}
+                                onClick={() => window.open('https://wa.me/971552423233', '_blank')}
+                                sx={{ 
+                                    bgcolor: '#25D366', 
+                                    color: '#FFF', 
+                                    fontWeight: 950, 
+                                    px: 6, py: 2.5, 
+                                    borderRadius: 4,
+                                    fontSize: '1.2rem',
+                                    '&:hover': { bgcolor: '#20BA5A', transform: 'scale(1.05)' }
+                                }}
+                            >
+                                WhatsApp CEO (0552423233)
+                            </Button>
                         </Grid>
-                    </Grid>
-                </Container>
-            </Box>
-
-            {/* Company Contact Section (V6 Upgrade) */}
-            <Box sx={{ py: 15, bgcolor: '#0B0B0C', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <Container maxWidth="lg">
-                    <Grid container spacing={6}>
-                        <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Mail color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
-                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Institutional Inquiries</Typography>
-                                <Typography variant="body1" color="rgba(255,255,255,0.6)">CEO@bin-groups.com</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Phone color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
-                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Direct Support</Typography>
-                                <Typography variant="body1" color="rgba(255,255,255,0.6)">+971 [REDACTED]</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, height: '100%', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <MapPin color={binThemeTokens.gold} size={32} style={{ marginBottom: 24 }} />
-                                <Typography variant="h5" fontWeight="900" color="#FFF" gutterBottom>Global HQ</Typography>
-                                <Typography variant="body1" color="rgba(255,255,255,0.6)">Dubai, United Arab Emirates</Typography>
+                        <Grid item xs={12} md={5}>
+                            <Paper sx={{ p: 5, borderRadius: 8, bgcolor: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+                                <BadgeCheck size={80} color={binThemeTokens.gold} style={{ marginBottom: 24, opacity: 0.8 }} />
+                                <Typography variant="h5" fontWeight="950" color="#FFF" gutterBottom>BIN GROUP L.L.C</Typography>
+                                <Typography variant="body2" color="rgba(255,255,255,0.4)">Registered Trademark • UAE Nationwide Operations</Typography>
                             </Paper>
                         </Grid>
                     </Grid>
                 </Container>
             </Box>
 
-            {/* Zero-Escrow Fintech Banner */}
-            <Box sx={{ 
-                py: 6, bgcolor: alpha(binThemeTokens.gold, 0.1), borderTop: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`,
-                borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`
-            }}>
-                <Container maxWidth="lg">
-                    <Stack direction={{ xs: 'column', md: 'row' }} alignItems="center" justifyContent="space-between" spacing={4}>
-                        <Stack direction="row" spacing={3} alignItems="center">
-                            <ShieldCheck size={48} color={binThemeTokens.gold} />
-                            <Box>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">Zero-Escrow Fintech Policy</Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>BIN GROUP does not hold escrow. All property yields are routed directly to your bank account.</Typography>
-                            </Box>
-                        </Stack>
-                        <Button 
-                            variant="contained" 
-                            onClick={() => navigate('/onboarding')}
-                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 6, py: 2, borderRadius: 100 }}
-                        >
-                            Open Account
-                        </Button>
-                    </Stack>
+            {/* Final Login Gate */}
+            <Box ref={loginRef} sx={{ py: 20, bgcolor: '#000', textAlign: 'center', borderTop: '2px solid rgba(198, 167, 94, 0.3)' }}>
+                <Container maxWidth="sm">
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 6, letterSpacing: -2 }}>Sign In to Dashboard</Typography>
+                    <Card sx={{ 
+                        bgcolor: 'rgba(22, 22, 24, 0.8)', 
+                        backdropFilter: 'blur(30px)', 
+                        border: '1px solid rgba(255,255,255,0.05)', 
+                        borderRadius: 10, 
+                        p: { xs: 4, md: 6 }
+                    }}>
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 4, bgcolor: 'rgba(211, 47, 47, 0.1)', color: '#ffb74d', border: '1px solid rgba(211, 47, 47, 0.2)' }}>
+                                {error}
+                            </Alert>
+                        )}
+                        <form onSubmit={handleLogin}>
+                            <Stack spacing={4}>
+                                <TextField
+                                    fullWidth
+                                    label="Administrative Email"
+                                    variant="outlined"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    InputProps={{
+                                        sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, height: 65, fontSize: '1.1rem' }
+                                    }}
+                                    sx={{ '& .MuiInputBase-input': { color: '#FFFFFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
+                                />
+                                <TextField
+                                    fullWidth
+                                    label="Security Key"
+                                    type={showPassword ? 'text' : 'password'}
+                                    variant="outlined"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    InputProps={{
+                                        endAdornment: (<InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: 'rgba(255,255,255,0.3)' }}>{showPassword ? <EyeOff /> : <Eye />}</IconButton></InputAdornment>),
+                                        sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, height: 65, fontSize: '1.1rem' }
+                                    }}
+                                    sx={{ '& .MuiInputBase-input': { color: '#FFFFFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
+                                />
+                                <Button
+                                    type="submit"
+                                    fullWidth
+                                    variant="contained"
+                                    disabled={localLoading}
+                                    sx={{ py: 2.5, borderRadius: 4, fontWeight: 950, letterSpacing: 3, background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, color: '#000', fontSize: '1.1rem' }}
+                                >
+                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : 'AUTHORIZE ACCESS'}
+                                </Button>
+                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>SECURE GLOBAL VERIFICATION</Typography>
+                                </Divider>
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    onClick={handleGoogleLogin}
+                                    disabled={localLoading}
+                                    startIcon={<UserCircle />}
+                                    sx={{ py: 2, borderRadius: 4, fontWeight: 800, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}
+                                >
+                                    Verify Identity
+                                </Button>
+                            </Stack>
+                        </form>
+                    </Card>
                 </Container>
             </Box>
 
-            {/* Footer */}
-            <Box sx={{ py: 10, textAlign: 'center', opacity: 0.6 }}>
-                 <Typography variant="caption" sx={{ letterSpacing: 5, fontWeight: 900, color: '#FFF' }}>
-                    BIN GROUP SOVEREIGN OS © 2026 | INSTITUTIONAL PORTFOLIO MANAGEMENT
+            {/* Footer Institutional Footer */}
+            <Box sx={{ py: 10, textAlign: 'center', opacity: 0.4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                 <Typography variant="caption" sx={{ letterSpacing: 4, fontWeight: 900, color: '#FFF' }}>
+                    BIN GROUP SOVEREIGN OS © 2026 | INSTITUTIONAL PORTFOLIO MANAGEMENT | UAE NATIONWIDE
                  </Typography>
             </Box>
         </Box>

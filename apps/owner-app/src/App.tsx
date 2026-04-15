@@ -169,7 +169,7 @@ export default function App() {
             <RoleProvider>
               <CssBaseline />
               <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
-                <BinGroupHeader />
+                <Routes><Route path="/" element={null} /><Route path="*" element={<BinGroupHeader />} /></Routes>
                 <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
                    <AppContent />
                 </Box>

@@ -9,7 +9,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -36,15 +36,10 @@ const LoginPage: React.FC = () => {
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
-            // RoleContext will handle redirection
-            // But if it takes too long, we want to allow retry
-            setTimeout(() => setLocalLoading(false), 5000);
+            // signInWithRedirect will reload the page on success, 
+            // but we need to handle errors that happen before redirect.
+            await signInWithRedirect(auth, provider);
         } catch (err: any) {
-            if (err.code === 'auth/popup-closed-by-user') {
-                setLocalLoading(false);
-                return;
-            }
             console.error("Google Auth Error:", err);
             setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
             setLocalLoading(false);
@@ -58,13 +53,14 @@ const LoginPage: React.FC = () => {
 
         try {
             await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
-            // RoleContext will handle redirection
-            setTimeout(() => setLocalLoading(false), 5000);
+            // Redirect will be handled by RoleContext/useEffect
         } catch (err: any) {
             console.error("Login Error:", err);
             setError(err.message || "Failed to sign in. Check your credentials.");
             setLocalLoading(false);
         }
+        // No finally here because if successful, we want to stay in loading state 
+        // until the app redirects. If it fails, we setLocalLoading(false) in catch.
     };
 
     if (roleLoading) {

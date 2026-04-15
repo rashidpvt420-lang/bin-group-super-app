@@ -26,8 +26,6 @@ const LandingPage: React.FC = () => {
             overflow: 'hidden',
             position: 'relative'
         }}>
-            <BinGroupHeader />
-
             {/* Hero Background Grid Effect */}
             <Box sx={{
                 position: 'absolute',

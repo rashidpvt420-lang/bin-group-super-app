@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
     GoogleAuthProvider, 
-    signInWithPopup
+    signInWithRedirect
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { Shield, Lock, ArrowRight, Globe } from 'lucide-react';
@@ -47,10 +47,7 @@ export default function UnifiedLogin() {
         setError(null);
         const provider = new GoogleAuthProvider();
         try {
-            const result = await signInWithPopup(auth, provider);
-            if (result.user) {
-                await handleUserRole(result.user.uid);
-            }
+            await signInWithRedirect(auth, provider);
         } catch (err: any) {
             if (err.code === 'auth/popup-closed-by-user') {
                 setLoading(false);

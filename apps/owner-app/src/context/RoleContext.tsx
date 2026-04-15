@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
-import { onAuthStateChanged, User, signOut } from "firebase/auth";
+import { onAuthStateChanged, User, signOut, getRedirectResult } from "firebase/auth";
 import { db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, isSupported, getMessaging, getToken, app } from "../lib/firebase";
 import LegalModal from "../components/LegalModal";
 
@@ -32,6 +32,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, [loading]);
 
     useEffect(() => {
+        // Handle Redirect Result immediately on mount
+        getRedirectResult(auth).then((result) => {
+            if (result) {
+                console.log("🛡️ [AUTH] Redirect result obtained for:", result.user.email);
+            }
+        }).catch((err) => {
+            console.error("🛡️ [AUTH] Redirect result error:", err);
+            setError(`Authentication failed: ${err.message}`);
+        });
+
         const safetyTimeout = setTimeout(() => {
             if (loadingRef.current) {
                 console.error("[ROLE-SYNC] BIN-CRITICAL: Role synchronization stalled.");

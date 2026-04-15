@@ -92,11 +92,13 @@ const BinGroupHeader: React.FC = () => {
                     )}
 
                     {/* App Links (Responsive) */}
-                    <Box sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
-                        <Button color="inherit" href="/dashboard">{t('nav.dashboard')}</Button>
-                        <Button color="inherit" href="/onboarding">{t('nav.onboarding')}</Button>
-                        {role === 'admin' && <Button color="primary" variant="outlined" href="/admin">{t('nav.admin')}</Button>}
-                    </Box>
+                    {user && (
+                        <Box sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
+                            <Button color="inherit" href="/dashboard">{t('nav.dashboard')}</Button>
+                            <Button color="inherit" href="/onboarding">{t('nav.onboarding')}</Button>
+                            {role === 'admin' && <Button color="primary" variant="outlined" href="/admin">{t('nav.admin')}</Button>}
+                        </Box>
+                    )}
                 </Box>
             </Toolbar>
         </AppBar>
