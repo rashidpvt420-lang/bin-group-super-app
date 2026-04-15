@@ -45,22 +45,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             }
         });
 
-        const safetyTimeout = setTimeout(() => {
-            if (loadingRef.current) {
-                console.error("[ROLE-SYNC] BIN-CRITICAL: Role synchronization stalled.");
-                // Check if we have a user but sync is just slow
-                if (auth.currentUser) {
-                    console.warn("[ROLE-SYNC] User present but sync incomplete. Defaulting to tenant for safety.");
-                    setRole('tenant');
-                    setStatus('active');
-                    setLoading(false);
-                } else {
-                    setError("Identity Synchronization Timed Out. Please check your connection or reload.");
-                    setLoading(false);
-                }
-            }
-        }, 20000); // Increased to 20s for slow networks
-
         console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
 
         const syncProfile = async (currentUser: User) => {
@@ -190,7 +174,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 console.log("🛡️ [AUTH] Syncing Profile for:", currentUser.email);
                 await syncProfile(currentUser);
                 setLoading(false);
-                clearTimeout(safetyTimeout);
             } else {
                 setRole(null);
                 setStatus(null);
@@ -199,18 +182,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setError(null);
                 setLegalAccepted(true);
                 setLoading(false);
-                clearTimeout(safetyTimeout);
             }
         }, (err) => {
             console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
             setError("Fatal Authorization Fault: " + err.message);
             setLoading(false);
-            clearTimeout(safetyTimeout);
         });
 
         return () => {
             unsubscribe();
-            clearTimeout(safetyTimeout);
         };
     }, []);
 

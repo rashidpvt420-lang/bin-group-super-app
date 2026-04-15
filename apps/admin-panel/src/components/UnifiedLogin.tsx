@@ -1,65 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { auth, db } from '../lib/firebase';
+import React, { useState } from 'react';
+import { auth } from '../lib/firebase';
 import { 
     GoogleAuthProvider, 
     signInWithRedirect
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 import { Shield, Lock, ArrowRight, Globe } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function UnifiedLogin() {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { loading: authLoading, error: authError } = useAuth();
+    const [localLoading, setLocalLoading] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Just check if already signed in
-        if (auth.currentUser) {
-            handleUserRole(auth.currentUser.uid);
-        } else {
-            setLoading(false);
-        }
-    }, []);
-
-    const handleUserRole = async (uid: string) => {
-        try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                if (data.role === 'admin' || data.isAdmin) {
-                    window.location.href = '/admin/dashboard';
-                } else {
-                    setError("ACCESS DENIED: Administrative credentials required.");
-                    setLoading(false);
-                }
-            } else {
-                setError("IDENTITY FAULT: Administrative profile not found.");
-                setLoading(false);
-            }
-        } catch (err) {
-            setError("DATABASE_OFFLINE: Could not verify permissions.");
-            setLoading(false);
-        }
-    };
+    const error = authError || localError;
+    const loading = authLoading || localLoading;
 
     const handleGoogleLogin = async () => {
-        localStorage.clear();
-        setLoading(true);
-        setError(null);
+        setLocalLoading(true);
+        setLocalError(null);
         const provider = new GoogleAuthProvider();
         try {
             await signInWithRedirect(auth, provider);
+            // Redirection is handled by the browser, AuthContext will catch the result on reload.
         } catch (err: any) {
-            if (err.code === 'auth/popup-closed-by-user') {
-                setLoading(false);
-                return;
-            }
-            console.error("Auth popup error:", err);
-            setError(`IDENTITY_FAULT: ${err.message || 'Verification failed.'}`);
-            setLoading(false);
+            console.error("Auth redirect error:", err);
+            setLocalError(`IDENTITY_FAULT: ${err.message || 'Verification failed.'}`);
+            setLocalLoading(false);
         }
     };
 
-    if (loading) {
+    if (loading && !error) {
         return (
             <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
                 <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6"></div>
@@ -112,7 +82,8 @@ export default function UnifiedLogin() {
 
                     <button 
                         onClick={handleGoogleLogin}
-                        className="w-full group relative flex items-center justify-between bg-white text-black font-black py-5 px-8 rounded-2xl transition-all duration-300 hover:bg-[#C6A75E] hover:scale-[1.02] active:scale-[0.98] shadow-xl overflow-hidden"
+                        disabled={loading}
+                        className="w-full group relative flex items-center justify-between bg-white text-black font-black py-5 px-8 rounded-2xl transition-all duration-300 hover:bg-[#C6A75E] hover:scale-[1.02] active:scale-[0.98] shadow-xl overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <div className="flex items-center gap-4">
                             <Globe className="w-6 h-6" />

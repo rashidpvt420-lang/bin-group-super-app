@@ -35,11 +35,12 @@ New-Item -ItemType Directory -Force hosting/public/admin | Out-Null
 
 # Physical Separation of SPAs
 Write-Host '   -> Deploying Owner SPA to / (Root)' -ForegroundColor Gray
-Get-ChildItem -Path "apps/owner-app/build" | Copy-Item -Destination "hosting/public" -Recurse -Force
+# Use robocopy for hardened recursive transfer
+robocopy "apps/owner-app/build" "hosting/public" /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
 
 Write-Host '   -> Deploying Admin SPA to /admin' -ForegroundColor Gray
-# Note: pipeline copy ensures nested chunks (e.g. static/js) are perfectly recursed into /admin/static/
-Get-ChildItem -Path "apps/admin-panel/build" | Copy-Item -Destination "hosting/public/admin" -Recurse -Force
+# Note: robocopy ensures nested chunks (e.g. static/js) are perfectly recursed into /admin/static/
+robocopy "apps/admin-panel/build" "hosting/public/admin" /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
 
 # [VERIFICATION] Ensure no manifest or index collision
 if (Test-Path hosting/public/admin/index.html) {
