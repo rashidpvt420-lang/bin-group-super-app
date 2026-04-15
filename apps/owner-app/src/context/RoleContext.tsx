@@ -39,16 +39,27 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             }
         }).catch((err) => {
             console.error("🛡️ [AUTH] Redirect result error:", err);
-            setError(`Authentication failed: ${err.message}`);
+            // Non-fatal if we already have a user from onAuthStateChanged
+            if (!auth.currentUser) {
+                setError(`Authentication failed: ${err.message}`);
+            }
         });
 
         const safetyTimeout = setTimeout(() => {
             if (loadingRef.current) {
                 console.error("[ROLE-SYNC] BIN-CRITICAL: Role synchronization stalled.");
-                setError("Role synchronization timed out.");
-                setLoading(false);
+                // Check if we have a user but sync is just slow
+                if (auth.currentUser) {
+                    console.warn("[ROLE-SYNC] User present but sync incomplete. Defaulting to tenant for safety.");
+                    setRole('tenant');
+                    setStatus('active');
+                    setLoading(false);
+                } else {
+                    setError("Identity Synchronization Timed Out. Please check your connection or reload.");
+                    setLoading(false);
+                }
             }
-        }, 15000);
+        }, 20000); // Increased to 20s for slow networks
 
         console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
 
@@ -58,9 +69,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 let snap;
                 
                 try {
-                    snap = await getDoc(userDocRef);
+                    // [SAFETY] Use a timeout for the firestore read
+                    const fetchPromise = getDoc(userDocRef);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), 10000));
+                    snap = await Promise.race([fetchPromise, timeoutPromise]) as any;
                 } catch (err: any) {
-                    console.error("📍 [ROLE-SYNC] Permission Denied or Fetch Error:", err);
+                    console.error("📍 [ROLE-SYNC] Permission Denied, Timeout, or Fetch Error:", err);
                     setRole('tenant');
                     setStatus('active');
                     setIsAdmin(false);
@@ -69,6 +83,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 }
                 
                 if (snap && !snap.exists()) {
+                    console.log("📍 [ROLE-SYNC] Profile missing. Creating sovereign tenant profile...");
                     try {
                         const newProfile = {
                             uid: currentUser.uid,
@@ -83,6 +98,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         snap = await getDoc(userDocRef);
                     } catch (err) {
                         console.error("📍 [ROLE-SYNC] Profile creation failed:", err);
+                        // Fallback to local guest-tenant mode
                         setRole('tenant');
                         setStatus('active');
                         setLoading(false);

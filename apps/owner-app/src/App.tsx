@@ -113,9 +113,11 @@ function AppContent() {
         p: 4,
         textAlign: 'center'
       }}>
-        <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.identity_fault') || 'IDENTITY FAULT'}</Typography>
-        <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{t('common.role_error_prefix') || roleError}</Typography>
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>{t('common.reload_sys') || 'RELOAD SYSTEM'}</Button>
+        <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.identity_fault')}</Typography>
+        <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>
+          {t('common.role_error_prefix')} {roleError}
+        </Typography>
+        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
       </Box>
     );
   }
