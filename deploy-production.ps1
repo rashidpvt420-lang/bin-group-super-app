@@ -22,11 +22,31 @@ if ($LASTEXITCODE -ne 0) { Write-Host '❌ Admin Panel Build Failed' -Foreground
 
 # 4/5 Assemble Deployment Bundle
 Write-Host '📦 [4/5] Assembling Unified Hosting Bundle...' -ForegroundColor Yellow
-Remove-Item -Recurse -Force hosting/public/* -ErrorAction SilentlyContinue
+
+# [STRICT] Full purge of target hosting directory
+if (Test-Path hosting/public) {
+    Remove-Item -Recurse -Force hosting/public/* -ErrorAction SilentlyContinue
+} else {
+    New-Item -ItemType Directory -Force hosting/public | Out-Null
+}
+
+# Ensure admin subdirectory exists
 New-Item -ItemType Directory -Force hosting/public/admin | Out-Null
 
+# Physical Separation of SPAs
+Write-Host '   -> Deploying Owner SPA to / (Root)' -ForegroundColor Gray
 Copy-Item -Recurse -Force apps/owner-app/build/* hosting/public/
+
+Write-Host '   -> Deploying Admin SPA to /admin' -ForegroundColor Gray
+# Note: copying contents of build/ to admin/ ensures chunks land at /admin/static/
 Copy-Item -Recurse -Force apps/admin-panel/build/* hosting/public/admin/
+
+# [VERIFICATION] Ensure no manifest or index collision
+if (Test-Path hosting/public/admin/index.html) {
+    Write-Host '   ✅ Admin Assembly Verified' -ForegroundColor Green
+} else {
+    Write-Host '   ❌ Admin Assembly FAILED' -ForegroundColor Red; exit 1
+}
 
 # 5/5 Institutional Deploy (Atomic)
 Write-Host '🚀 [5/5] Uploading to Production (bin-group-57c60)...' -ForegroundColor Cyan

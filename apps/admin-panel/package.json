@@ -2,7 +2,7 @@
     "name": "home-os-admin-panel",
     "version": "1.0.0",
     "private": true,
-    "homepage": "/admin",
+    "homepage": "/admin/",
     "dependencies": {
         "@bin/shared": "*",
         "@emotion/react": "^11.11.1",

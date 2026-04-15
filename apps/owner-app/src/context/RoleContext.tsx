@@ -186,7 +186,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
+                console.log("🛡️ [AUTH] Syncing Profile for:", currentUser.email);
                 await syncProfile(currentUser);
+                setLoading(false);
+                clearTimeout(safetyTimeout);
             } else {
                 setRole(null);
                 setStatus(null);
@@ -194,9 +197,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setPropertyId(null);
                 setError(null);
                 setLegalAccepted(true);
+                setLoading(false);
+                clearTimeout(safetyTimeout);
             }
-            setLoading(false);
-            clearTimeout(safetyTimeout);
         }, (err) => {
             console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
             setError("Fatal Authorization Fault: " + err.message);
