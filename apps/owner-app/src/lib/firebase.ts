@@ -5,8 +5,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
-const PRIMARY_REGION = "me-central1";
-const SECONDARY_REGION = "europe-west3";
+const PRIMARY_REGION = "europe-west3";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
@@ -30,17 +29,8 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// Regionalized Functions Failover
-let functions = getFunctions(app, PRIMARY_REGION);
-
-// Connectivity Watchdog
-const connectionWatchdog = setTimeout(() => {
-    console.warn("âš ï¸ [V7-CIRCUIT-BREAKER] Primary UAE Region Latency > 4s. Activating Passive Failover (EU).");
-    functions = getFunctions(app, SECONDARY_REGION);
-}, 4000);
-
-// Clear watchdog on first successful interaction if possible,
-// but for now, we follow the strict 4000ms requirement.
+// Regionalized Functions - Fixed to match production deployment
+const functions = getFunctions(app, PRIMARY_REGION);
 
 // Explicit Exports
 export {
@@ -50,4 +40,3 @@ export {
 };
 
 export default app;
-

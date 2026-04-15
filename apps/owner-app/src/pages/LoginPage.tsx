@@ -38,6 +38,8 @@ const LoginPage: React.FC = () => {
             const provider = new GoogleAuthProvider();
             await signInWithPopup(auth, provider);
             // RoleContext will handle redirection
+            // But if it takes too long, we want to allow retry
+            setTimeout(() => setLocalLoading(false), 5000);
         } catch (err: any) {
             if (err.code === 'auth/popup-closed-by-user') {
                 setLocalLoading(false);
@@ -57,11 +59,10 @@ const LoginPage: React.FC = () => {
         try {
             await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             // RoleContext will handle redirection
+            setTimeout(() => setLocalLoading(false), 5000);
         } catch (err: any) {
             console.error("Login Error:", err);
             setError(err.message || "Failed to sign in. Check your credentials.");
-            setLocalLoading(true);
-        } finally {
             setLocalLoading(false);
         }
     };
