@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { auth } from '../lib/firebase';
+import { auth, signInWithPopup } from '../lib/firebase';
 import { 
-    GoogleAuthProvider, 
-    signInWithRedirect
+    GoogleAuthProvider
 } from 'firebase/auth';
 import { Shield, Lock, ArrowRight, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -20,10 +19,13 @@ export default function UnifiedLogin() {
         setLocalError(null);
         const provider = new GoogleAuthProvider();
         try {
-            await signInWithRedirect(auth, provider);
-            // Redirection is handled by the browser, AuthContext will catch the result on reload.
+            console.log("🔍 [DIAG] Starting signInWithPopup for Admin...");
+            const result = await signInWithPopup(auth, provider);
+            if (result.user) {
+                console.log("🛡️ [AUTH] Admin Popup login successful for:", result.user.email);
+            }
         } catch (err: any) {
-            console.error("Auth redirect error:", err);
+            console.error("Auth popup error:", err);
             setLocalError(`IDENTITY_FAULT: ${err.message || 'Verification failed.'}`);
             setLocalLoading(false);
         }

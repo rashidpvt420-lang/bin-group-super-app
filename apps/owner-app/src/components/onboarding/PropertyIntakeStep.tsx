@@ -40,47 +40,57 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (tabValue === 0 && editingIndex !== null && autocompleteRef.current) {
-            // Initialize Google Autocomplete for the address field
-            try {
-                googleAutocompleteRef.current = new (window as any).google.maps.places.Autocomplete(autocompleteRef.current, {
-                    componentRestrictions: { country: "ae" },
-                    fields: ["address_components", "geometry", "formatted_address"],
-                    types: ["address"]
-                });
+        let autocomplete: any = null;
 
-                googleAutocompleteRef.current.addListener("place_changed", () => {
-                    const place = googleAutocompleteRef.current.getPlace();
-                    if (!place.geometry) return;
-
-                    const address = place.formatted_address;
-                    let emirate = 'Dubai';
-                    let area = '';
-
-                    // Extract Emirate and Area from address components
-                    for (const component of place.address_components) {
-                        if (component.types.includes("administrative_area_level_1")) {
-                            emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
-                        }
-                        if (component.types.includes("sublocality") || component.types.includes("neighborhood")) {
-                            area = component.long_name;
-                        }
-                    }
-
-                    updateProperty(editingIndex!, { 
-                        address, 
-                        emirate, 
-                        area: area || activeProperty?.area,
-                        location: {
-                            lat: place.geometry.location.lat(),
-                            lng: place.geometry.location.lng()
-                        }
+        const initAutocomplete = async () => {
+            if (tabValue === 0 && editingIndex !== null && autocompleteRef.current) {
+                try {
+                    // Use modern importLibrary for robust dynamic loading
+                    const { Autocomplete } = await (window as any).google.maps.importLibrary("places") as any;
+                    
+                    autocomplete = new Autocomplete(autocompleteRef.current, {
+                        componentRestrictions: { country: "ae" },
+                        fields: ["address_components", "geometry", "formatted_address"],
+                        types: ["address"]
                     });
-                });
-            } catch (e) {
-                console.error("Google Autocomplete Init Failed:", e);
+
+                    autocomplete.addListener("place_changed", () => {
+                        const place = autocomplete.getPlace();
+                        if (!place.geometry) return;
+
+                        const address = place.formatted_address;
+                        let emirate = 'Dubai';
+                        let area = '';
+
+                        // Extract Emirate and Area from address components
+                        for (const component of place.address_components) {
+                            if (component.types.includes("administrative_area_level_1")) {
+                                emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
+                            }
+                            if (component.types.includes("sublocality") || component.types.includes("neighborhood")) {
+                                area = component.long_name;
+                            }
+                        }
+
+                        updateProperty(editingIndex!, { 
+                            address, 
+                            emirate, 
+                            area: area || activeProperty?.area,
+                            location: {
+                                lat: place.geometry.location.lat(),
+                                lng: place.geometry.location.lng()
+                            }
+                        });
+                    });
+                    
+                    googleAutocompleteRef.current = autocomplete;
+                } catch (e) {
+                    console.error("Google Autocomplete Init Failed:", e);
+                }
             }
-        }
+        };
+
+        initAutocomplete();
 
         return () => {
             if (googleAutocompleteRef.current) {

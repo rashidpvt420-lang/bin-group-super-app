@@ -8,8 +8,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { auth, signInWithPopup } from '../lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -33,13 +33,17 @@ const LoginPage: React.FC = () => {
     }, [role, isAdmin, roleLoading, navigate]);
 
     const handleGoogleLogin = async () => {
-        console.log("🔍 [DIAG] Google Login Clicked");
+        console.log("🔍 [DIAG] Google Login Clicked - Using POPUP flow");
         setLocalLoading(true);
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            console.log("🔍 [DIAG] Starting signInWithRedirect...");
-            await signInWithRedirect(auth, provider);
+            console.log("🔍 [DIAG] Starting signInWithPopup...");
+            const result = await signInWithPopup(auth, provider);
+            if (result.user) {
+                console.log("🛡️ [AUTH] Popup login successful for:", result.user.email);
+                // Navigation will be handled by the useEffect watching 'role'
+            }
         } catch (err: any) {
             console.error("❌ [DIAG] Google Auth Error:", err);
             setError(`Identity verification failed: ${err.message || 'Unknown error'}`);

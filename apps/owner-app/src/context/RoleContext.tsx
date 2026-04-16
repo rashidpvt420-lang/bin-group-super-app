@@ -40,22 +40,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         const initAuth = async () => {
             console.log("🔍 [DIAG] Starting initAuth...");
             try {
-                // Handle Redirect Result immediately on mount to clear any pending auth state
-                try {
-                    console.log("🔍 [DIAG] Calling getRedirectResult...");
-                    const result = await getRedirectResult(auth);
-                    if (result) {
-                        console.log("🛡️ [AUTH] Redirect result obtained for:", result.user.email);
-                    } else {
-                        console.log("🔍 [DIAG] No redirect result found.");
-                    }
-                } catch (err: any) {
-                    console.warn("🛡️ [AUTH] Non-fatal redirect recovery warning:", err.message);
-                    if (err.code === 'auth/internal-error') {
-                        console.error("❌ [DIAG] getRedirectResult returned auth/internal-error. This usually indicates a configuration or CSP issue.");
-                    }
-                }
-
+                // [V8] POPUP-ONLY PROTOCOL: Redirect logic removed to prevent cross-origin token drop.
                 console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
 
                 const syncProfile = async (currentUser: User) => {

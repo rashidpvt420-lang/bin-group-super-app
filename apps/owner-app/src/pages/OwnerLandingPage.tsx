@@ -24,8 +24,8 @@ import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
-import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { auth, signInWithPopup } from '../lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import {
     ArrowRight,
     ShieldCheck,
@@ -82,7 +82,11 @@ const OwnerLandingPage: React.FC = () => {
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            await signInWithRedirect(auth, provider);
+            console.log("🔍 [DIAG] Starting signInWithPopup...");
+            const result = await signInWithPopup(auth, provider);
+            if (result.user) {
+                console.log("🛡️ [AUTH] Popup login successful for:", result.user.email);
+            }
         } catch (err: any) {
             console.error("Google Auth Error:", err);
             setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
