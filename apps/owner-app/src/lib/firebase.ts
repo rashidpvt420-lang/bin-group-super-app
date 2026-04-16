@@ -1,8 +1,12 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or } from 'firebase/firestore';
+import { 
+    getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, 
+    updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, 
+    Timestamp, deleteDoc, writeBatch, or 
+} from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, getRedirectResult, User } from 'firebase/auth';
 import { getToken, isSupported, getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -34,8 +38,9 @@ const functions = getFunctions(app, PRIMARY_REGION);
 // Explicit Exports
 export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
+    onAuthStateChanged, getRedirectResult, type User,
     ref, uploadBytes, getDownloadURL,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, writeBatch, or
+    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or
 };
 
 export default app;

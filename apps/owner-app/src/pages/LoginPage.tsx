@@ -24,6 +24,7 @@ const LoginPage: React.FC = () => {
 
     useEffect(() => {
         if (!roleLoading && role) {
+            console.log("🔍 [DIAG] LoginPage Role Resolved:", role);
             if (role === 'tenant') navigate('/tenant');
             else if (role === 'technician') navigate('/tech');
             else if (role === 'admin' || isAdmin) window.location.href = '/admin';
@@ -32,15 +33,15 @@ const LoginPage: React.FC = () => {
     }, [role, isAdmin, roleLoading, navigate]);
 
     const handleGoogleLogin = async () => {
+        console.log("🔍 [DIAG] Google Login Clicked");
         setLocalLoading(true);
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            // signInWithRedirect will reload the page on success, 
-            // but we need to handle errors that happen before redirect.
+            console.log("🔍 [DIAG] Starting signInWithRedirect...");
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
-            console.error("Google Auth Error:", err);
+            console.error("❌ [DIAG] Google Auth Error:", err);
             setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
             setLocalLoading(false);
         }
@@ -48,19 +49,18 @@ const LoginPage: React.FC = () => {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log("🔍 [DIAG] Email Login Clicked for:", email);
         setLocalLoading(true);
         setError(null);
 
         try {
             await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
-            // Redirect will be handled by RoleContext/useEffect
+            console.log("🔍 [DIAG] Email Login Success");
         } catch (err: any) {
-            console.error("Login Error:", err);
+            console.error("❌ [DIAG] Login Error:", err);
             setError(err.message || "Failed to sign in. Check your credentials.");
             setLocalLoading(false);
         }
-        // No finally here because if successful, we want to stay in loading state 
-        // until the app redirects. If it fails, we setLocalLoading(false) in catch.
     };
 
     if (roleLoading) {
@@ -75,10 +75,10 @@ const LoginPage: React.FC = () => {
     }
 
     return (
-        <Box sx={{ 
-            minHeight: '100vh', 
-            bgcolor: '#000', 
-            display: 'flex', 
+        <Box sx={{
+            minHeight: '100vh',
+            bgcolor: '#000',
+            display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             p: 2,
@@ -94,7 +94,7 @@ const LoginPage: React.FC = () => {
                         </Box>
                     </Box>
                     <Typography variant="h4" fontWeight="900" sx={{ color: '#fff', mb: 1 }}>{t('login.portal')}</Typography>
-                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>{t('login.auth_access')} <Chip label="v1.23-STABLE" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
+                    <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>{t('login.auth_access')} <Chip label="v1.23-STABLE-DIAG" size="small" sx={{ ml: 1, bgcolor: binThemeTokens.gold, color: '#000', height: 16, fontSize: '0.6rem', verticalAlign: 'middle' }} /></Typography>
                 </Box>
 
                 <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.8)', backdropFilter: 'blur(20px)', border: `1px solid rgba(255,255,255,0.05)`, borderRadius: 8, boxShadow: '0 40px 100px rgba(0,0,0,0.6)', overflow: 'visible', position: 'relative' }}>

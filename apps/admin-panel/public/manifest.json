@@ -1,0 +1,20 @@
+{
+  "short_name": "BIN-Admin",
+  "name": "BIN-ADMINISTRY",
+  "display": "standalone",
+  "start_url": "/admin/",
+  "theme_color": "#020617",
+  "background_color": "#020617",
+  "icons": [
+    {
+      "src": "logo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

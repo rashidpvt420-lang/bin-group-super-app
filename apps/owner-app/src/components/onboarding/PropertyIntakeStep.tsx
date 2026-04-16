@@ -36,7 +36,58 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const [editingIndex, setEditingIndex] = useState<number | null>(0);
     const [tabValue, setTabValue] = useState(0); 
     const autocompleteRef = useRef<HTMLInputElement>(null);
+    const googleAutocompleteRef = useRef<any>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (tabValue === 0 && editingIndex !== null && autocompleteRef.current) {
+            // Initialize Google Autocomplete for the address field
+            try {
+                googleAutocompleteRef.current = new (window as any).google.maps.places.Autocomplete(autocompleteRef.current, {
+                    componentRestrictions: { country: "ae" },
+                    fields: ["address_components", "geometry", "formatted_address"],
+                    types: ["address"]
+                });
+
+                googleAutocompleteRef.current.addListener("place_changed", () => {
+                    const place = googleAutocompleteRef.current.getPlace();
+                    if (!place.geometry) return;
+
+                    const address = place.formatted_address;
+                    let emirate = 'Dubai';
+                    let area = '';
+
+                    // Extract Emirate and Area from address components
+                    for (const component of place.address_components) {
+                        if (component.types.includes("administrative_area_level_1")) {
+                            emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
+                        }
+                        if (component.types.includes("sublocality") || component.types.includes("neighborhood")) {
+                            area = component.long_name;
+                        }
+                    }
+
+                    updateProperty(editingIndex!, { 
+                        address, 
+                        emirate, 
+                        area: area || activeProperty?.area,
+                        location: {
+                            lat: place.geometry.location.lat(),
+                            lng: place.geometry.location.lng()
+                        }
+                    });
+                });
+            } catch (e) {
+                console.error("Google Autocomplete Init Failed:", e);
+            }
+        }
+
+        return () => {
+            if (googleAutocompleteRef.current) {
+                (window as any).google.maps.event.clearInstanceListeners(googleAutocompleteRef.current);
+            }
+        };
+    }, [tabValue, editingIndex]);
 
     const safeProperties = Array.isArray(properties) ? properties : [];
 
@@ -172,7 +223,16 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                         <Grid container spacing={3}>
                             <Grid item xs={12} sm={6}><TextField fullWidth label={t('field.emirate')} select value={activeProperty.emirate} onChange={(e) => updateProperty(editingIndex!, { emirate: e.target.value })}>{['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'RAK', 'Fujairah', 'UAQ'].map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}</TextField></Grid>
-                            <Grid item xs={12} sm={6}><TextField fullWidth label={t('field.area')} value={activeProperty.area} onChange={(e) => updateProperty(editingIndex!, { area: e.target.value })} /></Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField 
+                                    fullWidth 
+                                    label={t('field.area')} 
+                                    value={activeProperty.area} 
+                                    onChange={(e) => updateProperty(editingIndex!, { area: e.target.value })} 
+                                    inputRef={autocompleteRef}
+                                    placeholder="Search address or area..."
+                                />
+                            </Grid>
 
                             <Grid item xs={12} sm={4}>
                                 <TextField fullWidth label={t('field.type')} select value={activeProperty.propertyType} onChange={(e) => updateProperty(editingIndex!, { propertyType: e.target.value })}>

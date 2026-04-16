@@ -1,7 +1,10 @@
 {
   "short_name": "BIN-Groups",
   "name": "BIN-Groups | Institutional Asset OS",
-  "description": "Sovereign Asset Management for UAE Portfolio Owners",
+  "display": "standalone",
+  "start_url": "/",
+  "theme_color": "#0b0b0c",
+  "background_color": "#0b0b0c",
   "icons": [
     {
       "src": "/logo.png",
@@ -14,9 +17,5 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": "/",
-  "display": "standalone",
-  "theme_color": "#0b0b0c",
-  "background_color": "#0b0b0c",
   "gcm_sender_id": "123413252227"
 }
