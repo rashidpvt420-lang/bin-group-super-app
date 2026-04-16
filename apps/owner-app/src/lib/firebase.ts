@@ -3,9 +3,7 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateD
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-
-const PRIMARY_REGION = "europe-west3";
+import { getToken, isSupported, getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
@@ -29,7 +27,8 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// Regionalized Functions - Fixed to match production deployment
+// Regionalized Functions
+const PRIMARY_REGION = "europe-west3";
 const functions = getFunctions(app, PRIMARY_REGION);
 
 // Explicit Exports

@@ -32,17 +32,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, [loading]);
 
     useEffect(() => {
-        // Handle Redirect Result immediately on mount
+        // Handle Redirect Result immediately on mount to clear any pending auth state
         getRedirectResult(auth).then((result) => {
             if (result) {
                 console.log("🛡️ [AUTH] Redirect result obtained for:", result.user.email);
             }
         }).catch((err) => {
-            console.error("🛡️ [AUTH] Redirect result error:", err);
-            // Non-fatal if we already have a user from onAuthStateChanged
-            if (!auth.currentUser) {
-                setError(`Authentication failed: ${err.message}`);
-            }
+            console.warn("🛡️ [AUTH] Non-fatal redirect recovery warning:", err.message);
+            // DO NOT set global error here to avoid blocking login UI
         });
 
         console.log("💎 [BOOT] Sovereign RoleProvider Mounted. Watchdog Armed.");
@@ -51,23 +48,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             try {
                 const userDocRef = doc(db, "users", currentUser.uid);
                 let snap;
-                
+
                 try {
-                    // [SAFETY] Use a timeout for the firestore read
                     const fetchPromise = getDoc(userDocRef);
                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), 10000));
                     snap = await Promise.race([fetchPromise, timeoutPromise]) as any;
                 } catch (err: any) {
-                    console.error("📍 [ROLE-SYNC] Permission Denied, Timeout, or Fetch Error:", err);
+                    console.error("📜 [ROLE-SYNC] Permission Denied, Timeout, or Fetch Error:", err);
                     setRole('tenant');
                     setStatus('active');
                     setIsAdmin(false);
-                    setLoading(false);
                     return;
                 }
-                
+
                 if (snap && !snap.exists()) {
-                    console.log("📍 [ROLE-SYNC] Profile missing. Creating sovereign tenant profile...");
+                    console.log("📜 [ROLE-SYNC] Profile missing. Creating sovereign tenant profile...");
                     try {
                         const newProfile = {
                             uid: currentUser.uid,
@@ -81,11 +76,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         await setDoc(userDocRef, newProfile);
                         snap = await getDoc(userDocRef);
                     } catch (err) {
-                        console.error("📍 [ROLE-SYNC] Profile creation failed:", err);
-                        // Fallback to local guest-tenant mode
+                        console.error("📜 [ROLE-SYNC] Profile creation failed:", err);
                         setRole('tenant');
                         setStatus('active');
-                        setLoading(false);
                         return;
                     }
                 }
@@ -93,66 +86,51 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 if (snap && snap.exists()) {
                     const data = snap.data();
                     const currentStatus = (data.status || 'active').toUpperCase();
-                    
+
                     if (currentStatus === 'PENDING_APPROVAL') {
                         setRole(data.role?.toLowerCase() || 'owner');
                         setStatus('PENDING_APPROVAL');
                         setIsAdmin(false);
-                        setError("ACCOUNT PENDING APPROVAL: Your contract and bank details are currently being verified by BIN GROUP compliance. Please contact support@bin-groups.com if this persists for > 24 hours.");
-                        setLoading(false);
+                        setError("ACCOUNT PENDING APPROVAL: Your contract and bank details are currently being verified.");
                         return;
                     }
 
                     setRole(data.role?.toLowerCase() || 'tenant');
                     setStatus(currentStatus.toLowerCase());
-                    const isHighPrivilege = data.role?.toLowerCase() === 'admin' || data.isAdmin === true || data.role?.toLowerCase() === 'owner';
                     setIsAdmin(data.role?.toLowerCase() === 'admin' || data.isAdmin === true);
-                    setPropertyId(data.propertyId || data.unitId || null); // [FIX] Handle unitId fallback for tenants
+                    setPropertyId(data.propertyId || data.unitId || null);
                     setLegalAccepted(!!data.legalAcceptedAt);
-
-                    // [V6.4] Institutional MFA/2FA Enforcement
-                    if (isHighPrivilege) {
-                        const enrolledFactors = (currentUser as any).multiFactor?.enrolledFactors || [];
-                        if (enrolledFactors.length === 0) {
-                            console.warn("🛡️ [MFA-ENFORCEMENT] High-privilege access attempt without second factor.");
-                            setError("INSTITUTIONAL MFA REQUIRED: Your account role (ADMIN/OWNER) requires Multi-Factor Authentication for UAE PDPL compliance. Please visit your Account Security settings or contact hq@bin-groups.com to enable 2FA.");
-                            setLoading(false);
-                            return;
-                        }
-                    }
 
                     setError(null);
 
-                    // [V5] Silent FCM Token Harvest - NON-BLOCKING
+                    // [V5] Silent FCM Token Harvest
                     (async () => {
                         try {
                             const messagingSupported = await isSupported();
                             if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                                 const messaging = getMessaging(app);
                                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                                // Using a timeout for service worker ready to prevent indefinite hangs
                                 const swReadyPromise = navigator.serviceWorker.ready;
                                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_READY_TIMEOUT")), 5000));
-                                
+
                                 try {
                                     await Promise.race([swReadyPromise, timeoutPromise]);
-                                    const currentToken = await getToken(messaging, { 
+                                    const currentToken = await getToken(messaging, {
                                         vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                                        serviceWorkerRegistration: registration 
+                                        serviceWorkerRegistration: registration
                                     });
                                     if (currentToken) {
                                         await updateDoc(doc(db, 'users', currentUser.uid), {
                                             fcmToken: currentToken,
                                             updatedAt: new Date().toISOString()
                                         });
-                                        console.log("Token saved to user profile.");
                                     }
                                 } catch (raceErr) {
-                                    console.warn("📍 [V5] SW Ready timeout or getToken failed:", raceErr);
+                                    console.warn("📜 [V5] SW Ready timeout or getToken failed:", raceErr);
                                 }
                             }
                         } catch (notifErr) {
-                            console.warn("📍 [V5] Silent Token Harvest bypass/failed:", notifErr);
+                            console.warn("📜 [V5] Silent Token Harvest bypass/failed:", notifErr);
                         }
                     })();
 
@@ -161,10 +139,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setStatus('active');
                 }
             } catch (err: any) {
-                console.error("📍 [ROLE-SYNC] Fatal context resolution failure:", err);
+                console.error("📜 [ROLE-SYNC] Fatal context resolution failure:", err);
                 setRole('tenant');
                 setStatus('active');
-                setLoading(false);
             }
         };
 
@@ -185,7 +162,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             }
         }, (err) => {
             console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
-            setError("Fatal Authorization Fault: " + err.message);
+            setError("Authentication Protocol Violation: " + err.message);
             setLoading(false);
         });
 

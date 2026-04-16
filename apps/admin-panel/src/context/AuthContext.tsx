@@ -33,8 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log("🛡️ [AUTH] Identity verification recovered for:", result.user.email);
             }
         }).catch((err) => {
-            console.error("🛡️ [AUTH] Redirect resolution fault:", err);
-            setError(`Identity Verification Fault: ${err.message}`);
+            console.warn("🛡️ [AUTH] Non-fatal redirect recovery warning:", err.message);
         });
 
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
