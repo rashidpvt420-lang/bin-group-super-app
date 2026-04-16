@@ -4,7 +4,6 @@ import { createTheme, alpha } from '@mui/material/styles';
  * BIN-GROUP Sovereign Identity System (V1.18)
  * Admin Panel Optimized - Dark Mode + Institutional Gold
  */
-
 export const binThemeTokens = {
   black: '#0B0B0C',
   graphite: '#161618',

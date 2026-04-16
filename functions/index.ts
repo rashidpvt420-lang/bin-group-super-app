@@ -279,10 +279,15 @@ export const adminCreateUser = onCall({ enforceAppCheck: true }, async (request)
         } else throw new HttpsError("internal", err.message);
     }
 
-    await admin.auth().setCustomUserClaims(uid, { role, status: 'active' });
+    const isAdministrative = role === 'admin' || role === 'ceo' || role === 'manager';
+    await admin.auth().setCustomUserClaims(uid, { 
+        role, 
+        admin: isAdministrative,
+        status: 'active' 
+    });
     await db.collection("users").doc(uid).set({
         uid, email: email.toLowerCase(), displayName: displayName || "New User",
-        role, status: "active", emirate: emirate || null, serviceZone: serviceZone || null,
+        role, status: "active", isAdmin: isAdministrative, emirate: emirate || null, serviceZone: serviceZone || null,
         assignedZones: assignedZones || [], updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         isOffDuty: false, joinDate: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });

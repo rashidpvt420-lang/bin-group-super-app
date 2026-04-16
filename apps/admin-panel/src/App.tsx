@@ -56,10 +56,10 @@ function AppContent() {
     React.useEffect(() => {
         const timer = setTimeout(() => {
             if (loading) {
-                console.warn("[ADMIN-SHELL] Boot timeout. Forcing UI release.");
+                console.warn("[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.");
                 setSafetyReleased(true);
             }
-        }, 5000);
+        }, 12000); // Increased for high-latency loads
         return () => clearTimeout(timer);
     }, [loading]);
 
@@ -142,7 +142,7 @@ function Layout() {
             bgcolor: '#020617',
             direction: isRTL ? 'rtl' : 'ltr'
         }}>
-            <Box sx={{ display: 'flex', flexGrow: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+            <Box sx={{ display: 'flex', flexGrow: 1 }}>
                 <Navigation />
                 <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'auto' }}>
                     <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', bgcolor: 'rgba(255,255,255,0.02)' }}>

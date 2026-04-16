@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
 
@@ -27,10 +27,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [loading]);
 
     useEffect(() => {
+        // [STABILITY] Explicitly resolve redirect results for cross-domain institutional flows
+        getRedirectResult(auth).then((result) => {
+            if (result) {
+                console.log("🛡️ [AUTH] Identity verification recovered for:", result.user.email);
+            }
+        }).catch((err) => {
+            console.error("🛡️ [AUTH] Redirect resolution fault:", err);
+            setError(`Identity Verification Fault: ${err.message}`);
+        });
+
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
             try {
                 if (usr) {
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 8000));
+                    console.log("🛡️ [AUTH] Watchdog detected user:", usr.email);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 20000));
                     
                     try {
                         const userDocPromise = getDoc(doc(db, 'users', usr.uid));
@@ -38,12 +49,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                         if (userDoc.exists()) {
                             const data = userDoc.data();
-                            if (data.role === 'admin' || data.isAdmin === true) {
+                            console.log("🛡️ [AUTH] Profile data resolved:", data.role);
+                            
+                            // [ROLE-EXPANSION] Allow CEO and Manager roles to access Admin Terminal
+                            const hasAdminAccess = data.role === 'admin' || data.isAdmin === true || data.role === 'ceo' || data.role === 'manager';
+                            
+                            if (hasAdminAccess) {
                                 setUser({ ...usr, ...data });
                                 setIsAuthenticated(true);
                                 setError(null);
 
-                                // [V5] Silent FCM Token Harvest - DECOUPLED FROM BOOTSTRAP
+                                // [V5] Silent FCM Token Harvest - DECOUPLED
                                 setTimeout(async () => {
                                     try {
                                         const messagingSupported = await isSupported();
@@ -66,31 +82,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             }
                                         }
                                     } catch (fcmErr) {
-                                        console.warn("[AUTH] Optional FCM harvest bypassed:", fcmErr);
+                                        console.warn("[AUTH] FCM harvest bypassed:", fcmErr);
                                     }
                                 }, 1000);
                             } else {
-                                setError("Access Denied: Administrative credentials required.");
-                                await signOut(auth);
+                                setError("Access Denied: You do not have Administrative or CEO clearance.");
                                 setIsAuthenticated(false);
                                 setUser(null);
+                                await signOut(auth);
                             }
                         } else {
-                            setError("Sovereign Profile not found.");
-                            await signOut(auth);
+                            setError("Sovereign Profile not found in the UAE nodes.");
                             setIsAuthenticated(false);
                             setUser(null);
+                            await signOut(auth);
                         }
                     } catch (firestoreErr: any) {
                         setError("Identity Synchronization Failure. Protocol violation or database timeout.");
-                        await signOut(auth);
                         setIsAuthenticated(false);
                         setUser(null);
+                        await signOut(auth);
                     }
                 } else {
                     setIsAuthenticated(false);
                     setUser(null);
-                    setError(null);
+                    // [FIX] DO NOT clear the error when usr is null, as it wipes the "Access Denied" message
                 }
             } catch (err: any) {
                 setError("System Initialization Fault: " + (err.message || 'Unknown'));

@@ -550,7 +550,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
                     direction: isRTL ? 'rtl' : 'ltr', 
                     minHeight: '100vh',
                     fontFamily: "'Cairo', 'Inter', sans-serif",
-                    backgroundColor: '#000',
+                    backgroundColor: '#020617',
                     color: '#fff'
                 }}
             >
