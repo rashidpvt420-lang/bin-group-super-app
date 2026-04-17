@@ -338,7 +338,16 @@ export default function TechnicianPortalPage() {
                                                 </Typography>
                                             </Grid>
                                             <Grid item xs={12} md={4} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                <Button variant="contained" fullWidth startIcon={<Navigation />} onClick={() => handleNavigate(ticket)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{t('tech.navigate')}</Button>
+                                                <Button 
+                                                    variant="contained" 
+                                                    fullWidth 
+                                                    startIcon={<Navigation />} 
+                                                    onClick={() => handleNavigate(ticket)} 
+                                                    disabled={!ticket.propertyLocation?.location && !ticket.address && !ticket.propertyLocation?.address}
+                                                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                                                >
+                                                    {t('tech.navigate')}
+                                                </Button>
                                                 <Stack direction="row" spacing={1}>
                                                     {(ticket.status === 'assigned' || ticket.status === 'ASSIGNED') ? (
                                                         <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'EN_ROUTE')} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 950 }}>{t('tech.action.en_route')}</Button>
@@ -348,6 +357,18 @@ export default function TechnicianPortalPage() {
                                                         <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'IN_PROGRESS')} sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 950 }}>{t('tech.action.start_work')}</Button>
                                                     ) : null}
                                                 </Stack>
+                                                {ticket.tenantPhone && (
+                                                    <Button 
+                                                        variant="outlined" 
+                                                        fullWidth 
+                                                        component="a"
+                                                        href={`tel:${ticket.tenantPhone}`}
+                                                        startIcon={<Phone size={16} />}
+                                                        sx={{ color: '#4ade80', borderColor: '#4ade80', fontWeight: 950 }}
+                                                    >
+                                                        {t('support.phone')}
+                                                    </Button>
+                                                )}
                                                 <Button variant="outlined" fullWidth onClick={() => navigate(`/tech/ticket/${ticket.id}`)} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{t('tech.open_node')}</Button>
                                             </Grid>
                                         </Grid>
