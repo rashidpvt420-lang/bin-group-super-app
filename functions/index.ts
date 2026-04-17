@@ -17,6 +17,8 @@ const db = admin.firestore();
 
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
+const smtpUserSecret = defineSecret("SMTP_USER");
+const smtpPassSecret = defineSecret("SMTP_PASS");
 
 // ─── [V7.1] SOVEREIGN PRESTIGE INFRASTRUCTURE ─────────────────────────────────────
 const PRESTIGE_FOOTER = `
@@ -46,9 +48,13 @@ function wrapInLuxuryTemplate(content: string, subject: string) {
 
 // ─── [V5] OMNI-CHANNEL NOTIFICATION ENGINE ─────────────────────────────────────────
 async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: any = null, extraData: any = {}) {
+    const result = { pushSent: false, mailQueued: false };
     try {
         const userDoc = await db.collection("users").doc(userId).get();
-        if (!userDoc.exists) return false;
+        if (!userDoc.exists) {
+            console.log(`[V5 Omni] User ${userId} not found. Aborting dispatch.`);
+            return result;
+        }
 
         const userData = userDoc.data();
         const fcmToken = userData?.fcmToken;
@@ -72,14 +78,20 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                 data: {
                     userId: String(userId),
                     ticketId: String(extraData.ticketId || ''),
-                    // [PATCH] Ensure all data payload values are STRINGS
                     ...Object.entries(extraData).reduce((acc: any, [k, v]) => {
                         acc[k] = (typeof v === 'object' && v !== null) ? JSON.stringify(v) : String(v);
                         return acc;
                     }, {})
                 }
             };
-            await admin.messaging().send(payload);
+            try {
+                await admin.messaging().send(payload);
+                result.pushSent = true;
+            } catch (err: any) {
+                console.error(`[V5 Omni] Push transmission failed for ${userId}:`, err.message || err);
+            }
+        } else {
+            console.log(`[V5 Omni] No registered FCM token for ${userId}. Skipping push.`);
         }
 
         // 2. Dispatch Email
@@ -95,12 +107,16 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                 },
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
+            result.mailQueued = true;
+        } else {
+            console.log(`[V5 Omni] Email options not provided or no email exists for ${userId}. Skipping email.`);
         }
-        return true;
+        
     } catch (error) {
-        console.error(`[V5 Omni] Dispatch Failure for user ${userId}:`, error);
-        return false;
+        console.error(`[V5 Omni] Core Dispatch Exception for user ${userId}:`, error);
     }
+    
+    return result;
 }
 
 // ─── [V5] TICKET ROUTING & CONTEXT ATTACHMENT ─────────────────────────────────────
@@ -195,6 +211,11 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 });
 
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
+    if (!request.auth) {
+        console.warn(`[AI AUTH LOCKOUT] Unauthenticated guidance execution attempt.`);
+        return { status: "ERROR", error: "UNAUTHORIZED_CALLER" };
+    }
+    
     try {
         if (!request.data || typeof request.data.input !== "string" || !request.data.input.trim()) {
             return { status: "ERROR", error: "Invalid request payload" };
@@ -275,38 +296,50 @@ export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", asyn
     const data = snap.data();
     
     try {
+        // [CVE-MITIGATION/DATA SANITIZATION] Restrict intake properties to explicitly allowed fields
+        const safePropertyData = {
+            propertyName: typeof data.propertyName === 'string' ? data.propertyName : 'New Asset',
+            propertyType: typeof data.propertyType === 'string' ? data.propertyType : 'Unknown',
+            emirate: typeof data.emirate === 'string' ? data.emirate : 'Dubai',
+            address: typeof data.address === 'string' ? data.address : '',
+            unitCount: typeof data.unitCount === 'number' ? data.unitCount : 0,
+            ownerEmail: typeof data.ownerEmail === 'string' ? data.ownerEmail : '',
+            ownerPhone: typeof data.ownerPhone === 'string' ? data.ownerPhone : ''
+        };
+
         await db.collection("properties").add({
-            ...data,
+            ...safePropertyData,
             status: 'PENDING_APPROVAL',
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         await snap.ref.update({ status: 'PROCESSED', processedAt: admin.firestore.FieldValue.serverTimestamp() });
         console.log(`[INTAKE] Submission ${event.params.id} routed to sovereign properties vault successfully.`);
     } catch (err) {
-        console.error(`[INTAKE] Failure routing ${event.params.id}:`, err);
+        console.error(`[INTAKE] Failure routing ${event.params.id}:`, String(err));
         await snap.ref.update({ status: 'ERROR', error: String(err) });
     }
 });
 
 // [V8] Mail Transport LIVE using hardcoded institutional credentials
-const mailTransport = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: 'hq@bin-groups.com',
-        pass: 'SovereignSecure#2026'
-    }
-});
-
-export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) => {
+export const processMailQueue = onDocumentCreated({ document: "mail/{docId}", secrets: [smtpUserSecret, smtpPassSecret] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     const mailData = snap.data();
     
     try {
+        // [V8] Mail Transport LIVE using Firebase Secrets integration
+        const mailTransport = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: {
+                user: smtpUserSecret.value(),
+                pass: smtpPassSecret.value()
+            }
+        });
+
         await mailTransport.sendMail({
-            from: '"BIN GROUP" <hq@bin-groups.com>',
+            from: `"BIN GROUP" <${smtpUserSecret.value()}>`,
             to: mailData.to,
             subject: mailData.message?.subject || 'BIN GROUP Update',
             html: mailData.message?.html || ''
@@ -323,9 +356,9 @@ export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) 
 export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
     try {
         const client = new admin.firestore.v1.FirestoreAdminClient();
-        const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'bin-group-57c60';
+        const projectId = admin.app().options.projectId || process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'bin-group-57c60';
         const databaseName = client.databasePath(projectId, '(default)');
-        const bucket = `gs://${projectId}.firebasestorage.app/backups/live/${new Date().toISOString()}`;
+        const bucket = `gs://${projectId}.appspot.com/backups/live/${new Date().toISOString()}`;
         
         await client.exportDocuments({
             name: databaseName,
@@ -333,7 +366,7 @@ export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
             collectionIds: [] // Exports all collections
         });
         console.log(`[BACKUP] Initialized sovereign vault snapshot at ${bucket}`);
-    } catch (err) {
-        console.error(`[BACKUP] Systemic export fault:`, err);
+    } catch (err: any) {
+        console.error(`[BACKUP] Systemic export fault:`, err.message || err);
     }
 });

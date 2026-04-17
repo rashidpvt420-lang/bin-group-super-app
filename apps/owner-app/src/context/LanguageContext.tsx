@@ -343,7 +343,12 @@ const translations: Record<Language, Record<string, string>> = {
         'tech.action.en_route': 'En Route',
         'tech.action.arrived': 'Arrived',
         'tech.action.start_work': 'Start Work',
-        'status.specialist': 'Specialist'
+        'status.specialist': 'Specialist',
+        'tech.verified_specialist': 'VERIFIED SPECIALIST',
+        'tech.secure_identity_verified': 'SECURE IDENTITY VERIFIED',
+        'tech.qr_registry_note': 'Scanning this code connects to the Sovereign Registry to verify real-time credentials.',
+        'tech.dismiss_id': 'DISMISS ID',
+        'tech.show_digital_id': 'SHOW DIGITAL ID'
     },
     ar: {
         'nav.dashboard': 'لوحة القيادة',
@@ -675,7 +680,12 @@ const translations: Record<Language, Record<string, string>> = {
         'ai.error_undefined': 'أعاد مركز التحكم خطأ غير معروف.',
         'ai.error_unreadable': 'تم استلام بيانات غير مقروءة من المحرك السيادي.',
         'ai.error_unexpected': 'حدث خطأ غير متوقع.',
-        'ai.error_limit': 'تم الوصول إلى الحد التشغيلي (20/24ساعة).'
+        'ai.error_limit': 'تم الوصول إلى الحد التشغيلي (20/24ساعة).',
+        'tech.verified_specialist': 'أخصائي معتمد',
+        'tech.secure_identity_verified': 'تم التحقق من الهوية الآمنة',
+        'tech.qr_registry_note': 'محاولة مسح هذا الرمز تتصل بالسجل السيادي للتحقق من الصلاحيات.',
+        'tech.dismiss_id': 'إغلاق الهوية',
+        'tech.show_digital_id': 'عرض الهوية الرقمية'
     }
 };
 

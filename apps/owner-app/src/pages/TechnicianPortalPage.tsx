@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip, alpha, CircularProgress, Tabs, Tab, Switch, FormControlLabel, Alert, Dialog } from '@mui/material';
-import { Wrench, Clock, ShieldCheck, Activity, MapPin, Navigation, ArrowRight, Calendar, UserCheck, Briefcase, Trophy, Zap, Globe, BellRing, Timer, CheckCircle2 } from 'lucide-react';
+import { Wrench, Clock, ShieldCheck, Activity, MapPin, Navigation, ArrowRight, Calendar, UserCheck, Briefcase, Trophy, Zap, Globe, BellRing, Timer, CheckCircle2, Phone } from 'lucide-react';
+
 import { 
     db, collection, query, orderBy, onSnapshot, limit, where, or, app, 
     getMessaging, isSupported, getToken as getFcmToken, 
@@ -35,6 +36,8 @@ interface Ticket {
         unitNumber: string;
         floorNumber?: string;
         location?: { lat: number; lng: number };
+        lat?: number | null;
+        lng?: number | null;
     };
 }
 
@@ -109,7 +112,7 @@ export default function TechnicianPortalPage() {
                     console.log("📍 [PUSH DIAGNOSTICS] Token received. Writing to Firestore...");
                     await updateDoc(doc(db, 'users', user.uid), {
                         fcmToken: currentToken,
-                        updatedAt: new Date().toISOString()
+                        updatedAt: serverTimestamp()
                     });
                     console.log("📍 [PUSH DIAGNOSTICS] Firestore write successful.");
                     alert(t('tech.notif_handshake_success'));
@@ -173,7 +176,9 @@ export default function TechnicianPortalPage() {
                         if (tenantSnap.exists()) enriched.tenantPhone = tenantSnap.data()?.phone || tenantSnap.data()?.phoneNumber;
                     } catch (e) {}
                 }
-                if ((!t.propertyLocation || !t.propertyLocation.address) && t.propertyId) {
+                const missingAddress = !t.propertyLocation?.address && !t.address;
+                const missingCoords = (!t.propertyLocation?.lat || !t.propertyLocation?.lng) && !t.propertyLocation?.location;
+                if ((missingAddress || missingCoords) && t.propertyId) {
                     try {
                         const propSnap = await getDoc(doc(db, 'properties', t.propertyId));
                         if (propSnap.exists()) {
@@ -228,15 +233,20 @@ export default function TechnicianPortalPage() {
     const missionPool = tickets.filter(t => t.status === 'OPEN');
 
     const handleNavigate = (ticket: Ticket) => {
-        if (!ticket.propertyLocation) return;
-        const loc = ticket.propertyLocation as any;
+        if (!ticket.propertyLocation) {
+            if (ticket.address) {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ticket.address)}`, '_blank');
+            }
+            return;
+        }
+        const loc = ticket.propertyLocation;
         let queryStr = '';
         if (loc.lat && loc.lng) {
             queryStr = `${loc.lat},${loc.lng}`;
         } else if (loc.location && loc.location.lat && loc.location.lng) {
             queryStr = `${loc.location.lat},${loc.location.lng}`;
         } else {
-            queryStr = encodeURIComponent(`${loc.address || ''}, ${loc.propertyName || ''}`);
+            queryStr = encodeURIComponent(`${loc.address || ticket.address || ''}, ${loc.propertyName || ticket.propertyName || ''}`);
         }
         window.open(`https://www.google.com/maps/search/?api=1&query=${queryStr}`, '_blank');
     };
@@ -301,7 +311,7 @@ export default function TechnicianPortalPage() {
                         onClick={() => setIdModalOpen(true)}
                         sx={{ mt: 1, color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900, borderRadius: 2 }}
                     >
-                        SHOW DIGITAL ID
+                        {t('tech.show_digital_id') || 'SHOW DIGITAL ID'}
                     </Button>
                 </Box>
                 <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ '& .MuiTab-root': { color: 'rgba(255,255,255,0.5)', fontWeight: 950 }, '& .Mui-selected': { color: binThemeTokens.gold } }}>
@@ -331,7 +341,7 @@ export default function TechnicianPortalPage() {
                                                     {ticket.tenantPhone || 'No Phone Number'}
                                                 </Typography>
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                                                    {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}
+                                                    {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || ticket.propertyLocation?.floorNumber || 'N/A'}
                                                 </Typography>
                                                 <Typography variant="body2" dir="auto" sx={{ color: alpha('#FFF', 0.5), mt: 1 }}>
                                                     {ticket.address || ticket.propertyLocation?.address || 'Location details in Navigator'}
@@ -343,7 +353,7 @@ export default function TechnicianPortalPage() {
                                                     fullWidth 
                                                     startIcon={<Navigation />} 
                                                     onClick={() => handleNavigate(ticket)} 
-                                                    disabled={!ticket.propertyLocation?.location && !ticket.address && !ticket.propertyLocation?.address}
+                                                    disabled={!ticket.address && !ticket.propertyLocation?.address && !(ticket.propertyLocation?.lat && ticket.propertyLocation?.lng) && !(ticket.propertyLocation?.location?.lat && ticket.propertyLocation?.location?.lng)}
                                                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                                                 >
                                                     {t('tech.navigate')}
@@ -388,7 +398,7 @@ export default function TechnicianPortalPage() {
                                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('tech.pool_id')}: {ticket.id.substring(0,8)}</Typography>
                                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{ticket.description}</Typography>
                                             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                                                {ticket.propertyName} | {t('field.units')} {ticket.unitNumber || 'N/A'} ({t('field.floors')} {ticket.floorNumber || 'N/A'})
+                                                {ticket.propertyName || ticket.propertyLocation?.propertyName || 'Asset'} | {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} ({t('field.floors')} {ticket.floorNumber || ticket.propertyLocation?.floorNumber || 'N/A'})
                                             </Typography>
                                         </Box>
                                         <Button variant="outlined" onClick={() => navigate(`/tech/ticket/${ticket.id}`)} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{t('tech.accept')}</Button>
@@ -504,6 +514,7 @@ export default function TechnicianPortalPage() {
 }
 
 const DigitalIDModal = ({ open, onClose, userData }: { open: boolean, onClose: () => void, userData: any }) => {
+    const { t } = useLanguage();
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://bin-groups.com/v/${userData?.uid}`)}&bgcolor=0B0B0B&color=D4AF37`;
 
     return (
@@ -517,7 +528,7 @@ const DigitalIDModal = ({ open, onClose, userData }: { open: boolean, onClose: (
             <Box sx={{ p: 4, textAlign: 'center' }}>
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>BIN GROUP OFFICIAL</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>VERIFIED SPECIALIST</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{t('tech.verified_specialist') || 'VERIFIED SPECIALIST'}</Typography>
                 </Box>
                 
                 <Box sx={{ p: 2, bgcolor: '#FFF', borderRadius: 4, display: 'inline-block', mb: 3 }}>
@@ -527,15 +538,15 @@ const DigitalIDModal = ({ open, onClose, userData }: { open: boolean, onClose: (
                 <Box sx={{ mb: 4 }}>
                     <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{userData?.displayName}</Typography>
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>ID: {userData?.uid?.substring(0, 12).toUpperCase()}</Typography>
-                    <Typography variant="caption" sx={{ color: '#4ade80', fontWeight: 950, mt: 1, display: 'block' }}>● SECURE IDENTITY VERIFIED</Typography>
+                    <Typography variant="caption" sx={{ color: '#4ade80', fontWeight: 950, mt: 1, display: 'block' }}>● {t('tech.secure_identity_verified') || 'SECURE IDENTITY VERIFIED'}</Typography>
                 </Box>
 
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block', mb: 3 }}>
-                    Scanning this code connects to the Sovereign Registry to verify real-time credentials.
+                    {t('tech.qr_registry_note') || 'Scanning this code connects to the Sovereign Registry to verify real-time credentials.'}
                 </Typography>
 
                 <Button fullWidth onClick={onClose} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 4 }}>
-                    DISMISS ID
+                    {t('tech.dismiss_id') || 'DISMISS ID'}
                 </Button>
             </Box>
         </Dialog>
