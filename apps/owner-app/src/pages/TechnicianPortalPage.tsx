@@ -1,7 +1,11 @@
 import React from 'react';
 import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip, alpha, CircularProgress, Tabs, Tab, Switch, FormControlLabel, Alert, Dialog } from '@mui/material';
 import { Wrench, Clock, ShieldCheck, Activity, MapPin, Navigation, ArrowRight, Calendar, UserCheck, Briefcase, Trophy, Zap, Globe, BellRing, Timer, CheckCircle2 } from 'lucide-react';
-import { db, collection, query, orderBy, onSnapshot, limit, where, or, app, getMessaging, isSupported, getToken as getFcmToken, updateDoc, doc, writeBatch, serverTimestamp } from '../lib/firebase';
+import { 
+    db, collection, query, orderBy, onSnapshot, limit, where, or, app, 
+    getMessaging, isSupported, getToken as getFcmToken, 
+    updateDoc, doc, getDoc, writeBatch, serverTimestamp 
+} from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
@@ -15,23 +19,22 @@ interface Ticket {
     status: string;
     priority: string;
     propertyId: string;
+    tenantId: string;
+    tenantPhone?: string;
     createdAt: any;
     assignedTechnicianId?: string;
     preferredTiming?: string;
-    // Top-level fields from SOS submission
     unitNumber?: string;
     floorNumber?: string;
     propertyName?: string;
     address?: string;
     tenantName?: string;
-    emirate?: string;
-    serviceZone?: string;
     propertyLocation?: {
-        unitNumber: string;
-        propertyType: string;
         address: string;
-        location?: { lat: number; lng: number };
         propertyName: string;
+        unitNumber: string;
+        floorNumber?: string;
+        location?: { lat: number; lng: number };
     };
 }
 
@@ -128,7 +131,7 @@ export default function TechnicianPortalPage() {
         );
 
         const poolUnsub = onSnapshot(poolQuery, (snapshot) => {
-            const poolData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket));
+            const poolData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Ticket));
             setTickets(prev => {
                 const assigned = prev.filter(t => t.assignedTechnicianId === user.uid);
                 const combined = [...assigned, ...poolData];
@@ -138,11 +141,38 @@ export default function TechnicianPortalPage() {
             setLoading(false);
         });
 
-        const assignedUnsub = onSnapshot(assignedQuery, (snapshot) => {
-            const assignedData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ticket));
+        const assignedUnsub = onSnapshot(assignedQuery, async (snapshot) => {
+            const assignedData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Ticket));
+            
+            // [V9] DATA ENRICHMENT: Fetch missing context for assigned tickets
+            const enrichedData = await Promise.all(assignedData.map(async (t) => {
+                const enriched = { ...t };
+                if (!t.tenantPhone && t.tenantId) {
+                    try {
+                        const tenantSnap = await getDoc(doc(db, 'users', t.tenantId));
+                        if (tenantSnap.exists()) enriched.tenantPhone = tenantSnap.data()?.phone || tenantSnap.data()?.phoneNumber;
+                    } catch (e) {}
+                }
+                if ((!t.propertyLocation || !t.propertyLocation.address) && t.propertyId) {
+                    try {
+                        const propSnap = await getDoc(doc(db, 'properties', t.propertyId));
+                        if (propSnap.exists()) {
+                            const pData = propSnap.data();
+                            enriched.propertyLocation = {
+                                ...enriched.propertyLocation,
+                                address: pData?.address,
+                                propertyName: pData?.name,
+                                location: pData?.location
+                            } as any;
+                        }
+                    } catch (e) {}
+                }
+                return enriched;
+            }));
+
             setTickets(prev => {
                 const pool = prev.filter(t => t.status === 'OPEN');
-                const combined = [...assignedData, ...pool];
+                const combined = [...enrichedData, ...pool];
                 return Array.from(new Map(combined.map(item => [item.id, item])).values());
             });
         });
@@ -266,14 +296,14 @@ export default function TechnicianPortalPage() {
                                         <Grid container>
                                             <Grid item xs={12} md={8} sx={{ p: 4 }}>
                                                 <Chip label={t('tech.urgent_dispatch')} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, mb: 2 }} />
-                                                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{ticket.description}</Typography>
-                                                <Typography variant="body1" sx={{ color: binThemeTokens.gold, fontWeight: 700, mb: 1 }}>
+                                                <Typography variant="h4" fontWeight="950" dir="auto" sx={{ color: '#FFF', mb: 1 }}>{ticket.description}</Typography>
+                                                <Typography variant="body1" dir="auto" sx={{ color: binThemeTokens.gold, fontWeight: 700, mb: 1 }}>
                                                     {ticket.tenantName || 'Resident'} | {ticket.propertyName || ticket.propertyLocation?.propertyName || 'Asset'}
                                                 </Typography>
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
                                                     {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}
                                                 </Typography>
-                                                <Typography variant="body2" sx={{ color: alpha('#FFF', 0.5), mt: 1 }}>
+                                                <Typography variant="body2" dir="auto" sx={{ color: alpha('#FFF', 0.5), mt: 1 }}>
                                                     {ticket.address || ticket.propertyLocation?.address || 'Location details in Navigator'}
                                                 </Typography>
                                             </Grid>

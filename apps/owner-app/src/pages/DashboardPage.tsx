@@ -3,7 +3,7 @@ import {
   Container, Grid, Card, CardContent, Typography, Box, Button,
   LinearProgress, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, Stack, Chip, Divider, CircularProgress,
-  alpha
+  alpha, Alert
 } from '@mui/material';
 import SignalCellularAltIcon from '@mui/icons-material/SignalCellularAlt';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -13,7 +13,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import SpeedIcon from '@mui/icons-material/Speed';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import { ArrowRight, ArrowLeft, ShieldAlert, Crown, Tent, AlertCircle, AlertCircle as AlertCircleIcon } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ShieldAlert, Crown, Tent, AlertCircle, AlertCircle as AlertCircleIcon, BellRing } from 'lucide-react';
 import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
@@ -31,7 +31,7 @@ import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 
 export default function DashboardPage() {
-    const { user, role } = useRole();
+    const { user, role, enableNotifications } = useRole();
     const { t, isRTL } = useLanguage();
     const [contracts, setContracts] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
@@ -41,6 +41,8 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [generatingAudit, setGeneratingAudit] = useState<string | null>(null);
     const [integrity, setIntegrity] = useState<ProfileHealth | null>(null);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [showNotifSuccess, setShowNotifSuccess] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -103,6 +105,16 @@ export default function DashboardPage() {
 
         fetchData();
     }, [user]);
+
+    const handleEnableNotifs = async () => {
+        setNotifLoading(true);
+        const success = await enableNotifications();
+        if (success) {
+            setShowNotifSuccess(true);
+            setTimeout(() => setShowNotifSuccess(false), 5000);
+        }
+        setNotifLoading(false);
+    };
 
     const handleDownloadAudit = async (propId: string, area: string) => {
         const intel = intelligence[propId];
@@ -340,7 +352,7 @@ export default function DashboardPage() {
                         <TableRow key={p.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                             <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="subtitle1" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{p.area}</Typography>
+                                <Typography variant="subtitle1" dir="auto" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{p.area}</Typography>
                                 {p.propertyType === 'majlis' && (
                                     <Chip 
                                         label={p.majlisType?.toUpperCase() || 'MAJLIS'} 
@@ -359,7 +371,7 @@ export default function DashboardPage() {
                                     <ShieldAlert size={14} color={binThemeTokens.gold} style={{ opacity: 0.8 }} />
                                 )}
                             </Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{p.buildingName || t('dash.private_asset')} · {p.emirate}</Typography>
+                            <Typography variant="caption" dir="auto" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{p.buildingName || t('dash.private_asset')} · {p.emirate}</Typography>
                             </TableCell>
                             <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -379,7 +391,7 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell>
                             <Chip 
-                                label={contract?.status || t('status.pending')} 
+                                label={contract?.status ? t(`status.${contract.status.toLowerCase()}`) : t('status.pending')} 
                                 size="small" 
                                 sx={{ 
                                     fontSize: '0.7rem', height: 24, fontWeight: 900, 
@@ -399,6 +411,50 @@ export default function DashboardPage() {
 
         <Grid item xs={12} lg={4}>
             <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary, letterSpacing: 1 }}>{t('dash.alerts')}</Typography>
+            
+            {/* [V5-PATCH] Push Notification Enablement Section */}
+            <Paper sx={{ 
+                p: 3, mb: 4, 
+                bgcolor: 'rgba(22, 22, 24, 0.9)', 
+                border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`,
+                borderRadius: 4,
+                boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+            }}>
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                    <BellRing size={20} color={binThemeTokens.gold} />
+                    <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#FFF' }}>
+                        SOVEREIGN PUSH ALERTS
+                    </Typography>
+                </Stack>
+                
+                {showNotifSuccess ? (
+                    <Alert icon={<BellRing size={18} />} severity="success" sx={{ bgcolor: 'rgba(74, 222, 128, 0.1)', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.2)' }}>
+                        Handshake Success: Alerts are now active.
+                    </Alert>
+                ) : (
+                    <Box>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mb: 2, display: 'block' }}>
+                            Enable real-time mission status updates and portfolio safety alerts.
+                        </Typography>
+                        <Button 
+                            fullWidth 
+                            variant="contained" 
+                            size="small"
+                            disabled={notifLoading}
+                            onClick={handleEnableNotifs}
+                            sx={{ 
+                                bgcolor: binThemeTokens.gold, 
+                                color: '#000', 
+                                fontWeight: 900,
+                                '&:hover': { bgcolor: binThemeTokens.goldLight }
+                            }}
+                        >
+                            {notifLoading ? <CircularProgress size={16} color="inherit" /> : 'ACTIVATE ALERTS'}
+                        </Button>
+                    </Box>
+                )}
+            </Paper>
+
             <Stack spacing={3}>
                 {(notifications || []).length > 0 ? (notifications || []).map((n, i) => (
                     <Paper key={i} sx={{ 

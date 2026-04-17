@@ -74,6 +74,10 @@ export interface PropertyData {
     assetGrade: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
     currentStatus: string;
     address: string;
+    location?: {
+        lat: number;
+        lng: number;
+    };
     ownerEmail?: string;
     exposure?: string;
     strategy?: 'sale' | 'rent' | 'fm';
@@ -198,7 +202,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     persist(
         (set, get) => ({
             step: 1,
-            properties: [{ ...defaultProperty, id: 'prop-1' }],
+            properties: [],
             portfolioSummary: {
                 totalProperties: 1,
                 totalUnits: 1,
@@ -323,7 +327,7 @@ export const useOnboardingStore = create<OnboardingState>()(
 
             reset: () => set({
                 step: 1,
-                properties: [{ ...defaultProperty, id: 'prop-1' }],
+                properties: [],
                 selectedPlan: null,
                 selectedAddOns: [],
                 contractId: null,

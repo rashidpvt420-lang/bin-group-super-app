@@ -15,6 +15,7 @@ interface RoleContextType {
     user: User | null;
     propertyId: string | null;
     legalAccepted: boolean;
+    enableNotifications: () => Promise<boolean>;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -29,6 +30,41 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [error, setError] = useState<string | null>(null);
     const [legalAccepted, setLegalAccepted] = useState(true);
     const loadingRef = useRef(loading);
+
+    const enableNotifications = async (): Promise<boolean> => {
+        if (!user) return false;
+        try {
+            const messagingSupported = await isSupported();
+            if (!messagingSupported) return false;
+
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                const messaging = getMessaging(app);
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+                const swReadyPromise = navigator.serviceWorker.ready;
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_READY_TIMEOUT")), 5000));
+
+                await Promise.race([swReadyPromise, timeoutPromise]);
+                const currentToken = await getToken(messaging, {
+                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
+                    serviceWorkerRegistration: registration
+                });
+                
+                if (currentToken) {
+                    await updateDoc(doc(db, 'users', user.uid), {
+                        fcmToken: currentToken,
+                        updatedAt: new Date().toISOString()
+                    });
+                    console.log("🛡️ [AUTH] FCM Token Harvested successfully.");
+                    return true;
+                }
+            }
+            return false;
+        } catch (err) {
+            console.warn("🛡️ [AUTH] Notification enablement failed:", err);
+            return false;
+        }
+    };
 
     useEffect(() => {
         loadingRef.current = loading;
@@ -194,7 +230,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId, legalAccepted }}>
+        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId, legalAccepted, enableNotifications }}>
             {user && !legalAccepted && !loading && !error && (
                 <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />
             )}

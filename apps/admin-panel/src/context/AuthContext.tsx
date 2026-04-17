@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
+import { auth, db, onAuthStateChanged, signInWithPopup } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
 
@@ -27,39 +27,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [loading]);
 
     useEffect(() => {
-        // [STABILITY] Explicitly resolve redirect results for cross-domain institutional flows
-        getRedirectResult(auth).then((result) => {
-            if (result) {
-                console.log("🛡️ [AUTH] Identity verification recovered for:", result.user.email);
-            }
-        }).catch((err) => {
-            console.warn("🛡️ [AUTH] Non-fatal redirect recovery warning:", err.message);
-        });
-
+        console.log("🔍 [DIAG] Admin AuthProvider Mounted. Monitoring state...");
+        
+        // [V8] POPUP-ONLY PROTOCOL: Purged Redirect logic to prevent custom domain token drops.
+        
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+            console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             try {
                 if (usr) {
-                    console.log("🛡️ [AUTH] Watchdog detected user:", usr.email);
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 20000));
-                    
+                    console.log("🛡️ [AUTH] Syncing Profile for:", usr.uid);
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 15000));       
+
                     try {
                         const userDocPromise = getDoc(doc(db, 'users', usr.uid));
                         const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
 
                         if (userDoc.exists()) {
                             const data = userDoc.data();
-                            console.log("🛡️ [AUTH] Profile data resolved:", data.role);
-                            
-                            // [ROLE-EXPANSION] Allow CEO and Manager roles to access Admin Terminal
+                            console.log("🛡️ [AUTH] Profile resolved. Role:", data.role);
+
                             const hasAdminAccess = data.role === 'admin' || data.isAdmin === true || data.role === 'ceo' || data.role === 'manager';
-                            
+
                             if (hasAdminAccess) {
                                 setUser({ ...usr, ...data });
                                 setIsAuthenticated(true);
                                 setError(null);
 
-                                // [V5] Silent FCM Token Harvest - DECOUPLED
-                                setTimeout(async () => {
+                                // [V5] Silent FCM Token Harvest
+                                (async () => {
                                     try {
                                         const messagingSupported = await isSupported();
                                         if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -67,11 +62,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
                                             const swReadyPromise = navigator.serviceWorker.ready;
                                             const swTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_TIMEOUT")), 5000));
-                                            
+
                                             await Promise.race([swReadyPromise, swTimeout]);
-                                            const currentToken = await getToken(messaging, { 
+                                            const currentToken = await getToken(messaging, {
                                                 vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                                                serviceWorkerRegistration: registration 
+                                                serviceWorkerRegistration: registration
                                             });
                                             if (currentToken) {
                                                 await updateDoc(doc(db, 'users', usr.uid), {
@@ -81,58 +76,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             }
                                         }
                                     } catch (fcmErr) {
-                                        console.warn("[AUTH] FCM harvest bypassed:", fcmErr);
+                                        console.warn("🛡️ [AUTH] FCM harvest bypassed:", fcmErr);
                                     }
-                                }, 1000);
+                                })();
                             } else {
+                                console.warn("🛡️ [AUTH] ACCESS DENIED: Insufficient clearance for:", usr.email);
                                 setError("Access Denied: You do not have Administrative or CEO clearance.");
                                 setIsAuthenticated(false);
                                 setUser(null);
                                 await signOut(auth);
                             }
                         } else {
+                            console.error("🛡️ [AUTH] CRITICAL: Profile missing for authenticated user:", usr.uid);
                             setError("Sovereign Profile not found in the UAE nodes.");
                             setIsAuthenticated(false);
                             setUser(null);
                             await signOut(auth);
                         }
                     } catch (firestoreErr: any) {
+                        console.error("🛡️ [AUTH] Firestore Sync Error:", firestoreErr);
                         setError("Identity Synchronization Failure. Protocol violation or database timeout.");
                         setIsAuthenticated(false);
                         setUser(null);
-                        await signOut(auth);
+                        // Safe fallback: Allow re-auth rather than signOut to prevent loops if it's just a timeout
                     }
                 } else {
                     setIsAuthenticated(false);
                     setUser(null);
-                    // [FIX] DO NOT clear the error when usr is null, as it wipes the "Access Denied" message
                 }
             } catch (err: any) {
+                console.error("🛡️ [AUTH] System Fault:", err);
                 setError("System Initialization Fault: " + (err.message || 'Unknown'));
                 setIsAuthenticated(false);
             } finally {
+                console.log("🔍 [DIAG] Admin Auth loading complete.");
                 setLoading(false);
             }
         }, (err) => {
-            console.error("🛡️ [AUTH] Observer error:", err);
+            console.error("🛡️ [AUTH] Fatal Observer Error:", err);
             setError("Authentication Observer Fault.");
             setLoading(false);
         });
 
         return () => {
-            unsubscribe();
+            if (unsubscribe) unsubscribe();
         };
     }, []);
 
     const login = async (credentials: any) => {
-        // Implementation handled by components calling firebase directly for now
+        // Handled via UnifiedLogin.tsx -> signInWithPopup
     };
 
     const logout = async () => {
-        await signOut(auth);
-        setIsAuthenticated(false);
-        setUser(null);
-        window.location.href = '/admin/login';
+        try {
+            await signOut(auth);
+            setIsAuthenticated(false);
+            setUser(null);
+            window.location.href = '/admin/login';
+        } catch (e) {
+            window.location.reload();
+        }
     };
 
     return (

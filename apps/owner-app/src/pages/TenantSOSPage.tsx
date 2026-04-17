@@ -251,12 +251,12 @@ export default function TenantSOSPage() {
                                     <Grid item xs={12} md={7} sx={{ p: 4 }}>
                                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                                             <Chip 
-                                                label={ticket.status.replace('_', ' ')} 
+                                                label={t(`status.${ticket.status.toLowerCase()}`)} 
                                                 sx={{ bgcolor: ticket.status === 'EN_ROUTE' ? binThemeTokens.gold : 'rgba(255,255,255,0.1)', color: ticket.status === 'EN_ROUTE' ? '#000' : '#FFF', fontWeight: 900 }} 
                                             />
                                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>REF: {ticket.id.substring(0,8)}</Typography>
                                         </Stack>
-                                        <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>{ticket.description}</Typography>
+                                        <Typography variant="h4" fontWeight="950" dir="auto" sx={{ color: '#FFF', mb: 2, textAlign: 'inherit' }}>{ticket.description}</Typography>
                                         
                                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
                                         
@@ -377,6 +377,7 @@ export default function TenantSOSPage() {
                                 rows={4} 
                                 label={t('sos.mission_description')} 
                                 value={description}
+                                inputProps={{ dir: 'auto' }}
                                 onChange={(e) => setDescription(e.target.value)}
                                 required
                                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' } }}

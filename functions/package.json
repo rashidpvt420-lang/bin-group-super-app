@@ -17,6 +17,7 @@
     "firebase-functions": "^7.2.3",
     "google-auth-library": "^9.15.1",
     "nodemailer": "^8.0.5",
+    "openai": "^6.34.0",
     "pdfkit": "^0.18.0"
   },
   "devDependencies": {

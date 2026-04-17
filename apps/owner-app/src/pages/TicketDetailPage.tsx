@@ -26,15 +26,43 @@ export default function TicketDetailPage() {
     useEffect(() => {
         if (!id) return;
         const docRef = doc(db, 'maintenanceTickets', id);
-        const unsubscribe = onSnapshot(docRef, (docSnap: any) => {
+        const unsubscribe = onSnapshot(docRef, async (docSnap: any) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                setTicket({ id: docSnap.id, ...data });
+                const ticketData = { id: docSnap.id, ...data };
+                
+                // [V9] PRIVACY OVERRIDE: Fetch missing context for assigned technicians
+                if (role === 'technician' && (data.assignedTechnicianId === user?.uid)) {
+                    if (!data.tenantPhone && data.tenantId) {
+                        try {
+                            const tenantSnap = await getDoc(doc(db, 'users', data.tenantId));
+                            if (tenantSnap.exists()) {
+                                ticketData.tenantPhone = tenantSnap.data()?.phone || tenantSnap.data()?.phoneNumber;
+                            }
+                        } catch (e) { console.warn("Tenant fetch failed:", e); }
+                    }
+                    if ((!data.propertyLocation || !data.propertyLocation.address) && data.propertyId) {
+                        try {
+                            const propSnap = await getDoc(doc(db, 'properties', data.propertyId));
+                            if (propSnap.exists()) {
+                                const pData = propSnap.data();
+                                ticketData.propertyLocation = {
+                                    ...ticketData.propertyLocation,
+                                    address: pData?.address,
+                                    propertyName: pData?.name,
+                                    location: pData?.location
+                                };
+                            }
+                        } catch (e) { console.warn("Property fetch failed:", e); }
+                    }
+                }
+
+                setTicket(ticketData);
                 setNotes(data.notes || '');
                 
                 // Calculate distance if techLocation exists and user is tenant or same technician
-                if (data.status === 'EN_ROUTE' && data.techLocation && data.propertyLocation?.location) {
-                    calculateDistance(data.techLocation, data.propertyLocation.location);
+                if (data.status === 'EN_ROUTE' && data.techLocation && (data.propertyLocation?.location || ticketData.propertyLocation?.location)) {
+                    calculateDistance(data.techLocation, data.propertyLocation?.location || ticketData.propertyLocation?.location);
                 } else {
                     setDistanceInfo(null);
                 }
@@ -42,7 +70,7 @@ export default function TicketDetailPage() {
         });
         setLoading(false);
         return () => unsubscribe();
-    }, [id]);
+    }, [id, role, user?.uid]);
 
     useEffect(() => {
         // Broadcaster Logic for Technicians
@@ -284,7 +312,7 @@ export default function TicketDetailPage() {
                     </Box>
                     <Stack spacing={1} alignItems="flex-end">
                         <Chip 
-                            label={ticket.status.replace('_', ' ')} 
+                            label={t(`status.${ticket.status.toLowerCase()}`)} 
                             sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, px: 2 }} 
                         />
                         {ticket.propertyLocation && (
@@ -352,7 +380,8 @@ export default function TicketDetailPage() {
                                 </Box>
                                 <Box>
                                     <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.tenantName || 'Anonymous Resident'}</Typography>
-                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{t('field.units')} {ticket.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}</Typography>
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 700 }}>{ticket.tenantPhone || ticket.tenantPhoneNumber || 'No Phone Registered'}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}</Typography>
                                 </Box>
                             </Stack>
                             <Stack direction="row" spacing={1}>
@@ -361,12 +390,19 @@ export default function TicketDetailPage() {
                                     component="a"
                                     href={`tel:${ticket.tenantPhone || ticket.tenantPhoneNumber || ''}`}
                                     variant="contained" 
-                                    sx={{ minWidth: 0, p: 1.5, borderRadius: 2, bgcolor: '#10b981', color: '#FFF', visibility: (ticket.status === 'EN_ROUTE' || ticket.status === 'ARRIVED' || ticket.status === 'IN_PROGRESS') ? 'visible' : 'hidden' }}
+                                    sx={{ minWidth: 0, p: 1.5, borderRadius: 2, bgcolor: '#10b981', color: '#FFF', visibility: (ticket.status === 'EN_ROUTE' || ticket.status === 'ARRIVED' || ticket.status === 'IN_PROGRESS' || ticket.status === 'assigned' || ticket.status === 'ASSIGNED') ? 'visible' : 'hidden' }}
                                 >
                                     <Phone size={20} />
                                 </Button>
                             </Stack>
                         </Stack>
+                        {ticket.propertyLocation?.address && (
+                            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <MapPin size={12} /> {ticket.propertyLocation.address}
+                                </Typography>
+                            </Box>
+                        )}
                     </Box>
                 )}
 
