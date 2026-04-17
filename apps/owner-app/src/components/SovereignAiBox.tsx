@@ -59,17 +59,23 @@ const SovereignAiBox: React.FC = () => {
         }
     }, [messages, isTyping]);
 
+    const tx = (key: string, fallback: string) => {
+        const trans = t(key);
+        if (!trans || trans === key) return fallback;
+        return trans;
+    };
+
     const getInitialMessage = () => {
         switch (role?.toUpperCase()) {
             case 'TENANT':
-                return t('ai.init.tenant') || "Sovereign Assistant Online. How is your residence today? I can help with ticket status or basic maintenance troubleshooting.";
+                return tx('ai.init.tenant', "Sovereign Assistant Online. How is your residence today? I can help with ticket status or basic maintenance troubleshooting.");
             case 'TECHNICIAN':
-                return t('ai.init.tech') || "Mission Guidance Node Active. Provide a Ticket ID or ask about part availability for your current assignment.";
+                return tx('ai.init.tech', "Mission Guidance Node Active. Provide a Ticket ID or ask about part availability for your current assignment.");
             case 'OWNER':
             case 'ADMIN':
-                return t('ai.init.owner') || "Strategic Terminal Active. Analysis of financial velocity and system health is available. What do you wish to audit?";
+                return tx('ai.init.owner', "Strategic Terminal Active. Analysis of financial velocity and system health is available. What do you wish to audit?");
             default:
-                return t('ai.init.default') || "BIN GROUP Sovereign AI Initialized. How can I assist you today?";
+                return tx('ai.init.default', "BIN GROUP Sovereign AI Initialized. How can I assist you today?");
         }
     };
 
@@ -77,20 +83,20 @@ const SovereignAiBox: React.FC = () => {
         const actions = [];
         switch (role?.toUpperCase()) {
             case 'TENANT':
-                actions.push({ label: 'Check SOS Status', icon: <AlertCircle size={14} /> });
-                actions.push({ label: 'Maintenance Tips', icon: <Wrench size={14} /> });
+                actions.push({ label: tx('ai.action.check_sos_status', 'Check SOS Status'), icon: <AlertCircle size={14} /> });
+                actions.push({ label: tx('ai.action.maintenance_tips', 'Maintenance Tips'), icon: <Wrench size={14} /> });
                 break;
             case 'TECHNICIAN':
-                actions.push({ label: 'Mission Guidance', icon: <ShieldCheck size={14} /> });
-                actions.push({ label: 'Route Help', icon: <Navigation size={14} /> });
+                actions.push({ label: tx('ai.action.mission_guidance', 'Mission Guidance'), icon: <ShieldCheck size={14} /> });
+                actions.push({ label: tx('ai.action.route_help', 'Route Help'), icon: <Navigation size={14} /> });
                 break;
             case 'OWNER':
-                actions.push({ label: 'Audit ROI', icon: <TrendingUp size={14} /> });
-                actions.push({ label: 'Property Health', icon: <Building2 size={14} /> });
+                actions.push({ label: tx('ai.action.audit_roi', 'Audit ROI'), icon: <TrendingUp size={14} /> });
+                actions.push({ label: tx('ai.action.property_health', 'Property Health'), icon: <Building2 size={14} /> });
                 break;
             case 'ADMIN':
-                actions.push({ label: 'Queue Summary', icon: <Calendar size={14} /> });
-                actions.push({ label: 'System Alerts', icon: <ShieldCheck size={14} /> });
+                actions.push({ label: tx('ai.action.queue_summary', 'Queue Summary'), icon: <Calendar size={14} /> });
+                actions.push({ label: tx('ai.action.system_alerts', 'System Alerts'), icon: <ShieldCheck size={14} /> });
                 break;
         }
         return actions;
@@ -114,14 +120,22 @@ const SovereignAiBox: React.FC = () => {
         try {
             const getAiGuidance = httpsCallable(functions, 'getMissionGuidance');
             const result = await getAiGuidance({ input: text, role });
-            const data = result.data as { guidance: string };
+            const data = result.data as { status?: string, guidance?: string, error?: string };
             
-            const aiMsg: Message = { id: Date.now().toString(), text: data.guidance, sender: 'ai', timestamp: new Date() };
-            setMessages(prev => [...prev, aiMsg]);
+            if (data.status === "ERROR") {
+                const aiMsg: Message = { id: Date.now().toString(), text: data.error || tx('ai.error_undefined', "Mission control returned an undefined error."), sender: 'ai', timestamp: new Date() };
+                setMessages(prev => [...prev, aiMsg]);
+            } else if (data.guidance) {
+                const aiMsg: Message = { id: Date.now().toString(), text: data.guidance, sender: 'ai', timestamp: new Date() };
+                setMessages(prev => [...prev, aiMsg]);
+            } else {
+                const aiMsg: Message = { id: Date.now().toString(), text: tx('ai.error_unreadable', "Received unreadable data from Sovereign Engine."), sender: 'ai', timestamp: new Date() };
+                setMessages(prev => [...prev, aiMsg]);
+            }
         } catch (err: any) {
-            let errorText = "The Sovereign Engine is momentarily offline. Synchronizing with headquarters...";
+            let errorText = err.message || tx('ai.error_unexpected', "An unexpected error occurred.");
             if (err.code === 'resource-exhausted' || err.message?.includes('Limit Reached')) {
-                errorText = "AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.";
+                errorText = tx('ai.error_limit', "AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.");
             }
             
             const aiMsg: Message = { id: Date.now().toString(), text: errorText, sender: 'ai', timestamp: new Date() };
@@ -159,8 +173,8 @@ const SovereignAiBox: React.FC = () => {
                     <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}><Bot size={20} /></Avatar>
                         <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="subtitle1" fontWeight="950" color="#FFF">SOVEREIGN AI</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{role?.toUpperCase()} ASSISTANT</Typography>
+                            <Typography variant="subtitle1" fontWeight="950" color="#FFF">{tx('ai.title', "SOVEREIGN AI")}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>{t(`status.${role?.toLowerCase() || 'owner'}`).toUpperCase()} {tx('ai.assistant_label', "ASSISTANT")}</Typography>
                         </Box>
                         <IconButton size="small" onClick={() => setIsOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X /></IconButton>
                     </Box>
@@ -185,7 +199,7 @@ const SovereignAiBox: React.FC = () => {
                         {isTyping && (
                             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                 <CircularProgress size={12} sx={{ color: binThemeTokens.gold }} />
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Sovereign AI Thinking...</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{tx('ai.thinking', "Sovereign AI Thinking...")}</Typography>
                             </Box>
                         )}
                     </Box>
@@ -209,7 +223,7 @@ const SovereignAiBox: React.FC = () => {
                             <TextField 
                                 fullWidth 
                                 size="small" 
-                                placeholder={t('ai.directive_placeholder') || "Type your directive..."} 
+                                placeholder={tx('ai.directive_placeholder', "Type your directive...")} 
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}

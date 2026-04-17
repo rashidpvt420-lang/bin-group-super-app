@@ -62,15 +62,32 @@ export default function TechnicianPortalPage() {
         }
         
         try {
-            const messagingSupported = await isSupported();
-            if (!messagingSupported) {
-                throw new Error("UNSUPPORTED_BROWSER");
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+
+            console.log("📍 [PUSH DIAGNOSTICS] iOS:", isIOS, "Standalone:", isStandalone);
+
+            if (isIOS && !isStandalone) {
+                setNotifError("iOS PROTOCOL: To receive emergency dispatch notifications, you must tap the Share icon and select 'Add to Home Screen' first.");
+                setNotifLoading(false);
+                return;
             }
 
-            const permission = await Notification.requestPermission();
+            const messagingSupported = await isSupported();
+            if (!messagingSupported) {
+                console.warn("📍 [PUSH DIAGNOSTICS] Messaging unsupported in this context.");
+                setNotifError("Notifications are not supported by this browser environment.");
+                setNotifLoading(false);
+                return;
+            }
+
+            console.log("📍 [PUSH DIAGNOSTICS] Requesting permission...");
+            const permission = await window.Notification.requestPermission();
             setNotifStatus(permission);
+            console.log("📍 [PUSH DIAGNOSTICS] Permission:", permission);
             
             if (permission === 'granted') {
+                console.log("📍 [PUSH DIAGNOSTICS] Registering SW...");
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
                 const sw = registration.installing || registration.waiting || registration.active;
                 if (sw && sw.state !== 'activated') {
@@ -80,6 +97,7 @@ export default function TechnicianPortalPage() {
                         });
                     });
                 }
+                console.log("📍 [PUSH DIAGNOSTICS] SW Active. Fetching token...");
 
                 const messaging = getMessaging(app);
                 const currentToken = await getFcmToken(messaging, { 
@@ -88,20 +106,22 @@ export default function TechnicianPortalPage() {
                 });
                 
                 if (currentToken) {
+                    console.log("📍 [PUSH DIAGNOSTICS] Token received. Writing to Firestore...");
                     await updateDoc(doc(db, 'users', user.uid), {
                         fcmToken: currentToken,
                         updatedAt: new Date().toISOString()
                     });
+                    console.log("📍 [PUSH DIAGNOSTICS] Firestore write successful.");
                     alert(t('tech.notif_handshake_success'));
                 } else {
                     throw new Error("EMPTY_TOKEN");
                 }
             } else {
-                throw new Error("PERMISSION_DENIED");
+                setNotifError("Permission was denied. Please allow notifications in your browser settings.");
             }
         } catch (err: any) {
-            console.error("📍 [V3-PATCH] Notification Failure:", err);
-            setNotifError("Notifications could not be enabled right now. Please refresh the app and try again.");
+            console.error("📍 [PUSH DIAGNOSTICS] Notification Failure:", err.message, err.stack);
+            setNotifError("Handshake aborted. " + (err.message || 'System limitation blocked notification access.'));
         } finally {
             setNotifLoading(false);
         }
@@ -209,8 +229,15 @@ export default function TechnicianPortalPage() {
 
     const handleNavigate = (ticket: Ticket) => {
         if (!ticket.propertyLocation) return;
-        const loc = ticket.propertyLocation;
-        let queryStr = loc.location ? `${(loc.location as any).lat},${(loc.location as any).lng}` : encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
+        const loc = ticket.propertyLocation as any;
+        let queryStr = '';
+        if (loc.lat && loc.lng) {
+            queryStr = `${loc.lat},${loc.lng}`;
+        } else if (loc.location && loc.location.lat && loc.location.lng) {
+            queryStr = `${loc.location.lat},${loc.location.lng}`;
+        } else {
+            queryStr = encodeURIComponent(`${loc.address || ''}, ${loc.propertyName || ''}`);
+        }
         window.open(`https://www.google.com/maps/search/?api=1&query=${queryStr}`, '_blank');
     };
 
@@ -299,6 +326,9 @@ export default function TechnicianPortalPage() {
                                                 <Typography variant="h4" fontWeight="950" dir="auto" sx={{ color: '#FFF', mb: 1 }}>{ticket.description}</Typography>
                                                 <Typography variant="body1" dir="auto" sx={{ color: binThemeTokens.gold, fontWeight: 700, mb: 1 }}>
                                                     {ticket.tenantName || 'Resident'} | {ticket.propertyName || ticket.propertyLocation?.propertyName || 'Asset'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontWeight: 900, mb: 1 }}>
+                                                    {ticket.tenantPhone || 'No Phone Number'}
                                                 </Typography>
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
                                                     {t('field.units')} {ticket.unitNumber || ticket.propertyLocation?.unitNumber || 'N/A'} | {t('field.floors')} {ticket.floorNumber || 'N/A'}

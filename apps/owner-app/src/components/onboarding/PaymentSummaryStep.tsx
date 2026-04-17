@@ -311,7 +311,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                                 color: binThemeTokens.gold, fontWeight: 950, mb: 2
                                             }}
                                         >
-                                            {t('onboarding.payment.proceed_manual_btn') || 'CONTINUE TO ACTIVATION'}
+                                            {t('onboarding.payment.proceed_manual_btn')}
                                         </Button>
                                     )}
 

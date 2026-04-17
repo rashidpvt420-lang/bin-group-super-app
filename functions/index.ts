@@ -5,6 +5,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
+import * as nodemailer from "nodemailer";
 
 // [V8] PRODUCTION GRADE STABILIZATION
 setGlobalOptions({ region: "europe-west3" });
@@ -128,7 +129,9 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
                 propertyName: propertyData?.name || ticketData.propertyName || "Institutional Asset",
                 unitNumber: ticketData.unitNumber || "N/A",
                 floorNumber: ticketData.floorNumber || "N/A",
-                location: propertyData?.location || null
+                location: propertyData?.location || null,
+                lat: propertyData?.location?.lat || propertyData?.location?.latitude || null,
+                lng: propertyData?.location?.lng || propertyData?.location?.longitude || null
             }
         };
         await snap.ref.update(contextUpdate);
@@ -191,21 +194,30 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
     }
 });
 
-// ─── [V8] PRODUCTION AI MISSION GUIDANCE ───────────────────────────────────────────
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
-    const { input, role } = request.data;
-    const apiKey = openAiKey.value();
-
-    if (!apiKey) {
-        console.error("OPENAI_API_KEY not configured.");
-        return { guidance: "Sovereign Engine synchronized. Headquarters is calibrating neural nodes. Please try again in 60 seconds." };
-    }
-
     try {
+        if (!request.data || typeof request.data.input !== "string" || !request.data.input.trim()) {
+            return { status: "ERROR", error: "Invalid request payload" };
+        }
+        const { input, role } = request.data;
+        const userRole = role || "unknown";
+        
+        let apiKey = "";
+        try {
+            apiKey = openAiKey.value();
+        } catch (e: any) {
+            console.error("Failed to read OPENAI_API_KEY secret:", { message: e.message, code: e.code, stack: e.stack });
+            return { status: "ERROR", error: "OPENAI API Key unreadable" };
+        }
+
+        if (!apiKey) {
+            return { status: "ERROR", error: "OPENAI_API_KEY is empty." };
+        }
+
         const openai = new OpenAI({ apiKey });
 
         const systemPrompt = `You are the BIN GROUP Sovereign AI, an elite institutional property management assistant for UAE real estate.
-        User Role: ${role}
+        User Role: ${userRole}
         Tone: Professional, prestigious, authoritative, and helpful.
         Context: UAE Real Estate laws, Dubai/Abu Dhabi standards.
         Instructions: Provide concise, high-impact guidance. If the user reports a critical issue (AC failure, major leak, fire), advise them to use the SOS protocol immediately.`;
@@ -222,15 +234,19 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
 
         return { 
             status: "V8_PRODUCTION_READY", 
-            guidance: completion.choices[0]?.message?.content || "Sovereign Engine synchronized. How can I assist your operation?",
+            guidance: completion.choices[0]?.message?.content || "No response generated.",
             timestamp: new Date().toISOString()
         };
     } catch (error: any) {
-        console.error("AI Guidance Failure:", error);
+        console.error("AI Guidance Failure:", {
+            message: error.message,
+            code: error.code,
+            status: error.status,
+            stack: error.stack
+        });
         return { 
             status: "ERROR", 
-            guidance: "The Sovereign Engine is momentarily offline. Synchronizing with headquarters...",
-            error: error.message 
+            error: "Distinct Backend Failure State: " + error.message 
         };
     }
 });
@@ -251,6 +267,73 @@ export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/
 });
 
 export const googleSecurityEvents = onRequest({ cors: true }, async (req, res) => { res.status(202).send("Accepted"); });
-export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async () => {});
-export const processMailQueue = onDocumentCreated("mail/{docId}", async () => {});
-export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {});
+
+// [V8] Intake Workflow LIVE
+export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    
+    try {
+        await db.collection("properties").add({
+            ...data,
+            status: 'PENDING_APPROVAL',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        await snap.ref.update({ status: 'PROCESSED', processedAt: admin.firestore.FieldValue.serverTimestamp() });
+        console.log(`[INTAKE] Submission ${event.params.id} routed to sovereign properties vault successfully.`);
+    } catch (err) {
+        console.error(`[INTAKE] Failure routing ${event.params.id}:`, err);
+        await snap.ref.update({ status: 'ERROR', error: String(err) });
+    }
+});
+
+// [V8] Mail Transport LIVE using hardcoded institutional credentials
+const mailTransport = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+        user: 'hq@bin-groups.com',
+        pass: 'SovereignSecure#2026'
+    }
+});
+
+export const processMailQueue = onDocumentCreated("mail/{docId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const mailData = snap.data();
+    
+    try {
+        await mailTransport.sendMail({
+            from: '"BIN GROUP" <hq@bin-groups.com>',
+            to: mailData.to,
+            subject: mailData.message?.subject || 'BIN GROUP Update',
+            html: mailData.message?.html || ''
+        });
+        await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: admin.firestore.FieldValue.serverTimestamp() } });
+        console.log(`[MAIL] Successfully dispatched outbox ID: ${event.params.docId}`);
+    } catch (err: any) {
+        console.error(`[MAIL] Dispatch block error for ${event.params.docId}:`, err);
+        await snap.ref.update({ delivery: { state: 'ERROR', error: err.message, timestamp: admin.firestore.FieldValue.serverTimestamp() } });
+    }
+});
+
+// [V8] Automated Sovereign Database Backups LIVE
+export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
+    try {
+        const client = new admin.firestore.v1.FirestoreAdminClient();
+        const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'bin-group-57c60';
+        const databaseName = client.databasePath(projectId, '(default)');
+        const bucket = `gs://${projectId}.firebasestorage.app/backups/live/${new Date().toISOString()}`;
+        
+        await client.exportDocuments({
+            name: databaseName,
+            outputUriPrefix: bucket,
+            collectionIds: [] // Exports all collections
+        });
+        console.log(`[BACKUP] Initialized sovereign vault snapshot at ${bucket}`);
+    } catch (err) {
+        console.error(`[BACKUP] Systemic export fault:`, err);
+    }
+});
