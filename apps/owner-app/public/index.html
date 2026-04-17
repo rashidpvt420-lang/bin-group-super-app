@@ -41,14 +41,12 @@
     
     <style>
         body { background-color: #0B0B0C; color: #FFFFFF; margin: 0; font-family: 'Inter', 'Cairo', sans-serif; overflow-x: hidden; }
-        .system-loader { height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #C6A75E; font-family: sans-serif; font-weight: 900; letter-spacing: 4px; }
-        .compliance-wrapper { text-align: center; padding: 60px 20px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 100px; background: rgba(0,0,0,0.2); }
-        .compliance-header { color: #c6a75e; margin-bottom: 8px; font-weight: 900; letter-spacing: 1px; font-size: 14px; }
-        .compliance-text { font-size: 11px; color: #888; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.6; }
-        .compliance-links { font-size: 12px; font-weight: 700; }
-        .compliance-link { color: #c6a75e; text-decoration: none; margin: 0 12px; transition: color 0.2s; }
-        .compliance-link:hover { color: #E6C77A; }
-        .compliance-contact { font-size: 10px; color: #444; margin-top: 20px; }
+        .system-loader { height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #C6A75E; font-family: sans-serif; font-weight: 900; letter-spacing: 4px; flex-direction: column; line-height: 1.5; }
+        .ar-font { font-family: 'Cairo', sans-serif; }
+        .system-error { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif; }
+        .error-title { font-weight: 900; letter-spacing: 2px; }
+        .error-msg { color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6; }
+        .btn-reload { background: #c6a75e; color: #000; border: none; padding: 12px 24px; font-weight: 900; cursor: pointer; border-radius: 4px; margin-top: 20px; }
     </style>
 </head>
 
@@ -56,37 +54,25 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     
     <div id="root">
-        <div class="system-loader">
-            INITIALIZING BIN-GROUPS OS...
+        <div id="bin-boot-loader" class="system-loader">
+            <div>INITIALIZING BIN-GROUPS OS...</div>
+            <div class="ar-font">جاري تهيئة النظام...</div>
         </div>
-    </div>
-
-    <!-- BIN GROUP INSTITUTIONAL COMPLIANCE -->
-    <div class="compliance-wrapper">
-        <h4 class="compliance-header">INSTITUTIONAL DATA TRANSPARENCY</h4>
-        <p class="compliance-text">
-            BIN-GROUP utilizes Google OAuth to authenticate authorized asset owners and institutional partners. We request access to 
-            your identity profile solely to verify your institutional clearance within the BIN-GENESIS™ ecosystem.
-        </p>
-        <div class="compliance-links">
-            <a href="/privacy-policy" class="compliance-link">Privacy Policy</a> |
-            <a href="/terms-of-service" class="compliance-link">Terms of Service</a> |
-            <a href="/support" class="compliance-link">Support</a>
-        </div>
-        <p class="compliance-contact">Contact: ceo@bin-groups.com</p>
     </div>
 
     <!-- [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS -->
     <script>
         setTimeout(() => {
             const root = document.getElementById('root');
-            if (root && (root.innerText.includes('LOADING') || root.innerText.includes('INITIALIZING'))) {
+            const loader = document.getElementById('bin-boot-loader');
+            // Strict sentinel-based check avoiding generic innerText collisions
+            if (loader && root && root.contains(loader)) {
                 console.error("FATAL: BIN-Groups OS Initialization timed out at the HTML layer.");
                 root.innerHTML = `
-                    <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif;">
-                        <h1 style="font-weight: 900; letter-spacing: 4px;">REACT_INITIALIZATION_ERROR</h1>
-                        <p style="color: #fff; opacity: 0.8; max-width: 600px;">The secure bundle failed to execute within the strict data integrity window. Check your internet connection or browse from a supported UAE institutional proxy.</p>
-                        <button onclick="window.location.reload()" style="background: #c6a75e; color: #000; border: none; padding: 12px 24px; font-weight: 900; cursor: pointer; border-radius: 4px; margin-top: 20px;">RELOAD SYSTEM</button>
+                    <div class="system-error">
+                        <h1 class="error-title">SYSTEM TIMEOUT / خطأ في النظام</h1>
+                        <p class="error-msg">Initialization locked. Check connection. / تعذر بدء النظام. يرجى التحقق من الاتصال.</p>
+                        <button onclick="window.location.reload()" class="btn-reload">RELOAD / إعادة تحميل</button>
                     </div>
                 `;
             }
