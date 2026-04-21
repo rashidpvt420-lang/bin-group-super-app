@@ -15,26 +15,25 @@ import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 
 const Navigation = () => {
-    const { t, isRTL } = useLanguage();
+    const { t, tx, isRTL } = useLanguage();
 
     const primaryMenu = [
-        { text: t('nav.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-        { text: t('nav.financials'), icon: <AccountBalanceWalletIcon />, path: '/admin/financials', color: binThemeTokens.gold },
-        { text: t('nav.audit'), icon: <SecurityIcon />, path: '/admin/vault', color: binThemeTokens.gold },
-        { text: t('onboarding.payment.verify_btn'), icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
+        { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+        { text: tx('nav.financials', 'Treasury'), icon: <AccountBalanceWalletIcon />, path: '/admin/financials', color: binThemeTokens.gold },
+        { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/vault', color: binThemeTokens.gold },
+        { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
     ];
 
     const managementMenu = [
-        { text: "Onboard Asset", icon: <PeopleIcon />, path: '/admin/onboard-property' },
-        { text: t('admin.active_tenants'), icon: <PeopleIcon />, path: '/owners' },
-        { text: t('nav.brokers'), icon: <PeopleIcon />, path: '/broker' },
-        { text: t('nav.tenants'), icon: <PeopleIcon />, path: '/tenants' },
-        { text: t('nav.technicians'), icon: <PeopleIcon />, path: '/technicians' },
-        { text: t('nav.tickets'), icon: <ReceiptIcon />, path: '/tickets' },
+        { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
+        { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
+        { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
+        { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
+        { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
     ];
 
     const systemMenu = [
-        { text: t('nav.support'), icon: <SettingsIcon />, path: '/settings' },
+        { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/settings' },
     ];
 
     return (

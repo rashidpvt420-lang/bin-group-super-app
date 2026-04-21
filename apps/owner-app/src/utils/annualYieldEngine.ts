@@ -40,6 +40,17 @@ export function calculateAnnualYieldMetrics(data: PortfolioData) {
     const grossROI = estimatedAssetExposure > 0 ? (totalGVC / estimatedAssetExposure) * 100 : 0;
     const netROI = estimatedAssetExposure > 0 ? (netIncome / estimatedAssetExposure) * 100 : 0;
 
+    // [V2] PM Operational Metrics
+    const totalUnits = data.properties.reduce((sum, p) => sum + (p.units || 1), 0);
+    const occupiedUnits = data.properties.reduce((sum, p) => sum + (p.occupiedUnits || (p.units || 1)), 0);
+    const occupancyRate = totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 100;
+
+    const resolvedTickets = data.tickets.filter(t => ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(t.status)).length;
+    const totalTickets = data.tickets.length;
+    const resolutionRate = totalTickets > 0 ? (resolvedTickets / totalTickets) * 100 : 100;
+
+    const renewalsProcessed = data.contracts.filter(c => c.status === 'RENEWED').length;
+
     return {
         grossContractValue: totalGVC,
         netIncome: netIncome,
@@ -47,6 +58,16 @@ export function calculateAnnualYieldMetrics(data: PortfolioData) {
         totalMaintenanceCosts: totalCosts,
         grossROI: parseFloat(grossROI.toFixed(1)) || 0,
         netROI: parseFloat(netROI.toFixed(1)) || 0,
-        annualYield: estimatedAssetExposure > 0 ? parseFloat(((totalGVC / estimatedAssetExposure) * 100).toFixed(2)) : 0
+        annualYield: estimatedAssetExposure > 0 ? parseFloat(((totalGVC / estimatedAssetExposure) * 100).toFixed(2)) : 0,
+        pmMetrics: {
+            totalUnits,
+            occupiedUnits,
+            vacantUnits: totalUnits - occupiedUnits,
+            occupancyRate: parseFloat(occupancyRate.toFixed(1)),
+            renewalsProcessed,
+            resolvedTickets,
+            resolutionRate: parseFloat(resolutionRate.toFixed(1)),
+            avgVacancyDays: 14 // Mocked for now
+        }
     };
 }

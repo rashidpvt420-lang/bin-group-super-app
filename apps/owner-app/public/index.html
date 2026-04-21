@@ -5,6 +5,7 @@
     <meta name="google-site-verification" content="mm_dIPIuegRkyjnI5sMjxWmzCOESKt3_I0CdG9oUwHg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0b0b0c" />
+    <meta http-equiv="Content-Security-Policy" content="connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.run.app https://api.openai.com;" />
 
     <!-- PWA & Modern Mobile Configuration -->
     <meta name="mobile-web-app-capable" content="yes" />
@@ -51,7 +52,12 @@
 </head>
 
 <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+        <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif;">
+            <h1 style="font-weight: 900; letter-spacing: 2px;">JAVASCRIPT REQUIRED / تفعيل الجافا سكربت مطلوب</h1>
+            <p style="color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6;">To access the Sovereign OS, please enable JavaScript in your browser settings. / للوصول إلى نظام التشغيل السيادي، يرجى تفعيل الجافا سكربت في إعدادات متصفحك.</p>
+        </div>
+    </noscript>
     
     <div id="root">
         <div id="bin-boot-loader" class="system-loader">

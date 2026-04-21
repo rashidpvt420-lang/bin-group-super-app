@@ -9,6 +9,7 @@ import LandingPage from './pages/LandingPage';
 import OwnerLandingPage from './pages/OwnerLandingPage';
 
 import LoginPage from './pages/LoginPage';
+import RoleGatewayPage from './pages/RoleGatewayPage';
 
 import InvoiceVerificationPage from './pages/public/InvoiceVerificationPage';
 import CertificateVerificationPage from './pages/public/CertificateVerificationPage';
@@ -79,8 +80,9 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
 
   if (loading) return <LoadingScreen />;
 
-  // Only redirect if on login or root landing page
-  if (user && (location.pathname === '/' || location.pathname === '/login')) {
+  // Only redirect if on login, root landing page, or role gateway
+  const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
+  if (user && isAuthEntryPage) {
     const normalizedRole = (role || '').toLowerCase();
     if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
@@ -127,6 +129,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<OwnerLandingPage />} />
         <Route path="/v1" element={<LandingPage />} />
+        <Route path="/gateway" element={<RoleGatewayPage />} />
         <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'owner']}><ReportingDashboard /></ProtectedRoute>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />

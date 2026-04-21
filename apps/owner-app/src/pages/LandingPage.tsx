@@ -91,7 +91,7 @@ const LandingPage: React.FC = () => {
                         <Button 
                             variant="outlined" 
                             size="large"
-                            onClick={() => navigate('/login')}
+                            onClick={() => navigate('/gateway')}
                             sx={{ 
                                 borderColor: (theme) => alpha(theme.palette.text.primary, 0.2), 
                                 color: 'text.primary', 

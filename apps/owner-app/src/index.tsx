@@ -37,15 +37,7 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
 
-    // [STABILITY] Unregister Service Workers to bypass aggressive production caching
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (let registration of registrations) {
-                registration.unregister();
-                console.log('🛡️ [INIT] Purged Active Service Worker.');
-            }
-        });
-    }
+    // [STABILITY] Ensuring persistent PWA lifecycle for FCM Push Notifications
 
     try {
         root.render(

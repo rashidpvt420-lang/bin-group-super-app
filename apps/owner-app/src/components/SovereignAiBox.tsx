@@ -133,11 +133,26 @@ const SovereignAiBox: React.FC = () => {
                 setMessages(prev => [...prev, aiMsg]);
             }
         } catch (err: any) {
-            let errorText = err.message || tx('ai.error_unexpected', "An unexpected error occurred.");
-            if (err.code === 'resource-exhausted' || err.message?.includes('Limit Reached')) {
-                errorText = tx('ai.error_limit', "AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.");
-            }
+            console.error("[AI Frontend Capture]", err);
             
+            // [HARDENING] Map raw Firebase codes to localized sentences
+            let errorText = tx('ai.error_unexpected', "An unexpected error occurred.");
+            
+            const code = err.code || '';
+            const msg = err.message || '';
+
+            if (code === 'unauthenticated') {
+                errorText = tx('ai.error_unauthenticated', "Please sign in again to use Sovereign AI.");
+            } else if (code === 'resource-exhausted' || msg.includes('Limit Reached')) {
+                errorText = tx('ai.error_limit', "AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.");
+            } else if (code === 'invalid-argument') {
+                errorText = tx('ai.error_invalid', "Your request was invalid. Please try again.");
+            } else if (code === 'internal') {
+                errorText = tx('ai.error_internal', "AI backend temporarily unavailable. Please try again.");
+            } else if (code === 'failed-precondition') {
+                errorText = tx('ai.error_config', "AI service is not fully configured.");
+            }
+
             const aiMsg: Message = { id: Date.now().toString(), text: errorText, sender: 'ai', timestamp: new Date() };
             setMessages(prev => [...prev, aiMsg]);
         } finally {

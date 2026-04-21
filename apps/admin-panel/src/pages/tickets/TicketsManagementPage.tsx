@@ -41,7 +41,7 @@ interface Ticket {
   unit: string;
   category: string;
   description: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'ASSIGNED' | 'EN_ROUTE';
+  status: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
   assignedTechnicianId?: string;
   assignedTechnicianName?: string;
@@ -49,6 +49,9 @@ interface Ticket {
   createdAt: any;
   completedAt: any | null;
   emergencyCharge: number;
+  estimatedCost?: number;
+  urgency?: string;
+  revisionNotes?: string;
   propertyName?: string;
   propertyId?: string;
   unitNumber?: string;
@@ -72,6 +75,8 @@ export default function TicketsManagementPage() {
   
   // Assignment State
   const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
+  const [detailTicket, setDetailTicket] = useState<Ticket | null>(null);
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [techLoading, setTechLoading] = useState(false);
 
@@ -131,6 +136,41 @@ export default function TicketsManagementPage() {
   const handleOpenAssign = (ticket: Ticket) => {
       setAssigningTicket(ticket);
       fetchTechnicians();
+  };
+
+  const handleOpenDetail = (ticket: Ticket) => {
+      setDetailTicket(ticket);
+      setEstimatedCost(ticket.estimatedCost?.toString() || '');
+  };
+
+  const handleUpdateEstimate = async () => {
+      if (!detailTicket) return;
+      try {
+          const cost = parseFloat(estimatedCost);
+          if (isNaN(cost)) {
+              alert("Please enter a valid numeric estimate.");
+              return;
+          }
+          const ticketRef = doc(db, 'maintenanceTickets', detailTicket.ticketId);
+          
+          const updateData: any = {
+              estimatedCost: cost,
+              updatedAt: serverTimestamp()
+          };
+
+          // If cost > 1000, trigger owner approval flow
+          if (cost > 1000 && (detailTicket.status === 'OPEN' || detailTicket.status === 'ESTIMATED')) {
+              updateData.status = 'AWAITING_OWNER_APPROVAL';
+          } else if (detailTicket.status === 'OPEN') {
+              updateData.status = 'ESTIMATED';
+          }
+
+          await updateDoc(ticketRef, updateData);
+          setDetailTicket(null);
+      } catch (err) {
+          console.error("Update failed:", err);
+          alert("Error: Failed to update estimate.");
+      }
   };
 
   const handleAssign = async (tech: Technician) => {
@@ -298,15 +338,25 @@ export default function TicketsManagementPage() {
                         )}
                     </TableCell>
                     <TableCell align={isRTL ? 'left' : 'right'}>
-                      <Button 
-                        size="small" 
-                        variant="contained" 
-                        onClick={() => handleOpenAssign(ticket)}
-                        disabled={ticket.status === 'COMPLETED'}
-                        sx={{ fontSize: '0.7rem', fontWeight: 900 }}
-                      >
-                          {ticket.assignedTechnicianId ? 'REASSIGN' : 'ASSIGN'}
-                      </Button>
+                      <Stack direction="row" spacing={1} justifyContent={isRTL ? 'flex-start' : 'flex-end'}>
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => handleOpenDetail(ticket)}
+                          sx={{ fontSize: '0.7rem', fontWeight: 900 }}
+                        >
+                            DETAILS
+                        </Button>
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          onClick={() => handleOpenAssign(ticket)}
+                          disabled={ticket.status === 'COMPLETED'}
+                          sx={{ fontSize: '0.7rem', fontWeight: 900 }}
+                        >
+                            {ticket.assignedTechnicianId ? 'REASSIGN' : 'ASSIGN'}
+                        </Button>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -357,6 +407,65 @@ export default function TicketsManagementPage() {
           </DialogContent>
           <DialogActions>
               <Button onClick={() => setAssigningTicket(null)}>CANCEL</Button>
+          </DialogActions>
+      </Dialog>
+
+      {/* Detail/Estimate Dialog */}
+      <Dialog open={!!detailTicket} onClose={() => setDetailTicket(null)} fullWidth maxWidth="sm">
+          <DialogTitle sx={{ fontWeight: 900 }}>MISSION LOG DETAILS</DialogTitle>
+          <DialogContent>
+              {detailTicket && (
+                  <Stack spacing={3} sx={{ mt: 1 }}>
+                      <Box>
+                          <Typography variant="caption" color="textSecondary" fontWeight="bold">DESCRIPTION</Typography>
+                          <Typography variant="body1">{detailTicket.description}</Typography>
+                      </Box>
+                      <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                              <Typography variant="caption" color="textSecondary" fontWeight="bold">PROPERTY</Typography>
+                              <Typography variant="body2">{detailTicket.propertyName || 'N/A'}</Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                              <Typography variant="caption" color="textSecondary" fontWeight="bold">UNIT</Typography>
+                              <Typography variant="body2">{detailTicket.unitNumber || detailTicket.unit || 'N/A'}</Typography>
+                          </Grid>
+                      </Grid>
+                      
+                      <Divider />
+                      
+                      <Box>
+                          <Typography variant="overline" sx={{ color: '#1976d2', fontWeight: 900 }}>Financial Projections</Typography>
+                          <TextField
+                              fullWidth
+                              label="Estimated Cost (AED)"
+                              type="number"
+                              variant="outlined"
+                              size="small"
+                              value={estimatedCost}
+                              onChange={(e) => setEstimatedCost(e.target.value)}
+                              sx={{ mt: 1 }}
+                              helperText="Estimates above AED 1,000 trigger mandatory Owner Approval."
+                          />
+                      </Box>
+
+                      {detailTicket.revisionNotes && (
+                          <Alert severity="warning">
+                              <Typography variant="caption" fontWeight="bold">OWNER REVISION REQUEST:</Typography>
+                              <Typography variant="body2">{detailTicket.revisionNotes}</Typography>
+                          </Alert>
+                      )}
+                  </Stack>
+              )}
+          </DialogContent>
+          <DialogActions>
+              <Button onClick={() => setDetailTicket(null)}>CANCEL</Button>
+              <Button 
+                variant="contained" 
+                onClick={handleUpdateEstimate}
+                sx={{ bgcolor: '#1976d2', fontWeight: 900 }}
+              >
+                  UPDATE ESTIMATE
+              </Button>
           </DialogActions>
       </Dialog>
     </Container>

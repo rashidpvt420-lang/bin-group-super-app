@@ -167,12 +167,35 @@ export default function TicketDetailPage() {
     const updateStatus = async (newStatus: string) => {
         if (!id || !user?.uid) return;
         setUpdating(true);
+
+        // [V10] GPS Check-in Protocol
+        let locationData = null;
+        if (newStatus === 'ARRIVED') {
+            try {
+                const pos: any = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject);
+                });
+                locationData = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    timestamp: Date.now()
+                };
+            } catch (e) {
+                console.warn("GPS check-in failed, continuing with timestamp only.");
+            }
+        }
+
         const docRef = doc(db, 'maintenanceTickets', id);
         const updateData: any = {
             status: newStatus,
             updatedAt: serverTimestamp(),
             notes: notes
         };
+
+        if (locationData) {
+            updateData.checkInLocation = locationData;
+            updateData.checkInAt = serverTimestamp();
+        }
 
         try {
 
@@ -194,7 +217,10 @@ export default function TicketDetailPage() {
     };
 
     const handleFinalizeCompletion = async () => {
-        if (!signature || !ticket.hasBeforePhoto || !ticket.hasAfterPhoto) return;
+        if (!signature || !ticket.hasBeforePhoto || !ticket.hasAfterPhoto || !notes.trim()) {
+            alert("Mandatory Protocol: Before/After Photos, Completion Notes, and Signature are required for mission closure.");
+            return;
+        }
         setUpdating(true);
         
         // If signature is base64, try uploading to Storage too
@@ -214,8 +240,11 @@ export default function TicketDetailPage() {
         const updateData = {
             status: 'COMPLETED',
             tenantSignature: signatureUrl,
+            notes: notes,
+            partsUsed: ticket.partsUsed || [],
             completedAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
+            completionTimestamp: Date.now()
         };
         
         try {
@@ -458,6 +487,36 @@ export default function TicketDetailPage() {
                         </Button>
                     </Grid>
                 </Grid>
+
+                {role === 'technician' && (
+                    <Box sx={{ mb: 4 }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>PARTS & MATERIALS</Typography>
+                        <Stack spacing={2}>
+                            {(ticket.partsUsed || []).map((part: any, idx: number) => (
+                                <Paper key={idx} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography variant="body2">{part.name}</Typography>
+                                    <Typography variant="body2" fontWeight="900">QTY: {part.quantity}</Typography>
+                                </Paper>
+                            ))}
+                            <Button 
+                                variant="outlined" 
+                                size="small" 
+                                startIcon={<PenTool size={14} />}
+                                onClick={() => {
+                                    const name = prompt("Enter part name:");
+                                    const qty = prompt("Enter quantity:");
+                                    if (name && qty) {
+                                        const newParts = [...(ticket.partsUsed || []), { name, quantity: qty }];
+                                        updateDoc(doc(db, 'maintenanceTickets', id!), { partsUsed: newParts });
+                                    }
+                                }}
+                                sx={{ color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+                            >
+                                ADD PART
+                            </Button>
+                        </Stack>
+                    </Box>
+                )}
 
                 {role === 'technician' && (
                     <TextField

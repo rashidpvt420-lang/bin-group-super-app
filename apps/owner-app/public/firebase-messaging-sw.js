@@ -1,7 +1,8 @@
-// [V5] Sovereign Messaging Service Worker
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
+// [V8] Sovereign Messaging Service Worker - Pristine Direct Initialization
+importScripts('https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging-compat.js');
 
+// [SECURITY] Use explicit, hardcoded public credentials. Never use process.env here.
 firebase.initializeApp({
     apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
     authDomain: "bin-group-57c60.firebaseapp.com",
@@ -11,37 +12,38 @@ firebase.initializeApp({
     appId: "1:123413252227:web:285cb53bc26626d699f3b6"
 });
 
-firebase.messaging.isSupported().then((supported) => {
-    if (supported) {
-        const messaging = firebase.messaging();
-        messaging.onBackgroundMessage((payload) => {
-          console.log('[firebase-messaging-sw.js] Background message received:', payload);
-          const notificationTitle = payload.notification?.title || payload.data?.title || 'BIN GROUP Update';
-          const notificationOptions = {
-            body: payload.notification?.body || payload.data?.body || 'New institutional alert received.',
-            icon: '/logo.png',
-            badge: '/logo.png',
-            requireInteraction: true,
-            data: {
-                ...payload.data,
-                url: payload.data?.url || '/dashboard'
-            }
-          };
-          self.registration.showNotification(notificationTitle, notificationOptions);
-        });
-    } else {
-        console.warn('[firebase-messaging-sw.js] Firebase Messaging is not supported in this browser.');
-    }
-}).catch((err) => console.error('[firebase-messaging-sw.js] isSupported error:', err));
+var messaging = firebase.messaging();
 
-self.onnotificationclick = (event) => {
+messaging.onBackgroundMessage(function(payload) {
+  console.log('[v8-sw] Background Mission Notification Received:', payload);
+  
+  var title = (payload.notification && payload.notification.title) || 
+              (payload.data && payload.data.title) || 
+              'BIN-GROUPS';
+              
+  var options = {
+    body: (payload.notification && payload.notification.body) || 
+          (payload.data && payload.data.body) || 
+          'Digital mission protocol updated.',
+    icon: '/logo.png',
+    badge: '/logo.png',
+    requireInteraction: true,
+    data: {
+        url: (payload.data && payload.data.url) || '/tech'
+    }
+  };
+
+  return self.registration.showNotification(title, options);
+});
+
+self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    const urlToOpen = event.notification.data?.url || '/';
+    var urlToOpen = (event.notification.data && event.notification.data.url) || '/tech';
 
     event.waitUntil(
-        clients.matchAll({ type: 'window' }).then((windowClients) => {
-            for (let i = 0; i < windowClients.length; i++) {
-                const client = windowClients[i];
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(windowClients) {
+            for (var i = 0; i < windowClients.length; i++) {
+                var client = windowClients[i];
                 if (client.url === urlToOpen && 'focus' in client) {
                     return client.focus();
                 }
@@ -51,4 +53,4 @@ self.onnotificationclick = (event) => {
             }
         })
     );
-};
+});

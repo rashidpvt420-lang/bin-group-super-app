@@ -1,10 +1,9 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onCall, onRequest } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import OpenAI from "openai";
 import * as nodemailer from "nodemailer";
 
 // [V8] PRODUCTION GRADE STABILIZATION
@@ -211,14 +210,14 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 });
 
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
+    // 1. IAM Auth Lock
     if (!request.auth) {
-        console.warn(`[AI AUTH LOCKOUT] Unauthenticated guidance execution attempt.`);
-        return { status: "ERROR", error: "UNAUTHORIZED_CALLER" };
+        throw new HttpsError('unauthenticated', 'Sovereign ID verification failed. Session invalid.');
     }
     
     try {
         if (!request.data || typeof request.data.input !== "string" || !request.data.input.trim()) {
-            return { status: "ERROR", error: "Invalid request payload" };
+            return { status: "ERROR", error: "Invalid request payload." };
         }
         const { input, role } = request.data;
         const userRole = role || "unknown";
@@ -227,15 +226,13 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
         try {
             apiKey = openAiKey.value();
         } catch (e: any) {
-            console.error("Failed to read OPENAI_API_KEY secret:", { message: e.message, code: e.code, stack: e.stack });
-            return { status: "ERROR", error: "OPENAI API Key unreadable" };
+            console.error("Failed to read OPENAI_API_KEY secret:", e);
+            throw new HttpsError('internal', 'AI Key integration fault.');
         }
 
         if (!apiKey) {
-            return { status: "ERROR", error: "OPENAI_API_KEY is empty." };
+            throw new HttpsError('internal', 'AI Key configuration missing.');
         }
-
-        const openai = new OpenAI({ apiKey });
 
         const systemPrompt = `You are the BIN GROUP Sovereign AI, an elite institutional property management assistant for UAE real estate.
         User Role: ${userRole}
@@ -243,34 +240,44 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
         Context: UAE Real Estate laws, Dubai/Abu Dhabi standards.
         Instructions: Provide concise, high-impact guidance. If the user reports a critical issue (AC failure, major leak, fire), advise them to use the SOS protocol immediately.`;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: input }
-            ],
-            max_tokens: 250,
-            temperature: 0.7,
+        // 2. Make native fetch call
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: input }
+                ],
+                max_tokens: 250,
+                temperature: 0.7
+            })
         });
 
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("OpenAI API rejection:", response.status, errorData);
+            throw new HttpsError('internal', 'AI backend temporarily unavailable. Please try again.');
+        }
+
+        const data = await response.json();
+        
         return { 
             status: "V8_PRODUCTION_READY", 
-            guidance: completion.choices[0]?.message?.content || "No response generated.",
+            guidance: data.choices?.[0]?.message?.content || "No response generated.",
             timestamp: new Date().toISOString()
         };
     } catch (error: any) {
-        console.error("AI Guidance Failure:", {
-            message: error.message,
-            code: error.code,
-            status: error.status,
-            stack: error.stack
-        });
-        return { 
-            status: "ERROR", 
-            error: "Distinct Backend Failure State: " + error.message 
-        };
+        console.error("AI Guidance Failure Node:", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'AI backend temporarily unavailable. Please try again.');
     }
 });
+
 // STUBS & OTHER TRIGGERS
 export const onTicketStatusUpdate = onDocumentUpdated("maintenanceTickets/{ticketId}", async (event) => {
     const after = event.data?.after.data();
@@ -296,7 +303,6 @@ export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", asyn
     const data = snap.data();
     
     try {
-        // [CVE-MITIGATION/DATA SANITIZATION] Restrict intake properties to explicitly allowed fields
         const safePropertyData = {
             propertyName: typeof data.propertyName === 'string' ? data.propertyName : 'New Asset',
             propertyType: typeof data.propertyType === 'string' ? data.propertyType : 'Unknown',
@@ -320,14 +326,13 @@ export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", asyn
     }
 });
 
-// [V8] Mail Transport LIVE using hardcoded institutional credentials
+// [V8] Mail Transport LIVE using Firebase Secrets integration
 export const processMailQueue = onDocumentCreated({ document: "mail/{docId}", secrets: [smtpUserSecret, smtpPassSecret] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     const mailData = snap.data();
     
     try {
-        // [V8] Mail Transport LIVE using Firebase Secrets integration
         const mailTransport = nodemailer.createTransport({
             host: 'smtp.gmail.com',
             port: 465,

@@ -34,34 +34,46 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const enableNotifications = async (): Promise<boolean> => {
         if (!user) return false;
         try {
+            console.log("🛡️ [AUTH] Notification Handshake Initiated. Current Origin:", window.location.origin);
             const messagingSupported = await isSupported();
+            console.log("🛡️ [AUTH] Messaging Supported:", messagingSupported);
             if (!messagingSupported) return false;
 
             const permission = await Notification.requestPermission();
+            console.log("🛡️ [AUTH] Permission Status:", permission);
             if (permission === 'granted') {
                 const messaging = getMessaging(app);
+                console.log("🛡️ [AUTH] Registering Service Worker...");
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
                 const swReadyPromise = navigator.serviceWorker.ready;
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_READY_TIMEOUT")), 5000));
 
-                await Promise.race([swReadyPromise, timeoutPromise]);
+                console.log("🛡️ [AUTH] Awaiting SW Ready state...");
+                const readyRegistration = await Promise.race([swReadyPromise, timeoutPromise]) as ServiceWorkerRegistration;
+                
+                console.log("🛡️ [AUTH] Requesting FCM Token...");
                 const currentToken = await getToken(messaging, {
                     vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                    serviceWorkerRegistration: registration
+                    serviceWorkerRegistration: readyRegistration
                 });
                 
                 if (currentToken) {
+                    console.log("🛡️ [AUTH] FCM Token Obtained Successfully.");
                     await updateDoc(doc(db, 'users', user.uid), {
                         fcmToken: currentToken,
                         updatedAt: new Date().toISOString()
                     });
-                    console.log("🛡️ [AUTH] FCM Token Harvested successfully.");
+                    console.log("🛡️ [AUTH] Firestore Sync Complete.");
                     return true;
                 }
             }
             return false;
-        } catch (err) {
-            console.warn("🛡️ [AUTH] Notification enablement failed:", err);
+        } catch (err: any) {
+            console.error("🛡️ [AUTH] Notification enablement failed:", {
+                code: err.code,
+                message: err.message,
+                origin: window.location.origin
+            });
             return false;
         }
     };
@@ -151,29 +163,31 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                                 try {
                                     const messagingSupported = await isSupported();
                                     if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                                        console.log("🛡️ [AUTH] Silent FCM Harvest Initiated.");
                                         const messaging = getMessaging(app);
                                         const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });     
                                         const swReadyPromise = navigator.serviceWorker.ready;
                                         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_READY_TIMEOUT")), 5000));
 
                                         try {
-                                            await Promise.race([swReadyPromise, timeoutPromise]);
+                                            const readyRegistration = await Promise.race([swReadyPromise, timeoutPromise]) as ServiceWorkerRegistration;
                                             const currentToken = await getToken(messaging, {
                                                 vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',  
-                                                serviceWorkerRegistration: registration
+                                                serviceWorkerRegistration: readyRegistration
                                             });
                                             if (currentToken) {
+                                                console.log("🛡️ [AUTH] Silent FCM Token Obtained.");
                                                 await updateDoc(doc(db, 'users', currentUser.uid), {
                                                     fcmToken: currentToken,
                                                     updatedAt: new Date().toISOString()
                                                 });
                                             }
-                                        } catch (raceErr) {
-                                            console.warn("📜 [V5] SW Ready timeout or getToken failed:", raceErr);
+                                        } catch (raceErr: any) {
+                                            console.warn("🛡️ [AUTH] Silent Harvest failed:", raceErr.code || raceErr.message);
                                         }
                                     }
                                 } catch (notifErr) {
-                                    console.warn("📜 [V5] Silent Token Harvest bypass/failed:", notifErr);
+                                    console.warn("🛡️ [AUTH] Silent Harvest bypass:", notifErr);
                                 }
                             })();
 

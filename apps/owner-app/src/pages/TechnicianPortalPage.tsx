@@ -65,66 +65,94 @@ export default function TechnicianPortalPage() {
         }
         
         try {
+            const currentOrigin = window.location.origin;
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
 
-            console.log("📍 [PUSH DIAGNOSTICS] iOS:", isIOS, "Standalone:", isStandalone);
+            console.log("📍 [PUSH DIAGNOSTICS] Origin:", currentOrigin);
+            console.log("📍 [PUSH DIAGNOSTICS] User Agent:", navigator.userAgent);
+            console.log("📍 [PUSH DIAGNOSTICS] Standalone Mode:", isStandalone);
+            console.log("📍 [PUSH DIAGNOSTICS] Protocol:", window.location.protocol);
 
             if (isIOS && !isStandalone) {
-                setNotifError("iOS PROTOCOL: To receive emergency dispatch notifications, you must tap the Share icon and select 'Add to Home Screen' first.");
+                setNotifError("iOS REQUIREMENT: Tap Share icon -> 'Add to Home Screen'. Push is only available in standalone PWA mode on iPhone.");
                 setNotifLoading(false);
                 return;
             }
 
             const messagingSupported = await isSupported();
+            console.log("📍 [PUSH DIAGNOSTICS] Messaging Supported:", messagingSupported);
+
             if (!messagingSupported) {
-                console.warn("📍 [PUSH DIAGNOSTICS] Messaging unsupported in this context.");
-                setNotifError("Notifications are not supported by this browser environment.");
+                setNotifError("Handshake Failed: Firebase Messaging is unsupported in this environment. Ensure HTTPS (current: " + window.location.protocol + ") and clear Service Worker cache.");
                 setNotifLoading(false);
                 return;
             }
 
-            console.log("📍 [PUSH DIAGNOSTICS] Requesting permission...");
-            const permission = await window.Notification.requestPermission();
+            console.log("📍 [PUSH DIAGNOSTICS] Current Permission:", Notification.permission);
+            const permission = await Notification.requestPermission();
             setNotifStatus(permission);
-            console.log("📍 [PUSH DIAGNOSTICS] Permission:", permission);
+            console.log("📍 [PUSH DIAGNOSTICS] New Permission Result:", permission);
             
             if (permission === 'granted') {
-                console.log("📍 [PUSH DIAGNOSTICS] Registering SW...");
+                console.log("📍 [PUSH DIAGNOSTICS] Registering /firebase-messaging-sw.js...");
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                const sw = registration.installing || registration.waiting || registration.active;
+                
+                // Wait for SW activation
+                let sw = registration.installing || registration.waiting || registration.active;
+                console.log("📍 [PUSH DIAGNOSTICS] SW Status:", sw?.state);
+                
                 if (sw && sw.state !== 'activated') {
+                    console.log("📍 [PUSH DIAGNOSTICS] Waiting for SW activation...");
                     await new Promise<void>((resolve) => {
-                        sw.addEventListener('statechange', (e: any) => {
-                            if (e.target.state === 'activated') resolve();
+                        registration.addEventListener('updatefound', () => {
+                            const newSw = registration.installing;
+                            newSw?.addEventListener('statechange', () => {
+                                if (newSw.state === 'activated') resolve();
+                            });
                         });
+                        // Fallback resolve
+                        setTimeout(resolve, 3000);
                     });
                 }
-                console.log("📍 [PUSH DIAGNOSTICS] SW Active. Fetching token...");
+                
+                const readyRegistration = await navigator.serviceWorker.ready;
+                console.log("📍 [PUSH DIAGNOSTICS] SW Ready Handshake Complete.");
 
                 const messaging = getMessaging(app);
-                const currentToken = await getFcmToken(messaging, { 
-                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                    serviceWorkerRegistration: registration 
-                });
-                
-                if (currentToken) {
-                    console.log("📍 [PUSH DIAGNOSTICS] Token received. Writing to Firestore...");
-                    await updateDoc(doc(db, 'users', user.uid), {
-                        fcmToken: currentToken,
-                        updatedAt: serverTimestamp()
+                try {
+                    console.log("📍 [PUSH DIAGNOSTICS] Requesting FCM Token with VAPID...");
+                    const currentToken = await getFcmToken(messaging, { 
+                        vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
+                        serviceWorkerRegistration: readyRegistration 
                     });
-                    console.log("📍 [PUSH DIAGNOSTICS] Firestore write successful.");
-                    alert(t('tech.notif_handshake_success'));
-                } else {
-                    throw new Error("EMPTY_TOKEN");
+                    
+                    if (currentToken) {
+                        console.log("📍 [PUSH DIAGNOSTICS] Token Obtained Successfully.");
+                        await updateDoc(doc(db, 'users', user.uid), {
+                            fcmToken: currentToken,
+                            updatedAt: serverTimestamp()
+                        });
+                        console.log("📍 [PUSH DIAGNOSTICS] Firestore Sync Complete.");
+                        alert(t('tech.notif_handshake_success'));
+                    } else {
+                        throw new Error("EMPTY_FCM_TOKEN_RETURNED");
+                    }
+                } catch (tokenErr: any) {
+                    console.error("📍 [PUSH DIAGNOSTICS] getToken failure details:", {
+                        code: tokenErr.code,
+                        message: tokenErr.message,
+                        stack: tokenErr.stack,
+                        customData: tokenErr.customData
+                    });
+                    setNotifError(`FCM Subscription Failed: [${tokenErr.code || 'UNKNOWN'}] ${tokenErr.message}`);
                 }
             } else {
-                setNotifError("Permission was denied. Please allow notifications in your browser settings.");
+                setNotifError("Permission Denied. Please enable notifications in device settings.");
             }
         } catch (err: any) {
-            console.error("📍 [PUSH DIAGNOSTICS] Notification Failure:", err.message, err.stack);
-            setNotifError("Handshake aborted. " + (err.message || 'System limitation blocked notification access.'));
+            console.error("📍 [PUSH DIAGNOSTICS] Systemic Failure:", err);
+            setNotifError(`Systemic Handshake Aborted: ${err.message}`);
         } finally {
             setNotifLoading(false);
         }
@@ -360,11 +388,11 @@ export default function TechnicianPortalPage() {
                                                 </Button>
                                                 <Stack direction="row" spacing={1}>
                                                     {(ticket.status === 'assigned' || ticket.status === 'ASSIGNED') ? (
-                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'EN_ROUTE')} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 950 }}>{t('tech.action.en_route')}</Button>
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'EN_ROUTE')} sx={{ bgcolor: '#C6A75E', color: '#000', fontWeight: 900 }}>{t('tech.action.en_route')}</Button>
                                                     ) : ticket.status === 'EN_ROUTE' ? (
-                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'ARRIVED')} sx={{ bgcolor: '#3b82f6', color: '#fff', fontWeight: 950 }}>{t('tech.action.arrived')}</Button>
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'ARRIVED')} sx={{ bgcolor: '#3b82f6', color: '#fff', fontWeight: 900 }}>{t('tech.action.arrived')}</Button>
                                                     ) : ticket.status === 'ARRIVED' ? (
-                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'IN_PROGRESS')} sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 950 }}>{t('tech.action.start_work')}</Button>
+                                                        <Button variant="contained" fullWidth onClick={() => handleStatusUpdate(ticket.id, 'IN_PROGRESS')} sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 900 }}>{t('tech.action.start_work')}</Button>
                                                     ) : null}
                                                 </Stack>
                                                 {ticket.tenantPhone && (

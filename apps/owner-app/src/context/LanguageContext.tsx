@@ -7,6 +7,7 @@ interface LanguageContextType {
     lang: Language;
     setLang: (lang: Language) => void;
     t: (key: string, variables?: Record<string, any>) => string;
+    tx: (key: string, fallback: string, variables?: Record<string, any>) => string;
     isRTL: boolean;
 }
 
@@ -20,7 +21,6 @@ const translations: Record<Language, Record<string, string>> = {
         'nav.tech': 'Technician',
         'nav.admin': 'BIN-Groups Admin',
         'nav.tenants': 'Tenants',
-        'nav.technicians': 'Technician Corps',
         'nav.tickets': 'Mission Logs',
         'nav.financials': 'Treasury',
         'nav.audit': 'Institutional Audit',
@@ -76,7 +76,6 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.title': 'Institutional Onboarding',
         'onboarding.description': 'BIN GROUP provides elite maintenance for all asset classes: Government Majlis, Government Properties, Hotels, Residential, Commercial, and Institutional nodes.',
         'onboarding.bulk_intake': 'Bulk Property Intake (1–500)',
-        'onboarding.property_details': 'Property Details',
         'onboarding.analysis': 'Asset Analysis',
         'onboarding.quote': 'BIN-Groups Quote',
         'onboarding.payment': 'Activation',
@@ -87,6 +86,14 @@ const translations: Record<Language, Record<string, string>> = {
         'step.addons': 'Service Tailoring',
         'step.summary': 'Security Deposit',
         'step.account': 'Account Activation',
+        'step.type': 'Property Type',
+        'step.location': 'Location',
+        'step.data': 'Building Data',
+        'step.systems': 'Systems & Services',
+        'step.contract': 'Contract Selection',
+        'step.terms': 'Payment Terms',
+        'step.review': 'Review Summary',
+        'step.submit': 'Admin Submission',
         'field.emirate': 'Emirate',
         'field.area': 'Area / Cluster',
         'field.type': 'Property Type',
@@ -116,8 +123,8 @@ const translations: Record<Language, Record<string, string>> = {
         'status.sovereign': 'BIN-GROUPS GRADE',
         'login.portal': 'PARTNER PORTAL',
         'login.auth_access': 'AUTHENTICATED INSTITUTIONAL ACCESS',
-        'login.email': 'Access Email',
-        'login.password': 'Secure Key (Password)',
+        'login.email': 'Email Address',
+        'login.password': 'Password',
         'login.signin': 'SECURE SIGN IN',
         'login.google': 'SIGN IN WITH GOOGLE',
         'login.or_sso': 'OR INSTITUTIONAL SSO',
@@ -125,6 +132,14 @@ const translations: Record<Language, Record<string, string>> = {
         'login.inst_grade': 'INSTITUTIONAL GRADE',
         'login.uae_ops': 'UAE PORTFOLIO OPS',
         'login.footer': '© 2026 BIN-GROUP UAE. UNAUTHORIZED ACCESS IS MONITORED.',
+        'login.authorized_only': 'Authorized client and partner access only.',
+        'gateway.title': 'Select Your Operational Node',
+        'gateway.subtitle': 'Enter the BIN GROUP Sovereign OS via your authorized role.',
+        'gateway.role.owner': 'Continue as Owner',
+        'gateway.role.tenant': 'Continue as Tenant',
+        'gateway.role.technician': 'Continue as Technician',
+        'gateway.role.broker': 'Continue as Broker',
+        'gateway.role.admin': 'Continue as Admin',
         'dash.title': 'Portfolio Intelligence',
         'dash.terminal': 'Terminal',
         'dash.locked_assets': 'Locked Assets',
@@ -201,7 +216,6 @@ const translations: Record<Language, Record<string, string>> = {
         'tech.service_node': 'Service Node',
         'tech.subtitle': 'Live maintenance grid and sovereign asset restoration.',
         'tech.mission_dispatch': 'MISSION DISPATCH',
-        'tech.active_tickets': 'ACTIVE TICKETS',
         'tech.kpi.mttr': 'MTTR (AVG)',
         'tech.kpi.sla': 'SLA COMPLIANCE',
         'tech.kpi.uptime': 'ZONE UPTIME',
@@ -265,6 +279,12 @@ const translations: Record<Language, Record<string, string>> = {
         'status.resolved': 'Resolved',
         'status.closed': 'Closed',
         'status.settled': 'Settled',
+        'status.estimated': 'Estimated',
+        'status.awaiting_owner_approval': 'Awaiting Owner Approval',
+        'status.approved': 'Approved',
+        'status.rejected': 'Rejected',
+        'status.revised_quote_sent': 'Revised Quote Sent',
+        'status.overdue_approval': 'Overdue Approval',
         'status.active': 'Active',
         'status.inactive': 'Inactive',
         'onboarding.payment.verify_btn': 'Verify Payment',
@@ -321,6 +341,10 @@ const translations: Record<Language, Record<string, string>> = {
         'ai.error_unreadable': 'Received unreadable data from Sovereign Engine.',
         'ai.error_unexpected': 'An unexpected error occurred.',
         'ai.error_limit': 'AI Operational Limit Reached (20/24h). Please contact BIN GROUP Admin for credential escalation.',
+        'ai.error_unauthenticated': 'Please sign in again to use Sovereign AI.',
+        'ai.error_invalid': 'Your request was invalid. Please try again.',
+        'ai.error_internal': 'AI backend temporarily unavailable. Please try again.',
+        'ai.error_config': 'AI service is not fully configured.',
         'status.tenant': 'Tenant',
         'status.technician': 'Technician',
         'status.admin': 'Admin',
@@ -348,7 +372,29 @@ const translations: Record<Language, Record<string, string>> = {
         'tech.secure_identity_verified': 'SECURE IDENTITY VERIFIED',
         'tech.qr_registry_note': 'Scanning this code connects to the Sovereign Registry to verify real-time credentials.',
         'tech.dismiss_id': 'DISMISS ID',
-        'tech.show_digital_id': 'SHOW DIGITAL ID'
+        'tech.show_digital_id': 'SHOW DIGITAL ID',
+        'admin.dashboard': 'ADMIN DASHBOARD',
+        'admin.total_revenue': 'TOTAL REVENUE',
+        'ADMIN.TOTAL_REVENUE': 'TOTAL REVENUE',
+        'admin.active_tenants': 'ACTIVE TENANTS',
+        'common.currency': 'AED',
+        'common.currency_aed': 'AED',
+        'tech.ai_proposal': 'AI PROTOCOL PROPOSALS',
+        'dash.sovereign_ai': 'SOVEREIGN AI',
+        'landing.transparency_title': 'GROWTH & RISK TRANSPARENCY',
+        'landing.transparency_desc': 'All financial dispatches are secured via Sovereign Hash Anchor.',
+        'fin.total_deductions': 'TOTAL DEDUCTIONS',
+        'analysis.efficiency': 'OPERATIONAL EFFICIENCY',
+        'dash.proposed': 'PROPOSED',
+        'dash.sanctioned': 'SANCTIONED',
+        'dash.declined': 'DECLINED',
+        'fin.income': 'INCOME',
+        'fin.burn': 'BURN',
+        'fin.logs_title': 'SYSTEMIC LEDGER LOGS',
+        'admin.contract_ref': 'CONTRACT REF',
+        'fin.log.date': 'DATE',
+        'admin.amount': 'AMOUNT',
+        'fin.log.status': 'STATUS'
     },
     ar: {
         'nav.dashboard': 'لوحة القيادة',
@@ -357,7 +403,6 @@ const translations: Record<Language, Record<string, string>> = {
         'nav.tech': 'فني',
         'nav.admin': 'إدارة مجموعة بن',
         'nav.tenants': 'المستأجرون',
-        'nav.technicians': 'فيلق الفنيين',
         'nav.tickets': 'سجلات المهام',
         'nav.financials': 'الخزينة',
         'nav.audit': 'التدقيق المؤسسي',
@@ -413,7 +458,6 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.title': 'التسجيل المؤسسي',
         'onboarding.description': 'توفر مجموعة بن صيانة متميزة لجميع فئات الأصول: المجالس الحكومية، العقارات الحكومية، الفنادق، السكني، التجاري، والمراكز المؤسسية.',
         'onboarding.bulk_intake': 'إدخال العقارات بالجملة (1–500)',
-        'onboarding.property_details': 'تفاصيل العقار',
         'onboarding.analysis': 'تحليل الأصول',
         'onboarding.quote': 'تسعيرة مجموعة بن',
         'onboarding.payment': 'التفعيل',
@@ -424,6 +468,14 @@ const translations: Record<Language, Record<string, string>> = {
         'step.addons': 'تخصيص الخدمات',
         'step.summary': 'مبلغ التأمين',
         'step.account': 'تفعيل الحساب',
+        'step.type': 'نوع العقار',
+        'step.location': 'الموقع',
+        'step.data': 'بيانات المبنى',
+        'step.systems': 'الأنظمة والخدمات',
+        'step.contract': 'اختيار العقد',
+        'step.terms': 'شروط الدفع',
+        'step.review': 'ملخص المراجعة',
+        'step.submit': 'تقديم للإدارة',
         'field.emirate': 'الإمارة',
         'field.area': 'المنطقة / المجمع',
         'field.type': 'نوع العقار',
@@ -453,8 +505,8 @@ const translations: Record<Language, Record<string, string>> = {
         'status.sovereign': 'فئة مجموعة بن',
         'login.portal': 'بوابة الشركاء',
         'login.auth_access': 'دخول مؤسسي موثق',
-        'login.email': 'البريد الإلكتروني للدخول',
-        'login.password': 'المفتاح الآمن (كلمة المرور)',
+        'login.email': 'البريد الإلكتروني',
+        'login.password': 'كلمة المرور',
         'login.signin': 'دخول آمن',
         'login.google': 'الدخول عبر جوجل',
         'login.or_sso': 'أو الدخول المؤسسي الموحد',
@@ -462,6 +514,14 @@ const translations: Record<Language, Record<string, string>> = {
         'login.inst_grade': 'درجة مؤسسية',
         'login.uae_ops': 'عمليات محفظة الإمارات',
         'login.footer': '© 2026 مجموعة بن الإمارات. الدخول غير المصرح به مراقب.',
+        'login.authorized_only': 'دخول العملاء والشركاء المصرح لهم فقط.',
+        'gateway.title': 'اختر عقدة التشغيل الخاصة بك',
+        'gateway.subtitle': 'ادخل إلى نظام BIN GROUP السيادي عبر دورك المصرح به.',
+        'gateway.role.owner': 'المتابعة كمالك',
+        'gateway.role.tenant': 'المتابعة كمستأجر',
+        'gateway.role.technician': 'المتابعة كفني',
+        'gateway.role.broker': 'المتابعة كوسيظ',
+        'gateway.role.admin': 'المتابعة كمسؤول',
         'dash.title': 'ذكاء المحفظة',
         'dash.terminal': 'المحطة',
         'dash.locked_assets': 'الأصول المقفلة',
@@ -481,7 +541,7 @@ const translations: Record<Language, Record<string, string>> = {
         'dash.kpi.trend.optimal': 'مثالي',
         'dash.ledger': 'سجل الأصول',
         'dash.asset_node': 'عقدة الأصول',
-        'dash.health_index': 'مؤشر الصحة',
+        'dash.health_index': 'HEALTH INDEX',
         'dash.annual_amc': 'عقد الصيانة السنوي (AMC)',
         'dash.protocol_status': 'حالة البروتوكول',
         'dash.private_asset': 'أصل خاص',
@@ -490,7 +550,7 @@ const translations: Record<Language, Record<string, string>> = {
         'dash.intel.forecast': 'توقعات الذكاء الاصطناعي',
         'dash.intel.integrity_decay': 'تآكل السلامة',
         'dash.intel.horizon': 'أفق 12 شهراً',
-        'dash.intel.projected_yield': 'العائد المتوقع',
+        'dash.intel.projected_yield': 'الاعائد المتوقع',
         'dash.intel.annualized_net': 'صافي سنوي',
         'dash.intel.guidance_title': 'توجيه المهمة الاستراتيجية',
         'dash.intel.protocol_commands': 'أوامر بروتوكول مجموعة بن',
@@ -538,7 +598,6 @@ const translations: Record<Language, Record<string, string>> = {
         'tech.service_node': 'عقدة الخدمة',
         'tech.subtitle': 'شبكة الصيانة المباشرة وترميم أصول مجموعة بن.',
         'tech.mission_dispatch': 'إرسال المهمة',
-        'tech.active_tickets': 'التذاكر النشطة',
         'tech.kpi.mttr': 'متوسط وقت الإصلاح',
         'tech.kpi.sla': 'الالتزام بـ SLA',
         'tech.kpi.uptime': 'جاهزية المنطقة',
@@ -604,26 +663,15 @@ const translations: Record<Language, Record<string, string>> = {
         'common.system': 'النظام',
         'common.sys_init_fault': 'خطأ في تهيئة النظام',
         'common.reload_sys': 'إعادة تحميل النظام',
-        'common.auth_sync': 'جاري مصادقة هوية مجموعة بن...',
-        'common.identity_fault': 'خطأ في الهوية',
-        'common.role_error_prefix': 'خطأ في تصريح الدور:',
         'status.owner': 'مالك',
-        'status.tenant': 'مستأجر',
-        'status.technician': 'فني',
-        'status.admin': 'مسؤول',
         'common.asset': 'أصل',
         'status.pending': 'قيد الانتظار',
-        'status.open': 'مفتوح',
-        'status.assigned': 'معين',
-        'status.en_route': 'في الطريق',
-        'status.arrived': 'وصل',
-        'status.in_progress': 'قيد التنفيذ',
-        'status.completed': 'مكتمل',
-        'status.resolved': 'محلول',
-        'status.closed': 'مغلق',
-        'status.settled': 'تمت التسوية',
-        'status.active': 'نشط',
-        'status.inactive': 'غير نشط',
+        'status.estimated': 'تم التقدير',
+        'status.awaiting_owner_approval': 'بانتظار موافقة المالك',
+        'status.approved': 'تمت الموافقة',
+        'status.rejected': 'مرفوض',
+        'status.revised_quote_sent': 'تم إرسال تسعيرة معدلة',
+        'status.overdue_approval': 'موافقة متأخرة',
         'onboarding.payment.verify_btn': 'التحقق من الدفع',
         'onboarding.payment.vat_excl': 'غير شامل ضريبة القيمة المضافة',
         'onboarding.payment.appreciation_title': 'شكراً لاختياركم مجموعة بن',
@@ -659,12 +707,6 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.payment.verified_desc': 'محفظتك الآن نشطة في المحرك السيادي.',
         'onboarding.payment.proceed_btn': 'الدخول للوحة القيادة',
         'onboarding.payment.asset_class': 'فئة الأصول',
-        'support.title': 'الدعم المؤسسي',
-        'support.subtitle': 'قناة اتصال آمنة لملاك الأصول والشركاء المؤسسيين.',
-        'support.email': 'دعم البريد الإلكتروني',
-        'support.phone': 'الخط الساخن المباشر',
-        'support.office': 'المقر الرئيسي',
-        'support.office_address': 'المقر الرئيسي لبن للإنشاءات، طابق 88، برج سوفرين، شارع الشيخ زايد، دبي، الإمارات',
         'ai.init.default': 'النظام السيادي جاهز للمساعدة. كيف يمكنني خدمتك اليوم؟',
         'ai.thinking': 'النظام السيادي يحلل المعطيات...',
         'ai.action.check_sos_status': 'حالة استغاثة الطوارئ',
@@ -681,6 +723,32 @@ const translations: Record<Language, Record<string, string>> = {
         'ai.error_unreadable': 'تم استلام بيانات غير مقروءة من المحرك السيادي.',
         'ai.error_unexpected': 'حدث خطأ غير متوقع.',
         'ai.error_limit': 'تم الوصول إلى الحد التشغيلي (20/24ساعة).',
+        'ai.error_unauthenticated': 'يرجى تسجيل الدخول مرة أخرى لاستخدام الذكاء الاصطناعي.',
+        'ai.error_invalid': 'الطلب غير صالح. يرجى المحاولة مرة أخرى.',
+        'ai.error_internal': 'الخدمة الخلفية غير متوفرة حالياً.',
+        'ai.error_config': 'خدمة الذكاء الاصطناعي غير مهيأة بالكامل.',
+        'admin.dashboard': 'لوحة تحكم المسؤول',
+        'admin.total_revenue': 'إجمالي الإيرادات',
+        'ADMIN.TOTAL_REVENUE': 'إجمالي الإيرادات',
+        'admin.active_tenants': 'المستأجرون النشطون',
+        'common.currency': 'درهم',
+        'common.currency_aed': 'درهم',
+        'tech.ai_proposal': 'مقترحات بروتوكول الذكاء الاصطناعي',
+        'dash.sovereign_ai': 'الذكاء الاصطناعي السيادي',
+        'landing.transparency_title': 'شفافية النمو والمخاطر',
+        'landing.transparency_desc': 'يتم تأمين جميع عمليات الإرسال المالية عبر رابط التشفير السيادي.',
+        'fin.total_deductions': 'إجمالي الاستقطاعات',
+        'analysis.efficiency': 'الكفاءة التشغيلية',
+        'dash.proposed': 'مقترح',
+        'dash.sanctioned': 'موافق عليه',
+        'dash.declined': 'مرفوض',
+        'fin.income': 'الدخل',
+        'fin.burn': 'المصروفات',
+        'fin.logs_title': 'سجلات الدفتر النظامي',
+        'admin.contract_ref': 'مرجع العقد',
+        'fin.log.date': 'التاريخ',
+        'admin.amount': 'المبلغ',
+        'fin.log.status': 'الحالة',
         'tech.verified_specialist': 'أخصائي معتمد',
         'tech.secure_identity_verified': 'تم التحقق من الهوية الآمنة',
         'tech.qr_registry_note': 'محاولة مسح هذا الرمز تتصل بالسجل السيادي للتحقق من الصلاحيات.',
@@ -692,8 +760,7 @@ const translations: Record<Language, Record<string, string>> = {
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [lang, setLang] = useState<Language>(() => {
         const saved = localStorage.getItem('app_lang');
-        if (saved === 'en' || saved === 'ar') return saved as Language;
-        return 'en';
+        return (saved as Language) || 'en';
     });
 
     useEffect(() => {
@@ -712,10 +779,23 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
         return text;
     };
 
+    const tx = (key: string, fallback: string, variables?: Record<string, any>) => {
+        const text = translations[lang]?.[key] || translations['en']?.[key];
+        if (!text) return fallback;
+        
+        let result = text;
+        if (variables) {
+            Object.entries(variables).forEach(([k, v]) => {
+                result = result.replace(`{${k}}`, String(v));
+            });
+        }
+        return result;
+    };
+
     const isRTL = lang === 'ar';
 
     return (
-        <LanguageContext.Provider value={{ lang, setLang, t, isRTL }}>
+        <LanguageContext.Provider value={{ lang, setLang, t, tx, isRTL }}>
             <Box 
                 id="bin-app-root"
                 dir={isRTL ? 'rtl' : 'ltr'}
