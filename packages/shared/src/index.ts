@@ -15,4 +15,6 @@ export * from './context/AIContext';
 export * from './lib/notificationService';
 export * from './utils/DesignStudioPricingEngine';
 export * from './context/LanguageContext';
+export * from './components/CeoContactButtons';
+export * from './components/SovereignSupportChat';
 console.log("⚡ [SHARED-LOAD] Evaluation Complete.");
