@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import { Alert, 
     Container, Grid, Card, CardContent, Typography, Box, Paper, 
     Stack, Divider, alpha, LinearProgress, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip
 } from '@mui/material';
-import { 
+import { Alert, 
     DollarSign, TrendingUp, TrendingDown, Wallet, Users, 
     Building2, Activity, PieChart, AlertTriangle
 } from 'lucide-react';
-import { db } from '../../lib/firebase';
-import { collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { binThemeTokens } from '../../theme/adminTheme';
+import { Alert, db } from '../../lib/firebase';
+import { Alert, collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { Alert, binThemeTokens } from '../../theme/adminTheme';
 
 export default function ProfitabilityDashboardPage() {
     const [transactions, setTransactions] = useState<any[]>([]);
@@ -164,3 +164,4 @@ export default function ProfitabilityDashboardPage() {
         </Container>
     );
 }
+

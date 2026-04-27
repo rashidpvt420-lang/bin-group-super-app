@@ -364,7 +364,7 @@ export default function TenantSOSPage() {
                         city: propertyData.city || serviceZone || propertyData.area,
                         area: propertyData.area || serviceZone,
                         placeId: propertyData.googlePlaceId || propertyData.geo?.placeId,
-                        source: 'property_record',
+                        source: 'admin_manual',
                         verified: true
                     });
                 } catch (e) {

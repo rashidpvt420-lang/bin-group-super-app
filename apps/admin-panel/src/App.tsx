@@ -42,6 +42,7 @@ import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
 import PayrollManagementPage from './pages/financials/PayrollManagementPage';
 import TransactionsPage from './pages/financials/TransactionsPage';
+import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
@@ -94,7 +95,8 @@ function AppContent() {
                 <Route element={<Layout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <Route path="/financials" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
+                    <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
+                    <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
                     <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />

@@ -22,9 +22,10 @@ import {
   DialogActions,
   Alert,
 } from '@mui/material';
-import { db } from '../../lib/firebase';
+import { db, functions } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { Wallet, Clock } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 
 interface Technician {
@@ -116,6 +117,24 @@ export default function PayrollManagementPage() {
     }
   };
 
+  const handleSettlePayment = async (record: PayrollRecord) => {
+    setProcessing(true);
+    try {
+        // 1. Generate Payslip via Cloud Protocol
+        const payslipNode = httpsCallable(functions, 'processStaffPayslip');
+        const result: any = await payslipNode({ payrollId: record.id });
+
+        if (result.data.status === 'SUCCESS') {
+            alert(`Sovereign Pay Advice Secured: ${result.data.pdfUrl}`);
+        }
+    } catch (err: any) {
+        console.error("Payslip Node Fault:", err);
+        alert("Institutional Payroll node failed. Check ledger permissions.");
+    } finally {
+        setProcessing(false);
+    }
+  };
+
   const totalPayroll = payroll
     .filter(p => p.month === currentMonth)
     .reduce((sum, p) => sum + p.amount, 0);
@@ -188,8 +207,20 @@ export default function PayrollManagementPage() {
                   />
                 </TableCell>
                 <TableCell align={isRTL ? 'left' : 'right'}>
-                  {record.status === 'pending' && (
-                    <Button size="small" variant="outlined" color="success">{t('fin.settle_payment')}</Button>
+                  {record.status === 'pending' ? (
+                    <Button 
+                        size="small" 
+                        variant="contained" 
+                        color="success" 
+                        onClick={() => handleSettlePayment(record)}
+                        disabled={processing}
+                        startIcon={processing ? <CircularProgress size={14} /> : <Send size={14} />}
+                        sx={{ borderRadius: 100, fontWeight: 900, textTransform: 'none' }}
+                    >
+                        {t('fin.settle_payment') || 'PAY & ADVISE'}
+                    </Button>
+                  ) : (
+                    <Button size="small" startIcon={<FileText size={14} />} sx={{ fontWeight: 900 }}>VIEW SLIP</Button>
                   )}
                 </TableCell>
               </TableRow>
