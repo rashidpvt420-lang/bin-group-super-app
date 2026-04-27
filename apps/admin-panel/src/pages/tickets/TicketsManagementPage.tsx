@@ -34,7 +34,7 @@ import {
   Alert
 } from '@mui/material';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp, startAfter } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp, startAfter } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
 
