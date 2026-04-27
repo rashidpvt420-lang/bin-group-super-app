@@ -29,6 +29,8 @@ import { generatePredictiveIntelligence, MissionGuidancePayload } from '../utils
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
+import OwnerReportGenerator from '../components/OwnerReportGenerator';
+import CeoContactButtons from '../components/CeoContactButtons';
 
 export default function DashboardPage() {
     const { user, role } = useRole();
@@ -170,22 +172,31 @@ export default function DashboardPage() {
                 {user?.displayName?.toUpperCase() || t('status.owner')} {t('dash.terminal')} · {totalProperties} {t('dash.locked_assets')}
             </Typography>
         </Box>
-        <Button 
-            variant="contained" 
-            size="large" 
-            sx={{ 
-                background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                color: '#0B0B0C', 
-                px: 5, 
-                py: 2, 
-                fontWeight: 900, 
-                borderRadius: 3,
-                boxShadow: '0 10px 20px rgba(198, 167, 94, 0.2)',
-                '&:hover': { transform: 'scale(1.02)' }
-            }}
-            onClick={() => window.location.href = '/onboarding'}>
-            {t('dash.onboard_cta')}
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+            <OwnerReportGenerator 
+                user={user} 
+                properties={properties} 
+                contracts={contracts} 
+                metrics={metrics} 
+                isRTL={isRTL} 
+            />
+            <Button 
+                variant="contained" 
+                size="large" 
+                sx={{ 
+                    background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
+                    color: '#0B0B0C', 
+                    px: 5, 
+                    py: 2, 
+                    fontWeight: 900, 
+                    borderRadius: 3,
+                    boxShadow: '0 10px 20px rgba(198, 167, 94, 0.2)',
+                    '&:hover': { transform: 'scale(1.02)' }
+                }}
+                onClick={() => window.location.href = '/onboarding'}>
+                {t('dash.onboard_cta')}
+            </Button>
+        </Stack>
       </Box>
 
       {/* Profile Integrity Alert */}
@@ -597,6 +608,22 @@ export default function DashboardPage() {
                   </Button>
               </Grid>
           </Grid>
+
+          <Divider sx={{ my: 8, borderColor: 'rgba(198,167,94,0.1)' }} />
+          
+          <Box sx={{ textAlign: 'center', mb: 4, pb: 4 }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>
+                  Institutional Escalation
+              </Typography>
+              <Typography variant="h5" sx={{ color: '#FFF', fontWeight: 900, mt: 1, mb: 2 }}>
+                  Executive Operations Desk
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, maxWidth: 600, mx: 'auto' }}>
+                  For high-priority asset protocols, sovereign majlis requirements, or direct partnership inquiries, 
+                  access our executive communication channel.
+              </Typography>
+              <CeoContactButtons />
+          </Box>
       </Box>
     </Container>
   );

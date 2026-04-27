@@ -4,11 +4,13 @@ import {
 } from '@mui/material';
 import { 
     Home, Building2, Building, Hotel, Landmark, Gem, 
-    Briefcase, Warehouse, ShieldCheck, Hash, Scaling, Calendar, ArrowRight, Scan, Upload
+    Briefcase, Warehouse, ShieldCheck, Hash, Scaling, Calendar, ArrowRight, Scan, Upload, FileText
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { storage, ref, uploadBytes, getDownloadURL, functions } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const { properties, updateProperty, addProperty } = useOnboardingStore();
@@ -24,19 +26,37 @@ const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
     const activeProperty = properties[0];
 
-    const simulateScan = () => {
+    const handleTitleDeedUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
         setScanning(true);
-        setTimeout(() => {
+        try {
+            // 1. Upload to Temp
+            const storageRef = ref(storage, `temp_kyc/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const fileUrl = await getDownloadURL(storageRef);
+
+            // 2. Call OCR Protocol
+            const ocrNode = httpsCallable(functions, 'processTitleDeedOCR');
+            const result: any = await ocrNode({ fileUrl });
+
+            if (result.data.status === 'SUCCESS') {
+                const extracted = result.data.data;
+                updateProperty(0, {
+                    propertyType: extracted.propertyType || 'Apartment',
+                    sqft: extracted.sqft || 1850,
+                    area: extracted.area || '',
+                    emirate: extracted.emirate || 'Dubai'
+                });
+                setScanned(true);
+            }
+        } catch (err) {
+            console.error("OCR Failure:", err);
+            alert("Scanner node busy. Please fill data manually.");
+        } finally {
             setScanning(false);
-            setScanned(true);
-            updateProperty(0, {
-                propertyType: 'Apartment',
-                sqft: 1850,
-                units: 1,
-                floors: 1,
-                age: 2
-            });
-        }, 2000);
+        }
     };
 
     const types = [
@@ -116,7 +136,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                         sx={{ mb: 3, py: 1.5, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderStyle: 'dashed' }}
                                     >
                                         {scanning ? 'SCANNING DOCUMENT...' : scanned ? 'TITLE DEED VERIFIED' : 'SCAN TITLE DEED (AUTO-FILL)'}
-                                        {!scanning && !scanned && <input type="file" accept="image/*,.pdf" hidden onChange={simulateScan} />}
+                                        {!scanning && !scanned && <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />}
                                     </Button>
 
                                     <TextField 

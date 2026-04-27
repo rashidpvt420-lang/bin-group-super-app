@@ -14,6 +14,8 @@ import { db, collection, query, onSnapshot, orderBy, where, doc, updateDoc, serv
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 
 export default function HRManagementPage() {
     const { t, tx, isRTL } = useLanguage();
@@ -22,6 +24,7 @@ export default function HRManagementPage() {
     const [staff, setStaff] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [generatingId, setGeneratingId] = useState<string | null>(null);
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -137,9 +140,49 @@ export default function HRManagementPage() {
                                                 <Typography variant="body2" fontWeight="900" color="#10b981">{s.performanceScore || '98'}%</Typography>
                                             </TableCell>
                                             <TableCell align="right">
-                                                <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
-                                                    <ChevronRight size={18} />
-                                                </IconButton>
+                                                <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                                                    {isHRManager && (
+                                                        <Button 
+                                                            size="small" 
+                                                            variant="outlined" 
+                                                            startIcon={generatingId === s.id ? <CircularProgress size={14} /> : <FileText size={14} />}
+                                                            disabled={generatingId !== null}
+                                                            onClick={async () => {
+                                                                setGeneratingId(s.id);
+                                                                try {
+                                                                    const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
+                                                                    await genFn({
+                                                                        staffId: s.id,
+                                                                        staffName: s.displayName,
+                                                                        staffEmail: s.email,
+                                                                        payPeriod: 'April 2026',
+                                                                        basicSalary: s.salary || 12000,
+                                                                        allowances: 3000,
+                                                                        overtime: 500,
+                                                                        deductions: 0
+                                                                    });
+                                                                    alert("Payslip generated and emailed successfully.");
+                                                                } catch (err) {
+                                                                    console.error("Payroll fault:", err);
+                                                                    alert("Institutional Payroll Engine failed.");
+                                                                } finally {
+                                                                    setGeneratingId(null);
+                                                                }
+                                                            }}
+                                                            sx={{ 
+                                                                borderColor: alpha(binThemeTokens.gold, 0.3), 
+                                                                color: binThemeTokens.gold, 
+                                                                fontWeight: 900,
+                                                                fontSize: '0.7rem'
+                                                            }}
+                                                        >
+                                                            PAYSLIP
+                                                        </Button>
+                                                    )}
+                                                    <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                                                        <ChevronRight size={18} />
+                                                    </IconButton>
+                                                </Stack>
                                             </TableCell>
                                         </TableRow>
                                     ))}

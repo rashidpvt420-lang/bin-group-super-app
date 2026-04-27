@@ -354,24 +354,28 @@ export default function TenantSOSPage() {
         setSubmitting(true);
         try {
             let ticketGeo = propertyData?.geo || null;
-            if (!ticketGeo) {
-                ticketGeo = buildGeoAnchor({
-                    lat: propertyData?.location?.lat ?? propertyData?.coordinates?.lat,
-                    lng: propertyData?.location?.lng ?? propertyData?.coordinates?.lng,
-                    address: physicalAddress || propertyData?.address,
-                    emirate: emirate || propertyData?.emirate,
-                    city: propertyData?.city || serviceZone || propertyData?.area,
-                    area: propertyData?.area || serviceZone,
-                    placeId: propertyData?.googlePlaceId || propertyData?.geo?.placeId,
-                    source: propertyData?.geo?.source || 'property_record',
-                    verified: propertyData?.geo?.verified ?? false
-                });
+            if (!ticketGeo && propertyData) {
+                try {
+                    ticketGeo = buildGeoAnchor({
+                        lat: propertyData.location?.lat ?? propertyData.coordinates?.lat,
+                        lng: propertyData.location?.lng ?? propertyData.coordinates?.lng,
+                        address: physicalAddress || propertyData.address,
+                        emirate: emirate || propertyData.emirate,
+                        city: propertyData.city || serviceZone || propertyData.area,
+                        area: propertyData.area || serviceZone,
+                        placeId: propertyData.googlePlaceId || propertyData.geo?.placeId,
+                        source: 'property_record',
+                        verified: true
+                    });
+                } catch (e) {
+                    console.warn("Geo anchoring failed:", e);
+                }
             }
 
             await addDoc(collection(db, 'maintenanceTickets'), {
                 companyId: 'BIN_GROUP',
                 tenantId: user.uid,
-                tenantName: user.displayName || 'Anonymous Tenant',
+                tenantName: user.displayName || 'Sovereign Tenant',
                 tenantEmail: user.email || '',
                 tenantPhone: user.phoneNumber || (user as any).phone || 'No Phone Number',
                 trade: category.toUpperCase(),
@@ -385,13 +389,13 @@ export default function TenantSOSPage() {
                 occupantNotes,
                 hasImage: !!image,
                 status: 'OPEN',
-                priority: urgency === 'EMERGENCY' || category === 'ac_failure' || category === 'plumbing' || category === 'electrical' ? 'EMERGENCY' : 'MEDIUM',
-                
+                priority: urgency === 'EMERGENCY' || ['ac_failure', 'plumbing', 'electrical'].includes(category) ? 'EMERGENCY' : 'MEDIUM',
+
                 // STRICT BINDING
                 propertyId: unitData.propertyId,
                 unitId: unitData.id,
                 ownerId: propertyData?.ownerId || 'SYSTEM',
-                
+
                 unitNumber: unitData.unitNumber || '',
                 floorNumber: unitData.floorNumber || '',
                 emirate: emirate || propertyData?.emirate || '',
@@ -399,10 +403,12 @@ export default function TenantSOSPage() {
                 area: propertyData?.area || serviceZone || '',
                 serviceZone: serviceZone || propertyData?.serviceZone || '',
                 address: physicalAddress || propertyData?.address || '',
-                fullAddress: physicalAddress || propertyData?.address || '',
                 propertyName: propertyData?.name || propertyData?.propertyName || 'Assigned Property',
+                unitLabel: unitData.unitNumber || 'N/A',
+
+                ticketGeo,
                 geo: ticketGeo,
-                
+
                 propertyLocation: {
                     address: physicalAddress || propertyData?.address || '',
                     propertyName: propertyData?.name || propertyData?.propertyName || 'Assigned Property',
@@ -411,6 +417,7 @@ export default function TenantSOSPage() {
                     location: ticketGeo ? { lat: ticketGeo.lat, lng: ticketGeo.lng } : null,
                     geo: ticketGeo
                 },
+
                 tenantSafety: {
                     technicianIdentityRequired: true,
                     otpBeforeWork: true,

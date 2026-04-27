@@ -37,6 +37,7 @@ interface CFOStats {
 
 export default function CFODashboard() {
     const [stats, setStats] = useState<CFOStats | null>(null);
+    const [snapshotData, setSnapshotData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -66,6 +67,8 @@ export default function CFODashboard() {
 
         // 🏢 2. Portfolio Intelligence (From Properties & Contracts)
         const unsubProps = onSnapshot(collection(db, 'properties'), (snapshot: QuerySnapshot<DocumentData>) => {
+            const props = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSnapshotData(props);
             setStats(prev => ({
                 ...(prev || {} as CFOStats),
                 portfolioCount: snapshot.size
@@ -225,39 +228,40 @@ export default function CFODashboard() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {[
-                                    { name: 'Marina Crown Tower', value: 185000, cost: 62000, margin: 66, status: 'PAID' },
-                                    { name: 'JVC Pearl Residences', value: 94500, cost: 41000, margin: 56, status: 'PENDING' },
-                                    { name: 'Downtown Emaar Heights', value: 320000, cost: 112000, margin: 65, status: 'PAID' },
-                                    { name: 'Al Noor Tower', value: 112000, cost: 78000, margin: 30, status: 'OVERDUE' }
-                                ].map((row) => (
-                                    <TableRow key={row.name} hover>
-                                        <TableCell sx={{ fontWeight: 800 }}>{row.name}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>AED {row.value.toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {row.cost.toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.value - row.cost).toLocaleString()}</TableCell>
+                                {stats?.portfolioCount ? snapshotData.map((row: any) => (
+                                    <TableRow key={row.id} hover>
+                                        <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || 'Unnamed Asset'}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
                                         <TableCell>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body2" fontWeight={800}>{row.margin}%</Typography>
+                                                <Typography variant="body2" fontWeight={800}>60%</Typography>
                                                 <Box sx={{ flexGrow: 1, height: 4, bgcolor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                                                    <Box sx={{ width: `${row.margin}%`, height: '100%', bgcolor: row.margin > 40 ? '#16a34a' : '#ef4444' }} />
+                                                    <Box sx={{ width: `60%`, height: '100%', bgcolor: '#16a34a' }} />
                                                 </Box>
                                             </Box>
                                         </TableCell>
                                         <TableCell>
                                             <Chip 
-                                                label={row.status} 
+                                                label="ACTIVE" 
                                                 size="small" 
                                                 sx={{ 
                                                     fontWeight: 900, 
                                                     fontSize: 9, 
-                                                    bgcolor: row.status === 'PAID' ? '#dcfce7' : row.status === 'OVERDUE' ? '#fee2e2' : '#fef3c7',
-                                                    color: row.status === 'PAID' ? '#166534' : row.status === 'OVERDUE' ? '#991b1b' : '#92400e'
+                                                    bgcolor: '#dcfce7',
+                                                    color: '#166534'
                                                 }} 
                                             />
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={6} align="center">
+                                            <Typography variant="body2" sx={{ py: 4, color: 'textSecondary' }}>No active portfolio data available.</Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </TableContainer>
