@@ -19,23 +19,129 @@ service cloud.firestore {
     }
 
     match /maintenanceTickets/{ticketId} {
-      allow create: if isAuth();
+      allow create: if isAdmin() || (isAuth() &&
+        request.resource.data.companyId is string &&
+        request.resource.data.propertyId is string &&
+        request.resource.data.unitId is string &&
+        request.resource.data.tenantId == request.auth.uid &&
+        request.resource.data.geo.lat is number &&
+        request.resource.data.geo.lng is number &&
+        request.resource.data.geo.lat >= -90 &&
+        request.resource.data.geo.lat <= 90 &&
+        request.resource.data.geo.lng >= -180 &&
+        request.resource.data.geo.lng <= 180);
       allow read, update: if isAuth(); 
+      allow delete: if isAdmin();
+    }
+
+    match /intake_submissions/{id} {
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin() || (
+        isAuth() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.activationState == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
+        request.resource.data.dashboardUnlocked != true
+      );
       allow delete: if isAdmin();
     }
 
     match /properties/{propertyId} {
       allow read: if isAuth(); 
-      allow write: if isAdmin();
+      allow write: if isAdmin() &&
+        request.resource.data.companyId is string &&
+        request.resource.data.ownerId is string &&
+        request.resource.data.geo.lat is number &&
+        request.resource.data.geo.lng is number &&
+        request.resource.data.geo.lat >= -90 &&
+        request.resource.data.geo.lat <= 90 &&
+        request.resource.data.geo.lng >= -180 &&
+        request.resource.data.geo.lng <= 180 &&
+        (request.resource.data.geo.address is string || request.resource.data.geo.placeId is string) &&
+        request.resource.data.geo.emirate is string &&
+        (request.resource.data.geo.city is string || request.resource.data.geo.area is string);
+    }
+
+    match /companies/{companyId}/properties/{propId} {
+      allow read: if isAuth();
+      allow write: if isAdmin() &&
+        request.resource.data.companyId == companyId &&
+        request.resource.data.ownerId is string &&
+        request.resource.data.geo.lat is number &&
+        request.resource.data.geo.lng is number &&
+        request.resource.data.geo.lat >= -90 &&
+        request.resource.data.geo.lat <= 90 &&
+        request.resource.data.geo.lng >= -180 &&
+        request.resource.data.geo.lng <= 180 &&
+        (request.resource.data.geo.address is string || request.resource.data.geo.placeId is string) &&
+        request.resource.data.geo.emirate is string &&
+        (request.resource.data.geo.city is string || request.resource.data.geo.area is string);
     }
 
     match /contracts/{contractId} {
       allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
+      allow create: if isAdmin() || (
+        isAuth() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
+        request.resource.data.paymentVerified == false
+      );
+      allow update: if isAdmin() || (
+        isAuth() &&
+        resource.data.ownerId == request.auth.uid &&
+        request.resource.data.ownerId == request.auth.uid &&
+        resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
+        request.resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
+        request.resource.data.paymentVerified == false
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /payment_transactions/{paymentId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() || (
+        isAuth() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.status == 'PENDING' &&
+        request.resource.data.unlocksDashboard == false
+      );
+      allow update: if isAdmin() || (
+        isAuth() &&
+        resource.data.ownerId == request.auth.uid &&
+        request.resource.data.ownerId == request.auth.uid &&
+        resource.data.status == 'PENDING' &&
+        request.resource.data.status == 'PENDING' &&
+        request.resource.data.unlocksDashboard == false
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /owners/{ownerId} {
+      allow read: if isOwner(ownerId) || isAdmin();
+      allow create, update: if isAdmin() || (
+        isOwner(ownerId) &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.dashboardUnlocked == false &&
+        request.resource.data.status == 'PAYMENT_PENDING'
+      );
+      allow delete: if isAdmin();
     }
 
     match /telemetry_logs/{logId} {
       allow read, write: if isAdmin();
+    }
+
+    match /design_requests/{requestId} {
+      allow create: if isAuth();
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /move_out_requests/{requestId} {
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
     }
 
     match /{document=**} {

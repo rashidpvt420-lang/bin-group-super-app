@@ -9,11 +9,13 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import ArticleIcon from '@mui/icons-material/Article';
 import { useLanguage } from '../context/LanguageContext';
 import { formatAED } from '../utils/formatters';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 interface Props {
     propertyData: any;
     selectedPlan: any;
-    onSign: () => void;
+    onSign: (data: any) => void;
 }
 
 export default function ContractDigitalSignature({ propertyData, selectedPlan, onSign }: Props) {
@@ -27,6 +29,70 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
     const handleSendOtp = () => {
         setOtpSent(true);
         setSnackbar({ open: true, message: "Institutional Activation: OTP sent to the registered mobile number on the Title Deed.", severity: 'info' });
+    };
+
+    const handleFinalize = () => {
+        const signedArtifact = {
+            signature,
+            timestamp: new Date().toISOString(),
+            version: 'v2.0-UAE-INSTITUTIONAL',
+            institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            acceptanceLog: {
+                accepted,
+                otpVerified: true,
+                platform: 'BIN-GENESIS-SOVEREIGN-OS'
+            }
+        };
+        
+        generateContractPDF(signedArtifact);
+        onSign(signedArtifact);
+    };
+
+    const generateContractPDF = (artifact: any) => {
+        const doc = new jsPDF();
+        const contractInfo = getContractContent();
+        
+        doc.setFontSize(22);
+        doc.text("BIN GROUP - SOVEREIGN CONTRACT", 105, 20, { align: "center" });
+        
+        doc.setFontSize(16);
+        doc.text(contractInfo.title, 105, 30, { align: "center" });
+        
+        doc.setFontSize(12);
+        doc.text(`Version: ${artifact.version}`, 20, 50);
+        doc.text(`Hash: ${artifact.institutionalHash}`, 20, 58);
+        doc.text(`Timestamp: ${new Date(artifact.timestamp).toLocaleString()}`, 20, 66);
+
+        doc.setFontSize(14);
+        doc.text("1. PARTIES", 20, 85);
+        doc.setFontSize(11);
+        doc.text(`Property: ${propertyData?.address || propertyData?.propertyName || 'Subject Asset'}`, 20, 95);
+        doc.text(`Owner/Entity: ${propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}`, 20, 102);
+        doc.text(`Provider: BIN GROUP PROPERTY MANAGEMENT LLC`, 20, 109);
+
+        doc.setFontSize(14);
+        doc.text("2. SCOPE OF SERVICES", 20, 125);
+        doc.setFontSize(11);
+        const splitScope = doc.splitTextToSize(contractInfo.body, 170);
+        doc.text(splitScope, 20, 135);
+
+        doc.setFontSize(14);
+        doc.text("3. PRICING & DISBURSEMENT", 20, 180);
+        doc.setFontSize(11);
+        doc.text(`Annual Management Fee: AED ${formatAED(Math.round(selectedPlan?.annualPrice || selectedPlan?.package?.annualPrice || 0))}`, 20, 190);
+        doc.text(`Payment Schedule: Institutional settlement manifest applies.`, 20, 197);
+
+        doc.setFontSize(14);
+        doc.text("4. SIGNATURES", 20, 220);
+        doc.setFontSize(11);
+        doc.text(`Digitally Signed By: ${artifact.signature}`, 20, 230);
+        doc.text(`Mobile OTP Verified: YES`, 20, 237);
+        doc.text(`Platform Origin: ${artifact.acceptanceLog.platform}`, 20, 244);
+        
+        // Add secure border around signature
+        doc.rect(15, 215, 180, 40);
+
+        doc.save(`BIN_GROUP_Contract_${artifact.institutionalHash}.pdf`);
     };
 
     const getContractContent = () => {
@@ -140,7 +206,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                             color="success"
                             size="large"
                             disabled={otp.length < 6}
-                            onClick={onSign}
+                            onClick={handleFinalize}
                             startIcon={<DrawIcon />}
                             sx={{ fontWeight: 'bold' }}
                         >

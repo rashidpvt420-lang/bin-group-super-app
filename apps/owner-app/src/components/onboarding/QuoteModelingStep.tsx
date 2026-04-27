@@ -4,9 +4,7 @@ import { ArrowRight, ArrowLeft, TrendingUp, ShieldCheck, Sparkles } from 'lucide
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { generateTenderScopePdf, TenderInput } from '../../utils/tenderExportEngine';
 import { formatAED } from '../../utils/formatters';
-import { FileDown } from 'lucide-react';
 
 interface Props {
     onNext: () => void;
@@ -29,26 +27,6 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
     }
 
     const { packages, savingsSimulation, benchmark, contractRecommendation } = valuationResult;
-
-    const handleDownloadTender = () => {
-        const tenderInput: TenderInput = {
-            emirate: propertyData?.emirate || 'Abu Dhabi',
-            propertyType: propertyData?.propertyType || 'Residential',
-            assetType: propertyData?.propertyType || 'Residential Portfolio',
-            sqft: propertyData?.sqft || 0,
-            annualYield: 7.2, // Calibrated for super-app launch
-            majlisType: propertyData?.majlisType,
-            heritageSensitivity: propertyData?.heritageSensitivity || 'Standard',
-            hasSolar: propertyData?.solarIntegration || false,
-            hasEV: (propertyData?.parkingCapacity || 0) > 0 
-        };
-
-        const valuation = {
-            annualContractValue: packages?.[1]?.annualPrice || 0
-        };
-
-        generateTenderScopePdf(tenderInput, valuation);
-    };
 
     return (
         <Box sx={{ maxWidth: 1200, mx: 'auto', direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -162,22 +140,6 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
 
             <Box sx={{ display: 'flex', gap: 2, mt: 10, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button variant="text" onClick={onBack} size="large" sx={{ color: binThemeTokens.textSecondary, py: 2, px: 4, fontWeight: 700 }}>{t('btn.back_analysis')}</Button>
-                <Button 
-                    variant="outlined" 
-                    onClick={handleDownloadTender}
-                    size="large"
-                    startIcon={isRTL ? null : <FileDown />}
-                    endIcon={isRTL ? <FileDown /> : null}
-                    sx={{ 
-                        color: binThemeTokens.gold, 
-                        borderColor: binThemeTokens.gold,
-                        px: 4, py: 2.5, fontWeight: 900,
-                        borderRadius: 4,
-                        '&:hover': { borderColor: binThemeTokens.goldLight, bgcolor: 'rgba(198,167,94,0.05)' }
-                    }}
-                >
-                    {t('btn.download_tender')}
-                </Button>
                 <Box flexGrow={1} />
                 <Button 
                     variant="contained" 
@@ -188,7 +150,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
                     sx={{ 
                         background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
                         color: binThemeTokens.black,
-                        px: 8, py: 2.5, fontWeight: 900, fontSize: '1.2rem',
+                        px: 8, py: 2.5, fontWeight: 950, fontSize: '1.2rem',
                         borderRadius: 4
                     }}
                 >

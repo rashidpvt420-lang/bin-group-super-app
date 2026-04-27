@@ -40,9 +40,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     // 2. [OWNER LOCK PROTOCOL]
     // Only lock out owners who are pending or haven't paid. 
     // Tenants/Technicians bypass this as their status is managed differently.
-    if (normalizedRole === 'owner' && (currentStatus === 'pending' || currentStatus === 'pending_approval') && !isAdmin) {
+    const ownerLockedStatuses = ['pending', 'pending_approval', 'payment_pending', 'awaiting_verification', 'awaiting_approval', 'rejected', 'onboarding'];
+    if (normalizedRole === 'owner' && ownerLockedStatuses.includes(currentStatus) && !isAdmin) {
         if (!location.pathname.startsWith('/onboarding')) {
-            const isPendingApproval = status === 'pending_approval';
+            const isPendingApproval = currentStatus === 'pending_approval' || currentStatus === 'awaiting_verification' || currentStatus === 'payment_pending';
 
             return (
                 <Box sx={{ 

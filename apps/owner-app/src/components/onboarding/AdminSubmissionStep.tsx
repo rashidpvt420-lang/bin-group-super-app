@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatAED } from '../../utils/formatters';
+import ContractDigitalSignature from '../ContractDigitalSignature';
 
 const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const { 
@@ -18,13 +19,20 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const { tx, isRTL } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [showSignature, setShowSignature] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [signedData, setSignedData] = useState<any>(null);
 
     // [V3] CALCULATION LOGIC: 15% Upfront Mobilization
     const estimatedAMC = (portfolioSummary?.totalUnits || 1) * 2500; 
     const mobilizationPayment = estimatedAMC * 0.15;
 
     const handleFinalSubmit = async () => {
+        if (!signedData) {
+            setShowSignature(true);
+            return;
+        }
+
         setLoading(true);
         setError(null);
         try {
@@ -34,6 +42,7 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 portfolioSummary,
                 mobilizationDue: mobilizationPayment,
                 companyProfile,
+                signedData, // [V4] Executed document metadata
                 status: 'AWAITING_VERIFICATION',
                 paymentStatus: 'PENDING',
                 createdAt: serverTimestamp(),
@@ -60,6 +69,24 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 </Typography>
                 <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold }} />
             </Box>
+        );
+    }
+
+    if (showSignature) {
+        return (
+            <Container maxWidth="md" sx={{ py: 4 }}>
+                <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.9)', border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4 }}>
+                    <ContractDigitalSignature 
+                        propertyData={properties[0]} 
+                        selectedPlan={selectedPlan} 
+                        onSign={(data: any) => {
+                            setSignedData(data);
+                            setShowSignature(false);
+                        }} 
+                    />
+                    <Button onClick={() => setShowSignature(false)} sx={{ mt: 2, color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+                </Paper>
+            </Container>
         );
     }
 
@@ -92,6 +119,12 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                 This upfront allocation covers asset auditing, technician mapping, and system initialization.
                             </Typography>
                         </Box>
+
+                        {signedData && (
+                             <Alert severity="success" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#4ADE80', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                DIGITAL CONTRACT SIGNED: {signedData.institutionalHash}
+                             </Alert>
+                        )}
 
                         <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 
@@ -129,7 +162,7 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                 '&:hover': { bgcolor: '#E6C77A', transform: 'translateY(-2px)' }
                             }}
                         >
-                            SECURE SUBMISSION
+                            {signedData ? 'SECURE SUBMISSION' : 'SIGN CONTRACT & SUBMIT'}
                         </Button>
                     </Stack>
                 </Paper>

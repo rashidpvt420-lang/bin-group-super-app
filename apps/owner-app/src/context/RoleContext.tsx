@@ -2,9 +2,18 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, useRe
 import { 
     db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, 
     isSupported, getMessaging, getToken, app, 
-    onAuthStateChanged, getRedirectResult, User 
+    onAuthStateChanged, getRedirectResult, User, arrayUnion
 } from "../lib/firebase";        
 import LegalModal from "../components/LegalModal";
+
+export interface SovereignUser extends User {
+    designStudioBeta?: boolean;
+    role?: string;
+    status?: string;
+    isAdmin?: boolean;
+    propertyId?: string;
+    unitId?: string;
+}
 
 interface RoleContextType {
     role: string | null;
@@ -12,7 +21,7 @@ interface RoleContextType {
     isAdmin: boolean;
     loading: boolean;
     error: string | null;
-    user: User | null;
+    user: SovereignUser | null;
     propertyId: string | null;
     legalAccepted: boolean;
     enableNotifications: () => Promise<boolean>;
@@ -24,7 +33,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [role, setRole] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<SovereignUser | null>(null);
     const [propertyId, setPropertyId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -59,10 +68,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 
                 if (currentToken) {
                     console.log("🛡️ [AUTH] FCM Token Obtained Successfully.");
+                    const userAgent = window.navigator.userAgent.toLowerCase();
+                    const isIOS = /iphone|ipad|ipod/.test(userAgent);
+                    const isStandalone = ('standalone' in window.navigator) && (window.navigator as any).standalone;
+
                     await updateDoc(doc(db, 'users', user.uid), {
-                        fcmToken: currentToken,
-                        updatedAt: new Date().toISOString()
+                       fcmTokens: arrayUnion(currentToken),
+                       platform: isIOS ? 'ios' : 'android',
+                       isStandalone: !!isStandalone,
+                       userAgent: window.navigator.userAgent,
+                       updatedAt: new Date().toISOString()
                     });
+
                     console.log("🛡️ [AUTH] Firestore Sync Complete.");
                     return true;
                 }
@@ -138,6 +155,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         if (snap && snap.exists()) {
                             const data = snap.data();
                             console.log("🔍 [DIAG] Profile data loaded:", JSON.stringify({ role: data.role, status: data.status, isAdmin: data.isAdmin }));
+                            
+                            // Enrich the user object with profile data including designStudioBeta
+                            setUser(prev => prev ? { ...prev, ...data } : null);
+
                             const currentStatus = (data.status || 'active').toUpperCase();
 
                             if (currentStatus === 'PENDING_APPROVAL') {
@@ -178,7 +199,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                                             if (currentToken) {
                                                 console.log("🛡️ [AUTH] Silent FCM Token Obtained.");
                                                 await updateDoc(doc(db, 'users', currentUser.uid), {
-                                                    fcmToken: currentToken,
+                                                    fcmTokens: arrayUnion(currentToken),
                                                     updatedAt: new Date().toISOString()
                                                 });
                                             }

@@ -320,7 +320,7 @@ export default function PricingPage() {
                         <strong>Due Dates:</strong> Payments are due strictly as per the schedule selected in the App (Annual Upfront or Quarterly).<br />
                         <strong>The "Two-Strike" Suspension:</strong> If the Client fails to settle two (2) consecutive invoices (or if two cheques return unpaid), all services—including Emergency SOS response—will be automatically suspended. Service will only resume upon full settlement of the outstanding balance plus a Reactivation Fee of AED 500.<br />
                         <strong>Bounced Cheques:</strong> Any returned cheque or declined auto-payment will incur an administrative fine of AED 250 per instance.<br />
-                        <strong>Spare Parts Markup:</strong> The Client acknowledges that spare parts and consumables are chargeable and include a standard procurement and handling fee (20%) over the supplier cost.
+                        <strong>Spare Parts Markup:</strong> The Client acknowledges that spare parts and consumables are chargeable and include a standard institutional handling fee (20%) over the supplier cost.
                     </Typography>
 
                     <Typography variant="subtitle2" gutterBottom fontWeight="bold" sx={{ mt: 3, color: '#0f172a' }}>5. LIABILITY & DISPUTE RESOLUTION</Typography>

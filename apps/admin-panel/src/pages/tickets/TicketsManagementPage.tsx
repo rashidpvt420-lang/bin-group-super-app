@@ -28,10 +28,13 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
-  CircularProgress
+  CircularProgress,
+  Stack,
+  Divider,
+  Alert
 } from '@mui/material';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp, startAfter } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
 
@@ -54,6 +57,8 @@ interface Ticket {
   revisionNotes?: string;
   propertyName?: string;
   propertyId?: string;
+  unitId?: string;
+  ownerId?: string;
   unitNumber?: string;
   floorNumber?: string;
 }
@@ -68,57 +73,69 @@ interface Technician {
 export default function TicketsManagementPage() {
   const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Assignment State
+  // Restore Mission States
   const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
   const [detailTicket, setDetailTicket] = useState<Ticket | null>(null);
   const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [techLoading, setTechLoading] = useState(false);
+  
+  const PAGE_SIZE = 20;
+
+  const mapTicket = (doc: any) => {
+    const data = doc.data() || {};
+    return {
+      ticketId: doc.id,
+      tenantId: data.tenantId || data.userId || '',
+      unit: data.unitNumber || data.unit || data.unitId || 'N/A',
+      category: data.trade || data.issueType || data.category || 'General',
+      description: data.description || '',
+      status: data.status || 'OPEN',
+      priority: data.priority || 'MEDIUM',
+      assignedTechnicianId: data.assignedTechnicianId,
+      assignedTechnicianName: data.assignedTechnicianName,
+      assignedTechnician: data.assignedTechnicianName || data.assignedTechnician || data.technicianAssigned || data.assignedTo || null,
+      createdAt: data.createdAt || null,
+      completedAt: data.completedAt || null,
+      emergencyCharge: data.emergencyCharge || 0,
+      propertyName: data.propertyName || 'Private Asset',
+      propertyId: data.propertyId || 'UNASSOCIATED',
+      unitNumber: data.unitNumber || 'N/A',
+      floorNumber: data.floorNumber || 'N/A'
+    } as Ticket;
+  };
 
   useEffect(() => {
-    const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(100));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      try {
-          const fetched = (snapshot.docs || []).map(doc => {
-            const data = doc.data() || {};
-            return {
-              ticketId: doc.id,
-              tenantId: data.tenantId || data.userId || '',
-              unit: data.unitNumber || data.unit || data.unitId || 'N/A',
-              category: data.trade || data.issueType || data.category || 'General',
-              description: data.description || '',
-              status: data.status || 'OPEN',
-              priority: data.priority || 'MEDIUM',
-              assignedTechnicianId: data.assignedTechnicianId,
-              assignedTechnicianName: data.assignedTechnicianName,
-              assignedTechnician: data.assignedTechnicianName || data.assignedTechnician || data.technicianAssigned || data.assignedTo || null,
-              createdAt: data.createdAt || null,
-              completedAt: data.completedAt || null,
-              emergencyCharge: data.emergencyCharge || 0,
-              propertyName: data.propertyName,
-              propertyId: data.propertyId,
-              floorNumber: data.floorNumber
-            } as Ticket;
-          });
-          setTickets(fetched);
-          setLoading(false);
-      } catch (err) {
-          console.error("[TICKETS] Mapping failure:", err);
-          setLoading(false);
-      }
-    }, (error) => {
-      console.error("Firestore error:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    const fetchInitial = async () => {
+        const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const snap = await getDocs(q);
+        setTickets(snap.docs.map(mapTicket));
+        setLastDoc(snap.docs[snap.docs.length - 1]);
+        setHasMore(snap.docs.length === PAGE_SIZE);
+        setLoading(false);
+    };
+    fetchInitial();
   }, []);
+
+  const loadMore = async () => {
+    if (!lastDoc || loadingMore) return;
+    setLoadingMore(true);
+    const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
+    const snap = await getDocs(q);
+    const fetched = snap.docs.map(mapTicket);
+    setTickets(prev => [...prev, ...fetched]);
+    setLastDoc(snap.docs[snap.docs.length - 1]);
+    setHasMore(snap.docs.length === PAGE_SIZE);
+    setLoadingMore(false);
+  };
 
   const fetchTechnicians = async () => {
       setTechLoading(true);
@@ -175,6 +192,13 @@ export default function TicketsManagementPage() {
 
   const handleAssign = async (tech: Technician) => {
       if (!assigningTicket) return;
+
+      // 🚨 INSTITUTIONAL SAFEGUARD: Prevent dispatch of unassociated tickets
+      if (!assigningTicket.propertyId || !assigningTicket.unit || assigningTicket.propertyId === 'UNASSOCIATED') {
+          alert("Sovereign Protocol Violation: Mission cannot be dispatched without a verified Property and Unit node. Please link this ticket in the Orphan War Room first.");
+          return;
+      }
+
       try {
           const ticketRef = doc(db, 'maintenanceTickets', assigningTicket.ticketId);
           await updateDoc(ticketRef, {
@@ -240,7 +264,7 @@ export default function TicketsManagementPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" sx={{ mb: 4, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
-        {t('landing.about_overline')} <Box component="span" sx={{ color: '#1976d2' }}>{t('tech.tickets_mgt')}</Box>
+        {t('tech.tickets_mgt').split(' ')[0]} <Box component="span" sx={{ color: '#1976d2' }}>{t('tech.tickets_mgt').split(' ').slice(1).join(' ')}</Box>
       </Typography>
 
       {/* Filters */}
@@ -264,6 +288,8 @@ export default function TicketsManagementPage() {
                 <MenuItem value="">{t('tech.all_statuses')}</MenuItem>
                 <MenuItem value="OPEN">OPEN</MenuItem>
                 <MenuItem value="ASSIGNED">ASSIGNED</MenuItem>
+                <MenuItem value="EN_ROUTE">EN ROUTE</MenuItem>
+                <MenuItem value="ARRIVED">ARRIVED</MenuItem>
                 <MenuItem value="IN_PROGRESS">IN PROGRESS</MenuItem>
                 <MenuItem value="COMPLETED">COMPLETED</MenuItem>
               </Select>

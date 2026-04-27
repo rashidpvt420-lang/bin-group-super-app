@@ -6,23 +6,33 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import SecurityIcon from '@mui/icons-material/Security';
 import SettingsIcon from '@mui/icons-material/Settings';
-// import RadarIcon from '@mui/icons-material/Radar';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
+import FileTextIcon from '@mui/icons-material/Description';
+import { Sparkles, Users } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useLanguage } from '@bin/shared';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
+import CeoContactButtons from './CeoContactButtons';
+
+import { useAuth } from '../context/AuthContext';
 
 const Navigation = () => {
     const { t, tx, isRTL } = useLanguage();
+    const { user } = useAuth();
+    
+    const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
 
-    const primaryMenu = [
-        { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-        { text: tx('nav.financials', 'Treasury'), icon: <AccountBalanceWalletIcon />, path: '/admin/financials', color: binThemeTokens.gold },
-        { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/vault', color: binThemeTokens.gold },
-        { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
-    ];
+const primaryMenu = [
+    { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+    { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
+    { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
+    { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
+    { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
+    { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
+    { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
+];
 
     const managementMenu = [
         { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
@@ -30,6 +40,9 @@ const Navigation = () => {
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
+        { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
+        { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
+        ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
     ];
 
     const systemMenu = [
@@ -131,6 +144,9 @@ const Navigation = () => {
                         <ListItemIcon sx={{ color: '#DAA520', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><SecurityIcon /></ListItemIcon>
                         <ListItemText primary={t('nav.support')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#DAA520' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
+                    <Box sx={{ mt: 2, mb: 1, px: 2 }}>
+                        <CeoContactButtons compact />
+                    </Box>
                     <ListItem
                         component="a"
                         href="https://bin-groups.com"

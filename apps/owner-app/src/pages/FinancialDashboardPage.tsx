@@ -92,7 +92,8 @@ export default function FinancialDashboardPage() {
                 netPayout: yieldMetrics.netIncome || 0,
                 pendingPayments: (yieldMetrics.grossContractValue || 0) - (yieldMetrics.totalCollected || 0),
                 overdueAmount: 0,
-                dailyTrend
+                dailyTrend,
+                pm: yieldMetrics.pmMetrics // [V2] NEW
             });
 
         } catch (err) {
@@ -285,6 +286,29 @@ export default function FinancialDashboardPage() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* [V2] PM OPERATIONAL ROI SECTION */}
+      <Box sx={{ mt: 8 }}>
+          <Typography variant="h5" fontWeight="950" sx={{ mb: 4, color: '#FFF', display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TrendingUp color={binThemeTokens.gold} /> OPERATIONAL ROI AUDIT
+          </Typography>
+          <Grid container spacing={3}>
+              {[
+                  { label: 'Occupied Units', val: safeFinancials.pm?.occupiedUnits, sub: `${safeFinancials.pm?.occupancyRate}% Occupancy` },
+                  { label: 'Vacant Units', val: safeFinancials.pm?.vacantUnits, sub: 'Ready for Leasing' },
+                  { label: 'Renewals Processed', val: safeFinancials.pm?.renewalsProcessed, sub: 'Institutional Retention' },
+                  { label: 'Issues Resolved', val: safeFinancials.pm?.resolvedTickets, sub: `${safeFinancials.pm?.resolutionRate}% Resolution Rate` }
+              ].map((item, i) => (
+                  <Grid item xs={12} sm={6} md={3} key={i}>
+                      <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
+                          <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 900, textTransform: 'uppercase' }}>{item.label}</Typography>
+                          <Typography variant="h4" fontWeight="900" sx={{ my: 1, color: '#FFF' }}>{item.val ?? 'N/A'}</Typography>
+                          <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700 }}>{item.sub}</Typography>
+                      </Paper>
+                  </Grid>
+              ))}
+          </Grid>
+      </Box>
 
       <Box sx={{ mt: 10 }}>
         <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary }}>{t('fin.logs_title')}</Typography>

@@ -1,15 +1,113 @@
-import React from 'react';
-import { Box, Typography, Container, Paper, Grid, Stack, Button, Chip, Divider } from '@mui/material';
-import { Building, Users, TrendingUp, Landmark, Share2, Search, Briefcase } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+    Box, Typography, Container, Paper, Grid, Stack, Button, Chip, 
+    Divider, Table, TableBody, TableCell, TableContainer, TableHead, 
+    TableRow, Tabs, Tab, TextField, alpha, CircularProgress 
+} from '@mui/material';
+import { 
+    Building, Users, TrendingUp, Landmark, Share2, Search, 
+    Briefcase, PieChart, Wallet, CreditCard, Clock, CheckCircle2, UserPlus, FileUp
+} from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
 import Papa from 'papaparse';
-import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
+import { db, collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy } from '../lib/firebase';
+import { useRole } from '../context/RoleContext';
+import { useAI } from '@bin/shared';
+import CeoContactButtons from '../components/CeoContactButtons';
 
 export default function BrokerPortalPage() {
-    const { t } = useLanguage();
+    const { t, tx, isRTL } = useLanguage();
+    const { user } = useRole();
+    const { setPageContext } = useAI();
     const [uploading, setUploading] = React.useState(false);
+    const [tab, setTab] = React.useState(0);
     const [leads, setLeads] = React.useState<any[]>([]);
+    const [stats, setStats] = useState({
+        pending: 0,
+        approved: 0,
+        paid: 0,
+        totalLeads: 0
+    });
+
+    useEffect(() => {
+        if (leads.length > 0) {
+            setPageContext({ leads, stats });
+        } else {
+            setPageContext(null);
+        }
+        return () => setPageContext(null);
+    }, [leads, stats]);
+
+    // Manual Lead Form
+    const [leadName, setLeadName] = useState('');
+    const [leadPhone, setLeadPhone] = useState('');
+    const [leadProperty, setLeadProperty] = useState('');
+    const [manualSubmitting, setManualSubmitting] = useState(false);
+    const brokerCode = user?.uid ? `BIN-${user.uid.slice(0, 6).toUpperCase()}` : 'BIN-PENDING';
+
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        const q = query(
+            collection(db, 'intake_submissions'), 
+            where('brokerId', '==', user.uid),
+            orderBy('createdAt', 'desc')
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            const fetchedLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setLeads(fetchedLeads);
+
+            let p = 0, a = 0, pd = 0;
+            fetchedLeads.forEach((l: any) => {
+                const commission = (l.mobilizationDue || 0) * 0.10;
+                if (l.paymentStatus === 'VERIFIED') {
+                    if (l.commissionStatus === 'PAID') pd += commission;
+                    else a += commission;
+                } else {
+                    p += commission;
+                }
+            });
+            setStats({ pending: p, approved: a, paid: pd, totalLeads: fetchedLeads.length });
+        });
+
+        return () => unsub();
+    }, [user]);
+
+    const handleManualSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!leadName || !user) return;
+        setManualSubmitting(true);
+        try {
+            await addDoc(collection(db, 'intake_submissions'), {
+                companyId: 'BIN_GROUP',
+                ownerName: leadName,
+                ownerPhone: leadPhone,
+                propertyName: leadProperty,
+                brokerId: user.uid,
+                brokerName: user.displayName,
+                brokerCode,
+                status: 'PENDING_REVIEW',
+                paymentStatus: 'PENDING',
+                commissionStatus: 'pending_lead',
+                commissionRules: {
+                    requiresPaymentVerification: true,
+                    requiresFinanceApproval: true,
+                    duplicateCommissionBlocked: true,
+                    autoPayoutAllowed: false
+                },
+                createdBy: user.uid,
+                createdByRole: 'broker',
+                visibility: 'broker_admin_finance',
+                auditVersion: 1,
+                createdAt: serverTimestamp(),
+                source: 'BROKER_MANUAL_ENTRY'
+            });
+            setLeadName(''); setLeadPhone(''); setLeadProperty('');
+            alert("Lead registered successfully.");
+        } catch (err) { console.error(err); } finally { setManualSubmitting(false); }
+    };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -26,7 +124,23 @@ export default function BrokerPortalPage() {
                     if (row.propertyName && row.ownerName) {
                         await addDoc(collection(db, 'intake_submissions'), {
                             ...row,
+                            companyId: 'BIN_GROUP',
+                            brokerId: user?.uid,
+                            brokerName: user?.displayName,
+                            brokerCode,
                             status: 'PENDING_REVIEW',
+                            paymentStatus: 'PENDING',
+                            commissionStatus: 'pending_lead',
+                            commissionRules: {
+                                requiresPaymentVerification: true,
+                                requiresFinanceApproval: true,
+                                duplicateCommissionBlocked: true,
+                                autoPayoutAllowed: false
+                            },
+                            createdBy: user?.uid,
+                            createdByRole: 'broker',
+                            visibility: 'broker_admin_finance',
+                            auditVersion: 1,
                             createdAt: serverTimestamp(),
                             source: 'BROKER_CSV_IMPORT'
                         });
@@ -43,86 +157,148 @@ export default function BrokerPortalPage() {
         });
     };
 
+    const getStatusChip = (status: string) => {
+        const s = status || 'PENDING';
+        if (s === 'PROCESSED' || s === 'VERIFIED' || s === 'PAID') return <Chip label={s} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900 }} />;
+        if (s === 'AWAITING_VERIFICATION' || s === 'PENDING_REVIEW') return <Chip label="REVIEWING" size="small" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#60A5FA', fontWeight: 900 }} />;
+        return <Chip label={s} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', fontWeight: 900 }} />;
+    };
+
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
-            {/* Background Texture */}
-            <Box sx={{ position: 'fixed', top: '10%', right: '5%', width: 600, height: 600, background: 'radial-gradient(circle, rgba(198,167,94,0.02) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-
-            <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+            <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1 }}>{t('broker.title')}</Typography>
-                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>{t('broker.subtitle')}</Typography>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: '#FFFFFF', letterSpacing: -1 }}>BROKER COMMAND</Typography>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>SOVEREIGN REFERRAL ENGINE</Typography>
+                    <Chip label={`Broker Code: ${brokerCode}`} size="small" sx={{ mt: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
+                    <Box sx={{ mt: 1.5 }}>
+                        <CeoContactButtons compact />
+                    </Box>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button 
-                        component="label" 
-                        variant="outlined" 
-                        disabled={uploading}
-                        sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3, px: 4 }}
-                    >
-                        {uploading ? 'PARSING...' : t('broker.import_csv')}
-                        <input hidden accept=".csv" type="file" onChange={handleFileUpload} />
-                    </Button>
-                    <Button variant="contained" sx={{ background: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900, borderRadius: 3, px: 4 }}>{t('broker.list_new')}</Button>
-                </Box>
+                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 }, '& .Mui-selected': { color: binThemeTokens.gold } }}>
+                    <Tab label="PIPELINE" />
+                    <Tab label="COMMISSIONS" />
+                </Tabs>
             </Box>
 
-            {/* Market Intelligence */}
-            <Grid container spacing={4} sx={{ mb: 8, position: 'relative', zIndex: 1 }}>
-                {[
-                    { label: t('broker.kpi.inventory'), val: '42 Assets', icon: <Building size={24} /> },
-                    { label: t('broker.kpi.leads'), val: '156', icon: <Users size={24} /> },
-                    { label: t('broker.kpi.market'), val: '8.2%', icon: <TrendingUp size={24} /> },
-                    { label: t('broker.kpi.commission'), val: 'AED 450k', icon: <Landmark size={24} /> },
-                ].map((kpi, i) => (
-                    <Grid item xs={12} sm={6} md={3} key={i}>
-                        <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(198,167,94,0.15)', borderRadius: 6, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-                            <Box sx={{ color: binThemeTokens.gold, mb: 3 }}>{kpi.icon}</Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 1 }}>{kpi.label}</Typography>
-                            <Typography variant="h4" fontWeight="900" sx={{ color: '#FFFFFF' }}>{kpi.val}</Typography>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
-
-            {/* Inventory Deck */}
-            <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: '#FFFFFF', letterSpacing: 1, position: 'relative', zIndex: 1 }}>{t('broker.listings')}</Typography>
-            <Grid container spacing={4} sx={{ position: 'relative', zIndex: 1 }}>
-                {[
-                    { name: 'Skyview Penthouse', loc: 'Downtown', price: 'AED 8.5M', yield: '8.4%', image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80' },
-                    { name: 'Marina Waterfront Villa', loc: 'Palm Jumeirah', price: 'AED 24M', yield: '6.2%', image: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=800&q=80' },
-                    { name: 'Executive Suite', loc: 'Business Bay', price: 'AED 1.2M', yield: '9.1%', image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80' },
-                ].map((item, i) => (
-                    <Grid item xs={12} md={4} key={i}>
-                        <Paper sx={{ overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.4)', border: '1px solid rgba(255,255,255,0.05)', '&:hover': { border: '1px solid rgba(198,167,94,0.3)' } }}>
-                            <Box sx={{ height: 200, bgcolor: 'rgba(255,255,255,0.05)', position: 'relative' }}>
-                                <Box sx={{ position: 'absolute', top: 20, right: 20 }}>
-                                    <Chip label={item.yield + " " + t('broker.yield_label')} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#0B0B0C', fontWeight: 900 }} />
-                                </Box>
-                                <Box 
-                                    component="img" 
-                                    src={item.image} 
-                                    alt={item.name} 
-                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
-                                />
-                            </Box>
-                            <Box sx={{ p: 4 }}>
-                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFFFFF', mb: 0.5 }}>{item.name}</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 3 }}>{item.loc} • {t('broker.unit_type')}</Typography>
-                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 3 }} />
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                    <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{item.price}</Typography>
-                                    <Stack direction="row" spacing={1}>
-                                        <Button size="small" sx={{ minWidth: 40, p: 1, color: binThemeTokens.textSecondary }}><Share2 size={18} /></Button>
-                                        <Button size="small" variant="outlined" sx={{ borderColor: 'rgba(198,167,94,0.3)', color: binThemeTokens.gold, fontWeight: 900 }}>{t('broker.details')}</Button>
+            {tab === 0 && (
+                <Box>
+                    <Grid container spacing={4} sx={{ mb: 6 }}>
+                        <Grid item xs={12} lg={4}>
+                            <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <UserPlus color={binThemeTokens.gold} /> QUICK INTAKE
+                                </Typography>
+                                <form onSubmit={handleManualSubmit}>
+                                    <Stack spacing={2}>
+                                        <TextField fullWidth label="Client Name" size="small" value={leadName} onChange={(e) => setLeadName(e.target.value)} required />
+                                        <TextField fullWidth label="Mobile Number" size="small" value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} />
+                                        <TextField fullWidth label="Property Name" size="small" value={leadProperty} onChange={(e) => setLeadProperty(e.target.value)} />
+                                        <Button type="submit" variant="contained" fullWidth disabled={manualSubmitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>
+                                            {manualSubmitting ? <CircularProgress size={20} /> : 'REGISTER LEAD'}
+                                        </Button>
                                     </Stack>
-                                </Stack>
-                            </Box>
-                        </Paper>
+                                </form>
+                                <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
+                                <Button component="label" fullWidth variant="outlined" startIcon={<FileUp />} sx={{ color: 'rgba(255,255,255,0.6)', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>
+                                    BULK CSV IMPORT
+                                    <input hidden accept=".csv" type="file" onChange={handleFileUpload} />
+                                </Button>
+                            </Paper>
+                        </Grid>
+
+                        <Grid item xs={12} lg={8}>
+                            <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.6)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Typography variant="h6" fontWeight="950">LIVE PIPELINE</Typography>
+                                </Box>
+                                <Table>
+                                    <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
+                                        <TableRow>
+                                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ASSET / OWNER</TableCell>
+                                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
+                                            <TableCell align="right" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>EST. PAYOUT</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {leads.map((lead) => (
+                                            <TableRow key={lead.id}>
+                                                <TableCell>
+                                                    <Typography variant="body1" fontWeight="900" color="#FFF">{lead.propertyName || 'Unnamed Asset'}</Typography>
+                                                    <Typography variant="caption" color="textSecondary">{lead.ownerName || 'Pending Contact'}</Typography>
+                                                </TableCell>
+                                                <TableCell>{getStatusChip(lead.status)}</TableCell>
+                                                <TableCell align="right">
+                                                    <Typography variant="body1" fontWeight="900" sx={{ color: lead.paymentStatus === 'VERIFIED' ? '#4ADE80' : '#FFF' }}>
+                                                        AED {((lead.mobilizationDue || 0) * 0.10).toLocaleString()}
+                                                    </Typography>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {leads.length === 0 && (
+                                            <TableRow><TableCell colSpan={3} align="center" sx={{ py: 10, color: 'rgba(255,255,255,0.2)' }}>No leads in pipeline.</TableCell></TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Grid>
                     </Grid>
-                ))}
-            </Grid>
+                </Box>
+            )}
+
+            {tab === 1 && (
+                <Box sx={{ position: 'relative', zIndex: 1 }}>
+                    <Grid container spacing={4}>
+                        <Grid item xs={12} md={8}>
+                            <Paper sx={{ p: 6, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(198,167,94,0.15)', borderRadius: 8 }}>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>TREASURY OVERSIGHT</Typography>
+                                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1, mb: 6 }}>Commission Lifecycle</Typography>
+                                <Stack direction="row" spacing={1} sx={{ mb: 4, flexWrap: 'wrap', gap: 1 }}>
+                                    {['pending_lead', 'contract_pending', 'payment_verified', 'finance_approved', 'payout_processing', 'paid', 'clawback_required'].map((status) => (
+                                        <Chip key={status} label={status.replace(/_/g, ' ').toUpperCase()} size="small" variant="outlined" sx={{ color: 'rgba(255,255,255,0.72)', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 800 }} />
+                                    ))}
+                                </Stack>
+                                
+                                <Stack spacing={6}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Box>
+                                            <Typography variant="h6" fontWeight="900" color="#FFF">COMMISSION PENDING</Typography>
+                                            <Typography variant="body2" color="textSecondary">Waiting for Owner Mobilization payment.</Typography>
+                                        </Box>
+                                        <Typography variant="h4" fontWeight="950" color="#FFF">AED {stats.pending.toLocaleString()}</Typography>
+                                    </Box>
+                                    <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Box>
+                                            <Typography variant="h6" fontWeight="900" color="#10b981">APPROVED FOR PAYOUT</Typography>
+                                            <Typography variant="body2" color="textSecondary">Mobilization verified. Payout scheduled.</Typography>
+                                        </Box>
+                                        <Typography variant="h4" fontWeight="950" color="#10b981">AED {stats.approved.toLocaleString()}</Typography>
+                                    </Box>
+                                </Stack>
+                            </Paper>
+                        </Grid>
+
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
+                                <Stack spacing={4}>
+                                    <Box>
+                                        <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <Wallet color={binThemeTokens.gold} /> PAYOUT
+                                        </Typography>
+                                        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>Configure UAE bank account for automated dispatches.</Typography>
+                                    </Box>
+                                    <TextField fullWidth label="BANK NAME" variant="filled" sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                                    <TextField fullWidth label="IBAN NUMBER" variant="filled" sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }} />
+                                    <Button variant="contained" fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>
+                                        SAVE PROTOCOL
+                                    </Button>
+                                </Stack>
+                            </Paper>
+                        </Grid>
+                    </Grid>
+                </Box>
+            )}
         </Container>
     );
 }
-

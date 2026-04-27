@@ -2,8 +2,9 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, 
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, 
-    Timestamp, deleteDoc, writeBatch, or 
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion, enableIndexedDbPersistence
 } from 'firebase/firestore';
+
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, User } from 'firebase/auth';
@@ -31,16 +32,27 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
+if (typeof window !== 'undefined') {
+    enableIndexedDbPersistence(db).catch((error) => {
+        console.warn('[FIREBASE] Offline persistence unavailable:', error?.code || error?.message || error);
+    });
+}
+
 // Regionalized Functions
 const PRIMARY_REGION = "europe-west3";
 const functions = getFunctions(app, PRIMARY_REGION);
+
+// 🚨 PRODUCTION SAFEGUARD: Never connect to emulator in public production mesh
+if (process.env.NODE_ENV === 'development' && window.location.hostname === 'localhost') {
+    // connectFunctionsEmulator(functions, "localhost", 5001);
+}
 
 // Explicit Exports
 export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
     onAuthStateChanged, getRedirectResult, signInWithPopup, type User,
     ref, uploadBytes, getDownloadURL,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or
+    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion
 };
 
 export default app;

@@ -1,53 +1,55 @@
 // admin-panel/src/App.tsx
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
-
+import { 
+    LogOut, 
+    User as UserIcon, 
+} from 'lucide-react';
+import { signOut } from 'firebase/auth';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
-// import PricingAuditViewer from './components/pricing/PricingAuditViewer';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
-// import MarketIntelligenceDashboard from './components/market/MarketIntelligenceDashboard';
 import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
-import { LanguageProvider, useLanguage } from '@bin/shared';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider } from '@bin/shared';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { auth } from './lib/firebase';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
-// import LiveMapPage from './pages/map/LiveMapPage';
 import OwnersPage from './pages/owners/OwnerManagementPage';
 import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import ReportsPage from './pages/reports/ReportsPage';
-// import PricingPage from './pages/pricing/PricingPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
-import PartsStorePage from './pages/procurement/PartsStorePage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
+import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
 import ProfitabilityPage from './pages/admin/ProfitabilityPage';
 import CompliancePage from './pages/admin/CompliancePage';
-// import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
 import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
 import PayrollManagementPage from './pages/financials/PayrollManagementPage';
 import TransactionsPage from './pages/financials/TransactionsPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
+import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
+import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
+import HRManagementPage from './pages/admin/HRManagementPage';
 import { TechnicianMapPage } from './pages/Placeholders';
 import { adminTheme } from './theme/adminTheme';
 
-// Removed legacy primary theme definition to use centralized adminTheme.ts
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
     const { t, isRTL } = useLanguage();
@@ -59,7 +61,7 @@ function AppContent() {
                 console.warn("[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.");
                 setSafetyReleased(true);
             }
-        }, 12000); // Increased for high-latency loads
+        }, 12000);
         return () => clearTimeout(timer);
     }, [loading]);
 
@@ -92,9 +94,8 @@ function AppContent() {
                 <Route element={<Layout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    {/* <Route path="/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} /> */}
-                    <Route path="/admin/financials" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
-                    <Route path="/admin/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
+                    <Route path="/financials" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
+                    <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
@@ -104,23 +105,22 @@ function AppContent() {
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><TechnicianMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
+                    <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
-                    {/* <Route path="/pricing" element={<ProtectedRoute adminOnly><PricingPage /></ProtectedRoute>} />
-                    <Route path="/pricing/audit/:id" element={<ProtectedRoute adminOnly><PricingAuditViewer /></ProtectedRoute>} /> */}
-                    <Route path="/procurement" element={<ProtectedRoute adminOnly><PartsStorePage /></ProtectedRoute>} />
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
-                    <Route path="/admin/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
-                    <Route path="/admin/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
-                    <Route path="/admin/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
-                    {/* <Route path="/admin/live-ops" element={<ProtectedRoute adminOnly><LiveOpsCommandCenter /></ProtectedRoute>} /> */}
-                    <Route path="/admin/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
-                    <Route path="/admin/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
-                    <Route path="/admin/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
-                    {/* <Route path="/admin/market-intel" element={<ProtectedRoute adminOnly><MarketIntelligenceDashboard /></ProtectedRoute>} /> */}
-                    <Route path="/admin/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianCommandCenter /></ProtectedRoute>} />
-                    <Route path="/admin/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
-                    <Route path="/admin/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
+                    <Route path="/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
+                    <Route path="/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
+                    <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
+                    <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
+                    <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
+                    <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianCommandCenter /></ProtectedRoute>} />
+                    <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
+                    <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
+                    <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
+                    <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
+                    <Route path="/hr" element={<ProtectedRoute adminOnly><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                 </Route>
             )}
@@ -130,45 +130,125 @@ function AppContent() {
     );
 }
 
-
 function Layout() {
     const { t, isRTL } = useLanguage();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    const handleLogout = async () => {
+        try {
+            localStorage.clear();
+            await signOut(auth);
+            window.location.href = '/login';
+        } catch (err) {
+            console.error("Logout failure:", err);
+        }
+    };
     
     return (
         <Box sx={{ 
             display: 'flex', 
-            minHeight: '100vh', 
-            flexDirection: 'column', 
+            height: '100vh', 
+            width: '100vw',
             bgcolor: '#020617',
+            overflow: 'hidden',
             direction: isRTL ? 'rtl' : 'ltr'
         }}>
-            <Box sx={{ display: 'flex', flexGrow: 1 }}>
-                <Navigation />
-                <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'auto' }}>
-                    <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', bgcolor: 'rgba(255,255,255,0.02)' }}>
-                        <LanguageSwitcher />
+            <Navigation />
+            
+            <Box sx={{ 
+                flexGrow: 1, 
+                display: 'flex', 
+                flexDirection: 'column',
+                height: '100vh',
+                overflow: 'hidden',
+                position: 'relative'
+            }}>
+                {/* GLOBAL ADMIN TOP BAR */}
+                <Box sx={{ 
+                    px: 4,
+                    py: 1.5,
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    bgcolor: 'rgba(2, 6, 23, 0.8)', 
+                    backdropFilter: 'blur(10px)',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    zIndex: 1100
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
+                            {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND</Box>
+                        </Typography>
                     </Box>
-                    <Outlet />
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <LanguageSwitcher />
+                        
+                        <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
+                        
+                        {/* User Badge */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <UserIcon size={14} color="#000" />
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>
+                                    {user?.displayName?.split(' ')[0] || 'ADMIN'}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>
+                                    {user?.role || 'operator'}
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        <Button 
+                            onClick={handleLogout}
+                            startIcon={<LogOut size={16} />}
+                            sx={{ 
+                                color: '#ef4444', 
+                                fontWeight: 900, 
+                                fontSize: '0.75rem',
+                                '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' }
+                            }}
+                        >
+                            {t('nav.logout') || 'LOGOUT'}
+                        </Button>
+                    </Box>
+                </Box>
+
+                <Box component="main" sx={{ 
+                    flexGrow: 1, 
+                    overflowY: 'auto',
+                    p: 0,
+                    bgcolor: '#020617',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    '&::-webkit-scrollbar': { width: '8px' },
+                    '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }
+                }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Outlet />
+                    </Box>
+                    
+                    <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
+                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | 
+                            <Typography 
+                                component="a" 
+                                href="https://bin-groups.com/privacy-policy" 
+                                sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
+                            >
+                                {t('footer.privacy')}
+                            </Typography>
+                        </Typography>
+                    </Box>
                 </Box>
             </Box>
-            <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                    © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | 
-                    <Typography 
-                        component="a" 
-                        href="https://bin-groups.com/privacy-policy" 
-                        sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
-                    >
-                        {t('footer.privacy')}
-                    </Typography>
-                    <Typography 
-                        component="a" 
-                        href="https://bin-groups.com/terms-of-service" 
-                        sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
-                    >
-                        {t('footer.terms')}
-                    </Typography>
-                </Typography>
+            
+            {/* AI CHAT PORTAL */}
+            <Box sx={{ position: 'fixed', bottom: 0, right: 0, zIndex: 9999 }}>
+                <SovereignAIChat role="admin" onNavigate={navigate} />
             </Box>
         </Box>
     );
@@ -181,7 +261,9 @@ export default function App() {
             <LanguageProvider>
                 <Router basename="/admin">
                     <AuthProvider>
-                        <AppContent />
+                        <AIProvider>
+                            <AppContent />
+                        </AIProvider>
                     </AuthProvider>
                 </Router>
             </LanguageProvider>

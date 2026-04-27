@@ -9,7 +9,8 @@ import {
     CssBaseline,
     useTheme,
     useMediaQuery,
-    alpha
+    alpha,
+    Button
 } from '@mui/material';
 import { 
     Shield as ShieldIcon
@@ -18,16 +19,16 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
-// New Guided Steps
-import PropertyTypeStep from '../components/onboarding/PropertyTypeStep';
+// Optimized Guided Steps
+import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
+import AssetProfileStep from '../components/onboarding/AssetProfileStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
-import BuildingDataStep from '../components/onboarding/BuildingDataStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
-import ContractTypeStep from '../components/onboarding/ContractTypeStep';
-import PaymentTermsStep from '../components/onboarding/PaymentTermsStep';
-import OnboardingReviewStep from '../components/onboarding/OnboardingReviewStep';
-import AdminSubmissionStep from '../components/onboarding/AdminSubmissionStep';
-import AccountActivationStep from '../components/onboarding/AccountActivationStep';
+import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
+import ProofUploadStep from '../components/onboarding/ProofUploadStep';
+import AccountCreationStep from '../components/onboarding/AccountCreationStep';
+import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
+import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
 const PropertyOnboardingPage = () => {
     const { step, nextStep, prevStep } = useOnboardingStore();
@@ -36,28 +37,29 @@ const PropertyOnboardingPage = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     const onboardingSteps = [
-        tx('step.type', 'Type'),
+        tx('step.company', 'Company'),
+        tx('step.asset', 'Asset'),
         tx('step.location', 'Location'),
-        tx('step.data', 'Building'),
         tx('step.systems', 'Systems'),
-        tx('step.contract', 'Contract'),
-        tx('step.terms', 'Terms'),
+        tx('step.service_plan', 'Service Plan'),
+        tx('step.documents', 'Documents'),
+        tx('step.verification', 'Verification'),
         tx('step.review', 'Review'),
-        tx('step.submit', 'Submit')
+        tx('step.payment', 'Payment')
     ];
 
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
-            case 1: return <PropertyTypeStep onNext={nextStep} />;
-            case 2: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
-            case 3: return <BuildingDataStep onNext={nextStep} onBack={prevStep} />;
+            case 1: return <CompanyProfileStep onNext={nextStep} />;
+            case 2: return <AssetProfileStep onNext={nextStep} />;
+            case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
             case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
-            case 5: return <ContractTypeStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <PaymentTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <OnboardingReviewStep onNext={nextStep} onBack={prevStep} />;
-            case 8: return <AdminSubmissionStep onNext={nextStep} />;
-            case 9: return <AccountActivationStep />;
-            default: return <PropertyTypeStep onNext={nextStep} />;
+            case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
+            case 6: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
+            case 9: return <PaymentSubmissionStep onBack={prevStep} />;
+            default: return <CompanyProfileStep onNext={nextStep} />;
         }
     };
 
@@ -80,13 +82,23 @@ const PropertyOnboardingPage = () => {
                         <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
                             BIN GROUP
                         </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ShieldIcon color="#10b981" size={18} />
-                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>V2.0 SECURE ONBOARDING</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <ShieldIcon color="#10b981" size={18} />
+                                <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>INSTITUTIONAL ONBOARDING</Typography>
+                            </Box>
+                            <Button
+                                variant="outlined" 
+                                size="small"
+                                onClick={() => alert('Your progress is automatically saved to this browser. Return to /onboarding to continue. Re-select document files if you refresh before final submission.')}
+                                sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.3), textTransform: 'none', fontWeight: 700 }}
+                            >
+                                Save & Resume Later
+                            </Button>
                         </Box>
                     </Box>
 
-                    <Stepper activeStep={step - 1} alternativeLabel={!isMobile}>
+                    <Stepper activeStep={step - 1} alternativeLabel={!isMobile} sx={{ minHeight: isMobile ? 34 : 'auto', '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' } }}>
                         {onboardingSteps.map((label) => (
                             <Step key={label}>
                                 <StepLabel 

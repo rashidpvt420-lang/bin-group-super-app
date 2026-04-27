@@ -19,7 +19,7 @@ export default function AuditLogPage() {
     useEffect(() => {
         const q = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(100));
         const unsubscribe = onSnapshot(q, (snap) => {
-            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
             setLogs(data);
         });
         return () => unsubscribe();

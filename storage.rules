@@ -34,6 +34,13 @@ service firebase.storage {
                    request.resource.contentType.matches('application/pdf|image/.*');
     }
 
+    match /onboarding-proof/{userId}/{intakeId}/{fileName} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
+      allow write: if isAuth() && request.auth.uid == userId &&
+                   request.resource.size < 15 * 1024 * 1024 &&
+                   request.resource.contentType.matches('application/pdf|image/.*');
+    }
+
     // ─── TRANSACTIONAL ASSETS (Property & Contracts) ─────────────────────────
     match /property_images/{documentId} {
       allow read: if true; 
@@ -65,6 +72,14 @@ service firebase.storage {
       allow write: if isAdmin();
     }
     
+    // ─── DESIGN STUDIO REFERENCE IMAGES ──────────────────────────────────────────
+    match /design_requests/{userId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == userId) && 
+                   request.resource.size < 10 * 1024 * 1024 &&
+                   request.resource.contentType.matches('image/.*');
+    }
+
     // Default lockdown for unmanaged paths
     match /{allPaths=**} {
       allow read, write: if false;

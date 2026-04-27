@@ -5,6 +5,8 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
+import { extractTitleDeedData } from "./ocrEngine";
+import { generateContractPDF, generatePayslipPDF } from "./pdfEngine";
 
 // [V8] PRODUCTION GRADE STABILIZATION
 setGlobalOptions({ region: "europe-west3" });
@@ -13,6 +15,82 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
+
+const geoHashBase32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+
+function geohashForLocation(latitude: number, longitude: number, precision = 9) {
+    let idx = 0;
+    let bit = 0;
+    let evenBit = true;
+    let geohash = "";
+    let latMin = -90;
+    let latMax = 90;
+    let lonMin = -180;
+    let lonMax = 180;
+
+    while (geohash.length < precision) {
+        if (evenBit) {
+            const lonMid = (lonMin + lonMax) / 2;
+            if (longitude >= lonMid) {
+                idx = idx * 2 + 1;
+                lonMin = lonMid;
+            } else {
+                idx *= 2;
+                lonMax = lonMid;
+            }
+        } else {
+            const latMid = (latMin + latMax) / 2;
+            if (latitude >= latMid) {
+                idx = idx * 2 + 1;
+                latMin = latMid;
+            } else {
+                idx *= 2;
+                latMax = latMid;
+            }
+        }
+        evenBit = !evenBit;
+        if (++bit === 5) {
+            geohash += geoHashBase32.charAt(idx);
+            bit = 0;
+            idx = 0;
+        }
+    }
+    return geohash;
+}
+
+function normalizeGeo(source: any) {
+    const lat = Number(source?.geo?.lat ?? source?.location?.lat ?? source?.coordinates?.lat ?? source?.lat);
+    const lng = Number(source?.geo?.lng ?? source?.location?.lng ?? source?.coordinates?.lng ?? source?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return {
+        point: new admin.firestore.GeoPoint(lat, lng),
+        lat,
+        lng,
+        geohash: source?.geo?.geohash || geohashForLocation(lat, lng),
+        source: source?.geo?.source || "property_record",
+        placeId: source?.geo?.placeId || source?.googlePlaceId || "",
+        address: source?.geo?.address || source?.addressLine || source?.address || "",
+        emirate: source?.geo?.emirate || source?.emirate || "",
+        city: source?.geo?.city || source?.city || source?.area || source?.serviceZone || "",
+        area: source?.geo?.area || source?.area || source?.serviceZone || "",
+        verified: source?.geo?.verified === true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+}
+
+function distanceKm(a: any, b: any) {
+    const lat1 = Number(a?.lat);
+    const lng1 = Number(a?.lng);
+    const lat2 = Number(b?.lat);
+    const lng2 = Number(b?.lng);
+    if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+    const toRad = (value: number) => value * Math.PI / 180;
+    const radius = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
 
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
@@ -45,88 +123,372 @@ function wrapInLuxuryTemplate(content: string, subject: string) {
     `;
 }
 
-// ─── [V5] OMNI-CHANNEL NOTIFICATION ENGINE ─────────────────────────────────────────
-async function dispatchOmniNotification(userId: string, title: string, body: string, emailOptions: any = null, extraData: any = {}) {
-    const result = { pushSent: false, mailQueued: false };
-    try {
-        const userDoc = await db.collection("users").doc(userId).get();
-        if (!userDoc.exists) {
-            console.log(`[V5 Omni] User ${userId} not found. Aborting dispatch.`);
-            return result;
+/**
+ * [INSTITUTIONAL REPAIR TRIGGER - SECURED]
+ */
+export const institutionalRepairTrigger = onCall({
+    cors: true,
+    enforceAppCheck: true,
+}, async (request) => {
+    // 1. Admin Auth Check
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sovereign Admin credentials required.");
+    }
+    if (!request.auth.token.admin && !request.auth.token.super_admin) {
+        throw new HttpsError("permission-denied", "Sovereign Admin credentials required.");
+    }
+
+    const dryRun = request.data.dryRun !== false; // Default to true for safety
+    const batch = db.batch();
+    const tickets = await db.collection("maintenanceTickets").get();
+    
+    const repairLog: any[] = [];
+    let docsMatched = 0;
+    let docsUpdated = 0;
+    let docsSkipped = 0;
+    const repairedTicketIds: string[] = [];
+    const orphanTicketIds: string[] = [];
+    const invalidStatusTicketIds: string[] = [];
+
+    const statusMap: Record<string, string> = {
+        'assigned': 'ASSIGNED',
+        'pending': 'OPEN',
+        'CLAIMED': 'ASSIGNED',
+        'taken': 'ASSIGNED',
+        'finished': 'COMPLETED',
+        'done': 'COMPLETED'
+    };
+
+    for (const ticketDoc of tickets.docs) {
+        const t = ticketDoc.data();
+        let needsFix = false;
+        const update: any = { 
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            repairSource: 'SECURED_ADMIN_TRIGGER'
+        };
+        const changes: any = { before: {}, after: {} };
+
+        // A. Status Normalization
+        if (statusMap[t.status]) {
+            changes.before.status = t.status;
+            update.status = statusMap[t.status];
+            changes.after.status = update.status;
+            needsFix = true;
+            invalidStatusTicketIds.push(ticketDoc.id);
+        } else if (t.status === 'ASSIGNED' && !t.assignedTechnicianId) {
+            changes.before.status = t.status;
+            update.status = 'OPEN';
+            changes.after.status = update.status;
+            needsFix = true;
+            invalidStatusTicketIds.push(ticketDoc.id);
         }
+
+        // B. Relational Orphan Repair (Deterministic only)
+        if (!t.propertyId || t.propertyId === 'UNASSOCIATED' || !t.unitId || t.unitId === 'UNASSOCIATED') {
+            orphanTicketIds.push(ticketDoc.id);
+            if (t.tenantId) {
+                const tenantDoc = await db.collection("users").doc(t.tenantId).get();
+                const tenantData = tenantDoc.data();
+                
+                if (tenantData?.propertyId && tenantData?.unitId && tenantData.propertyId !== 'UNASSOCIATED') {
+                    changes.before.propertyId = t.propertyId;
+                    changes.before.unitId = t.unitId;
+                    
+                    update.propertyId = tenantData.propertyId;
+                    update.unitId = tenantData.unitId;
+                    update.propertyName = tenantData.propertyName || t.propertyName;
+                    update.unitNumber = tenantData.unitNumber || t.unitNumber;
+                    update.ownerId = tenantData.ownerId || t.ownerId;
+                    
+                    changes.after.propertyId = update.propertyId;
+                    changes.after.unitId = update.unitId;
+                    needsFix = true;
+                } else {
+                    docsSkipped++;
+                    repairLog.push({ id: ticketDoc.id, status: 'SKIPPED', reason: 'Ambiguous relational link' });
+                    continue;
+                }
+            } else {
+                docsSkipped++;
+                repairLog.push({ id: ticketDoc.id, status: 'SKIPPED', reason: 'No tenantId to anchor repair' });
+                continue;
+            }
+        }
+
+        if (needsFix) {
+            docsMatched++;
+            if (!dryRun) {
+                batch.update(ticketDoc.ref, update);
+                docsUpdated++;
+                repairedTicketIds.push(ticketDoc.id);
+            }
+            repairLog.push({ id: ticketDoc.id, changes });
+        }
+    }
+
+    const summary = {
+        dryRun,
+        project: process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || admin.app().options.projectId || 'bin-group-57c60',
+        database: '(default)',
+        collection: 'maintenanceTickets',
+        docsMatched,
+        docsUpdated,
+        docsSkipped,
+        repairedTicketIds,
+        orphanTicketIds,
+        invalidStatusTicketIds,
+        log: repairLog
+    };
+
+    // Audit Log Write
+    if (!dryRun && docsUpdated > 0) {
+        await batch.commit();
+        await db.collection("repair_audit_logs").add({
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            adminId: request.auth.uid,
+            summary
+        });
+    }
+
+    return summary;
+});
+
+// ─── [V5] OMNI-CHANNEL NOTIFICATION ENGINE (UPGRADED) ──────────────────────────────
+async function dispatchOmniNotification(userId: string, title: string, body: string, options: any = {}) {
+    const result = { pushSent: false, mailQueued: false, outcomes: [] as any[], pushFallbackRequired: false };
+    const eventKey = options.eventKey || `${userId}_${title.replace(/\s+/g, '_')}`;
+    const dedupWindowMs = 60000; // 60s suppression window
+
+    try {
+        // 1. DUPLICATE SUPPRESSION
+        const dedupRef = db.collection("notification_dedup").doc(eventKey);
+        const dedupDoc = await dedupRef.get();
+        if (dedupDoc.exists) {
+            const lastSent = dedupDoc.data()?.timestamp?.toMillis() || 0;
+            if (Date.now() - lastSent < dedupWindowMs) {
+                console.log(`[NOTIFY] Suppressing duplicate event: ${eventKey}`);
+                return result;
+            }
+        }
+
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) return result;
 
         const userData = userDoc.data();
-        const fcmToken = userData?.fcmToken;
+        const fcmTokens: string[] = userData?.fcmTokens || (userData?.fcmToken ? [userData.fcmToken] : []);
         const userEmail = userData?.email;
+        const isIOS = userData?.platform === 'ios' || userData?.userAgent?.toLowerCase().includes('iphone');
+        const isStandalone = userData?.isStandalone === true;
 
-        // 1. Dispatch Push Notification if Token exists
-        if (fcmToken) {
-            const payload: admin.messaging.TokenMessage = {
-                token: fcmToken,
+        // IPHONE HARDENING: Mark fallback if on iOS but not in standalone mode
+        if (isIOS && !isStandalone) {
+            result.pushFallbackRequired = true;
+        }
+
+        // 2. PUSH DISPATCH (Multi-device)
+        if (fcmTokens.length > 0) {
+            const messages = fcmTokens.map(token => ({
+                token,
                 notification: { title, body },
-                webpush: {
-                    headers: { Urgency: 'high' },
-                    notification: {
-                        requireInteraction: true,
-                        vibrate: [500, 250, 500, 250, 500],
-                        data: {
-                            url: extraData.url || '/tech'
+                data: { ...options.extraData, url: options.url || '/' }
+            }));
+
+            const response = await admin.messaging().sendEach(messages).catch(e => {
+                console.error("[NOTIFY] SendEach Fault:", e);
+                return null;
+            });
+
+            if (response) {
+                const invalidTokens: string[] = [];
+                response.responses.forEach((res, idx) => {
+                    const token = fcmTokens[idx];
+                    if (!res.success) {
+                        const error = res.error as any;
+                        if (error?.code === 'messaging/registration-token-not-registered' || error?.code === 'messaging/invalid-registration-token') {
+                            invalidTokens.push(token);
                         }
                     }
-                },
-                data: {
-                    userId: String(userId),
-                    ticketId: String(extraData.ticketId || ''),
-                    ...Object.entries(extraData).reduce((acc: any, [k, v]) => {
-                        acc[k] = (typeof v === 'object' && v !== null) ? JSON.stringify(v) : String(v);
-                        return acc;
-                    }, {})
+                    result.outcomes.push({ token: token.substring(0, 8) + "...", success: res.success, error: res.error?.message });
+                });
+
+                if (invalidTokens.length > 0) {
+                    await db.collection("users").doc(userId).update({
+                        fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens)
+                    });
                 }
-            };
-            try {
-                await admin.messaging().send(payload);
-                result.pushSent = true;
-            } catch (err: any) {
-                console.error(`[V5 Omni] Push transmission failed for ${userId}:`, err.message || err);
+
+                if (response.successCount > 0) result.pushSent = true;
             }
         } else {
-            console.log(`[V5 Omni] No registered FCM token for ${userId}. Skipping push.`);
+            result.pushFallbackRequired = true;
         }
 
-        // 2. Dispatch Email
-        if (emailOptions && userEmail) {
-            await db.collection("mail").add({
-                to: userEmail,
-                message: {
-                    subject: emailOptions.subject || title,
-                    html: emailOptions.template || wrapInLuxuryTemplate(`
-                        <h2 style="color: #C6A75E;">BIN-GROUP Update</h2>
-                        <p>${body}</p>
-                    `, title)
-                },
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            result.mailQueued = true;
-        } else {
-            console.log(`[V5 Omni] Email options not provided or no email exists for ${userId}. Skipping email.`);
-        }
+        // 3. CRITICAL FALLBACK STRATEGY (SMS/Email/Banner)
+        const isCritical = ['NEW_MISSION', 'TECH_EN_ROUTE', 'OWNER_NOC', 'PAYMENT_VERIFIED', 'URGENT_ISSUE', 'OVERDUE_APPROVAL'].includes(options.type);
         
-    } catch (error) {
-        console.error(`[V5 Omni] Core Dispatch Exception for user ${userId}:`, error);
+        if (result.pushFallbackRequired && isCritical) {
+            // Trigger Email Fallback
+            if (userEmail) {
+                await db.collection("mail").add({
+                    to: userEmail,
+                    message: {
+                        subject: `[URGENT] ${title}`,
+                        html: wrapInLuxuryTemplate(`<p>${body}</p><p><i>This is an automated fallback alert because push notifications are disabled on your device.</i></p>`, title)
+                    },
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                result.mailQueued = true;
+            }
+
+            // In-app urgent banner payload
+            await db.collection("in_app_alerts").add({
+                userId,
+                title,
+                body,
+                severity: 'CRITICAL',
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                read: false
+            });
+        }
+
+        // 4. LOG & LOCK
+        await dedupRef.set({ timestamp: admin.firestore.FieldValue.serverTimestamp() });
+        await db.collection("notification_outcomes").add({
+            userId, title, eventKey, ...result, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+    } catch (err) {
+        console.error("🚨 [NOTIFY] Critical Handshake Failure:", err);
     }
-    
     return result;
 }
 
-// ─── [V5] TICKET ROUTING & CONTEXT ATTACHMENT ─────────────────────────────────────
+// Communication Triggers
+export const onApprovalStagnant = onSchedule("every 24 hours", async () => {
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const pending = await db.collection("maintenanceTickets")
+        .where("status", "==", "AWAITING_OWNER_APPROVAL")
+        .where("updatedAt", "<", admin.firestore.Timestamp.fromDate(fortyEightHoursAgo))
+        .get();
+
+    for (const doc of pending.docs) {
+        const data = doc.data();
+        if (data.ownerId) {
+            await dispatchOmniNotification(data.ownerId, "REMINDER: Quote Approval Required", `Mission #${doc.id.substring(0,8)} is awaiting your authorization.`);
+        }
+    }
+});
+
+export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (before?.status === after?.status) return;
+
+    if (after?.status === 'ESTIMATED' && after?.ownerId) {
+        await dispatchOmniNotification(after.ownerId, "NEW QUOTE GENERATED", `A technical estimate for #${event.params.id.substring(0,8)} is ready for review.`);
+    }
+});
+
+// ─── [V11] MAINTENANCE APPROVAL ENGINE & CRONS ───────────────────────────────────
+
+export const evaluateSLACron = onSchedule("every 4 hours", async (event) => {
+    const now = admin.firestore.Timestamp.now();
+    const twentyFourHoursAgo = new Date(now.toDate().getTime() - 24 * 60 * 60 * 1000);
+    const fortyEightHoursAgo = new Date(now.toDate().getTime() - 48 * 60 * 60 * 1000);
+
+    const batch = db.batch();
+
+    // 1. Stale OPEN tickets (Breach Detection)
+    const staleTickets = await db.collection("maintenanceTickets")
+        .where("status", "in", ["OPEN", "assigned"])
+        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(twentyFourHoursAgo))
+        .get();
+
+    for (const doc of staleTickets.docs) {
+        const ticket = doc.data();
+        if (ticket.slaViolated) continue;
+
+        batch.update(doc.ref, { slaViolated: true, lastEscalatedAt: now });
+
+        if (ticket.ownerId) {
+            const ownerSnap = await db.collection("owners").doc(ticket.ownerId).get();
+            const ownerData = ownerSnap.data();
+            const tier = ownerData?.planType || 'institutional';
+            let penaltyAmount = tier === 'sovereign' ? 150 : (tier === 'premium' ? 100 : 50);
+
+            const creditRef = db.collection("transactions").doc();
+            batch.set(creditRef, {
+                ownerId: ticket.ownerId,
+                propertyId: ticket.propertyId || 'PORTFOLIO',
+                ticketId: doc.id,
+                type: 'SLA_CREDIT',
+                amount: penaltyAmount,
+                description: `SLA Breach Credit: Resolution delay on Mission #${doc.id.substring(0,8)}`,
+                status: 'RECONCILED',
+                createdAt: now
+            });
+
+            const breachRef = db.collection("sla_breaches").doc();
+            batch.set(breachRef, {
+                ticketId: doc.id,
+                ownerId: ticket.ownerId,
+                tier,
+                penaltyAmount,
+                detectedAt: now,
+                resolved: false
+            });
+        }
+
+        const adminsSnap = await db.collection("users").where("role", "in", ["admin", "ADMIN"]).get();
+        for (const adminDoc of adminsSnap.docs) {
+            await dispatchOmniNotification(adminDoc.id, "SLA BREACH", `Ticket #${doc.id.substring(0,8)} is stagnant. Penalty applied.`);
+        }
+    }
+
+    // 2. Overdue Approvals (> 48h)
+    const overdueApprovals = await db.collection("maintenanceTickets")
+        .where("status", "==", "AWAITING_OWNER_APPROVAL")
+        .where("updatedAt", "<", admin.firestore.Timestamp.fromDate(fortyEightHoursAgo))
+        .get();
+
+    for (const doc of overdueApprovals.docs) {
+        batch.update(doc.ref, { status: 'OVERDUE_APPROVAL', lastEscalatedAt: now });
+        const data = doc.data();
+        if (data.ownerId) {
+            await dispatchOmniNotification(data.ownerId, "APPROVAL OVERDUE", `Mission #${doc.id.substring(0,8)} requires urgent approval.`);
+        }
+    }
+
+    await batch.commit();
+});
+
+export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const ticket = snap.data();
+    
+    // Auto-enrichment
+    const update: any = { 
+        createdAt: ticket.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+        intelligenceFlag: "ACTIVE" 
+    };
+
+    // Priority Escalation Logic
+    const text = ((ticket.description || "") + (ticket.trade || "")).toLowerCase();
+    const urgentKeywords = ["flood", "fire", "smoke", "burst", "leak", "danger", "sos", "power"];
+    if (urgentKeywords.some(key => text.includes(key))) {
+        update.priority = "EMERGENCY";
+    }
+
+    await snap.ref.update(update);
+});
+
 export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
     const snap = event.data;
     if (!snap) return;
     const ticketData = snap.data();
-    const ticketId = event.params.ticketId;
 
     try {
-        // Fetch full context
         const tenantDoc = await db.collection("users").doc(ticketData.tenantId).get();
         const tenantData = tenantDoc.data();
 
@@ -136,242 +498,326 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
             if (propSnap.exists) propertyData = propSnap.data();
         }
 
-        // Attach missing context to the ticket
+        const propertyGeo = normalizeGeo(propertyData || ticketData);
         const contextUpdate = {
+            companyId: ticketData.companyId || propertyData?.companyId || "BIN_GROUP",
             tenantPhone: tenantData?.phone || tenantData?.phoneNumber || "N/A",
+            ownerId: propertyData?.ownerId || ticketData.ownerId || null,
+            emirate: propertyGeo?.emirate || propertyData?.emirate || ticketData.emirate || tenantData?.emirate || "",
+            city: propertyGeo?.city || propertyData?.city || ticketData.city || "",
+            area: propertyGeo?.area || propertyData?.area || ticketData.area || propertyData?.serviceZone || "",
+            geo: propertyGeo,
             propertyLocation: {
-                address: propertyData?.address || ticketData.address || "UAE Portfolio",
+                address: propertyGeo?.address || propertyData?.address || ticketData.address || "UAE Portfolio",
                 propertyName: propertyData?.name || ticketData.propertyName || "Institutional Asset",
                 unitNumber: ticketData.unitNumber || "N/A",
                 floorNumber: ticketData.floorNumber || "N/A",
-                location: propertyData?.location || null,
-                lat: propertyData?.location?.lat || propertyData?.location?.latitude || null,
-                lng: propertyData?.location?.lng || propertyData?.location?.longitude || null
+                location: propertyGeo ? { lat: propertyGeo.lat, lng: propertyGeo.lng } : null,
+                geo: propertyGeo
             }
         };
         await snap.ref.update(contextUpdate);
 
-        // Routing Logic
-        let emirate = ticketData.emirate || tenantData?.emirate;
-        let serviceZone = ticketData.serviceZone || tenantData?.serviceZone;
-
-        let techQuery = await db.collection("users")
-            .where("role", "==", "technician")
-            .where("isOffDuty", "==", false)
-            .where("assignedZones", "array-contains", serviceZone)
-            .get();
-
-        if (techQuery.empty) {
-            techQuery = await db.collection("users")
-                .where("role", "==", "technician")
-                .where("isOffDuty", "==", false)
-                .where("emirate", "==", emirate)
-                .get();
-        }
-
-        if (techQuery.empty) {
-            await snap.ref.update({ autoDispatchStatus: "NO_TECH_IN_TERRITORY" });
+        if (!propertyGeo || !contextUpdate.emirate) {
+            await snap.ref.update({
+                status: "pending_assignment",
+                assignmentStatus: "admin_manual_assignment",
+                assignmentError: "Missing verified geo-anchor. Admin review is required.",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection("adminAlerts").add({
+                companyId: contextUpdate.companyId,
+                type: "GEO_ANCHOR_MISSING",
+                ticketId: event.params.ticketId,
+                propertyId: ticketData.propertyId || null,
+                message: "Ticket cannot auto-assign until property geo-anchor is verified.",
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
             return;
         }
 
-        let bestTech: any = null;
-        let minActiveCount = Infinity;
-        for (const techDoc of techQuery.docs) {
-            const activeTicketsSnap = await db.collection("maintenanceTickets")
-                .where("assignedTechnicianId", "==", techDoc.id)
-                .where("status", "not-in", ["RESOLVED", "CLOSED", "COMPLETED"])
-                .get();
-            if (activeTicketsSnap.size < minActiveCount) {
-                minActiveCount = activeTicketsSnap.size;
-                bestTech = { id: techDoc.id, ...techDoc.data() };
-            }
-        }
+        // Routing Logic
+        const techQuery = await db.collection("users")
+            .where("role", "==", "technician")
+            .get();
 
-        if (bestTech) {
+        const requiredSkill = String(ticketData.complaintCategory || ticketData.trade || "").toLowerCase();
+        const candidates = techQuery.docs
+            .map((docSnap) => ({ id: docSnap.id, data: docSnap.data() }))
+            .filter((tech) => {
+                const data = tech.data;
+                const onDuty = data.onDuty === true || data.available === true || data.isOffDuty === false;
+                const hasCapacity = Number(data.currentJobCount || 0) < Number(data.maxConcurrentJobs || 3);
+                const emiratesCovered = Array.isArray(data.emiratesCovered) ? data.emiratesCovered : [data.emirate].filter(Boolean);
+                const sameEmirate = emiratesCovered.map((e: any) => String(e).toLowerCase()).includes(String(contextUpdate.emirate).toLowerCase());
+                const skills = Array.isArray(data.tradeSkills) ? data.tradeSkills.map((s: any) => String(s).toLowerCase()) : [String(data.trade || data.specialization || "").toLowerCase()];
+                const skillMatch = !requiredSkill || skills.some((skill: string) => requiredSkill.includes(skill) || skill.includes(requiredSkill));
+                return onDuty && hasCapacity && sameEmirate && skillMatch;
+            })
+            .map((tech) => {
+                const data = tech.data;
+                const liveLocation = normalizeGeo({ geo: data.liveLocation, location: data.liveLocation });
+                const citiesCovered = Array.isArray(data.citiesCovered) ? data.citiesCovered.map((c: any) => String(c).toLowerCase()) : [];
+                const sameCity = citiesCovered.includes(String(contextUpdate.city).toLowerCase()) || String(data.currentDutyArea || data.primaryArea || "").toLowerCase() === String(contextUpdate.city).toLowerCase();
+                const sameArea = String(data.currentDutyArea || data.primaryArea || "").toLowerCase() === String(contextUpdate.area).toLowerCase();
+                return {
+                    ...tech,
+                    distance: liveLocation ? distanceKm(liveLocation, propertyGeo) : Number.POSITIVE_INFINITY,
+                    sameCity,
+                    sameArea,
+                    jobCount: Number(data.currentJobCount || 0),
+                    rating: Number(data.rating || 0)
+                };
+            })
+            .sort((a, b) => Number(b.sameArea) - Number(a.sameArea) || Number(b.sameCity) - Number(a.sameCity) || a.distance - b.distance || a.jobCount - b.jobCount || b.rating - a.rating);
+
+        if (candidates.length > 0) {
+            const bestTech = candidates[0];
+            console.log("[AUTO_ROUTE_DECISION]", {
+                ticketId: event.params.ticketId,
+                assignedTechnicianId: bestTech.id,
+                emirate: contextUpdate.emirate,
+                city: contextUpdate.city,
+                area: contextUpdate.area,
+                sameArea: bestTech.sameArea,
+                sameCity: bestTech.sameCity,
+                distanceKm: Number.isFinite(bestTech.distance) ? Number(bestTech.distance.toFixed(2)) : null,
+                candidateCount: candidates.length
+            });
             await snap.ref.update({
                 assignedTechnicianId: bestTech.id,
-                assignedTechnicianName: bestTech.displayName || "Technician Specialist",
+                assignedTechnicianName: bestTech.data.displayName || bestTech.data.name || "Specialist",
                 status: "assigned",
-                autoDispatchStatus: "SUCCESS_V8_CONTEXT",
-                dispatchedAt: admin.firestore.FieldValue.serverTimestamp()
+                assignmentStatus: "technician_notified",
+                assignmentReason: {
+                    sameArea: bestTech.sameArea,
+                    sameCity: bestTech.sameCity,
+                    distanceKm: Number.isFinite(bestTech.distance) ? Number(bestTech.distance.toFixed(2)) : null,
+                    emirate: contextUpdate.emirate
+                },
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            await dispatchOmniNotification(
-                bestTech.id,
-                `MISSION ASSIGNED: ${ticketData.trade || 'Issue'}`,
-                `Location: ${contextUpdate.propertyLocation.propertyName}, Unit ${ticketData.unitNumber}. Tap to view.`,
-                { subject: "New Mission Assignment - BIN GROUP" },
-                { ticketId, url: `/tech/ticket/${ticketId}`, tenantPhone: contextUpdate.tenantPhone }
-            );
+            await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.complaintCategory || ticketData.trade || "Fault"} at ${contextUpdate.propertyLocation.propertyName}, ${contextUpdate.area || contextUpdate.emirate}`, {
+                url: `/tech`,
+                extraData: {
+                    ticketId: event.params.ticketId,
+                    propertyId: ticketData.propertyId,
+                    tenantId: ticketData.tenantId,
+                    priority: ticketData.priority || "MEDIUM",
+                    openRoute: true
+                }
+            });
+        } else {
+            console.log("[AUTO_ROUTE_ESCALATION]", {
+                ticketId: event.params.ticketId,
+                emirate: contextUpdate.emirate,
+                city: contextUpdate.city,
+                area: contextUpdate.area,
+                reason: "NO_LOCAL_TECHNICIAN"
+            });
+            await snap.ref.update({
+                status: "pending_assignment",
+                assignmentStatus: "admin_manual_assignment",
+                assignmentError: `No on-duty ${contextUpdate.emirate} technician matched this ticket.`,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection("adminAlerts").add({
+                companyId: contextUpdate.companyId,
+                type: "NO_LOCAL_TECHNICIAN",
+                ticketId: event.params.ticketId,
+                propertyId: ticketData.propertyId || null,
+                emirate: contextUpdate.emirate,
+                city: contextUpdate.city || null,
+                area: contextUpdate.area || null,
+                message: `No local technician available for ${contextUpdate.area || contextUpdate.city || contextUpdate.emirate}.`,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
         }
-    } catch (error) {
-        console.error(`[V8 Dispatch] Failure:`, error);
+    } catch (err) {
+        console.error("AutoRoute Failure:", err);
     }
 });
 
+// ─── [V8] AI MISSION GUIDANCE ─────────────────────────────────────────────────────
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
-    // 1. IAM Auth Lock
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Sovereign ID verification failed. Session invalid.');
-    }
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     
     try {
-        if (!request.data || typeof request.data.input !== "string" || !request.data.input.trim()) {
-            return { status: "ERROR", error: "Invalid request payload." };
-        }
-        const { input, role } = request.data;
-        const userRole = role || "unknown";
+        const { input } = request.data;
+        const apiKey = openAiKey.value();
         
-        let apiKey = "";
-        try {
-            apiKey = openAiKey.value();
-        } catch (e: any) {
-            console.error("Failed to read OPENAI_API_KEY secret:", e);
-            throw new HttpsError('internal', 'AI Key integration fault.');
-        }
-
-        if (!apiKey) {
-            throw new HttpsError('internal', 'AI Key configuration missing.');
-        }
-
-        const systemPrompt = `You are the BIN GROUP Sovereign AI, an elite institutional property management assistant for UAE real estate.
-        User Role: ${userRole}
-        Tone: Professional, prestigious, authoritative, and helpful.
-        Context: UAE Real Estate laws, Dubai/Abu Dhabi standards.
-        Instructions: Provide concise, high-impact guidance. If the user reports a critical issue (AC failure, major leak, fire), advise them to use the SOS protocol immediately.`;
-
-        // 2. Make native fetch call
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: "gpt-4o-mini",
                 messages: [
-                    { role: "system", content: systemPrompt },
+                    { role: "system", content: "You are the BIN GROUP Sovereign AI assistant for UAE property operations." },
                     { role: "user", content: input }
                 ],
-                max_tokens: 250,
-                temperature: 0.7
+                max_tokens: 250
             })
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error("OpenAI API rejection:", response.status, errorData);
-            throw new HttpsError('internal', 'AI backend temporarily unavailable. Please try again.');
-        }
-
+        if (!response.ok) throw new Error("AI Backend Rejection");
         const data = await response.json();
-        
-        return { 
-            status: "V8_PRODUCTION_READY", 
-            guidance: data.choices?.[0]?.message?.content || "No response generated.",
-            timestamp: new Date().toISOString()
-        };
-    } catch (error: any) {
-        console.error("AI Guidance Failure Node:", error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'AI backend temporarily unavailable. Please try again.');
+        return { status: "SUCCESS", guidance: data.choices?.[0]?.message?.content };
+    } catch (error) {
+        throw new HttpsError('internal', 'AI backend unavailable.');
     }
 });
 
-// STUBS & OTHER TRIGGERS
-export const onTicketStatusUpdate = onDocumentUpdated("maintenanceTickets/{ticketId}", async (event) => {
-    const after = event.data?.after.data();
-    if (after?.status === 'EN_ROUTE') {
-        await dispatchOmniNotification(after.tenantId, "Technician En Route", "Your service specialist is moving towards your location now.");      
-    }
-});
+// ─── [V8] CORE SYSTEM LOGIC ───────────────────────────────────────────────────────
 
-export const getSovereignSystemStats = onCall({ cors: true }, async () => ({ status: "OK" }));
-export const onMaintenanceTicketCreated = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
-    const snap = event.data;
-    if (snap) {
-        await snap.ref.update({ createdAt: admin.firestore.FieldValue.serverTimestamp(), intelligenceFlag: "ACTIVE" });
-    }
-});
-
-export const googleSecurityEvents = onRequest({ cors: true }, async (req, res) => { res.status(202).send("Accepted"); });
-
-// [V8] Intake Workflow LIVE
 export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async (event) => {
     const snap = event.data;
     if (!snap) return;
     const data = snap.data();
-    
     try {
-        const safePropertyData = {
-            propertyName: typeof data.propertyName === 'string' ? data.propertyName : 'New Asset',
-            propertyType: typeof data.propertyType === 'string' ? data.propertyType : 'Unknown',
-            emirate: typeof data.emirate === 'string' ? data.emirate : 'Dubai',
-            address: typeof data.address === 'string' ? data.address : '',
-            unitCount: typeof data.unitCount === 'number' ? data.unitCount : 0,
-            ownerEmail: typeof data.ownerEmail === 'string' ? data.ownerEmail : '',
-            ownerPhone: typeof data.ownerPhone === 'string' ? data.ownerPhone : ''
-        };
-
         await db.collection("properties").add({
-            ...safePropertyData,
+            propertyName: data.propertyName || 'New Asset',
+            ownerEmail: data.ownerEmail,
             status: 'PENDING_APPROVAL',
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
-        await snap.ref.update({ status: 'PROCESSED', processedAt: admin.firestore.FieldValue.serverTimestamp() });
-        console.log(`[INTAKE] Submission ${event.params.id} routed to sovereign properties vault successfully.`);
+        await snap.ref.update({ status: 'PROCESSED' });
     } catch (err) {
-        console.error(`[INTAKE] Failure routing ${event.params.id}:`, String(err));
         await snap.ref.update({ status: 'ERROR', error: String(err) });
     }
 });
 
-// [V8] Mail Transport LIVE using Firebase Secrets integration
 export const processMailQueue = onDocumentCreated({ document: "mail/{docId}", secrets: [smtpUserSecret, smtpPassSecret] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
-    const mailData = snap.data();
-    
     try {
         const mailTransport = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: {
-                user: smtpUserSecret.value(),
-                pass: smtpPassSecret.value()
-            }
+            host: 'smtp.gmail.com', port: 465, secure: true,
+            auth: { user: smtpUserSecret.value(), pass: smtpPassSecret.value() }
         });
-
+        const mailData = snap.data();
         await mailTransport.sendMail({
             from: `"BIN GROUP" <${smtpUserSecret.value()}>`,
             to: mailData.to,
-            subject: mailData.message?.subject || 'BIN GROUP Update',
+            subject: mailData.message?.subject || 'Update',
             html: mailData.message?.html || ''
         });
         await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: admin.firestore.FieldValue.serverTimestamp() } });
-        console.log(`[MAIL] Successfully dispatched outbox ID: ${event.params.docId}`);
     } catch (err: any) {
-        console.error(`[MAIL] Dispatch block error for ${event.params.docId}:`, err);
-        await snap.ref.update({ delivery: { state: 'ERROR', error: err.message, timestamp: admin.firestore.FieldValue.serverTimestamp() } });
+        await snap.ref.update({ delivery: { state: 'ERROR', error: err.message } });
     }
 });
 
-// [V8] Automated Sovereign Database Backups LIVE
 export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
     try {
         const client = new admin.firestore.v1.FirestoreAdminClient();
-        const projectId = admin.app().options.projectId || process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'bin-group-57c60';
-        const databaseName = client.databasePath(projectId, '(default)');
+        const projectId = admin.app().options.projectId || 'bin-group-57c60';
         const bucket = `gs://${projectId}.appspot.com/backups/live/${new Date().toISOString()}`;
-        
-        await client.exportDocuments({
-            name: databaseName,
-            outputUriPrefix: bucket,
-            collectionIds: [] // Exports all collections
-        });
-        console.log(`[BACKUP] Initialized sovereign vault snapshot at ${bucket}`);
+        await client.exportDocuments({ name: client.databasePath(projectId, '(default)'), outputUriPrefix: bucket, collectionIds: [] });
     } catch (err: any) {
-        console.error(`[BACKUP] Systemic export fault:`, err.message || err);
+        console.error("Backup Failure:", err.message);
+    }
+});
+
+// ─── [V12] ASYNC SUMMARY AGGREGATORS ──────────────────────────────────────────
+
+export const syncOwnerSummary = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+    const data = event.data?.after.data();
+    if (!data?.ownerId) return;
+
+    const ownerId = data.ownerId;
+    const ticketsSnap = await db.collection("maintenanceTickets").where("ownerId", "==", ownerId).get();
+    const propsSnap = await db.collection("properties").where("ownerId", "==", ownerId).get();
+    
+    let openCount = 0;
+    let totalBpi = 0;
+    const riskAssets: any[] = [];
+
+    ticketsSnap.forEach(docSnap => {
+        const t = docSnap.data();
+        if (!['COMPLETED', 'CLOSED', 'RESOLVED'].includes(t.status)) openCount++;
+    });
+
+    propsSnap.forEach(docSnap => {
+        const p = docSnap.data();
+        const score = p.lastBpi || 90;
+        totalBpi += score;
+        if (score < 75) riskAssets.push({ id: docSnap.id, name: p.propertyName || p.name, score });
+    });
+
+    await db.collection("owner_summaries").doc(ownerId).set({
+        openTickets: openCount,
+        propertyCount: propsSnap.size,
+        avgBpi: propsSnap.size > 0 ? Math.round(totalBpi / propsSnap.size) : 100,
+        riskAssets,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+});
+
+export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
+    const summaryRef = db.collection("admin_summaries").doc("global");
+    await summaryRef.update({
+        openTickets: admin.firestore.FieldValue.increment(1),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }));
+});
+
+export const googleSecurityEvents = onRequest({ cors: true }, async (req, res) => { res.status(202).send("Accepted"); });
+export const getSovereignSystemStats = onCall({ cors: true }, async () => ({ status: "OK" }));
+
+/**
+ * [V8.2] INSTITUTIONAL DOCUMENT OCR PROTOCOL
+ */
+export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
+    
+    const { fileUrl } = request.data;
+    if (!fileUrl) throw new HttpsError("invalid-argument", "Missing document stream.");
+
+    try {
+        const extractedData = await extractTitleDeedData(fileUrl);
+        
+        // Log OCR attempt for audit
+        await db.collection("ocr_audit_logs").add({
+            userId: request.auth.uid,
+            fileUrl,
+            extractedData,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return {
+            status: "SUCCESS",
+            data: extractedData,
+            verified: (extractedData.confidenceScore || 0) > 0.85
+        };
+    } catch (err: any) {
+        console.error("OCR Protocol Fault:", err);
+        throw new HttpsError("internal", "Document parsing node failed.");
+    }
+});
+
+/**
+ * [V8.2] INSTITUTIONAL CONTRACT GENERATION PROTOCOL
+ */
+export const generateInstitutionalContract = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
+    
+    const { contractData } = request.data;
+    if (!contractData) throw new HttpsError("invalid-argument", "Missing contract payload.");
+
+    try {
+        const pdfUrl = await generateContractPDF({
+            ...contractData,
+            ownerId: request.auth.uid
+        });
+
+        return {
+            status: "SUCCESS",
+            pdfUrl,
+            timestamp: new Date().toISOString()
+        };
+    } catch (err: any) {
+        console.error("Contract Node Fault:", err);
+        throw new HttpsError("internal", "Contract synthesis failed.");
     }
 });

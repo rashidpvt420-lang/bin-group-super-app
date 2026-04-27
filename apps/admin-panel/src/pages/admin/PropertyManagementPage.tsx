@@ -27,6 +27,7 @@ import { Plus as AddIcon, Edit as EditIcon, Trash2 as DeleteIcon, MapPin } from 
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { buildGeoAnchor } from '../../utils/geoAnchor';
 
 interface Property {
     id: string;
@@ -36,6 +37,13 @@ interface Property {
     coordinates?: {
         lat: number;
         lng: number;
+    };
+    geo?: {
+        lat: number;
+        lng: number;
+        geohash?: string;
+        address?: string;
+        verified?: boolean;
     };
     ownerId: string;
     emirate: string;
@@ -78,16 +86,28 @@ export default function PropertyManagementPage() {
 
     const handleAddProperty = async () => {
         try {
+            const geo = buildGeoAnchor({
+                lat: formData.lat,
+                lng: formData.lng,
+                address: formData.address,
+                emirate: formData.emirate,
+                city: formData.serviceZone,
+                area: formData.serviceZone
+            });
             await addDoc(collection(db, 'properties'), {
+                companyId: 'BIN_GROUP',
                 name: formData.name,
+                propertyName: formData.name,
                 propertyType: formData.propertyType,
                 address: formData.address,
-                location: {
-                    lat: parseFloat(formData.lat) || 0,
-                    lng: parseFloat(formData.lng) || 0
-                },
+                addressLine: formData.address,
+                geo,
+                location: { lat: geo.lat, lng: geo.lng },
+                coordinates: { lat: geo.lat, lng: geo.lng },
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
+                city: formData.serviceZone || formData.emirate,
+                area: formData.serviceZone || formData.emirate,
                 serviceZone: formData.serviceZone,
                 unitsCount: parseInt(formData.unitsCount) || 0,
                 floorsCount: parseInt(formData.floorsCount) || 0,
@@ -96,8 +116,9 @@ export default function PropertyManagementPage() {
             });
             setOpenAdd(false);
             resetForm();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error adding property:", error);
+            alert(error?.message || 'We could not verify this location. Admin review is required.');
         }
     };
 
@@ -107,8 +128,8 @@ export default function PropertyManagementPage() {
             name: prop.name || '',
             propertyType: prop.propertyType || 'Villa',
             address: prop.address || '',
-            lat: prop.coordinates?.lat?.toString() || '',
-            lng: prop.coordinates?.lng?.toString() || '',
+            lat: (prop.geo?.lat ?? prop.coordinates?.lat)?.toString() || '',
+            lng: (prop.geo?.lng ?? prop.coordinates?.lng)?.toString() || '',
             ownerId: prop.ownerId || '',
             emirate: prop.emirate || '',
             serviceZone: prop.serviceZone || '',
@@ -121,16 +142,28 @@ export default function PropertyManagementPage() {
     const handleUpdateProperty = async () => {
         if (!selectedProperty) return;
         try {
+            const geo = buildGeoAnchor({
+                lat: formData.lat,
+                lng: formData.lng,
+                address: formData.address,
+                emirate: formData.emirate,
+                city: formData.serviceZone,
+                area: formData.serviceZone
+            });
             await updateDoc(doc(db, 'properties', selectedProperty.id), {
+                companyId: 'BIN_GROUP',
                 name: formData.name,
+                propertyName: formData.name,
                 propertyType: formData.propertyType,
                 address: formData.address,
-                location: {
-                    lat: parseFloat(formData.lat) || 0,
-                    lng: parseFloat(formData.lng) || 0
-                },
+                addressLine: formData.address,
+                geo,
+                location: { lat: geo.lat, lng: geo.lng },
+                coordinates: { lat: geo.lat, lng: geo.lng },
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
+                city: formData.serviceZone || formData.emirate,
+                area: formData.serviceZone || formData.emirate,
                 serviceZone: formData.serviceZone,
                 unitsCount: parseInt(formData.unitsCount) || 0,
                 floorsCount: parseInt(formData.floorsCount) || 0,
@@ -138,8 +171,9 @@ export default function PropertyManagementPage() {
             });
             setOpenEdit(false);
             resetForm();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error updating property:", error);
+            alert(error?.message || 'We could not verify this location. Admin review is required.');
         }
     };
 
@@ -228,8 +262,9 @@ export default function PropertyManagementPage() {
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: binThemeTokens.gold }}>
                                         <MapPin size={14} />
                                         <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                            {prop.coordinates ? `${prop.coordinates.lat.toFixed(4)}, ${prop.coordinates.lng.toFixed(4)}` : 'N/A'}
+                                            {prop.geo ? `${prop.geo.lat.toFixed(4)}, ${prop.geo.lng.toFixed(4)}` : prop.coordinates ? `${prop.coordinates.lat.toFixed(4)}, ${prop.coordinates.lng.toFixed(4)}` : 'N/A'}
                                         </Typography>
+                                        {prop.geo?.verified && <Chip label="VERIFIED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
                                     </Box>
                                 </TableCell>
                                 <TableCell align="right">

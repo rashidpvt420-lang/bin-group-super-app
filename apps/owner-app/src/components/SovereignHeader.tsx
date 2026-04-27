@@ -1,20 +1,31 @@
-import React from 'react';
-import { AppBar, Toolbar, Typography, Box, Button, IconButton, alpha } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { AppBar, Toolbar, Typography, Box, Button, IconButton, alpha, Badge } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import { useCustomTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import TranslateIcon from '@mui/icons-material/Translate';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { auth } from '../lib/firebase';
+import { auth, db, collection, query, where, onSnapshot } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { useNavigate } from 'react-router-dom';
 
 const BinGroupHeader: React.FC = () => {
     const { lang, setLang, t, isRTL } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
     const { user, role } = useRole();
+    const navigate = useNavigate();
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const q = query(collection(db, 'notifications'), where('userId', '==', user.uid), where('read', '==', false));
+        const unsubscribe = onSnapshot(q, (snap) => setUnreadCount(snap.size));
+        return () => unsubscribe();
+    }, [user]);
 
     const toggleLanguage = () => {
         setLang(lang === 'en' ? 'ar' : 'en');
@@ -30,7 +41,7 @@ const BinGroupHeader: React.FC = () => {
             zIndex: 1500
         }}>
             <Toolbar sx={{ justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/')}>
                     <Box 
                         component="img" 
                         src="/logo.png" 
@@ -54,6 +65,15 @@ const BinGroupHeader: React.FC = () => {
                         }}>
                             {role.toUpperCase()}
                         </Box>
+                    )}
+
+                    {/* Notifications */}
+                    {user && (
+                        <IconButton onClick={() => navigate('/notifications')} sx={{ color: binThemeTokens.gold }}>
+                            <Badge badgeContent={unreadCount} color="error" sx={{ '& .MuiBadge-badge': { fontWeight: 900, fontSize: '0.65rem' } }}>
+                                <NotificationsIcon />
+                            </Badge>
+                        </IconButton>
                     )}
 
                     {/* Language Switcher */}
@@ -89,15 +109,6 @@ const BinGroupHeader: React.FC = () => {
                             <LogoutIcon sx={{ mr: { xs: 0, sm: 1 }, fontSize: '1.25rem' }} />
                             <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{t('nav.logout') || 'Sign Out'}</Box>
                         </Button>
-                    )}
-
-                    {/* App Links (Responsive) */}
-                    {user && (
-                        <Box sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
-                            <Button color="inherit" href="/dashboard">{t('nav.dashboard')}</Button>
-                            <Button color="inherit" href="/onboarding">{t('nav.onboarding')}</Button>
-                            {role === 'admin' && <Button color="primary" variant="outlined" href="/admin">{t('nav.admin')}</Button>}
-                        </Box>
                     )}
                 </Box>
             </Toolbar>

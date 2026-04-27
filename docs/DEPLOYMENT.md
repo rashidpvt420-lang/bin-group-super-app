@@ -351,6 +351,14 @@ Test Restores: Monthly
 - ✅ Customer support: < 2 hour response time
 - ✅ Zero data loss incidents
 
+---
+
+## ⚠️ KNOWN OPERATIONAL LIMITS (V1.0)
+
+1. **iPhone Push Connectivity**: Background wake-up and real-time delivery on iOS strictly depend on the user installing the app as a **PWA / Home Screen Standalone** node. Standard mobile browser push is restricted by Apple.
+2. **Summary Data Lag**: Asynchronous summary documents (Owner/Admin dashboards) are precomputed and may experience a brief propagation lag (2-5 seconds) under peak operational load.
+3. **SMS Fallback Protocols**: Automated SMS/Voice fallbacks for emergency missions require active carrier white-listing and institutional account funding if activated.
+
 **Sign-off by:**
 - [ ] CEO/Founder
 - [ ] CTO/Tech Lead

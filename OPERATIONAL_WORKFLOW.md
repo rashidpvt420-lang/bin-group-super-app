@@ -27,7 +27,7 @@ Establishing the asset in the database.
 Instant commercial transparency.
 
 * **Action**: Trigger "Get Maintenance Quote".
-* **Logic**: Runs the [Professional FM Tender Algorithm](./PRICING_STRATEGY_UAE.md).
+* **Logic**: Runs the [Professional FM Pricing Algorithm](./PRICING_STRATEGY_UAE.md).
 * **Output**: Comparison of Maintenance-Only, Property Management, and Integrated Package prices.
 * **UX**: Recommends the "Integrated Plan" for maximum yield protection.
 

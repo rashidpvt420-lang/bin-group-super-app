@@ -158,6 +158,14 @@ Rent Collection Waterfall:
 
 ---
 
+## ⚠️ KNOWN OPERATIONAL LIMITS (V1.0)
+
+- **iPhone Push Connectivity**: Background wake-up and real-time delivery on iOS strictly depend on the user installing the app as a **PWA / Home Screen Standalone** node.
+- **Summary Data Lag**: Asynchronous summary documents (Owner/Admin dashboards) may experience a brief propagation lag (2-5 seconds) under peak operational load.
+- **SMS Fallback Protocols**: Automated SMS/Voice fallbacks for emergency missions require active carrier white-listing and institutional account funding if activated.
+
+---
+
 ## 🔒 Security & Compliance
 
 - All phone numbers hidden by default

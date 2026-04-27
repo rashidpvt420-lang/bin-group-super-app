@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, onAuthStateChanged, signInWithPopup } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { getDoc, doc, updateDoc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
 
 interface AuthContextType {
@@ -70,10 +70,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                             });
                                             if (currentToken) {
                                                 await updateDoc(doc(db, 'users', usr.uid), {
-                                                    fcmToken: currentToken,
+                                                    fcmTokens: arrayUnion(currentToken),
                                                     updatedAt: new Date().toISOString()
                                                 });
                                             }
+
                                         }
                                     } catch (fcmErr) {
                                         console.warn("🛡️ [AUTH] FCM harvest bypassed:", fcmErr);

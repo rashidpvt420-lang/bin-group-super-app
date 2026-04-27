@@ -21,6 +21,14 @@ import {
   IconButton,
   Tooltip,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormControlLabel,
+  Switch,
+  Checkbox,
+  ListItemText,
 } from '@mui/material';
 import { db, auth } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -36,6 +44,22 @@ interface Technician {
   status: 'active' | 'pending' | 'inactive' | 'on-duty';
   specialization: string;
   role: 'technician';
+  
+  // Advanced Institutional Fields
+  emiratesCovered?: string[];
+  citiesCovered?: string[];
+  areasCovered?: string[];
+  primaryEmirate?: string;
+  primaryCity?: string;
+  primaryArea?: string;
+  onDuty?: boolean;
+  available?: boolean;
+  currentJobCount?: number;
+  maxConcurrentJobs?: number;
+  shiftStart?: string;
+  shiftEnd?: string;
+  rating?: number;
+  emergencyEligible?: boolean;
 }
 
 export default function TechniciansManagementPage() {
@@ -60,6 +84,11 @@ export default function TechniciansManagementPage() {
     phoneNumber: '',
     specialization: '',
     status: 'active' as 'active' | 'pending' | 'inactive' | 'on-duty',
+    emiratesCovered: [] as string[],
+    primaryEmirate: '',
+    maxConcurrentJobs: 3,
+    emergencyEligible: false,
+    onDuty: false,
   });
 
   useEffect(() => {
@@ -124,6 +153,11 @@ export default function TechniciansManagementPage() {
       phoneNumber: tech.phoneNumber || '',
       specialization: tech.specialization || '',
       status: tech.status || 'active',
+      emiratesCovered: tech.emiratesCovered || [],
+      primaryEmirate: tech.primaryEmirate || '',
+      maxConcurrentJobs: tech.maxConcurrentJobs || 3,
+      emergencyEligible: !!tech.emergencyEligible,
+      onDuty: !!tech.onDuty,
     });
     setOpenEdit(true);
   };
@@ -144,6 +178,11 @@ export default function TechniciansManagementPage() {
         phoneNumber: editTech.phoneNumber,
         specialization: editTech.specialization,
         status: editTech.status,
+        emiratesCovered: editTech.emiratesCovered,
+        primaryEmirate: editTech.primaryEmirate,
+        maxConcurrentJobs: editTech.maxConcurrentJobs,
+        emergencyEligible: editTech.emergencyEligible,
+        onDuty: editTech.onDuty,
       }).catch(() => {/* tech doc might not exist yet */});
 
       setOpenEdit(false);
@@ -325,6 +364,62 @@ export default function TechniciansManagementPage() {
               value={editTech.specialization} 
               onChange={(e) => setEditTech({...editTech, specialization: e.target.value})} 
             />
+
+            <FormControl fullWidth>
+              <InputLabel>Primary Emirate</InputLabel>
+              <Select
+                value={editTech.primaryEmirate}
+                label="Primary Emirate"
+                onChange={(e) => setEditTech({...editTech, primaryEmirate: e.target.value})}
+              >
+                {['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'].map(e => (
+                  <MenuItem key={e} value={e}>{e}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel>Emirates Covered</InputLabel>
+              <Select
+                multiple
+                value={editTech.emiratesCovered}
+                label="Emirates Covered"
+                onChange={(e) => setEditTech({...editTech, emiratesCovered: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value})}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip key={value} label={value} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'].map((name) => (
+                  <MenuItem key={name} value={name}>
+                    <Checkbox checked={editTech.emiratesCovered.indexOf(name) > -1} />
+                    <ListItemText primary={name} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField 
+                label="Max Concurrent Jobs" 
+                type="number"
+                fullWidth 
+                value={editTech.maxConcurrentJobs} 
+                onChange={(e) => setEditTech({...editTech, maxConcurrentJobs: parseInt(e.target.value) || 0})} 
+            />
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <FormControlLabel
+                    control={<Switch checked={editTech.onDuty} onChange={(e) => setEditTech({...editTech, onDuty: e.target.checked})} />}
+                    label="On Duty"
+                />
+                <FormControlLabel
+                    control={<Switch checked={editTech.emergencyEligible} onChange={(e) => setEditTech({...editTech, emergencyEligible: e.target.checked})} />}
+                    label="Emergency SOS Eligible"
+                />
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>

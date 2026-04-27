@@ -22,7 +22,7 @@
 * `uid`: string
 * `role`: 'owner' | 'tenant' | 'tech' | 'admin' | 'broker'
 * `language`: 'en' | 'ar'
-* `fcmToken`: string (for notifications)
+* `fcmTokens`: string[] (for multi-device notifications)
 
 ### `/properties`
 
@@ -80,7 +80,7 @@
 | :--- | :--- | :--- |
 | `/api/auth/otp/send` | POST | Triggers UAE Phone Number verification. |
 | `/api/properties` | GET/POST | List/Create property assets. |
-| `/api/quotes/calculate` | POST | Runs the [Tender Algorithm](./PRICING_STRATEGY_UAE.md). |
+| `/api/quotes/calculate` | POST | Runs the [Pricing Algorithm](./PRICING_STRATEGY_UAE.md). |
 | `/api/tickets/create` | POST | Initiates maintenance request with media upload. |
 | `/api/tickets/assign` | PATCH | AI-based or Manual technician allocation. |
 | `/api/payments/init` | POST | Generates Stripe/PayTabs checkout for rent/contracts. |

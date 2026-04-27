@@ -19,9 +19,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Chip,
+  TableContainer
 } from '@mui/material';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../services/api';
+import { db, collection, query, where, getDocs, orderBy, limit } from '../../lib/firebase';
 
 interface ReportData {
   date: string;
@@ -36,19 +39,28 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportType, setReportType] = useState('financial');
   const [data, setData] = useState<ReportData[]>([]);
+  const [breaches, setBreaches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const handleGenerateReport = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/admin/reports', {
-        params: {
-          startDate,
-          endDate,
-          type: reportType,
-        },
-      });
-      setData(response.data.data);
+      if (reportType === 'sla_breaches') {
+          const q = query(collection(db, 'sla_breaches'), orderBy('detectedAt', 'desc'), limit(100));
+          const snap = await getDocs(q);
+          setBreaches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setData([]); 
+      } else {
+          const response = await apiClient.get('/api/admin/reports', {
+            params: {
+              startDate,
+              endDate,
+              type: reportType,
+            },
+          });
+          setData(response.data.data);
+          setBreaches([]);
+      }
     } catch (error) {
       console.error('Failed to generate report:', error);
       alert('Failed to generate report');
@@ -85,7 +97,7 @@ export default function ReportsPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
+      <Typography variant="h4" sx={{ mb: 4, fontWeight: 900 }}>
         Reports & Analytics
       </Typography>
 
@@ -120,6 +132,7 @@ export default function ReportsPage() {
                 <MenuItem value="operational">Operational</MenuItem>
                 <MenuItem value="performance">Performance</MenuItem>
                 <MenuItem value="owner">Owner Summary</MenuItem>
+                <MenuItem value="sla_breaches">SLA Breaches & Credits</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -271,7 +284,37 @@ export default function ReportsPage() {
         </>
       )}
 
-      {!loading && data.length === 0 && (
+      {reportType === 'sla_breaches' && breaches.length > 0 && (
+          <Box sx={{ mt: 4 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 900 }}>INSTITUTIONAL SLA BREACH LEDGER</Typography>
+              <TableContainer component={Paper}>
+                  <Table>
+                      <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                          <TableRow>
+                              <TableCell sx={{ fontWeight: 900 }}>TICKET ID</TableCell>
+                              <TableCell sx={{ fontWeight: 900 }}>OWNER ID</TableCell>
+                              <TableCell sx={{ fontWeight: 900 }}>TIER</TableCell>
+                              <TableCell sx={{ fontWeight: 900 }}>PENALTY</TableCell>
+                              <TableCell sx={{ fontWeight: 900 }}>DETECTED AT</TableCell>
+                          </TableRow>
+                      </TableHead>
+                      <TableBody>
+                          {breaches.map((b) => (
+                              <TableRow key={b.id}>
+                                  <TableCell>{b.ticketId?.substring(0,8)}</TableCell>
+                                  <TableCell>{b.ownerId?.substring(0,8)}</TableCell>
+                                  <TableCell><Chip label={b.tier?.toUpperCase()} size="small" variant="outlined" /></TableCell>
+                                  <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>AED {b.penaltyAmount}</TableCell>
+                                  <TableCell>{b.detectedAt?.toDate ? b.detectedAt.toDate().toLocaleString() : 'Recent'}</TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+              </TableContainer>
+          </Box>
+      )}
+
+      {!loading && data.length === 0 && breaches.length === 0 && (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="textSecondary">Generate a report to see data here</Typography>
         </Paper>

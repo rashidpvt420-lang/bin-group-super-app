@@ -36,7 +36,7 @@ To ensure 100% data accuracy and speed, the Client agrees to the following opera
 1. **Due Dates:** Payments are due strictly as per the schedule selected in the App (Annual Upfront or Quarterly).
 2. **The "Two-Strike" Suspension:** If the Client fails to settle two (2) consecutive invoices (or if two cheques return unpaid), all services—including Emergency SOS response—will be automatically suspended. Service will only resume upon full settlement of the outstanding balance plus a Reactivation Fee of AED 500.
 3. **Bounced Cheques:** Any returned cheque or declined auto-payment will incur an administrative fine of AED 250 per instance.
-4. **Spare Parts Markup:** The Client acknowledges that spare parts and consumables are chargeable and include a standard procurement and handling fee (20%) over the supplier cost.
+4. **Spare Parts Markup:** The Client acknowledges that spare parts and consumables are chargeable and include a standard operational and handling fee (20%) over the supplier cost.
 
 ---
 

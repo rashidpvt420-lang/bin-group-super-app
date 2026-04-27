@@ -47,7 +47,7 @@ async function runVerification() {
         await db.collection('users').doc(techId).set({
             role: "technician",
             isOffDuty: false,
-            fcmToken: "fake_token_android_12345",
+            fcmTokens: ["fake_token_android_12345"],
             email: "tech_test@example.com",
             displayName: "Ali Test Technician",
             serviceZone: "Test Zone",

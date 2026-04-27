@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+const createOnboardingSessionId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID();
+    }
+    return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export interface PropertyData {
     id: string;
     emirate: string;
@@ -34,7 +41,7 @@ export interface PropertyData {
     districtCooling: boolean;
     // Institutional / Majlis Specific
     majlis: boolean;
-    majlisType: 'government' | 'none'; // Restricted to Government only per final business rules
+    majlisType: 'government' | 'none';
     majlisSubtype?: string;
     majlisGarden?: boolean;
     authorityName?: string;
@@ -74,6 +81,24 @@ export interface PropertyData {
     assetGrade: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
     currentStatus: string;
     address: string;
+    addressLine?: string;
+    city?: string;
+    googlePlaceId?: string;
+    geo?: {
+        point?: { latitude: number; longitude: number };
+        lat: number;
+        lng: number;
+        geohash: string;
+        source: string;
+        placeId?: string;
+        address: string;
+        emirate: string;
+        city: string;
+        area: string;
+        verified: boolean;
+        verifiedAt?: string;
+        updatedAt?: string;
+    };
     location?: {
         lat: number;
         lng: number;
@@ -108,6 +133,7 @@ export interface OnboardingState {
     accountCreated: boolean;
     valuationResult: any | null;
     intakeId: string | null;
+    onboardingSessionId: string;
     paymentManifest: any | null;
     paymentMethod: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null;
     companyProfile: {
@@ -117,19 +143,46 @@ export interface OnboardingState {
         phone: string;
         email: string;
     };
-    propertyData: PropertyData; // Backward compatibility for single-asset logic
-    updatePropertyData: (data: Partial<PropertyData>) => void;
-
+    signupData: {
+        name: string;
+        email: string;
+        phone: string;
+        password?: string;
+    };
+    kycUrls: {
+        emiratesId?: string;
+        passport?: string;
+        titleDeed?: string;
+        tradeLicense?: string;
+    };
+    ownerAccount: {
+        uid: string;
+        fullName: string;
+        email: string;
+        mobile: string;
+    } | null;
+    proofDocuments: {
+        propertyProof: File | null;
+        emiratesId: File | null;
+        passport: File | null;
+        tradeLicense: File | null;
+        tenancySupport: File | null;
+        labels: Record<string, string>;
+    };
+    propertyData: PropertyData; // Backward compatibility
+    
     // Actions
     setStep: (step: number) => void;
     nextStep: () => void;
     prevStep: () => void;
     setIntakeId: (id: string) => void;
     addProperty: (data?: Partial<PropertyData>) => void;
+    bulkAddProperties: (items: Partial<PropertyData>[]) => void;
     removeProperty: (index: number) => void;
     updateProperty: (index: number, data: Partial<PropertyData>) => void;
-    bulkAddProperties: (properties: PropertyData[]) => void;
     updateCompanyProfile: (data: Partial<OnboardingState['companyProfile']>) => void;
+    updateSignupData: (data: Partial<OnboardingState['signupData']>) => void;
+    updateKycUrls: (data: Partial<OnboardingState['kycUrls']>) => void;
     setSelectedPlan: (plan: any) => void;
     toggleAddOn: (id: string) => void;
     setContractId: (id: string) => void;
@@ -139,6 +192,9 @@ export interface OnboardingState {
     setValuationResult: (result: any) => void;
     setPaymentManifest: (manifest: any) => void;
     setPaymentMethod: (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null) => void;
+    setOwnerAccount: (account: OnboardingState['ownerAccount']) => void;
+    setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: File | null) => void;
+    updatePropertyData: (data: Partial<PropertyData>) => void;
     calculateSummary: () => void;
     reset: () => void;
 }
@@ -175,26 +231,11 @@ const defaultProperty: PropertyData = {
     districtCooling: false,
     majlis: false,
     majlisType: 'none',
-    majlisSubtype: '',
-    majlisGarden: false,
-    heritageSensitivity: 'Standard',
-    guestCapacity: 0,
-    parkingCapacity: 0,
-    hospitalityReadiness: false,
-    irrigationSystem: false,
-    solarIntegration: false,
-    evReadiness: false,
-    securityLevel: 'Standard',
-    protocolLevel: 'Standard',
-    publicGathering: false,
-    governmentUse: false,
-    eventUse: false,
     missions: [],
     condition: 'Good',
     assetGrade: 'Premium',
     currentStatus: 'Active',
     address: '',
-    exposure: 'Community',
     strategy: 'fm',
 };
 
@@ -204,12 +245,12 @@ export const useOnboardingStore = create<OnboardingState>()(
             step: 1,
             properties: [],
             portfolioSummary: {
-                totalProperties: 1,
-                totalUnits: 1,
-                totalRentable: 1,
+                totalProperties: 0,
+                totalUnits: 0,
+                totalRentable: 0,
                 totalPersonal: 0,
                 totalMajlis: 0,
-                totalSqFt: 1200,
+                totalSqFt: 0,
                 estimatedACV: 0,
                 recommendedTier: 'Premium',
                 isMixedUsePortfolio: false,
@@ -223,14 +264,20 @@ export const useOnboardingStore = create<OnboardingState>()(
             accountCreated: false,
             valuationResult: null,
             intakeId: null,
+            onboardingSessionId: createOnboardingSessionId(),
             paymentManifest: null,
             paymentMethod: null,
-            companyProfile: {
-                name: '',
-                licenseNumber: '',
-                contactPerson: '',
-                phone: '',
-                email: '',
+            companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
+            signupData: { name: '', email: '', phone: '' },
+            kycUrls: {},
+            ownerAccount: null,
+            proofDocuments: {
+                propertyProof: null,
+                emiratesId: null,
+                passport: null,
+                tradeLicense: null,
+                tenancySupport: null,
+                labels: {}
             },
             propertyData: { ...defaultProperty, id: 'prop-1' },
 
@@ -240,21 +287,24 @@ export const useOnboardingStore = create<OnboardingState>()(
             setIntakeId: (id) => set({ intakeId: id }),
             
             addProperty: (data) => {
-                const newProperty = { 
-                    ...defaultProperty, 
-                    ...data, 
-                    id: `prop-${get().properties.length + 1}` 
-                };
-                set((state) => ({
-                    properties: [...state.properties, newProperty]
+                const newProperty = { ...defaultProperty, ...data, id: `prop-${get().properties.length + 1}` };
+                set((state) => ({ properties: [...state.properties, newProperty] }));
+                get().calculateSummary();
+            },
+
+            bulkAddProperties: (items) => {
+                const currentCount = get().properties.length;
+                const newProperties = items.map((item, index) => ({
+                    ...defaultProperty,
+                    ...item,
+                    id: item.id || `prop-${currentCount + index + 1}`
                 }));
+                set((state) => ({ properties: [...state.properties, ...newProperties] }));
                 get().calculateSummary();
             },
 
             removeProperty: (index) => {
-                set((state) => ({
-                    properties: state.properties.filter((_, i) => i !== index)
-                }));
+                set((state) => ({ properties: state.properties.filter((_, i) => i !== index) }));
                 get().calculateSummary();
             },
 
@@ -267,22 +317,17 @@ export const useOnboardingStore = create<OnboardingState>()(
                 get().calculateSummary();
             },
 
-            bulkAddProperties: (newProps) => {
-                set({ properties: newProps });
-                get().calculateSummary();
-            },
-
             updateCompanyProfile: (data) => set((state) => ({
                 companyProfile: { ...state.companyProfile, ...data }
             })),
             
-            updatePropertyData: (data) => {
-                set((state) => ({
-                    propertyData: { ...state.propertyData, ...data },
-                    properties: state.properties.map((p, i) => i === 0 ? { ...p, ...data } : p)
-                }));
-                get().calculateSummary();
-            },
+            updateSignupData: (data) => set((state) => ({
+                signupData: { ...state.signupData, ...data }
+            })),
+
+            updateKycUrls: (data) => set((state) => ({
+                kycUrls: { ...state.kycUrls, ...data }
+            })),
 
             setSelectedPlan: (selectedPlan) => set({ selectedPlan }),
             toggleAddOn: (id) => set((state) => ({
@@ -297,55 +342,71 @@ export const useOnboardingStore = create<OnboardingState>()(
             setValuationResult: (valuationResult) => set({ valuationResult }),
             setPaymentManifest: (paymentManifest) => set({ paymentManifest }),
             setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+            setOwnerAccount: (ownerAccount) => set({ ownerAccount, accountCreated: !!ownerAccount }),
+            updatePropertyData: (data) => set((state) => ({
+                propertyData: { ...state.propertyData, ...data }
+            })),
+            setProofDocument: (key, file) => set((state) => ({
+                proofDocuments: {
+                    ...state.proofDocuments,
+                    [key]: file,
+                    labels: {
+                        ...state.proofDocuments.labels,
+                        [key]: file?.name || ''
+                    }
+                }
+            })),
 
             calculateSummary: () => {
-                const props = Array.isArray(get().properties) ? get().properties : [];
+                const props = get().properties;
                 const summary: PortfolioSummary = {
                     totalProperties: props.length,
-                    totalUnits: props.reduce((acc, p) => acc + (p.units || 1), 0),
+                    totalUnits: props.reduce((acc, p) => acc + (p.units || 0), 0),
                     totalRentable: props.filter(p => p.useType === 'Rental' || p.useType === 'Mixed').length,
                     totalPersonal: props.filter(p => p.useType === 'Personal').length,
                     totalMajlis: props.filter(p => p.majlis).length,
                     totalSqFt: props.reduce((acc, p) => acc + (p.sqft || 0), 0),
-                    estimatedACV: 0, // Calculated in pricing engine later
+                    estimatedACV: 0,
                     recommendedTier: 'Premium',
                     isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
-                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign' || p.propertyType === 'GOVERNMENT_MAJLIS' || p.propertyType === 'GOVERNMENT_PROPERTY'),
+                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign'),
                 };
-
-                // Logic for tier recommendation
-                if (summary.totalUnits > 100 || summary.isSovereignPortfolio) {
-                    summary.recommendedTier = 'Sovereign Institutional';
-                } else if (summary.totalUnits > 20) {
-                    summary.recommendedTier = 'Institutional';
-                } else {
-                    summary.recommendedTier = 'Premium';
-                }
-
+                if (summary.totalUnits > 100 || summary.isSovereignPortfolio) summary.recommendedTier = 'Sovereign Institutional';
+                else if (summary.totalUnits > 20) summary.recommendedTier = 'Institutional';
                 set({ portfolioSummary: summary });
             },
 
             reset: () => set({
-                step: 1,
-                properties: [],
-                selectedPlan: null,
-                selectedAddOns: [],
-                contractId: null,
-                paymentVerified: false,
-                paymentRequested: false,
-                accountCreated: false,
-                valuationResult: null,
-                paymentManifest: null,
-                paymentMethod: null,
-                companyProfile: {
-                    name: '',
-                    licenseNumber: '',
-                    contactPerson: '',
-                    phone: '',
-                    email: '',
+                step: 1, properties: [], selectedPlan: null, selectedAddOns: [], contractId: null,
+                intakeId: null, onboardingSessionId: createOnboardingSessionId(),
+                paymentVerified: false, paymentRequested: false, accountCreated: false,
+                valuationResult: null, paymentManifest: null, paymentMethod: null,
+                companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
+                signupData: { name: '', email: '', phone: '' }, kycUrls: {},
+                ownerAccount: null,
+                proofDocuments: {
+                    propertyProof: null,
+                    emiratesId: null,
+                    passport: null,
+                    tradeLicense: null,
+                    tenancySupport: null,
+                    labels: {}
                 }
             })
         }),
-        { name: 'bin-group-onboarding-v2' }
+        {
+            name: 'bin-group-onboarding-v2',
+            partialize: (state) => ({
+                ...state,
+                proofDocuments: {
+                    propertyProof: null,
+                    emiratesId: null,
+                    passport: null,
+                    tradeLicense: null,
+                    tenancySupport: null,
+                    labels: state.proofDocuments.labels
+                }
+            })
+        }
     )
 );
