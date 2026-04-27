@@ -257,58 +257,54 @@ export default function SOSFeedPage() {
         ))}
       </List>
 
-      {/* RISK MANAGEMENT / KILL SWITCH (God Mode) */}
+      {/* Verified risk controls */}
       <Box sx={{ mt: 8 }}>
         <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: '#0f172a' }}>
-          🛡️ RISK MANAGEMENT CENTER (GOD MODE)
+          Risk Management Controls
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Rogue Tenant Kill Switch</Typography>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Tenant Access Review</Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Suspension locks all digital keys, app access, and freezes maintenance response.
+                Account restrictions must be handled from verified tenant records with an audit reason. This SOS page does not change user access from a simulated list.
               </Typography>
               <List>
-                {[
-                  { name: 'John Doe', unit: '402', threat: 'Fraudulent Receipt' },
-                  { name: 'Sarah Ahmed', unit: '1205', threat: 'Abusive to Staff' }
-                ].map((tenant, idx) => (
-                  <ListItem key={idx} sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
-                    <ListItemText
-                      primary={tenant.name}
-                      secondary={`Unit ${tenant.unit} - Alert: ${tenant.threat}`}
-                    />
-                    <Button
-                      variant="contained"
-                      color="error"
-                      size="small"
-                      onClick={() => alert(`CRITICAL: Access for ${tenant.name} has been TERMINATED. All digital keys invalidated.`)}
-                    >
-                      SUSPEND ACCOUNT
-                    </Button>
-                  </ListItem>
-                ))}
+                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
+                  <ListItemText
+                    primary="Verified tenant record required"
+                    secondary="Use Tenant Management to review tenancy status, payment records, complaint history, and supporting evidence."
+                  />
+                </ListItem>
+                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
+                  <ListItemText
+                    primary="Audit reason required"
+                    secondary="Any restriction must be linked to an authenticated admin action and preserved in the audit log."
+                  />
+                </ListItem>
               </List>
+              <Button variant="outlined" color="inherit" size="small" disabled>
+                Use Tenant Management for audited restrictions
+              </Button>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Technician Safety Monitor</Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Live GPS tracking and SOS monitoring for field staff in high-rise towers.
+                Live tracking must come from technician location telemetry. This panel does not display simulated field pulses.
               </Typography>
               <Box sx={{ p: 2, bgcolor: '#0f172a', color: '#fff', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: '#10b981', display: 'block' }}>● 14 TECHNICIANS LIVE ON GOOGLE MAPS</Typography>
-                <Typography variant="caption" sx={{ color: '#fff', opacity: 0.7 }}>Last Pulse: {new Date().toLocaleTimeString()}</Typography>
+                <Typography variant="caption" sx={{ color: '#10b981', display: 'block' }}>Telemetry source required</Typography>
+                <Typography variant="caption" sx={{ color: '#fff', opacity: 0.7 }}>Last pulse appears only after a real technician location update.</Typography>
               </Box>
               <Button 
                 variant="outlined" 
                 fullWidth 
                 sx={{ mt: 2 }}
-                onClick={() => alert("Initializing Real-Time GPS Tracking Module...\nSearching for 14 Active Technician Pulses across Dubai Marina and Downtown.")}
+                disabled
               >
-                Open Live GPS Tracker
+                Live tracker pending telemetry
               </Button>
             </Paper>
           </Grid>

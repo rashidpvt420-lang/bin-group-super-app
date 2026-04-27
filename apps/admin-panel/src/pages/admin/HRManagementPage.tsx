@@ -3,7 +3,7 @@ import {
     Container, Typography, Box, Paper, Grid, Stack, Button, 
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
-    IconButton, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem
+    IconButton, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Alert
 } from '@mui/material';
 import { 
     Users, Briefcase, Calendar, Clock, DollarSign, 
@@ -15,7 +15,7 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { auth, functions } from '../../lib/firebase';
 
 export default function HRManagementPage() {
     const { t, tx, isRTL } = useLanguage();
@@ -25,6 +25,7 @@ export default function HRManagementPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState<string | null>(null);
+    const [payrollError, setPayrollError] = useState<string | null>(null);
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -46,6 +47,25 @@ export default function HRManagementPage() {
             case 'INACTIVE': return '#ef4444';
             default: return 'rgba(255,255,255,0.4)';
         }
+    };
+
+    const getPayrollErrorMessage = (err: any) => {
+        const code = err?.code || 'functions/internal';
+        const message = err?.message || 'No additional detail was returned.';
+
+        if (code === 'functions/unauthenticated') {
+            return 'Your admin session expired. Sign in again and retry payslip generation.';
+        }
+        if (code === 'functions/permission-denied') {
+            return 'Your account does not have HR or finance permission to generate payslips.';
+        }
+        if (code === 'functions/failed-precondition') {
+            return 'Payroll email is not configured in Firebase Secrets. Configure SMTP_USER and SMTP_PASS before retrying.';
+        }
+        if (code === 'functions/invalid-argument') {
+            return `Payslip data is incomplete. ${message}`;
+        }
+        return `Payslip could not be generated (${code}). ${message}`;
     };
 
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
@@ -77,6 +97,16 @@ export default function HRManagementPage() {
                     <Tab label="PAYROLL HUB" disabled={!isHRManager} />
                     <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
                 </Tabs>
+
+                {payrollError && (
+                    <Alert
+                        severity="error"
+                        onClose={() => setPayrollError(null)}
+                        sx={{ mb: 3, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#fecaca' }}
+                    >
+                        {payrollError}
+                    </Alert>
+                )}
 
                 {tab === 0 && (
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
@@ -149,7 +179,13 @@ export default function HRManagementPage() {
                                                             disabled={generatingId !== null}
                                                             onClick={async () => {
                                                                 setGeneratingId(s.id);
+                                                                setPayrollError(null);
                                                                 try {
+                                                                    if (!auth.currentUser) {
+                                                                        setPayrollError('Your admin session expired. Sign in again and retry payslip generation.');
+                                                                        return;
+                                                                    }
+                                                                    await auth.currentUser.getIdToken(true);
                                                                     const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
                                                                     await genFn({
                                                                         staffId: s.id,
@@ -162,9 +198,9 @@ export default function HRManagementPage() {
                                                                         deductions: 0
                                                                     });
                                                                     alert("Payslip generated and emailed successfully.");
-                                                                } catch (err) {
+                                                                } catch (err: any) {
                                                                     console.error("Payroll fault:", err);
-                                                                    alert("Institutional Payroll Engine failed.");
+                                                                    setPayrollError(getPayrollErrorMessage(err));
                                                                 } finally {
                                                                     setGeneratingId(null);
                                                                 }

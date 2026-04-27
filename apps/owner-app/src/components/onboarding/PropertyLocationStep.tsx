@@ -1,28 +1,53 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { 
-    Box, Typography, Grid, Paper, alpha, TextField, 
-    InputAdornment, Button, Stack, Divider, Container, Alert
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    Alert,
+    Box,
+    Button,
+    Container,
+    Grid,
+    InputAdornment,
+    Paper,
+    Stack,
+    TextField,
+    Typography,
+    alpha
 } from '@mui/material';
-import { MapPin, Search, Navigation, ArrowRight, ArrowLeft, Crosshair } from 'lucide-react';
-import { useOnboardingStore } from '../../store/onboardingStore';
+import { ArrowLeft, ArrowRight, Crosshair, Navigation, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 
+type GeoPayload = {
+    lat: number;
+    lng: number;
+    address?: string;
+    emirate?: string;
+    city?: string;
+    area?: string;
+    placeId?: string;
+    source?: 'google_maps' | 'title_deed' | 'admin_manual';
+    verified?: boolean;
+};
+
+const UAE_CENTER = { lat: 24.4539, lng: 54.3773 };
+
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
-    const { tx, isRTL } = useLanguage();
+    const { tx } = useLanguage();
+    const activeProperty = properties[0];
+
     const autocompleteRef = useRef<HTMLInputElement>(null);
     const googleAutocompleteRef = useRef<any>(null);
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const markerRef = useRef<any>(null);
     const geocoderRef = useRef<any>(null);
+
     const [locationError, setLocationError] = useState<string | null>(null);
+    const [mapsReady, setMapsReady] = useState(false);
 
-    const activeProperty = properties[0];
-
-    const commitGeoAnchor = (payload: { lat: number; lng: number; address?: string; emirate?: string; city?: string; area?: string; placeId?: string; source?: 'google_maps' | 'title_deed' | 'admin_manual'; verified?: boolean }) => {
+    const commitGeoAnchor = (payload: GeoPayload) => {
         try {
             const geo = buildPersistableGeoAnchor({
                 lat: payload.lat,
@@ -52,10 +77,30 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         }
     };
 
+    const commitAdminReviewGeo = (lat: number, lng: number) => {
+        const emirate = activeProperty?.emirate || 'Dubai';
+        const city = activeProperty?.city || activeProperty?.area || emirate;
+        const area = activeProperty?.area || city;
+        const address = activeProperty?.address?.trim() || `${area}, ${emirate}, UAE`;
+
+        commitGeoAnchor({
+            lat,
+            lng,
+            address,
+            emirate,
+            city,
+            area,
+            source: 'admin_manual',
+            verified: false
+        });
+        setLocationError('We could not detect the area. The pin was saved for admin review.');
+    };
+
     const extractAddressParts = (components: any[] = []) => {
         let emirate = activeProperty?.emirate || '';
         let city = activeProperty?.city || '';
         let area = activeProperty?.area || '';
+
         components.forEach((component) => {
             if (component.types.includes('administrative_area_level_1')) {
                 emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
@@ -67,14 +112,20 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area = component.long_name;
             }
         });
-        return { emirate, city: city || area || emirate, area: area || city || emirate };
+
+        return {
+            emirate,
+            city: city || area || emirate,
+            area: area || city || emirate
+        };
     };
 
     const reverseGeocode = (lat: number, lng: number) => {
         if (!geocoderRef.current) {
-            commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false });
+            commitAdminReviewGeo(lat, lng);
             return;
         }
+
         geocoderRef.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
             if (status === 'OK' && results?.[0]) {
                 const parts = extractAddressParts(results[0].address_components || []);
@@ -87,9 +138,10 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     source: 'google_maps',
                     verified: true
                 });
-            } else {
-                commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false });
+                return;
             }
+
+            commitAdminReviewGeo(lat, lng);
         });
     };
 
@@ -98,6 +150,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setLocationError('Please select the property location from Google Maps.');
             return;
         }
+
         const position = { lat, lng };
         mapInstanceRef.current?.setCenter(position);
         markerRef.current?.setPosition(position);
@@ -105,87 +158,108 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     };
 
     useEffect(() => {
-        let autocomplete: any = null;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+        let cancelled = false;
 
-        const initAutocomplete = async () => {
-            if (autocompleteRef.current) {
-                try {
-                    if (!(window as any).google?.maps) {
-                        setLocationError('Google Maps is still loading. Please retry the location search.');
+        const waitForGoogleMaps = () => new Promise<any>((resolve, reject) => {
+            const startedAt = Date.now();
+            const poll = () => {
+                if (cancelled) return;
+                const googleMaps = (window as any).google?.maps;
+                if (googleMaps?.importLibrary) {
+                    resolve(googleMaps);
+                    return;
+                }
+                if (Date.now() - startedAt > 8000) {
+                    reject(new Error('Google Maps did not finish loading.'));
+                    return;
+                }
+                retryTimer = setTimeout(poll, 250);
+            };
+            poll();
+        });
+
+        const initMap = async () => {
+            try {
+                const googleMaps = await waitForGoogleMaps();
+                const { Autocomplete } = await googleMaps.importLibrary('places') as any;
+                const { Map } = await googleMaps.importLibrary('maps') as any;
+                const { Marker } = await googleMaps.importLibrary('marker') as any;
+
+                if (!autocompleteRef.current || !mapRef.current || cancelled) return;
+
+                const initialPosition = activeProperty?.location || UAE_CENTER;
+                geocoderRef.current = new googleMaps.Geocoder();
+                mapInstanceRef.current = new Map(mapRef.current, {
+                    center: initialPosition,
+                    zoom: activeProperty?.location ? 16 : 7,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    fullscreenControl: true
+                });
+
+                markerRef.current = new Marker({
+                    map: mapInstanceRef.current,
+                    position: initialPosition,
+                    draggable: true,
+                    title: 'Property geo-anchor'
+                });
+
+                markerRef.current.addListener('dragend', () => {
+                    const position = markerRef.current.getPosition();
+                    moveMarker(position.lat(), position.lng());
+                });
+
+                mapInstanceRef.current.addListener('click', (event: any) => {
+                    if (event.latLng) moveMarker(event.latLng.lat(), event.latLng.lng());
+                });
+
+                const autocomplete = new Autocomplete(autocompleteRef.current, {
+                    componentRestrictions: { country: 'ae' },
+                    fields: ['address_components', 'geometry', 'formatted_address', 'place_id']
+                });
+
+                autocomplete.addListener('place_changed', () => {
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry) {
+                        setLocationError('Please select the property location from Google Maps.');
                         return;
                     }
-                    const { Autocomplete } = await (window as any).google.maps.importLibrary("places") as any;
-                    const { Map } = await (window as any).google.maps.importLibrary("maps") as any;
-                    const { Marker } = await (window as any).google.maps.importLibrary("marker") as any;
-                    
-                    autocomplete = new Autocomplete(autocompleteRef.current, {
-                        componentRestrictions: { country: "ae" },
-                        fields: ["address_components", "geometry", "formatted_address", "place_id"],
-                        types: ["address"]
+
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
+                    const parts = extractAddressParts(place.address_components || []);
+
+                    commitGeoAnchor({
+                        lat,
+                        lng,
+                        address: place.formatted_address || activeProperty?.address,
+                        placeId: place.place_id,
+                        ...parts,
+                        source: 'google_maps',
+                        verified: true
                     });
 
-                    geocoderRef.current = new (window as any).google.maps.Geocoder();
+                    mapInstanceRef.current?.setZoom(16);
+                    markerRef.current?.setPosition({ lat, lng });
+                    mapInstanceRef.current?.setCenter({ lat, lng });
+                });
 
-                    if (mapRef.current && !mapInstanceRef.current) {
-                        const initial = activeProperty?.location || { lat: 24.4539, lng: 54.3773 };
-                        mapInstanceRef.current = new Map(mapRef.current, {
-                            center: initial,
-                            zoom: activeProperty?.location ? 16 : 7,
-                            mapTypeControl: false,
-                            streetViewControl: false,
-                            fullscreenControl: true
-                        });
-                        markerRef.current = new Marker({
-                            map: mapInstanceRef.current,
-                            position: initial,
-                            draggable: true,
-                            title: 'Property geo-anchor'
-                        });
-                        markerRef.current.addListener('dragend', () => {
-                            const position = markerRef.current.getPosition();
-                            moveMarker(position.lat(), position.lng());
-                        });
-                        mapInstanceRef.current.addListener('click', (event: any) => {
-                            if (event.latLng) moveMarker(event.latLng.lat(), event.latLng.lng());
-                        });
-                    }
-
-                    autocomplete.addListener("place_changed", () => {
-                        const place = autocomplete.getPlace();
-                        if (!place.geometry) return;
-
-                        const address = place.formatted_address;
-                        const parts = extractAddressParts(place.address_components || []);
-                        const lat = place.geometry.location.lat();
-                        const lng = place.geometry.location.lng();
-
-                        commitGeoAnchor({
-                            address,
-                            placeId: place.place_id,
-                            lat,
-                            lng,
-                            ...parts,
-                            source: 'google_maps',
-                            verified: true
-                        });
-                        mapInstanceRef.current?.setZoom(16);
-                        markerRef.current?.setPosition({ lat, lng });
-                        mapInstanceRef.current?.setCenter({ lat, lng });
-                    });
-                    
-                    googleAutocompleteRef.current = autocomplete;
-                } catch (e) {
-                    console.error("Google Autocomplete Init Failed:", e);
-                    setLocationError('We could not verify this location. Admin review is required.');
-                }
+                googleAutocompleteRef.current = autocomplete;
+                setMapsReady(true);
+            } catch (err) {
+                console.error('Google Maps initialization failed:', err);
+                setLocationError('Map could not load. Please check your connection or contact support.');
             }
         };
 
-        initAutocomplete();
+        initMap();
 
         return () => {
+            cancelled = true;
+            if (retryTimer) clearTimeout(retryTimer);
             if (googleAutocompleteRef.current) {
-                (window as any).google.maps.event.clearInstanceListeners(googleAutocompleteRef.current);
+                (window as any).google?.maps?.event?.clearInstanceListeners(googleAutocompleteRef.current);
             }
         };
     }, []);
@@ -195,6 +269,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setLocationError('Location permission is required to anchor this property.');
             return;
         }
+
         navigator.geolocation.getCurrentPosition(
             (position) => moveMarker(position.coords.latitude, position.coords.longitude),
             () => setLocationError('Location permission is required to anchor this property.'),
@@ -202,7 +277,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         );
     };
 
-    const canProceed = activeProperty?.address && activeProperty?.emirate && activeProperty?.geo?.lat && activeProperty?.geo?.lng;
+    const canProceed = Boolean(activeProperty?.address && activeProperty?.emirate && activeProperty?.geo?.lat && activeProperty?.geo?.lng);
 
     return (
         <Box sx={{ py: 4 }}>
@@ -216,7 +291,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             </Box>
 
             <Container maxWidth="md">
-                <Paper sx={{ p: 6, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <Stack spacing={4}>
                         <Box>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>
@@ -230,17 +305,17 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             <TextField
                                 fullWidth
                                 inputRef={autocompleteRef}
-                                placeholder="Search for property address or area in UAE..."
+                                placeholder="Search for property address, building, or area in UAE..."
                                 value={activeProperty?.address || ''}
-                                onChange={(e) => updateProperty(0, { address: e.target.value })}
+                                onChange={(event) => updateProperty(0, { address: event.target.value })}
                                 InputProps={{
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <Search color={binThemeTokens.gold} size={20} />
                                         </InputAdornment>
                                     ),
-                                    sx: { 
-                                        borderRadius: 3, 
+                                    sx: {
+                                        borderRadius: 3,
                                         bgcolor: 'rgba(255,255,255,0.02)',
                                         '& fieldset': { borderColor: 'rgba(198,167,94,0.2)' }
                                     }
@@ -250,6 +325,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 variant="outlined"
                                 startIcon={<Crosshair size={16} />}
                                 onClick={handleUseCurrentLocation}
+                                disabled={!mapsReady}
                                 sx={{ mt: 2, color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.35), fontWeight: 900 }}
                             >
                                 Use Current Location
@@ -284,21 +360,21 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                         </Grid>
 
                         {activeProperty?.geo && (
-                            <Box sx={{ 
-                                p: 3, 
-                                borderRadius: 3, 
-                                bgcolor: alpha('#10b981', 0.05), 
-                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                            <Box sx={{
+                                p: 3,
+                                borderRadius: 3,
+                                bgcolor: alpha(activeProperty.geo.verified ? '#10b981' : '#f59e0b', 0.05),
+                                border: `1px solid ${activeProperty.geo.verified ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 2
                             }}>
-                                <Navigation color="#10b981" size={24} />
+                                <Navigation color={activeProperty.geo.verified ? '#10b981' : '#f59e0b'} size={24} />
                                 <Box>
-                                    <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>
-                                        GEO-DATA LOCKED
+                                    <Typography variant="body2" sx={{ color: activeProperty.geo.verified ? '#10b981' : '#f59e0b', fontWeight: 900 }}>
+                                        {activeProperty.geo.verified ? 'GEO-DATA LOCKED' : 'GEO-DATA SAVED FOR ADMIN REVIEW'}
                                     </Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(16, 185, 129, 0.6)' }}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)' }}>
                                         Coordinates: {activeProperty.geo.lat.toFixed(6)}, {activeProperty.geo.lng.toFixed(6)} | {activeProperty.geo.geohash}
                                     </Typography>
                                 </Box>
@@ -307,24 +383,26 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     </Stack>
 
                     <Box sx={{ mt: 6, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                        <Button 
-                            variant="outlined" 
-                            size="large" 
+                        <Button
+                            variant="outlined"
+                            size="large"
                             onClick={onBack}
                             startIcon={<ArrowLeft />}
-                            sx={{ borderRadius: 100, px: 4, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+                            sx={{ borderRadius: 100, px: 4, color: 'rgba(255,255,255,0.72)', borderColor: 'rgba(255,255,255,0.16)' }}
                         >
                             BACK
                         </Button>
-                        <Button 
-                            variant="contained" 
-                            size="large" 
+                        <Button
+                            variant="contained"
+                            size="large"
                             onClick={onNext}
                             disabled={!canProceed}
                             endIcon={<ArrowRight />}
-                            sx={{ 
-                                borderRadius: 100, px: 6, 
-                                bgcolor: binThemeTokens.gold, color: '#000', 
+                            sx={{
+                                borderRadius: 100,
+                                px: 6,
+                                bgcolor: binThemeTokens.gold,
+                                color: '#000',
                                 fontWeight: 950,
                                 '&:hover': { bgcolor: '#E6C77A' }
                             }}

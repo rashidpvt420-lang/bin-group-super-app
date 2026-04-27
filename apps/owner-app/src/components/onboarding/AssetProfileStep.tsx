@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 import { 
     Home, Building2, Building, Hotel, Landmark, Gem, 
-    Briefcase, Warehouse, ShieldCheck, Hash, Scaling, Calendar, ArrowRight, Scan, Upload, FileText
+    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -12,7 +12,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { storage, ref, uploadBytes, getDownloadURL, functions } from '../../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 
-const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
+const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty, addProperty } = useOnboardingStore();
     const { tx } = useLanguage();
     const [scanning, setScanning] = useState(false);
@@ -63,13 +63,39 @@ const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         { id: 'Villa', label: 'Villa', icon: <Home size={24} /> },
         { id: 'Apartment', label: 'Apartment', icon: <Building size={24} /> },
         { id: 'Residential Building', label: 'Residential Building', icon: <Building2 size={24} /> },
-        { id: 'Office', label: 'Office', icon: <Briefcase size={24} /> },
         { id: 'Commercial Building', label: 'Commercial Building', icon: <Warehouse size={24} /> },
-        { id: 'HOTEL', label: 'Hotel', icon: <Hotel size={24} />, premium: true },
-        { id: 'GOVERNMENT_MAJLIS', label: 'Government Majlis', icon: <Landmark size={24} />, premium: true },
-        { id: 'GOVERNMENT_PROPERTY', label: 'Government Property', icon: <ShieldCheck size={24} />, premium: true },
+        { id: 'Office', label: 'Office', icon: <Briefcase size={24} /> },
+        { id: 'Retail Center', label: 'Retail Center', icon: <Building size={24} /> },
+        { id: 'Mall', label: 'Mall', icon: <Building2 size={24} />, premium: true },
+        { id: 'Hotel', label: 'Hotel', icon: <Hotel size={24} />, premium: true, useType: 'hospitality' },
+        { id: 'Hospital', label: 'Hospital', icon: <ShieldCheck size={24} />, premium: true, useType: 'healthcare' },
+        { id: 'Clinic', label: 'Clinic', icon: <ShieldCheck size={24} />, premium: true, useType: 'healthcare' },
+        { id: 'School', label: 'School', icon: <Landmark size={24} />, premium: true, useType: 'education' },
+        { id: 'Warehouse', label: 'Warehouse', icon: <Warehouse size={24} /> },
+        { id: 'Labour Camp', label: 'Labour Camp', icon: <Building2 size={24} />, premium: true },
+        { id: 'Government Property', label: 'Government Property', icon: <ShieldCheck size={24} />, premium: true, ownerType: 'government' },
+        { id: 'Government Majlis', label: 'Government Majlis', icon: <Landmark size={24} />, premium: true, ownerType: 'government', majlis: true, majlisType: 'government' },
+        { id: 'Private Majlis', label: 'Private Majlis', icon: <Landmark size={24} />, premium: true, majlis: true, majlisType: 'private' },
         { id: 'Mixed-Use Tower', label: 'Mixed-Use Tower', icon: <Gem size={24} />, premium: true },
+        { id: 'Skyscraper', label: 'Skyscraper', icon: <Building2 size={24} />, premium: true },
+        { id: 'Stadium', label: 'Stadium', icon: <Gem size={24} />, premium: true, useType: 'event' },
+        { id: 'Sports Complex', label: 'Sports Complex', icon: <Gem size={24} />, premium: true, useType: 'event' },
+        { id: 'Event Venue', label: 'Event Venue', icon: <Gem size={24} />, premium: true, useType: 'event' },
+        { id: 'Resort', label: 'Resort', icon: <Hotel size={24} />, premium: true, useType: 'hospitality' },
+        { id: 'Industrial Property', label: 'Industrial Property', icon: <Warehouse size={24} /> },
+        { id: 'Staff Accommodation', label: 'Staff Accommodation', icon: <Building2 size={24} /> },
+        { id: 'Farm / Estate', label: 'Farm / Estate', icon: <Home size={24} /> },
     ];
+
+    const selectPropertyType = (type: typeof types[number]) => {
+        updateProperty(0, {
+            propertyType: type.id,
+            majlis: Boolean((type as any).majlis),
+            majlisType: (type as any).majlisType || 'none',
+            ownerType: (type as any).ownerType || activeProperty?.ownerType || 'individual',
+            useType: (type as any).useType || activeProperty?.useType || 'residential'
+        });
+    };
 
     const canProceed = activeProperty?.propertyType && activeProperty?.units > 0 && activeProperty?.sqft > 0;
 
@@ -96,7 +122,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                 {types.map((type) => (
                                     <Grid item xs={12} sm={4} key={type.id}>
                                         <Paper 
-                                            onClick={() => updateProperty(0, { propertyType: type.id })}
+                                            onClick={() => selectPropertyType(type)}
                                             sx={{ 
                                                 p: 2, 
                                                 cursor: 'pointer',
@@ -195,14 +221,28 @@ const AssetProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                     </Grid>
                                 </Grid>
 
-                                <Button 
-                                    variant="contained" fullWidth size="large" 
-                                    onClick={onNext} disabled={!canProceed}
-                                    endIcon={<ArrowRight />}
-                                    sx={{ mt: 2, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                                >
-                                    CONTINUE
-                                </Button>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                    {onBack && (
+                                        <Button
+                                            variant="outlined"
+                                            fullWidth
+                                            size="large"
+                                            onClick={onBack}
+                                            startIcon={<ArrowLeft />}
+                                            sx={{ mt: 2, borderRadius: 4, color: 'rgba(255,255,255,0.72)', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}
+                                        >
+                                            BACK
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="contained" fullWidth size="large"
+                                        onClick={onNext} disabled={!canProceed}
+                                        endIcon={<ArrowRight />}
+                                        sx={{ mt: 2, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                                    >
+                                        CONTINUE
+                                    </Button>
+                                </Stack>
                             </Stack>
                         </Paper>
                     </Grid>

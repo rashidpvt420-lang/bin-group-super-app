@@ -51,7 +51,7 @@ const PropertyOnboardingPage = () => {
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
             case 1: return <CompanyProfileStep onNext={nextStep} />;
-            case 2: return <AssetProfileStep onNext={nextStep} />;
+            case 2: return <AssetProfileStep onNext={nextStep} onBack={prevStep} />;
             case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
             case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
             case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
@@ -83,6 +83,15 @@ const PropertyOnboardingPage = () => {
                             BIN GROUP
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Button
+                                component="a"
+                                href="/"
+                                variant="text"
+                                size="small"
+                                sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'none', fontWeight: 800 }}
+                            >
+                                Back to website
+                            </Button>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <ShieldIcon color="#10b981" size={18} />
                                 <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>INSTITUTIONAL ONBOARDING</Typography>

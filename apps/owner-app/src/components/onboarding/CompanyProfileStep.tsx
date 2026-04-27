@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-    Box, Typography, Grid, Paper, TextField, Button, Stack, Container 
+    Box, Typography, Grid, Paper, TextField, Button, Stack, Container, Divider
 } from '@mui/material';
 import { Building2, User, Phone, Mail, FileText, ArrowRight } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -79,5 +79,4 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     );
 };
 
-import { Divider } from '@mui/material';
 export default CompanyProfileStep;

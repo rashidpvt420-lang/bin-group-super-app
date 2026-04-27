@@ -72,6 +72,7 @@ export const isValidLatLng = (lat: unknown, lng: unknown) => {
 export const buildGeoAnchor = (input: GeoInput) => {
     const lat = parseCoordinate(input.lat);
     const lng = parseCoordinate(input.lng);
+
     if (lat === null || lng === null || !isValidLatLng(lat, lng)) {
         throw new Error('Please select the property location from Google Maps.');
     }

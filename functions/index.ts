@@ -97,6 +97,25 @@ const openAiKey = defineSecret("OPENAI_API_KEY");
 const smtpUserSecret = defineSecret("SMTP_USER");
 const smtpPassSecret = defineSecret("SMTP_PASS");
 
+const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase();
+
+async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>) {
+    const token = authContext?.token || {};
+    const tokenRole = normalizeRole(token.role || token.userRole || token.primaryRole);
+    if (token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole)) {
+        return true;
+    }
+
+    const userDoc = await db.collection("users").doc(authContext.uid).get();
+    const userData = userDoc.data() || {};
+    const firestoreRole = normalizeRole(userData.role || userData.userRole || userData.primaryRole);
+    return userData.isAdmin === true ||
+        userData.admin === true ||
+        userData.superAdmin === true ||
+        userData.super_admin === true ||
+        allowedRoles.has(firestoreRole);
+}
+
 // ─── [V7.1] SOVEREIGN PRESTIGE INFRASTRUCTURE ─────────────────────────────────────
 
 export const analyzeTitleDeed = onCall({
@@ -124,14 +143,37 @@ export const analyzeTitleDeed = onCall({
 export const generateAndEmailPayslip = onCall({
     cors: true,
     memory: "512MiB",
-    timeoutSeconds: 60
+    timeoutSeconds: 60,
+    secrets: [smtpUserSecret, smtpPassSecret]
 }, async (request) => {
     if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Auth required.");
+        throw new HttpsError("unauthenticated", "Admin sign-in is required before generating payslips.");
     }
 
-    const { staffId, payPeriod, staffEmail, staffName, basicSalary, allowances, overtime, deductions } = request.data;
-    const netSalary = (basicSalary || 0) + (allowances || 0) + (overtime || 0) - (deductions || 0);
+    const hasPayrollAccess = await hasCallableRoleAccess(
+        request.auth,
+        new Set(["admin", "super_admin", "ceo", "hr_manager", "finance_admin"])
+    );
+    if (!hasPayrollAccess) {
+        throw new HttpsError("permission-denied", "HR or finance admin access is required to generate payslips.");
+    }
+
+    const { staffId, payPeriod, staffEmail, staffName, basicSalary, allowances, overtime, deductions } = request.data || {};
+    if (!staffId || !payPeriod || !staffEmail || !staffName) {
+        throw new HttpsError("invalid-argument", "Staff name, staff email, staff ID, and pay period are required.");
+    }
+
+    const smtpUser = smtpUserSecret.value();
+    const smtpPass = smtpPassSecret.value();
+    if (!smtpUser || !smtpPass) {
+        throw new HttpsError("failed-precondition", "Payroll email credentials are not configured.");
+    }
+
+    const safeBasicSalary = Number(basicSalary) || 0;
+    const safeAllowances = Number(allowances) || 0;
+    const safeOvertime = Number(overtime) || 0;
+    const safeDeductions = Number(deductions) || 0;
+    const netSalary = safeBasicSalary + safeAllowances + safeOvertime - safeDeductions;
 
     try {
         const pdfUrl = await generatePayslipPDF({
@@ -140,26 +182,25 @@ export const generateAndEmailPayslip = onCall({
             payPeriod,
             paymentDate: new Date().toLocaleDateString(),
             position: "Field Operations Specialist", // Dynamic in real usage
-            basicSalary,
-            allowances,
-            overtime,
-            deductions,
+            basicSalary: safeBasicSalary,
+            allowances: safeAllowances,
+            overtime: safeOvertime,
+            deductions: safeDeductions,
             netSalary
         });
 
-        // Email logic
         const transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
             port: 465,
             secure: true,
             auth: {
-                user: "Ceo@bin-groups.com", // Example institutional email
-                pass: "placeholder-pass" // In real usage, use Secret
+                user: smtpUser,
+                pass: smtpPass
             }
         });
 
         await transporter.sendMail({
-            from: '"BIN GROUP HR" <Ceo@bin-groups.com>',
+            from: `"BIN GROUP HR" <${smtpUser}>`,
             to: staffEmail,
             subject: `Institutional Payslip - ${payPeriod}`,
             html: `
@@ -176,9 +217,12 @@ export const generateAndEmailPayslip = onCall({
         });
 
         return { success: true, pdfUrl };
-    } catch (err) {
+    } catch (err: any) {
         console.error("Payslip engine fault:", err);
-        throw new HttpsError("internal", "Payroll generation engine unavailable.");
+        if (err instanceof HttpsError) {
+            throw err;
+        }
+        throw new HttpsError("internal", "Payroll generation or email delivery failed. Check function logs for PDF or SMTP details.");
     }
 });
 const PRESTIGE_FOOTER = `
@@ -211,14 +255,17 @@ function wrapInLuxuryTemplate(content: string, subject: string) {
  */
 export const institutionalRepairTrigger = onCall({
     cors: true,
-    enforceAppCheck: true,
 }, async (request) => {
     // 1. Admin Auth Check
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Sovereign Admin credentials required.");
     }
-    if (!request.auth.token.admin && !request.auth.token.super_admin) {
-        throw new HttpsError("permission-denied", "Sovereign Admin credentials required.");
+    const hasRepairAccess = await hasCallableRoleAccess(
+        request.auth,
+        new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "support_admin"])
+    );
+    if (!hasRepairAccess) {
+        throw new HttpsError("permission-denied", "Admin repair access is required.");
     }
 
     const dryRun = request.data.dryRun !== false; // Default to true for safety

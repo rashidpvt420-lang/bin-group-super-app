@@ -322,7 +322,7 @@ const OwnerLandingPage: React.FC = () => {
                             <Stack spacing={4}>
                                 <TextField
                                     fullWidth
-                                    label="Administrative Email"
+                                    label="Email Address"
                                     variant="outlined"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
