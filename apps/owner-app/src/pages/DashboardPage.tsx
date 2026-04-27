@@ -31,6 +31,7 @@ import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 import OwnerReportGenerator from '../components/OwnerReportGenerator';
 import CeoContactButtons from '../components/CeoContactButtons';
+import { SovereignSupportChat } from '@bin/shared';
 
 export default function DashboardPage() {
     const { user, role } = useRole();
@@ -625,6 +626,7 @@ export default function DashboardPage() {
               <CeoContactButtons />
           </Box>
       </Box>
+      <SovereignSupportChat role="owner" />
     </Container>
   );
 }
