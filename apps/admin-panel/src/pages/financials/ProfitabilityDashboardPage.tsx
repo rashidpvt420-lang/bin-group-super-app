@@ -105,7 +105,7 @@ export default function ProfitabilityDashboardPage() {
                                     <TableRow key={t.id}>
                                         <TableCell sx={{ opacity: 0.7 }}>{t.createdAt?.toDate().toLocaleDateString()}</TableCell>
                                         <TableCell><Chip label={t.category?.toUpperCase()} size="small" variant="outlined" /></TableCell>
-                                        <TableCell fontWeight="700">{t.description}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t.description}</TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 900, color: t.type === 'credit' ? '#10b981' : '#ef4444' }}>
                                             {t.type === 'credit' ? '+' : '-'} AED {t.amount?.toLocaleString()}
                                         </TableCell>
