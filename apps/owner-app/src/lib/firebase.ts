@@ -32,10 +32,20 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
+// [V8] OFFLINE PERSISTENCE PROTOCOL
+// Only enable if not already started to avoid initialization crashes
 if (typeof window !== 'undefined') {
-    enableIndexedDbPersistence(db).catch((error) => {
-        console.warn('[FIREBASE] Offline persistence unavailable:', error?.code || error?.message || error);
-    });
+    (async () => {
+        try {
+            await enableIndexedDbPersistence(db);
+        } catch (err: any) {
+            if (err.code === 'failed-precondition') {
+                console.warn('[FIREBASE] Persistence failed: Multiple tabs open.');
+            } else if (err.code === 'unimplemented') {
+                console.warn('[FIREBASE] Persistence unsupported by browser.');
+            }
+        }
+    })();
 }
 
 // Regionalized Functions
