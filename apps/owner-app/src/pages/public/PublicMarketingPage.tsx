@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { ArrowRight, Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
 
@@ -136,7 +136,6 @@ const servicePlans = [
 
 export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
     const params = useParams();
-    const navigate = useNavigate();
     const key = page === 'dynamic' ? params.page || 'home' : page;
     const content = key === 'home' ? null : pageContent[key || ''];
 
@@ -156,11 +155,14 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
                 <Coverage />
                 {(key === 'contact' || key === 'request-demo' || key === 'home') && <DemoForm />}
                 <Box sx={{ pt: 5, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Button onClick={() => navigate('/onboarding')} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
+                    <Button component="a" href="/request-demo" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
                         Request Contract
                     </Button>
-                    <Button onClick={() => navigate('/gateway')} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
+                    <Button component="a" href="/owners" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
                         View Platform
+                    </Button>
+                    <Button component="a" href="/onboarding" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
+                        Onboard Your Property
                     </Button>
                 </Box>
             </Container>
@@ -169,20 +171,19 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
 }
 
 function MarketingNav() {
-    const navigate = useNavigate();
     return (
         <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,0.84)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(198,167,94,0.18)' }}>
             <Container maxWidth="xl" sx={{ py: 1.4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                <Stack direction="row" alignItems="center" spacing={1.5} onClick={() => navigate('/')} sx={{ cursor: 'pointer' }}>
+                <Stack component="a" href="/" direction="row" alignItems="center" spacing={1.5} sx={{ cursor: 'pointer', color: '#FFF', textDecoration: 'none' }}>
                     <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} onError={(event: any) => { event.currentTarget.style.display = 'none'; }} />
                     <Typography variant="h6" fontWeight="950">BIN-<Box component="span" sx={{ color: binThemeTokens.gold }}>GROUPS</Box></Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', md: 'flex' } }}>
                     {['owners', 'tenants', 'maintenance', 'security', 'contact'].map((item) => (
-                        <Button key={item} onClick={() => navigate(`/${item}`)} sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 800, textTransform: 'capitalize' }}>{item.replace('-', ' ')}</Button>
+                        <Button key={item} component="a" href={`/${item}`} sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 800, textTransform: 'capitalize' }}>{item.replace('-', ' ')}</Button>
                     ))}
                 </Stack>
-                <Button onClick={() => navigate('/request-demo')} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                <Button component="a" href="/request-demo" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                     Request Demo
                 </Button>
             </Container>
@@ -191,7 +192,6 @@ function MarketingNav() {
 }
 
 function HomeHero() {
-    const navigate = useNavigate();
     return (
         <Box sx={{ minHeight: { xs: '78vh', md: '86vh' }, display: 'flex', alignItems: 'center', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(198,167,94,0.16)' }}>
             <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(198,167,94,0.16), rgba(0,0,0,0.12) 38%, rgba(20,20,22,0.92))' }} />
@@ -207,11 +207,14 @@ function HomeHero() {
                             From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties, and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers, payments, documents, contracts, and AI design in one verified command system.
                         </Typography>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                            <Button onClick={() => navigate('/onboarding')} endIcon={<ArrowRight />} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
+                            <Button component="a" href="/request-demo" endIcon={<ArrowRight />} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
                                 Request Contract
                             </Button>
-                            <Button onClick={() => navigate('/gateway')} variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
+                            <Button component="a" href="/owners" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
                                 View Platform
+                            </Button>
+                            <Button component="a" href="/onboarding" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
+                                Onboard Your Property
                             </Button>
                         </Stack>
                     </Grid>

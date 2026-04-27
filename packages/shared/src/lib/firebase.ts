@@ -5,12 +5,11 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import type { Auth } from 'firebase/auth';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import type { FirebaseStorage } from 'firebase/storage';
-import { getAnalytics } from 'firebase/analytics';
 import type { Analytics } from 'firebase/analytics';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import type { Functions } from 'firebase/functions';
 import { 
-    getFirestore, connectFirestoreEmulator, collection, enableIndexedDbPersistence,
+    getFirestore, connectFirestoreEmulator, collection,
     doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, deleteDoc
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
@@ -63,21 +62,7 @@ console.log("💎 [BIN-INIT] Initializing Functions...");
 export const functions: Functions = getFunctions(_app);
 console.log("💎 [BIN-INIT] Functions secured.");
 
-console.log("💎 [BIN-INIT] Starting persistence check...");
-// 🌐 Offline Persistence
-if (typeof window !== 'undefined') {
-    console.log("💎 [BIN-INIT] Enabling IndexedDB Persistence...");
-    enableIndexedDbPersistence(_db).then(() => {
-        console.log("💎 [BIN-INIT] Persistence enabled.");
-    }).catch((err: any) => {
-        console.log("💎 [BIN-INIT] Persistence skipped/error:", err.code);
-        if (err.code === 'failed-precondition') {
-            console.warn('⚠️ [FIREBASE] Persistence locked (multiple tabs)');
-        } else if (err.code === 'unimplemented') {
-            console.warn('⚠️ [FIREBASE] Persistence unsupported');
-        }
-    });
-}
+console.log("💎 [BIN-INIT] Persistence deferred until an authenticated offline workflow requests it.");
 console.log("💎 [BIN-INIT] Script evaluation reaching emulator section...");
 
 // ✅ Emulator Mesh
@@ -99,13 +84,18 @@ if (typeof window !== 'undefined' &&
 
 // 📊 Analytics (Resilient)
 let _analytics: Analytics | null = null;
-if (typeof window !== 'undefined') {
-    try {
-        _analytics = getAnalytics(_app);
-        console.log("💎 [BIN-INIT] Analytics secured.");
-    } catch (err) {
-        console.warn("⚠️ [BIN-INIT] Analytics initialization skipped (Safe).");
-    }
+const measurementId = (firebaseConfig as { measurementId?: string }).measurementId;
+if (typeof window !== 'undefined' && measurementId) {
+    import('firebase/analytics')
+        .then(({ getAnalytics }) => {
+            _analytics = getAnalytics(_app);
+            console.log("💎 [BIN-INIT] Analytics secured.");
+        })
+        .catch(() => {
+            console.warn("⚠️ [BIN-INIT] Analytics initialization skipped (Safe).");
+        });
+} else {
+    console.log("💎 [BIN-INIT] Analytics skipped: no measurementId configured.");
 }
 export const analytics = _analytics;
 
@@ -113,7 +103,6 @@ export { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, whe
 
 // Finalized App Singleton Registry
 export default app;
-
 
 
 

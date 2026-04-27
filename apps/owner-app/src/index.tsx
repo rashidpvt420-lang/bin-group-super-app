@@ -49,13 +49,16 @@ function BootSignal() {
 // 🏁 [BIN-METRICS] Start Performance Timer
 const BOOT_START = Date.now();
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement);
+const mountApp = () => {
+    const rootElement = document.getElementById('root');
 
-    // [STABILITY] Ensuring persistent PWA lifecycle for FCM Push Notifications
+    if (!rootElement) {
+        console.error('[BIN-SYSTEM] Critical Mount Error: #root element missing from DOM.');
+        return;
+    }
 
     try {
+        const root = ReactDOM.createRoot(rootElement);
         root.render(
             <React.StrictMode>
                 <BootSignal />
@@ -64,10 +67,15 @@ if (rootElement) {
                 </ErrorBoundary>
             </React.StrictMode>
         );
-        // [BIN-SAFETY] Handshake successful if code reaches here
         const bootTime = Date.now() - BOOT_START;
         console.log(`💎 [BOOT] Sovereign Core active in ${bootTime}ms`);
     } catch (err) {
         console.error('[BIN-SYSTEM] Critical Mount Error:', err);
     }
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountApp, { once: true });
+} else {
+    mountApp();
 }

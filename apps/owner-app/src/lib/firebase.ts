@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, 
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, 
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion, enableIndexedDbPersistence
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -29,24 +29,9 @@ try {
 }
 
 const db = getFirestore(app);
+
 const auth = getAuth(app);
 const storage = getStorage(app);
-
-// [V8] OFFLINE PERSISTENCE PROTOCOL
-// Only enable if not already started to avoid initialization crashes
-if (typeof window !== 'undefined') {
-    (async () => {
-        try {
-            await enableIndexedDbPersistence(db);
-        } catch (err: any) {
-            if (err.code === 'failed-precondition') {
-                console.warn('[FIREBASE] Persistence failed: Multiple tabs open.');
-            } else if (err.code === 'unimplemented') {
-                console.warn('[FIREBASE] Persistence unsupported by browser.');
-            }
-        }
-    })();
-}
 
 // Regionalized Functions
 const PRIMARY_REGION = "europe-west3";
