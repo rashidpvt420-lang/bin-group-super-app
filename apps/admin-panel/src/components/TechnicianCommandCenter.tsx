@@ -8,7 +8,6 @@ import {
     Battery, 
     AlertTriangle,
     Clock,
-    User,
     ChevronRight,
     Search,
     Filter,

@@ -7,8 +7,7 @@ import {
 } from '@mui/material';
 import { 
     Sparkles, Search, ChevronRight, Filter, 
-    CheckCircle2, Clock, XCircle, CreditCard,
-    Layout, Home, User
+    CheckCircle2, Clock, XCircle, CreditCard
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, orderBy, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
