@@ -17,10 +17,10 @@
     <link rel="apple-touch-icon" href="/logo.png" />
 
     <!-- SEO & Institutional Branding -->
-    <title>BIN-Groups | Institutional Asset OS</title>
-    <meta name="description" content="The No-Call Infrastructure for UAE Real Estate. 100% Data Sovereignty and Self-healing property management." />
+    <title>BIN-GROUPS | Real-Time Property Operations OS for the UAE</title>
+    <meta name="description" content="BIN-GROUPS connects UAE property owners, tenants, technicians, brokers, payments, documents, contracts, and AI design in one verified real-time operations system." />
     <meta property="og:title" content="BIN-Groups | Institutional Asset OS" />
-    <meta property="og:description" content="Direct-to-Bank Integrity. RERA Escrow Compliance. The Operating System for UAE Real Estate." />
+    <meta property="og:description" content="The real-time property operations OS for villas, towers, malls, hospitals, hotels, stadiums, Majlis operations, and government properties across the UAE." />
     <meta property="og:image" content="https://bin-groups.com/logo.png" />
     <meta property="og:url" content="https://bin-groups.com" />
     <meta property="og:type" content="website" />
@@ -48,6 +48,36 @@
         .error-title { font-weight: 900; letter-spacing: 2px; }
         .error-msg { color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6; }
         .btn-reload { background: #c6a75e; color: #000; border: none; padding: 12px 24px; font-weight: 900; cursor: pointer; border-radius: 4px; margin-top: 20px; }
+        .public-shell { min-height: 100vh; background: radial-gradient(circle at top left, rgba(198,167,94,0.16), transparent 32rem), #0b0b0c; color: #fff; padding: 32px; box-sizing: border-box; }
+        .public-shell-inner { max-width: 1160px; margin: 0 auto; }
+        .public-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 52px; }
+        .public-brand { color: #c6a75e; font-weight: 950; letter-spacing: 3px; text-transform: uppercase; }
+        .public-links { display: flex; flex-wrap: wrap; gap: 14px; justify-content: flex-end; }
+        .public-links a, .public-cta a, .public-contact a { color: #fff; text-decoration: none; font-weight: 800; }
+        .public-links a { color: rgba(255,255,255,0.74); font-size: 13px; }
+        .public-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); gap: 36px; align-items: center; }
+        .public-kicker { color: #c6a75e; font-size: 12px; font-weight: 950; letter-spacing: 4px; text-transform: uppercase; }
+        .public-title { margin: 16px 0; font-size: clamp(40px, 6vw, 76px); line-height: 0.95; font-weight: 950; letter-spacing: 0; }
+        .public-copy { max-width: 760px; color: rgba(255,255,255,0.72); font-size: 18px; line-height: 1.7; }
+        .public-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 30px 0; }
+        .public-cta a { border: 1px solid rgba(198,167,94,0.55); border-radius: 8px; padding: 13px 18px; }
+        .public-cta a:first-child { background: #c6a75e; color: #050505; }
+        .public-panel { border: 1px solid rgba(198,167,94,0.22); background: rgba(255,255,255,0.045); border-radius: 8px; padding: 24px; }
+        .public-panel h2 { margin: 0 0 12px; color: #c6a75e; font-size: 18px; }
+        .public-panel ul { margin: 0; padding-left: 18px; color: rgba(255,255,255,0.72); line-height: 1.9; }
+        .public-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 36px; }
+        .public-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 18px; background: rgba(255,255,255,0.035); }
+        .public-card strong { display: block; color: #fff; margin-bottom: 8px; }
+        .public-card span { color: rgba(255,255,255,0.62); font-size: 14px; line-height: 1.55; }
+        .public-contact { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; color: rgba(255,255,255,0.65); }
+        .public-contact a { color: #c6a75e; }
+        .system-loader { min-height: auto; height: auto; padding: 22px; background: transparent; font-size: 12px; }
+        @media (max-width: 800px) {
+            .public-shell { padding: 22px; }
+            .public-nav, .public-hero { display: block; }
+            .public-links { justify-content: flex-start; margin-top: 18px; }
+            .public-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 
@@ -60,10 +90,88 @@
     </noscript>
     
     <div id="root">
-        <div id="bin-boot-loader" class="system-loader">
-            <div>INITIALIZING BIN-GROUPS OS...</div>
-            <div class="ar-font">جاري تهيئة النظام...</div>
-        </div>
+        <main class="public-shell" aria-label="BIN-GROUPS public company profile">
+            <div class="public-shell-inner">
+                <nav class="public-nav" aria-label="Public navigation">
+                    <div class="public-brand">BIN-GROUPS</div>
+                    <div class="public-links">
+                        <a href="/owners">Owners</a>
+                        <a href="/tenants">Tenants</a>
+                        <a href="/technicians">Technicians</a>
+                        <a href="/brokers">Brokers</a>
+                        <a href="/security">Security</a>
+                        <a href="/admin">Admin</a>
+                    </div>
+                </nav>
+
+                <section class="public-hero">
+                    <div>
+                        <div class="public-kicker">UAE Property Operations</div>
+                        <h1 class="public-title">BIN-GROUPS — The Real-Time Property Operations OS for the UAE</h1>
+                        <p class="public-copy">
+                            From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties,
+                            and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers,
+                            payments, documents, contracts, and AI design in one verified command system.
+                        </p>
+                        <div class="public-cta">
+                            <a href="/request-demo">Request Contract</a>
+                            <a href="/owners">View Platform</a>
+                            <a href="/onboarding">Onboard Your Property</a>
+                        </div>
+                    </div>
+
+                    <aside class="public-panel">
+                        <h2>Built For Every UAE Asset Type</h2>
+                        <ul>
+                            <li>Villas, apartments, towers, offices, and retail centers</li>
+                            <li>Malls, hotels, hospitals, clinics, schools, and warehouses</li>
+                            <li>Government properties, private Majlis, stadiums, and event venues</li>
+                            <li>Verified documents, geo-anchored properties, contracts, payments, and reports</li>
+                        </ul>
+                    </aside>
+                </section>
+
+                <section class="public-grid" aria-label="Platform capabilities">
+                    <div class="public-card">
+                        <strong>Owners</strong>
+                        <span>Onboard properties, upload title deeds, select service plans, approve payments, and receive reports.</span>
+                    </div>
+                    <div class="public-card">
+                        <strong>Tenants</strong>
+                        <span>Submit emergency requests, track technician status, upload evidence, and chat with support.</span>
+                    </div>
+                    <div class="public-card">
+                        <strong>Technicians</strong>
+                        <span>Receive routed jobs, open maps, update status, track duty, and handle field evidence.</span>
+                    </div>
+                    <div class="public-card">
+                        <strong>Admins</strong>
+                        <span>Review onboarding, verify payments, manage documents, route missions, and audit operations.</span>
+                    </div>
+                    <div class="public-card">
+                        <strong>AI Design Studio</strong>
+                        <span>Create property improvement concepts, owner approvals, scope packages, and design reports.</span>
+                    </div>
+                    <div class="public-card">
+                        <strong>Security</strong>
+                        <span>Role-based access, App Check-ready architecture, document protection, and audit logging.</span>
+                    </div>
+                </section>
+
+                <footer class="public-contact">
+                    <span>Support and escalation:</span>
+                    <a href="https://wa.me/971552423233">WhatsApp CEO Office</a>
+                    <a href="mailto:Ceo@bin-groups.com">Ceo@bin-groups.com</a>
+                    <a href="/support">Support Center</a>
+                    <a href="/contact">Contact</a>
+                </footer>
+
+                <div id="bin-boot-loader" class="system-loader" aria-live="polite">
+                    <div>INITIALIZING BIN-GROUPS OS...</div>
+                    <div class="ar-font">جاري تهيئة النظام...</div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <!-- [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS -->
@@ -74,10 +182,10 @@
             // Strict sentinel-based check avoiding generic innerText collisions
             if (loader && root && root.contains(loader)) {
                 console.error("FATAL: BIN-Groups OS Initialization timed out at the HTML layer.");
-                root.innerHTML = `
-                    <div class="system-error">
-                        <h1 class="error-title">SYSTEM TIMEOUT / خطأ في النظام</h1>
-                        <p class="error-msg">Initialization locked. Check connection. / تعذر بدء النظام. يرجى التحقق من الاتصال.</p>
+                loader.innerHTML = `
+                    <div class="system-error" style="height: auto; min-height: 220px; background: transparent;">
+                        <h2 class="error-title">INTERACTIVE APP TIMEOUT / تعذر بدء التطبيق التفاعلي</h2>
+                        <p class="error-msg">The public profile remains available. Reload to retry the live app. / الصفحة التعريفية متاحة. أعد التحميل لتشغيل التطبيق.</p>
                         <button onclick="window.location.reload()" class="btn-reload">RELOAD / إعادة تحميل</button>
                     </div>
                 `;
