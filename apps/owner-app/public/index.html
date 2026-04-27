@@ -30,6 +30,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+    <!-- [SOVEREIGN-BOOT] GLOBAL STATE & ERROR CAPTURE -->
+    <script>
+      window.__BIN_GROUPS_BOOT__ = {
+        staticReady: true,
+        reactMounted: false,
+        authReady: false,
+        startedAt: Date.now()
+      };
+
+      window.addEventListener("error", function (event) {
+        console.error("BIN-GROUPS BOOT ERROR:", event.message, event.filename, event.lineno, event.colno);
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        console.error("BIN-GROUPS BOOT PROMISE REJECTION:", event.reason);
+      });
+    </script>
     
     <!-- External APIs -->
     <script>
@@ -174,23 +192,48 @@
         </main>
     </div>
 
-    <!-- [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS -->
     <script>
-        setTimeout(() => {
-            const root = document.getElementById('root');
-            const loader = document.getElementById('bin-boot-loader');
-            // Strict sentinel-based check avoiding generic innerText collisions
-            if (loader && root && root.contains(loader)) {
-                console.error("FATAL: BIN-Groups OS Initialization timed out at the HTML layer.");
-                loader.innerHTML = `
-                    <div class="system-error" style="height: auto; min-height: 220px; background: transparent;">
-                        <h2 class="error-title">INTERACTIVE APP TIMEOUT / تعذر بدء التطبيق التفاعلي</h2>
-                        <p class="error-msg">The public profile remains available. Reload to retry the live app. / الصفحة التعريفية متاحة. أعد التحميل لتشغيل التطبيق.</p>
-                        <button onclick="window.location.reload()" class="btn-reload">RELOAD / إعادة تحميل</button>
-                    </div>
-                `;
-            }
-        }, 12000);
+      // [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS
+      setTimeout(function () {
+        var boot = window.__BIN_GROUPS_BOOT__ || {};
+        var path = window.location.pathname;
+
+        // Skip timeout warnings for public-facing marketing routes
+        var isPublicLanding =
+          path === "/" ||
+          path === "" ||
+          path === "/index.html" ||
+          path === "/owners" ||
+          path === "/tenants" ||
+          path === "/technicians" ||
+          path === "/brokers";
+
+        if (boot.reactMounted) {
+          return;
+        }
+
+        if (isPublicLanding && boot.staticReady) {
+          console.warn("BIN-GROUPS: React did not mount yet, static public homepage remains available.");
+          var publicLoader = document.getElementById('bin-boot-loader');
+          if (publicLoader) {
+            publicLoader.style.display = "none";
+          }
+          return;
+        }
+
+        var loader = document.getElementById('bin-boot-loader');
+        if (loader) {
+          document.body.classList.add("bin-groups-timeout-visible");
+          console.error("FATAL: BIN-Groups OS Initialization timed out on an interactive route.");
+          loader.innerHTML = `
+            <div class="system-error" style="height: auto; min-height: 220px; background: transparent;">
+              <h2 class="error-title">APP RECOVERY MODE / وضع استعادة التطبيق</h2>
+              <p class="error-msg">This is an interactive route requiring the Sovereign React bundle. Please reload to retry. / هذا المسار يتطلب تحميل حزمة التفاعل. يرجى إعادة المحاولة.</p>
+              <button onclick="window.location.reload()" class="btn-reload">RELOAD / إعادة تحميل</button>
+            </div>
+          `;
+        }
+      }, 12000);
     </script>
 </body>
 </html>

@@ -80,6 +80,40 @@ function LoadingScreen() {
   );
 }
 
+const PUBLIC_ROUTE_PATHS = new Set([
+  '/',
+  '/owner-landing',
+  '/v1',
+  '/login',
+  '/terms-of-service',
+  '/privacy-policy',
+  '/terms',
+  '/privacy',
+  '/support',
+  '/owners',
+  '/tenants',
+  '/technicians',
+  '/brokers',
+  '/property-management',
+  '/maintenance',
+  '/ai-design-studio',
+  '/majlis-care',
+  '/stadiums',
+  '/hotels',
+  '/malls',
+  '/hospitals',
+  '/government-properties',
+  '/security',
+  '/contact',
+  '/request-demo',
+]);
+
+const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
+
+function isPublicRoute(pathname: string) {
+  return PUBLIC_ROUTE_PATHS.has(pathname) || PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 /**
  * [INSTITUTIONAL ROUTER]
  * Handles strict redirection for authenticated users who land on the root or login pages.
@@ -87,12 +121,13 @@ function LoadingScreen() {
 function RoleRedirector({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useRole();
   const location = useLocation();
+  const publicRoute = isPublicRoute(location.pathname);
 
-  if (loading) return <LoadingScreen />;
+  if (loading && !publicRoute) return <LoadingScreen />;
 
   // Only redirect if on login, root landing page, or role gateway
   const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
-  if (user && isAuthEntryPage) {
+  if (user && !loading && isAuthEntryPage) {
     const normalizedRole = (role || '').toLowerCase();
     if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
@@ -107,13 +142,15 @@ function AppContent() {
   const { loading: roleLoading, error: roleError, user, role } = useRole();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
+  const publicRoute = isPublicRoute(location.pathname);
 
   // [STRICT BLOCK]
-  if (roleLoading) {
+  if (roleLoading && !publicRoute) {
     return <LoadingScreen />;
   }
 
-  if (roleError && !user) {
+  if (roleError && !user && !publicRoute) {
     return (
       <Box sx={{ 
         height: '100vh', 

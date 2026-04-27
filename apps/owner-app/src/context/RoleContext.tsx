@@ -28,6 +28,14 @@ interface RoleContextType {
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
+const AUTH_BOOT_TIMEOUT_MS = 6000;
+
+const markGlobalAuthReady = () => {
+    window.__BIN_GROUPS_BOOT__ = {
+        ...(window.__BIN_GROUPS_BOOT__ || {}),
+        authReady: true,
+    };
+};
 
 export function RoleProvider({ children }: { children: ReactNode }) {
     const [role, setRole] = useState<string | null>(null);
@@ -117,7 +125,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         try {
                             console.log("🔍 [DIAG] Fetching Firestore profile...");
                             const fetchPromise = getDoc(userDocRef);
-                            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), 10000));       
+                            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), AUTH_BOOT_TIMEOUT_MS));
                             snap = await Promise.race([fetchPromise, timeoutPromise]) as any;
                             console.log("🔍 [DIAG] Firestore profile fetch result:", snap?.exists() ? "Exists" : "Does not exist");
                         } catch (err: any) {
@@ -228,12 +236,29 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 };
 
                 console.log("🔍 [DIAG] Setting up onAuthStateChanged...");
+
+                let profileSyncResolved = false;
+                const markAuthReady = () => {
+                    if (profileSyncResolved) return;
+                    profileSyncResolved = true;
+                    setLoading(false);
+                    markGlobalAuthReady();
+                    console.log("🔍 [DIAG] Auth handshake marked as READY.");
+                };
+
+                // Fallback timeout to prevent deadlock on public pages
+                setTimeout(markAuthReady, AUTH_BOOT_TIMEOUT_MS);
+
                 unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
                     console.log("🛡️ [AUTH] onAuthStateChanged:", currentUser ? currentUser.email : "Logged Out");
                     setUser(currentUser);
                     if (currentUser) {
                         console.log("🛡️ [AUTH] Syncing Profile for:", currentUser.email);
-                        await syncProfile(currentUser);
+                        try {
+                            await syncProfile(currentUser);
+                        } finally {
+                            markAuthReady();
+                        }
                     } else {
                         console.log("🔍 [DIAG] User is null, clearing state and setting loading=false");
                         setRole(null);
@@ -242,17 +267,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         setPropertyId(null);
                         setError(null);
                         setLegalAccepted(true);
-                        setLoading(false);
+                        markAuthReady();
                     }
                 }, (err) => {
                     console.error("[ROLE-SYNC] Fatal Auth Observer Error:", err);
                     setError("Authentication Protocol Violation: " + err.message);
-                    setLoading(false);
+                    markAuthReady();
                 });
 
             } catch (fatalErr: any) {
                 console.error("❌ [AUTH-BOOT] Fatal Identity Bridge Failure:", fatalErr);
                 setError("IDENTITY FAULT: " + fatalErr.message);
+                markGlobalAuthReady();
                 setLoading(false);
             }
         };

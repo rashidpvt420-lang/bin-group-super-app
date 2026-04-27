@@ -31,6 +31,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // [V8] POPUP-ONLY PROTOCOL: Purged Redirect logic to prevent custom domain token drops.
         
+        let authHandshakeResolved = false;
+        const markAuthReady = () => {
+            if (authHandshakeResolved) return;
+            authHandshakeResolved = true;
+            setLoading(false);
+            if (typeof window !== 'undefined') {
+                const bootWindow = window as typeof window & { __BIN_GROUPS_BOOT__?: Record<string, unknown> };
+                bootWindow.__BIN_GROUPS_BOOT__ = {
+                    ...(bootWindow.__BIN_GROUPS_BOOT__ || {}),
+                    authReady: true,
+                };
+            }
+            console.log("🔍 [DIAG] Admin Auth handshake marked as READY.");
+        };
+
+        // Fallback timeout to prevent deadlock
+        setTimeout(markAuthReady, 10000);
+
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             try {
@@ -100,23 +118,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setIsAuthenticated(false);
                         setUser(null);
                         // Safe fallback: Allow re-auth rather than signOut to prevent loops if it's just a timeout
+                    } finally {
+                        markAuthReady();
                     }
                 } else {
                     setIsAuthenticated(false);
                     setUser(null);
+                    markAuthReady();
                 }
             } catch (err: any) {
                 console.error("🛡️ [AUTH] System Fault:", err);
                 setError("System Initialization Fault: " + (err.message || 'Unknown'));
                 setIsAuthenticated(false);
+                markAuthReady();
             } finally {
-                console.log("🔍 [DIAG] Admin Auth loading complete.");
-                setLoading(false);
+                console.log("🔍 [DIAG] Admin Auth loading sequence finished.");
             }
         }, (err) => {
             console.error("🛡️ [AUTH] Fatal Observer Error:", err);
             setError("Authentication Observer Fault.");
-            setLoading(false);
+            markAuthReady();
         });
 
         return () => {
