@@ -1,7 +1,7 @@
 import { GeoPoint, Timestamp } from 'firebase/firestore';
 
 export interface GeoAnchor {
-  point: GeoPoint;
+  point: GeoPoint | null;
   lat: number;
   lng: number;
   geohash: string;
@@ -15,6 +15,7 @@ export interface GeoAnchor {
   verifiedBy: string | null;
   verifiedAt: Timestamp | null;
   updatedAt: Timestamp;
+  requiresGeoReview?: boolean;
 }
 
 export function validateGeoAnchor(geo: Partial<GeoAnchor>): string[] {

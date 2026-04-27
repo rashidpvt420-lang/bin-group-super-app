@@ -12,6 +12,7 @@ type GeoInput = {
     source?: "google_maps" | "title_deed" | "admin_manual";
     verified?: boolean;
     verifiedBy?: string | null;
+    requiresGeoReview?: boolean;
 };
 
 const base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
@@ -72,36 +73,37 @@ export const isValidLatLng = (lat: unknown, lng: unknown) => {
 export const buildGeoAnchor = (input: GeoInput) => {
     const lat = parseCoordinate(input.lat);
     const lng = parseCoordinate(input.lng);
+    const isManual = input.source === 'admin_manual';
 
-    if (lat === null || lng === null || !isValidLatLng(lat, lng)) {
+    if (!isManual && (lat === null || lng === null || !isValidLatLng(lat, lng))) {
         throw new Error('Please select the property location from Google Maps.');
     }
 
     const address = input.address?.trim() || '';
-    const placeId = input.placeId?.trim() || '';
-    if (!address && !placeId) {
-        throw new Error('We could not verify this location. Admin review is required.');
+    if (!address && !isManual) {
+        throw new Error('Address is required for verification.');
     }
 
     if (!input.emirate?.trim()) {
-        throw new Error('We could not verify this location. Admin review is required.');
+        throw new Error('Emirate is required for institutional tracking.');
     }
 
     return {
-        point: new GeoPoint(lat, lng),
-        lat,
-        lng,
-        geohash: geohashForLocation([lat, lng]),
+        point: (lat !== null && lng !== null) ? new GeoPoint(lat, lng) : null,
+        lat: lat || 0,
+        lng: lng || 0,
+        geohash: (lat !== null && lng !== null) ? geohashForLocation([lat, lng]) : 'PENDING',
         address,
         emirate: input.emirate.trim(),
         city: input.city?.trim() || input.area?.trim() || input.emirate.trim(),
         area: input.area?.trim() || input.city?.trim() || input.emirate.trim(),
-        placeId,
+        placeId: input.placeId || (isManual ? 'MANUAL' : null),
         source: input.source || 'google_maps',
-        verified: input.verified ?? true,
+        verified: input.verified ?? !isManual,
         verifiedBy: input.verifiedBy || null,
         verifiedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        requiresGeoReview: !!input.requiresGeoReview || isManual
     };
 };
 
@@ -109,8 +111,7 @@ export const buildPersistableGeoAnchor = (input: GeoInput) => {
     const geo = buildGeoAnchor(input);
     return {
         ...geo,
-        point: { latitude: geo.lat, longitude: geo.lng },
-        verifiedBy: geo.verifiedBy,
+        point: geo.point ? { latitude: geo.lat, longitude: geo.lng } : null,
         verifiedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };

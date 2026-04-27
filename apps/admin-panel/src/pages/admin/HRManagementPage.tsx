@@ -182,12 +182,14 @@ export default function HRManagementPage() {
                                                                 setPayrollError(null);
                                                                 try {
                                                                     if (!auth.currentUser) {
-                                                                        setPayrollError('Your admin session expired. Sign in again and retry payslip generation.');
+                                                                        setPayrollError('Your admin session is not active. Sign in again before generating payslips.');
                                                                         return;
                                                                     }
                                                                     await auth.currentUser.getIdToken(true);
+                                                                    
+                                                                    // The function in index.ts is generateAndEmailPayslip
                                                                     const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
-                                                                    await genFn({
+                                                                    const result: any = await genFn({
                                                                         staffId: s.id,
                                                                         staffName: s.displayName,
                                                                         staffEmail: s.email,
@@ -197,7 +199,10 @@ export default function HRManagementPage() {
                                                                         overtime: 500,
                                                                         deductions: 0
                                                                     });
-                                                                    alert("Payslip generated and emailed successfully.");
+                                                                    
+                                                                    if (result.data.success) {
+                                                                        alert("Sovereign Pay Advice secured and dispatched via email.");
+                                                                    }
                                                                 } catch (err: any) {
                                                                     console.error("Payroll fault:", err);
                                                                     setPayrollError(getPayrollErrorMessage(err));

@@ -1,8 +1,9 @@
 import React from 'react';
 import { Box, Container, Typography, Paper, Grid } from '@mui/material';
-import { Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin, ShieldAlert } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
+import { CeoContactButtons } from '@bin/shared';
 
 const SupportPage: React.FC = () => {
     const { t, isRTL } = useLanguage();
@@ -44,9 +45,10 @@ const SupportPage: React.FC = () => {
                     </Grid>
 
                     <Box sx={{ mt: 8, pt: 4, borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                        <Typography variant="body2" color="textSecondary">
+                        <Typography variant="body2" color="textSecondary" sx={{ mb: 4 }}>
                             {t('support.hours')}
                         </Typography>
+                        <CeoContactButtons />
                     </Box>
                 </Paper>
             </Container>

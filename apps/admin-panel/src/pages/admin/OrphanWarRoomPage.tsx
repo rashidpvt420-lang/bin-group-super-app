@@ -70,38 +70,30 @@ export default function OrphanWarRoomPage() {
         setRepairError(null);
         setRepairErrorDetail(null);
         try {
-            await auth.currentUser.getIdToken(true);
+            // Force refresh token to ensure admin claim is current
+            const tokenResult = await auth.currentUser.getIdTokenResult(true);
+            console.log("🛡️ [TECH-REPAIR] Admin Claims:", tokenResult.claims);
+
             const repairFn = httpsCallable<{ dryRun: boolean }, RepairReport>(functions, 'institutionalRepairTrigger');
             const result = await repairFn({ dryRun });
             setRepairReport(result.data);
         } catch (err: any) {
             console.error('[TECH-REPAIR] Callable failure:', err);
             
-            // Log failed function calls
-            try {
-                await writeBatch(db).set(doc(collection(db, 'audit_logs')), {
-                    action: 'REPAIR_TRIGGER_FAILED',
-                    error: err.message || 'Unknown error',
-                    code: err.code || 'UNKNOWN',
-                    adminId: auth.currentUser?.uid || 'UNKNOWN',
-                    timestamp: serverTimestamp()
-                }).commit();
-            } catch (logErr) {
-                console.error("Failed to log repair error", logErr);
-            }
-
             setRepairErrorDetail(JSON.stringify({
                 code: err?.code || 'UNKNOWN',
                 message: err?.message || 'Unknown server error',
-                name: err?.name || 'FirebaseError'
+                details: err?.details || 'Check console logs'
             }, null, 2));
 
             if (err?.code === 'functions/unauthenticated') {
-                setRepairError("Repair could not start because your admin authentication expired. Please refresh/login and try again.");
+                setRepairError("Administrative access expired. Sign in again to re-validate your Sovereign credentials.");
             } else if (err?.code === 'functions/permission-denied') {
-                setRepairError("Repair blocked. This action requires admin or super admin authorization.");
+                setRepairError("Permission Denied: Your account requires explicit 'admin' or 'super_admin' claims to run repair batch protocols.");
+            } else if (err?.message?.includes('not a function')) {
+                setRepairError("Cloud Function 'institutionalRepairTrigger' not found. Verify backend deployment and primary region (europe-west3).");
             } else {
-                setRepairError("Repair could not be completed. The technical detail is retained below for developers.");
+                setRepairError(`Institutional Repair Protocol failed: ${err.message || 'Check connection'}`);
             }
         } finally {
             setRepairRunning(null);
