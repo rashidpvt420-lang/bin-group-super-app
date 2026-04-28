@@ -1,18 +1,41 @@
 import React, { useState } from 'react';
-import { auth, signInWithPopup } from '../lib/firebase';
+import { auth, signInWithPopup, signInWithEmailAndPassword } from '../lib/firebase';
 import { 
-    GoogleAuthProvider
+    GoogleAuthProvider,
+    sendPasswordResetEmail
 } from 'firebase/auth';
-import { Shield, Lock, ArrowRight, Globe } from 'lucide-react';
+import { Shield, Lock, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function UnifiedLogin() {
     const { loading: authLoading, error: authError } = useAuth();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
 
     const error = authError || localError;
     const loading = authLoading || localLoading;
+
+    const getFriendlyAuthError = (err: any) => {
+        const code = err?.code || '';
+        if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
+            return 'The email or password is incorrect.';
+        }
+        if (code.includes('too-many-requests')) {
+            return 'Too many attempts. Please wait, then try again.';
+        }
+        if (code.includes('popup-closed-by-user')) {
+            return 'Google sign-in was cancelled.';
+        }
+        if (code.includes('popup-blocked')) {
+            return 'Your browser blocked the Google sign-in window. Allow popups and retry.';
+        }
+        if (code.includes('network-request-failed')) {
+            return 'Network connection failed. Check your connection and retry.';
+        }
+        return 'Sign-in could not be completed. Please retry or contact support.';
+    };
 
     const handleGoogleLogin = async () => {
         setLocalLoading(true);
@@ -26,7 +49,43 @@ export default function UnifiedLogin() {
             }
         } catch (err: any) {
             console.error("Auth popup error:", err);
-            setLocalError(`IDENTITY_FAULT: ${err.message || 'Verification failed.'}`);
+            setLocalError(getFriendlyAuthError(err));
+            setLocalLoading(false);
+        }
+    };
+
+    const handleEmailLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLocalLoading(true);
+        setLocalError(null);
+        try {
+            console.log("🔍 [DIAG] Starting signInWithEmailAndPassword for Admin...");
+            const result = await signInWithEmailAndPassword(auth, email, password);
+            if (result.user) {
+                console.log("🛡️ [AUTH] Admin Email login successful for:", result.user.email);
+            }
+        } catch (err: any) {
+            console.error("Auth email error:", err);
+            setLocalError(getFriendlyAuthError(err));
+            setLocalLoading(false);
+        }
+    };
+
+    const handlePasswordReset = async () => {
+        if (!email) {
+            setLocalError('Enter your admin email first, then request password reset.');
+            return;
+        }
+
+        setLocalLoading(true);
+        setLocalError(null);
+        try {
+            await sendPasswordResetEmail(auth, email);
+            setLocalError('Password reset email sent if this account is registered.');
+        } catch (err: any) {
+            console.error("Password reset error:", err);
+            setLocalError(getFriendlyAuthError(err));
+        } finally {
             setLocalLoading(false);
         }
     };
@@ -82,16 +141,60 @@ export default function UnifiedLogin() {
                         </div>
                     )}
 
+                    <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
+                        <div>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="Institutional Email"
+                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Passcode"
+                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
+                                required
+                            />
+                        </div>
+                        <button 
+                            type="submit"
+                            disabled={loading || !email || !password}
+                            className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
+                        >
+                            Access Command Center
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handlePasswordReset}
+                            disabled={loading}
+                            className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
+                        >
+                            Forgot Password
+                        </button>
+                    </form>
+
+                    <div className="flex items-center gap-4 mb-6 opacity-50">
+                        <div className="h-[1px] flex-1 bg-white/20"></div>
+                        <span className="text-[10px] text-white font-bold uppercase tracking-widest">Or External ID</span>
+                        <div className="h-[1px] flex-1 bg-white/20"></div>
+                    </div>
+
                     <button 
+                        type="button"
                         onClick={handleGoogleLogin}
                         disabled={loading}
-                        className="w-full group relative flex items-center justify-between bg-white text-black font-black py-5 px-8 rounded-2xl transition-all duration-300 hover:bg-[#C6A75E] hover:scale-[1.02] active:scale-[0.98] shadow-xl overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full group relative flex items-center justify-center bg-white text-black font-black py-4 px-8 rounded-xl transition-all duration-300 hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <div className="flex items-center gap-4">
-                            <Globe className="w-6 h-6" />
-                            <span className="uppercase tracking-widest text-sm">Verify Identity</span>
+                        <div className="flex items-center gap-3">
+                            <Globe className="w-5 h-5" />
+                            <span className="uppercase tracking-widest text-sm">Google SSO</span>
                         </div>
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </button>
 
                     <div className="mt-8 flex items-center justify-center gap-2 opacity-40">

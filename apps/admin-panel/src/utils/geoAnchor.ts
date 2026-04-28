@@ -51,11 +51,16 @@ export const buildGeoAnchor = (input: {
     area?: string;
     placeId?: string;
     verifiedBy?: string;
+    source?: string;
+    verified?: boolean;
 }) => {
     const lat = Number(input.lat);
     const lng = Number(input.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         throw new Error('Please select the property location from Google Maps.');
+    }
+    if (lat === 0 && lng === 0) {
+        throw new Error('Default coordinates cannot be used for a property geo-anchor.');
     }
     if (!input.address?.trim() || !input.emirate?.trim()) {
         throw new Error('We could not verify this location. Admin review is required.');
@@ -65,13 +70,13 @@ export const buildGeoAnchor = (input: {
         lat,
         lng,
         geohash: geohashForLocation([lat, lng]),
-        source: 'admin_verified',
+        source: input.source || 'admin_verified',
         placeId: input.placeId || '',
         address: input.address.trim(),
         emirate: input.emirate.trim(),
         city: input.city?.trim() || input.area?.trim() || input.emirate.trim(),
         area: input.area?.trim() || input.city?.trim() || input.emirate.trim(),
-        verified: true,
+        verified: input.verified ?? true,
         verifiedBy: input.verifiedBy || 'ADMIN',
         verifiedAt: serverTimestamp(),
         updatedAt: serverTimestamp()

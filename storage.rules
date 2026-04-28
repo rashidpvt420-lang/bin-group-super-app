@@ -14,7 +14,7 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return hasRole('ADMIN') || hasRole('admin');
+      return hasRole('ADMIN') || hasRole('admin') || request.auth.token.admin == true;
     }
 
     function isAuditor() {
@@ -25,6 +25,11 @@ service firebase.storage {
     match /kyc_documents/{documentId} {
       allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
+    }
+
+    match /temp_kyc/{documentId} {
+      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
+      allow read: if isAuth();
     }
 
     match /kyc/{userId}/{allPaths=**} {

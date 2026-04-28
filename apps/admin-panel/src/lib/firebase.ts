@@ -7,7 +7,7 @@ import {
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getAuth, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
+import { getAuth, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -29,6 +29,6 @@ export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged, type User,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
-    ref, uploadBytes, getDownloadURL, signInWithPopup
+    ref, uploadBytes, getDownloadURL, signInWithPopup, signInWithEmailAndPassword
 };
 export default app;

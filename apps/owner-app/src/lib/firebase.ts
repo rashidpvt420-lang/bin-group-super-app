@@ -5,7 +5,7 @@ import {
     Timestamp, deleteDoc, writeBatch, or, arrayUnion
 } from 'firebase/firestore';
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, User } from 'firebase/auth';
 import { getToken, isSupported, getMessaging } from 'firebase/messaging';
@@ -29,7 +29,6 @@ try {
 }
 
 const db = getFirestore(app);
-
 const auth = getAuth(app);
 const storage = getStorage(app);
 
@@ -37,16 +36,11 @@ const storage = getStorage(app);
 const PRIMARY_REGION = "europe-west3";
 const functions = getFunctions(app, PRIMARY_REGION);
 
-// 🚨 PRODUCTION SAFEGUARD: Never connect to emulator in public production mesh
-if (process.env.NODE_ENV === 'development' && window.location.hostname === 'localhost') {
-    // connectFunctionsEmulator(functions, "localhost", 5001);
-}
-
 // Explicit Exports
 export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
     onAuthStateChanged, getRedirectResult, signInWithPopup, type User,
-    ref, uploadBytes, getDownloadURL,
+    ref, uploadBytes, uploadBytesResumable, getDownloadURL,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion
 };
 

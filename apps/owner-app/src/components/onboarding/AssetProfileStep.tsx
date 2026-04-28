@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-    Box, Typography, Grid, Paper, alpha, Stack, Divider, TextField, MenuItem, Container, Button, CircularProgress, Chip
+    Box, Typography, Grid, Paper, alpha, Stack, Divider, TextField, MenuItem, Container, Button, CircularProgress, Chip, Snackbar, Alert
 } from '@mui/material';
 import { 
     Home, Building2, Building, Hotel, Landmark, Gem, 
@@ -17,6 +17,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const { tx } = useLanguage();
     const [scanning, setScanning] = useState(false);
     const [scanned, setScanned] = useState(false);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
 
     React.useEffect(() => {
         if (properties.length === 0) {
@@ -53,7 +54,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
             }
         } catch (err) {
             console.error("OCR Failure:", err);
-            alert("Scanner node busy. Please fill data manually.");
+            setSnackbar({ open: true, message: "Scanner node busy. Please fill data manually.", severity: 'error' });
         } finally {
             setScanning(false);
         }
@@ -248,6 +249,12 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                     </Grid>
                 </Grid>
             </Container>
+
+            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+                <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

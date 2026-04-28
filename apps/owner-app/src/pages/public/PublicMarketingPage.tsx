@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
-import { ArrowRight, Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
@@ -16,98 +16,57 @@ const pageContent: Record<string, PageContent> = {
     owners: {
         eyebrow: 'Owner Command',
         title: 'Operate every property with verified contracts, documents, payments, and approvals.',
-        subtitle: 'Owners get onboarding, service plans, add-ons, tenant requests, reports, AI design, and approval workflows in one real-time system.',
-        bullets: ['Title deed and document-ready onboarding', 'Service plan and add-on selection', 'Payment, contract, approval, and report visibility']
+        subtitle: 'Owners get onboarding, service plans, add-ons, tenant requests, reports, AI Design Studio, property health, and rent ledger in one real-time system.',
+        bullets: [
+            'Institutional Dashboard with real-time portfolio analytics',
+            'Title Deed OCR extraction and verification protocol',
+            'Master Service Agreements and automated e-signatures',
+            'Live rent ledger, move-in/out reports, and property health scores'
+        ]
     },
     tenants: {
         eyebrow: 'Tenant Care',
         title: 'Fast maintenance requests, technician tracking, and clear move-in/move-out support.',
         subtitle: 'Tenants can submit emergencies, upload evidence, follow technician status, verify completion, and access unit documents.',
-        bullets: ['Emergency request shortcuts', 'Technician identity and job status', 'Move-in and move-out readiness']
+        bullets: [
+            'Sovereign SOS: Instant emergency maintenance routing',
+            'Real-time technician tracking and GPS-arrival alerts',
+            'Digital move-in/out checklists and condition evidence',
+            'Direct support chat and community announcements'
+        ]
     },
     technicians: {
         eyebrow: 'Technician Corps',
         title: 'A field command center for jobs, routes, duty, overtime, and performance.',
         subtitle: 'Technicians see assigned jobs, mission pool, route hints, HR duty state, workload, notification link, and digital ID.',
-        bullets: ['Mission cards and status lifecycle', 'Duty synchronization and workload', 'Push dispatch readiness']
+        bullets: [
+            'Area-based auto-assignment and smart route optimization',
+            'Offline mode for consistent updates in data-dead zones',
+            'Digital ID and certified credential management',
+            'Live payroll tracking, overtime visibility, and digital payslips'
+        ]
     },
     brokers: {
         eyebrow: 'Broker Network',
         title: 'Track leads, contract attribution, commission status, and payout readiness.',
         subtitle: 'Brokers can bring owners, properties, and tenants while finance/admin controls payment verification and payout approval.',
-        bullets: ['Broker code and lead attribution', 'Commission status pipeline', 'Finance-approved payout controls']
-    },
-    'property-management': {
-        eyebrow: 'Property Management',
-        title: 'Tenant onboarding, rent visibility, complaints, documents, and owner reporting.',
-        subtitle: 'BIN-GROUPS connects property operations from lease readiness through daily tenant care and monthly owner reporting.',
-        bullets: ['Tenant and unit linkage', 'Documents and payment visibility', 'Owner reporting and approvals']
-    },
-    maintenance: {
-        eyebrow: 'Maintenance Operations',
-        title: 'Real-time maintenance dispatch for villas, towers, malls, hospitals, hotels, and more.',
-        subtitle: 'Requests become verified missions with technician routing, SLA tracking, evidence, status updates, and owner/admin visibility.',
-        bullets: ['Emergency and scheduled dispatch', 'Before/after photo evidence', 'SLA and completion tracking']
-    },
-    'ai-design-studio': {
-        eyebrow: 'AI Design Studio',
-        title: 'AI Design Studio for owners and tenants, with quote-ready upgrade paths.',
-        subtitle: 'Upload room photos, explore non-permanent tenant ideas or owner renovation concepts, then request approval or quote packages.',
-        bullets: ['Owner and tenant design concepts', 'Material and scope planning', 'Admin quote workflow ready']
-    },
-    'majlis-care': {
-        eyebrow: 'Majlis Care',
-        title: 'Function-ready operations for private Majlis and government Majlis properties.',
-        subtitle: 'Prepare AC, lighting, washrooms, gardens, cleaning, pest control, hospitality, security, and technician standby for important gatherings.',
-        bullets: ['Pre-function inspection', 'Technician standby', 'Full function readiness packages']
-    },
-    stadiums: {
-        eyebrow: 'Stadiums & Events',
-        title: 'Event-day operations support for stadiums, sports complexes, and venues.',
-        subtitle: 'Coordinate pre-event inspections, standby technicians, VIP readiness, facilities checks, and post-event reporting.',
-        bullets: ['Event technician standby', 'Crowd facility readiness', 'Post-event inspection and cleaning']
-    },
-    hotels: {
-        eyebrow: 'Hotels & Resorts',
-        title: 'Hospitality-grade property operations for guest-ready assets.',
-        subtitle: 'Support room maintenance, turnover coordination, preventive calendars, guest complaint response, and owner reporting.',
-        bullets: ['Guest-ready inspections', 'Room and back-of-house maintenance', 'Peak-season standby options']
-    },
-    malls: {
-        eyebrow: 'Malls & Retail',
-        title: 'Retail and commercial operations for common areas, tenants, parking, and events.',
-        subtitle: 'Manage fit-out coordination, escalator/lift support, food court operations, back-of-house checks, and mall event support.',
-        bullets: ['Common area operations', 'Retail complaint handling', 'Parking and event support']
-    },
-    hospitals: {
-        eyebrow: 'Healthcare Property',
-        title: 'Critical facility coordination for hospitals, clinics, and healthcare assets.',
-        subtitle: 'Support preventive maintenance, critical asset registers, restricted access rules, and compliance document vaults.',
-        bullets: ['Critical asset registers', 'Emergency power and HVAC priority', 'Compliance document vault']
-    },
-    'government-properties': {
-        eyebrow: 'Government Properties',
-        title: 'Institutional operations for government buildings, service centers, and VIP assets.',
-        subtitle: 'BIN-GROUPS supports secure property onboarding, approval hierarchy, custom SLAs, and command-center reporting.',
-        bullets: ['Custom approval hierarchy', 'Secure document handling', 'Enterprise reporting']
+        bullets: [
+            'Broker ID and automated lead attribution tracking',
+            'Real-time commission pipeline and approval status',
+            'Contract management and payout proof archive',
+            'Direct communication line with Finance and Admin'
+        ]
     },
     security: {
-        eyebrow: 'Security & Trust',
-        title: 'Role-based access, protected documents, audit logs, and Firebase-backed operations.',
-        subtitle: 'Sensitive documents, payments, contracts, and identity flows are designed for controlled access and auditability.',
-        bullets: ['Firebase Auth and role checks', 'Storage and document protection', 'Audit-ready operational events']
-    },
-    contact: {
-        eyebrow: 'Contact',
-        title: 'Talk to BIN-GROUPS about your property portfolio.',
-        subtitle: 'Share your property type, emirate, contract goal, and operating needs. The team can guide onboarding and service planning.',
-        bullets: ['UAE-wide property coverage', 'Owner and institutional onboarding', 'Demo and contract request support']
-    },
-    'request-demo': {
-        eyebrow: 'Request Demo',
-        title: 'See the real-time property operations OS in action.',
-        subtitle: 'Request a guided walkthrough for owner onboarding, tenant requests, technician dispatch, admin command center, documents, and reports.',
-        bullets: ['Owner onboarding demo', 'Tenant and technician workflow demo', 'Admin finance and operations overview']
+        eyebrow: 'Sovereign Security',
+        title: 'Document protection, audit logs, role access, and evidence protocols.',
+        subtitle: 'Sensitive documents, payments, contracts, and identity flows are protected by institutional-grade encryption and access controls.',
+        bullets: [
+            'Firebase App Check and device-integrity enforcement',
+            'Immutable audit logs for every operational event',
+            'Encrypted document vault and role-based data isolation',
+            'Protocol-driven evidence capture for all field work'
+        ]
     }
 };
 
@@ -128,10 +87,26 @@ const screenshots = [
 ];
 
 const servicePlans = [
-    'Maintenance Only',
-    'Property Management',
-    'Total Care Hybrid',
-    'Enterprise / Government / Stadium / Hospital Custom Contract'
+    {
+        name: 'Maintenance Only',
+        covers: 'Tenant maintenance requests, technician dispatch, minor repair coordination, SLA tracking, completion proof, history and owner reports.',
+        excludes: 'Major replacement, structural works, authority fees, lift/pool AMC, pest control, landscaping, renovation and major parts unless approved or added.'
+    },
+    {
+        name: 'Property Management',
+        covers: 'Tenant onboarding, rent ledger, rent tracking, complaints, move-in/out, document collection, occupancy tracking, lease reminders and owner reports.',
+        excludes: 'Court/legal cases, broker commission, major repairs, furnishing, deep cleaning and government fees unless approved or added.'
+    },
+    {
+        name: 'Total Care Hybrid',
+        covers: 'Maintenance, property management, priority SLA, preventive calendar, property health audits, owner approvals, tenant service management, AI Design Studio and monthly reporting.',
+        excludes: 'Capital expenditure, major equipment replacement, structural renovation, authority fines/fees and specialist certification unless quoted.'
+    },
+    {
+        name: 'Enterprise / Government / Stadium / Hospital',
+        covers: 'Custom SLA, multi-building operations, critical systems, compliance document vault, event standby, dedicated teams, custom reporting and approval hierarchy.',
+        excludes: 'Anything outside signed scope, authority fees unless written, and third-party specialist works unless quoted.'
+    }
 ];
 
 export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
@@ -207,7 +182,7 @@ function HomeHero() {
                             From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties, and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers, payments, documents, contracts, and AI design in one verified command system.
                         </Typography>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                            <Button component="a" href="/request-demo" endIcon={<ArrowRight />} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
+                            <Button component="a" href="/request-demo" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
                                 Request Contract
                             </Button>
                             <Button component="a" href="/owners" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
@@ -327,11 +302,14 @@ function ServicePlans() {
             <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>Service Plan Examples</Typography>
             <Grid container spacing={2}>
                 {servicePlans.map((plan) => (
-                    <Grid item xs={12} md={3} key={plan}>
+                    <Grid item xs={12} md={3} key={plan.name}>
                         <Paper sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 2 }}>
                             <Building2 size={24} color={binThemeTokens.gold} />
-                            <Typography fontWeight="950" sx={{ mt: 1.5 }}>{plan}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>Coverage, exclusions, add-ons, SLA and payment terms shown before contract.</Typography>
+                            <Typography fontWeight="950" sx={{ mt: 1.5 }}>{plan.name}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', mt: 1, fontWeight: 900 }}>Covers</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{plan.covers}</Typography>
+                            <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 1.5, fontWeight: 900 }}>Not covered unless written</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>{plan.excludes}</Typography>
                         </Paper>
                     </Grid>
                 ))}

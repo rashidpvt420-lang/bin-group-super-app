@@ -2,20 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Box, Paper, Grid, Stack, Button, 
     TextField, MenuItem, FormControlLabel, Checkbox, Slider,
-    Divider, alpha, CircularProgress, Chip, IconButton
+    Divider, alpha, CircularProgress, Chip, IconButton,
+    Snackbar, Alert
 } from '@mui/material';
 import { 
     Sparkles, ArrowRight, Camera, Ruler, Info, ShieldCheck, 
     Home, Landmark, Building, ShoppingBag, Layout, Image as ImageIcon, X
 } from 'lucide-react';
-import { db, collection, addDoc, serverTimestamp, getDocs, query, where, storage, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
+import { auth, db, collection, addDoc, serverTimestamp, getDocs, query, where, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useNavigate } from 'react-router-dom';
 import { 
     DESIGN_ZONES, ADDON_SERVICES, DesignScope, calculateDesignStudioQuote,
-    NotificationEvents
+    NotificationEvents, logAuditAction
 } from '@bin/shared';
 import { LinearProgress } from '@mui/material';
 
@@ -28,6 +29,8 @@ export default function DesignStudioPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
 
     // New Input States
     const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -75,23 +78,78 @@ export default function DesignStudioPage() {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
+        const currentUser = auth.currentUser;
+        if (!currentUser?.uid) {
+            setSnackbar({ open: true, message: "Please sign in before uploading design images.", severity: 'error' });
+            return;
+        }
+
+        const maxFileSize = 10 * 1024 * 1024;
+        const invalidFile = Array.from(files).find((file) => !file.type.startsWith('image/') || file.size > maxFileSize);
+        if (invalidFile) {
+            setSnackbar({
+                open: true,
+                message: "Upload images only, up to 10 MB each. Choose a smaller photo or a supported image file.",
+                severity: 'error'
+            });
+            e.target.value = '';
+            return;
+        }
         
         setUploading(true);
+        setUploadProgress(0);
         try {
             const uploadedUrls = [...referenceImages];
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                const storageRef = ref(storage, `design_requests/${user?.uid}/${Date.now()}_${i}`);
-                const snap = await uploadBytes(storageRef, file);
-                const url = await getDownloadURL(snap.ref);
-                uploadedUrls.push(url);
+                const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const storageRef = ref(storage, `design_requests/${currentUser.uid}/${Date.now()}_${i}_${safeName}`);
+                
+                await new Promise<void>((resolve, reject) => {
+                    const uploadTask = uploadBytesResumable(storageRef, file);
+                    uploadTask.on('state_changed', 
+                        (snapshot) => {
+                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                            setUploadProgress(progress);
+                        },
+                        (error) => reject(error),
+                        async () => {
+                            try {
+                                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                                uploadedUrls.push(url);
+                                resolve();
+                            } catch (e) {
+                                reject(e);
+                            }
+                        }
+                    );
+                });
             }
             setReferenceImages(uploadedUrls);
+            setUploadProgress(0);
+            setSnackbar({ open: true, message: "Image uploaded successfully. Preview is ready.", severity: 'success' });
+            
+            // Audit Log: Document Upload
+            await logAuditAction({
+                actorId: currentUser.uid,
+                actorRole: role || 'user',
+                action: 'DOCUMENT_UPLOAD',
+                targetType: 'design_studio_reference',
+                targetId: currentUser.uid,
+                metadata: { fileCount: files.length, totalImages: uploadedUrls.length }
+            });
         } catch (err) {
             console.error("Upload failure:", err);
-            alert("Image upload failed. Check connection.");
+            const code = (err as any)?.code || '';
+            const message = code.includes('unauthorized')
+                ? "Image upload is blocked for this account. Please sign in again or contact support."
+                : code.includes('retry-limit-exceeded') || code.includes('canceled')
+                    ? "Image upload could not complete on this connection. Please retry or choose a smaller image."
+                    : "Image upload failed. Your photo was not uploaded. Please retry or continue without image.";
+            setSnackbar({ open: true, message, severity: 'error' });
         } finally {
             setUploading(false);
+            e.target.value = '';
         }
     };
 
@@ -144,10 +202,24 @@ export default function DesignStudioPage() {
                 );
             }
 
+            await logAuditAction({
+                actorId: user?.uid || 'ANONYMOUS',
+                actorRole: role || 'user',
+                action: 'DESIGN_REQUEST_SUBMITTED',
+                targetType: 'design_requests',
+                targetId: docRef.id,
+                metadata: { 
+                    propertyId: selectedPropertyId, 
+                    zoneType: scope.zoneType,
+                    style: designStyle,
+                    imageCount: referenceImages.length
+                }
+            });
+
             navigate(`/design-studio/request/${docRef.id}`);
         } catch (err) {
             console.error("Design Studio Fault:", err);
-            alert("Sovereign AI Engine timeout. Please check your data connectivity.");
+            setSnackbar({ open: true, message: "Sovereign AI Engine timeout. Please check your data connectivity or retry.", severity: 'error' });
         } finally {
             setSubmitting(false);
         }
@@ -207,7 +279,15 @@ export default function DesignStudioPage() {
                                         <input type="file" hidden accept="image/*" multiple onChange={handleImageUpload} />
                                     </Button>
                                 </Stack>
-                                {uploading && <LinearProgress sx={{ height: 2, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />}
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 1 }}>
+                                    Accepted: JPG, PNG, HEIC/Web images where supported. Max 10 MB per image.
+                                </Typography>
+                                {uploading && (
+                                    <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <LinearProgress variant="determinate" value={uploadProgress} sx={{ flexGrow: 1, height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{Math.round(uploadProgress)}%</Typography>
+                                    </Box>
+                                )}
                             </Box>
 
                             <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Redesign Objective</Typography>
@@ -358,6 +438,12 @@ export default function DesignStudioPage() {
                     </Stack>
                 </Grid>
             </Grid>
+
+            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+                <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Container>
     );
 }

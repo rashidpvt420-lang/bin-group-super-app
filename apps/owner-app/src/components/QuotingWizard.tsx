@@ -135,8 +135,7 @@ const QuotingWizard: React.FC<{ onResult: (result: any) => void }> = ({ onResult
                                 sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', borderRadius: 4 }}
                             >
                                 <MenuItem value="Dubai">Dubai Headquarters</MenuItem>
-                                <MenuItem value="Abu Dhabi">Abu Dhabi Division</MenuItem>
-                                <MenuItem value="Al Ain">Al Ain Operations</MenuItem>
+                                <MenuItem value="Abu Dhabi">Abu Dhabi Division (including Al Ain)</MenuItem>
                             </Select>
                         </FormControl>
                     </Stack>

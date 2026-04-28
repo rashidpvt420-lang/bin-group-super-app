@@ -17,4 +17,7 @@ export * from './utils/DesignStudioPricingEngine';
 export * from './context/LanguageContext';
 export * from './components/CeoContactButtons';
 export * from './components/SovereignSupportChat';
+export * from './components/SovereignAlertHandler';
+export * from './utils/auditLogger';
+export * from './lib/firebase';
 console.log("⚡ [SHARED-LOAD] Evaluation Complete.");

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { auth, db, onAuthStateChanged, signInWithPopup } from '../lib/firebase';
+import { auth, db, onAuthStateChanged } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
 
 interface AuthContextType {
@@ -14,6 +14,24 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const ADMIN_ROLES = new Set([
+    'admin',
+    'super_admin',
+    'ceo',
+    'manager',
+    'operations_admin',
+    'finance_admin',
+    'hr_admin',
+    'support_admin',
+]);
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string) => {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(label)), ms)),
+    ]);
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -28,8 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         console.log("🔍 [DIAG] Admin AuthProvider Mounted. Monitoring state...");
-        
-        // [V8] POPUP-ONLY PROTOCOL: Purged Redirect logic to prevent custom domain token drops.
         
         let authHandshakeResolved = false;
         const markAuthReady = () => {
@@ -46,7 +62,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("🔍 [DIAG] Admin Auth handshake marked as READY.");
         };
 
-        // Fallback timeout to prevent deadlock
         setTimeout(markAuthReady, 10000);
 
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
@@ -54,24 +69,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
                 if (usr) {
                     console.log("🛡️ [AUTH] Syncing Profile for:", usr.uid);
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 15000));       
-
                     try {
-                        const userDocPromise = getDoc(doc(db, 'users', usr.uid));
-                        const userDoc = await Promise.race([userDocPromise, timeoutPromise]) as any;
+                        const idTokenResult = await withTimeout(usr.getIdTokenResult(true), 10000, 'AUTH_TOKEN_TIMEOUT') as any;
+                        const claims = idTokenResult?.claims || {};
+                        let data: Record<string, any> = {};
+                        let profileReadFailed = false;
 
-                        if (userDoc.exists()) {
-                            const data = userDoc.data();
-                            console.log("🛡️ [AUTH] Profile resolved. Role:", data.role);
+                        try {
+                            const userDoc = await withTimeout(getDoc(doc(db, 'users', usr.uid)), 10000, 'ADMIN_PROFILE_TIMEOUT') as any;
+                            data = userDoc.exists() ? userDoc.data() : {};
+                        } catch (profileErr) {
+                            profileReadFailed = true;
+                            console.warn("🛡️ [AUTH] Admin profile read skipped:", profileErr);
+                        }
 
-                            const hasAdminAccess = data.role === 'admin' || data.isAdmin === true || data.role === 'ceo' || data.role === 'manager';
+                        const claimRole = typeof claims.role === 'string' ? claims.role : undefined;
+                        const profileRole = typeof data.role === 'string' ? data.role : undefined;
+                        const resolvedRole = claimRole || profileRole || (claims.admin === true ? 'admin' : undefined);
+                        const hasAdminAccess =
+                            claims.admin === true ||
+                            claims.super_admin === true ||
+                            data.isAdmin === true ||
+                            (resolvedRole ? ADMIN_ROLES.has(resolvedRole) : false);
 
-                            if (hasAdminAccess) {
-                                setUser({ ...usr, ...data });
-                                setIsAuthenticated(true);
-                                setError(null);
+                        console.log("🛡️ [AUTH] Identity Resolved. Role:", resolvedRole || 'none', "ProfileReadFailed:", profileReadFailed);
 
-                                // [V5] Silent FCM Token Harvest
+                        if (hasAdminAccess) {
+                            setUser({ ...usr, ...data, role: resolvedRole || 'admin', claims });
+                            setIsAuthenticated(true);
+                            setError(null);
+
                                 (async () => {
                                     try {
                                         const messagingSupported = await isSupported();
@@ -98,26 +125,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                         console.warn("🛡️ [AUTH] FCM harvest bypassed:", fcmErr);
                                     }
                                 })();
+
+                                if (!sessionStorage.getItem(`login_audit_${usr.uid}`)) {
+                                    sessionStorage.setItem(`login_audit_${usr.uid}`, 'true');
+                                    addDoc(collection(db, 'audit_logs'), {
+                                        actorId: usr.uid,
+                                        actorRole: resolvedRole || 'admin',
+                                        targetType: 'system',
+                                        targetId: 'admin-panel',
+                                        action: 'login',
+                                        before: null,
+                                        after: 'active',
+                                        userAgent: navigator.userAgent,
+                                        createdAt: serverTimestamp()
+                                    }).catch(e => console.error("Audit log failed", e));
+                                }
+
                             } else {
                                 console.warn("🛡️ [AUTH] ACCESS DENIED: Insufficient clearance for:", usr.email);
-                                setError("Access Denied: You do not have Administrative or CEO clearance.");
+                                setError("This account is not authorized for the Admin Command Center.");
                                 setIsAuthenticated(false);
                                 setUser(null);
                                 await signOut(auth);
-                            }
-                        } else {
-                            console.error("🛡️ [AUTH] CRITICAL: Profile missing for authenticated user:", usr.uid);
-                            setError("Sovereign Profile not found in the UAE nodes.");
-                            setIsAuthenticated(false);
-                            setUser(null);
-                            await signOut(auth);
                         }
                     } catch (firestoreErr: any) {
                         console.error("🛡️ [AUTH] Firestore Sync Error:", firestoreErr);
-                        setError("Identity Synchronization Failure. Protocol violation or database timeout.");
+                        setError("We could not verify your admin session. Please retry or contact support if this continues.");
                         setIsAuthenticated(false);
                         setUser(null);
-                        // Safe fallback: Allow re-auth rather than signOut to prevent loops if it's just a timeout
                     } finally {
                         markAuthReady();
                     }
@@ -146,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = async (credentials: any) => {
-        // Handled via UnifiedLogin.tsx -> signInWithPopup
     };
 
     const logout = async () => {

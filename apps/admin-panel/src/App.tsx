@@ -19,7 +19,7 @@ import InstitutionalReportsPanel from './components/reports/InstitutionalReports
 import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider } from '@bin/shared';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { auth } from './lib/firebase';
 
@@ -252,6 +252,7 @@ function Layout() {
             <Box sx={{ position: 'fixed', bottom: 0, right: 0, zIndex: 9999 }}>
                 <SovereignAIChat role="admin" onNavigate={navigate} />
             </Box>
+            <SovereignAlertHandler />
         </Box>
     );
 }

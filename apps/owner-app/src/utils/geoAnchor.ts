@@ -13,6 +13,7 @@ type GeoInput = {
     verified?: boolean;
     verifiedBy?: string | null;
     requiresGeoReview?: boolean;
+    dispatchReady?: boolean;
 };
 
 const base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
@@ -75,12 +76,16 @@ export const buildGeoAnchor = (input: GeoInput) => {
     const lng = parseCoordinate(input.lng);
     const isManual = input.source === 'admin_manual';
 
-    if (!isManual && (lat === null || lng === null || !isValidLatLng(lat, lng))) {
+    if (lat === null || lng === null || !isValidLatLng(lat, lng)) {
         throw new Error('Please select the property location from Google Maps.');
     }
 
+    if (lat === 0 && lng === 0) {
+        throw new Error('Please select the real property location. Default coordinates cannot be used.');
+    }
+
     const address = input.address?.trim() || '';
-    if (!address && !isManual) {
+    if (!address && !input.placeId) {
         throw new Error('Address is required for verification.');
     }
 
@@ -89,10 +94,10 @@ export const buildGeoAnchor = (input: GeoInput) => {
     }
 
     return {
-        point: (lat !== null && lng !== null) ? new GeoPoint(lat, lng) : null,
-        lat: lat || 0,
-        lng: lng || 0,
-        geohash: (lat !== null && lng !== null) ? geohashForLocation([lat, lng]) : 'PENDING',
+        point: new GeoPoint(lat, lng),
+        lat,
+        lng,
+        geohash: geohashForLocation([lat, lng]),
         address,
         emirate: input.emirate.trim(),
         city: input.city?.trim() || input.area?.trim() || input.emirate.trim(),
@@ -103,7 +108,8 @@ export const buildGeoAnchor = (input: GeoInput) => {
         verifiedBy: input.verifiedBy || null,
         verifiedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        requiresGeoReview: !!input.requiresGeoReview || isManual
+        requiresGeoReview: !!input.requiresGeoReview || isManual,
+        dispatchReady: input.dispatchReady ?? (!isManual && (input.verified ?? true))
     };
 };
 

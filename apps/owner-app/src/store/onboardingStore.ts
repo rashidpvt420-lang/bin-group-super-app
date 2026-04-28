@@ -96,6 +96,8 @@ export interface PropertyData {
         city: string;
         area: string;
         verified: boolean;
+        dispatchReady?: boolean;
+        requiresGeoReview?: boolean;
         verifiedAt?: string;
         updatedAt?: string;
     };

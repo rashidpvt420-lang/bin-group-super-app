@@ -62,7 +62,9 @@ const normalizePropertyForSubmission = (property: any, ownerId: string) => {
         area: property.area || property.geo?.area,
         placeId: property.googlePlaceId || property.geo?.placeId,
         source: property.geo?.source || 'google_maps',
-        verified: property.geo?.verified ?? true
+        verified: property.geo?.verified ?? true,
+        requiresGeoReview: property.geo?.requiresGeoReview,
+        dispatchReady: property.geo?.dispatchReady
     });
 
     return {
@@ -79,7 +81,8 @@ const normalizePropertyForSubmission = (property: any, ownerId: string) => {
         geo,
         location: { lat: geo.lat, lng: geo.lng },
         coordinates: { lat: geo.lat, lng: geo.lng },
-        geoAnchorStatus: geo.verified ? 'owner_confirmed' : 'admin_review_required'
+        dispatchReady: geo.dispatchReady,
+        geoAnchorStatus: geo.dispatchReady ? 'owner_confirmed' : 'admin_review_required'
     };
 };
 

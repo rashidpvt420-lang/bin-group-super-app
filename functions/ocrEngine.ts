@@ -36,12 +36,14 @@ export async function extractTitleDeedData(fileUrl: string) {
         const buffer = await fileResponse.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
+        const mimeType = fileResponse.headers.get('content-type') || 'application/pdf';
+
         const request = {
             contents: [{ 
                 role: 'user', 
                 parts: [
                     { text: prompt },
-                    { inlineData: { data: base64, mimeType: 'application/pdf' } }
+                    { inlineData: { data: base64, mimeType: mimeType } }
                 ] 
             }],
         };

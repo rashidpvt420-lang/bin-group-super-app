@@ -96,6 +96,11 @@
         .public-contact { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; color: rgba(255,255,255,0.65); }
         .public-contact a { color: #c6a75e; }
         .system-loader { min-height: auto; height: auto; padding: 22px; background: transparent; font-size: 12px; }
+        
+        /* [ROUTE-AWARE CONTENT] */
+        .route-content { display: none; }
+        body:not(.bin-groups-timeout-visible) .route-home { display: block; }
+        
         @media (max-width: 800px) {
             .public-shell { padding: 22px; }
             .public-nav, .public-hero { display: block; }
@@ -127,33 +132,46 @@
                     </div>
                 </nav>
 
-                <section class="public-hero">
-                    <div>
-                        <div class="public-kicker">UAE Property Operations</div>
-                        <h1 class="public-title">BIN-GROUPS — The Real-Time Property Operations OS for the UAE</h1>
-                        <p class="public-copy">
-                            From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties,
-                            and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers,
-                            payments, documents, contracts, and AI design in one verified command system.
-                        </p>
-                        <div class="public-cta">
-                            <a href="/request-demo" class="primary-cta">Request Contract</a>
-                            <a href="/owners" class="secondary-cta">View Platform</a>
-                            <a href="/onboarding" class="secondary-cta">Onboard Your Property</a>
+                <div id="static-route-home" class="route-content route-home">
+                    <section class="public-hero">
+                        <div>
+                            <div class="public-kicker">UAE Property Operations</div>
+                            <h1 class="public-title">BIN-GROUPS — The Real-Time Property Operations OS for the UAE</h1>
+                            <p class="public-copy">
+                                From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties,
+                                and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers,
+                                payments, documents, contracts, and AI design in one verified command system.
+                            </p>
+                            <div class="public-cta">
+          <a href="/request-demo" class="primary-cta">Request Contract</a>
+          <a href="/owners" class="secondary-cta">View Platform</a>
+          <a href="/onboarding" class="secondary-cta">Onboard Your Property</a>
+                            </div>
                         </div>
 
-                    </div>
+                        <aside class="public-panel">
+                            <h2>Built For Every UAE Asset Type</h2>
+                            <ul>
+                                <li>Villas, apartments, towers, offices, and retail centers</li>
+                                <li>Malls, hotels, hospitals, clinics, schools, and warehouses</li>
+                                <li>Government properties, private Majlis, stadiums, and event venues</li>
+                                <li>Verified documents, geo-anchored properties, contracts, payments, and reports</li>
+                            </ul>
+                        </aside>
+                    </section>
+                </div>
 
-                    <aside class="public-panel">
-                        <h2>Built For Every UAE Asset Type</h2>
-                        <ul>
-                            <li>Villas, apartments, towers, offices, and retail centers</li>
-                            <li>Malls, hotels, hospitals, clinics, schools, and warehouses</li>
-                            <li>Government properties, private Majlis, stadiums, and event venues</li>
-                            <li>Verified documents, geo-anchored properties, contracts, payments, and reports</li>
-                        </ul>
-                    </aside>
-                </section>
+                <div id="static-route-owners" class="route-content">
+                    <h1 class="public-title">Owner Command</h1>
+                    <p class="public-copy">Operate every property with verified contracts, documents, payments, and approvals. Get real-time portfolio analytics and AI design upgrades.</p>
+                    <div class="public-cta"><a href="/onboarding" class="primary-cta">Onboard Your Property</a></div>
+                </div>
+
+                <div id="static-route-tenants" class="route-content">
+                    <h1 class="public-title">Tenant Care</h1>
+                    <p class="public-copy">Fast maintenance requests, technician tracking, and clear move-in/move-out support. Sovereign SOS dispatch ensures your unit is always operational.</p>
+          <div class="public-cta"><a href="/support" class="primary-cta">Contact Support</a></div>
+                </div>
 
                 <section class="public-grid" aria-label="Platform capabilities">
                     <div class="public-card">
@@ -168,9 +186,9 @@
                         <strong>Technicians</strong>
                         <span>Receive routed jobs, open maps, update status, track duty, and handle field evidence.</span>
                     </div>
-                    <div class="public-card">
-                        <strong>Admins</strong>
-                        <span>Review onboarding, verify payments, manage documents, route missions, and audit operations.</span>
+        <div class="public-card">
+          <strong>Internal Command</strong>
+          <span>Admin Command Center is protected for BIN-GROUPS staff and authorized internal operators only.</span>
                     </div>
                     <div class="public-card">
                         <strong>AI Design Studio</strong>
@@ -199,6 +217,16 @@
     </div>
 
     <script>
+      (function() {
+        var path = window.location.pathname;
+        var contents = document.querySelectorAll('.route-content');
+        contents.forEach(function(c) { c.style.display = 'none'; });
+        
+        if (path === '/owners') document.getElementById('static-route-owners').style.display = 'block';
+        else if (path === '/tenants') document.getElementById('static-route-tenants').style.display = 'block';
+        else document.getElementById('static-route-home').style.display = 'block';
+      })();
+
       // [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS
       setTimeout(function () {
         var boot = window.__BIN_GROUPS_BOOT__ || {};

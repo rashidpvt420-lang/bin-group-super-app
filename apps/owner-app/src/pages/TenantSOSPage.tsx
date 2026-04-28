@@ -19,6 +19,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../utils/geoAnchor';
 import CeoContactButtons from '../components/CeoContactButtons';
+import { logAuditAction } from '@bin/shared';
 
 interface UnitData {
     id: string;
@@ -55,6 +56,7 @@ export default function TenantSOSPage() {
     const [physicalAddress, setPhysicalAddress] = useState('');
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<UnitData | null>(null);
+    const [tenancyId, setTenancyId] = useState<string | null>(null);
     const [contextLoading, setContextLoading] = useState(true);
 
     const [requestingMoveOut, setRequestingMoveOut] = useState(false);
@@ -134,6 +136,18 @@ export default function TenantSOSPage() {
                     const docData = unitSnap.docs[0].data();
                     const uData: UnitData = { id: unitSnap.docs[0].id, ...docData };
                     setUnitData(uData);
+
+                    // Fetch Active Tenancy Link
+                    const tenancySnap = await getDocs(query(
+                        collection(db, "tenancies"), 
+                        where("tenantId", "==", user.uid),
+                        where("unitId", "==", uData.id),
+                        where("status", "==", "ACTIVE"),
+                        limit(1)
+                    ));
+                    if (!tenancySnap.empty) {
+                        setTenancyId(tenancySnap.docs[0].id);
+                    }
 
                     if (uData.propertyId) {
                         const propRef = doc(db, "properties", uData.propertyId);
@@ -372,7 +386,7 @@ export default function TenantSOSPage() {
                 }
             }
 
-            await addDoc(collection(db, 'maintenanceTickets'), {
+            const ticketRef = await addDoc(collection(db, 'maintenanceTickets'), {
                 companyId: 'BIN_GROUP',
                 tenantId: user.uid,
                 tenantName: user.displayName || 'Sovereign Tenant',
@@ -394,6 +408,7 @@ export default function TenantSOSPage() {
                 // STRICT BINDING
                 propertyId: unitData.propertyId,
                 unitId: unitData.id,
+                tenancyId: tenancyId || 'PENDING_LINK',
                 ownerId: propertyData?.ownerId || 'SYSTEM',
 
                 unitNumber: unitData.unitNumber || '',
@@ -440,6 +455,22 @@ export default function TenantSOSPage() {
                 createdAt: serverTimestamp(),
                 source: 'TENANT_APP_SOS_V6_STRICT'
             });
+
+            await logAuditAction({
+                actorId: user.uid,
+                actorRole: 'tenant',
+                action: 'TICKET_SUBMITTED',
+                targetType: 'maintenanceTickets',
+                targetId: ticketRef.id,
+                metadata: {
+                    category,
+                    urgency,
+                    propertyId: unitData.propertyId,
+                    unitId: unitData.id,
+                    tenancyId: tenancyId || 'PENDING'
+                }
+            });
+
             setSubmitted(true);
         } catch (err) {
             console.error(err);

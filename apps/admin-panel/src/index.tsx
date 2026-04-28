@@ -3,15 +3,19 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import { setupSovereignAlertInterceptor } from '@bin/shared';
+
+setupSovereignAlertInterceptor();
 
 // [STABILITY-PROTOCOL] Global System Recovery
 const handleError = (msg: any, error: any) => {
+  const debugId = `ADMIN-BOOT-${Date.now().toString(36).toUpperCase()}`;
+  console.error(`[${debugId}] Admin bootstrap error:`, msg, error);
   const root = document.getElementById('root');
   if (root) {
     root.innerHTML = `<div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#020617; color:#fff; font-family:sans-serif; text-align:center; padding:20px;">
-      <h2 style="color:#DAA520;">ADMIN_SYSTEM_FAILURE</h2>
-      <p style="opacity:0.7;">A critical bootstrap exception was caught by the Admin Terminal watchdog.</p>
-      <pre style="background:#000; padding:15px; font-size:10px; color:#ff4444; border:1px solid #1e293b; border-radius:4px; text-align:left; overflow:auto; max-width:800px;">${msg}\n${error?.stack || ''}</pre>
+      <h2 style="color:#DAA520;">Admin Console Could Not Start</h2>
+      <p style="opacity:0.75; max-width:560px;">The admin console hit a startup problem. Please reload once. If it continues, contact BIN-GROUPS support with debug ID <strong>${debugId}</strong>.</p>
       <button onclick="window.location.reload()" style="margin-top:30px; background:#DAA520; border:none; color:#000; padding:12px 30px; font-weight:900; cursor:pointer; border-radius:5px;">RELOAD TERMINAL</button>
     </div>`;
   }

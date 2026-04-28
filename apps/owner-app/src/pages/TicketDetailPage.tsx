@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Container, Paper, Button, Stack, Chip, TextField, Grid, alpha, Dialog, DialogTitle, DialogContent, DialogActions, Divider, CircularProgress } from '@mui/material';
 import { ArrowLeft, Camera, CheckCircle2, MapPin, Clock, Navigation, ShieldCheck, PenTool, Phone, MessageSquare, User, ImageIcon } from 'lucide-react';
 import { db, doc, getDoc, updateDoc, serverTimestamp, onSnapshot, storage, ref, uploadBytes, getDownloadURL } from '../lib/firebase';
-import { queueMutation } from '../lib/offlineSync';
+import { queueMutation, queueAttachment } from '../lib/offlineSync';
 import SignaturePad from '../components/SignaturePad';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
@@ -18,7 +18,6 @@ export default function TicketDetailPage() {
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
     const [updating, setUpdating] = useState(false);
-    const [geoWatcher, setGeoWatcher] = useState<number | null>(null);
     const [distanceInfo, setDistanceInfo] = useState<{ distance: string, eta: string } | null>(null);
     const [showCompleteModal, setShowCompleteModal] = useState(false);
     const [signature, setSignature] = useState<string | null>(null);
@@ -68,13 +67,6 @@ export default function TicketDetailPage() {
         setDistanceInfo({ distance: distStr, eta: `${etaMin}-${etaMin + 2} mins` });
     };
 
-    const handleNavigate = () => {
-        if (!ticket?.propertyLocation) return;
-        const loc = ticket.propertyLocation;
-        let query = loc.location ? `${loc.location.lat},${loc.location.lng}` : encodeURIComponent(`${loc.address}, ${loc.propertyName}`);
-        window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, '_blank');
-    };
-
     const updateStatus = async (newStatus: string) => {
         if (!id || !user?.uid) return;
         setUpdating(true);
@@ -85,6 +77,7 @@ export default function TicketDetailPage() {
             setTicket({ ...ticket, ...updateData });
         } catch (err) {
             await queueMutation('maintenanceTickets', id, updateData);
+            setTicket({ ...ticket, ...updateData, pending_sync: true });
         }
         setUpdating(false);
     };
@@ -96,7 +89,15 @@ export default function TicketDetailPage() {
         }
         setUpdating(true);
         const updateData = { status: 'COMPLETED', tenantSignature: signature, notes, completedAt: serverTimestamp(), updatedAt: serverTimestamp() };
-        await updateDoc(doc(db, 'maintenanceTickets', id!), updateData);
+        
+        try {
+            await updateDoc(doc(db, 'maintenanceTickets', id!), updateData);
+        } catch (err) {
+            await queueMutation('maintenanceTickets', id!, updateData);
+            await queueAttachment(id!, 'tenantSignature', signature, `signature_${Date.now()}.png`);
+            setTicket({ ...ticket, ...updateData, pending_sync: true });
+        }
+        
         setShowCompleteModal(false);
         setUpdating(false);
     };
@@ -105,12 +106,17 @@ export default function TicketDetailPage() {
         const file = e.target.files?.[0];
         if (!file || !id) return;
         setUpdating(true);
+        
+        const fileName = `${field}_${Date.now()}.jpg`;
         try {
-            const storageRef = ref(storage, `evidence/${id}/${field}_${Date.now()}.jpg`);
+            const storageRef = ref(storage, `evidence/${id}/${fileName}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
             await updateDoc(doc(db, 'maintenanceTickets', id), { [field]: true, [`${field}Url`]: url, updatedAt: serverTimestamp() });
-        } catch (err) {}
+        } catch (err) {
+            await queueAttachment(id, field, file, fileName);
+            setTicket({ ...ticket, [field]: true, [`${field}Pending`]: true });
+        }
         setUpdating(false);
     };
 
@@ -144,18 +150,26 @@ export default function TicketDetailPage() {
                         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>REF: {ticket.id.substring(0, 8)}</Typography>
                         <Typography variant="h4" fontWeight="900" sx={{ color: '#FFFFFF', mb: 1 }}>{ticket.trade || 'GENERAL'}</Typography>
                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{ticket.propertyName} ({ticket.unitNumber})</Typography>
+                        {(ticket.pending_sync || ticket.hasBeforePhotoPending || ticket.hasAfterPhotoPending) && (
+                            <Chip label="OFFLINE - PENDING SYNC" size="small" sx={{ mt: 1, bgcolor: alpha(binThemeTokens.gold, 0.2), color: binThemeTokens.gold, fontWeight: 900 }} />
+                        )}
                     </Box>
                     <Chip label={ticket.status} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                 </Stack>
 
-                {/* Evidence Grid */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     <Grid item xs={6}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', mb: 1, fontWeight: 900 }}>BEFORE PHOTO</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>BEFORE PHOTO</Typography>
+                            {ticket.hasBeforePhotoPending && <Chip label="QUEUED" size="small" sx={{ height: 16, fontSize: 10, bgcolor: 'rgba(255,255,255,0.1)' }} />}
+                        </Stack>
                         {ticket.hasBeforePhotoUrl ? <Box component="img" src={ticket.hasBeforePhotoUrl} sx={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 4 }} /> : <Paper sx={{ height: 200, bgcolor: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImageIcon color="rgba(255,255,255,0.1)" /></Paper>}
                     </Grid>
                     <Grid item xs={6}>
-                        <Typography variant="caption" sx={{ color: '#4ade80', display: 'block', mb: 1, fontWeight: 900 }}>AFTER PHOTO</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                            <Typography variant="caption" sx={{ color: '#4ade80', fontWeight: 900 }}>AFTER PHOTO</Typography>
+                            {ticket.hasAfterPhotoPending && <Chip label="QUEUED" size="small" sx={{ height: 16, fontSize: 10, bgcolor: 'rgba(255,255,255,0.1)' }} />}
+                        </Stack>
                         {ticket.hasAfterPhotoUrl ? <Box component="img" src={ticket.hasAfterPhotoUrl} sx={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 4 }} /> : <Paper sx={{ height: 200, bgcolor: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImageIcon color="rgba(255,255,255,0.1)" /></Paper>}
                     </Grid>
                 </Grid>
@@ -164,22 +178,6 @@ export default function TicketDetailPage() {
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>DESCRIPTION</Typography>
                     <Typography variant="body1" sx={{ color: '#FFF' }}>{ticket.description}</Typography>
                 </Box>
-
-                {ticket.notes && (
-                    <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>RESOLUTION NOTES</Typography>
-                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>{ticket.notes}</Typography>
-                    </Box>
-                )}
-
-                {ticket.tenantSignature && (
-                    <Box sx={{ mb: 4 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>INSTITUTIONAL SIGN-OFF</Typography>
-                        <Box sx={{ p: 2, bgcolor: '#FFF', borderRadius: 2, display: 'inline-block' }}>
-                            <Box component="img" src={ticket.tenantSignature} sx={{ maxHeight: 100, display: 'block' }} />
-                        </Box>
-                    </Box>
-                )}
 
                 {!isReadOnly && role === 'technician' && (
                     <Stack spacing={2}>

@@ -9,7 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 
-const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
+const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
@@ -24,15 +24,17 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [locationError, setLocationError] = useState<string | null>(null);
     const [mapFailed, setMapFailed] = useState(false);
     const [manualEntry, setManualEntry] = useState(false);
+    const [manualLat, setManualLat] = useState('');
+    const [manualLng, setManualLng] = useState('');
 
     const activeProperty = properties[0];
 
-    const commitGeoAnchor = (payload: { lat: number; lng: number; address?: string; emirate?: string; city?: string; area?: string; placeId?: string; source?: 'google_maps' | 'title_deed' | 'admin_manual'; verified?: boolean; requiresGeoReview?: boolean }) => {
+    const commitGeoAnchor = (payload: { lat: number; lng: number; address?: string; emirate?: string; city?: string; area?: string; placeId?: string; source?: 'google_maps' | 'title_deed' | 'admin_manual'; verified?: boolean; requiresGeoReview?: boolean; dispatchReady?: boolean }) => {
         try {
             const isManual = payload.source === 'admin_manual' || manualEntry;
             const geo = buildPersistableGeoAnchor({
-                lat: payload.lat ?? 0,
-                lng: payload.lng ?? 0,
+                lat: payload.lat,
+                lng: payload.lng,
                 address: payload.address || activeProperty?.address,
                 emirate: payload.emirate || activeProperty?.emirate,
                 city: payload.city || activeProperty?.city || payload.area || activeProperty?.area,
@@ -40,7 +42,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 placeId: payload.placeId || activeProperty?.googlePlaceId || 'MANUAL',
                 source: payload.source || (isManual ? 'admin_manual' : 'google_maps'),
                 verified: payload.verified ?? !isManual,
-                verifiedBy: null
+                verifiedBy: null,
+                requiresGeoReview: payload.requiresGeoReview ?? isManual,
+                dispatchReady: payload.dispatchReady ?? (!isManual && (payload.verified ?? true))
             });
 
             updateProperty(0, {
@@ -52,6 +56,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 geo: geo as any,
                 location: { lat: geo.lat, lng: geo.lng }
             });
+            setManualLat(String(geo.lat));
+            setManualLng(String(geo.lng));
             setLocationError(null);
         } catch (err: any) {
             console.error("Geo Commit Error:", err);
@@ -74,12 +80,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area = component.long_name;
             }
         });
+
+        // [STABILITY] Al Ain is part of Abu Dhabi Emirate
+        if (city === 'Al Ain' || area === 'Al Ain' || emirate === 'Al Ain') {
+            emirate = 'Abu Dhabi';
+            city = 'Al Ain';
+        }
+
         return { emirate, city: city || area || emirate, area: area || city || emirate };
     };
 
     const reverseGeocode = (lat: number, lng: number) => {
         if (!geocoderRef.current) {
-            commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false, requiresGeoReview: true });
+            setLocationError('We could not detect the area. Please search an address or use manual review.');
             return;
         }
         geocoderRef.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
@@ -95,7 +108,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     verified: true
                 });
             } else {
-                commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false, requiresGeoReview: true });
+                setLocationError('We could not detect the area. Please move the pin or search again.');
             }
         });
     };
@@ -109,13 +122,21 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     };
 
     useEffect(() => {
+        const waitForGoogleMaps = async () => {
+            const startedAt = Date.now();
+            while (!(window as any).google?.maps && Date.now() - startedAt < 10000) {
+                await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+            return (window as any).google?.maps;
+        };
+
         const initAutocomplete = async () => {
             try {
-                if (!(window as any).google?.maps) {
-                    setTimeout(() => { if (!(window as any).google?.maps) setMapFailed(true); }, 5000);
+                const googleMaps = await waitForGoogleMaps();
+                if (!googleMaps) {
+                    setMapFailed(true);
                     return;
                 }
-                const googleMaps = (window as any).google.maps;
                 
                 // Using standard Geocoder instead of importLibrary for broader compatibility
                 geocoderRef.current = new googleMaps.Geocoder();
@@ -124,7 +145,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     const autocomplete = new googleMaps.places.Autocomplete(autocompleteRef.current, {
                         componentRestrictions: { country: "ae" },
                         fields: ["address_components", "geometry", "formatted_address", "place_id"],
-                        types: ["address"]
                     });
 
                     autocomplete.addListener("place_changed", () => {
@@ -159,6 +179,10 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                         const pos = markerRef.current.getPosition();
                         moveMarker(pos.lat(), pos.lng());
                     });
+                    mapInstanceRef.current.addListener('click', (event: any) => {
+                        if (!event.latLng) return;
+                        moveMarker(event.latLng.lat(), event.latLng.lng());
+                    });
                 }
                 setManualEntry(false);
             } catch (e) {
@@ -175,17 +199,22 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setLocationError("Emirate and Address are required for manual entry.");
             return;
         }
+        if (!isValidLatLng(manualLat, manualLng)) {
+            setLocationError("Enter valid latitude and longitude, or return to the map and select a pin.");
+            return;
+        }
         commitGeoAnchor({
-            lat: activeProperty?.location?.lat || 0,
-            lng: activeProperty?.location?.lng || 0,
+            lat: Number(manualLat),
+            lng: Number(manualLng),
             source: 'admin_manual',
             verified: false,
-            requiresGeoReview: true
+            requiresGeoReview: true,
+            dispatchReady: false
         });
         onNext();
     };
 
-    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !manualEntry) || (manualEntry && activeProperty?.emirate && activeProperty?.address);
+    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !manualEntry) || (manualEntry && activeProperty?.emirate && activeProperty?.address && isValidLatLng(manualLat, manualLng));
 
     return (
         <Box sx={{ py: 4 }}>
@@ -217,7 +246,27 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                     }}
                                 />
                                 <Box ref={mapRef} sx={{ width: '100%', height: 350, borderRadius: 4, border: '1px solid rgba(198,167,94,0.18)' }} />
-                                <Button onClick={() => setManualEntry(true)} sx={{ color: binThemeTokens.gold }}>Switch to Manual Entry</Button>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                    <Button
+                                        onClick={() => {
+                                            if (!navigator.geolocation) {
+                                                setLocationError('Location permission is not available on this device.');
+                                                return;
+                                            }
+                                            navigator.geolocation.getCurrentPosition(
+                                                (position) => moveMarker(position.coords.latitude, position.coords.longitude),
+                                                () => setLocationError('Location permission is required to anchor this property.'),
+                                                { enableHighAccuracy: true, timeout: 10000 }
+                                            );
+                                        }}
+                                        startIcon={<Crosshair size={16} />}
+                                        sx={{ color: binThemeTokens.gold }}
+                                    >
+                                        Use Current Location
+                                    </Button>
+                                    <Button onClick={() => setManualEntry(true)} sx={{ color: binThemeTokens.gold }}>Switch to Manual Review</Button>
+                                </Stack>
+                                {locationError && <Alert severity="warning">{locationError}</Alert>}
                             </>
                         ) : (
                             <Stack spacing={3}>
@@ -239,10 +288,30 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                     value={activeProperty?.address || ''} 
                                     onChange={(e) => updateProperty(0, { address: e.target.value })} 
                                 />
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField
+                                            fullWidth
+                                            label="Latitude"
+                                            value={manualLat}
+                                            onChange={(e) => setManualLat(e.target.value)}
+                                            placeholder="24.4539"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField
+                                            fullWidth
+                                            label="Longitude"
+                                            value={manualLng}
+                                            onChange={(e) => setManualLng(e.target.value)}
+                                            placeholder="54.3773"
+                                        />
+                                    </Grid>
+                                </Grid>
                                 {locationError && <Typography variant="caption" color="error">{locationError}</Typography>}
                                 <FormControlLabel 
                                     control={<Checkbox checked={true} disabled />} 
-                                    label={<Typography variant="caption">Mark for Administrative Geo-Review (Required for activation)</Typography>} 
+                                    label={<Typography variant="caption">Manual geo is marked for Administrative Geo-Review and cannot auto-dispatch until locked.</Typography>} 
                                 />
                                 {!mapFailed && <Button onClick={() => setManualEntry(false)} sx={{ color: binThemeTokens.gold }}>Return to Map</Button>}
                             </Stack>

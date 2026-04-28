@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
     Box, Typography, Container, Paper, Grid, Button, 
-    CircularProgress, Stack
+    CircularProgress, Stack, Snackbar, Alert
 } from '@mui/material';
 import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
 import { db, collection, getDocs, doc, writeBatch, serverTimestamp } from '../../lib/firebase';
@@ -14,6 +14,7 @@ export default function GeoRepairCommandCenter() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [repairing, setRepairing] = useState<string | null>(null);
+    const [notice, setNotice] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
     useEffect(() => {
         fetchAnomalies();
@@ -50,8 +51,6 @@ export default function GeoRepairCommandCenter() {
     const repairProperty = async (prop: any) => {
         setRepairing(prop.id);
         try {
-            // Attempt to repair via generic geocoding (Placeholder logic for admin map select)
-            // Realistically, the admin would open a map modal here, but for auto-repair we use normalized existing data
             const source = prop.geo || prop.location || prop.coordinates;
             const repairedGeo = buildGeoAnchor({
                 lat: source?.lat ?? source?.latitude,
@@ -61,7 +60,9 @@ export default function GeoRepairCommandCenter() {
                 city: prop.city || prop.area || prop.serviceZone || prop.geo?.city,
                 area: prop.area || prop.serviceZone || prop.city || prop.geo?.area,
                 placeId: prop.googlePlaceId || prop.placeId || prop.geo?.placeId,
-                verifiedBy: 'GEO_REPAIR_CENTER'
+                source: 'admin_manual',
+                verified: true,
+                verifiedBy: 'ADMIN_GEO_REPAIR_CENTER'
             });
             
             if (repairedGeo) {
@@ -72,21 +73,19 @@ export default function GeoRepairCommandCenter() {
                     geo: repairedGeo,
                     location: { lat: repairedGeo.lat, lng: repairedGeo.lng },
                     coordinates: { lat: repairedGeo.lat, lng: repairedGeo.lng },
-                    geoAnchorStatus: 'admin_repaired',
+                    geoAnchorStatus: 'verified_and_locked',
                     updatedAt: serverTimestamp()
                 };
                 batch.set(doc(db, 'properties', prop.id), payload, { merge: true });
-                
                 batch.set(doc(db, 'companies', companyId, 'properties', prop.id), { ...prop, ...payload, propertyId: prop.id }, { merge: true });
                 
                 await batch.commit();
                 await fetchAnomalies();
-                alert(`Property ${prop.propertyName || prop.id} successfully repaired and locked.`);
-            } else {
-                alert(`Could not auto-repair ${prop.id}. Manual pin selection required.`);
+                setNotice({ open: true, message: `${prop.propertyName || prop.id} is now verified and locked.`, severity: 'success' });
             }
         } catch (error) {
             console.error(error);
+            setNotice({ open: true, message: error instanceof Error ? error.message : 'Geo repair failed. Select a verified pin and retry.', severity: 'error' });
         } finally {
             setRepairing(null);
         }
@@ -152,6 +151,11 @@ export default function GeoRepairCommandCenter() {
                     </Paper>
                 </Grid>
             </Grid>
+            <Snackbar open={notice.open} autoHideDuration={6000} onClose={() => setNotice((prev) => ({ ...prev, open: false }))}>
+                <Alert severity={notice.severity} variant="filled" onClose={() => setNotice((prev) => ({ ...prev, open: false }))}>
+                    {notice.message}
+                </Alert>
+            </Snackbar>
         </Container>
     );
 }

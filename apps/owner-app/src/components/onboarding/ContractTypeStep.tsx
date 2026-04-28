@@ -14,43 +14,49 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
     const plans = [
         {
             id: 'maintenance_only',
-            title: 'CONTRACT TYPE A',
+            title: 'PROTOCOL A',
             name: 'MAINTENANCE ONLY',
             icon: <Wrench size={32} />,
             features: [
-                'Covers systemic maintenance issues',
-                'Includes minor repairs & labor',
-                'AED 1,000 Approval Limit per issue',
-                'Automated escalation for high-cost jobs'
+                'Tenant maintenance request handling',
+                'Institutional technician dispatch',
+                'Minor repair coordination',
+                'SLA tracking & Completion proof',
+                'Maintenance history & Owner reports',
+                'AED 1,000 Auto-Approval rule'
             ],
-            desc: 'Focus on technical integrity and rapid restoration.'
+            desc: 'Focus on technical integrity and rapid asset restoration.'
         },
         {
             id: 'pm_only',
-            title: 'CONTRACT TYPE B',
-            name: 'PROPERTY MANAGEMENT ONLY',
+            title: 'PROTOCOL B',
+            name: 'PROPERTY MANAGEMENT',
             icon: <UserCheck size={32} />,
             features: [
-                'Complete operational management',
-                '5% Fee per unit logic',
-                'Rent collection & tenant handling',
-                'Full oversight and reporting'
+                'Tenant onboarding & Document vault',
+                'Rent ledger & tracking',
+                'Complaint management',
+                'Move-in / Move-out inspection',
+                'Occupancy tracking & Lease reminders',
+                'Owner financial reporting'
             ],
-            desc: 'Maximizing ROI through operational excellence.'
+            desc: 'Maximizing ROI through rigorous operational management.'
         },
         {
             id: 'hybrid',
-            title: 'CONTRACT TYPE C',
-            name: 'MAINTENANCE + PM (HYBRID)',
+            title: 'PROTOCOL C',
+            name: 'TOTAL CARE HYBRID',
             icon: <ShieldCheck size={32} />,
             premium: true,
             features: [
-                'All features of Type A and Type B',
-                'Unified operational property care',
-                'Maximum asset visibility',
-                'Premium account management'
+                'All features of Maintenance & PM',
+                'Priority SLA & Escalation',
+                'Preventive maintenance calendar',
+                'Property health & Risk audits',
+                'AI Design Studio access',
+                'Detailed monthly yield reports'
             ],
-            desc: 'The ultimate Sovereign-grade operational layer.'
+            desc: 'The ultimate Sovereign-grade property operations layer.'
         }
     ];
 

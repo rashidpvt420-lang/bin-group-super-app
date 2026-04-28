@@ -48,7 +48,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 
 import ErrorBoundary from './components/ErrorBoundary';
-import { SovereignAIChat, AIProvider } from '@bin/shared';
+import { SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 
@@ -254,6 +254,7 @@ export default function App() {
                   <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
                     <AppContent />
                   </Box>
+                  <SovereignAlertHandler />
                 </Box>
               </AIProvider>
             </RoleProvider>

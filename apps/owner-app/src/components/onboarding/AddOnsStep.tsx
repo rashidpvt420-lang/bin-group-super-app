@@ -201,7 +201,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
 
     return (
         <Box>
-            <Typography variant="h4" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold }}>Service Tailoring</Typography>
+            <Typography variant="h4" fontWeight="950" sx={{ mb: 1, color: binThemeTokens.gold }}>SELECT ADD-ON SERVICES</Typography>
             <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 6, maxWidth: 600 }}>
                 Our intelligence engine has identified the following mandatory and recommended mission-critical services based on your asset profile.
             </Typography>
@@ -262,10 +262,10 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                                                 </Typography>
                                             </Box>
                                         </Box>
-                                        <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 2, minWidth: 140, justifyContent: 'flex-end' }}>
                                             <Box>
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(addon.price)}</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>ANNUAL</Typography>
+                                                <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, whiteSpace: 'nowrap' }}>AED {formatAED(addon.price)}+</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block' }}>ANNUAL</Typography>
                                             </Box>
                                             {isSelected ? (
                                                 <Check color={binThemeTokens.gold} size={24} />
