@@ -17,21 +17,18 @@ import {
 import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
-    db,
-    doc,
+    auth,
+    functions,
     getDownloadURL,
-    getDoc,
+    httpsCallable,
     ref,
-    serverTimestamp,
-    setDoc,
     storage,
-    updateDoc,
     uploadBytes
 } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { buildGeoAnchor } from '../../utils/geoAnchor';
+import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
 const documentLabels: Record<string, string> = {
     propertyProof: 'Proof of property / ownership / title deed / lease authority proof',
@@ -53,7 +50,7 @@ const getPlanCoverage = (selectedPlan: any) => ({
 
 const normalizePropertyForSubmission = (property: any, ownerId: string) => {
     const geoSource = property.geo || property.location || property.coordinates;
-    const geo = buildGeoAnchor({
+    const geo = buildPersistableGeoAnchor({
         lat: geoSource?.lat ?? geoSource?.latitude,
         lng: geoSource?.lng ?? geoSource?.longitude,
         address: property.addressLine || property.address || property.geo?.address,
@@ -105,14 +102,15 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [submissionResult, setSubmissionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
     const requiredProofKeys: Array<keyof typeof proofDocuments> = ['propertyProof', 'emiratesId', 'passport'];
 
-    const uploadProofDocuments = async (intakeId: string) => {
-        if (!ownerAccount?.uid) return {};
+    const uploadProofDocuments = async (intakeId: string, ownerUid: string) => {
+        if (!ownerUid) return {};
 
         const cleanFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const entries = await Promise.all(
@@ -120,21 +118,60 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 .filter(([key, file]) => key !== 'labels' && file instanceof File)
                 .map(async ([key, file]) => {
                     const proofFile = file as File;
-                    const storagePath = `onboarding-proof/${ownerAccount.uid}/${intakeId}/${key}-${cleanFileName(proofFile.name)}`;
+                    const contentType = proofFile.type || 'application/octet-stream';
+                    const storagePath = `onboarding-proof/${ownerUid}/${intakeId}/${key}-${cleanFileName(proofFile.name)}`;
                     const storageRef = ref(storage, storagePath);
-                    await uploadBytes(storageRef, proofFile);
-                    const url = await getDownloadURL(storageRef);
-                    return [
+                    const baseManifest = {
+                        label: documentLabels[key] || key,
+                        fileName: proofFile.name,
+                        contentType,
+                        size: proofFile.size,
+                        storagePath
+                    };
+
+                    console.info('OWNER_ONBOARDING_PROOF_UPLOAD_DEBUG', {
+                        authUid: auth.currentUser?.uid || null,
+                        ownerUid,
                         key,
-                        {
-                            label: documentLabels[key] || key,
-                            fileName: proofFile.name,
-                            contentType: proofFile.type || 'application/octet-stream',
-                            size: proofFile.size,
+                        storagePath,
+                        contentType,
+                        size: proofFile.size
+                    });
+
+                    try {
+                        await uploadBytes(storageRef, proofFile, { contentType });
+                        const url = await getDownloadURL(storageRef);
+                        return [
+                            key,
+                            {
+                                ...baseManifest,
+                                url,
+                                uploadStatus: 'uploaded'
+                            }
+                        ];
+                    } catch (uploadError: any) {
+                        console.error('OWNER_ONBOARDING_PROOF_UPLOAD_FAILED', {
+                            authUid: auth.currentUser?.uid || null,
+                            ownerUid,
+                            key,
                             storagePath,
-                            url
-                        }
-                    ];
+                            code: uploadError?.code || uploadError?.name || 'unknown',
+                            message: uploadError?.message || 'Unknown proof upload error',
+                            serverResponse: uploadError?.serverResponse || null
+                        });
+
+                        return [
+                            key,
+                            {
+                                ...baseManifest,
+                                uploadStatus: 'upload_failed',
+                                uploadError: {
+                                    code: uploadError?.code || uploadError?.name || 'unknown',
+                                    message: uploadError?.message || 'Proof upload failed.'
+                                }
+                            }
+                        ];
+                    }
                 })
         );
 
@@ -158,9 +195,28 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             return;
         }
 
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            setError('Your session expired. Please sign in again.');
+            return;
+        }
+
+        const signedInOwnerAccount = {
+            ...ownerAccount,
+            uid: currentUser.uid,
+            email: ownerAccount.email || currentUser.email || ''
+        };
+
+        if (ownerAccount.uid !== currentUser.uid) {
+            console.warn('OWNER_ONBOARDING_UID_MISMATCH_CORRECTED', {
+                authUid: currentUser.uid,
+                ownerAccountUid: ownerAccount.uid
+            });
+        }
+
         let submissionProperties: any[] = [];
         try {
-            submissionProperties = (properties.length ? properties : []).map((property) => normalizePropertyForSubmission(property, ownerAccount.uid));
+            submissionProperties = (properties.length ? properties : []).map((property) => normalizePropertyForSubmission(property, currentUser.uid));
             if (submissionProperties.length === 0 || submissionProperties.some((property) => !property.geo?.point)) {
                 setError('Please select the property location from Google Maps.');
                 return;
@@ -173,48 +229,52 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         setSubmitting(true);
         setError(null);
         try {
-            const submissionId = `${ownerAccount.uid}_${onboardingSessionId}`;
-            const contractRef = doc(db, 'contracts', `${submissionId}_contract`);
-            const paymentRef = doc(db, 'payment_transactions', `${submissionId}_mobilization`);
-            const intakeRef = doc(db, 'intake_submissions', submissionId);
-            const [existingIntake, existingContract, existingPayment] = await Promise.all([
-                getDoc(intakeRef),
-                getDoc(contractRef),
-                getDoc(paymentRef)
-            ]);
+            const idTokenResult = await currentUser.getIdTokenResult(true);
+            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
+            const contractId = `${submissionId}_contract`;
+            const paymentTransactionId = `${submissionId}_mobilization`;
             const planCoverage = getPlanCoverage(selectedPlan);
-            const baseLifecycle = {
-                companyId: COMPANY_ID,
-                projectId: PROJECT_ID,
-                ownerId: ownerAccount.uid,
-                userId: ownerAccount.uid,
-                createdBy: ownerAccount.uid,
-                createdByRole: 'owner',
-                visibility: 'admin_owner',
-                auditVersion: 1
-            };
 
-            await setDoc(intakeRef, {
-                ...baseLifecycle,
-                intakeId: intakeRef.id,
+            console.info('OWNER_ONBOARDING_SUBMIT_DEBUG', {
+                authUid: currentUser.uid,
+                claims: idTokenResult.claims,
+                targetCallable: 'submitOwnerOnboarding',
+                targetPaths: {
+                    intake: `intake_submissions/${submissionId}`,
+                    propertyPending: `properties_pending/${submissionProperties[0]?.propertyId || `${submissionId}_property`}`,
+                    contract: `contracts/${contractId}`,
+                    payment: `payment_transactions/${paymentTransactionId}`,
+                    audit: `audit_logs/${submissionId}_submit`
+                },
+                payloadKeys: [
+                    'idempotencyKey',
+                    'onboardingSessionId',
+                    'ownerAccount',
+                    'contactInfo',
+                    'companyProfile',
+                    'properties',
+                    'selectedPlan',
+                    'selectedAddOns',
+                    'portfolioSummary',
+                    'pricing',
+                    'payment',
+                    'proofDocuments'
+                ]
+            });
+
+            const uploadedProofDocuments = await uploadProofDocuments(submissionId, currentUser.uid);
+            const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
+            const result = await submitOwnerOnboarding({
                 idempotencyKey: submissionId,
                 onboardingSessionId,
-                ownerAccount,
-                accountCreation: {
-                    uid: ownerAccount.uid,
-                    fullName: ownerAccount.fullName,
-                    email: ownerAccount.email,
-                    mobile: ownerAccount.mobile,
-                    createdBeforePayment: true
-                },
+                ownerAccount: signedInOwnerAccount,
                 contactInfo: {
-                    contactPerson: ownerAccount.fullName || companyProfile.contactPerson,
-                    email: ownerAccount.email || companyProfile.email,
-                    phone: ownerAccount.mobile || companyProfile.phone
+                    contactPerson: signedInOwnerAccount.fullName || companyProfile.contactPerson,
+                    email: signedInOwnerAccount.email || companyProfile.email,
+                    phone: signedInOwnerAccount.mobile || companyProfile.phone
                 },
                 companyProfile,
                 properties: submissionProperties,
-                propertyDetails: submissionProperties,
                 selectedPlan,
                 servicePlan: {
                     id: selectedPlan?.id || 'hybrid',
@@ -226,13 +286,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 contractType: selectedPlan?.id || selectedPlan?.name || 'hybrid',
                 selectedAddOns,
                 addOns: selectedAddOns,
-                titleDeed: {
-                    status: proofDocuments.propertyProof ? 'uploaded' : 'missing',
-                    verificationStatus: proofDocuments.propertyProof ? 'manual_review_required' : 'missing',
-                    source: 'OWNER_UPLOADED_DOCUMENT',
-                    verifiedFieldsLocked: false,
-                    locationGeoAnchorRequired: true
-                },
+                proofDocuments: uploadedProofDocuments,
                 portfolioSummary,
                 pricing: {
                     annualContractValue: estimatedAnnualValue,
@@ -241,119 +295,34 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     currency: 'AED'
                 },
                 payment: {
-                    paymentId: paymentRef.id,
-                    contractId: contractRef.id,
                     method: paymentMethod,
                     state: 'PAYMENT_PENDING',
                     amount: mobilizationAmount,
                     currency: 'AED',
                     mobilizationPercent: 15
-                },
-                paymentState: 'PAYMENT_PENDING',
-                paymentStatus: 'PENDING',
-                paymentGate: {
-                    required: true,
-                    mobilizationPercent: 15,
-                    dashboardUnlockRequiresAdminApproval: true
-                },
-                adminReviewState: 'AWAITING_VERIFICATION',
-                activationState: 'LOCKED_PENDING_ADMIN_APPROVAL',
-                status: 'AWAITING_VERIFICATION',
-                source: 'OWNER_PUBLIC_ONBOARDING_V4',
-                ...(existingIntake.exists() ? {} : { createdAt: serverTimestamp() }),
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            const uploadedProofDocuments = await uploadProofDocuments(intakeRef.id);
-            await updateDoc(intakeRef, {
-                proofDocuments: uploadedProofDocuments,
-                ownerIdentityDocuments: {
-                    emiratesId: uploadedProofDocuments.emiratesId || null,
-                    passport: uploadedProofDocuments.passport || null,
-                    tradeLicense: uploadedProofDocuments.tradeLicense || null
-                },
-                updatedAt: serverTimestamp()
+                }
             });
 
-            await setDoc(contractRef, {
-                ...baseLifecycle,
-                contractId: contractRef.id,
-                intakeId: intakeRef.id,
-                idempotencyKey: `${submissionId}_contract`,
-                status: 'PENDING_APPROVAL',
-                contractStatus: 'draft',
-                activationStatus: 'LOCKED_PENDING_ADMIN_APPROVAL',
-                paymentVerified: false,
-                paymentStatus: 'PENDING',
-                packageName: selectedPlan?.name || selectedPlan?.packageName || 'Institutional Package',
-                planType: selectedPlan?.id || 'hybrid',
-                selectedAddOns,
-                coverage: planCoverage.included,
-                exclusions: planCoverage.excluded,
-                signatureState: {
-                    ownerSigned: false,
-                    binGroupsSigned: false,
-                    pdfGenerated: false,
-                    emailed: false
-                },
-                paymentSchedule: {
-                    mobilizationPercent: 15,
-                    mobilizationAmount,
-                    remainingBalance: Math.max(estimatedAnnualValue - mobilizationAmount, 0),
-                    currency: 'AED'
-                },
-                portfolioSummary,
-                annualContractValue: estimatedAnnualValue,
-                depositAmount: mobilizationAmount,
-                ...(existingContract.exists() ? {} : { createdAt: serverTimestamp() }),
-                updatedAt: serverTimestamp()
-            }, { merge: true });
+            const response = result.data as any;
+            console.info('OWNER_ONBOARDING_SUBMIT_SUCCESS', {
+                intakeId: response?.intakeId,
+                propertyId: response?.propertyId,
+                contractId: response?.contractId,
+                paymentTransactionId: response?.paymentTransactionId,
+                auditLogId: response?.auditLogId,
+                status: response?.status
+            });
 
-            await setDoc(paymentRef, {
-                ...baseLifecycle,
-                paymentId: paymentRef.id,
-                intakeId: intakeRef.id,
-                contractId: contractRef.id,
-                idempotencyKey: `${submissionId}_mobilization`,
-                amount: mobilizationAmount,
-                currency: 'AED',
-                method: paymentMethod,
-                gateway: paymentMethod === 'BANK_TRANSFER' ? 'MANUAL_BANK' : 'MANUAL',
-                status: 'PENDING',
-                verificationState: 'ADMIN_VERIFICATION_REQUIRED',
-                unlocksDashboard: false,
-                history: [{ status: 'PENDING', timestamp: new Date(), note: '15% mobilization submitted for admin verification.' }],
-                ...(existingPayment.exists() ? {} : { createdAt: serverTimestamp() }),
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            await setDoc(doc(db, 'owners', ownerAccount.uid), {
-                ownerId: ownerAccount.uid,
-                uid: ownerAccount.uid,
-                name: ownerAccount.fullName,
-                displayName: ownerAccount.fullName,
-                email: ownerAccount.email,
-                phone: ownerAccount.mobile,
-                status: 'PAYMENT_PENDING',
-                dashboardUnlocked: false,
-                activeContractId: contractRef.id,
-                latestIntakeId: intakeRef.id,
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            await setDoc(doc(db, 'users', ownerAccount.uid), {
-                role: 'owner',
-                status: 'PAYMENT_PENDING',
-                dashboardUnlocked: false,
-                activeContractId: contractRef.id,
-                latestIntakeId: intakeRef.id,
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            setIntakeId(intakeRef.id);
+            setSubmissionResult(response);
+            setIntakeId(response?.intakeId || submissionId);
             setSubmitted(true);
         } catch (err: any) {
-            console.error('Submission error:', err);
+            console.error('OWNER_ONBOARDING_SUBMIT_FAILED', {
+                code: err?.code || err?.name || 'unknown',
+                message: err?.message || 'Unknown submission error',
+                details: err?.details || null,
+                authUid: auth.currentUser?.uid || null
+            });
             setError(err?.message || 'Onboarding submission failed.');
         } finally {
             setSubmitting(false);
@@ -370,6 +339,15 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4 }}>
                     Your dashboard remains locked while admin verifies documents and the 15% mobilization payment.
                 </Typography>
+                {submissionResult && (
+                    <Paper sx={{ p: 3, mb: 4, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'left' }}>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>ADMIN REVIEW IDS</Typography>
+                        <Typography variant="body2">Intake: {submissionResult.intakeId}</Typography>
+                        <Typography variant="body2">Property: {submissionResult.propertyId}</Typography>
+                        <Typography variant="body2">Contract: {submissionResult.contractId}</Typography>
+                        <Typography variant="body2">Payment: {submissionResult.paymentTransactionId}</Typography>
+                    </Paper>
+                )}
                 <Button
                     variant="contained"
                     onClick={() => {

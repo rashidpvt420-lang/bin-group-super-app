@@ -1,19 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
     Container, Typography, Box, Paper, Grid, Stack, Button, 
     Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     alpha
 } from '@mui/material';
 import { 
-    ShieldCheck, Download, 
-    Landmark, CheckCircle2,
-    FileText, Shield
+    Landmark
 } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
+import { Download, ShieldCheck } from 'lucide-react';
 
 const InstitutionalDocumentVaultPage: React.FC = () => {
-    const { tx, isRTL } = useLanguage();
-
     const complianceDocs = [
         { name: 'Trade License 2026', type: 'LICENSE', status: 'VERIFIED', expiry: '2026-12-31' },
         { name: 'VAT Registration UAE', type: 'TAX', status: 'VERIFIED', expiry: 'N/A' },

@@ -6,8 +6,11 @@ service cloud.firestore {
     function isAdmin() { 
       return isAuth() && (
         request.auth.token.admin == true || 
+        request.auth.token.isAdmin == true ||
+        request.auth.token.ceo == true ||
+        request.auth.token.manager == true ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
       ); 
     }
     
@@ -23,6 +26,7 @@ service cloud.firestore {
         request.resource.data.companyId is string &&
         request.resource.data.propertyId is string &&
         request.resource.data.unitId is string &&
+        request.resource.data.tenancyId is string &&
         request.resource.data.tenantId == request.auth.uid &&
         request.resource.data.geo.lat is number &&
         request.resource.data.geo.lng is number &&
@@ -30,25 +34,42 @@ service cloud.firestore {
         request.resource.data.geo.lat <= 90 &&
         request.resource.data.geo.lng >= -180 &&
         request.resource.data.geo.lng <= 180);
-      allow read, update: if isAuth(); 
+      
+      allow read: if isAuth() && (
+        resource.data.tenantId == request.auth.uid || 
+        resource.data.ownerId == request.auth.uid || 
+        resource.data.assignedTechnicianId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      allow update: if isAuth() && (
+        (resource.data.tenantId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rating', 'feedback'])) ||
+        (resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'estimatedCostApproved'])) ||
+        (resource.data.assignedTechnicianId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'techNotes', 'actualCost', 'completedAt'])) ||
+        isAdmin()
+      );
+      
       allow delete: if isAdmin();
     }
 
     match /intake_submissions/{id} {
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuth() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status in ['DRAFT', 'IN_PROGRESS'];
       allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin() || (
         isAuth() &&
         resource.data.userId == request.auth.uid &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.activationState == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
+        resource.data.status in ['DRAFT', 'IN_PROGRESS'] &&
+        request.resource.data.status in ['DRAFT', 'IN_PROGRESS'] &&
         request.resource.data.dashboardUnlocked != true
       );
       allow delete: if isAdmin();
     }
 
-    match /properties/{propertyId} {
-      allow read: if isAuth(); 
+    match /properties_pending/{propertyId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
       allow write: if isAdmin() &&
         request.resource.data.companyId is string &&
         request.resource.data.ownerId is string &&
@@ -60,72 +81,48 @@ service cloud.firestore {
         request.resource.data.geo.lng <= 180 &&
         (request.resource.data.geo.address is string || request.resource.data.geo.placeId is string) &&
         request.resource.data.geo.emirate is string &&
-        (request.resource.data.geo.city is string || request.resource.data.geo.area is string);
+        (request.resource.data.geo.city is string || request.resource.data.geo.area is string) &&
+        request.resource.data.dispatchReady == false &&
+        request.resource.data.verified == false &&
+        request.resource.data.approved == false;
     }
 
-    match /companies/{companyId}/properties/{propId} {
-      allow read: if isAuth();
-      allow write: if isAdmin() &&
-        request.resource.data.companyId == companyId &&
-        request.resource.data.ownerId is string &&
-        request.resource.data.geo.lat is number &&
-        request.resource.data.geo.lng is number &&
-        request.resource.data.geo.lat >= -90 &&
-        request.resource.data.geo.lat <= 90 &&
-        request.resource.data.geo.lng >= -180 &&
-        request.resource.data.geo.lng <= 180 &&
-        (request.resource.data.geo.address is string || request.resource.data.geo.placeId is string) &&
-        request.resource.data.geo.emirate is string &&
-        (request.resource.data.geo.city is string || request.resource.data.geo.area is string);
+    match /properties/{propertyId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin()); 
+      allow write: if isAdmin();
+    }
+
+    match /units/{unitId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /tenancies/{tenancyId} {
+      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
     }
 
     match /contracts/{contractId} {
       allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isAdmin() || (
-        isAuth() &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
-        request.resource.data.paymentVerified == false
-      );
-      allow update: if isAdmin() || (
-        isAuth() &&
-        resource.data.ownerId == request.auth.uid &&
-        request.resource.data.ownerId == request.auth.uid &&
-        resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
-        request.resource.data.activationStatus == 'LOCKED_PENDING_ADMIN_APPROVAL' &&
-        request.resource.data.paymentVerified == false
-      );
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /payment_transactions/{paymentId} {
       allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isAdmin() || (
-        isAuth() &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.status == 'PENDING' &&
-        request.resource.data.unlocksDashboard == false
-      );
-      allow update: if isAdmin() || (
-        isAuth() &&
-        resource.data.ownerId == request.auth.uid &&
-        request.resource.data.ownerId == request.auth.uid &&
-        resource.data.status == 'PENDING' &&
-        request.resource.data.status == 'PENDING' &&
-        request.resource.data.unlocksDashboard == false
-      );
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /owners/{ownerId} {
       allow read: if isOwner(ownerId) || isAdmin();
-      allow create, update: if isAdmin() || (
-        isOwner(ownerId) &&
-        request.resource.data.ownerId == request.auth.uid &&
-        request.resource.data.dashboardUnlocked == false &&
-        request.resource.data.status == 'PAYMENT_PENDING'
-      );
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{auditId} {
+      allow read: if isAdmin() || (isAuth() && resource.data.actorId == request.auth.uid);
+      allow write: if isAdmin();
     }
 
     match /telemetry_logs/{logId} {

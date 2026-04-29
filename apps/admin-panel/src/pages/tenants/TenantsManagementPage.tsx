@@ -1,15 +1,14 @@
 // admin-panel/src/pages/tenants/TenantsManagementPage.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Container, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, TextField, Typography, Button, Dialog,
-  DialogTitle, DialogContent, DialogActions, IconButton, Tooltip,
-  LinearProgress, Grid, MenuItem, Select, FormControl, InputLabel, Alert, Divider, CircularProgress, Stack
+  DialogTitle, DialogContent, DialogActions, IconButton, Grid, Stack,
+  FormControl, InputLabel, Select, MenuItem, CircularProgress
 } from '@mui/material';
-import { db, auth } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, writeBatch, addDoc, getDoc, getDocs, limit, startAfter, orderBy } from 'firebase/firestore';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, UploadFile as UploadIcon, ExitToApp as MoveOutIcon, ExpandMore as LoadMoreIcon, Search as SearchIcon } from '@mui/icons-material';
-import { useLanguage } from '@bin/shared';
+import { db } from '../../lib/firebase';
+import { collection, onSnapshot, query, where, serverTimestamp, doc, writeBatch, getDocs, limit, orderBy, startAfter } from 'firebase/firestore';
+import { Add as AddIcon, Edit as EditIcon, Search as SearchIcon } from '@mui/icons-material';
 
 interface Unit {
     id: string;
@@ -21,16 +20,9 @@ interface Unit {
 }
 
 export default function TenantsManagementPage() {
-  const { t, isRTL } = useLanguage();
   const [tenants, setTenants] = useState<any[]>([]);
-  const [lastDoc, setLastDoc] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
-  const [queryError, setQueryError] = useState<string | null>(null);
   
   // Strict Relationship Data
   const [owners, setOwners] = useState<any[]>([]);
@@ -55,6 +47,9 @@ export default function TenantsManagementPage() {
 
   const PAGE_SIZE = 20;
 
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
+
   useEffect(() => {
     const fetchInitialData = async () => {
         // Load Lookups
@@ -64,20 +59,38 @@ export default function TenantsManagementPage() {
         onSnapshot(query(collection(db, 'properties')), (snap) => {
             setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
-        onSnapshot(query(collection(db, 'units')), (snap) => {
-            setUnits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit)));
-        });
-
-        // Load Tenants
+        
+        // Initial Tenants
         const q = query(collection(db, 'users'), where('role', '==', 'tenant'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const snap = await getDocs(q);
         setTenants(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
+        if (snap.docs.length < PAGE_SIZE) setHasMore(false);
         setLastDoc(snap.docs[snap.docs.length - 1]);
-        setHasMore(snap.docs.length === PAGE_SIZE);
-        setLoading(false);
     };
     fetchInitialData();
   }, []);
+
+  const loadMoreTenants = async () => {
+      if (!lastDoc || !hasMore) return;
+      const q = query(collection(db, 'users'), where('role', '==', 'tenant'), orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
+      const snap = await getDocs(q);
+      const newTenants = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      setTenants(prev => [...prev, ...newTenants]);
+      setLastDoc(snap.docs[snap.docs.length - 1]);
+      if (snap.docs.length < PAGE_SIZE) setHasMore(false);
+  };
+
+  const fetchUnitsForProperty = async (propId: string) => {
+      const q = query(collection(db, 'units'), where('propertyId', '==', propId));
+      const snap = await getDocs(q);
+      setUnits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit)));
+  };
+
+  useEffect(() => {
+      if (selectedPropertyId) {
+          fetchUnitsForProperty(selectedPropertyId);
+      }
+  }, [selectedPropertyId]);
 
   const handleSearchExisting = async () => {
     if (!existingTenantSearch.includes('@')) return;
@@ -221,6 +234,12 @@ export default function TenantsManagementPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {hasMore && (
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+          <Button onClick={loadMoreTenants} sx={{ fontWeight: 900, color: '#000' }}>LOAD MORE RECORDS</Button>
+        </Box>
+      )}
 
       {/* ASSIGNMENT DIALOG */}
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="md" fullWidth>

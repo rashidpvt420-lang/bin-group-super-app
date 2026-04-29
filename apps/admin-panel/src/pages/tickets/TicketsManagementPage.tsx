@@ -28,13 +28,12 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
-  CircularProgress,
   Stack,
   Divider,
   Alert
 } from '@mui/material';
 import { db } from '../../lib/firebase';
-import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp, startAfter } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
 
@@ -73,10 +72,6 @@ interface Technician {
 export default function TicketsManagementPage() {
   const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [lastDoc, setLastDoc] = useState<any>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -86,7 +81,6 @@ export default function TicketsManagementPage() {
   const [detailTicket, setDetailTicket] = useState<Ticket | null>(null);
   const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [techLoading, setTechLoading] = useState(false);
   
   const PAGE_SIZE = 20;
 
@@ -118,27 +112,14 @@ export default function TicketsManagementPage() {
         const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const snap = await getDocs(q);
         setTickets(snap.docs.map(mapTicket));
-        setLastDoc(snap.docs[snap.docs.length - 1]);
-        setHasMore(snap.docs.length === PAGE_SIZE);
-        setLoading(false);
+        setTickets(snap.docs.map(mapTicket));
     };
     fetchInitial();
   }, []);
 
-  const loadMore = async () => {
-    if (!lastDoc || loadingMore) return;
-    setLoadingMore(true);
-    const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
-    const snap = await getDocs(q);
-    const fetched = snap.docs.map(mapTicket);
-    setTickets(prev => [...prev, ...fetched]);
-    setLastDoc(snap.docs[snap.docs.length - 1]);
-    setHasMore(snap.docs.length === PAGE_SIZE);
-    setLoadingMore(false);
-  };
+
 
   const fetchTechnicians = async () => {
-      setTechLoading(true);
       try {
           const q = query(collection(db, 'users'), where('role', '==', 'technician'));
           const snap = await getDocs(q);
@@ -147,7 +128,6 @@ export default function TicketsManagementPage() {
       } catch (err) {
           console.error("Failed to fetch technicians:", err);
       }
-      setTechLoading(false);
   };
 
   const handleOpenAssign = (ticket: Ticket) => {
@@ -252,14 +232,6 @@ export default function TicketsManagementPage() {
     const hours = Math.floor((completed.getTime() - created.getTime()) / (1000 * 60 * 60));
     return `${hours}h`;
   };
-
-  if (loading) {
-    return (
-      <Container sx={{ py: 10, textAlign: 'center' }}>
-        <Typography variant="h6" className="animate-pulse">{t('tech.syncing')}</Typography>
-      </Container>
-    );
-  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -403,10 +375,7 @@ export default function TicketsManagementPage() {
               <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
                   Select a verified specialist from the Technician Corps to handle Mission #{assigningTicket?.ticketId.substring(0,8).toUpperCase()}.
               </Typography>
-              {techLoading ? (
-                  <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box>
-              ) : (
-                  <List>
+              <List>
                       {technicians.map(tech => (
                           <ListItem 
                             button 
@@ -429,7 +398,6 @@ export default function TicketsManagementPage() {
                       ))}
                       {technicians.length === 0 && <Typography variant="body2" sx={{ textAlign: 'center', py: 2, fontStyle: 'italic' }}>No specialists found in this sector.</Typography>}
                   </List>
-              )}
           </DialogContent>
           <DialogActions>
               <Button onClick={() => setAssigningTicket(null)}>CANCEL</Button>

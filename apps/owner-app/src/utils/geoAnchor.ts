@@ -1,20 +1,4 @@
 import { GeoPoint, serverTimestamp } from 'firebase/firestore';
-import { GeoAnchor } from '@bin/shared';
-
-type GeoInput = {
-    lat: unknown;
-    lng: unknown;
-    address?: string;
-    emirate?: string;
-    city?: string;
-    area?: string;
-    placeId?: string;
-    source?: "google_maps" | "title_deed" | "admin_manual";
-    verified?: boolean;
-    verifiedBy?: string | null;
-    requiresGeoReview?: boolean;
-    dispatchReady?: boolean;
-};
 
 const base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
@@ -35,7 +19,7 @@ export const geohashForLocation = ([latitude, longitude]: [number, number], prec
                 idx = idx * 2 + 1;
                 lonMin = lonMid;
             } else {
-                idx *= 2;
+                idx = idx * 2;
                 lonMax = lonMid;
             }
         } else {
@@ -44,11 +28,10 @@ export const geohashForLocation = ([latitude, longitude]: [number, number], prec
                 idx = idx * 2 + 1;
                 latMin = latMid;
             } else {
-                idx *= 2;
+                idx = idx * 2;
                 latMax = latMid;
             }
         }
-
         evenBit = !evenBit;
         if (++bit === 5) {
             geohash += base32.charAt(idx);
@@ -56,41 +39,87 @@ export const geohashForLocation = ([latitude, longitude]: [number, number], prec
             idx = 0;
         }
     }
-
     return geohash;
 };
 
-export const parseCoordinate = (value: unknown) => {
-    const numberValue = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
+export interface GeoInput {
+    lat: string | number;
+    lng: string | number;
+    address?: string;
+    emirate?: string;
+    city?: string;
+    area?: string;
+    placeId?: string;
+    source?: string;
+    verified?: boolean;
+    verifiedBy?: string | null;
+    requiresGeoReview?: boolean;
+    dispatchReady?: boolean;
+}
+
+export interface GeoAnchor {
+    point: GeoPoint;
+    lat: number;
+    lng: number;
+    geohash: string;
+    address: string;
+    emirate: string;
+    city: string;
+    area: string;
+    placeId: string | null;
+    source: string;
+    verified: boolean;
+    requiresGeoReview: boolean;
+    dispatchReady: boolean;
+    verifiedBy: string | null;
+    verifiedAt: any;
+    updatedAt: any;
+}
+
+const parseCoordinate = (val: any): number | null => {
+    const num = Number(val);
+    return Number.isFinite(num) ? num : null;
 };
 
-export const isValidLatLng = (lat: unknown, lng: unknown) => {
-    const latitude = parseCoordinate(lat);
-    const longitude = parseCoordinate(lng);
-    return latitude !== null && longitude !== null && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+export const isValidLatLng = (lat: number, lng: number) => {
+    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 };
 
-export const buildGeoAnchor = (input: GeoInput) => {
+export const buildPersistableGeoAnchor = (input: GeoInput): GeoAnchor => {
+    const source = input.source || "google_maps";
+    const isManual = source === "admin_manual";
+
     const lat = parseCoordinate(input.lat);
     const lng = parseCoordinate(input.lng);
-    const isManual = input.source === 'admin_manual';
 
     if (lat === null || lng === null || !isValidLatLng(lat, lng)) {
-        throw new Error('Please select the property location from Google Maps.');
+        throw new Error("Please select the property location from Google Maps or enter valid manual coordinates.");
     }
 
-    if (lat === 0 && lng === 0) {
-        throw new Error('Please select the real property location. Default coordinates cannot be used.');
+    const address = input.address?.trim();
+    if (!address) {
+        throw new Error("Address is required for verification.");
     }
 
-    const address = input.address?.trim() || '';
-    if (!address && !input.placeId) {
-        throw new Error('Address is required for verification.');
+    let emirate = input.emirate?.trim() || "";
+    let city = input.city?.trim() || input.area?.trim() || emirate;
+    let area = input.area?.trim() || input.city?.trim() || emirate;
+
+    if (!emirate) {
+        throw new Error("Emirate is required for institutional tracking.");
     }
 
-    if (!input.emirate?.trim()) {
-        throw new Error('Emirate is required for institutional tracking.');
+    const combined = `${emirate} ${city} ${area}`.toLowerCase();
+
+    // Institutional Correction for Al Ain
+    if (combined.includes("falaj hazza")) {
+        emirate = "Abu Dhabi";
+        city = "Al Ain";
+        area = "Falaj Hazza";
+    } else if (combined.includes("al ain")) {
+        emirate = "Abu Dhabi";
+        city = "Al Ain";
+        area = area || "Al Ain Central";
     }
 
     return {
@@ -99,26 +128,18 @@ export const buildGeoAnchor = (input: GeoInput) => {
         lng,
         geohash: geohashForLocation([lat, lng]),
         address,
-        emirate: input.emirate.trim(),
-        city: input.city?.trim() || input.area?.trim() || input.emirate.trim(),
-        area: input.area?.trim() || input.city?.trim() || input.emirate.trim(),
-        placeId: input.placeId || (isManual ? 'MANUAL' : null),
-        source: input.source || 'google_maps',
+        emirate,
+        city,
+        area,
+        placeId: input.placeId || (isManual ? "MANUAL" : null),
+        source,
         verified: input.verified ?? !isManual,
+        requiresGeoReview: isManual ? true : Boolean(input.requiresGeoReview),
+        dispatchReady: isManual ? false : input.dispatchReady ?? true,
         verifiedBy: input.verifiedBy || null,
-        verifiedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        requiresGeoReview: !!input.requiresGeoReview || isManual,
-        dispatchReady: input.dispatchReady ?? (!isManual && (input.verified ?? true))
+        verifiedAt: input.verified ? serverTimestamp() : null,
+        updatedAt: serverTimestamp()
     };
 };
 
-export const buildPersistableGeoAnchor = (input: GeoInput) => {
-    const geo = buildGeoAnchor(input);
-    return {
-        ...geo,
-        point: geo.point ? { latitude: geo.lat, longitude: geo.lng } : null,
-        verifiedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
-};
+export const buildGeoAnchor = buildPersistableGeoAnchor;

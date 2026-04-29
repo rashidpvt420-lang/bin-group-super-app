@@ -1,8 +1,8 @@
 import React from 'react';
 import { 
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider 
+    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Collapse
 } from '@mui/material';
-import { Wrench, UserCheck, ShieldCheck, ArrowRight, ArrowLeft, Info } from 'lucide-react';
+import { Wrench, UserCheck, ShieldCheck, ArrowRight, ArrowLeft, Info, CheckCircle2, XCircle } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -25,6 +25,12 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                 'Maintenance history & Owner reports',
                 'AED 1,000 Auto-Approval rule'
             ],
+            excludes: [
+                'Major equipment replacement',
+                'Structural / Renovation works',
+                'Authority / Municipality fees',
+                'Landscaping & Pool unless add-on'
+            ],
             desc: 'Focus on technical integrity and rapid asset restoration.'
         },
         {
@@ -34,11 +40,17 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
             icon: <UserCheck size={32} />,
             features: [
                 'Tenant onboarding & Document vault',
-                'Rent ledger & tracking',
-                'Complaint management',
-                'Move-in / Move-out inspection',
+                'Rent ledger & payment tracking',
+                'Complaint mediation',
+                'Move-in / Move-out digital inspection',
                 'Occupancy tracking & Lease reminders',
                 'Owner financial reporting'
+            ],
+            excludes: [
+                'Technical maintenance dispatch',
+                'Court / Legal representation',
+                'Broker commissions',
+                'Major repairs / furnishing'
             ],
             desc: 'Maximizing ROI through rigorous operational management.'
         },
@@ -50,11 +62,16 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
             premium: true,
             features: [
                 'All features of Maintenance & PM',
-                'Priority SLA & Escalation',
+                'Priority SLA & Executive Escalation',
                 'Preventive maintenance calendar',
                 'Property health & Risk audits',
                 'AI Design Studio access',
                 'Detailed monthly yield reports'
+            ],
+            excludes: [
+                'Capital expenditure items',
+                'Structural major renovation',
+                'Authority fines from prior state'
             ],
             desc: 'The ultimate Sovereign-grade property operations layer.'
         }
@@ -68,6 +85,7 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
     return (
         <Box sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SOVEREIGN SERVICE MODELS</Typography>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
                     {tx('onboarding.select_contract', 'SELECT SERVICE PROTOCOL')}
                 </Typography>
@@ -85,7 +103,7 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                                 p: 4, 
                                 height: '100%',
                                 cursor: 'pointer',
-                                bgcolor: selectedPlan?.id === plan.id ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
+                                bgcolor: selectedPlan?.id === plan.id ? alpha(binThemeTokens.gold, 0.1) : 'rgba(22, 22, 24, 0.6)',
                                 border: `1px solid ${selectedPlan?.id === plan.id ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
                                 borderRadius: 4,
                                 transition: 'all 0.3s ease',
@@ -118,16 +136,29 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                             
                             <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
                             
-                            <Stack spacing={2} sx={{ flexGrow: 1 }}>
-                                {plan.features.map((feat, i) => (
-                                    <Stack direction="row" spacing={1} key={i}>
-                                        <Box sx={{ color: binThemeTokens.gold, mt: 0.2 }}><ShieldCheck size={14} /></Box>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{feat}</Typography>
-                                    </Stack>
-                                ))}
-                            </Stack>
+                            <Box sx={{ mb: 4, flexGrow: 1 }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>COVERED MISSIONS</Typography>
+                                <Stack spacing={1.5} sx={{ mb: 4 }}>
+                                    {plan.features.map((feat, i) => (
+                                        <Stack direction="row" spacing={1} key={i} alignItems="center">
+                                            <CheckCircle2 size={14} color="#10b981" />
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{feat}</Typography>
+                                        </Stack>
+                                    ))}
+                                </Stack>
 
-                            <Box sx={{ mt: 4, p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.02)' }}>
+                                <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900, mb: 2, display: 'block' }}>EXCLUSIONS</Typography>
+                                <Stack spacing={1.5}>
+                                    {plan.excludes.map((ex, i) => (
+                                        <Stack direction="row" spacing={1} key={i} alignItems="center">
+                                            <XCircle size={14} color="#ef4444" style={{ opacity: 0.6 }} />
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{ex}</Typography>
+                                        </Stack>
+                                    ))}
+                                </Stack>
+                            </Box>
+
+                            <Box sx={{ mt: 'auto', p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.02)' }}>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Info size={12} /> SYSTEMIC PROTOCOL ACTIVE
                                 </Typography>
@@ -143,7 +174,7 @@ const ContractTypeStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                     size="large" 
                     onClick={onBack}
                     startIcon={<ArrowLeft />}
-                    sx={{ borderRadius: 100, px: 6, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
+                    sx={{ borderRadius: 100, px: 6, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 900 }}
                 >
                     BACK
                 </Button>

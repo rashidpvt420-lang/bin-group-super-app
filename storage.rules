@@ -14,7 +14,13 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return hasRole('ADMIN') || hasRole('admin') || request.auth.token.admin == true;
+      return isAuth() && (
+        request.auth.token.admin == true || 
+        request.auth.token.isAdmin == true ||
+        request.auth.token.ceo == true ||
+        request.auth.token.manager == true ||
+        request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER']
+      );
     }
 
     function isAuditor() {

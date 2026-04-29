@@ -5,36 +5,21 @@ import {
   TableCell, TableHead, TableRow, TableContainer, Skeleton, Stack,
   Alert, Snackbar, Button, alpha, CircularProgress
 } from '@mui/material';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import ShowChartIcon from '@mui/icons-material/ShowChart';
-import SecurityIcon from '@mui/icons-material/Security';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import BusinessIcon from '@mui/icons-material/Business';
-import PeopleIcon from '@mui/icons-material/People';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import PsychologyIcon from '@mui/icons-material/Psychology';
-import SpeedIcon from '@mui/icons-material/Speed';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-
-import { useLanguage, calculateBuildingHealth, BuildingHealthReport } from '@bin/shared';
+import { useLanguage, calculateBuildingHealth } from '@bin/shared';
 
 // Import Firestore and Functions from sovereign shared lib
-import { db, collection, query, where, onSnapshot, orderBy, functions, getDocs, doc, updateDoc, serverTimestamp, limit } from '../../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db, collection, query, where, onSnapshot, orderBy, getDocs, doc, updateDoc, serverTimestamp, limit } from '../../lib/firebase';
 import { useAI } from '@bin/shared';
 import CeoContactButtons from '../../components/CeoContactButtons';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import BusinessIcon from '@mui/icons-material/Business';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 
 export default function DashboardPage() {
-  const { t, tx, lang, isRTL } = useLanguage();
+  const { lang } = useLanguage();
   const { setPageContext } = useAI();
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   
@@ -49,9 +34,6 @@ export default function DashboardPage() {
     availableFloat: 0
   });
 
-  const [sovereignStats, setSovereignStats] = useState<any>(null);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
   const [pendingOnboardings, setPendingOnboardings] = useState<any[]>([]);
   const [bpiAverage, setBpiAverage] = useState(0);
   const [riskAssets, setRiskAssets] = useState<any[]>([]);
@@ -79,8 +61,6 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<any>(null);
 
   useEffect(() => {
-    setLoading(true);
-    
     // [V12] ASYNC SUMMARY HARDENING
     const unsubSummary = onSnapshot(doc(db, "admin_summaries", "global"), (snap) => {
         if (snap.exists()) setSummary(snap.data());
@@ -129,15 +109,13 @@ export default function DashboardPage() {
         txns.push({ id: doc.id, displayId: doc.id.substring(0, 8), total: amount, date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() : 'Recent', type: data.type, description: data.description });
       });
       setStats(prev => ({ ...prev, revenue: totalIn, expenses: totalOut, netProfit: totalIn - totalOut }));
-      setRecentTransactions(txns.slice(0, 10));
-      setLoading(false);
     });
 
     onSnapshot(query(collection(db, 'intake_submissions'), where('status', '==', 'AWAITING_VERIFICATION')), (snap) => {
         setPendingOnboardings(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     });
 
-    return () => { unsubProperties(); unsubLedger(); };
+    return () => { unsubProperties(); unsubLedger(); unsubSummary(); };
   }, [lang]);
 
   const handleQuickVerify = async (id: string, type: 'ONBOARDING' | 'PAYMENT') => {

@@ -54,6 +54,17 @@ const BinGroupHeader: React.FC = () => {
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
+                    <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1 }}>
+                        {['owners', 'tenants', 'technicians', 'brokers', 'security'].map((item) => (
+                            <Button 
+                                key={item} 
+                                onClick={() => navigate(`/${item}`)} 
+                                sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}
+                            >
+                                {item.replace('-', ' ')}
+                            </Button>
+                        ))}
+                    </Box>
                     {/* Role Badge */}
                     {role && (
                         <Box sx={{ 
@@ -74,6 +85,24 @@ const BinGroupHeader: React.FC = () => {
                                 <NotificationsIcon />
                             </Badge>
                         </IconButton>
+                    )}
+
+                    {!user && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Button 
+                                onClick={() => navigate('/login')}
+                                sx={{ color: mode === 'dark' ? '#fff' : '#000', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
+                            >
+                                Login
+                            </Button>
+                            <Button 
+                                variant="contained"
+                                onClick={() => navigate('/onboarding')}
+                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.85rem', px: 2 }}
+                            >
+                                Get Started
+                            </Button>
+                        </Box>
                     )}
 
                     {/* Language Switcher */}

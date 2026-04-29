@@ -3,15 +3,15 @@ import React, { useState, useEffect } from 'react';
 import {
     Container, Box, Typography, Paper, Grid, Stack, Button, Chip,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent,
+    CircularProgress, Alert, Dialog, DialogTitle, DialogContent,
     DialogActions, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import { 
-    AlertTriangle, ShieldAlert, Link as LinkIcon, 
-    RefreshCcw, CheckCircle2, Search, Wrench
+    ShieldAlert, Link as LinkIcon, 
+    Search, Wrench, CheckCircle2
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, doc, updateDoc, writeBatch, serverTimestamp, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
-import { useAI, binThemeTokens } from '@bin/shared';
+import { db, collection, query, where, doc, writeBatch, serverTimestamp, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
+import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
 type RepairReport = {

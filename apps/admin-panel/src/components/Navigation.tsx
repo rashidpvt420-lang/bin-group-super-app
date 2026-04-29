@@ -137,7 +137,7 @@ const primaryMenu = [
                     ))}
                     <ListItem
                         component="a"
-                        href="mailto:hq@bin-groups.com"
+                        href="mailto:Ceo@bin-groups.com"
                         target="_blank"
                         sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#DAA520', 0.05), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
                     >

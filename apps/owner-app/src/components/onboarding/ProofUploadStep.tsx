@@ -41,7 +41,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             // In a real app, we'd upload to Storage first. 
             // For this flow, we'll simulate the URL since we are in the middle of onboarding.
             // But we'll call the real function to show infrastructure readiness.
-            const analyzeFn = httpsCallable(functions, 'analyzeTitleDeed');
+            const analyzeFn = httpsCallable(functions, 'processTitleDeedOCR');
             
             // Simulating a temporary blob URL for the purpose of the POC 
             // In production, this would be a gs:// or https:// storage link.
@@ -90,7 +90,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                         <Chip label={titleDeedPreview?.status || 'awaiting_upload'} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.gold, fontWeight: 900 }} />
                                     </Stack>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>
-                                        Phase 2 prepares the OCR workflow. After submission, admin can review extracted title deed fields, lock verified data, and flag mismatches.
+                                        This OCR node extracts authority fields from your title deed for institutional verification and property record locking.
                                     </Typography>
                                     {titleDeedPreview && (
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mt: 1 }}>
