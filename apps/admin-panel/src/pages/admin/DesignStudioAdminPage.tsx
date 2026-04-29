@@ -1,22 +1,18 @@
 // apps/admin-panel/src/pages/admin/DesignStudioAdminPage.tsx
 import React, { useState, useEffect } from 'react';
 import { 
-    Container, Typography, Box, Paper, Table, TableBody, TableCell, 
-    TableContainer, TableHead, TableRow, Chip, Button, IconButton,
-    TextField, Stack, InputAdornment, alpha, CircularProgress
+    Paper, Table, TableBody, TableCell, 
+    TableContainer, TableHead, TableRow, Chip, 
+    IconButton, Stack, alpha, CircularProgress, 
+    Typography, Box, Container, Button, TextField, InputAdornment
 } from '@mui/material';
-import { 
-    Sparkles, Search, ChevronRight, Filter, 
-    CheckCircle2, Clock, XCircle, CreditCard
-} from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import { db, collection, query, onSnapshot, orderBy, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useNavigate } from 'react-router-dom';
 
 export default function DesignStudioAdminPage() {
-    const { t, tx, isRTL } = useLanguage();
-    const navigate = useNavigate();
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');

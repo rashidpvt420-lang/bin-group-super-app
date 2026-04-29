@@ -47,12 +47,13 @@ import {
     Droplets,
     Lightbulb,
     Home,
-    AlertTriangle
+    AlertTriangle,
+    Languages
 } from 'lucide-react';
 
 const OwnerLandingPage: React.FC = () => {
     const navigate = useNavigate();
-    const { t, isRTL } = useLanguage();
+    const { t, lang, setLang, isRTL } = useLanguage();
     const { role, isAdmin, loading: roleLoading } = useRole();
     const loginRef = useRef<HTMLDivElement>(null);
 
@@ -130,7 +131,7 @@ const OwnerLandingPage: React.FC = () => {
             {/* 1. The Top Navigation Bar */}
             <AppBar position="sticky" sx={{ bgcolor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(30px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: 'none', zIndex: 1200 }}>
                 <Container maxWidth="xl">
-                    <Toolbar sx={{ justifyContent: 'space-between', py: 1.5 }}>
+                    <Toolbar sx={{ justifyContent: 'space-between', py: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box sx={{ p: 0.8, borderRadius: 1.5, bgcolor: binThemeTokens.gold }}>
                                 <ShieldCheck size={24} color="#000" />
@@ -139,23 +140,28 @@ const OwnerLandingPage: React.FC = () => {
                                 BIN GROUP<Box component="span" sx={{ color: binThemeTokens.gold, ml: 0.5 }}>™</Box>
                             </Typography>
                         </Box>
-                        <Button 
-                            variant="contained" 
-                            onClick={scrollToLogin}
-                            sx={{ 
-                                bgcolor: 'transparent', 
-                                border: `1px solid ${binThemeTokens.gold}`,
-                                color: binThemeTokens.gold, 
-                                fontWeight: 950, 
-                                px: 3, 
-                                py: 1,
-                                borderRadius: 100,
-                                fontSize: '0.9rem',
-                                '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: '#FFF', color: '#FFF' }
-                            }}
-                        >
-                            Institutional Login
-                        </Button>
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <IconButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: binThemeTokens.gold }}>
+                                <Languages size={20} />
+                            </IconButton>
+                            <Button 
+                                variant="contained" 
+                                onClick={scrollToLogin}
+                                sx={{ 
+                                    bgcolor: 'transparent', 
+                                    border: `1px solid ${binThemeTokens.gold}`,
+                                    color: binThemeTokens.gold, 
+                                    fontWeight: 950, 
+                                    px: 3, 
+                                    py: 1,
+                                    borderRadius: 100,
+                                    fontSize: '0.9rem',
+                                    '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: '#FFF', color: '#FFF' }
+                                }}
+                            >
+                                {t('landing.partner_login') || 'Institutional Login'}
+                            </Button>
+                        </Stack>
                     </Toolbar>
                 </Container>
             </AppBar>
@@ -169,7 +175,7 @@ const OwnerLandingPage: React.FC = () => {
             }}>
                 <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 8, mb: 3, display: 'block' }}>
-                        THE NEW STANDARD of UAE REAL ESTATE
+                        {t('landing.mission_overline')}
                     </Typography>
                     <Typography variant="h1" sx={{ 
                         fontSize: { xs: '3rem', md: '5.5rem' }, 
@@ -179,11 +185,11 @@ const OwnerLandingPage: React.FC = () => {
                         color: '#FFF',
                         mb: 4
                     }}>
-                        Redefining Property Management <br />
-                        <Box component="span" sx={{ color: binThemeTokens.gold }}>Across the UAE</Box>
+                        {t('landing.title').split(' — ')[0]} <br />
+                        <Box component="span" sx={{ color: binThemeTokens.gold }}>{t('landing.address')}</Box>
                     </Typography>
                     <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 850, mx: 'auto', fontWeight: 400, lineHeight: 1.6, fontSize: { xs: '1.2rem', md: '1.6rem' }, mb: 8 }}>
-                        Elite, end-to-end maintenance and asset stability for institutional property portfolios. Covering Dubai, Abu Dhabi, Al Ain, and the entire United Arab Emirates.
+                        {t('landing.subtitle')}
                     </Typography>
                     <Button 
                         variant="contained" 
@@ -196,7 +202,7 @@ const OwnerLandingPage: React.FC = () => {
                             '&:hover': { transform: 'translateY(-4px)' }
                         }}
                     >
-                        Onboard Premium Asset
+                        {t('landing.hero_onboard_cta')}
                     </Button>
                 </Container>
             </Box>
@@ -205,16 +211,16 @@ const OwnerLandingPage: React.FC = () => {
             <Box sx={{ py: 20, bgcolor: 'rgba(255,255,255,0.02)', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <Container maxWidth="lg">
                     <Box sx={{ textAlign: 'center', mb: 12 }}>
-                        <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', mb: 2, letterSpacing: -2 }}>The Headache Solved</Typography>
-                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 700, mx: 'auto' }}>We eliminate the friction of traditional maintenance, moving at the speed of your portfolio.</Typography>
+                        <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', mb: 2, letterSpacing: -2 }}>{t('landing.solve_title')}</Typography>
+                        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 700, mx: 'auto' }}>{t('landing.solve_subtitle')}</Typography>
                     </Box>
 
                     <Grid container spacing={4}>
                         {[
-                            { title: 'Zero Friction', desc: 'No manual coordination. Everything from ticketing to invoicing is digitally handled within the Sovereign OS.', icon: <Zap /> },
-                            { title: 'Real-Time GPS Dispatch', desc: 'Watch your service order fulfill in real-time. Our technicians are dispatched immediately via GPS routing.', icon: <Navigation /> },
-                            { title: 'Automated Financials', desc: 'Rental yields and maintenance fees are routed through mathematically precise automated protocols.', icon: <Database /> },
-                            { title: '100% Transparency', desc: 'Immutable portfolio tracking. No hidden costs. No administrative delays. Just absolute visibility.', icon: <TrendingUp /> }
+                            { title: t('landing.zero_friction'), desc: t('landing.zero_friction_desc'), icon: <Zap /> },
+                            { title: t('landing.gps_dispatch'), desc: t('landing.gps_dispatch_desc'), icon: <Navigation /> },
+                            { title: t('landing.auto_financials'), desc: t('landing.auto_financials_desc'), icon: <Database /> },
+                            { title: t('landing.transparency'), desc: t('landing.transparency_desc_v2'), icon: <TrendingUp /> }
                         ].map((point, i) => (
                             <Grid item xs={12} sm={6} md={3} key={i}>
                                 <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -232,9 +238,9 @@ const OwnerLandingPage: React.FC = () => {
             <Box sx={{ py: 20 }}>
                 <Container maxWidth="lg">
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4, mb: 2, display: 'block', textAlign: 'center' }}>
-                        MISSION DEPLOYMENT CAPABILITIES
+                        {t('landing.deployment_title')}
                     </Typography>
-                    <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', textAlign: 'center', mb: 10, letterSpacing: -2 }}>Elite Infrastructure Maintenance</Typography>
+                    <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF', textAlign: 'center', mb: 10, letterSpacing: -2 }}>{t('landing.elite_infra')}</Typography>
 
                     <Grid container spacing={3}>
                         {[
@@ -267,11 +273,11 @@ const OwnerLandingPage: React.FC = () => {
                     <Grid container spacing={10} alignItems="center">
                         <Grid item xs={12} md={7}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4, mb: 2, display: 'block' }}>
-                                DIRECT PARTNERSHIP
+                                {t('landing.mission_overline')}
                             </Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3, letterSpacing: -1.5 }}>Direct Executive Access</Typography>
+                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 3, letterSpacing: -1.5 }}>{t('landing.executive_access')}</Typography>
                             <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400, mb: 6, lineHeight: 1.8 }}>
-                                Institutional Partnerships require direct communication. For high-value asset onboarding or regional collaboration, connect directly with our leadership.
+                                {t('landing.executive_desc')}
                             </Typography>
                             <Button 
                                 variant="contained" 
@@ -288,14 +294,14 @@ const OwnerLandingPage: React.FC = () => {
                                     '&:hover': { bgcolor: '#20BA5A', transform: 'scale(1.05)' }
                                 }}
                             >
-                                WhatsApp CEO (0552423233)
+                                {t('landing.whatsapp_ceo')}
                             </Button>
                         </Grid>
                         <Grid item xs={12} md={5}>
                             <Paper sx={{ p: 5, borderRadius: 8, bgcolor: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
                                 <BadgeCheck size={80} color={binThemeTokens.gold} style={{ marginBottom: 24, opacity: 0.8 }} />
                                 <Typography variant="h5" fontWeight="950" color="#FFF" gutterBottom>BIN GROUP L.L.C</Typography>
-                                <Typography variant="body2" color="rgba(255,255,255,0.4)">Registered Trademark • UAE Nationwide Operations</Typography>
+                                <Typography variant="body2" color="rgba(255,255,255,0.4)">{t('landing.registered_trademark')}</Typography>
                             </Paper>
                         </Grid>
                     </Grid>
@@ -305,7 +311,7 @@ const OwnerLandingPage: React.FC = () => {
             {/* Final Login Gate */}
             <Box ref={loginRef} sx={{ py: 20, bgcolor: '#000', textAlign: 'center', borderTop: '2px solid rgba(198, 167, 94, 0.3)' }}>
                 <Container maxWidth="sm">
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 6, letterSpacing: -2 }}>Sign In to Dashboard</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 6, letterSpacing: -2 }}>{t('landing.sign_in_dash')}</Typography>
                     <Card sx={{ 
                         bgcolor: 'rgba(22, 22, 24, 0.8)', 
                         backdropFilter: 'blur(30px)', 
@@ -322,7 +328,7 @@ const OwnerLandingPage: React.FC = () => {
                             <Stack spacing={4}>
                                 <TextField
                                     fullWidth
-                                    label="Email Address"
+                                    label={t('login.email')}
                                     variant="outlined"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -334,7 +340,7 @@ const OwnerLandingPage: React.FC = () => {
                                 />
                                 <TextField
                                     fullWidth
-                                    label="Security Key"
+                                    label={t('login.password')}
                                     type={showPassword ? 'text' : 'password'}
                                     variant="outlined"
                                     value={password}
@@ -353,10 +359,10 @@ const OwnerLandingPage: React.FC = () => {
                                     disabled={localLoading}
                                     sx={{ py: 2.5, borderRadius: 4, fontWeight: 950, letterSpacing: 3, background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, color: '#000', fontSize: '1.1rem' }}
                                 >
-                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : 'AUTHORIZE ACCESS'}
+                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : t('landing.auth_authorize')}
                                 </Button>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>SECURE GLOBAL VERIFICATION</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>{t('landing.secure_global')}</Typography>
                                 </Divider>
                                 <Button
                                     fullWidth
@@ -366,7 +372,7 @@ const OwnerLandingPage: React.FC = () => {
                                     startIcon={<UserCircle />}
                                     sx={{ py: 2, borderRadius: 4, fontWeight: 800, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}
                                 >
-                                    Verify Identity
+                                    {t('landing.identity_verify')}
                                 </Button>
                             </Stack>
                         </form>
@@ -377,7 +383,7 @@ const OwnerLandingPage: React.FC = () => {
             {/* Footer Institutional Footer */}
             <Box sx={{ py: 10, textAlign: 'center', opacity: 0.4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                  <Typography variant="caption" sx={{ letterSpacing: 4, fontWeight: 900, color: '#FFF' }}>
-                    BIN GROUP SOVEREIGN OS © 2026 | INSTITUTIONAL PORTFOLIO MANAGEMENT | UAE NATIONWIDE
+                    BIN GROUP SOVEREIGN OS © 2026 | {t('landing.uae_ops')}
                  </Typography>
             </Box>
         </Box>

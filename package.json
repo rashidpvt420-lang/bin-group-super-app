@@ -10,7 +10,8 @@
   "scripts": {
     "build": "npm run build -ws",
     "deploy": "powershell ./deploy-production.ps1",
-    "clean": "npm run clean -ws && rm -rf hosting/public/*"
+    "clean": "npm run clean -ws && rm -rf hosting/public/*",
+    "lint": "npm run lint -ws --if-present"
   },
   "devDependencies": {
     "firebase-tools": "^13.0.0",

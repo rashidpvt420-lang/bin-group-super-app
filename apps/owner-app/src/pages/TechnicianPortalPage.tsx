@@ -214,7 +214,7 @@ export default function TechnicianPortalPage() {
         return Math.round(Number(logHours || userData?.weeklyHours || userData?.hoursThisWeek || 0));
     }, [workLogs, userData]);
 
-    const standardHours = Number(userData?.standardWeeklyHours || 40);
+    const standardHours = Number(userData?.standardWeeklyHours || 48);
     const isOnDuty = typeof userData?.onDuty === 'boolean' ? userData.onDuty : userData?.dutyStatus === 'ON_DUTY';
     const displayName = safeText(userData?.displayName || user?.displayName, 'Maintenance Specialist');
     const specialization = safeText(userData?.specialization || userData?.specialty || userData?.trade, 'General Maintenance');

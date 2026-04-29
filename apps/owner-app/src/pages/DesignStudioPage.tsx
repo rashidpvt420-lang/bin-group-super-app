@@ -6,8 +6,8 @@ import {
     Snackbar, Alert
 } from '@mui/material';
 import { 
-    Sparkles, ArrowRight, Camera, Ruler, Info, ShieldCheck, 
-    Home, Landmark, Building, ShoppingBag, Layout, Image as ImageIcon, X
+    Sparkles, ArrowRight, Camera, Ruler, ShieldCheck, 
+    Home, Image as ImageIcon, X, AlertTriangle, RefreshCcw, Info
 } from 'lucide-react';
 import { auth, db, collection, addDoc, serverTimestamp, getDocs, query, where, storage, ref, uploadBytesResumable, getDownloadURL } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
@@ -30,6 +30,7 @@ export default function DesignStudioPage() {
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
 
     // New Input States
@@ -60,7 +61,6 @@ export default function DesignStudioPage() {
         const fetchProperties = async () => {
             if (!user) return;
             try {
-                // If owner, fetch own properties. If tenant, fetch assigned property.
                 const q = query(collection(db, 'properties'), where(role === 'tenant' ? 'tenantId' : 'ownerId', '==', user.uid));
                 const snap = await getDocs(q);
                 const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -78,20 +78,18 @@ export default function DesignStudioPage() {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
+        setUploadError(null);
+        
         const currentUser = auth.currentUser;
         if (!currentUser?.uid) {
-            setSnackbar({ open: true, message: "Please sign in before uploading design images.", severity: 'error' });
+            setUploadError("Please sign in before uploading design images.");
             return;
         }
 
         const maxFileSize = 10 * 1024 * 1024;
         const invalidFile = Array.from(files).find((file) => !file.type.startsWith('image/') || file.size > maxFileSize);
         if (invalidFile) {
-            setSnackbar({
-                open: true,
-                message: "Upload images only, up to 10 MB each. Choose a smaller photo or a supported image file.",
-                severity: 'error'
-            });
+            setUploadError("Upload images only, up to 10 MB each. Choose a smaller photo or a supported image file.");
             e.target.value = '';
             return;
         }
@@ -129,7 +127,6 @@ export default function DesignStudioPage() {
             setUploadProgress(0);
             setSnackbar({ open: true, message: "Image uploaded successfully. Preview is ready.", severity: 'success' });
             
-            // Audit Log: Document Upload
             await logAuditAction({
                 actorId: currentUser.uid,
                 actorRole: role || 'user',
@@ -141,12 +138,11 @@ export default function DesignStudioPage() {
         } catch (err) {
             console.error("Upload failure:", err);
             const code = (err as any)?.code || '';
-            const message = code.includes('unauthorized')
-                ? "Image upload is blocked for this account. Please sign in again or contact support."
-                : code.includes('retry-limit-exceeded') || code.includes('canceled')
-                    ? "Image upload could not complete on this connection. Please retry or choose a smaller image."
-                    : "Image upload failed. Your photo was not uploaded. Please retry or continue without image.";
-            setSnackbar({ open: true, message, severity: 'error' });
+            setUploadError(
+                code.includes('unauthorized')
+                    ? "Image upload is blocked for this account. Please sign in again or contact support."
+                    : "Image upload failed. Please retry or choose another image."
+            );
         } finally {
             setUploading(false);
             e.target.value = '';
@@ -193,7 +189,6 @@ export default function DesignStudioPage() {
 
             const docRef = await addDoc(collection(db, 'design_requests'), requestData);
             
-            // Trigger Notification for Owner NOC
             if (role === 'tenant' && property?.ownerId) {
                 await NotificationEvents.OWNER.DESIGN_STUDIO_NOC(
                     property.ownerId, 
@@ -241,8 +236,26 @@ export default function DesignStudioPage() {
                 <Chip icon={<Sparkles size={16} />} label="FREE AI CONCEPTS" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
             </Box>
 
+            {uploadError && (
+                <Alert 
+                    severity="error" 
+                    icon={<AlertTriangle />}
+                    sx={{ mb: 4, bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)', '& .MuiAlert-message': { width: '100%' } }}
+                    action={
+                        <Stack direction="row" spacing={2}>
+                            <Button size="small" color="inherit" onClick={() => setUploadError(null)} startIcon={<RefreshCcw size={14}/>}>RETRY</Button>
+                            <Button size="small" color="inherit" component="label">
+                                CHANGE IMAGE
+                                <input type="file" hidden accept="image/*" onChange={handleImageUpload} />
+                            </Button>
+                        </Stack>
+                    }
+                >
+                    {uploadError}
+                </Alert>
+            )}
+
             <Grid container spacing={6}>
-                {/* 1. VISUAL CONTEXT & SCOPE */}
                 <Grid item xs={12} lg={4}>
                     <Stack spacing={4}>
                         <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -264,23 +277,30 @@ export default function DesignStudioPage() {
                                             </IconButton>
                                         </Box>
                                     ))}
-                                    <Button
-                                        component="label"
-                                        sx={{ 
-                                            width: 80, height: 80, flexShrink: 0, 
-                                            border: '1px dashed rgba(255,255,255,0.2)', 
-                                            borderRadius: 2, display: 'flex', flexDirection: 'column',
-                                            color: 'text.secondary', bgcolor: 'rgba(255,255,255,0.02)',
-                                            '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold }
-                                        }}
-                                    >
-                                        <Camera size={24} />
-                                        <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>
-                                        <input type="file" hidden accept="image/*" multiple onChange={handleImageUpload} />
-                                    </Button>
+                                    {!uploading && (
+                                        <Button
+                                            component="label"
+                                            sx={{ 
+                                                width: 80, height: 80, flexShrink: 0, 
+                                                border: '1px dashed rgba(255,255,255,0.2)', 
+                                                borderRadius: 2, display: 'flex', flexDirection: 'column',
+                                                color: 'text.secondary', bgcolor: 'rgba(255,255,255,0.02)',
+                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold }
+                                            }}
+                                        >
+                                            <Camera size={24} />
+                                            <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>
+                                            <input type="file" hidden accept="image/*" multiple onChange={handleImageUpload} />
+                                        </Button>
+                                    )}
+                                    {uploading && (
+                                        <Box sx={{ width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 2 }}>
+                                            <CircularProgress size={24} sx={{ color: binThemeTokens.gold }} />
+                                        </Box>
+                                    )}
                                 </Stack>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 1 }}>
-                                    Accepted: JPG, PNG, HEIC/Web images where supported. Max 10 MB per image.
+                                    Accepted: JPG, PNG, HEIC/Web images. Max 10 MB per image.
                                 </Typography>
                                 {uploading && (
                                     <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -345,7 +365,6 @@ export default function DesignStudioPage() {
                     </Stack>
                 </Grid>
 
-                {/* 2. DIMENSIONS & ADD-ONS */}
                 <Grid item xs={12} lg={5}>
                     <Stack spacing={4} sx={{ height: '100%' }}>
                         <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -382,7 +401,7 @@ export default function DesignStudioPage() {
 
                         <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', flexGrow: 1 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Layout color={binThemeTokens.gold} /> 4. SELECT ADD-ON SERVICES
+                                <ImageIcon color={binThemeTokens.gold} /> 4. SELECT ADD-ON SERVICES
                             </Typography>
                             <Grid container spacing={1}>
                                 {ADDON_SERVICES.map(addon => (
@@ -408,7 +427,6 @@ export default function DesignStudioPage() {
                     </Stack>
                 </Grid>
 
-                {/* 3. FINAL ACTION */}
                 <Grid item xs={12} lg={3}>
                     <Stack spacing={4}>
                         <Paper sx={{ p: 4, borderRadius: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, textAlign: 'center' }}>

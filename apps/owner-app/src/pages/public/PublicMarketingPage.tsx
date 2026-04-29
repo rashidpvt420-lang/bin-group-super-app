@@ -1,9 +1,12 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
-import { Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { ArrowRight, Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
+import { useLanguage } from '../../context/LanguageContext';
+import { Languages } from 'lucide-react';
+import IconButton from '@mui/material/IconButton';
 
 type PageContent = {
     eyebrow: string;
@@ -86,29 +89,6 @@ const screenshots = [
     { title: 'PDF reports', body: 'Contracts, move-in/out, maintenance, owner reports.' }
 ];
 
-const servicePlans = [
-    {
-        name: 'Maintenance Only',
-        covers: 'Tenant maintenance requests, technician dispatch, minor repair coordination, SLA tracking, completion proof, history and owner reports.',
-        excludes: 'Major replacement, structural works, authority fees, lift/pool AMC, pest control, landscaping, renovation and major parts unless approved or added.'
-    },
-    {
-        name: 'Property Management',
-        covers: 'Tenant onboarding, rent ledger, rent tracking, complaints, move-in/out, document collection, occupancy tracking, lease reminders and owner reports.',
-        excludes: 'Court/legal cases, broker commission, major repairs, furnishing, deep cleaning and government fees unless approved or added.'
-    },
-    {
-        name: 'Total Care Hybrid',
-        covers: 'Maintenance, property management, priority SLA, preventive calendar, property health audits, owner approvals, tenant service management, AI Design Studio and monthly reporting.',
-        excludes: 'Capital expenditure, major equipment replacement, structural renovation, authority fines/fees and specialist certification unless quoted.'
-    },
-    {
-        name: 'Enterprise / Government / Stadium / Hospital',
-        covers: 'Custom SLA, multi-building operations, critical systems, compliance document vault, event standby, dedicated teams, custom reporting and approval hierarchy.',
-        excludes: 'Anything outside signed scope, authority fees unless written, and third-party specialist works unless quoted.'
-    }
-];
-
 export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
     const params = useParams();
     const key = page === 'dynamic' ? params.page || 'home' : page;
@@ -128,15 +108,15 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
                 <VisualProof />
                 <ServicePlans />
                 <Coverage />
-                {(key === 'contact' || key === 'request-demo' || key === 'home') && <DemoForm />}
+                <DemoForm />
                 <Box sx={{ pt: 5, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Button component="a" href="/request-demo" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
+                    <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
                         Request Contract
                     </Button>
-                    <Button component="a" href="/owners" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
-                        View Platform
+                    <Button component={Link} to="/login" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
+                        Institutional Login
                     </Button>
-                    <Button component="a" href="/onboarding" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
+                    <Button component={Link} to="/onboarding" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
                         Onboard Your Property
                     </Button>
                 </Box>
@@ -146,21 +126,29 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
 }
 
 function MarketingNav() {
+    const { lang, setLang, isRTL } = useLanguage();
+    
     return (
-        <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,0.84)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(198,167,94,0.18)' }}>
-            <Container maxWidth="xl" sx={{ py: 1.4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                <Stack component="a" href="/" direction="row" alignItems="center" spacing={1.5} sx={{ cursor: 'pointer', color: '#FFF', textDecoration: 'none' }}>
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,0.84)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(198,167,94,0.18)', direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Container maxWidth="xl" sx={{ py: 1.4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <Stack component={Link} to="/" direction="row" alignItems="center" spacing={1.5} sx={{ cursor: 'pointer', color: '#FFF', textDecoration: 'none' }}>
                     <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} onError={(event: any) => { event.currentTarget.style.display = 'none'; }} />
                     <Typography variant="h6" fontWeight="950">BIN-<Box component="span" sx={{ color: binThemeTokens.gold }}>GROUPS</Box></Typography>
                 </Stack>
-                <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', md: 'flex' } }}>
+                <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', md: 'flex' }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     {['owners', 'tenants', 'technicians', 'brokers', 'security'].map((item) => (
-                        <Button key={item} component="a" href={`/${item}`} sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 800, textTransform: 'capitalize' }}>{item.replace('-', ' ')}</Button>
+                        <Button key={item} component={Link} to={`/${item}`} sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 800, textTransform: 'capitalize' }}>{item.replace('-', ' ')}</Button>
                     ))}
+                    <Button component={Link} to="/login" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Login</Button>
                 </Stack>
-                <Button component="a" href="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                    Get Started
-                </Button>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <IconButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: binThemeTokens.gold }}>
+                        <Languages size={20} />
+                    </IconButton>
+                    <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                        Get Started
+                    </Button>
+                </Stack>
             </Container>
         </Box>
     );
@@ -182,13 +170,13 @@ function HomeHero() {
                             From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties, and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers, payments, documents, contracts, and AI design in one verified command system.
                         </Typography>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                            <Button component="a" href="/request-demo" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
+                            <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
                                 Request Contract
                             </Button>
-                            <Button component="a" href="/owners" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
-                                View Platform
+                            <Button component={Link} to="/login" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
+                                Institutional Login
                             </Button>
-                            <Button component="a" href="/onboarding" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
+                            <Button component={Link} to="/onboarding" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
                                 Onboard Your Property
                             </Button>
                         </Stack>
@@ -236,10 +224,10 @@ function CommandMockup({ compact = false }: { compact?: boolean }) {
                     <Chip label="ONLINE" size="small" sx={{ bgcolor: alpha('#10b981', 0.16), color: '#10b981', fontWeight: 900 }} />
                 </Stack>
                 {[
-                    ['Owner Contract', 'Payment pending', 'AED 24,500'],
-                    ['Tenant AC Dispatch', 'Technician en route', '12 min ETA'],
-                    ['Move-Out Quote', 'Owner approval', '3 repair items'],
-                    ['Broker Commission', 'Finance review', 'Verified contract']
+                    ['Owner Contract', 'Active Protocol', 'AED 24,500'],
+                    ['Tenant SOS Dispatch', 'Technician assigned', '8 min ETA'],
+                    ['Move-Out Audit', 'Evidence captured', 'Verified'],
+                    ['Broker Commission', 'Finance approved', 'AED 1,200']
                 ].slice(0, compact ? 3 : 4).map(([a, b, c]) => (
                     <Box key={a} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -299,17 +287,19 @@ function VisualProof() {
 function ServicePlans() {
     return (
         <Box sx={{ mt: 8 }}>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>Service Plan Examples</Typography>
+            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>Institutional Service Protocols</Typography>
             <Grid container spacing={2}>
-                {servicePlans.map((plan) => (
-                    <Grid item xs={12} md={3} key={plan.name}>
+                {[
+                    'Maintenance Only (Alpha)',
+                    'Property Management (Beta)',
+                    'Total Care Hybrid (Omega)',
+                    'Enterprise Custom Protocol'
+                ].map((plan) => (
+                    <Grid item xs={12} md={3} key={plan}>
                         <Paper sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 2 }}>
                             <Building2 size={24} color={binThemeTokens.gold} />
-                            <Typography fontWeight="950" sx={{ mt: 1.5 }}>{plan.name}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', mt: 1, fontWeight: 900 }}>Covers</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{plan.covers}</Typography>
-                            <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 1.5, fontWeight: 900 }}>Not covered unless written</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>{plan.excludes}</Typography>
+                            <Typography fontWeight="950" sx={{ mt: 1.5 }}>{plan}</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>Coverage, exclusions, add-ons, SLA and payment terms verified before contract.</Typography>
                         </Paper>
                     </Grid>
                 ))}
@@ -321,7 +311,7 @@ function ServicePlans() {
 function Coverage() {
     return (
         <Box sx={{ mt: 8 }}>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>UAE-Wide Property Coverage</Typography>
+            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>UAE-Wide Portfolio Coverage</Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                 {propertyTypesList.map((type) => (
                     <Chip key={type} label={type} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: '#FFF', border: '1px solid rgba(198,167,94,0.22)', fontWeight: 800 }} />
@@ -337,12 +327,12 @@ function DemoForm() {
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, bgcolor: 'rgba(22,22,24,0.82)', border: '1px solid rgba(198,167,94,0.2)' }}>
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={5}>
-                        <Typography variant="h4" fontWeight="950">Contact / Demo Request</Typography>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.66)', mt: 1 }}>Tell BIN-GROUPS what you manage. This form is a frontend intake placeholder for Phase 1; protected CRM submission follows in Phase 2.</Typography>
+                        <Typography variant="h4" fontWeight="950">Institutional Inquiry</Typography>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.66)', mt: 1 }}>Tell BIN-GROUPS what you manage. Your portfolio audit starts here.</Typography>
                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
                         <Stack spacing={1}>
-                            <Stack direction="row" spacing={1}><Mail size={18} color={binThemeTokens.gold} /><Typography>hq@bin-groups.com</Typography></Stack>
-                            <Stack direction="row" spacing={1}><Phone size={18} color={binThemeTokens.gold} /><Typography>+971 4 888 8888</Typography></Stack>
+                            <Stack direction="row" spacing={1}><Mail size={18} color={binThemeTokens.gold} /><Typography>Ceo@bin-groups.com</Typography></Stack>
+                            <Stack direction="row" spacing={1}><Phone size={18} color={binThemeTokens.gold} /><Typography>+971 55 242 3233</Typography></Stack>
                             <Stack direction="row" spacing={1}><MapPin size={18} color={binThemeTokens.gold} /><Typography>United Arab Emirates</Typography></Stack>
                         </Stack>
                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
@@ -357,8 +347,8 @@ function DemoForm() {
                             <Grid item xs={12} md={6}><TextField fullWidth label="Phone / Email" /></Grid>
                             <Grid item xs={12} md={6}><TextField fullWidth label="Property Type" /></Grid>
                             <Grid item xs={12} md={6}><TextField fullWidth label="Emirate" /></Grid>
-                            <Grid item xs={12}><TextField fullWidth multiline minRows={4} label="What do you want to manage?" /></Grid>
-                            <Grid item xs={12}><Button disabled fullWidth variant="contained" sx={{ py: 1.4 }}>CRM submission activates in Phase 2</Button></Grid>
+                            <Grid item xs={12}><TextField fullWidth multiline minRows={4} label="Portfolio Details" /></Grid>
+                            <Grid item xs={12}><Button disabled fullWidth variant="contained" sx={{ py: 1.4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Submit for Audit</Button></Grid>
                         </Grid>
                     </Grid>
                 </Grid>

@@ -80,6 +80,7 @@ export interface PropertyData {
     condition: 'Mint' | 'Good' | 'Fair' | 'Poor';
     assetGrade: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
     currentStatus: string;
+    titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
     address: string;
     addressLine?: string;
     city?: string;
@@ -368,7 +369,12 @@ export const useOnboardingStore = create<OnboardingState>()(
                     totalPersonal: props.filter(p => p.useType === 'Personal').length,
                     totalMajlis: props.filter(p => p.majlis).length,
                     totalSqFt: props.reduce((acc, p) => acc + (p.sqft || 0), 0),
-                    estimatedACV: 0,
+                    estimatedACV: (get().properties.reduce((acc, p) => {
+                        let base = p.propertyType === 'Villa' ? 3500 : (p.propertyType === 'Apartment' ? 1800 : (p.propertyType === 'Building' ? 15000 : 5000));
+                        const gradeMult = p.assetGrade === 'Sovereign' ? 1.8 : (p.assetGrade === 'Ultra-Luxury' ? 1.5 : (p.assetGrade === 'Luxury' ? 1.3 : 1.0));
+                        const sqftMult = Math.max(1, (p.sqft || 1200) / 1200);
+                        return acc + (base * gradeMult * sqftMult);
+                    }, 0)),
                     recommendedTier: 'Premium',
                     isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
                     isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign'),

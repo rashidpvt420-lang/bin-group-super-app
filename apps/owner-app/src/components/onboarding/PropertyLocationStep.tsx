@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { 
     Box, Typography, Grid, Paper, alpha, TextField, 
-    InputAdornment, Button, Stack, Divider, Container, Alert, MenuItem, Checkbox, FormControlLabel
+    InputAdornment, Button, Stack, Divider, Container, Alert, MenuItem, Checkbox, FormControlLabel, CircularProgress
 } from '@mui/material';
-import { MapPin, Search, Navigation, ArrowRight, ArrowLeft, Crosshair, AlertTriangle } from 'lucide-react';
+import { MapPin, Search, Navigation, ArrowRight, ArrowLeft, Crosshair, AlertTriangle, RefreshCcw, Info } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -13,9 +13,8 @@ const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ra
 
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
-    const { tx, isRTL } = useLanguage();
+    const { tx } = useLanguage();
     const autocompleteRef = useRef<HTMLInputElement>(null);
-    const googleAutocompleteRef = useRef<any>(null);
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const markerRef = useRef<any>(null);
@@ -26,25 +25,43 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [manualEntry, setManualEntry] = useState(false);
     const [manualLat, setManualLat] = useState('');
     const [manualLng, setManualLng] = useState('');
+    const [initializing, setInitializing] = useState(true);
 
     const activeProperty = properties[0];
+    const isManualMode = manualEntry || mapFailed;
 
     const commitGeoAnchor = (payload: { lat: number; lng: number; address?: string; emirate?: string; city?: string; area?: string; placeId?: string; source?: 'google_maps' | 'title_deed' | 'admin_manual'; verified?: boolean; requiresGeoReview?: boolean; dispatchReady?: boolean }) => {
         try {
             const isManual = payload.source === 'admin_manual' || manualEntry;
+            
+            let resolvedEmirate = payload.emirate || activeProperty?.emirate;
+            let resolvedCity = payload.city || activeProperty?.city;
+            let resolvedArea = payload.area || activeProperty?.area;
+
+            const combined = `${resolvedEmirate} ${resolvedCity} ${resolvedArea}`.toLowerCase();
+
+            if (combined.includes("falaj hazza")) {
+                resolvedEmirate = "Abu Dhabi";
+                resolvedCity = "Al Ain";
+                resolvedArea = "Falaj Hazza";
+            } else if (combined.includes("al ain")) {
+                resolvedEmirate = "Abu Dhabi";
+                resolvedCity = "Al Ain";
+                resolvedArea = resolvedArea || "Al Ain Central";
+            }
+
             const geo = buildPersistableGeoAnchor({
                 lat: payload.lat,
                 lng: payload.lng,
                 address: payload.address || activeProperty?.address,
-                emirate: payload.emirate || activeProperty?.emirate,
-                city: payload.city || activeProperty?.city || payload.area || activeProperty?.area,
-                area: payload.area || activeProperty?.area || payload.city,
-                placeId: payload.placeId || activeProperty?.googlePlaceId || 'MANUAL',
+                emirate: resolvedEmirate,
+                city: resolvedCity,
+                area: resolvedArea,
+                placeId: payload.placeId || activeProperty?.googlePlaceId || (isManual ? 'MANUAL' : undefined),
                 source: payload.source || (isManual ? 'admin_manual' : 'google_maps'),
                 verified: payload.verified ?? !isManual,
-                verifiedBy: null,
-                requiresGeoReview: payload.requiresGeoReview ?? isManual,
-                dispatchReady: payload.dispatchReady ?? (!isManual && (payload.verified ?? true))
+                requiresGeoReview: isManual ? true : Boolean(payload.requiresGeoReview),
+                dispatchReady: isManual ? false : payload.dispatchReady ?? true
             });
 
             updateProperty(0, {
@@ -61,14 +78,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setLocationError(null);
         } catch (err: any) {
             console.error("Geo Commit Error:", err);
-            setLocationError(err?.message || 'We could not verify this location. Manual entry required.');
+            setLocationError(err?.message || 'Verification failed. Manual entry required.');
         }
     };
 
     const extractAddressParts = (components: any[] = []) => {
-        let emirate = activeProperty?.emirate || '';
-        let city = activeProperty?.city || '';
-        let area = activeProperty?.area || '';
+        let emirate = ''; let city = ''; let area = '';
         components.forEach((component) => {
             if (component.types.includes('administrative_area_level_1')) {
                 emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
@@ -80,145 +95,103 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area = component.long_name;
             }
         });
-
-        // [STABILITY] Al Ain is part of Abu Dhabi Emirate
-        if (city === 'Al Ain' || area === 'Al Ain' || emirate === 'Al Ain') {
-            emirate = 'Abu Dhabi';
-            city = 'Al Ain';
-        }
-
-        return { emirate, city: city || area || emirate, area: area || city || emirate };
+        return { emirate, city, area };
     };
 
-    const reverseGeocode = (lat: number, lng: number) => {
-        if (!geocoderRef.current) {
-            setLocationError('We could not detect the area. Please search an address or use manual review.');
-            return;
-        }
-        geocoderRef.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
-            if (status === 'OK' && results?.[0]) {
-                const parts = extractAddressParts(results[0].address_components || []);
-                commitGeoAnchor({
-                    lat,
-                    lng,
-                    address: results[0].formatted_address,
-                    placeId: results[0].place_id,
-                    ...parts,
-                    source: 'google_maps',
-                    verified: true
+    const initAutocomplete = async () => {
+        setInitializing(true);
+        setMapFailed(false);
+        try {
+            const waitForGoogleMaps = async () => {
+                const startedAt = Date.now();
+                while (!(window as any).google?.maps?.importLibrary && Date.now() - startedAt < 8000) {
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+                return (window as any).google?.maps;
+            };
+
+            const googleMaps = await waitForGoogleMaps();
+            if (!googleMaps) throw new Error("TIMEOUT");
+
+            const mapsLibrary = await googleMaps.importLibrary('maps');
+            const placesLibrary = await googleMaps.importLibrary('places');
+            const geocodingLibrary = await googleMaps.importLibrary('geocoding');
+            
+            geocoderRef.current = new geocodingLibrary.Geocoder();
+
+            if (autocompleteRef.current) {
+                const autocomplete = new placesLibrary.Autocomplete(autocompleteRef.current, {
+                    componentRestrictions: { country: "ae" },
+                    fields: ["address_components", "geometry", "formatted_address", "place_id"],
                 });
-            } else {
-                setLocationError('We could not detect the area. Please move the pin or search again.');
+
+                autocomplete.addListener("place_changed", () => {
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry) return;
+                    const parts = extractAddressParts(place.address_components || []);
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
+                    commitGeoAnchor({ address: place.formatted_address, placeId: place.place_id, lat, lng, ...parts });
+                    mapInstanceRef.current?.setCenter({ lat, lng });
+                    markerRef.current?.setPosition({ lat, lng });
+                });
             }
-        });
+
+            if (mapRef.current) {
+                const initial = activeProperty?.location || { lat: 25.2048, lng: 55.2708 };
+                mapInstanceRef.current = new mapsLibrary.Map(mapRef.current, {
+                    center: initial, zoom: activeProperty?.location ? 16 : 10,
+                    mapTypeControl: false, streetViewControl: false,
+                    styles: [{ "elementType": "geometry", "stylers": [{ "color": "#212121" }] }]
+                });
+                markerRef.current = new googleMaps.Marker({
+                    map: mapInstanceRef.current, position: initial, draggable: true
+                });
+                markerRef.current.addListener('dragend', () => {
+                    const pos = markerRef.current.getPosition();
+                    geocoderRef.current.geocode({ location: pos }, (results: any[]) => {
+                        if (results?.[0]) {
+                            const parts = extractAddressParts(results[0].address_components);
+                            commitGeoAnchor({ lat: pos.lat(), lng: pos.lng(), address: results[0].formatted_address, ...parts });
+                        }
+                    });
+                });
+            }
+            setManualEntry(false);
+        } catch (e: any) {
+            const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || (window as any).VITE_GOOGLE_MAPS_API_KEY;
+            const isPlaceholder = apiKey === 'YOUR_PRODUCTION_API_KEY_HERE' || !apiKey;
+            
+            console.error("GOOGLE_MAPS_LOAD_FAILED", {
+                reason: isPlaceholder ? "MISSING_API_KEY" : (e?.message || "Unknown initialization error"),
+                apiKeyPresent: !isPlaceholder,
+                currentDomain: window.location.hostname
+            });
+            setMapFailed(true);
+            setManualEntry(true);
+            if (isPlaceholder) {
+                setLocationError("Google Maps API Key not configured. Using manual fallback.");
+            }
+        } finally {
+            setInitializing(false);
+        }
     };
 
-    const moveMarker = (lat: number, lng: number) => {
-        if (!isValidLatLng(lat, lng)) return;
-        const position = { lat, lng };
-        mapInstanceRef.current?.setCenter(position);
-        markerRef.current?.setPosition(position);
-        reverseGeocode(lat, lng);
-    };
-
-    useEffect(() => {
-        const waitForGoogleMaps = async () => {
-            const startedAt = Date.now();
-            while (!(window as any).google?.maps && Date.now() - startedAt < 10000) {
-                await new Promise((resolve) => setTimeout(resolve, 250));
-            }
-            return (window as any).google?.maps;
-        };
-
-        const initAutocomplete = async () => {
-            try {
-                const googleMaps = await waitForGoogleMaps();
-                if (!googleMaps) {
-                    setMapFailed(true);
-                    return;
-                }
-                
-                // Using standard Geocoder instead of importLibrary for broader compatibility
-                geocoderRef.current = new googleMaps.Geocoder();
-
-                if (autocompleteRef.current) {
-                    const autocomplete = new googleMaps.places.Autocomplete(autocompleteRef.current, {
-                        componentRestrictions: { country: "ae" },
-                        fields: ["address_components", "geometry", "formatted_address", "place_id"],
-                    });
-
-                    autocomplete.addListener("place_changed", () => {
-                        const place = autocomplete.getPlace();
-                        if (!place.geometry) return;
-                        const address = place.formatted_address;
-                        const parts = extractAddressParts(place.address_components || []);
-                        const lat = place.geometry.location.lat();
-                        const lng = place.geometry.location.lng();
-                        commitGeoAnchor({ address, placeId: place.place_id, lat, lng, ...parts });
-                        mapInstanceRef.current?.setZoom(16);
-                        markerRef.current?.setPosition({ lat, lng });
-                        mapInstanceRef.current?.setCenter({ lat, lng });
-                    });
-                    googleAutocompleteRef.current = autocomplete;
-                }
-
-                if (mapRef.current && !mapInstanceRef.current) {
-                    const initial = activeProperty?.location || { lat: 24.4539, lng: 54.3773 };
-                    mapInstanceRef.current = new googleMaps.Map(mapRef.current, {
-                        center: initial,
-                        zoom: activeProperty?.location ? 16 : 7,
-                        mapTypeControl: false,
-                        streetViewControl: false
-                    });
-                    markerRef.current = new googleMaps.Marker({
-                        map: mapInstanceRef.current,
-                        position: initial,
-                        draggable: true
-                    });
-                    markerRef.current.addListener('dragend', () => {
-                        const pos = markerRef.current.getPosition();
-                        moveMarker(pos.lat(), pos.lng());
-                    });
-                    mapInstanceRef.current.addListener('click', (event: any) => {
-                        if (!event.latLng) return;
-                        moveMarker(event.latLng.lat(), event.latLng.lng());
-                    });
-                }
-                setManualEntry(false);
-            } catch (e) {
-                console.error("Maps fail:", e);
-                setMapFailed(true);
-            }
-        };
-
-        initAutocomplete();
-    }, []);
+    useEffect(() => { initAutocomplete(); }, []);
 
     const handleManualCommit = () => {
-        if (!activeProperty?.address || !activeProperty?.emirate) {
-            setLocationError("Emirate and Address are required for manual entry.");
-            return;
-        }
-        if (!isValidLatLng(manualLat, manualLng)) {
-            setLocationError("Enter valid latitude and longitude, or return to the map and select a pin.");
-            return;
-        }
-        commitGeoAnchor({
-            lat: Number(manualLat),
-            lng: Number(manualLng),
-            source: 'admin_manual',
-            verified: false,
-            requiresGeoReview: true,
-            dispatchReady: false
-        });
+        const lat = Number(manualLat); const lng = Number(manualLng);
+        if (!isValidLatLng(lat, lng)) { setLocationError("Enter valid coordinates."); return; }
+        commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false, requiresGeoReview: true, dispatchReady: false });
         onNext();
     };
 
-    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !manualEntry) || (manualEntry && activeProperty?.emirate && activeProperty?.address && isValidLatLng(manualLat, manualLng));
+    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !isManualMode) || (isManualMode && activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
 
     return (
         <Box sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>SOVEREIGN SPATIAL NODE</Typography>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>LOCATION IDENTIFICATION</Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>Identify geographic coordinates for dispatch optimization.</Typography>
             </Box>
@@ -226,106 +199,53 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             <Container maxWidth="md">
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <Stack spacing={4}>
-                        {(mapFailed || (window as any).google_maps_error) && (
-                            <Alert severity="error" icon={<AlertTriangle />} sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                Google Maps failed to load. Please use manual entry below to continue.
+                        {mapFailed && (
+                            <Alert 
+                                severity="warning" 
+                                icon={<AlertTriangle />} 
+                                sx={{ bgcolor: 'rgba(198, 167, 94, 0.05)', color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }} 
+                                action={<Button size="small" color="inherit" onClick={initAutocomplete} startIcon={<RefreshCcw size={14}/>}>RETRY</Button>}
+                            >
+                                {locationError || "Map unavailable. Please configure Google Maps API key or use manual entry below."}
                             </Alert>
                         )}
 
-                        {!manualEntry && !mapFailed ? (
+                        {!isManualMode ? (
                             <>
-                                <TextField
-                                    fullWidth
-                                    inputRef={autocompleteRef}
-                                    placeholder="Search for property address in UAE..."
-                                    value={activeProperty?.address || ''}
-                                    onChange={(e) => updateProperty(0, { address: e.target.value })}
-                                    InputProps={{
-                                        startAdornment: (<InputAdornment position="start"><Search color={binThemeTokens.gold} size={20} /></InputAdornment>),
-                                        sx: { borderRadius: 3, bgcolor: 'rgba(255,255,255,0.02)' }
-                                    }}
+                                <TextField fullWidth inputRef={autocompleteRef} placeholder="Search for property address in UAE..." value={activeProperty?.address || ''} onChange={(e) => updateProperty(0, { address: e.target.value })} 
+                                    InputProps={{ startAdornment: (<InputAdornment position="start"><Search color={binThemeTokens.gold} size={20} /></InputAdornment>), sx: { borderRadius: 3, bgcolor: 'rgba(255,255,255,0.02)' } }}
                                 />
-                                <Box ref={mapRef} sx={{ width: '100%', height: 350, borderRadius: 4, border: '1px solid rgba(198,167,94,0.18)' }} />
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                    <Button
-                                        onClick={() => {
-                                            if (!navigator.geolocation) {
-                                                setLocationError('Location permission is not available on this device.');
-                                                return;
-                                            }
-                                            navigator.geolocation.getCurrentPosition(
-                                                (position) => moveMarker(position.coords.latitude, position.coords.longitude),
-                                                () => setLocationError('Location permission is required to anchor this property.'),
-                                                { enableHighAccuracy: true, timeout: 10000 }
-                                            );
-                                        }}
-                                        startIcon={<Crosshair size={16} />}
-                                        sx={{ color: binThemeTokens.gold }}
-                                    >
-                                        Use Current Location
-                                    </Button>
-                                    <Button onClick={() => setManualEntry(true)} sx={{ color: binThemeTokens.gold }}>Switch to Manual Review</Button>
+                                <Box sx={{ position: 'relative' }}>
+                                    <Box ref={mapRef} sx={{ width: '100%', height: 350, borderRadius: 4, border: '1px solid rgba(198,167,94,0.18)', bgcolor: '#000' }} />
+                                    {initializing && (
+                                        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 4 }}>
+                                            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                                        </Box>
+                                    )}
+                                </Box>
+                                <Stack direction="row" spacing={2}>
+                                    <Button onClick={() => setManualEntry(true)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Manual Review Mode</Button>
                                 </Stack>
-                                {locationError && <Alert severity="warning">{locationError}</Alert>}
                             </>
                         ) : (
                             <Stack spacing={3}>
                                 <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.gold }}>MANUAL LOCATION ENTRY</Typography>
-                                <TextField 
-                                    select fullWidth label="Emirate" 
-                                    value={activeProperty?.emirate || ''} 
-                                    onChange={(e) => updateProperty(0, { emirate: e.target.value })}
-                                >
+                                <TextField select fullWidth label="Emirate" value={activeProperty?.emirate || ''} onChange={(e) => updateProperty(0, { emirate: e.target.value })}>
                                     {EMIRATES.map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}
                                 </TextField>
-                                <TextField 
-                                    fullWidth label="City / Area" 
-                                    value={activeProperty?.area || ''} 
-                                    onChange={(e) => updateProperty(0, { area: e.target.value, city: e.target.value })} 
-                                />
-                                <TextField 
-                                    fullWidth multiline rows={3} label="Full Address / Landmark" 
-                                    value={activeProperty?.address || ''} 
-                                    onChange={(e) => updateProperty(0, { address: e.target.value })} 
-                                />
+                                <TextField fullWidth label="City / Area" value={activeProperty?.area || ''} onChange={(e) => updateProperty(0, { area: e.target.value, city: e.target.value })} />
+                                <TextField fullWidth multiline rows={3} label="Full Address / Landmark" value={activeProperty?.address || ''} onChange={(e) => updateProperty(0, { address: e.target.value })} />
                                 <Grid container spacing={2}>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Latitude"
-                                            value={manualLat}
-                                            onChange={(e) => setManualLat(e.target.value)}
-                                            placeholder="24.4539"
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            label="Longitude"
-                                            value={manualLng}
-                                            onChange={(e) => setManualLng(e.target.value)}
-                                            placeholder="54.3773"
-                                        />
-                                    </Grid>
+                                    <Grid item xs={6}><TextField fullWidth label="Latitude" value={manualLat} onChange={(e) => setManualLat(e.target.value)} /></Grid>
+                                    <Grid item xs={6}><TextField fullWidth label="Longitude" value={manualLng} onChange={(e) => setManualLng(e.target.value)} /></Grid>
                                 </Grid>
-                                {locationError && <Typography variant="caption" color="error">{locationError}</Typography>}
-                                <FormControlLabel 
-                                    control={<Checkbox checked={true} disabled />} 
-                                    label={<Typography variant="caption">Manual geo is marked for Administrative Geo-Review and cannot auto-dispatch until locked.</Typography>} 
-                                />
-                                {!mapFailed && <Button onClick={() => setManualEntry(false)} sx={{ color: binThemeTokens.gold }}>Return to Map</Button>}
+                                <Alert severity="info" icon={<Info size={18}/>}>Manual geo requires Administrative Review before technician dispatch.</Alert>
                             </Stack>
                         )}
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
                             <Button variant="outlined" onClick={onBack} startIcon={<ArrowLeft />} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>BACK</Button>
-                            <Button 
-                                variant="contained" size="large" 
-                                onClick={manualEntry ? handleManualCommit : onNext} 
-                                disabled={!canProceed}
-                                endIcon={<ArrowRight />}
-                                sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                            >
+                            <Button variant="contained" size="large" onClick={isManualMode ? handleManualCommit : onNext} disabled={!canProceed} endIcon={<ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                                 CONTINUE
                             </Button>
                         </Box>

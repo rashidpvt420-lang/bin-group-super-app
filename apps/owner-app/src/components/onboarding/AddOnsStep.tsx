@@ -8,7 +8,8 @@ import {
     Stack, 
     Chip,
     Divider,
-    useTheme
+    useTheme,
+    alpha
 } from '@mui/material';
 import { 
     Check, 
@@ -21,15 +22,17 @@ import {
     Wind,
     ArrowUpRight,
     Camera,
-    Trash2
+    Trash2,
+    Info,
+    ArrowLeft
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
 
 const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNext, onBack }) => {
-    const { propertyData, selectedAddOns, toggleAddOn } = useOnboardingStore();
-    const theme = useTheme();
+    const { properties, selectedAddOns, toggleAddOn } = useOnboardingStore();
+    const activeProperty = properties[0];
 
     const allAddOns = [
         { 
@@ -48,19 +51,19 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Water Tank Sterilization', 
             desc: 'Quarterly lab-tested sterilization and cleaning.', 
             price: 1200, 
-            mandatory: propertyData?.tank || false,
-            showIf: propertyData?.tank || false,
+            mandatory: activeProperty?.tank || false,
+            showIf: activeProperty?.tank || false,
             reason: 'Mandatory if tank exists.'
         },
         { 
             id: 'elevator_amc', 
             icon: Activity, 
             name: 'Elevator / Lift AMC', 
-            desc: 'Full-cycle lift maintenance, quarterly inspections & Dubai Mun. certifications.', 
+            desc: 'Full-cycle lift maintenance, quarterly inspections & Municipality certifications.', 
             price: 3200, 
-            mandatory: (propertyData?.floors || 0) > 2 || (propertyData?.lifts || 0) > 0,
-            showIf: (propertyData?.floors || 0) > 2 || (propertyData?.lifts || 0) > 0,
-            reason: 'Mandatory for multi-floor assets per DM regulations.'
+            mandatory: (activeProperty?.floors || 0) > 2 || (activeProperty?.lifts || 0) > 0,
+            showIf: (activeProperty?.floors || 0) > 2 || (activeProperty?.lifts || 0) > 0,
+            reason: 'Mandatory for multi-floor assets per UAE regulations.'
         },
         { 
             id: 'pool_care', 
@@ -69,7 +72,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Daily chemicals, vacuuming, and pump care.', 
             price: 6000, 
             mandatory: false,
-            showIf: propertyData?.pool || propertyData?.majlis || false,
+            showIf: activeProperty?.pool || activeProperty?.majlis || false,
             reason: 'Villa/Majlis specialty care.'
         },
         { 
@@ -78,8 +81,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'BMU / Façade Access Mission', 
             desc: 'Annual safety certification for rigging/BMU crane systems.', 
             price: 4500, 
-            mandatory: propertyData?.bmu || false,
-            showIf: propertyData?.bmu || false,
+            mandatory: activeProperty?.bmu || false,
+            showIf: activeProperty?.bmu || false,
             reason: 'Compliance for high-rise assets.'
         },
         { 
@@ -89,7 +92,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Energy management interface optimization.', 
             price: 3500, 
             mandatory: false,
-            showIf: propertyData?.districtCooling || false,
+            showIf: activeProperty?.districtCooling || false,
             reason: 'Recommended for utility savings.'
         },
         { 
@@ -98,18 +101,18 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'CCTV / SIRA Maintenance', 
             desc: 'SIRA-approved preventive care and renewals.', 
             price: 1800, 
-            mandatory: propertyData?.sira || false,
-            showIf: propertyData?.sira || false,
+            mandatory: activeProperty?.sira || false,
+            showIf: activeProperty?.sira || false,
             reason: 'SIRA regulatory requirement.'
         },
         { 
             id: 'grease_trap', 
             icon: Trash2, 
             name: 'Grease Trap Service', 
-            desc: 'Monthly grease trap cleaning to Dubai Municipality standards.', 
+            desc: 'Monthly grease trap cleaning to Municipality standards.', 
             price: 900, 
             mandatory: false,
-            showIf: propertyData?.propertyType === 'Commercial' || (['Hotel / Resort', 'Retail Mall / Shop'] as string[]).includes(propertyData?.subType || ''),
+            showIf: activeProperty?.propertyType === 'Commercial' || (['Hotel', 'Retail', 'Mall'] as string[]).includes(activeProperty?.subType || ''),
             reason: 'Required for F&B / commercial kitchen tenancies.'
         },
         { 
@@ -118,7 +121,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'PCA Asset Audit', 
             desc: 'Professional engineering condition report.', 
             price: 5000, 
-            mandatory: propertyData?.propertyType === 'Commercial' || (propertyData?.age || 0) > 15,
+            mandatory: activeProperty?.propertyType === 'Commercial' || (activeProperty?.age || 0) > 15,
             showIf: true,
             reason: 'Institutional asset requirement.'
         },
@@ -129,9 +132,9 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Deep Care Programme',
             desc: 'Monthly deep cleaning, joinery care, upholstery protection & guest-wear restoration.',
             price: 8400,
-            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
-            reason: 'Required for high-footfall Government Majlis reception assets.'
+            mandatory: activeProperty?.propertyType === 'Government Majlis',
+            showIf: activeProperty?.propertyType === 'Government Majlis' || activeProperty?.majlis || false,
+            reason: 'Required for high-footfall Majlis reception assets.'
         },
         {
             id: 'majlis_landscaping',
@@ -139,8 +142,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             name: 'Majlis Landscaping & Grounds AMC',
             desc: 'Fortnightly garden maintenance, irrigation systems, palm care & decorative lighting.',
             price: 6000,
-            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' && propertyData?.majlisGarden,
-            showIf: (propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false) && propertyData?.majlisGarden,
+            mandatory: activeProperty?.propertyType === 'Government Majlis' && activeProperty?.majlisGarden,
+            showIf: (activeProperty?.propertyType === 'Government Majlis' || activeProperty?.majlis || false) && activeProperty?.majlisGarden,
             reason: 'Mandatory for properties with landscaped grounds.'
         },
         {
@@ -150,66 +153,38 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             desc: 'Pressure washing, window cleaning, entrance gate & perimeter care.',
             price: 2800,
             mandatory: false,
-            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
+            showIf: activeProperty?.propertyType === 'Government Majlis' || activeProperty?.majlis || false,
             reason: 'Recommended for premium Majlis estates.'
         },
         {
-            id: 'majlis_hvac',
-            icon: Wind,
-            name: 'Majlis Premium HVAC Service',
-            desc: 'Enhanced cooling load management, filter care, seasonal balancing for large Majlis reception areas.',
-            price: 4500,
-            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
-            reason: 'Majlis cooling loads exceed standard residential specs.'
-        },
-        {
-            id: 'majlis_hospitality',
+            id: 'majlis_standby',
             icon: Activity,
-            name: 'Hospitality Readiness Maintenance',
-            desc: 'Pre-event deep inspection, on-call response, VIP guest standards compliance.',
-            price: 3600,
-            mandatory: propertyData?.propertyType === 'GOVERNMENT_MAJLIS',
-            showIf: propertyData?.propertyType === 'GOVERNMENT_MAJLIS' || propertyData?.majlis || false,
-            reason: 'Sovereign Majlis VIP hosting standard.'
-        },
-        // ── INSTITUTIONAL SECTOR ADD-ONS ──────────────────────────────────
-        {
-            id: 'hotel_guest_safety',
-            icon: ShieldAlert,
-            name: 'Hotel Guest Safety Audit',
-            desc: 'Monthly DHA/Municipality compliance audits for guest-facing systems.',
-            price: 12500,
-            mandatory: propertyData?.propertyType === 'HOTEL',
-            showIf: propertyData?.propertyType === 'HOTEL',
-            reason: 'Mandatory guest-facing health & safety compliance.'
-        },
-        {
-            id: 'gov_compliance_pack',
-            icon: Activity,
-            name: 'Gov Property Compliance Pack',
-            desc: 'Consolidated multi-departmental audit readiness and reporting.',
-            price: 9500,
-            mandatory: propertyData?.propertyType === 'GOVERNMENT_PROPERTY',
-            showIf: propertyData?.propertyType === 'GOVERNMENT_PROPERTY',
-            reason: 'Departmental asset criticality and compliance stack.'
+            name: 'Majlis Event Standby',
+            desc: 'Technical standby for Majlis / event venue during official functions.',
+            price: 2500,
+            mandatory: false,
+            showIf: activeProperty?.propertyType === 'Government Majlis' || activeProperty?.majlis || false,
+            reason: 'On-call technical integrity for high-priority functions.'
         }
     ];
 
-    const currentAddOns = allAddOns.filter(a => a.showIf === undefined || a.showIf);
+    const currentAddOns = allAddOns.filter(a => a.showIf);
     const safeSelectedAddOns = Array.isArray(selectedAddOns) ? selectedAddOns : [];
 
     return (
-        <Box>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 1, color: binThemeTokens.gold }}>SELECT ADD-ON SERVICES</Typography>
-            <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 6, maxWidth: 600 }}>
-                Our intelligence engine has identified the following mandatory and recommended mission-critical services based on your asset profile.
-            </Typography>
+        <Box sx={{ py: 4 }}>
+            <Box sx={{ textAlign: 'center', mb: 6 }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>OPERATIONAL ADD-ONS</Typography>
+                <Typography variant="h4" fontWeight="950" sx={{ mb: 1, color: '#FFF' }}>SELECT ADD-ON SERVICES</Typography>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 800, mx: 'auto' }}>
+                    Mission-critical service layers tailored to your specific asset type and regulatory requirements.
+                </Typography>
+            </Box>
 
             <Grid container spacing={4}>
-                <Grid item xs={12} md={8}>
+                <Grid item xs={12} lg={8}>
                     <Grid container spacing={2}>
-                        {(Array.isArray(currentAddOns) ? currentAddOns : []).map((addon) => {
+                        {currentAddOns.map((addon) => {
                             const isSelected = safeSelectedAddOns.includes(addon.id) || addon.mandatory;
                             const Icon = addon.icon as LucideIcon;
                             
@@ -219,17 +194,17 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                                         onClick={() => !addon.mandatory && toggleAddOn(addon.id)}
                                         sx={{ 
                                             p: 3, borderRadius: 6, cursor: addon.mandatory ? 'default' : 'pointer',
-                                            bgcolor: isSelected ? 'rgba(198, 167, 94, 0.05)' : 'rgba(22, 22, 24, 0.6)',
+                                            bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.08) : 'rgba(22, 22, 24, 0.6)',
                                             border: '1px solid',
                                             borderColor: isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)',
-                                            transition: 'all 0.3s ease',
+                                            transition: 'all 0.2s ease',
                                             display: 'flex', 
                                             alignItems: 'center', 
                                             justifyContent: 'space-between',
+                                            position: 'relative',
                                             '&:hover': {
                                                 borderColor: binThemeTokens.gold,
-                                                bgcolor: isSelected ? 'rgba(198, 167, 94, 0.08)' : 'rgba(198, 167, 94, 0.03)',
-                                                transform: 'translateY(-2px)'
+                                                bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.12) : 'rgba(198, 167, 94, 0.03)'
                                             }
                                         }}
                                     >
@@ -237,38 +212,31 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                                             <Box sx={{ 
                                                 p: 1.5, borderRadius: 3, 
                                                 bgcolor: isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)',
-                                                color: isSelected ? binThemeTokens.black : binThemeTokens.textSecondary,
+                                                color: isSelected ? '#000' : binThemeTokens.gold,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center'
                                             }}>
                                                 <Icon size={24} />
                                             </Box>
                                             <Box>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                                    <Typography variant="h6" sx={{ fontWeight: 900, color: binThemeTokens.textPrimary }}>{addon.name}</Typography>
+                                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                                    <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#FFF' }}>{addon.name}</Typography>
                                                     {addon.mandatory && (
-                                                        <Chip 
-                                                            label="MANDATORY" size="small" 
-                                                            sx={{ 
-                                                                fontSize: 9, fontWeight: 900, 
-                                                                bgcolor: 'rgba(255, 77, 77, 0.1)', color: '#ff4d4d',
-                                                                border: '1px solid rgba(255, 77, 77, 0.2)'
-                                                            }} 
-                                                        />
+                                                        <Chip label="MANDATORY" size="small" sx={{ height: 16, fontSize: 8, fontWeight: 950, bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }} />
                                                     )}
-                                                </Box>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block' }}>{addon.desc}</Typography>
-                                                <Typography variant="caption" sx={{ color: addon.mandatory ? '#ff4d4d' : binThemeTokens.gold, fontWeight: 900 }}>
-                                                    REASON: {addon.reason}
+                                                </Stack>
+                                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 1 }}>{addon.desc}</Typography>
+                                                <Typography variant="caption" sx={{ color: addon.mandatory ? '#ef4444' : binThemeTokens.gold, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Info size={12} /> REASON: {addon.reason}
                                                 </Typography>
                                             </Box>
                                         </Box>
-                                        <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 2, minWidth: 140, justifyContent: 'flex-end' }}>
+                                        <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 2, minWidth: 150, justifyContent: 'flex-end' }}>
                                             <Box>
-                                                <Typography variant="subtitle1" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, whiteSpace: 'nowrap' }}>AED {formatAED(addon.price)}+</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block' }}>ANNUAL</Typography>
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF', whiteSpace: 'nowrap' }}>AED {addon.price.toLocaleString()}+</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>ANNUAL</Typography>
                                             </Box>
                                             {isSelected ? (
-                                                <Check color={binThemeTokens.gold} size={24} />
+                                                <Check color={binThemeTokens.gold} size={24} strokeWidth={3} />
                                             ) : (
                                                 <Box sx={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)' }} />
                                             )}
@@ -280,62 +248,48 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                     </Grid>
                 </Grid>
 
-                <Grid item xs={12} md={4}>
-                    <Paper sx={{ 
-                        p: 4, 
-                        borderRadius: 6, 
-                        bgcolor: '#161618', 
-                        border: '1px solid rgba(198, 167, 94, 0.1)', 
-                        position: 'sticky', 
-                        top: 180,
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
-                    }}>
-                        <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>SOVEREIGN TAILORING</Typography>
+                <Grid item xs={12} lg={4}>
+                    <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#111112', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, position: 'sticky', top: 100 }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>SOVEREIGN STACK</Typography>
+                        <Typography variant="h6" fontWeight="900" sx={{ mb: 3, color: '#FFF' }}>SELECTED ADD-ONS</Typography>
                         
-                        <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.1)' }} />}>
-                            {(Array.isArray(currentAddOns) ? currentAddOns : []).filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory).map((a) => (
+                        <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />}>
+                            {currentAddOns.filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory).map((a) => (
                                 <Box key={a.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{a.name}</Typography>
-                                    <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>AED {formatAED(a.price)}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>{a.name}</Typography>
+                                    <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>AED {a.price.toLocaleString()}</Typography>
                                 </Box>
                             ))}
+                            
+                            {currentAddOns.filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory).length === 0 && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>No additional missions selected.</Typography>
+                            )}
+
                             <Box sx={{ pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography fontWeight="900" sx={{ color: binThemeTokens.textPrimary, letterSpacing: 1 }}>TOTAL MISSIONS</Typography>
-                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                                    AED {formatAED((Array.isArray(currentAddOns) ? currentAddOns : [])
+                                <Typography fontWeight="950" sx={{ color: '#FFF' }}>TOTAL ANNUAL</Typography>
+                                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold }}>
+                                    AED {currentAddOns
                                         .filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory)
-                                        .reduce((sum, a) => sum + a.price, 0))}
+                                        .reduce((sum, a) => sum + a.price, 0).toLocaleString()}
                                 </Typography>
                             </Box>
                         </Stack>
 
-                        <Box sx={{ mt: 6 }}>
+                        <Stack spacing={2} sx={{ mt: 6 }}>
                             <Button 
-                                variant="contained" 
-                                fullWidth 
-                                size="large"
-                                onClick={onNext}
+                                variant="contained" fullWidth size="large" onClick={onNext}
                                 endIcon={<ArrowRight />}
-                                sx={{ 
-                                    background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                                    color: '#0B0B0C', 
-                                    py: 2, 
-                                    fontWeight: 900, 
-                                    borderRadius: 4,
-                                    fontSize: '1.1rem'
-                                }}
+                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', py: 2, fontWeight: 950, borderRadius: 3 }}
                             >
-                                PROCEED TO SUMMARY
+                                CONTINUE
                             </Button>
                             <Button 
-                                fullWidth 
-                                variant="text" 
-                                onClick={onBack}
-                                sx={{ mt: 2, color: binThemeTokens.textSecondary, fontWeight: 900 }}
+                                variant="text" fullWidth onClick={onBack} startIcon={<ArrowLeft />}
+                                sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}
                             >
-                                Back to Models
+                                BACK TO MODELS
                             </Button>
-                        </Box>
+                        </Stack>
                     </Paper>
                 </Grid>
             </Grid>

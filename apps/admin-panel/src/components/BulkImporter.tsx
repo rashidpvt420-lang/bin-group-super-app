@@ -57,16 +57,37 @@ const BulkImporter: React.FC = () => {
                 const chunk = rows.slice(i, i + BATCH_SIZE);
 
                 chunk.forEach(row => {
-                    const propRef = doc(collection(db, 'properties'));
-                    batch.set(propRef, {
-                        name: row.Bldg_Name || 'Unnamed Building',
-                        zone: row.Bldg_Zone || 'General',
-                        unitsCount: parseInt(row.Units_Count) || 53,
-                        ownerId: row.Owner_UID || 'PENDING',
-                        status: 'unlocked',
-                        createdAt: new Date().toISOString(),
-                        v2Scale: true
-                    });
+                    const type = (row.TYPE || 'PROPERTY').toUpperCase();
+                    if (type === 'PROPERTY') {
+                        const propRef = doc(collection(db, 'properties'));
+                        batch.set(propRef, {
+                            name: row.Bldg_Name || row.Name || 'Unnamed Building',
+                            zone: row.Bldg_Zone || row.Zone || 'General',
+                            unitsCount: parseInt(row.Units_Count || row.Units) || 0,
+                            ownerId: row.Owner_UID || row.OwnerId || 'PENDING',
+                            status: 'unlocked',
+                            createdAt: new Date().toISOString(),
+                            v2Scale: true
+                        });
+                    } else if (type === 'UNIT') {
+                        const unitRef = doc(collection(db, 'units'));
+                        batch.set(unitRef, {
+                            unitNumber: row.Unit_Number || row.Number,
+                            floorNumber: row.Floor || 0,
+                            propertyId: row.Property_ID || row.PropertyId,
+                            occupancyStatus: 'VACANT',
+                            createdAt: new Date().toISOString()
+                        });
+                    } else if (type === 'TENANT') {
+                        const userRef = doc(collection(db, 'users'));
+                        batch.set(userRef, {
+                            displayName: row.Name || row.FullName,
+                            email: (row.Email || '').toLowerCase(),
+                            role: 'tenant',
+                            status: 'active',
+                            createdAt: new Date().toISOString()
+                        });
+                    }
                 });
 
                 await batch.commit();

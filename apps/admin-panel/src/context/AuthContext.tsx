@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { auth, db, onAuthStateChanged } from '../lib/firebase';
-import { signOut } from 'firebase/auth';
+import { auth, db, onAuthStateChanged, app } from '../lib/firebase';
+import { signOut, getIdTokenResult } from 'firebase/auth';
 import { getDoc, doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { isSupported, getMessaging, getToken, app } from '../lib/firebase';
+import { isSupported, getMessaging, getToken } from 'firebase/messaging';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -26,13 +26,6 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
-const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string) => {
-    return Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(label)), ms)),
-    ]);
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -53,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authHandshakeResolved = true;
             setLoading(false);
             if (typeof window !== 'undefined') {
-                const bootWindow = window as typeof window & { __BIN_GROUPS_BOOT__?: Record<string, unknown> };
+                const bootWindow = window as any;
                 bootWindow.__BIN_GROUPS_BOOT__ = {
                     ...(bootWindow.__BIN_GROUPS_BOOT__ || {}),
                     authReady: true,
@@ -62,117 +55,108 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("🔍 [DIAG] Admin Auth handshake marked as READY.");
         };
 
-        setTimeout(markAuthReady, 10000);
-
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
-            try {
-                if (usr) {
-                    console.log("🛡️ [AUTH] Syncing Profile for:", usr.uid);
-                    try {
-                        const idTokenResult = await withTimeout(usr.getIdTokenResult(true), 10000, 'AUTH_TOKEN_TIMEOUT') as any;
-                        const claims = idTokenResult?.claims || {};
-                        let data: Record<string, any> = {};
-                        let profileReadFailed = false;
-
-                        try {
-                            const userDoc = await withTimeout(getDoc(doc(db, 'users', usr.uid)), 10000, 'ADMIN_PROFILE_TIMEOUT') as any;
-                            data = userDoc.exists() ? userDoc.data() : {};
-                        } catch (profileErr) {
-                            profileReadFailed = true;
-                            console.warn("🛡️ [AUTH] Admin profile read skipped:", profileErr);
-                        }
-
-                        const claimRole = typeof claims.role === 'string' ? claims.role : undefined;
-                        const profileRole = typeof data.role === 'string' ? data.role : undefined;
-                        const resolvedRole = claimRole || profileRole || (claims.admin === true ? 'admin' : undefined);
-                        const hasAdminAccess =
-                            claims.admin === true ||
-                            claims.super_admin === true ||
-                            data.isAdmin === true ||
-                            (resolvedRole ? ADMIN_ROLES.has(resolvedRole) : false);
-
-                        console.log("🛡️ [AUTH] Identity Resolved. Role:", resolvedRole || 'none', "ProfileReadFailed:", profileReadFailed);
-
-                        if (hasAdminAccess) {
-                            setUser({ ...usr, ...data, role: resolvedRole || 'admin', claims });
-                            setIsAuthenticated(true);
-                            setError(null);
-
-                                (async () => {
-                                    try {
-                                        const messagingSupported = await isSupported();
-                                        if (messagingSupported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                                            const messaging = getMessaging(app);
-                                            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                                            const swReadyPromise = navigator.serviceWorker.ready;
-                                            const swTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("SW_TIMEOUT")), 5000));
-
-                                            await Promise.race([swReadyPromise, swTimeout]);
-                                            const currentToken = await getToken(messaging, {
-                                                vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                                                serviceWorkerRegistration: registration
-                                            });
-                                            if (currentToken) {
-                                                await updateDoc(doc(db, 'users', usr.uid), {
-                                                    fcmTokens: arrayUnion(currentToken),
-                                                    updatedAt: new Date().toISOString()
-                                                });
-                                            }
-
-                                        }
-                                    } catch (fcmErr) {
-                                        console.warn("🛡️ [AUTH] FCM harvest bypassed:", fcmErr);
-                                    }
-                                })();
-
-                                if (!sessionStorage.getItem(`login_audit_${usr.uid}`)) {
-                                    sessionStorage.setItem(`login_audit_${usr.uid}`, 'true');
-                                    addDoc(collection(db, 'audit_logs'), {
-                                        actorId: usr.uid,
-                                        actorRole: resolvedRole || 'admin',
-                                        targetType: 'system',
-                                        targetId: 'admin-panel',
-                                        action: 'login',
-                                        before: null,
-                                        after: 'active',
-                                        userAgent: navigator.userAgent,
-                                        createdAt: serverTimestamp()
-                                    }).catch(e => console.error("Audit log failed", e));
-                                }
-
-                            } else {
-                                console.warn("🛡️ [AUTH] ACCESS DENIED: Insufficient clearance for:", usr.email);
-                                setError("This account is not authorized for the Admin Command Center.");
-                                setIsAuthenticated(false);
-                                setUser(null);
-                                await signOut(auth);
-                        }
-                    } catch (firestoreErr: any) {
-                        console.error("🛡️ [AUTH] Firestore Sync Error:", firestoreErr);
-                        setError("We could not verify your admin session. Please retry or contact support if this continues.");
-                        setIsAuthenticated(false);
-                        setUser(null);
-                    } finally {
-                        markAuthReady();
-                    }
-                } else {
-                    setIsAuthenticated(false);
-                    setUser(null);
-                    markAuthReady();
-                }
-            } catch (err: any) {
-                console.error("🛡️ [AUTH] System Fault:", err);
-                setError("System Initialization Fault: " + (err.message || 'Unknown'));
+            
+            if (!usr) {
                 setIsAuthenticated(false);
+                setUser(null);
+                setError(null);
                 markAuthReady();
-            } finally {
-                console.log("🔍 [DIAG] Admin Auth loading sequence finished.");
+                return;
             }
-        }, (err) => {
-            console.error("🛡️ [AUTH] Fatal Observer Error:", err);
-            setError("Authentication Observer Fault.");
-            markAuthReady();
+
+            try {
+                const timeoutPromise = new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 15000);
+                });
+
+                const authResolutionPromise = Promise.all([
+                    getIdTokenResult(usr, true),
+                    getDoc(doc(db, "users", usr.uid)),
+                ]);
+
+                const [idTokenResult, userDoc] = await Promise.race([
+                    authResolutionPromise,
+                    timeoutPromise,
+                ]);
+
+                const claims = idTokenResult.claims || {};
+                const profile = userDoc.exists() ? userDoc.data() : null;
+
+                const role = String(profile?.role || claims.role || "").toLowerCase();
+
+                const isAdmin =
+                    claims.admin === true ||
+                    claims.isAdmin === true ||
+                    claims.ceo === true ||
+                    claims.manager === true ||
+                    role === "admin" ||
+                    role === "super_admin" ||
+                    role === "ceo" ||
+                    role === "manager" ||
+                    ADMIN_ROLES.has(role);
+
+                if (!isAdmin) {
+                    throw new Error("ADMIN_ACCESS_DENIED");
+                }
+
+                // Successful Admin Resolution
+                setUser({ ...usr, ...profile, role, claims });
+                setIsAuthenticated(true);
+                setError(null);
+
+                // Audit Log (Once per session)
+                if (!sessionStorage.getItem(`login_audit_${usr.uid}`)) {
+                    sessionStorage.setItem(`login_audit_${usr.uid}`, 'true');
+                    addDoc(collection(db, 'audit_logs'), {
+                        actorId: usr.uid,
+                        actorRole: role,
+                        targetType: 'system',
+                        targetId: 'admin-panel',
+                        action: 'login',
+                        userAgent: navigator.userAgent,
+                        createdAt: serverTimestamp()
+                    }).catch(e => console.error("Audit log failed", e));
+                }
+
+                // Optional FCM Sync
+                (async () => {
+                    try {
+                        const supported = await isSupported();
+                        if (supported && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            const messaging = getMessaging(app);
+                            const currentToken = await getToken(messaging, {
+                                vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ'
+                            });
+                            if (currentToken) {
+                                await updateDoc(doc(db, 'users', usr.uid), {
+                                    fcmTokens: arrayUnion(currentToken),
+                                    updatedAt: new Date().toISOString()
+                                });
+                            }
+                        }
+                    } catch (fcmErr) {
+                        console.warn("🛡️ [AUTH] FCM harvest bypassed:", fcmErr);
+                    }
+                })();
+
+            } catch (err: any) {
+                console.error("🛡️ [AUTH] Admin Auth Error:", err);
+                setIsAuthenticated(false);
+                setUser(null);
+
+                if (err.message === "AUTH_SYNC_TIMEOUT") {
+                    setError("Admin session check timed out. Please retry.");
+                } else if (err.message === "ADMIN_ACCESS_DENIED") {
+                    setError("This account does not have admin access.");
+                    await signOut(auth);
+                } else {
+                    setError("Admin login failed. Please try again.");
+                }
+            } finally {
+                markAuthReady();
+            }
         });
 
         return () => {
@@ -181,6 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const login = async (credentials: any) => {
+        // Implementation provided by UnifiedLogin or direct firebase call
     };
 
     const logout = async () => {

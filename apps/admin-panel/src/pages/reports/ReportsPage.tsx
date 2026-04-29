@@ -24,7 +24,7 @@ import {
 } from '@mui/material';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { apiClient } from '../../services/api';
-import { db, collection, query, where, getDocs, orderBy, limit } from '../../lib/firebase';
+import { db, collection, query, getDocs, orderBy, limit } from '../../lib/firebase';
 
 interface ReportData {
   date: string;

@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 import { 
     Home, Building2, Building, Hotel, Landmark, Gem, 
-    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan
+    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -17,6 +17,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const { tx } = useLanguage();
     const [scanning, setScanning] = useState(false);
     const [scanned, setScanned] = useState(false);
+    const [ocrError, setOcrError] = useState<string | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
 
     React.useEffect(() => {
@@ -32,6 +33,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         if (!file) return;
 
         setScanning(true);
+        setOcrError(null);
         try {
             // 1. Upload to Temp
             const storageRef = ref(storage, `temp_kyc/${Date.now()}_${file.name}`);
@@ -48,13 +50,18 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                     propertyType: extracted.propertyType || 'Apartment',
                     sqft: extracted.sqft || 1850,
                     area: extracted.area || '',
-                    emirate: extracted.emirate || 'Dubai'
+                    emirate: extracted.emirate || 'Dubai',
+                    titleDeedStatus: 'extracted'
                 });
                 setScanned(true);
+                setSnackbar({ open: true, message: "Title deed data extracted successfully.", severity: 'success' });
+            } else {
+                throw new Error("OCR_NODE_BUSY");
             }
         } catch (err) {
             console.error("OCR Failure:", err);
-            setSnackbar({ open: true, message: "Scanner node busy. Please fill data manually.", severity: 'error' });
+            setOcrError("Scanner node busy or document unclear. Please fill data manually or retry.");
+            updateProperty(0, { titleDeedStatus: 'manual_review_required' });
         } finally {
             setScanning(false);
         }
@@ -112,8 +119,23 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
             </Box>
 
             <Container maxWidth="lg">
+                {ocrError && (
+                    <Alert 
+                        severity="warning" 
+                        icon={<AlertTriangle />}
+                        sx={{ mb: 4, bgcolor: 'rgba(255, 152, 0, 0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.2)' }}
+                        action={
+                            <Button size="small" color="inherit" component="label" startIcon={<RefreshCcw size={14}/>}>
+                                RETRY SCAN
+                                <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />
+                            </Button>
+                        }
+                    >
+                        {ocrError}
+                    </Alert>
+                )}
+
                 <Grid container spacing={4}>
-                    {/* CATEGORY SELECTOR */}
                     <Grid item xs={12} lg={7}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
@@ -148,7 +170,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                         </Paper>
                     </Grid>
 
-                    {/* PARAMETERS */}
                     <Grid item xs={12} lg={5}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
@@ -170,7 +191,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                         select fullWidth label="Asset Grade" size="small"
                                         value={activeProperty?.assetGrade || 'Premium'} 
                                         onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
-                                        disabled={scanned}
                                     >
                                     <MenuItem value="Standard">Standard</MenuItem>
                                     <MenuItem value="Premium">Premium</MenuItem>
@@ -184,7 +204,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                             fullWidth label="Units" type="number" size="small"
                                             value={activeProperty?.units || 0} 
                                             onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })}
-                                            disabled={scanned}
                                             InputProps={{
                                                 endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
                                             }}
@@ -195,7 +214,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                             fullWidth label="Floors" type="number" size="small"
                                             value={activeProperty?.floors || 1} 
                                             onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })}
-                                            disabled={scanned}
                                             InputProps={{
                                                 endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
                                             }}
@@ -206,7 +224,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                             fullWidth label="Sqft" type="number" size="small"
                                             value={activeProperty?.sqft || 0} 
                                             onChange={(e) => updateProperty(0, { sqft: parseInt(e.target.value) || 0 })}
-                                            disabled={scanned}
                                             InputProps={{
                                                 endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
                                             }}
@@ -217,7 +234,6 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                             fullWidth label="Age (Yrs)" type="number" size="small"
                                             value={activeProperty?.age || 0} 
                                             onChange={(e) => updateProperty(0, { age: parseInt(e.target.value) || 0 })}
-                                            disabled={scanned}
                                         />
                                     </Grid>
                                 </Grid>

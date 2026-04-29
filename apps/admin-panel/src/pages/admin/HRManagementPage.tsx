@@ -3,14 +3,13 @@ import {
     Container, Typography, Box, Paper, Grid, Stack, Button, 
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
-    IconButton, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Alert
+    IconButton, Alert
 } from '@mui/material';
 import { 
-    Users, Briefcase, Calendar, Clock, DollarSign, 
-    FileText, UserPlus, Search, ChevronRight, Filter,
-    CheckCircle2, AlertTriangle, ShieldCheck, MapPin, Search as SearchIcon
+    DollarSign, 
+    FileText, UserPlus, ChevronRight, Search as SearchIcon
 } from 'lucide-react';
-import { db, collection, query, onSnapshot, orderBy, where, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
@@ -18,7 +17,6 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../../lib/firebase';
 
 export default function HRManagementPage() {
-    const { t, tx, isRTL } = useLanguage();
     const { user } = useAuth();
     const [tab, setTab] = useState(0);
     const [staff, setStaff] = useState<any[]>([]);
