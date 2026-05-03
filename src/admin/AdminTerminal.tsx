@@ -1,0 +1,177 @@
+import React from 'react';
+import { Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
+import { LogOut, User as UserIcon } from 'lucide-react';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
+import { prefixer } from 'stylis';
+import rtlPlugin from 'stylis-plugin-rtl';
+import { signOut } from 'firebase/auth';
+
+// Re-using admin specific logic
+import { auth } from '@/lib/firebase';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import ProtectedRoute from './components/ProtectedRoute';
+import Navigation from './components/Navigation';
+import BulkImporter from './components/BulkImporter';
+import AdminPaymentApproval from './components/AdminPaymentApproval';
+import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
+import PilotCommandCenter from './components/pilot/PilotCommandCenter';
+import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+
+// Pages
+import DashboardPage from './pages/dashboard/DashboardPage';
+import OwnersPage from './pages/owners/OwnerManagementPage';
+import TenantsPage from './pages/tenants/TenantsManagementPage';
+import TicketsPage from './pages/tickets/TicketsManagementPage';
+import TechniciansPage from './pages/technicians/TechniciansManagementPage';
+import SettingsPage from './pages/settings/SettingsPage';
+import ReportsPage from './pages/reports/ReportsPage';
+import SOSFeedPage from './pages/sos/SOSFeedPage';
+import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
+import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
+import AuditShieldPage from './pages/admin/AuditShieldPage';
+import ProfitabilityPage from './pages/admin/ProfitabilityPage';
+import CompliancePage from './pages/admin/CompliancePage';
+import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
+import AuditLogPage from './pages/AuditLogPage';
+import PayrollManagementPage from './pages/financials/PayrollManagementPage';
+import TransactionsPage from './pages/financials/TransactionsPage';
+import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
+import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
+import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
+import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
+import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
+import HRManagementPage from './pages/admin/HRManagementPage';
+import PropertyPassportPage from './pages/properties/PropertyPassportPage';
+import ProductionControlCenter from './pages/ProductionControlCenter';
+import LiveMapPage from './pages/map/LiveMapPage';
+import PricingMatrixPage from './pages/admin/PricingMatrixPage';
+import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import { adminTheme } from './theme/adminTheme';
+
+const cacheRtl = createCache({
+    key: 'muirtl-admin',
+    stylisPlugins: [prefixer, rtlPlugin],
+});
+
+const cacheLtr = createCache({
+    key: 'muiltr-admin',
+});
+
+function AdminLayout() {
+    const { t, isRTL } = useLanguage();
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            window.location.href = '/login';
+        } catch (err) {
+            window.location.href = '/login';
+        }
+    };
+    
+    return (
+        <Box sx={{ 
+            display: 'flex', 
+            height: '100vh', 
+            width: '100vw',
+            bgcolor: '#020617',
+            overflow: 'hidden',
+            direction: isRTL ? 'rtl' : 'ltr'
+        }}>
+            <Navigation />
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100 }}>
+                    <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
+                        ADMIN / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND</Box>
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <LanguageSwitcher />
+                        <Button onClick={handleLogout} sx={{ color: '#ef4444', fontWeight: 900 }}>LOGOUT</Button>
+                    </Box>
+                </Box>
+                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#020617' }}>
+                    <Outlet />
+                </Box>
+            </Box>
+        </Box>
+    );
+}
+
+function AdminContent() {
+    const { isAuthenticated, loading } = useAuth();
+    if (loading) return <CircularProgress />;
+
+    return (
+        <Routes>
+            <Route element={<AdminLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<DashboardPage />} />
+                
+                {/* Core Operations */}
+                <Route path="financials" element={<ProfitabilityDashboardPage />} />
+                <Route path="financials/payroll" element={<PayrollManagementPage />} />
+                <Route path="transactions" element={<TransactionsPage />} />
+                <Route path="document-vault" element={<InstitutionalDocumentVaultPage />} />
+                <Route path="vault" element={<IntakeVaultPage />} />
+                <Route path="audit-shield" element={<AuditShieldPage />} />
+                <Route path="design-studio" element={<DesignStudioAdminPage />} />
+                <Route path="orphans" element={<OrphanWarRoomPage />} />
+                <Route path="manual-approvals" element={<AdminPaymentApproval />} />
+                <Route path="control-center" element={<ProductionControlCenter />} />
+                <Route path="admin/pricing-matrix" element={<PricingMatrixPage />} />
+                
+                {/* Management */}
+                <Route path="owners" element={<OwnersPage />} />
+                <Route path="owners/:id" element={<OwnerDetailsPage />} />
+                <Route path="tenants" element={<TenantsPage />} />
+                <Route path="broker" element={<BrokerManagementPage />} />
+                <Route path="properties/passport" element={<PropertyPassportPage />} />
+                <Route path="technicians" element={<TechniciansPage />} />
+                <Route path="technicians/map" element={<LiveMapPage />} />
+                <Route path="ops/technicians" element={<TechnicianDutyMonitorPage />} />
+                <Route path="tickets" element={<TicketsPage />} />
+                <Route path="sos" element={<SOSFeedPage />} />
+                <Route path="hr" element={<HRManagementPage />} />
+                <Route path="bulk-import" element={<BulkImporter />} />
+                
+                {/* Strategy & Intelligence */}
+                <Route path="profitability" element={<ProfitabilityPage />} />
+                <Route path="compliance" element={<CompliancePage />} />
+                <Route path="pilot" element={<PilotCommandCenter />} />
+                <Route path="ops/public" element={<PublicLaunchOpsPanel />} />
+                <Route path="reports/institutional" element={<InstitutionalReportsPanel />} />
+                
+                {/* System */}
+                <Route path="audit" element={<AuditLogPage />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="onboard-property" element={<PropertyOnboardingPage />} />
+            </Route>
+        </Routes>
+    );
+}
+
+export default function AdminTerminal() {
+    const { isRTL } = useLanguage();
+    const theme = React.useMemo(() => createTheme({
+        ...adminTheme as any,
+        direction: isRTL ? 'rtl' : 'ltr',
+    }), [isRTL]);
+
+    return (
+        <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
+            <ThemeProvider theme={theme}>
+                <AuthProvider>
+                    <AdminContent />
+                </AuthProvider>
+            </ThemeProvider>
+        </CacheProvider>
+    );
+}

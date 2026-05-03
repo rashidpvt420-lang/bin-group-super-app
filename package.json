@@ -1,27 +1,50 @@
 {
-  "name": "bin-group-platform",
+  "name": "bin-group-super-app",
   "private": true,
-  "description": "Consolidated BIN Group Property Management Ecosystem",
+  "version": "1.0.0",
+  "type": "module",
   "workspaces": [
-    "apps/*",
     "packages/*",
     "functions"
   ],
   "scripts": {
-    "build": "npm run build -ws",
-    "deploy": "powershell ./deploy-production.ps1",
-    "clean": "npm run clean -ws && rm -rf hosting/public/*",
-    "lint": "npm run lint -ws --if-present"
-  },
-  "devDependencies": {
-    "firebase-tools": "^13.0.0",
-    "typescript": "^5.0.0"
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "deploy": "firebase deploy --project bin-group-57c60"
   },
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/material": "^7.3.9",
-    "firebase": "^10.14.1",
-    "lucide-react": "^1.7.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.1",
+    "@mui/material": "^5.15.0",
+    "@mui/icons-material": "^5.14.0",
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@emotion/cache": "^11.14.0",
+    "lucide-react": "^1.0.1",
+    "firebase": "10.14.1",
+    "axios": "^1.4.0",
+    "recharts": "^2.7.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "papaparse": "^5.5.3",
+    "stylis": "^4.2.0",
+    "stylis-plugin-rtl": "^2.1.1",
+    "framer-motion": "^10.12.0",
+    "zustand": "^5.0.12",
+    "@google/generative-ai": "^0.24.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.1",
+    "typescript": "^5.3.3",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@types/node": "^20.11.17",
+    "eslint": "^8.56.0",
+    "globals": "^13.24.0",
+    "firebase-tools": "^13.0.0"
   }
 }

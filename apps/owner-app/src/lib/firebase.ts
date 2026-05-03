@@ -9,6 +9,7 @@ import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } fr
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, User } from 'firebase/auth';
 import { getToken, isSupported, getMessaging } from 'firebase/messaging';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -43,6 +44,20 @@ try {
 } catch (e) {
     console.error("Critical Init Failure. Pivoting to Secondary Cloud Node.");
     app = initializeApp(firebaseConfig, "SECONDARY_NODE");
+}
+
+// App Check (Monitoring Mode)
+if (typeof window !== 'undefined') {
+    const siteKey = process.env.REACT_APP_APP_CHECK_SITE_KEY || "6Lc_REPLACE_ME_WITH_REAL_KEY";
+    try {
+        initializeAppCheck(app, {
+            provider: new ReCaptchaV3Provider(siteKey),
+            isTokenAutoRefreshEnabled: true
+        });
+        console.log("🛡️ [SECURITY] App Check active in MONITORING mode.");
+    } catch (err) {
+        console.warn("App Check initialization failed:", err);
+    }
 }
 
 const db = getFirestore(app);

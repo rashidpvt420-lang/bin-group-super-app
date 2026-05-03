@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
 import { db } from '../lib/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
 
 const BulkImporter: React.FC = () => {
@@ -27,17 +27,25 @@ const BulkImporter: React.FC = () => {
     };
 
     const parseCSV = (text: string) => {
-        const lines = text.split('\n');
-        const headers = lines[0].split(',').map(h => h.trim());
-        return lines.slice(1).filter(line => line.trim()).map(line => {
+        const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
+        const headers = (lines[0] || '').split(',').map(h => h.trim());
+        return lines.slice(1).filter(line => line.trim()).map((line, rowIndex) => {
             const values = line.split(',').map(v => v.trim());
-            const entry: any = {};
+            const entry: any = { __rowNumber: rowIndex + 2 };
             headers.forEach((h, i) => {
-                entry[h] = values[i];
+                entry[h] = values[i] || '';
             });
             return entry;
         });
     };
+
+    const requireField = (row: any, fields: string[]) => {
+        const value = fields.map(f => row[f]).find(Boolean);
+        if (!value) throw new Error(`CSV row ${row.__rowNumber}: missing required field (${fields.join(' or ')})`);
+        return value;
+    };
+
+    const createSlug = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `row-${Date.now()}`;
 
     const startImport = async () => {
         if (!file) return;
@@ -58,35 +66,94 @@ const BulkImporter: React.FC = () => {
 
                 chunk.forEach(row => {
                     const type = (row.TYPE || 'PROPERTY').toUpperCase();
+                    const now = new Date().toISOString();
+
                     if (type === 'PROPERTY') {
-                        const propRef = doc(collection(db, 'properties'));
+                        const ownerId = requireField(row, ['Owner_UID', 'OwnerId', 'ownerId']);
+                        const propertyId = row.Property_ID || row.PropertyId || createSlug(row.Bldg_Name || row.Name || `property-${row.__rowNumber}`);
+                        const propRef = doc(db, 'properties', propertyId);
                         batch.set(propRef, {
+                            propertyId,
                             name: row.Bldg_Name || row.Name || 'Unnamed Building',
+                            propertyName: row.Bldg_Name || row.Name || 'Unnamed Building',
                             zone: row.Bldg_Zone || row.Zone || 'General',
-                            unitsCount: parseInt(row.Units_Count || row.Units) || 0,
-                            ownerId: row.Owner_UID || row.OwnerId || 'PENDING',
-                            status: 'unlocked',
-                            createdAt: new Date().toISOString(),
-                            v2Scale: true
-                        });
-                    } else if (type === 'UNIT') {
-                        const unitRef = doc(collection(db, 'units'));
-                        batch.set(unitRef, {
-                            unitNumber: row.Unit_Number || row.Number,
-                            floorNumber: row.Floor || 0,
-                            propertyId: row.Property_ID || row.PropertyId,
-                            occupancyStatus: 'VACANT',
-                            createdAt: new Date().toISOString()
-                        });
-                    } else if (type === 'TENANT') {
-                        const userRef = doc(collection(db, 'users'));
-                        batch.set(userRef, {
-                            displayName: row.Name || row.FullName,
-                            email: (row.Email || '').toLowerCase(),
-                            role: 'tenant',
+                            unitsCount: parseInt(row.Units_Count || row.Units || '0', 10) || 0,
+                            ownerId,
+                            emirate: row.Emirate || row.emirate || 'Abu Dhabi',
+                            propertyType: row.Property_Type || row.PropertyType || 'Building',
                             status: 'active',
-                            createdAt: new Date().toISOString()
-                        });
+                            createdAt: now,
+                            updatedAt: now,
+                            v2Scale: true
+                        }, { merge: true });
+                        batch.set(doc(db, 'propertyPassports', propertyId), {
+                            propertyId,
+                            ownerId,
+                            propertyType: row.Property_Type || row.PropertyType || 'Building',
+                            emirate: row.Emirate || row.emirate || 'Abu Dhabi',
+                            city: row.City || row.city || '',
+                            zone: row.Bldg_Zone || row.Zone || 'General',
+                            units: parseInt(row.Units_Count || row.Units || '0', 10) || 0,
+                            status: 'ACTIVE_ADMIN_IMPORTED',
+                            source: 'ADMIN_BULK_IMPORT',
+                            createdAt: now,
+                            updatedAt: now
+                        }, { merge: true });
+                    } else if (type === 'UNIT') {
+                        const propertyId = requireField(row, ['Property_ID', 'PropertyId', 'propertyId']);
+                        const unitNumber = requireField(row, ['Unit_Number', 'Number', 'Unit']);
+                        const unitId = row.Unit_ID || row.UnitId || createSlug(`${propertyId}-${unitNumber}`);
+                        const unitData = {
+                            unitId,
+                            unitNumber,
+                            floorNumber: parseInt(row.Floor || '0', 10) || 0,
+                            propertyId,
+                            ownerId: row.Owner_UID || row.OwnerId || '',
+                            tenantId: row.Tenant_UID || row.TenantId || '',
+                            occupancyStatus: row.Tenant_UID || row.TenantId ? 'OCCUPIED' : 'VACANT',
+                            createdAt: now,
+                            updatedAt: now,
+                            source: 'ADMIN_BULK_IMPORT'
+                        };
+                        batch.set(doc(db, 'units', unitId), unitData, { merge: true });
+                        batch.set(doc(db, 'properties', propertyId, 'units', unitId), unitData, { merge: true });
+                    } else if (type === 'TENANT') {
+                        const propertyId = requireField(row, ['Property_ID', 'PropertyId', 'propertyId']);
+                        const email = String(requireField(row, ['Email', 'email'])).toLowerCase();
+                        const tenantId = row.Tenant_UID || row.TenantId || createSlug(email);
+                        const unitId = row.Unit_ID || row.UnitId || createSlug(`${propertyId}-${row.Unit_Number || row.Unit || tenantId}`);
+                        const tenantData = {
+                            tenantId,
+                            authUid: row.Auth_UID || row.AuthUid || '',
+                            displayName: row.Name || row.FullName || email,
+                            email,
+                            phone: row.Phone || row.Mobile || '',
+                            role: 'tenant',
+                            status: 'invited',
+                            propertyId,
+                            unitId,
+                            ownerId: row.Owner_UID || row.OwnerId || '',
+                            createdAt: now,
+                            updatedAt: now,
+                            source: 'ADMIN_BULK_IMPORT'
+                        };
+                        batch.set(doc(db, 'tenantInvitations', tenantId), {
+                            ...tenantData,
+                            invitationStatus: 'PENDING_AUTH_CREATION',
+                            note: 'Create/send Firebase Auth invite from server-side function before tenant login.'
+                        }, { merge: true });
+                        batch.set(doc(db, 'properties', propertyId, 'tenants', tenantId), tenantData, { merge: true });
+                        batch.set(doc(db, 'tenants', tenantId), tenantData, { merge: true });
+                        batch.set(doc(db, 'properties', propertyId, 'units', unitId), {
+                            unitId,
+                            propertyId,
+                            tenantId,
+                            tenantEmail: email,
+                            occupancyStatus: 'OCCUPIED',
+                            updatedAt: now
+                        }, { merge: true });
+                    } else {
+                        throw new Error(`CSV row ${row.__rowNumber}: unsupported TYPE '${type}'`);
                     }
                 });
 

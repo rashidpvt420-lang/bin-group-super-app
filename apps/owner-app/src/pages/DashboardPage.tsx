@@ -6,14 +6,13 @@ import {
   alpha
 } from '@mui/material';
 import SignalCellularAltIcon from '@mui/icons-material/SignalCellularAlt';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SecurityIcon from '@mui/icons-material/Security';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import SpeedIcon from '@mui/icons-material/Speed';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import { ArrowRight, ArrowLeft, ShieldAlert, Crown, Tent, AlertCircle, AlertCircle as AlertCircleIcon } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ShieldAlert, Crown, AlertCircle } from 'lucide-react';
 import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
@@ -114,7 +113,7 @@ export default function DashboardPage() {
         };
 
         fetchData();
-    }, [user]);
+    }, [user, role]);
 
     const handleDownloadAudit = async (propId: string, area: string) => {
         const intel = intelligence[propId];

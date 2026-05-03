@@ -35,3 +35,27 @@ When an [SOS AI Triage](./AI_CONCIERGE_SPEC.md) event is triggered:
 ## 🔒 4. Audit & Logging
 
 Every admin action is recorded in the `action_logs` collection with a SHA-256 hash. NO admin action can be deleted, ensuring full accountability for financial overrides.
+
+---
+
+## 🛠️ 5. Role System Repair (Emergency Admin Access)
+
+If an administrator is locked out or requires role escalation, use the `add_admin_grant.js` script to manually insert a grant into the system.
+
+**Usage:**
+1. Update the `email` variable in `scripts/add_admin_grant.js`.
+2. Run the command:
+   ```powershell
+   node c:\Users\My-PC\Desktop\scripts\add_admin_grant.js
+   ```
+3. The user will be added to the `pending_admin_grants` collection. The `AdminTerminal` (via its `RoleRedirector`) will detect this record upon the user's next login and automatically escalate their account to `admin`.
+
+**Note:** This bypasses standard UI workflows and should only be used by the Lead Production Engineer.
+
+---
+
+## 🚩 6. Maintenance & Support
+
+* **API Status**: Check the [API_INFRASTRUCTURE_READINESS_REPORT.md](./API_INFRASTRUCTURE_READINESS_REPORT.md) for latest endpoint health.
+* **Hosting**: Production URL: `https://bin-group-57c60.web.app/`
+* **Deployment**: Use `deploy-production.ps1` for full ecosystem updates.

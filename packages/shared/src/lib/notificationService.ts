@@ -1,6 +1,7 @@
-// packages/shared/src/lib/notificationService.ts
-import { db } from './firebase';
+import { db, messaging, functions } from './firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getToken } from 'firebase/messaging';
+import { httpsCallable } from 'firebase/functions';
 
 export interface RoleNotification {
     userId: string;
@@ -111,3 +112,31 @@ export const NotificationEvents = {
             sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'SLA BREACH', body: `Mission #${ticketId} has breached response/resolution thresholds.`, type: 'SLA_BREACH', link: '/reports' }),
     }
 };
+
+export async function requestAndRegisterNotificationPermission() {
+    if (!messaging) return;
+    
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || 
+                             (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY;
+            
+            const token = await getToken(messaging, {
+                vapidKey
+            });
+            
+            if (token) {
+                const registerFCMToken = httpsCallable(functions, 'registerFCMToken');
+                await registerFCMToken({ 
+                    token, 
+                    platform: 'web', 
+                    userAgent: navigator.userAgent 
+                });
+                console.log("⚡ [NOTIFY] Sovereign FCM Token Anchored.");
+            }
+        }
+    } catch (err) {
+        console.error("🚨 [NOTIFY] Permission/Registration Fault:", err);
+    }
+}

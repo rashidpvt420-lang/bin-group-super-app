@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Grid, Card, CardContent, Typography, Box, Paper, Stack, Divider, alpha, LinearProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip } from '@mui/material';
-import { DollarSign, TrendingUp, TrendingDown, Wallet, Receipt, FileText, AlertCircle, PieChart } from 'lucide-react';
-import { db, collection, query, getDocs, limit, orderBy } from '../../lib/firebase';
+import React, { useState } from 'react';
+import { Container, Grid, Typography, Box, Paper, Stack, alpha, LinearProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function ProfitabilityDashboardPage() {
-    const [stats, setStats] = useState({
+    const [stats] = useState({
         totalRevenue: 2450000,
         mrr: 210000,
         arr: 2520000,

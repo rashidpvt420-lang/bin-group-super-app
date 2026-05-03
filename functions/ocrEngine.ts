@@ -6,7 +6,7 @@ import { VertexAI } from '@google-cloud/vertexai';
  */
 export async function extractTitleDeedData(fileUrl: string) {
     // 1. Initialize Vertex AI
-    const vertexAI = new VertexAI({ project: 'bin-group-57c60', location: 'us-central1' });
+    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'UNKNOWN_PROJECT', location: 'us-central1' });
     const generativeModel = vertexAI.getGenerativeModel({
         model: 'gemini-1.5-flash-001',
     });

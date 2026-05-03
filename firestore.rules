@@ -1,143 +1,209 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuth() { return request.auth != null; }
-    function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
-    function isAdmin() { 
-      return isAuth() && (
-        request.auth.token.admin == true || 
+    function isSignedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function userDocExists() { return isSignedIn() && exists(userPath()); }
+    function userRole() { return userDocExists() ? get(userPath()).data.role : null; }
+    function hasAnyRole(roles) { return isSignedIn() && userRole() in roles; }
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
         request.auth.token.isAdmin == true ||
         request.auth.token.ceo == true ||
         request.auth.token.manager == true ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
-      ); 
+        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
+      );
     }
-    
+    function isSelf(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function signedInEmail() { return isSignedIn() && request.auth.token.email is string ? request.auth.token.email : ''; }
+    function owns(data) { return isSignedIn() && (data.ownerId == request.auth.uid || data.userId == request.auth.uid || data.createdBy == request.auth.uid); }
+    function tenantOwns(data) { return isSignedIn() && (data.tenantId == request.auth.uid || data.authUid == request.auth.uid || data.userId == request.auth.uid || (data.email is string && data.email == signedInEmail()) || (data.tenantEmail is string && data.tenantEmail == signedInEmail())); }
+    function techOwns(data) { return isSignedIn() && (data.assignedTechnicianId == request.auth.uid || data.technicianId == request.auth.uid); }
+    function brokerOwns(data) { return isSignedIn() && (data.brokerId == request.auth.uid || data.createdBy == request.auth.uid); }
+    function validGeo(data) { return data.geo.lat is number && data.geo.lng is number && data.geo.lat >= -90 && data.geo.lat <= 90 && data.geo.lng >= -180 && data.geo.lng <= 180; }
+
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      // Role-Lock: Users cannot change their own roles or status upon account creation
-      allow create: if isOwner(userId) && (request.resource.data.role == 'tenant' || request.resource.data.role == 'owner');
-      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
-    }
-
-    match /maintenanceTickets/{ticketId} {
-      allow create: if isAdmin() || (isAuth() &&
-        request.resource.data.companyId is string &&
-        request.resource.data.propertyId is string &&
-        request.resource.data.unitId is string &&
-        request.resource.data.tenancyId is string &&
-        request.resource.data.tenantId == request.auth.uid &&
-        request.resource.data.geo.lat is number &&
-        request.resource.data.geo.lng is number &&
-        request.resource.data.geo.lat >= -90 &&
-        request.resource.data.geo.lat <= 90 &&
-        request.resource.data.geo.lng >= -180 &&
-        request.resource.data.geo.lng <= 180);
-      
-      allow read: if isAuth() && (
-        resource.data.tenantId == request.auth.uid || 
-        resource.data.ownerId == request.auth.uid || 
-        resource.data.assignedTechnicianId == request.auth.uid ||
-        isAdmin()
-      );
-      
-      allow update: if isAuth() && (
-        (resource.data.tenantId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rating', 'feedback'])) ||
-        (resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'estimatedCostApproved'])) ||
-        (resource.data.assignedTechnicianId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'techNotes', 'actualCost', 'completedAt'])) ||
-        isAdmin()
-      );
-      
-      allow delete: if isAdmin();
-    }
-
-    match /intake_submissions/{id} {
-      allow create: if isAuth() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.status in ['DRAFT', 'IN_PROGRESS'];
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() || (
-        isAuth() &&
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.userId == request.auth.uid &&
-        resource.data.status in ['DRAFT', 'IN_PROGRESS'] &&
-        request.resource.data.status in ['DRAFT', 'IN_PROGRESS'] &&
-        request.resource.data.dashboardUnlocked != true
-      );
-      allow delete: if isAdmin();
-    }
-
-    match /properties_pending/{propertyId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow write: if isAdmin() &&
-        request.resource.data.companyId is string &&
-        request.resource.data.ownerId is string &&
-        request.resource.data.geo.lat is number &&
-        request.resource.data.geo.lng is number &&
-        request.resource.data.geo.lat >= -90 &&
-        request.resource.data.geo.lat <= 90 &&
-        request.resource.data.geo.lng >= -180 &&
-        request.resource.data.geo.lng <= 180 &&
-        (request.resource.data.geo.address is string || request.resource.data.geo.placeId is string) &&
-        request.resource.data.geo.emirate is string &&
-        (request.resource.data.geo.city is string || request.resource.data.geo.area is string) &&
-        request.resource.data.dispatchReady == false &&
-        request.resource.data.verified == false &&
-        request.resource.data.approved == false;
-    }
-
-    match /properties/{propertyId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin()); 
-      allow write: if isAdmin();
-    }
-
-    match /units/{unitId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    match /tenancies/{tenancyId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
-    }
-
-    match /contracts/{contractId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /payment_transactions/{paymentId} {
-      allow read: if isAuth() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create, update: if isAdmin();
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId) && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician'];
+      allow update: if isAdmin() || (isSelf(userId) && request.resource.data.role == resource.data.role && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','name','phone','mobile','photoURL','language','updatedAt','lastLoginAt']));
       allow delete: if isAdmin();
     }
 
     match /owners/{ownerId} {
-      allow read: if isOwner(ownerId) || isAdmin();
-      allow create, update: if isAdmin();
+      allow read: if isSelf(ownerId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /properties/{propertyId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create, update, delete: if isAdmin();
+
+      match /units/{unitId} {
+        allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+        allow create, update, delete: if isAdmin();
+      }
+
+      match /tenants/{tenantId} {
+        allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data) || isSelf(tenantId);
+        allow create, update, delete: if isAdmin();
+      }
+
+      match /tickets/{ticketId} {
+        allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
+        allow create: if isAdmin() || (isSignedIn() && request.resource.data.propertyId == propertyId && tenantOwns(request.resource.data));
+        allow update: if isAdmin() || techOwns(resource.data);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /properties_pending/{propertyId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /propertyPassports/{propertyId} {
+      allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /units/{unitId} {
+      allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isAdmin() || isSelf(tenantId) || owns(resource.data) || tenantOwns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /tenant_invitations/{invitationId} {
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.tenantEmail == signedInEmail() || resource.data.acceptedBy == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
+    match /tenant_invitation_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only Cloud Functions
+    }
+
+    match /mail/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin(); // Allow Admin Panel to queue test/manual emails
+    }
+
+    match /tenant_import_batches/{batchId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /leases/{leaseId} {
+      allow read: if isAdmin() || tenantOwns(resource.data);
+      allow write: if isAdmin();
+    }
+
+    match /tenant_ledger/{id} {
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.tenantId == request.auth.uid || resource.data.ownerId == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
+    match /property_passports/{passportId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /leases/{leaseId} {
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.tenantId == request.auth.uid || resource.data.ownerId == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
+    match /tenancies/{tenancyId} {
+      allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /maintenanceTickets/{ticketId} {
+      allow create: if isAdmin() || (isSignedIn() &&
+        request.resource.data.companyId is string &&
+        request.resource.data.propertyId is string &&
+        request.resource.data.unitId is string &&
+        tenantOwns(request.resource.data) &&
+        validGeo(request.resource.data));
+      allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
+      allow update: if isAdmin() ||
+        (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rating', 'feedback', 'updatedAt'])) ||
+        (owns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'estimatedCostApproved', 'updatedAt'])) ||
+        (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'techNotes', 'actualCost', 'completedAt', 'beforePhotoUrl', 'afterPhotoUrl', 'signatureUrl', 'notes', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
+    match /technician_shifts/{shiftId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.technicianId == request.auth.uid);
+      allow write: if false; // Only Cloud Functions
+    }
+
+    match /intake_submissions/{id} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin() || (owns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contactInfo','companyProfile','properties','propertyDetails','selectedPlan','servicePlan','selectedAddOns','addOns','proofDocuments','ownerIdentityDocuments','titleDeed','portfolioSummary','pricing','payment','paymentMethod','updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /contracts/{contractId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /quotes/{quoteId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.ownerId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /payment_transactions/{paymentId} {
+      allow read: if isAdmin() || owns(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /brokerReferrals/{referralId} {
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.brokerId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /addOns/{addOnId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /audit_logs/{auditId} {
-      allow read: if isAdmin() || (isAuth() && resource.data.actorId == request.auth.uid);
-      allow write: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.actorId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
     }
 
     match /telemetry_logs/{logId} {
       allow read, write: if isAdmin();
     }
 
+    match /security_audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
     match /design_requests/{requestId} {
-      allow create: if isAuth();
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.ownerId == request.auth.uid);
+      allow read: if isAdmin() || owns(resource.data);
       allow update, delete: if isAdmin();
     }
 
     match /move_out_requests/{requestId} {
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
       allow update, delete: if isAdmin();
     }
 

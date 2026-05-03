@@ -27,22 +27,46 @@ service firebase.storage {
       return hasRole('AUDITOR') || hasRole('compliance_officer');
     }
 
-    // ─── KYC & IDENTITY VAULT ──────────────────────────────────────────────
+    // ─── [V11] INSTITUTIONAL PROOF & DOCUMENTS ────────────────────────────────
+    
+    // Proofs: before/after photos for tickets
+    match /proofs/{ticketId}/{allPaths=**} {
+      allow read: if isAuth(); // Tenant/Owner can read their mission proof
+      allow write: if isAuth() && (hasRole('technician') || isAdmin()) &&
+                   request.resource.size < 10 * 1024 * 1024 &&
+                   request.resource.contentType.matches('image/.*');
+    }
+
+    // Owner Documents: title deeds, passports, etc.
+    match /owners/{ownerId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) &&
+                   request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Tenant Documents: EJARI, IDs, etc.
+    match /tenants/{tenantId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) &&
+                   request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Contracts: Institutional agreements
+    match /contracts/{contractId}/{allPaths=**} {
+      allow read: if isAuth() && (isAdmin() || request.auth.token.role == 'owner');
+      allow write: if isAdmin(); // Only Admin can upload authoritative contracts
+    }
+
+    // Invoices: Financial records
+    match /invoices/{invoiceId}/{allPaths=**} {
+      allow read: if isAuth() && (isAdmin() || request.auth.token.role == 'owner');
+      allow write: if isAdmin();
+    }
+
+    // ─── LEGACY COMPATIBILITY ──────────────────────────────────────────────
     match /kyc_documents/{documentId} {
       allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
-    }
-
-    match /temp_kyc/{documentId} {
-      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
-      allow read: if isAuth();
-    }
-
-    match /kyc/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == userId) && 
-                   request.resource.size < 10 * 1024 * 1024 &&
-                   request.resource.contentType.matches('application/pdf|image/.*');
     }
 
     match /onboarding-proof/{userId}/{intakeId}/{fileName} {
@@ -52,48 +76,9 @@ service firebase.storage {
                    request.resource.contentType.matches('application/pdf|image/.*');
     }
 
-    // ─── TRANSACTIONAL ASSETS (Property & Contracts) ─────────────────────────
-    match /property_images/{documentId} {
-      allow read: if true; 
-      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
-    }
-    
-    match /contracts/{documentId} {
-      allow write: if isAdmin(); // Only Admin can upload signed institutional contracts
-      allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
-    }
-
-    // ─── OPERATIONAL ASSETS (Work Orders & Evidence) ─────────────────────────
-    match /workOrders/{orderId}/{allPaths=**} {
-      allow read: if isAuth();
-      allow write: if isAuth() && (hasRole('TECHNICIAN') || hasRole('technician') || isAdmin());
-    }
-
-    // ─── FIELD EVIDENCE VAULT ──────────────────────────────────────────────
-    match /evidence_photos/{ticketId}/{allPaths=**} {
-      allow read: if isAuth();
-      allow write: if isAuth() && (hasRole('TECHNICIAN') || hasRole('technician') || isAdmin()) &&
-                   request.resource.size < 10 * 1024 * 1024 &&
-                   request.resource.contentType.matches('image/.*');
-    }
-
-    // ─── PUBLIC INFRASTRUCTURE ──────────────────────────────────────────────
-    match /public/{allPaths=**} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // ─── DESIGN STUDIO REFERENCE IMAGES ──────────────────────────────────────────
-    match /design_requests/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAuth() && (request.auth.uid == userId) && 
-                   request.resource.size < 10 * 1024 * 1024 &&
-                   request.resource.contentType.matches('image/.*');
-    }
-
     // Default lockdown for unmanaged paths
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

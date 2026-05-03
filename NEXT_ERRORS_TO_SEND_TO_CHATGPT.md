@@ -1,12 +1,35 @@
-# NEXT ERRORS TO SEND TO CHATGPT
+# Next Errors To Send To ChatGPT — V2
 
-## Current Status: ZERO BLOCKERS
-All critical build and logic errors identified during the audit and stabilization phases have been resolved.
+Send these only if they fail during local Antigravity/Codex verification:
 
-### Resolved in Final Verification:
-- [FIXED] **functions/index.ts**: Unused `existingProperty` variable causing `tsc` failure.
-- [FIXED] **admin-panel**: Pagination logic for high-unit count buildings.
-- [FIXED] **owner-app**: ACV calculation accuracy and multi-property portfolio support.
+1. Full output of:
+   ```bash
+   npm install
+   npm run build
+   npm run lint
+   npm run typecheck --if-present
+   ```
 
----
-*Last Checked: 2026-04-29*
+2. Full output of:
+   ```bash
+   cd functions
+   npm install
+   npm run build
+   cd ..
+   ```
+
+3. Firestore emulator/rules errors from:
+   ```bash
+   firebase use staging
+   firebase emulators:start --only firestore,functions,hosting
+   ```
+
+4. Browser console errors from staging URLs.
+
+5. Firebase permission-denied errors with:
+   - signed-in role
+   - UID
+   - target collection/document path
+   - action: read/create/update/delete
+
+6. Screenshots of broken owner/admin/tenant/technician/broker pages.

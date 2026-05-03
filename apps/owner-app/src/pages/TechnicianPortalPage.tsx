@@ -77,12 +77,14 @@ export default function TechnicianPortalPage() {
             let callable;
             if (action === 'START') callable = httpsCallable(functions, 'startTechnicianDuty');
             else if (action === 'END') callable = httpsCallable(functions, 'endTechnicianDuty');
-            else if (action === 'BREAK') callable = httpsCallable(functions, 'takeTechnicianBreak');
-            else if (action === 'RESUME') callable = httpsCallable(functions, 'resumeTechnicianDuty');
+            // BREAK and RESUME can be added as separate functions if needed, 
+            // for now we'll map them to start/end or keep as placeholders
+            else if (action === 'BREAK') callable = httpsCallable(functions, 'pauseTechnicianWork'); 
             
             if (callable) await callable();
-        } catch (err) {
+        } catch (err: any) {
             console.error("Duty Action Failed:", err);
+            alert(err.message || "Duty transition failed.");
         }
         setUpdating(false);
     };
@@ -90,10 +92,11 @@ export default function TechnicianPortalPage() {
     const handleAcceptJob = async (ticketId: string) => {
         setUpdating(true);
         try {
-            const acceptJob = httpsCallable(functions, 'acceptTechnicianTicket');
+            const acceptJob = httpsCallable(functions, 'acceptTechnicianJob');
             await acceptJob({ ticketId });
-        } catch (err) {
+        } catch (err: any) {
             console.error("Accept Job Failed:", err);
+            alert(err.message || "Failed to accept mission.");
         }
         setUpdating(false);
     };
@@ -220,7 +223,7 @@ export default function TechnicianPortalPage() {
                     ) : (
                         <Stack spacing={2}>
                             {activeMissions.map((mission) => (
-                                <MissionCard key={mission.id} mission={mission} onAction={() => navigate(`/tech/ticket/${mission.id}`)} />
+                                <MissionCard key={mission.id} mission={mission} onAction={() => navigate(`/technician/ticket/${mission.id}`)} />
                             ))}
                         </Stack>
                     )}

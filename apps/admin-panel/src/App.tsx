@@ -2,26 +2,27 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
-import { 
-    LogOut, 
-    User as UserIcon, 
-} from 'lucide-react';
-import { signOut } from 'firebase/auth';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box, Button, Typography, CssBaseline, CircularProgress, alpha } from '@mui/material';
+import { LogOut, User as UserIcon } from 'lucide-react';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
+import { prefixer } from 'stylis';
 
+// ─── LIVE PRODUCTION IMPORTS ──────────────────────────────────────────
+import rtlPlugin from 'stylis-plugin-rtl';
+import { signOut } from 'firebase/auth';
+import { auth, db } from './lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
-import TechnicianCommandCenter from './components/ops/TechnicianCommandCenter';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
-import { auth } from './lib/firebase';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -48,8 +49,22 @@ import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
+import PropertyPassportPage from './pages/properties/PropertyPassportPage';
+import ProductionControlCenter from './pages/ProductionControlCenter';
 import { TechnicianMapPage } from './pages/Placeholders';
+import PricingMatrixPage from './pages/admin/PricingMatrixPage';
+import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import { adminTheme } from './theme/adminTheme';
+
+// Create RTL/LTR Caches
+const cacheRtl = createCache({
+    key: 'muirtl-admin',
+    stylisPlugins: [prefixer, rtlPlugin],
+});
+
+const cacheLtr = createCache({
+    key: 'muiltr-admin',
+});
 
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
@@ -101,6 +116,8 @@ function AppContent() {
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
+                    <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
@@ -117,13 +134,14 @@ function AppContent() {
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
-                    <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianCommandCenter /></ProtectedRoute>} />
+                    <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
                     <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
                     <Route path="/hr" element={<ProtectedRoute adminOnly><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
+                    <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
                 </Route>
             )}
 
@@ -139,11 +157,14 @@ function Layout() {
 
     const handleLogout = async () => {
         try {
+            console.log("[ADMIN] Initiating global logout sequence...");
             localStorage.clear();
+            sessionStorage.clear();
             await signOut(auth);
             window.location.href = '/login';
         } catch (err) {
             console.error("Logout failure:", err);
+            window.location.href = '/login';
         }
     };
     
@@ -259,17 +280,32 @@ function Layout() {
 
 export default function App() {
     return (
-        <ThemeProvider theme={adminTheme}>
-            <CssBaseline />
-            <LanguageProvider>
-                <Router basename="/admin">
+        <LanguageProvider>
+            <AdminThemeProviderWrapper />
+        </LanguageProvider>
+    );
+}
+
+function AdminThemeProviderWrapper() {
+    const { isRTL } = useLanguage();
+    
+    const theme = React.useMemo(() => createTheme({
+        ...adminTheme as any,
+        direction: isRTL ? 'rtl' : 'ltr',
+    }), [isRTL]);
+
+    return (
+        <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <Router>
                     <AuthProvider>
                         <AIProvider>
                             <AppContent />
                         </AIProvider>
                     </AuthProvider>
                 </Router>
-            </LanguageProvider>
-        </ThemeProvider>
+            </ThemeProvider>
+        </CacheProvider>
     );
 }

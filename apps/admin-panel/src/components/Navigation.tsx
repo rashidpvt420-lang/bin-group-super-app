@@ -32,13 +32,17 @@ const primaryMenu = [
     { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
     { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
     { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
+    { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
+    { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
 ];
 
     const managementMenu = [
         { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
+        { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
+        { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },

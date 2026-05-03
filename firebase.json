@@ -1,12 +1,8 @@
 {
   "firestore": {
     "database": "(default)",
-    "location": "eur3",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
-  },
-  "database": {
-    "rules": "database.rules.json"
   },
   "functions": [
     {
@@ -21,80 +17,41 @@
       ]
     }
   ],
-  "hosting": [
-    {
-      "target": "owner-app",
-      "public": "hosting/public",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "rewrites": [
-        {
-          "source": "/admin/**",
-          "destination": "/admin/index.html"
-        },
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ],
-      "headers": [
-        {
-          "source": "**/index.html",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "no-cache, no-store, must-revalidate"
-            }
-          ]
-        },
-        {
-          "source": "static/**/*.{js,css}",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=31536000, immutable"
-            }
-          ]
-        },
-        {
-          "source": "**",
-          "headers": [
-            {
-              "key": "Content-Security-Policy",
-              "value": "default-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com https://*.firebase.com https://*.firebaseapp.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.googleapis.com https://*.gstatic.com https://maps.googleapis.com https://maps.gstatic.com https://*.firebaseapp.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.gstatic.com https://maps.gstatic.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://maps.googleapis.com https://maps.gstatic.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.firebaseapp.com https://*.cloudfunctions.net wss://*.firebaseio.com; frame-src 'self' https://bin-group-57c60.firebaseapp.com https://*.firebaseapp.com https://*.firebase.com; worker-src 'self' blob: https://*.googleapis.com https://maps.googleapis.com https://maps.gstatic.com; child-src 'self' blob: https://*.firebaseapp.com https://*.googleapis.com https://maps.googleapis.com; object-src 'none';"
-            }
-          ]
-        }
-      ]
-    }
-  ],
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "assets/**/*.{js,css}",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      }
+    ]
+  },
   "storage": {
     "rules": "storage.rules"
-  },
-  "emulators": {
-    "functions": {
-      "port": 5001
-    },
-    "firestore": {
-      "port": 8080
-    },
-    "database": {
-      "port": 9000
-    },
-    "hosting": {
-      "port": 5000
-    },
-    "storage": {
-      "port": 9199
-    },
-    "dataconnect": {
-      "dataDir": "dataconnect/.dataconnect/pgliteData"
-    }
-  },
-  "dataconnect": {
-    "source": "dataconnect"
   }
 }

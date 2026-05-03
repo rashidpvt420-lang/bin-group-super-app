@@ -1,27 +1,57 @@
-# TEST VERIFICATION REPORT - BIN GROUP Super App
+# BIN GROUP Super App — V2 Test Verification Report
 
-## [2026-04-29] - Stabilization Verification
-### 1. Build & Lint Integrity
-- `npm run lint`: **PASSED** (Root & Workspaces)
-- `npm run build`: **PASSED** (All 4 workspaces: Admin, Owner, Functions, Shared)
+## Static Checks Completed in ChatGPT Sandbox
 
-### 2. Functional Verification
-- **Google Maps**: Verified fallback state machine. UI correctly enters manual mode when `google.maps` is undefined.
-- **Localization**: Verified i18n context propagation. Language toggle correctly flips `dir="rtl"` and updates the `t()` translation keys.
-- **Onboarding Logic**: 
-  - Verified `estimatedACV` calculation in `onboardingStore`.
-  - Verified `submitOwnerOnboarding` Cloud Function batch processing for multiple properties.
-- **Admin Registry**: 
-  - Verified pagination logic in `TenantsManagementPage`.
-  - Verified `BulkImporter` handles multi-type CSV records (Property/Unit/Tenant).
+### JSON validation
+Passed for:
+- `.firebaserc`
+- `firebase.json`
+- `firestore.indexes.json`
+- `database.rules.json`
 
-### 3. Security
-- **Firestore Rules**: Verified role-based isolation for `maintenanceTickets`. Read/Update now strictly locked to `tenantId`, `ownerId`, or `assignedTechnicianId`.
+### Source review completed
+High-risk files reviewed/modified:
+- `firestore.rules`
+- `functions/index.ts`
+- `functions/ocrEngine.ts`
+- `apps/owner-app/src/store/onboardingStore.ts`
+- `apps/owner-app/src/components/onboarding/AddOnsStep.tsx`
+- `apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx`
+- `apps/owner-app/src/pages/PropertyPassportPage.tsx`
+- `apps/admin-panel/src/components/BulkImporter.tsx`
+- frontend Firebase config files
+- `firebase.json`
+- `.firebaserc`
 
-### 4. Regression Check
-- Existing portals (Owner, Tenant, Tech, Broker, Admin) preserved.
-- No deletions or downgrades performed.
-- System is stable and ready for staging deployment.
+### Secret exposure static check
+- Removed frontend OpenAI API endpoint allowance from CSP.
+- No frontend `VITE_GOOGLE_MAPS_API_KEY` dependency remains.
+- Google Maps key standardized to `REACT_APP_GOOGLE_MAPS_API_KEY` for CRA/CRACO.
+- OpenAI API use remains in Firebase Functions only.
 
----
-*Verified by Antigravity AI @ 2026-04-29*
+## Checks Not Completed in ChatGPT Sandbox
+The sandbox cannot fully reproduce the local Antigravity/Codex environment, installed dependencies, Firebase login, staging project credentials, or secrets. These commands must be executed locally before staging deployment:
+
+```bash
+npm install
+npm run build
+npm run lint
+npm run typecheck --if-present
+cd functions && npm install && npm run build && cd ..
+firebase use staging
+firebase emulators:start --only firestore,functions,hosting
+```
+
+## Mandatory Staging Smoke Tests
+1. Owner signup/login works against staging Firebase Auth.
+2. Owner submits portfolio with more than one property.
+3. Each property creates a `propertyPassports/{propertyId}` document.
+4. Add-ons visibly update ACV.
+5. All 3 contract types are visible and selectable.
+6. Google Maps loads with restricted staging key; fallback works without key.
+7. Admin bulk imports PROPERTY CSV.
+8. Admin bulk imports UNIT CSV.
+9. Admin bulk imports TENANT CSV and tenant invitation documents are created.
+10. Firestore emulator denies cross-owner and cross-tenant reads.
+11. Technician cannot read unassigned tickets.
+12. Arabic/English switch persists and RTL/LTR is correct.
