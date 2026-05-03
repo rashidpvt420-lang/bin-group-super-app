@@ -96,17 +96,22 @@ export default function TenantSOSPage() {
     useEffect(() => {
         const fetchLedger = async () => {
             if (!user?.uid) return;
-            const userRef = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
-                const data = userSnap.data();
+            const ledgerQuery = query(
+                collection(db, 'tenant_ledger'),
+                where('tenantId', '==', user.uid),
+                where('ledgerStatus', '==', 'active'),
+                limit(1)
+            );
+            const ledgerSnap = await getDocs(ledgerQuery);
+            if (!ledgerSnap.empty) {
+                const data = ledgerSnap.docs[0].data();
                 setLedger({
-                    rentAmount: data.rentAmount || 0,
-                    paidAmount: data.paidAmount || 0,
-                    balance: (data.rentAmount || 0) - (data.paidAmount || 0),
-                    nextDueDate: data.nextDueDate || null,
-                    lastPaymentDate: data.lastPaymentDate || null,
-                    status: data.paymentStatus || 'NO_LEDGER'
+                    rentAmount: data.annualRent || 0,
+                    paidAmount: data.paidBalance || 0,
+                    balance: data.outstandingBalance || 0,
+                    nextDueDate: data.nextRentDue || null,
+                    lastPaymentDate: data.lastPaymentReceived || null,
+                    status: (data.paymentStatus || 'NO_LEDGER').toUpperCase() as any
                 });
             }
         };
@@ -137,16 +142,23 @@ export default function TenantSOSPage() {
                     const uData: UnitData = { id: unitSnap.docs[0].id, ...docData };
                     setUnitData(uData);
 
-                    // Fetch Active Tenancy Link
-                    const tenancySnap = await getDocs(query(
-                        collection(db, "tenancies"), 
+                    // Fetch Active Lease
+                    const leaseSnap = await getDocs(query(
+                        collection(db, "leases"), 
                         where("tenantId", "==", user.uid),
                         where("unitId", "==", uData.id),
-                        where("status", "==", "ACTIVE"),
+                        where("leaseStatus", "==", "active"),
                         limit(1)
                     ));
-                    if (!tenancySnap.empty) {
-                        setTenancyId(tenancySnap.docs[0].id);
+                    if (!leaseSnap.empty) {
+                        const leaseData = leaseSnap.docs[0].data();
+                        setTenancyId(leaseSnap.docs[0].id);
+                        // Store lease dates in propertyData for UI
+                        setPropertyData((prev: any) => ({
+                            ...prev,
+                            leaseStartDate: leaseData.leaseStartDate,
+                            leaseEndDate: leaseData.leaseEndDate
+                        }));
                     }
 
                     if (uData.propertyId) {

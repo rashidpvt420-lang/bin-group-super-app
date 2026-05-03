@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Button, Card, CardContent, Container,
     Divider, IconButton, TextField, Typography, InputAdornment,
-    Alert, CircularProgress, Stack, Chip, Grid, alpha
+    Alert, CircularProgress, Stack, Grid, alpha
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -10,13 +10,13 @@ import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, signInWithPopup } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
-import { Mail, Lock, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle, ArrowLeft, Key } from 'lucide-react';
+import { Mail, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle, ArrowLeft, Key } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
     const { t, tx, isRTL } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
-    const { role, isAdmin, loading: roleLoading } = useRole();
+    const { role, isAdmin, loading: roleLoading, refreshRole } = useRole();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -31,11 +31,52 @@ const LoginPage: React.FC = () => {
         if (!roleLoading && role) {
             console.log("🔍 [AUTH] Role Resolved:", role);
             if (role === 'tenant') navigate('/tenant');
-            else if (role === 'technician') navigate('/tech');
-            else if (role === 'admin' || isAdmin) window.location.href = '/admin';
-            else navigate('/dashboard');
+            else if (role === 'technician') navigate('/technician');
+            else if (role === 'broker') navigate('/broker');
+            else if (role === 'admin' || isAdmin) {
+                const adminUrl = 'https://bin-group-57c60-admin.web.app';
+                if (window.location.hostname.includes('admin')) {
+                    navigate('/dashboard');
+                } else {
+                    window.location.href = adminUrl;
+                }
+            }
+            else navigate('/owner-dashboard');
         }
     }, [role, isAdmin, roleLoading, navigate]);
+    
+    const getFriendlyAuthError = (err: any) => {
+        const code = err?.code || '';
+        const message = err?.message || '';
+        
+        // Institutional Diagnostic Logging
+        console.error("🛡️ [AUTH_DIAGNOSTIC]", {
+            code,
+            message,
+            authDomain: auth.config?.authDomain,
+            currentUrl: window.location.href,
+            provider: code.includes('google') ? 'google.com' : 'password',
+            env: process.env.NODE_ENV,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            emailAttempted: email.replace(/(.{3}).*@/, "$1***@")
+        });
+
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+            return t('login.error.invalid');
+        }
+        if (code === 'auth/too-many-requests') {
+            return t('login.error.too_many');
+        }
+        if (code === 'auth/popup-closed-by-user') {
+            return t('login.error.popup_closed');
+        }
+        if (code === 'auth/network-request-failed') {
+            return t('login.error.network');
+        }
+        
+        return tx('login.error.generic', 'Login could not be completed. Please contact BIN GROUP support.');
+    };
 
     const handleGoogleLogin = async () => {
         setLocalLoading(true);
@@ -45,10 +86,10 @@ const LoginPage: React.FC = () => {
             const result = await signInWithPopup(auth, provider);
             if (result.user) {
                 console.log("🛡️ [AUTH] Google Auth Success:", result.user.email);
+                await refreshRole(); // Force sync after login
             }
         } catch (err: any) {
-            console.error("❌ [AUTH] Google Error:", err);
-            setError(`Identity verification failed: ${err.message || 'Unknown error'}`);
+            setError(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
     };
@@ -61,9 +102,9 @@ const LoginPage: React.FC = () => {
         try {
             await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             console.log("🔍 [AUTH] Email Login Success");
+            await refreshRole(); // Force sync after login
         } catch (err: any) {
-            console.error("❌ [AUTH] Login Error:", err);
-            setError(err.message || "Failed to sign in. Check your credentials.");
+            setError(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
     };
@@ -73,15 +114,15 @@ const LoginPage: React.FC = () => {
             <Box sx={{ height: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold, mb: 4 }} />
                 <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
-                    AUTHORIZING SECURE ACCESS...
+                    {t('common.auth_sync')}
                 </Typography>
             </Box>
         );
     }
 
     const getRoleTitle = () => {
-        if (!intendedRole) return tx('login.portal', 'PARTNER PORTAL');
-        return tx(`gateway.role.${intendedRole}`, `Continue as ${intendedRole.charAt(0).toUpperCase() + intendedRole.slice(1)}`);
+        if (!intendedRole) return t('login.portal');
+        return t(`gateway.role.${intendedRole.toLowerCase()}`);
     };
 
     return (
@@ -98,11 +139,12 @@ const LoginPage: React.FC = () => {
             {/* Back to Gateway */}
             <Box sx={{ p: 4, position: 'absolute', top: 0, left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', zIndex: 10 }}>
                 <Button 
-                    startIcon={<ArrowLeft size={16} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} 
+                    startIcon={!isRTL ? <ArrowLeft size={16} /> : null} 
+                    endIcon={isRTL ? <ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> : null}
                     onClick={() => navigate('/gateway')}
                     sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700, '&:hover': { color: binThemeTokens.gold } }}
                 >
-                    CHANGE ROLE
+                    {t('login.change_role')}
                 </Button>
             </Box>
 
@@ -119,7 +161,7 @@ const LoginPage: React.FC = () => {
                         {getRoleTitle()}
                     </Typography>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>
-                        {tx('login.authorized_only', 'Authorized client and partner access only.')}
+                        {t('login.authorized_only')}
                     </Typography>
                 </Box>
 
@@ -127,7 +169,7 @@ const LoginPage: React.FC = () => {
                     <Box sx={{ position: 'absolute', top: -1, left: '10%', right: '10%', height: '2px', background: `linear-gradient(90deg, transparent, ${binThemeTokens.gold}, transparent)` }} />
                     <CardContent sx={{ p: { xs: 4, md: 6 } }}>
                         {error && (
-                            <Alert severity="error" sx={{ mb: 4, bgcolor: 'rgba(211, 47, 47, 0.1)', color: '#ffb74d', border: '1px solid rgba(211, 47, 47, 0.2)' }}>
+                            <Alert severity="error" sx={{ mb: 4, bgcolor: 'rgba(211, 47, 47, 0.1)', color: '#ffb74d', border: '1px solid rgba(211, 47, 47, 0.2)', '& .MuiAlert-icon': { color: '#ff4444' } }}>
                                 {error}
                             </Alert>
                         )}
@@ -135,7 +177,7 @@ const LoginPage: React.FC = () => {
                             <Stack spacing={4}>
                                 <TextField
                                     fullWidth
-                                    label={tx('login.email', 'Email Address')}
+                                    label={t('login.email')}
                                     variant="outlined"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -149,7 +191,7 @@ const LoginPage: React.FC = () => {
                                 />
                                 <TextField
                                     fullWidth
-                                    label={tx('login.password', 'Password')}
+                                    label={t('login.password')}
                                     type={showPassword ? 'text' : 'password'}
                                     variant="outlined"
                                     value={password}
@@ -169,7 +211,7 @@ const LoginPage: React.FC = () => {
                                     disabled={localLoading}
                                     sx={{ py: 2.5, borderRadius: 4, fontWeight: 950, letterSpacing: 2, background: `linear-gradient(135deg, ${binThemeTokens.gold}, #E6C77A)`, color: '#000', fontSize: '1rem', boxShadow: `0 15px 30px ${alpha(binThemeTokens.gold, 0.3)}`, '&:hover': { background: `linear-gradient(135deg, #E6C77A, ${binThemeTokens.gold})`, transform: 'translateY(-2px)' } }}
                                 >
-                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : tx('login.signin', 'SECURE SIGN IN')}
+                                    {localLoading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
                                 </Button>
                                 <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', px: 2, fontWeight: 900 }}>OR INSTITUTIONAL SSO</Typography>
@@ -182,7 +224,7 @@ const LoginPage: React.FC = () => {
                                     startIcon={<UserCircle size={20} />}
                                     sx={{ py: 1.5, borderRadius: 4, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' } }}
                                 >
-                                    {tx('login.google', 'SIGN IN WITH GOOGLE')}
+                                    {t('login.google')}
                                 </Button>
                             </Stack>
                         </form>
@@ -192,9 +234,9 @@ const LoginPage: React.FC = () => {
                 <Grid container spacing={3} sx={{ mt: 6 }}>
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Shield size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>ISO 27001</Typography></Box></Grid>
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><TrendingUp size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>INST-GRADE</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Building size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>UAE OPS</Typography></Box></Grid>
+                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Building size={24} color={binThemeTokens.gold} style={{ marginBottom: 8 }} /><Typography variant="caption" display="block" color="rgba(255,255,255,0.3)" fontWeight="900" letterSpacing={1}>UAE-SOV</Typography></Box></Grid>
                 </Grid>
-                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.15)', letterSpacing: 1, fontWeight: 700 }}>© 2026 BIN GROUP UAE. ALL RIGHTS RESERVED.</Typography>
+                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 8, color: 'rgba(255,255,255,0.15)', letterSpacing: 1, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>
             </Container>
         </Box>
     );

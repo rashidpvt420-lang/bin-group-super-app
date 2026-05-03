@@ -1,6 +1,21 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { ThemeProvider as MuiThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import { binThemeTokens } from "../theme/binGroupTheme";
+import { useLanguage } from "./LanguageContext";
+import rtlPlugin from 'stylis-plugin-rtl';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
+import { prefixer } from 'stylis';
+
+// Create rtl cache
+const cacheRtl = createCache({
+  key: 'muirtl',
+  stylisPlugins: [prefixer, rtlPlugin],
+});
+
+const cacheLtr = createCache({
+  key: 'muiltr',
+});
 
 type ThemeMode = 'light' | 'dark';
 
@@ -10,8 +25,6 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-import { useLanguage } from "./LanguageContext";
 
 export function CustomThemeProvider({ children }: { children: ReactNode }) {
     const [mode, setMode] = useState<ThemeMode>(() => {
@@ -50,6 +63,8 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
             h2: { fontWeight: 900 },
             h3: { fontWeight: 900 },
             h4: { fontWeight: 900 },
+            h5: { fontWeight: 900 },
+            h6: { fontWeight: 900 },
         },
         shape: { borderRadius: 12 },
         components: {
@@ -95,13 +110,15 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 },
             },
         },
-    }), [mode]);
+    }), [mode, isRTL]);
 
     return (
         <ThemeContext.Provider value={{ mode, toggleTheme }}>
-            <MuiThemeProvider theme={theme}>
-                {children}
-            </MuiThemeProvider>
+            <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
+                <MuiThemeProvider theme={theme}>
+                    {children}
+                </MuiThemeProvider>
+            </CacheProvider>
         </ThemeContext.Provider>
     );
 }
@@ -113,3 +130,4 @@ export function useCustomTheme() {
     }
     return context;
 }
+

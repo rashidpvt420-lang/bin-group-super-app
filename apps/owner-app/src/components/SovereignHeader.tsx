@@ -55,17 +55,25 @@ const BinGroupHeader: React.FC = () => {
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
                     <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1 }}>
-                        {['owners', 'tenants', 'technicians', 'brokers', 'security'].map((item) => (
+                        {['owner', 'tenant', 'technician', 'broker', 'security'].map((item) => (
                             <Button 
                                 key={item} 
                                 onClick={() => navigate(`/${item}`)} 
                                 sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}
                             >
-                                {item.replace('-', ' ')}
+                                {t(`gateway.role.${item}`)}
                             </Button>
                         ))}
                     </Box>
-                    {/* Role Badge */}
+                    
+                    <Button 
+                        onClick={toggleLanguage} 
+                        sx={{ color: binThemeTokens.gold, fontWeight: 900, minWidth: 0, px: 1 }}
+                        startIcon={<TranslateIcon />}
+                    >
+                        {lang === 'en' ? 'AR' : 'EN'}
+                    </Button>
+
                     {role && (
                         <Box sx={{ 
                             px: 1.5, py: 0.5, borderRadius: 2, 
@@ -78,7 +86,6 @@ const BinGroupHeader: React.FC = () => {
                         </Box>
                     )}
 
-                    {/* Notifications */}
                     {user && (
                         <IconButton onClick={() => navigate('/notifications')} sx={{ color: binThemeTokens.gold }}>
                             <Badge badgeContent={unreadCount} color="error" sx={{ '& .MuiBadge-badge': { fontWeight: 900, fontSize: '0.65rem' } }}>
@@ -93,50 +100,46 @@ const BinGroupHeader: React.FC = () => {
                                 onClick={() => navigate('/login')}
                                 sx={{ color: mode === 'dark' ? '#fff' : '#000', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
                             >
-                                Login
+                                {t('gateway.login')}
                             </Button>
                             <Button 
                                 variant="contained"
                                 onClick={() => navigate('/onboarding')}
-                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.85rem', px: 2 }}
+                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.85rem' }}
                             >
-                                Get Started
+                                {t('login.get_started')}
                             </Button>
                         </Box>
                     )}
 
-                    {/* Language Switcher */}
-                    <Button 
-                        onClick={toggleLanguage}
-                        startIcon={<TranslateIcon sx={{ color: binThemeTokens.gold }} />}
-                        sx={{ color: mode === 'dark' ? '#fff' : '#000', fontWeight: 700 }}
-                    >
-                        {lang === 'en' ? 'العربية' : 'English'}
-                    </Button>
-
-                    {/* Theme Switcher */}
                     <IconButton onClick={toggleTheme} sx={{ color: binThemeTokens.gold }}>
                         {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
                     </IconButton>
 
-                    {/* Prominent Global Logout */}
                     {user && (
                         <Button 
                             variant="contained"
                             size="small"
-                            onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
+                            onClick={() => { 
+                                const currentLang = localStorage.getItem('app_lang');
+                                localStorage.clear(); 
+                                if (currentLang) localStorage.setItem('app_lang', currentLang);
+                                sessionStorage.clear();
+                                signOut(auth).finally(() => {
+                                    window.location.href = '/';
+                                });
+                            }}
+                            startIcon={<LogoutIcon />}
                             sx={{ 
-                                bgcolor: alpha('#ef4444', 0.1), 
-                                color: '#ef4444',
+                                bgcolor: '#ef4444', 
+                                '&:hover': { bgcolor: '#dc2626' },
+                                color: '#fff',
                                 fontWeight: 900,
-                                minWidth: '40px',
-                                px: { xs: 1, sm: 2 },
-                                ml: 1,
-                                '&:hover': { bgcolor: alpha('#ef4444', 0.2) }
+                                fontSize: '0.75rem',
+                                display: { xs: 'none', sm: 'flex' }
                             }}
                         >
-                            <LogoutIcon sx={{ mr: { xs: 0, sm: 1 }, fontSize: '1.25rem' }} />
-                            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{t('nav.logout') || 'Sign Out'}</Box>
+                            {t('nav.logout')}
                         </Button>
                     )}
                 </Box>
