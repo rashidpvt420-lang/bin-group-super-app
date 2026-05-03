@@ -46,6 +46,7 @@ import BinGroupHeader from './components/SovereignHeader';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
+import { useI18nKeyGuard } from './utils/i18nKeyGuard';
 
 import ErrorBoundary from './components/ErrorBoundary';
 import { SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
@@ -78,6 +79,11 @@ function LoadingScreen() {
       </Typography>
     </Box>
   );
+}
+
+function I18nKeyGuardMount() {
+  useI18nKeyGuard();
+  return null;
 }
 
 const PUBLIC_ROUTE_PATHS = new Set([
@@ -249,6 +255,7 @@ export default function App() {
             <RoleProvider>
               <AIProvider>
                 <CssBaseline />
+                <I18nKeyGuardMount />
                 <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
                   <Routes><Route path="/" element={null} /><Route path="*" element={<BinGroupHeader />} /></Routes>
                   <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
