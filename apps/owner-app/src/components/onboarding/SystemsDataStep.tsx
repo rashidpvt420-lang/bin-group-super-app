@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
     Box, Typography, Grid, Paper, Checkbox, FormControlLabel, 
-    Stack, Button, Divider, alpha, Container 
+    Stack, Button, Container 
 } from '@mui/material';
 import { ArrowRight, ArrowLeft, Zap, Wind, Waves, ShieldCheck, Flame, Sun, Car } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -10,36 +10,40 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
-    const { tx, isRTL } = useLanguage();
+    const { t, isRTL } = useLanguage();
 
     const activeProperty = properties[0];
 
     const systemGroups = [
         {
-            title: 'CORE CLIMATE & FLOW',
+            title: t('onboarding.sys.core'),
             systems: [
-                { key: 'hvac', label: 'Central HVAC', icon: <Wind size={18} /> },
-                { key: 'districtCooling', label: 'District Cooling', icon: <Wind size={18} /> },
-                { key: 'tank', label: 'Water Tank / Pump', icon: <Zap size={18} /> },
-                { key: 'gen', label: 'Emergency Generator', icon: <Zap size={18} /> },
+                { key: 'hvac', label: t('onboarding.sys.hvac'), icon: <Wind size={18} /> },
+                { key: 'districtCooling', label: t('onboarding.sys.districtCooling'), icon: <Wind size={18} /> },
+                { key: 'tank', label: t('onboarding.sys.tank'), icon: <Zap size={18} /> },
+                { key: 'gen', label: t('onboarding.sys.gen'), icon: <Zap size={18} /> },
+                { key: 'lifts', label: t('onboarding.sys.lifts'), icon: <Zap size={18} /> },
             ]
         },
         {
-            title: 'SAFETY & COMPLIANCE',
+            title: t('onboarding.sys.safety'),
             systems: [
-                { key: 'fireAlarm', label: 'Civil Defense Alarm', icon: <Flame size={18} /> },
-                { key: 'firePump', label: 'Fire Suppression Pump', icon: <Flame size={18} /> },
-                { key: 'sira', label: 'SIRA / CCTV System', icon: <ShieldCheck size={18} /> },
-                { key: 'bmu', label: 'BMU / Cradle', icon: <Zap size={18} /> },
+                { key: 'fireAlarm', label: t('onboarding.sys.fireAlarm'), icon: <Flame size={18} /> },
+                { key: 'firePump', label: t('onboarding.sys.firePump'), icon: <Flame size={18} /> },
+                { key: 'sira', label: t('onboarding.sys.sira'), icon: <ShieldCheck size={18} /> },
+                { key: 'bmu', label: t('onboarding.sys.bmu'), icon: <Zap size={18} /> },
+                { key: 'wasteMan', label: t('onboarding.sys.wasteMan'), icon: <Zap size={18} /> },
             ]
         },
         {
-            title: 'AMENITIES & SUSTAINABILITY',
+            title: t('onboarding.sys.amenities'),
             systems: [
-                { key: 'pool', label: 'Swimming Pool', icon: <Waves size={18} /> },
-                { key: 'solarIntegration', label: 'Solar Integration', icon: <Sun size={18} /> },
-                { key: 'evReadiness', label: 'EV Charging Station', icon: <Car size={18} /> },
-                { key: 'irrigationSystem', label: 'Smart Irrigation', icon: <Waves size={18} /> },
+                { key: 'pool', label: t('onboarding.sys.pool'), icon: <Waves size={18} /> },
+                { key: 'gasSystem', label: t('onboarding.sys.gasSystem'), icon: <Flame size={18} /> },
+                { key: 'greaseTrap', label: t('onboarding.sys.greaseTrap'), icon: <Waves size={18} /> },
+                { key: 'majlisGarden', label: t('onboarding.sys.majlisGarden'), icon: <Sun size={18} /> },
+                { key: 'solarIntegration', label: t('onboarding.sys.solarIntegration'), icon: <Sun size={18} /> },
+                { key: 'evReadiness', label: t('onboarding.sys.evReadiness'), icon: <Car size={18} /> },
             ]
         }
     ];
@@ -47,11 +51,14 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     return (
         <Box sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-                    {tx('onboarding.systems_audit', 'CRITICAL SYSTEMS AUDIT')}
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
+                    {t('onboarding.systems_audit')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {tx('onboarding.systems_desc', 'Declare institutional systems for lifecycle modeling and SLA compliance.')}
+                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
+                    {t('onboarding.systems_matrix')}
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 800, mx: 'auto' }}>
+                    {t('onboarding.systems_desc')}
                 </Typography>
             </Box>
 
@@ -88,7 +95,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                                 m: 0, mb: 1, p: 1.5, borderRadius: 2,
                                                 bgcolor: (activeProperty as any)[sys.key] ? 'rgba(198, 167, 94, 0.05)' : 'transparent',
                                                 border: `1px solid ${(activeProperty as any)[sys.key] ? 'rgba(198, 167, 94, 0.1)' : 'transparent'}`,
-                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' }
+                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' },
+                                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                                '& .MuiTypography-root': { flexGrow: 1, textAlign: isRTL ? 'right' : 'left' }
                                             }}
                                         />
                                     ))}
@@ -98,21 +107,22 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                     ))}
                 </Grid>
 
-                <Box sx={{ mt: 8, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                <Box sx={{ mt: 8, display: 'flex', justifyContent: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Button 
                         variant="outlined" 
                         size="large" 
                         onClick={onBack}
-                        startIcon={<ArrowLeft />}
+                        startIcon={!isRTL ? <ArrowLeft /> : null}
+                        endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null}
                         sx={{ borderRadius: 100, px: 6, color: 'rgba(255,255,255,0.5)', borderColor: 'rgba(255,255,255,0.1)' }}
                     >
-                        BACK
+                        {t('onboarding.back')}
                     </Button>
                     <Button 
                         variant="contained" 
                         size="large" 
                         onClick={onNext}
-                        endIcon={<ArrowRight />}
+                        endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
                         sx={{ 
                             borderRadius: 100, px: 8, 
                             bgcolor: binThemeTokens.gold, color: '#000', 
@@ -120,7 +130,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                             '&:hover': { bgcolor: '#E6C77A' }
                         }}
                     >
-                        INITIALIZE ANALYSIS
+                        {t('onboarding.initialize_analysis')}
                     </Button>
                 </Box>
             </Container>

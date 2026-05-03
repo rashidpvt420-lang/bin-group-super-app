@@ -39,6 +39,7 @@ import AuditorPortalPage from './pages/public/AuditorPortalPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
+import TenantInvitePage from './pages/TenantInvitePage';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
@@ -106,6 +107,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/security',
   '/contact',
   '/request-demo',
+  '/tenant-invite',
 ]);
 
 const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
@@ -130,9 +132,9 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
   if (user && !loading && isAuthEntryPage) {
     const normalizedRole = (role || '').toLowerCase();
     if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
-    if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
+    if (normalizedRole === 'technician') return <Navigate to="/technician" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
-    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/dashboard" replace />;
+    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/owner-dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -207,7 +209,8 @@ function AppContent() {
         {/* Property Lifecycle Portals */}
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
+        <Route path="/owner-dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<Navigate to="/owner-dashboard" replace />} />
         <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute allowedRoles={['owner', 'admin', 'technician']}><MaintenanceCalendarPage /></ProtectedRoute>} />
         <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
@@ -220,14 +223,16 @@ function AppContent() {
         
         {/* Sector Portals */}
         <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantSOSPage /></ProtectedRoute>} />
-        <Route path="/tech/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianPortalPage /></ProtectedRoute>} />
-        <Route path="/tech/ticket/:id" element={<ProtectedRoute allowedRoles={['technician']}><TicketDetailPage /></ProtectedRoute>} />
+        <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianPortalPage /></ProtectedRoute>} />
+        <Route path="/tech/*" element={<Navigate to="/technician" replace />} />
+        <Route path="/technician/ticket/:id" element={<ProtectedRoute allowedRoles={['technician']}><TicketDetailPage /></ProtectedRoute>} />
         <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerPortalPage /></ProtectedRoute>} />
         <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
 
         {/* Public Protocol Validators */}
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
+        <Route path="/tenant-invite" element={<TenantInvitePage />} />
 
         {/* Institutional Recovery Redirects */}
         <Route path="/home" element={<Navigate to="/" replace />} />

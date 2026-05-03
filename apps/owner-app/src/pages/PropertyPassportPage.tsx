@@ -87,13 +87,13 @@ export default function PropertyPassportPage() {
                                 <Grid item xs={6}>
                                     <Stack spacing={0.5}>
                                         <Typography variant="caption" color="textSecondary">AREA (SQ FT)</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Ruler size={16} color={binThemeTokens.gold}/> {property.sqft?.toLocaleString()}</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Ruler size={16} color={binThemeTokens.gold}/> {(property.sqft || property.totalSqFt || 0).toLocaleString()}</Typography>
                                     </Stack>
                                 </Grid>
                                 <Grid item xs={6}>
                                     <Stack spacing={0.5}>
                                         <Typography variant="caption" color="textSecondary">UNITS</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Key size={16} color={binThemeTokens.gold}/> {property.units || '1'}</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Key size={16} color={binThemeTokens.gold}/> {property.units || property.numberOfUnits || '1'}</Typography>
                                     </Stack>
                                 </Grid>
                             </Grid>
@@ -104,7 +104,7 @@ export default function PropertyPassportPage() {
                             <Stack spacing={2}>
                                 <Box sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
                                     <Typography variant="caption" color="textSecondary">CANONICAL ADDRESS</Typography>
-                                    <Typography variant="body2" fontWeight="700" sx={{ mt: 0.5 }}>{property.geo?.address || property.address}</Typography>
+                                    <Typography variant="body2" fontWeight="700" sx={{ mt: 0.5 }}>{property.geo?.address || property.address || property.addressLine}</Typography>
                                 </Box>
                                 <Stack direction="row" spacing={2}>
                                     <Box sx={{ flex: 1, p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2 }}>
@@ -113,7 +113,7 @@ export default function PropertyPassportPage() {
                                     </Box>
                                     <Box sx={{ flex: 1, p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2 }}>
                                         <Typography variant="caption" color="textSecondary">COORDINATES</Typography>
-                                        <Typography variant="body2" fontWeight="900" sx={{ fontSize: '0.7rem' }}>{property.geo?.lat?.toFixed(4)}, {property.geo?.lng?.toFixed(4)}</Typography>
+                                        <Typography variant="body2" fontWeight="900" sx={{ fontSize: '0.7rem' }}>{(property.geo?.lat || property.gps?.lat || property.location?.lat || 0).toFixed(4)}, {(property.geo?.lng || property.gps?.lng || property.location?.lng || 0).toFixed(4)}</Typography>
                                     </Box>
                                 </Stack>
                             </Stack>

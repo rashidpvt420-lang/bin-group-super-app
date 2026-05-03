@@ -44,6 +44,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [generatingAudit, setGeneratingAudit] = useState<string | null>(null);
     const [integrity, setIntegrity] = useState<ProfileHealth | null>(null);
+    const [passports, setPassports] = useState<any[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -96,6 +97,14 @@ export default function DashboardPage() {
                 if (user && role) {
                     setIntegrity(checkProfileIntegrity(user, role));
                 }
+
+                // Fetch Property Passports
+                const passportQuery = query(
+                    collection(db, 'property_passports'),
+                    where('ownerId', '==', user.uid)
+                );
+                const passportSnap = await getDocs(passportQuery);
+                setPassports(passportSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
             } catch (err) {
                 console.error("Dashboard sync error:", err);
@@ -162,94 +171,100 @@ export default function DashboardPage() {
         );
     }
 
-  return (
-    <Container maxWidth="xl" sx={{ py: 6 }}>
-      <Box sx={{ mb: 8, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 3 }}>
-        <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>
-                {t('dash.title')}
-            </Typography>
-            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>
-                {user?.displayName?.toUpperCase() || t('status.owner')} {t('dash.terminal')} · {totalProperties} {t('dash.locked_assets')}
-            </Typography>
-        </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
-            <OwnerReportGenerator 
-                user={user} 
-                properties={properties} 
-                contracts={contracts} 
-                metrics={metrics} 
-                isRTL={isRTL} 
-            />
-            <Button 
-                variant="contained" 
-                size="large" 
-                sx={{ 
-                    background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                    color: '#0B0B0C', 
-                    px: 5, 
-                    py: 2, 
-                    fontWeight: 900, 
-                    borderRadius: 3,
-                    boxShadow: '0 10px 20px rgba(198, 167, 94, 0.2)',
-                    '&:hover': { transform: 'scale(1.02)' }
-                }}
-                onClick={() => window.location.href = '/onboarding'}>
-                {t('dash.onboard_cta')}
-            </Button>
-        </Stack>
-      </Box>
+    const totalCollected = passports.reduce((sum, p) => sum + (p.rentCollectedTotal || 0), 0);
+    const totalOutstanding = passports.reduce((sum, p) => sum + (p.rentOutstandingTotal || 0), 0);
+    const totalUnitsCount = passports.reduce((sum, p) => sum + (p.totalUnits || 0), 0);
 
-      {/* Profile Integrity Alert */}
-      {integrity && !integrity.isComplete && (
-          <Box sx={{ mb: 6 }}>
-              <Paper sx={{ 
-                  p: 3, bgcolor: alpha('#DC2626', 0.05), border: '1px solid #DC2626', borderRadius: 4,
-                  display: 'flex', alignItems: 'center', gap: 3
-              }}>
-                  <AlertCircle color="#DC2626" size={32} />
-                  <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="h6" sx={{ color: '#F87171', fontWeight: 900 }}>MISSING CRITICAL REQUIREMENTS</Typography>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                          Your Sovereign Protocol is incomplete. Missing: {integrity.missingFields.join(', ')}
-                      </Typography>
-                  </Box>
-                  <Button variant="contained" sx={{ bgcolor: '#DC2626', color: '#FFF', fontWeight: 900 }} onClick={() => window.location.href='/settings'}>
-                      Sync Profile
-                  </Button>
-              </Paper>
-          </Box>
-      )}
+    const kpis = [
+        { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(totalCollected)}`, trend: t('dash.kpi.trend.live'), icon: <AccountBalanceWalletIcon /> },
+        { label: t('dash.kpi.outstanding_rent'), val: `AED ${formatAED(totalOutstanding)}`, trend: 'Alert', icon: <TrendingUpIcon />, color: totalOutstanding > 0 ? '#ef4444' : binThemeTokens.gold },
+        { label: t('dash.kpi.occupancy_rate'), val: `${totalUnitsCount > 0 ? Math.round((passports.reduce((sum, p) => sum + (p.occupiedUnits || 0), 0) / totalUnitsCount) * 100) : 0}%`, trend: t('dash.kpi.trend.active'), icon: <SignalCellularAltIcon /> },
+        { label: t('dash.kpi.majlis_readiness'), val: properties?.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: t('dash.kpi.trend.optimal'), icon: <Crown size={20} color={binThemeTokens.gold} /> },
+    ];
+
+    return (
+        <Container maxWidth="xl" sx={{ py: 6 }}>
+            <Box sx={{ mb: 8, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 3 }}>
+                <Box>
+                    <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>
+                        {t('dash.title')}
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>
+                        {user?.displayName?.toUpperCase() || t('status.owner')} {t('dash.terminal')} · {totalProperties} {t('dash.locked_assets')}
+                    </Typography>
+                </Box>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <OwnerReportGenerator 
+                        user={user} 
+                        properties={properties} 
+                        contracts={contracts} 
+                        metrics={metrics} 
+                        isRTL={isRTL} 
+                    />
+                    <Button 
+                        variant="contained" 
+                        size="large" 
+                        sx={{ 
+                            background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
+                            color: '#0B0B0C', 
+                            px: 5, 
+                            py: 2, 
+                            fontWeight: 900, 
+                            borderRadius: 3,
+                            boxShadow: '0 10px 20px rgba(198, 167, 94, 0.2)',
+                            '&:hover': { transform: 'scale(1.02)' }
+                        }}
+                        onClick={() => window.location.href = '/onboarding'}>
+                        {t('dash.onboard_cta')}
+                    </Button>
+                </Stack>
+            </Box>
+
+            {/* Profile Integrity Alert */}
+            {integrity && !integrity.isComplete && (
+                <Box sx={{ mb: 6 }}>
+                    <Paper sx={{ 
+                        p: 3, bgcolor: alpha('#DC2626', 0.05), border: '1px solid #DC2626', borderRadius: 4,
+                        display: 'flex', alignItems: 'center', gap: 3
+                    }}>
+                        <AlertCircle color="#DC2626" size={32} />
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="h6" sx={{ color: '#F87171', fontWeight: 900 }}>{t('dash.missing_requirements')}</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                                Your Sovereign Protocol is incomplete. Missing: {integrity.missingFields.join(', ')}
+                            </Typography>
+                        </Box>
+                        <Button variant="contained" sx={{ bgcolor: '#DC2626', color: '#FFF', fontWeight: 900 }} onClick={() => window.location.href='/settings'}>
+                            Sync Profile
+                        </Button>
+                    </Paper>
+                </Box>
+            )}
 
             {/* Economic Powergrid */}
-      <Grid container spacing={4} sx={{ mb: 8 }}>
-        {[
-            { label: t('dash.kpi.gross_val'), val: `AED ${formatAED(metrics?.yield?.grossContractValue)}`, trend: t('dash.kpi.trend.live'), icon: <AccountBalanceWalletIcon /> },
-            { label: t('dash.kpi.annual_yield'), val: `${metrics?.yield?.annualYield || 0}%`, trend: '+0.4%', icon: <TrendingUpIcon /> },
-            { label: t('dash.kpi.radius'), val: properties?.[0]?.emirate || 'UAE', trend: t('dash.kpi.trend.active'), icon: <SignalCellularAltIcon /> },
-            { label: t('dash.kpi.majlis_readiness'), val: properties?.some(p => p.propertyType === 'GOVERNMENT_MAJLIS') ? t('status.sovereign') : `${metrics?.compliance || 0}%`, trend: t('dash.kpi.trend.optimal'), icon: <Crown size={20} color={binThemeTokens.gold} /> },
-        ].map((kpi, i) => (
-            <Grid item xs={12} md={3} key={i}>
-                <Card sx={{ 
-                    bgcolor: 'rgba(22, 22, 24, 0.7)', 
-                    backdropFilter: 'blur(20px)',
-                    p: 1.5, 
-                    borderRadius: 6, 
-                    border: '1px solid rgba(198, 167, 94, 0.15)',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-                }}>
-                    <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                            <Box sx={{ color: binThemeTokens.gold }}>{kpi.icon}</Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 900, letterSpacing: 1 }}>{kpi.trend}</Typography>
-                        </Box>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1, letterSpacing: 2 }}>{kpi.label}</Typography>
-                        <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{kpi.val}</Typography>
-                    </CardContent>
-                </Card>
+            <Grid container spacing={4} sx={{ mb: 8 }}>
+                {kpis.map((kpi, i) => (
+                    <Grid item xs={12} md={3} key={i}>
+                        <Card sx={{ 
+                            bgcolor: 'rgba(22, 22, 24, 0.7)', 
+                            backdropFilter: 'blur(20px)',
+                            p: 1.5, 
+                            borderRadius: 6, 
+                            border: '1px solid rgba(198, 167, 94, 0.15)',
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+                        }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                                    <Box sx={{ color: (kpi as any).color || binThemeTokens.gold }}>{kpi.icon}</Box>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 900, letterSpacing: 1 }}>{kpi.trend}</Typography>
+                                </Box>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1, letterSpacing: 2 }}>{kpi.label}</Typography>
+                                <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>{kpi.val}</Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                ))}
             </Grid>
-        ))}
-      </Grid>
 
       {/* Institutional Intelligence Deck — 6 KPIs */}
       <Grid container spacing={3} sx={{ mb: 8 }}>
@@ -348,28 +363,14 @@ export default function DashboardPage() {
               <TableBody>
                 {(properties || []).map((p) => {
                     const contract = (contracts || []).find(c => c.propertyId === p.id);
+                    const passport = passports.find(pass => pass.propertyId === p.id);
+                    const occupancyRate = passport ? Math.round((passport.occupiedUnits / passport.totalUnits) * 100) : 0;
+
                     return (
                         <TableRow key={p.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                             <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="subtitle1" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{p.area}</Typography>
-                                {p.propertyType === 'majlis' && (
-                                    <Chip 
-                                        label={p.majlisType?.toUpperCase() || 'MAJLIS'} 
-                                        size="small" 
-                                        icon={p.majlisType === 'royal' ? <Crown size={12} /> : <Tent size={12} />} 
-                                        sx={{ 
-                                            height: 20, 
-                                            fontSize: '0.6rem', 
-                                            bgcolor: p.majlisType === 'royal' ? binThemeTokens.gold : 'rgba(198,167,94,0.2)', 
-                                            color: p.majlisType === 'royal' ? '#000' : binThemeTokens.gold,
-                                            fontWeight: 900 
-                                        }} 
-                                    />
-                                )}
-                                {p.heritageSensitivity && p.heritageSensitivity !== 'standard' && (
-                                    <ShieldAlert size={14} color={binThemeTokens.gold} style={{ opacity: 0.8 }} />
-                                )}
                             </Box>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{p.buildingName || t('dash.private_asset')} · {p.emirate}</Typography>
                             </TableCell>
@@ -377,27 +378,30 @@ export default function DashboardPage() {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <LinearProgress 
                                     variant="determinate" 
-                                    value={p.healthIndex || 90} 
+                                    value={occupancyRate || 0} 
                                     sx={{ 
                                         height: 8, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)', width: 100,
                                         '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #C6A75E, #E6C77A)' }
                                     }} 
                                 />
-                                <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 900 }}>{p.healthIndex || 90}%</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 900 }}>{occupancyRate}%</Typography>
                             </Box>
                             </TableCell>
                             <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, fontSize: '1.1rem' }}>
-                                AED {formatAED(contract?.annualContractValue)}
+                                AED {formatAED(passport?.rentCollectedTotal || 0)}
+                                <Typography variant="caption" display="block" sx={{ color: '#ef4444', mt: 0.5 }}>
+                                    {formatAED(passport?.rentOutstandingTotal || 0)} O/S
+                                </Typography>
                             </TableCell>
                             <TableCell>
                             <Chip 
-                                label={contract?.status || t('status.pending')} 
+                                label={passport?.passportStatus?.toUpperCase() || 'ACTIVE'} 
                                 size="small" 
                                 sx={{ 
                                     fontSize: '0.7rem', height: 24, fontWeight: 900, 
-                                    bgcolor: contract?.status === 'ACTIVE' ? 'rgba(198, 167, 94, 0.1)' : 'rgba(255,255,255,0.05)', 
-                                    color: contract?.status === 'ACTIVE' ? binThemeTokens.gold : '#aaa',
-                                    border: `1px solid ${contract?.status === 'ACTIVE' ? 'rgba(198, 167, 94, 0.3)' : 'rgba(255,255,255,0.1)'}`
+                                    bgcolor: 'rgba(198, 167, 94, 0.1)', 
+                                    color: binThemeTokens.gold,
+                                    border: `1px solid rgba(198, 167, 94, 0.3)`
                                 }} 
                             />
                             </TableCell>
@@ -614,10 +618,10 @@ export default function DashboardPage() {
           
           <Box sx={{ textAlign: 'center', mb: 4, pb: 4 }}>
               <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>
-                  Institutional Escalation
+                  {t('dash.escalation_title')}
               </Typography>
               <Typography variant="h5" sx={{ color: '#FFF', fontWeight: 900, mt: 1, mb: 2 }}>
-                  Executive Operations Desk
+                  {t('dash.executive_desk')}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, maxWidth: 600, mx: 'auto' }}>
                   For high-priority asset protocols, sovereign majlis requirements, or direct partnership inquiries, 

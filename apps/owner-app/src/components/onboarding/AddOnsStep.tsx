@@ -24,14 +24,17 @@ import {
     Camera,
     Trash2,
     Info,
+    Building,
     ArrowLeft
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatAED } from '../../utils/formatters';
 
 const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, selectedAddOns, toggleAddOn } = useOnboardingStore();
+    const { t, tx, isRTL } = useLanguage();
     const activeProperty = properties[0];
 
     const allAddOns = [
@@ -125,6 +128,126 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             showIf: true,
             reason: 'Institutional asset requirement.'
         },
+        {
+            id: 'security',
+            icon: ShieldAlert,
+            name: 'Security Services',
+            desc: 'Guarding, access control coordination, incident logging and patrol support.',
+            price: 12000,
+            mandatory: false,
+            showIf: true,
+            reason: 'Optional manpower layer for towers, retail and high-value assets.'
+        },
+        {
+            id: 'cleaning',
+            icon: Droplets,
+            name: 'Cleaning Services',
+            desc: 'Common area cleaning and scheduled hygiene operations.',
+            price: 9000,
+            mandatory: false,
+            showIf: true,
+            reason: 'Recommended for shared facilities and tenant-heavy properties.'
+        },
+        {
+            id: 'manpower',
+            icon: Activity,
+            name: 'Manpower Support',
+            desc: 'Dedicated helpers and operational manpower for daily property tasks.',
+            price: 15000,
+            mandatory: false,
+            showIf: true,
+            reason: 'Optional staffing capacity for institutional owners.'
+        },
+        {
+            id: 'concierge',
+            icon: Info,
+            name: 'Concierge Desk',
+            desc: 'Front desk coordination and tenant/visitor support.',
+            price: 18000,
+            mandatory: false,
+            showIf: (activeProperty?.units || 0) >= 20 || activeProperty?.propertyType === 'Hotel',
+            reason: 'Recommended for towers, hotels and premium mixed-use properties.'
+        },
+        {
+            id: 'pest_control',
+            icon: ShieldAlert,
+            name: 'Pest Control',
+            desc: 'Scheduled pest prevention and emergency treatment.',
+            price: 1500,
+            mandatory: false,
+            showIf: true,
+            reason: 'Recommended baseline protection for all occupied assets.'
+        },
+        {
+            id: 'generator',
+            icon: Activity,
+            name: 'Generator Maintenance',
+            desc: 'Generator testing, preventive checks and emergency readiness.',
+            price: 3500,
+            mandatory: activeProperty?.gen || false,
+            showIf: activeProperty?.gen || false,
+            reason: 'Required where backup power systems exist.'
+        },
+        {
+            id: 'office_units',
+            icon: Building,
+            name: 'Office Unit Support',
+            desc: 'Dedicated checks for office units, pantry, lighting and MEP coordination.',
+            price: 2500,
+            mandatory: false,
+            showIf: (activeProperty?.offices || 0) > 0,
+            reason: 'Office units require separate occupancy and fit-out service tracking.'
+        },
+        {
+            id: 'retail_shops',
+            icon: Building,
+            name: 'Retail Shops Support',
+            desc: 'Retail tenancy MEP coordination, signage checks and service logging.',
+            price: 3000,
+            mandatory: false,
+            showIf: (activeProperty?.shops || 0) > 0,
+            reason: 'Retail shops add footfall and service complexity.'
+        },
+        {
+            id: 'parking_management',
+            icon: Camera,
+            name: 'Parking Management',
+            desc: 'Parking operations, access coordination and incident reporting.',
+            price: 6000,
+            mandatory: false,
+            showIf: (activeProperty?.parkingCapacity || 0) > 0 || (activeProperty?.units || 0) >= 20,
+            reason: 'Recommended for towers and high-occupancy buildings.'
+        },
+        {
+            id: 'waste_management',
+            icon: Trash2,
+            name: 'Waste Management',
+            desc: 'Waste room checks, municipal coordination and disposal schedules.',
+            price: 3500,
+            mandatory: activeProperty?.wasteMan || false,
+            showIf: true,
+            reason: 'Protects hygiene and compliance for occupied properties.'
+        },
+        {
+            id: 'mep_support',
+            icon: Activity,
+            name: 'MEP Support',
+            desc: 'Integrated mechanical, electrical and plumbing preventive support.',
+            price: 8500,
+            mandatory: false,
+            showIf: true,
+            reason: 'Core operational resilience layer for all asset classes.'
+        },
+        {
+            id: 'hvac_pm',
+            icon: Wind,
+            name: 'HVAC Preventive Maintenance',
+            desc: 'Preventive AC inspections, filters, coils, drain lines and performance checks.',
+            price: 4500,
+            mandatory: activeProperty?.hvac || false,
+            showIf: true,
+            reason: 'UAE climate makes HVAC continuity mission-critical.'
+        },
         // ── MAJLIS ADD-ONS ────────────────────────────────────────────────
         {
             id: 'majlis_deep_care',
@@ -174,10 +297,10 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
     return (
         <Box sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>OPERATIONAL ADD-ONS</Typography>
-                <Typography variant="h4" fontWeight="950" sx={{ mb: 1, color: '#FFF' }}>SELECT ADD-ON SERVICES</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{t('onboarding.addons_title')}</Typography>
+                <Typography variant="h4" fontWeight="950" sx={{ mb: 1, color: '#FFF' }}>{t('onboarding.addons_subtitle')}</Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 800, mx: 'auto' }}>
-                    Mission-critical service layers tailored to your specific asset type and regulatory requirements.
+                    {t('onboarding.addons_desc')}
                 </Typography>
             </Box>
 
@@ -221,19 +344,19 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                                                     <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#FFF' }}>{addon.name}</Typography>
                                                     {addon.mandatory && (
-                                                        <Chip label="MANDATORY" size="small" sx={{ height: 16, fontSize: 8, fontWeight: 950, bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }} />
+                                                        <Chip label={t('onboarding.mandatory')} size="small" sx={{ height: 16, fontSize: 8, fontWeight: 950, bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }} />
                                                     )}
                                                 </Stack>
                                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 1 }}>{addon.desc}</Typography>
                                                 <Typography variant="caption" sx={{ color: addon.mandatory ? '#ef4444' : binThemeTokens.gold, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Info size={12} /> REASON: {addon.reason}
+                                                    <Info size={12} /> {t('onboarding.reason')}: {addon.reason}
                                                 </Typography>
                                             </Box>
                                         </Box>
                                         <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 2, minWidth: 150, justifyContent: 'flex-end' }}>
                                             <Box>
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF', whiteSpace: 'nowrap' }}>AED {addon.price.toLocaleString()}+</Typography>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>ANNUAL</Typography>
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF', whiteSpace: 'nowrap' }}>{t('common.currency')} {addon.price.toLocaleString()}+</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>{t('onboarding.annual')}</Typography>
                                             </Box>
                                             {isSelected ? (
                                                 <Check color={binThemeTokens.gold} size={24} strokeWidth={3} />
@@ -250,8 +373,8 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
 
                 <Grid item xs={12} lg={4}>
                     <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#111112', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, position: 'sticky', top: 100 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>SOVEREIGN STACK</Typography>
-                        <Typography variant="h6" fontWeight="900" sx={{ mb: 3, color: '#FFF' }}>SELECTED ADD-ONS</Typography>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{t('onboarding.sovereign_stack')}</Typography>
+                        <Typography variant="h6" fontWeight="900" sx={{ mb: 3, color: '#FFF' }}>{t('onboarding.selected_addons')}</Typography>
                         
                         <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />}>
                             {currentAddOns.filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory).map((a) => (
@@ -266,9 +389,9 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                             )}
 
                             <Box sx={{ pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography fontWeight="950" sx={{ color: '#FFF' }}>TOTAL ANNUAL</Typography>
+                                <Typography fontWeight="950" sx={{ color: '#FFF' }}>{t('onboarding.total_annual')}</Typography>
                                 <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold }}>
-                                    AED {currentAddOns
+                                    {t('common.currency')} {currentAddOns
                                         .filter(a => safeSelectedAddOns.includes(a.id) || a.mandatory)
                                         .reduce((sum, a) => sum + a.price, 0).toLocaleString()}
                                 </Typography>
@@ -278,16 +401,16 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
                         <Stack spacing={2} sx={{ mt: 6 }}>
                             <Button 
                                 variant="contained" fullWidth size="large" onClick={onNext}
-                                endIcon={<ArrowRight />}
+                                endIcon={isRTL ? <ArrowLeft /> : <ArrowRight />}
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', py: 2, fontWeight: 950, borderRadius: 3 }}
                             >
-                                CONTINUE
+                                {t('btn.next')}
                             </Button>
                             <Button 
-                                variant="text" fullWidth onClick={onBack} startIcon={<ArrowLeft />}
+                                variant="text" fullWidth onClick={onBack} startIcon={isRTL ? <ArrowRight /> : <ArrowLeft />}
                                 sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}
                             >
-                                BACK TO MODELS
+                                {t('onboarding.back_to_models')}
                             </Button>
                         </Stack>
                     </Paper>

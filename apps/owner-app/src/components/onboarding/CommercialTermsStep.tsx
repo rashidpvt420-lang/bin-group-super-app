@@ -1,148 +1,200 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Chip, Container 
+    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Chip, Container, RadioGroup, FormControlLabel, Radio 
 } from '@mui/material';
-import { Wrench, UserCheck, ShieldCheck, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { Wrench, UserCheck, ShieldCheck, ArrowRight, CheckCircle2, XCircle, Info, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { formatAED } from '../../utils/formatters';
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { setSelectedPlan, selectedPlan } = useOnboardingStore();
-    const { tx } = useLanguage();
-    const [selectedTerm, setSelectedTerm] = useState('Annual');
+    const { setSelectedPlan, selectedPlan, properties, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
+    const { t, isRTL } = useLanguage();
+    
+    const activePropertyIndex = 0;
+    const property = properties[activePropertyIndex];
+
+    useEffect(() => {
+        calculateSummary();
+    }, [properties]);
 
     const plans = [
         {
-            id: 'maintenance_only',
-            name: 'Maintenance Only',
+            id: 'AMC',
+            name: t('onboarding.plan.amc'),
             icon: <Wrench size={24} />,
-            features: ['MEP coordination', 'Tenant maintenance request handling', 'SLA tracking', 'Completion photos'],
-            exclusions: ['Major replacements', 'Government fees', 'Lift/pool AMC unless selected'],
-            desc: 'Technical maintenance coverage for responsive repairs and operational history.'
+            features: ['MEP coordination', 'Emergency SOS dispatch', 'SLA tracking', 'Completion photos'],
+            desc: t('onboarding.plan.amc_desc')
         },
         {
-            id: 'pm_only',
-            name: 'Property Management',
+            id: 'PM',
+            name: t('onboarding.plan.pm'),
             icon: <UserCheck size={24} />,
             features: ['Tenant onboarding', 'Rent/payment tracking', 'Complaint management', 'Owner reporting'],
-            exclusions: ['Court/RDC cases', 'Major renovation', 'Broker commission unless contracted'],
-            desc: 'Tenant, rent, document and reporting operations for managed properties.'
+            desc: t('onboarding.plan.pm_desc')
         },
         {
-            id: 'hybrid',
-            name: 'Total Care Hybrid',
+            id: 'IFM',
+            name: t('onboarding.plan.ifm'),
             icon: <ShieldCheck size={24} />,
-            premium: true,
-            features: ['Maintenance + PM features', 'Priority SLA', 'Preventive calendar', 'AI Design Studio access'],
-            exclusions: ['Major capital expenditure', 'Authority fines/fees', 'Specialist compliance unless added'],
-            desc: 'Full operating visibility for owners who want maintenance, tenant service and reporting together.'
+            features: ['Maintenance + PM features', 'Priority response', 'Preventive calendar', 'Portfolio Passport'],
+            desc: t('onboarding.plan.ifm_desc')
         }
     ];
 
-    const terms = [
-        { id: 'Annual', label: 'ANNUAL', discount: '10% OFF' },
-        { id: 'Semi-Annual', label: 'SEMI-ANNUAL', discount: '5% OFF' },
-        { id: 'Quarterly', label: 'QUARTERLY', discount: 'STANDARD' },
+    const slaTiers = [
+        { id: 'standard', label: t('onboarding.sla.standard'), desc: t('onboarding.sla.standard_desc') },
+        { id: 'premium', label: t('onboarding.sla.premium'), desc: t('onboarding.sla.premium_desc') },
+        { id: 'elite', label: t('onboarding.sla.elite'), desc: t('onboarding.sla.elite_desc') }
     ];
 
-    const canProceed = selectedPlan;
+    const paymentPlans = [
+        { id: 'annual', label: t('onboarding.payment.annual'), desc: t('onboarding.payment.annual_desc') },
+        { id: 'quarterly', label: t('onboarding.payment.quarterly'), desc: t('onboarding.payment.quarterly_desc') },
+        { id: 'monthly', label: t('onboarding.payment.monthly'), desc: t('onboarding.payment.monthly_desc') }
+    ];
+
+    const handleUpdate = (data: any) => {
+        updateProperty(activePropertyIndex, data);
+    };
+
+    const quote = portfolioSummary.quoteResults?.[property?.id];
 
     return (
         <Box sx={{ py: 2 }}>
             <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-                    {tx('onboarding.service_plan', 'SERVICE PLAN')}
+                    {t('onboarding.commercial_title')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {tx('onboarding.service_plan_desc', 'Choose coverage, exclusions, add-ons, SLA impact and payment frequency before verification.')}
+                    {t('onboarding.commercial_desc')}
                 </Typography>
             </Box>
 
-            <Container maxWidth="lg">
+            <Container maxWidth="xl">
                 <Grid container spacing={4}>
-                    {/* PLAN SELECTOR */}
                     <Grid item xs={12} lg={8}>
-                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', mb: 4 }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
-                                1. SERVICE PLAN
+                                1. {t('onboarding.plan_select')}
                             </Typography>
                             <Grid container spacing={2}>
                                 {plans.map((plan) => (
                                     <Grid item xs={12} sm={4} key={plan.id}>
                                         <Paper 
-                                            onClick={() => setSelectedPlan(plan)}
+                                            onClick={() => handleUpdate({ strategy: plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm') })}
                                             sx={{ 
                                                 p: 3, height: '100%', cursor: 'pointer',
-                                                bgcolor: selectedPlan?.id === plan.id ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
-                                                border: `2px solid ${selectedPlan?.id === plan.id ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
+                                                bgcolor: (property.strategy === (plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm'))) ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
+                                                border: `2px solid ${(property.strategy === (plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm'))) ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
                                                 borderRadius: 4, transition: 'all 0.2s ease',
-                                                display: 'flex', flexDirection: 'column'
+                                                textAlign: 'center'
                                             }}
                                         >
                                             <Box sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', justifyContent: 'center' }}>{plan.icon}</Box>
-                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: 'center' }}>{plan.name}</Typography>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', minHeight: 44, textAlign: 'center' }}>{plan.desc}</Typography>
-                                            <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.05)' }} />
-                                            <Stack spacing={0.5} sx={{ mt: 1 }}>
-                                                {plan.features.map((f, i) => (
-                                                    <Stack key={i} direction="row" spacing={0.5} alignItems="flex-start">
-                                                        <CheckCircle2 size={13} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
-                                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', fontSize: '0.7rem' }}>{f}</Typography>
-                                                    </Stack>
-                                                ))}
-                                            </Stack>
-                                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, mt: 1.5, mb: 0.5, fontWeight: 900 }}>Not included unless added</Typography>
-                                            <Stack spacing={0.5}>
-                                                {plan.exclusions.map((item, i) => (
-                                                    <Stack key={i} direction="row" spacing={0.5} alignItems="flex-start">
-                                                        <XCircle size={12} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)', fontSize: '0.68rem' }}>{item}</Typography>
-                                                    </Stack>
-                                                ))}
-                                            </Stack>
+                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{plan.name}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', display: 'block', mb: 2 }}>{plan.desc}</Typography>
                                         </Paper>
                                     </Grid>
                                 ))}
                             </Grid>
                         </Paper>
+
+                        <Grid container spacing={4}>
+                            <Grid item xs={12} md={6}>
+                                <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
+                                        2. {t('onboarding.sla_title')}
+                                    </Typography>
+                                    <RadioGroup value={property.slaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>
+                                        {slaTiers.map(tier => (
+                                            <FormControlLabel 
+                                                key={tier.id} value={tier.id} 
+                                                control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />}
+                                                label={
+                                                    <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
+                                                        <Typography variant="subtitle2" fontWeight="900" color="#FFF">{tier.label}</Typography>
+                                                        <Typography variant="caption" color="rgba(255,255,255,0.5)">{tier.desc}</Typography>
+                                                    </Box>
+                                                }
+                                                sx={{ 
+                                                    mb: 2, p: 1, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0,
+                                                    flexDirection: isRTL ? 'row-reverse' : 'row'
+                                                }}
+                                            />
+                                        ))}
+                                    </RadioGroup>
+                                </Paper>
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
+                                        3. {t('onboarding.payment_title')}
+                                    </Typography>
+                                    <RadioGroup value={property.paymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>
+                                        {paymentPlans.map(plan => (
+                                            <FormControlLabel 
+                                                key={plan.id} value={plan.id} 
+                                                control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />}
+                                                label={
+                                                    <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
+                                                        <Typography variant="subtitle2" fontWeight="900" color="#FFF">{plan.label}</Typography>
+                                                        <Typography variant="caption" color="rgba(255,255,255,0.5)">{plan.desc}</Typography>
+                                                    </Box>
+                                                }
+                                                sx={{ 
+                                                    mb: 2, p: 1, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0,
+                                                    flexDirection: isRTL ? 'row-reverse' : 'row'
+                                                }}
+                                            />
+                                        ))}
+                                    </RadioGroup>
+                                </Paper>
+                            </Grid>
+                        </Grid>
                     </Grid>
 
-                    {/* FREQUENCY SELECTOR */}
                     <Grid item xs={12} lg={4}>
-                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
-                                2. PAYMENT FREQUENCY
-                            </Typography>
-                            <Stack spacing={2}>
-                                {terms.map((term) => (
-                                    <Paper 
-                                        key={term.id}
-                                        onClick={() => setSelectedTerm(term.id)}
-                                        sx={{ 
-                                            p: 2, cursor: 'pointer',
-                                            bgcolor: selectedTerm === term.id ? 'rgba(198, 167, 94, 0.05)' : 'rgba(255,255,255,0.02)',
-                                            border: `1px solid ${selectedTerm === term.id ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
-                                            borderRadius: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                        }}
-                                    >
-                                        <Typography variant="caption" fontWeight="900" sx={{ color: '#FFF' }}>{term.label}</Typography>
-                                        <Chip label={term.discount} size="small" sx={{ height: 20, fontSize: '0.6rem', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
-                                    </Paper>
-                                ))}
-
-                                <Box sx={{ mt: 2 }}>
-                                    <Button 
-                                        variant="contained" fullWidth size="large" 
-                                        onClick={onNext} disabled={!canProceed}
-                                        endIcon={<ArrowRight />}
-                                        sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                                    >
-                                        Review Documents
-                                    </Button>
-                                    <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>BACK</Button>
+                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}`, position: 'sticky', top: 24 }}>
+                            <Box sx={{ textAlign: 'center', mb: 3 }}>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{t('onboarding.quote_est')}</Typography>
+                                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>
+                                    AED {formatAED(quote?.annualTotal || 0)}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography>
+                            </Box>
+                            
+                            <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+                            
+                            <Stack spacing={2} sx={{ mb: 4 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography>
+                                    <Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.6)">{t(`onboarding.payment.${property.paymentPlan}`)}</Typography>
+                                    <Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>
+                                        AED {formatAED(property.paymentPlan === 'monthly' ? quote?.monthlyPayment || 0 : (property.paymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0))}
+                                    </Typography>
                                 </Box>
                             </Stack>
+
+                            <Button 
+                                variant="contained" fullWidth size="large" 
+                                onClick={onNext}
+                                endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
+                                sx={{ 
+                                    borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2,
+                                    boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)',
+                                    '&:hover': { bgcolor: '#E6C77A' }
+                                }}
+                            >
+                                {t('onboarding.confirm_btn')}
+                            </Button>
+                            <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>
+                                {t('onboarding.revise_btn')}
+                            </Button>
                         </Paper>
                     </Grid>
                 </Grid>
