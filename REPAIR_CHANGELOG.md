@@ -1,46 +1,112 @@
-# REPAIR CHANGELOG - BIN GROUP Super App
+# BIN GROUP Super App — Repair Changelog
 
-## [2026-04-29] - Final Stabilization & Verification
+## Independent V2 Surgical Fixes
 
-### **Phase 1: Stability & Infrastructure**
-#### [MODIFY] [PropertyLocationStep.tsx](file:///c:/Users/My-PC/Desktop/bin%20app/apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx)
-- **Reason:** Prevent onboarding blockage due to missing/failing Google Maps API.
-- **Before:** Component would crash or hang if `google.maps` was undefined.
-- **After:** Implements a fallback state machine. If map fails to load, it enters "Manual Mode" allowing users to type address and pick coordinates without a visual map.
+### `.firebaserc`
+- Added `staging` alias for `studio-5724711541-8a962`.
+- Kept `production` alias for `bin-group-57c60`.
+- Added hosting target separation to prevent accidental production deployment.
 
-### **Phase 2: Localization**
-#### [MODIFY] [LanguageContext.tsx](file:///c:/Users/My-PC/Desktop/bin%20app/apps/owner-app/src/context/LanguageContext.tsx)
-- **Reason:** Centralize i18n logic and support RTL/LTR directionality.
-- **Before:** Partial translation keys; no directionality persistence.
-- **After:** 50+ new institutional keys added. `dir` attribute correctly toggles and persists in `localStorage`.
+### `firebase.json`
+- Removed broken/missing `hosting/public` dependency.
+- Pointed hosting targets to `apps/owner-app/build` and `apps/admin-panel/build`.
+- Removed missing Data Connect reference.
+- Kept Firestore, Storage, Functions, Hosting, and Emulator configuration explicit.
+- Removed frontend CSP access to `api.openai.com`.
 
-### **Phase 3: Business Logic**
-#### [MODIFY] [onboardingStore.ts](file:///c:/Users/My-PC/Desktop/bin%20app/apps/owner-app/src/store/onboardingStore.ts)
-- **Reason:** Fix broken ACV (Annual Contract Value) logic.
-- **Before:** `estimatedACV` always returned zero.
-- **After:** Implemented weighted calculation based on `propertyType`, `sqft`, and `assetGrade`.
+### `database.rules.json`
+- Added restrictive Realtime Database rules because database emulator/rules configuration existed.
+- Only admin/isAdmin tokens can read/write RTDB.
 
-#### [MODIFY] [index.ts](file:///c:/Users/My-PC/Desktop/bin%20app/functions/index.ts)
-- **Reason:** Fix multi-property onboarding bug.
-- **Before:** Cloud function only saved the first property of a portfolio.
-- **After:** Iterates through all normalized properties in the batch. Fixed `tsc` compilation error (unused variable).
+### Frontend Firebase Config
+Files updated:
+- `apps/owner-app/src/lib/firebase.ts`
+- `apps/admin-panel/src/lib/firebase.ts`
+- `packages/shared/src/lib/firebase.ts`
+- `apps/owner-app/public/firebase-messaging-sw.js`
 
-### **Phase 4: Admin Scalability**
-#### [MODIFY] [TenantsManagementPage.tsx](file:///c:/Users/My-PC/Desktop/bin%20app/apps/admin-panel/src/pages/tenants/TenantsManagementPage.tsx)
-- **Reason:** Fix performance bottleneck for large buildings.
-- **Before:** Loaded all tenants without limit; no pagination.
-- **After:** Implemented `Load More` button with `startAfter` cursor logic.
+Before:
+- Firebase frontend config was hardcoded to production project values.
 
-#### [MODIFY] [BulkImporter.tsx](file:///c:/Users/My-PC/Desktop/bin%20app/apps/admin-panel/src/components/BulkImporter.tsx)
-- **Reason:** Expand utility for rapid deployment.
-- **Before:** Only supported property imports.
-- **After:** Supports `PROPERTY`, `UNIT`, and `TENANT` types via CSV `TYPE` column.
+After:
+- Config is loaded from `REACT_APP_FIREBASE_*` variables.
+- This allows staging builds without pointing the frontend at production.
 
-### **Phase 5: Security**
-#### [MODIFY] [firestore.rules](file:///c:/Users/My-PC/Desktop/bin%20app/firestore.rules)
-- **Reason:** Protect sensitive owner/tenant data.
-- **Before:** Permissive `allow read` for all authenticated users on tickets and properties.
-- **After:** Hardened rules requiring `uid` match for `tenantId` or `ownerId`, or `assignedTechnicianId`.
+### Google Maps
+Files updated:
+- `apps/owner-app/public/index.html`
+- `apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx`
 
----
-*Verified by Antigravity AI @ 2026-04-29*
+Before:
+- Global `%REACT_APP_GOOGLE_MAPS_API_KEY%` script existed in HTML.
+- Mixed `VITE_GOOGLE_MAPS_API_KEY`/CRA key expectations caused unreliable loading.
+
+After:
+- Maps script is loaded by the component only when a valid key exists.
+- CRA/CRACO key name is standardized as `REACT_APP_GOOGLE_MAPS_API_KEY`.
+- Missing/failing Maps key triggers manual fallback mode and does not block onboarding.
+
+### Add-ons and Pricing
+Files updated:
+- `apps/owner-app/src/store/onboardingStore.ts`
+- `apps/owner-app/src/components/onboarding/AddOnsStep.tsx`
+
+Before:
+- Add-ons were visible but not materially connected to ACV calculation.
+- Several institutional add-on categories were missing.
+
+After:
+- ACV includes selected and mandatory add-ons.
+- Added security, cleaning, manpower, concierge, pest control, generator, office units, retail shops, parking, waste management, MEP support, HVAC preventive maintenance, and related items.
+
+### Property Passport
+Files updated:
+- `functions/index.ts`
+- `apps/owner-app/src/pages/PropertyPassportPage.tsx`
+
+Before:
+- No canonical `propertyPassports/{propertyId}` ledger was created during owner onboarding.
+- UI relied mainly on property records.
+
+After:
+- Every normalized property in a submitted portfolio creates/updates a canonical passport.
+- Passport includes ownership, location, structure, contract, payment, add-ons, compliance, system status, quote/contract/payment history, and risk fields.
+- UI reads canonical passport first and falls back to legacy property data.
+
+### Bulk Importer
+File updated:
+- `apps/admin-panel/src/components/BulkImporter.tsx`
+
+Before:
+- Tenant imports wrote user-like documents without creating real Firebase Auth users.
+
+After:
+- PROPERTY imports create properties and passports.
+- UNIT imports create root and nested unit records.
+- TENANT imports create `tenantInvitations`, nested tenant records, tenant registry records, and unit occupancy updates.
+- Import clearly marks tenant Auth creation as pending server-side work.
+
+### Firestore Rules
+File updated:
+- `firestore.rules`
+
+Before:
+- Rules were incomplete for the stated tower/owner/tenant/property passport model.
+
+After:
+- Added role/ownership helpers and collection-specific access for users, owners, properties, nested units/tenants/tickets, passports, units, tenants, tenant invitations, tenancies, maintenance tickets, intake submissions, contracts, quotes, payments, broker referrals, add-ons, logs, design requests, and move-out requests.
+- Fallback is admin-only.
+
+### Server-side Project IDs
+Files updated:
+- `functions/index.ts`
+- `functions/ocrEngine.ts`
+
+Before:
+- Some server-side logic referenced hardcoded production project ID.
+
+After:
+- Project ID is resolved dynamically from Firebase/Admin runtime environment where practical.
+
+### Package Cleanup
+Removed generated/debug/cache artifacts from the V2 review package, including Firebase debug logs, generated Functions lib output, Android Gradle build/cache files, IDE cache files, and generated mobile web assets.

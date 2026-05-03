@@ -1,16 +1,6 @@
 {
   "rules": {
-    "users": {
-      "$uid": {
-        ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
-      }
-    },
-    "admin": {
-      ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin')",
-      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin')"
-    },
-    ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin')",
-    ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin')"
+    ".read": "auth != null && (auth.token.admin == true || auth.token.isAdmin == true)",
+    ".write": "auth != null && (auth.token.admin == true || auth.token.isAdmin == true)"
   }
 }

@@ -35,6 +35,7 @@ type RepairReport = {
 
 export default function OrphanWarRoomPage() {
     const { setPageContext } = useAI();
+    const activeProjectId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'UNCONFIGURED_PROJECT';
     const [orphans, setOrphans] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
     const [geoRepairItems, setGeoRepairItems] = useState<any[]>([]);
@@ -257,7 +258,7 @@ export default function OrphanWarRoomPage() {
                             <Wrench size={20} /> TECH REPAIR CONTROL
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800, display: 'block', mt: 0.5 }}>
-                            project: bin-group-57c60 | database: (default) | collection: maintenanceTickets
+                            project: {activeProjectId} | database: (default) | collection: maintenanceTickets
                         </Typography>
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>

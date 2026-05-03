@@ -1,80 +1,67 @@
-# STAGING DEPLOYMENT PLAN - BIN GROUP Super App
+# BIN GROUP Super App — Staging Deployment Plan
 
-## 1. Environment Infrastructure
-- **Staging Project ID:** `studio-5724711541-8a962`
-- **Region:** `europe-west3` (Functions) / `eur3` (Firestore)
-- **Status:** **STAGING-ONLY** (Production `bin-group-57c60` must remain untouched)
+## Staging target
+- Firebase project alias: `staging`
+- Firebase project ID: `studio-5724711541-8a962`
+- Production project ID: `bin-group-57c60`
 
-## 2. Pre-Deployment Configuration & Secrets Audit
-### Firebase Aliases
+Production must remain untouched until staging smoke tests pass and a separate production approval is given.
+
+## Required frontend environment variables
+Create staging `.env.local` files for `apps/owner-app` and `apps/admin-panel` using staging Firebase Web App values:
+
 ```bash
-# Add staging alias if not present
-firebase use --add studio-5724711541-8a962 staging
+REACT_APP_FIREBASE_API_KEY=...
+REACT_APP_FIREBASE_AUTH_DOMAIN=studio-5724711541-8a962.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=studio-5724711541-8a962
+REACT_APP_FIREBASE_STORAGE_BUCKET=studio-5724711541-8a962.firebasestorage.app
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=...
+REACT_APP_FIREBASE_APP_ID=...
+REACT_APP_GOOGLE_MAPS_API_KEY=...
 ```
 
-### Critical Secrets Architecture
-The BIN GROUP app follows a **Strict Sovereign Isolation** policy for secrets:
-- **Client-Side (Frontend)**: Only `VITE_GOOGLE_MAPS_API_KEY` is allowed. It MUST be restricted via the Google Cloud Console to authorized domains (`*.web.app`, `*.firebaseapp.com`) and specific APIs.
-- **Server-Side (Functions)**: All institutional secrets (`OPENAI_API_KEY`, `STRIPE_SECRET`, `SMTP_PASS`) are managed via **Firebase Secret Manager**.
-- **Admin Credentials**: Service account keys (`serviceAccountKey.json`) are prohibited from the repository and are only injected via `GOOGLE_APPLICATION_CREDENTIALS` in restricted CI/CD or controlled terminal environments.
+Google Maps browser key must be restricted to staging hosting domains and only the required Maps APIs.
 
-### Staging Environment Variables
-| Variable | Handling | Purpose |
-|----------|----------|---------|
-| `VITE_GOOGLE_MAPS_API_KEY` | Restricted Frontend Key | Maps & Geocoding |
-| `OPENAI_API_KEY` | Firebase Secret | AI Mission Concierge |
-| `STRIPE_SECRET` | Firebase Secret | Payment processing |
-| `SMTP_PASS` | Firebase Secret | Notification delivery |
-
-## 3. Deployment Sequence (Surgical Staging)
-Deploy in this exact order to prevent dependency failures:
+## Required server-side secrets
+Set secrets only in Firebase Functions / Google Secret Manager. Do not put these in frontend `.env` files.
 
 ```bash
-# 1. Switch to staging
+firebase functions:secrets:set OPENAI_API_KEY --project staging
+firebase functions:secrets:set STRIPE_SECRET_KEY --project staging
+firebase functions:secrets:set SMTP_PASSWORD --project staging
+```
+
+## Deploy sequence
+
+```bash
 firebase use staging
-
-# 2. Deploy Firestore Rules (Security Gate)
-firebase deploy --only firestore:rules
-
-# 3. Deploy Firestore Indexes
-firebase deploy --only firestore:indexes
-
-# 4. Deploy Cloud Functions (Logic Layer)
-firebase deploy --only functions
-
-# 5. Build and Deploy Hosting (UI Layer)
+firebase deploy --only firestore:rules --project staging
+firebase deploy --only firestore:indexes --project staging
 npm run build
-firebase deploy --only hosting
-```
-
-## 4. Smoke Test Checklist (Staging)
-- [ ] **Auth**: Create a test owner account; verify success.
-- [ ] **Onboarding**: Complete a 3-property portfolio intake; verify `intake_submissions` and `properties_pending` records.
-- [ ] **Pricing**: Confirm ACV is non-zero in the UI summary.
-- [ ] **Maps**: Force a failing API key (or simulate) and verify "Manual Mode" fallback.
-- [ ] **Admin**: Upload a test CSV with `UNIT` and `TENANT` types; verify data persistence.
-- [ ] **Security**: Attempt to read Owner B's property with Owner A's token; verify `permission-denied`.
-
-## 5. Rollback Commands (Staging)
-```bash
-# Revert hosting
-firebase hosting:rollback --project staging
-
-# Revert functions (requires git checkout previous commit)
-git checkout [previous-stable-tag]
 firebase deploy --only functions --project staging
+firebase deploy --only hosting:owner-app --project staging
+firebase deploy --only hosting:admin-panel --project staging
 ```
 
-## 6. Known Risks
-- **Emulator Divergence**: Minor differences between local emulator behavior and live Staging Firestore rules.
-- **API Quotas**: Staging usage shares OpenAI/Google quotas unless separate keys are used.
+## Smoke test gate
+1. Owner account can sign in to staging only.
+2. Owner creates a portfolio with more than one property.
+3. `submitOwnerOnboarding` persists every property and creates `propertyPassports/{propertyId}`.
+4. Quote/ACV is non-zero and changes when units, age, grade, emirate, and add-ons change.
+5. Google Maps loads with the restricted key, or manual fallback works without blocking onboarding.
+6. Admin can import PROPERTY, UNIT, and TENANT CSV rows.
+7. Admin can view 53+ tenants with pagination.
+8. Owner cannot read another owner's property, contract, payment, or passport.
+9. Tenant cannot read unrelated tenant/unit records.
+10. Technician cannot read unassigned tickets.
+11. Browser console has no Firebase permission errors for valid actors.
+12. Unauthenticated users cannot read private collections.
 
-## 7. Production Promotion Checklist
-- [ ] Staging Smoke Test: **100% PASS**
-- [ ] Peer Review of `REPAIR_CHANGELOG.md`
-- [ ] Sign-off from Project Lead
-- [ ] Final check of `.firebaserc` to ensure `default` points to `bin-group-57c60`
-- [ ] **Manual Approval Triggered**
-
----
-*Created by Antigravity AI @ 2026-04-29*
+## Production promotion checklist
+- Independent code review approved.
+- Staging smoke test screenshots captured.
+- Firestore rules access matrix verified.
+- Functions logs clean.
+- Google Maps domain restriction verified.
+- Production `.env` values reviewed.
+- Manual written approval before `firebase use production`.

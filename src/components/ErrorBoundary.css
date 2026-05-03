@@ -1,0 +1,50 @@
+.error-boundary-fallback {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #0B0B0C;
+    color: #FFF;
+    font-family: 'Inter', sans-serif;
+    text-align: center;
+    padding: 2rem;
+}
+
+.error-boundary-tag {
+    color: #C6A75E;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    margin-bottom: 24px;
+}
+
+.error-boundary-title {
+    font-size: 3rem;
+    font-weight: 950;
+    margin-bottom: 16px;
+    letter-spacing: -2px;
+}
+
+.error-boundary-desc {
+    color: rgba(255,255,255,0.6);
+    max-width: 500px;
+    line-height: 1.6;
+    margin-bottom: 40px;
+}
+
+.error-boundary-btn {
+    background: #C6A75E;
+    color: #000;
+    border: none;
+    padding: 16px 48px;
+    border-radius: 100px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.error-boundary-btn:hover {
+    transform: scale(1.05);
+    background: #E6C77A;
+}

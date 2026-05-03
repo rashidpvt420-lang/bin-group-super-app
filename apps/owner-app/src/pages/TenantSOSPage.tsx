@@ -594,11 +594,18 @@ export default function TenantSOSPage() {
                     </Typography>
                     <Stack spacing={4}>
                         {activeTickets.map(ticket => (
-                            <Paper key={ticket.id} sx={{ p: 0, overflow: 'hidden', borderRadius: 8, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${ticket.status === 'EN_ROUTE' ? binThemeTokens.gold : 'rgba(255,255,255,0.1)'}`, boxShadow: '0 40px 100px rgba(0,0,0,0.5)' }}>
+                            <Paper key={ticket.id} sx={{ p: 0, overflow: 'hidden', borderRadius: 8, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${['EN_ROUTE', 'WORK_STARTED', 'IN_PROGRESS'].includes(ticket.status) ? binThemeTokens.gold : 'rgba(255,255,255,0.1)'}`, boxShadow: '0 40px 100px rgba(0,0,0,0.5)' }}>
                                 <Grid container>
                                     <Grid item xs={12} md={7} sx={{ p: 4 }}>
                                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                                            <Chip label={ticket.status} sx={{ bgcolor: ticket.status === 'EN_ROUTE' ? binThemeTokens.gold : 'rgba(255,255,255,0.1)', color: ticket.status === 'EN_ROUTE' ? '#000' : '#FFF', fontWeight: 900 }} />
+                                            <Chip 
+                                                label={ticket.status?.replace('_', ' ')} 
+                                                sx={{ 
+                                                    bgcolor: ['EN_ROUTE', 'WORK_STARTED', 'IN_PROGRESS'].includes(ticket.status) ? binThemeTokens.gold : 'rgba(255,255,255,0.1)', 
+                                                    color: ['EN_ROUTE', 'WORK_STARTED', 'IN_PROGRESS'].includes(ticket.status) ? '#000' : '#FFF', 
+                                                    fontWeight: 900 
+                                                }} 
+                                            />
                                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>REF: {ticket.id.substring(0,8)}</Typography>
                                         </Stack>
                                         <Typography variant="h4" fontWeight="950" dir="auto" sx={{ color: '#FFF', mb: 2 }}>{ticket.description}</Typography>
@@ -606,11 +613,11 @@ export default function TenantSOSPage() {
                                         <Grid container spacing={2}>
                                             <Grid item xs={6}>
                                                 <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary }}>SPECIALIST</Typography>
-                                                <Typography variant="body1" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{ticket.assignedTechnicianName || 'PENDING'}</Typography>
+                                                <Typography variant="body1" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{ticket.assignedTechnicianName || 'ALLOCATING...'}</Typography>
                                             </Grid>
                                             <Grid item xs={6}>
-                                                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary }}>TIMING</Typography>
-                                                <Typography variant="body1" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.preferredTiming}</Typography>
+                                                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary }}>STATUS</Typography>
+                                                <Typography variant="body1" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.technicianStatus || 'PENDING'}</Typography>
                                             </Grid>
                                         </Grid>
                                     </Grid>
@@ -623,14 +630,22 @@ export default function TenantSOSPage() {
                                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{distanceInfo[ticket.id]?.distance || '--'} AWAY</Typography>
                                                 </Box>
                                             </Stack>
-                                        ) : ticket.status === 'OPEN' ? (
-                                            <Stack spacing={3} alignItems="center" textAlign="center" sx={{ opacity: 0.5 }}>
-                                                <Clock size={48} color={binThemeTokens.textSecondary} />
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textSecondary }}>PENDING DISPATCH</Typography>
+                                        ) : ticket.status === 'COMPLETED' ? (
+                                            <Stack spacing={2} alignItems="center">
+                                                <CheckCircle2 size={48} color="#4ade80" />
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>WORK FINISHED</Typography>
+                                                <Button 
+                                                    variant="contained" 
+                                                    startIcon={<Check size={18}/>}
+                                                    onClick={() => updateDoc(doc(db, 'maintenanceTickets', ticket.id), { status: 'CLOSED', closedAt: serverTimestamp() })}
+                                                    sx={{ bgcolor: '#4ade80', color: '#000', fontWeight: 950, borderRadius: 2 }}
+                                                >
+                                                    APPROVE & CLOSE
+                                                </Button>
                                             </Stack>
                                         ) : (
                                             <Stack spacing={3} alignItems="center" textAlign="center">
-                                                <Activity size={48} color={binThemeTokens.gold} />
+                                                <Activity size={48} color={binThemeTokens.gold} className={ticket.status === 'WORK_STARTED' || ticket.status === 'IN_PROGRESS' ? 'animate-spin' : ''} />
                                                 <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{ticket.status.replace('_', ' ')}</Typography>
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Mission currently active.</Typography>
                                             </Stack>

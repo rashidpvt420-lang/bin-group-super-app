@@ -6,9 +6,11 @@ import {
 } from 'firebase/auth';
 import { Shield, Lock, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '@bin/shared';
 
 export default function UnifiedLogin() {
     const { loading: authLoading, error: authError } = useAuth();
+    const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
@@ -19,22 +21,35 @@ export default function UnifiedLogin() {
 
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
-        if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
-            return 'The email or password is incorrect.';
+        const message = err?.message || '';
+        
+        // Institutional Diagnostic Logging
+        console.error("🛡️ [AUTH_DIAGNOSTIC]", {
+            code,
+            message,
+            authDomain: auth.config?.authDomain,
+            currentUrl: window.location.href,
+            provider: code.includes('google') ? 'google.com' : 'password',
+            env: process.env.NODE_ENV,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            emailAttempted: email.replace(/(.{3}).*@/, "$1***@")
+        });
+
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+            return 'The institutional email or passcode is incorrect.';
         }
-        if (code.includes('too-many-requests')) {
-            return 'Too many attempts. Please wait, then try again.';
+        if (code === 'auth/too-many-requests') {
+            return 'Security lockout: Too many attempts. Please wait.';
         }
-        if (code.includes('popup-closed-by-user')) {
-            return 'Google sign-in was cancelled.';
+        if (code === 'auth/popup-closed-by-user') {
+            return 'SSO Handshake cancelled by operator.';
         }
-        if (code.includes('popup-blocked')) {
-            return 'Your browser blocked the Google sign-in window. Allow popups and retry.';
+        if (code === 'auth/network-request-failed') {
+            return 'Protocol timeout: Network connection failed.';
         }
-        if (code.includes('network-request-failed')) {
-            return 'Network connection failed. Check your connection and retry.';
-        }
-        return 'Sign-in could not be completed. Please retry or contact support.';
+        
+        return 'Login could not be completed. Please contact BIN GROUP support.';
     };
 
     const handleGoogleLogin = async () => {
@@ -42,13 +57,12 @@ export default function UnifiedLogin() {
         setLocalError(null);
         const provider = new GoogleAuthProvider();
         try {
-            console.log("🔍 [DIAG] Starting signInWithPopup for Admin...");
+            console.log("🔍 [DIAG] Starting Admin SSO Handshake...");
             const result = await signInWithPopup(auth, provider);
             if (result.user) {
-                console.log("🛡️ [AUTH] Admin Popup login successful for:", result.user.email);
+                console.log("🛡️ [AUTH] Admin SSO successful for:", result.user.email);
             }
         } catch (err: any) {
-            console.error("Auth popup error:", err);
             setLocalError(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
@@ -59,13 +73,12 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         try {
-            console.log("🔍 [DIAG] Starting signInWithEmailAndPassword for Admin...");
-            const result = await signInWithEmailAndPassword(auth, email, password);
+            console.log("🔍 [DIAG] Validating Administrative Credentials...");
+            const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             if (result.user) {
-                console.log("🛡️ [AUTH] Admin Email login successful for:", result.user.email);
+                console.log("🛡️ [AUTH] Admin Secure Login successful for:", result.user.email);
             }
         } catch (err: any) {
-            console.error("Auth email error:", err);
             setLocalError(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
@@ -73,7 +86,7 @@ export default function UnifiedLogin() {
 
     const handlePasswordReset = async () => {
         if (!email) {
-            setLocalError('Enter your admin email first, then request password reset.');
+            setLocalError('Enter your administrative email first.');
             return;
         }
 
@@ -81,9 +94,8 @@ export default function UnifiedLogin() {
         setLocalError(null);
         try {
             await sendPasswordResetEmail(auth, email);
-            setLocalError('Password reset email sent if this account is registered.');
+            setLocalError('Recovery protocol initiated. Check your email.');
         } catch (err: any) {
-            console.error("Password reset error:", err);
             setLocalError(getFriendlyAuthError(err));
         } finally {
             setLocalLoading(false);
@@ -95,14 +107,14 @@ export default function UnifiedLogin() {
             <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
                 <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6"></div>
                 <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">
-                    Authenticating Sovereign Identity...
+                    {t('common.auth_sync')}
                 </p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30">
+        <div className={`min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30 ${isRTL ? 'rtl' : 'ltr'}`}>
             {/* Background Branding */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
@@ -128,9 +140,9 @@ export default function UnifiedLogin() {
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
                     
                     <div className="mb-8">
-                        <h2 className="text-xl font-black text-white mb-2">Institutional Access</h2>
+                        <h2 className="text-xl font-black text-white mb-2">{t('login.portal')}</h2>
                         <p className="text-sm text-[#64748b] leading-relaxed">
-                            Authorized personnel only. All access attempts are logged under the Sovereign Audit Protocol.
+                            {t('login.authorized_only')}
                         </p>
                     </div>
 
@@ -147,7 +159,7 @@ export default function UnifiedLogin() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Institutional Email"
+                                placeholder={t('login.email')}
                                 className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
                                 required
                             />
@@ -157,7 +169,7 @@ export default function UnifiedLogin() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Passcode"
+                                placeholder={t('login.password')}
                                 className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
                                 required
                             />
@@ -167,7 +179,7 @@ export default function UnifiedLogin() {
                             disabled={loading || !email || !password}
                             className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
                         >
-                            Access Command Center
+                            {loading ? '...' : t('login.signin')}
                         </button>
                         <button
                             type="button"
@@ -175,13 +187,13 @@ export default function UnifiedLogin() {
                             disabled={loading}
                             className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
                         >
-                            Forgot Password
+                            {t('login.forgot_password')}
                         </button>
                     </form>
 
                     <div className="flex items-center gap-4 mb-6 opacity-50">
                         <div className="h-[1px] flex-1 bg-white/20"></div>
-                        <span className="text-[10px] text-white font-bold uppercase tracking-widest">Or External ID</span>
+                        <span className="text-[10px] text-white font-bold uppercase tracking-widest">Or SSO</span>
                         <div className="h-[1px] flex-1 bg-white/20"></div>
                     </div>
 
@@ -193,39 +205,23 @@ export default function UnifiedLogin() {
                     >
                         <div className="flex items-center gap-3">
                             <Globe className="w-5 h-5" />
-                            <span className="uppercase tracking-widest text-sm">Google SSO</span>
+                            <span className="uppercase tracking-widest text-sm">{t('login.google')}</span>
                         </div>
                     </button>
 
                     <div className="mt-8 flex items-center justify-center gap-2 opacity-40">
                         <Lock className="w-3 h-3 text-[#94a3b8]" />
                         <span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
-                            256-bit Encrypted Node
+                            {t('login.iso_secure_badge')}
                         </span>
                     </div>
                 </div>
 
-                {/* Footer Security Marks */}
-                <div className="mt-12 grid grid-cols-3 gap-4 opacity-30 grayscale hover:opacity-100 transition-opacity duration-700">
-                    <div className="text-center">
-                        <div className="text-[8px] text-white font-black uppercase mb-1">Status</div>
-                        <div className="text-[10px] text-[#C6A75E] font-black italic">PROD_ACTIVE</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-[8px] text-white font-black uppercase mb-1">Protocol</div>
-                        <div className="text-[10px] text-[#C6A75E] font-black italic">ALFA_4</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-[8px] text-white font-black uppercase mb-1">Region</div>
-                        <div className="text-[10px] text-[#C6A75E] font-black italic">UAE_SOV</div>
-                    </div>
+                <div className="mt-12 text-center opacity-40">
+                    <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
+                        BIN-Groups CORE v1.23-STABLE
+                    </p>
                 </div>
-            </div>
-
-            <div className="mt-8 text-center opacity-40">
-                <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
-                    BIN-Groups CORE v1.23-STABLE
-                </p>
             </div>
         </div>
     );

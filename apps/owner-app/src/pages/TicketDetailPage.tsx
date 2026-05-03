@@ -45,15 +45,30 @@ export default function TicketDetailPage() {
         return () => unsubscribe();
     }, [id]);
 
-    const handleLifecycleTransition = async (newStatus: string) => {
+    const handleStartWork = async () => {
         if (!id) return;
         setUpdating(true);
         try {
-            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
-            await updateTicketLifecycle({ ticketId: id, status: newStatus });
-        } catch (err) {
-            console.error("Lifecycle Update Failed:", err);
-            alert("Sync Error: Please check connection.");
+            const startWork = httpsCallable(functions, 'startTechnicianWork');
+            await startWork({ ticketId: id });
+        } catch (err: any) {
+            console.error("Start Work Failed:", err);
+            alert(err.message || "Failed to start work.");
+        }
+        setUpdating(false);
+    };
+
+    const handlePauseWork = async () => {
+        if (!id) return;
+        const reason = prompt(t('tech.pause_reason') || "Reason for pause (e.g. Waiting for parts):");
+        if (!reason) return;
+        setUpdating(true);
+        try {
+            const pauseWork = httpsCallable(functions, 'pauseTechnicianWork');
+            await pauseWork({ ticketId: id, reason });
+        } catch (err: any) {
+            console.error("Pause Work Failed:", err);
+            alert(err.message || "Failed to pause work.");
         }
         setUpdating(false);
     };
@@ -69,12 +84,13 @@ export default function TicketDetailPage() {
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
             
-            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
-            await updateTicketLifecycle({ 
-                ticketId: id, 
-                status: ticket.status, 
-                proofType: field, 
-                proofUrl: url 
+            // For now, we update the single photo fields which the UI expects
+            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle'); // Still fallback if needed, but better to use direct firestore update for photos
+            // Actually I'll use direct update to avoid needing the old function
+            const { updateDoc, doc } = await import('firebase/firestore');
+            await updateDoc(doc(db, 'maintenanceTickets', id), {
+                [field === 'BEFORE' ? 'beforePhotoUrl' : 'afterPhotoUrl']: url,
+                [`${field.toLowerCase()}Photos`]: [url] // Match the requested array schema too
             });
         } catch (err) {
             console.error("Photo Upload Failed:", err);
@@ -84,31 +100,23 @@ export default function TicketDetailPage() {
     };
 
     const handleFinalizeCompletion = async () => {
-        if (!signature || !ticket.beforePhotoUrl || !ticket.afterPhotoUrl || !notes.trim()) {
-            alert(t('tech.protocol.required'));
+        if (!ticket.beforePhotoUrl || !ticket.afterPhotoUrl || !notes.trim()) {
+            alert("Protocol Violation: Before/After photos and notes are mandatory.");
             return;
         }
         setUpdating(true);
         try {
-            // Upload Signature
-            const sigRef = ref(storage, `evidence/${id}/signature_${Date.now()}.png`);
-            const res = await fetch(signature);
-            const blob = await res.blob();
-            await uploadBytes(sigRef, blob);
-            const sigUrl = await getDownloadURL(sigRef);
-
-            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
-            await updateTicketLifecycle({ 
+            const finishWork = httpsCallable(functions, 'finishTechnicianWork');
+            await finishWork({ 
                 ticketId: id, 
-                status: 'COMPLETED', 
-                notes, 
-                proofType: 'SIGNATURE', 
-                proofUrl: sigUrl 
+                afterPhotos: [ticket.afterPhotoUrl], 
+                notes 
             });
             setShowCompleteModal(false);
-        } catch (err) {
+            navigate('/technician');
+        } catch (err: any) {
             console.error("Completion Failed:", err);
-            alert("Protocol Failure: Handshake interrupted.");
+            alert(err.message || "Final handshake failed.");
         }
         setUpdating(false);
     };
@@ -182,32 +190,21 @@ export default function TicketDetailPage() {
                             <Button 
                                 fullWidth variant="contained" 
                                 startIcon={<Navigation size={20}/>}
-                                onClick={() => handleLifecycleTransition('EN_ROUTE')} 
-                                sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}
-                            >
-                                {t('tech.action.en_route')}
-                            </Button>
-                        )}
-                        
-                        {ticket.status === 'EN_ROUTE' && (
-                            <Button 
-                                fullWidth variant="contained" 
-                                startIcon={<MapPin size={20}/>}
-                                onClick={() => handleLifecycleTransition('ARRIVED')} 
-                                sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}
-                            >
-                                {t('tech.action.arrived')}
-                            </Button>
-                        )}
-
-                        {ticket.status === 'ARRIVED' && (
-                            <Button 
-                                fullWidth variant="contained" 
-                                startIcon={<Play size={20}/>}
-                                onClick={() => handleLifecycleTransition('IN_PROGRESS')} 
+                                onClick={() => handleStartWork()} 
                                 sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}
                             >
                                 {t('tech.action.start_work')}
+                            </Button>
+                        )}
+                        
+                        {(ticket.status === 'IN_PROGRESS' || ticket.status === 'ARRIVED') && (
+                            <Button 
+                                fullWidth variant="outlined" 
+                                startIcon={<AlertTriangle size={20}/>}
+                                onClick={() => handlePauseWork()} 
+                                sx={{ py: 2, color: '#ffb74d', borderColor: '#ffb74d', fontWeight: 950, borderRadius: 4 }}
+                            >
+                                {t('tech.action.pause') || 'NEED PARTS / PAUSE'}
                             </Button>
                         )}
                         

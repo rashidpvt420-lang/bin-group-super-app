@@ -1,355 +1,43 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sovereign | BIN Group Institutional OS</title>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIN Group Sovereign | Institutional Asset OS</title>
-    
     <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Sovereign" />
-    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0B0B0C" />
     <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.json" />
 
-    <!-- SEO & WhatsApp Sharing (Open Graph) -->
-    <meta name="description" content="The No-Call Infrastructure for UAE Real Estate. 100% Data Sovereignty and Self-healing property management." />
-    <meta property="og:title" content="BIN Group Sovereign | Institutional Asset OS" />
+    <!-- SEO & Sharing (Open Graph) -->
+    <meta name="description" content="BIN Group Sovereign: The No-Call Infrastructure for UAE Real Estate. 100% Data Sovereignty and institutional asset management." />
+    <meta property="og:title" content="Sovereign | BIN Group Institutional OS" />
     <meta property="og:description" content="Direct-to-Bank Integrity. RERA Escrow Compliance. The Operating System for UAE Real Estate." />
     <meta property="og:image" content="https://bin-groups.com/logo.png" />
     <meta property="og:url" content="https://bin-groups.com" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body style="background: #000; margin: 0; padding: 0; overflow: hidden; font-family: system-ui, -apple-system, sans-serif;">
+    <!-- [BIN-BOOT] Static Loading Layer -->
+    <div id="bin-boot-loader" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999;">
+      <div style="width: 120px; height: 120px; border: 2px solid rgba(198,167,94,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 40px;">
+        <div style="width: 80px; height: 80px; border: 4px solid #C6A75E; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      </div>
+      <h2 style="color: #C6A75E; letter-spacing: 6px; font-weight: 900; margin: 0; font-size: 14px; text-transform: uppercase;">BIN GROUP Super App</h2>
+      <p style="color: rgba(198,167,94,0.4); margin-top: 15px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Establishing Sovereign Connection...</p>
+      
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+    </div>
 
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel for JSX compilation in browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
-        rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Outfit', 'sans-serif'] },
-                    colors: {
-                        background: '#050505',
-                        surface: '#121212',
-                        brandBlue: '#003366',
-                        brandGold: '#D4AF37',
-                        textMuted: '#a3a3a3',
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            background-color: #0a0a0a;
-            color: white;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-        }
-
-        .gradient-text {
-            background: linear-gradient(180deg, #FFFFFF 0%, #a3a3a3 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .hero-glow {
-            position: absolute;
-            top: 10%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80vw;
-            height: 300px;
-            background: radial-gradient(circle, rgba(234, 179, 8, 0.1) 0%, transparent 60%);
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #0a0a0a;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 4px;
-        }
-    </style>
-</head>
-
-<body>
     <div id="root"></div>
-
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-
-        // Icons mock
-        const ShieldCheck = () => <i data-lucide="shield-check" className="w-4 h-4 text-yellowPrimary mr-1"></i>;
-        const User = () => <i data-lucide="user" className="w-5 h-5 text-yellowPrimary"></i>;
-        const Wrench = () => <i data-lucide="wrench" className="w-5 h-5 text-yellowPrimary"></i>;
-        const Briefcase = () => <i data-lucide="briefcase" className="w-5 h-5 text-yellowPrimary"></i>;
-        const Users = () => <i data-lucide="users" className="w-5 h-5 text-yellowPrimary"></i>;
-        const ArrowRight = () => <i data-lucide="arrow-right" className="w-4 h-4 ml-2"></i>;
-        const Mail = () => <i data-lucide="mail" className="w-4 h-4 text-gray-500"></i>;
-        const Globe = () => <i data-lucide="globe" className="w-4 h-4 text-gray-400 mr-1"></i>;
-        const Lock = () => <i data-lucide="lock" className="w-4 h-4 text-gray-400 mr-1"></i>;
-        const QrCode = () => <i data-lucide="qr-code" className="w-16 h-16 text-white mb-4"></i>;
-
-        const App = () => {
-            const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-            const [activeTab, setActiveTab] = useState('OWNER');
-
-            useEffect(() => {
-                lucide.createIcons();
-            }, [isLoginModalOpen, activeTab]);
-
-            // To map to actual compiled portals
-            const portalLinks = {
-                'TENANT': '/login',
-                'TECH': '/login',
-                'OWNER': '/login',
-                'ADMIN': '/admin/index.html',
-                'BROKER': '/login'
-            };
-
-            const handleLoginSubmit = (e) => {
-                e.preventDefault();
-                // PRODUCTION LOCKDOWN: Removed simulation alert. 
-                // In production, this would hit the Firebase Auth /api/login endpoint.
-                const target = portalLinks[activeTab] || '#';
-                console.log(`[AUTH] Routing to ${activeTab} at ${target}`);
-                window.location.href = target;
-            };
-
-            return (
-                <div className="min-h-screen flex flex-col items-center relative overflow-hidden">
-                    <div className="hero-glow"></div>
-
-                    {/* Navigation */}
-                    <nav className="w-full max-w-7xl px-8 py-6 flex justify-between items-center z-10 w-full">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-                                <i data-lucide="building-2" className="w-5 h-5 text-white"></i>
-                            </div>
-                            <span className="text-xl font-black tracking-tighter">BIN-GROUP</span>
-                        </div>
-                        <div className="flex items-center gap-6">
-                            <button onClick={() => setIsLoginModalOpen(true)} className="text-sm font-black uppercase tracking-widest hover:text-brandGold transition-colors text-white/70">Terminal Access</button>
-                            <button onClick={() => setIsLoginModalOpen(true)} className="bg-brandBlue text-white border border-white/10 px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-transform">Get Started</button>
-                        </div>
-                    </nav>
-
-                    {/* Hero Section */}
-                    <main className="w-full max-w-5xl px-8 flex flex-col items-center mt-20 z-10 text-center">
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-yellowPrimary/30 bg-yellowPrimary/5 text-yellowPrimary text-xs font-bold tracking-widest mb-8">
-                            <i data-lucide="sparkles" className="w-3 h-3"></i> V2.0 MASTER EXECUTION BLUEPRINT
-                        </div>
-
-                        <h1 className="text-4xl md:text-8xl font-black tracking-tighter mb-6 leading-tight break-words">
-                            The "No-Call"<br /><span className="gradient-text">Ecosystem.</span>
-                        </h1>
-
-                        <p className="text-lg md:text-xl text-textMuted max-w-2xl mb-12 font-light">
-                            Direct-to-Bank Integrity. 100% Data Sovereignty. Self-healing property management for the UAE.
-                        </p>
-
-                        <div className="flex flex-col sm:flex-row gap-4 mb-24">
-                            <button onClick={() => setIsLoginModalOpen(true)} className="bg-brandBlue hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center transition-all shadow-2xl">
-                                ACTIVATE TOKEN <ArrowRight />
-                            </button>
-                            <button className="bg-white/5 border border-white/10 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-colors flex items-center justify-center">
-                                INFRASTRUCTURE DETAILS
-                            </button>
-                        </div>
-
-                        {/* Portal Grid */}
-                        <div className="w-full">
-                            <h2 className="text-2xl font-bold mb-2">Experience the Ecosystem</h2>
-                            <p className="text-textMuted text-sm mb-10">Select a specialized portal to view the live demo experience.</p>
-
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                {/* Component Cards */}
-                                {[
-                                    { id: 'TENANT', title: 'Tenant Portal', sub: 'THE "UBER" EXPERIENCE', icon: <User /> },
-                                    { id: 'TECH', title: 'Tech Flow', sub: 'FIELD COMMANDER VIEW', icon: <Wrench /> },
-                                    { id: 'OWNER', title: 'Owner OS', sub: 'B2B COMMAND CENTER', icon: <Briefcase /> },
-                                    { id: 'BROKER', title: 'Broker Portal', sub: 'PARTNER ENGINE', icon: <Users /> },
-                                ].map((portal) => (
-                                    <div key={portal.id} onClick={() => { setActiveTab(portal.id); setIsLoginModalOpen(true); }} className="glass-panel p-8 rounded-2xl flex flex-col items-center text-center cursor-pointer hover:border-yellowPrimary/50 hover:bg-white/5 transition-all group">
-                                        <div className="w-12 h-12 rounded-xl bg-[#222] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            {portal.icon}
-                                        </div>
-                                        <h3 className="font-bold text-lg mb-1">{portal.title}</h3>
-                                        <p className="text-[10px] uppercase tracking-widest text-[#666] font-bold">{portal.sub}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Feature Blocks */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 w-full mt-32 text-left mb-32">
-                            {/* Split Payment */}
-                            <div>
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1e3a8a]/30 text-blue-400 text-xs font-bold mb-6 border border-blue-900/50">
-                                    <ShieldCheck /> RERA ESCROW COMPLIANCE
-                                </div>
-                                <h3 className="text-4xl font-bold mb-4">Split-Payment<br />Routing Reality.</h3>
-                                <p className="text-textMuted mb-8 text-sm leading-relaxed">
-                                    We never legally hold your principal funds. Our gateway automatically routes rent directly to your bank account, keeping us 100% compliant with RERA escrow regulations.
-                                </p>
-                                <div className="glass-panel rounded-xl p-6 border-l-2 border-l-yellowPrimary">
-                                    <div className="text-xs text-textMuted uppercase tracking-wider mb-4 font-bold">Live Split Demo (Quarterly Rent)</div>
-                                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/5">
-                                        <div>
-                                            <div className="text-[10px] text-textMuted">TENANT PAYS</div>
-                                            <div className="text-lg font-bold">AED 30,000</div>
-                                        </div>
-                                        <i data-lucide="arrow-right-left" className="w-5 h-5 text-yellowPrimary"></i>
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-textMuted">SPLIT ROUTING</div>
-                                            <div className="text-xs text-green-500 font-bold">Instant Settlement</div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-[#111] p-3 rounded text-center border border-white/5">
-                                            <div className="text-[10px] text-green-500 font-bold mb-1">To OWNER ACCOUNT (94.5%)</div>
-                                            <div className="font-bold">AED 28,350</div>
-                                        </div>
-                                        <div className="bg-[#111] p-3 rounded text-center border border-white/5">
-                                            <div className="text-[10px] text-yellowPrimary font-bold mb-1">TO BIN GROUP (5.5%)</div>
-                                            <div className="font-bold">AED 1,650</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* QR Strategy */}
-                            <div className="pt-8 md:pt-0">
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-900/30 text-purple-400 text-xs font-bold mb-6 border border-purple-900/50">
-                                    <i data-lucide="smartphone" className="w-3 h-3"></i> PHYSICAL ONBOARDING
-                                </div>
-                                <h3 className="text-4xl font-bold mb-4">The Lobby<br />QR Strategy.</h3>
-                                <p className="text-textMuted mb-8 text-sm leading-relaxed">
-                                    We eliminate phone calls at the source. Branded QR plaques in every elevator and lobby link directly to the App, ensuring 100% tenant adoption from day one.
-                                </p>
-                                <div className="glass-panel rounded-3xl p-8 flex flex-col items-center justify-center min-h-[300px] hover:border-white/20 transition-all">
-                                    <QrCode />
-                                    <div className="font-bold tracking-widest text-lg mb-4">SCAN TO REPORT</div>
-                                    <div className="text-xs text-textMuted tracking-widest mb-6">ELEVATOR PLAQUE V2.0</div>
-                                    <div className="flex gap-8 text-[10px] text-textMuted">
-                                        <div className="flex flex-col items-center"><i data-lucide="smartphone" className="w-4 h-4 mb-1"></i> APP CLIP</div>
-                                        <div className="flex flex-col items-center"><i data-lucide="lock" className="w-4 h-4 mb-1"></i> SECURE</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </main>
-
-                    {/* Login Modal Overlay */}
-                    {isLoginModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                            <div className="w-full max-w-md bg-[#121212] border border-white/10 rounded-2xl shadow-2xl relative animate-[fadeIn_0.2s_ease-out]">
-                                <button onClick={() => setIsLoginModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
-                                    <i data-lucide="x" className="w-5 h-5"></i>
-                                </button>
-
-                                <div className="p-8">
-                                    <div className="text-center mb-8">
-                                        <h2 className="text-2xl font-bold mb-2">Institutional Access</h2>
-                                        <p className="text-textMuted text-sm">Secure multi-factor authentication</p>
-                                    </div>
-
-                                    {/* Tabs */}
-                                    <div className="flex bg-[#1a1a1a] rounded-lg p-1 mb-8 text-xs font-bold text-center">
-                                        {['OWNER', 'TECH', 'BROKER', 'ADMIN'].map(tab => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setActiveTab(tab)}
-                                                className={`flex-1 py-2.5 rounded-md transition-all ${activeTab === tab ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}
-                                            >
-                                                {tab}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <form onSubmit={handleLoginSubmit}>
-                                        <div className="mb-4">
-                                            <label className="block text-xs font-bold mb-2">Email or Phone</label>
-                                            <div className="relative">
-                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                    <Mail />
-                                                </div>
-                                                <input required type="text" placeholder="name@example.com" className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-yellowPrimary transition-colors" />
-                                            </div>
-                                        </div>
-
-                                        <div className="mb-6 bg-[#1a1a1a] border border-white/5 p-4 rounded-lg flex gap-3 text-xs text-textMuted leading-relaxed">
-                                            <input required type="checkbox" className="mt-1 accent-yellowPrimary" />
-                                            <span className="opacity-80">I accept the <a href="https://digital-user-agreement.web.app" target="_blank" className="text-yellowPrimary hover:underline">Digital User Agreement</a> including the "No-Call" mandate and Financial Authority clauses.</span>
-                                        </div>
-
-                                        <button type="submit" className="w-full bg-brandBlue hover:bg-blue-700 text-white font-black uppercase tracking-widest py-4 rounded-xl transition-colors mb-6 shadow-xl">
-                                            SEND MOBILE OTP
-                                        </button>
-                                    </form>
-                                </div>
-
-                                <div className="bg-[#0a0a0a] border-t border-white/5 p-4 rounded-b-2xl flex justify-center gap-6 text-[10px] text-gray-500 font-bold">
-                                    <div className="flex items-center"><Lock /> E2E Encrypted</div>
-                                    <div className="flex items-center"><Globe /> UAE Data Residency</div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {/* Footer / Compliance */}
-                    <footer className="w-full bg-[#0a0a0a] border-t border-white/5 py-12 mt-auto z-10">
-                        <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-                            <div className="flex items-center gap-2 opacity-50">
-                                <div className="w-6 h-6 bg-gray-600 rounded flex items-center justify-center">
-                                    <i data-lucide="building-2" className="w-4 h-4 text-white"></i>
-                                </div>
-                                <span className="text-sm font-black tracking-tighter">BIN-GROUP</span>
-                            </div>
-                            
-                            <div className="flex gap-8 text-[10px] uppercase tracking-[0.2em] font-black text-white/40">
-                                <a href="/privacy-policy.html" className="hover:text-brandGold transition-colors">Privacy Policy</a>
-                                <a href="/terms-of-service.html" className="hover:text-brandGold transition-colors">Terms of Service</a>
-                                <a href="/support" className="hover:text-brandGold transition-colors">Support Terminal</a>
-                            </div>
-
-                            <div className="text-[10px] text-white/20 font-mono">
-                                © 2026 BIN-GROUP UAE. ALL RIGHTS RESERVED.
-                            </div>
-                        </div>
-                    </footer>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

@@ -4,7 +4,7 @@ export interface QuoteInput {
   assetClassId: string;
   emirate: string; // dubai, abuDhabi, sharjah, etc.
   zone: 'A' | 'B' | 'C';
-  contractType: 'AMC' | 'PM' | 'IFM';
+  contractType: 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
   sqft?: number;
   units?: number;
   beds?: number;
@@ -53,8 +53,8 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
 
   // 1. Base Quote Calculation
   let baseRate = 0;
-  if (input.contractType === 'AMC') baseRate = assetClass.maintenanceRange.min;
-  else if (input.contractType === 'PM') {
+  if (input.contractType === 'FM_ONLY') baseRate = assetClass.maintenanceRange.min;
+  else if (input.contractType === 'PM_ONLY') {
       const rent = input.annualRent || 100000;
       baseRate = (rent * assetClass.managementRange.min) / 100;
   }
