@@ -14,13 +14,30 @@ import {
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
-    authDomain: "bin-group-57c60.firebaseapp.com",
-    projectId: "bin-group-57c60",
-    storageBucket: "bin-group-57c60.firebasestorage.app",
-    messagingSenderId: "123413252227",
-    appId: "1:123413252227:web:285cb53bc26626d699f3b6"
+type BinFirebaseConfig = {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+};
+
+const readRequiredEnv = (name: string): string => {
+    const value = process.env[name];
+    if (!value || value.includes('REPLACE_ME')) {
+        throw new Error(`Missing required Firebase environment variable: ${name}`);
+    }
+    return value;
+};
+
+const firebaseConfig: BinFirebaseConfig = {
+    apiKey: readRequiredEnv('REACT_APP_FIREBASE_API_KEY'),
+    authDomain: readRequiredEnv('REACT_APP_FIREBASE_AUTH_DOMAIN'),
+    projectId: readRequiredEnv('REACT_APP_FIREBASE_PROJECT_ID'),
+    storageBucket: readRequiredEnv('REACT_APP_FIREBASE_STORAGE_BUCKET'),
+    messagingSenderId: readRequiredEnv('REACT_APP_FIREBASE_MESSAGING_SENDER_ID'),
+    appId: readRequiredEnv('REACT_APP_FIREBASE_APP_ID')
 };
 
 const _app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
