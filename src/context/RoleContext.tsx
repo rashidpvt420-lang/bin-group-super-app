@@ -74,35 +74,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const loadingRef = useRef(loading);
 
     const enableNotifications = async (): Promise<boolean> => {
-        if (!user) return false;
-        try {
-            const messagingSupported = await isSupported();
-            if (!messagingSupported) return false;
-
-            const permission = await Notification.requestPermission();
-            if (permission === 'granted') {
-                const messaging = getMessaging(app);
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                const readyRegistration = await navigator.serviceWorker.ready;
-                
-                const currentToken = await getToken(messaging, {
-                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                    serviceWorkerRegistration: readyRegistration
-                });
-                
-                if (currentToken) {
-                    await updateDoc(doc(db, 'users', user.uid), {
-                       fcmTokens: arrayUnion(currentToken),
-                       updatedAt: new Date().toISOString()
-                    });
-                    return true;
-                }
-            }
-            return false;
-        } catch (err: any) {
-            console.error("🛡️ [AUTH] Notification enablement failed:", err);
-            return false;
-        }
+        console.warn("🛡️ [AUTH] Push notifications temporarily disabled during caching repair.");
+        return false;
     };
 
     const syncProfile = async (currentUser: User) => {

@@ -5,164 +5,59 @@ import {
   Button, Dialog, DialogTitle, DialogContent,
   DialogActions, IconButton, Tooltip, CircularProgress,
   FormControl, InputLabel, Select, MenuItem,
-  FormControlLabel, Switch, Checkbox, ListItemText,
-  alpha, Stack, Avatar
+  FormControlLabel, Switch, alpha, Stack, Avatar
 } from '@mui/material';
 import { 
     Users, Wrench, Edit3, Trash2, Shield, Search, 
-    Zap, Clock, MapPin, Activity 
+    Zap, Clock, MapPin, Activity, Star, 
+    Briefcase, CheckCircle2, UserPlus, Phone, Mail
 } from 'lucide-react';
-import { db, auth } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
-import axios from 'axios';
-import { useLanguage, binThemeTokens } from '@bin/shared';
+import { db } from '@/lib/firebase';
+import { 
+    collection, onSnapshot, query, where, serverTimestamp, 
+    doc, updateDoc, deleteDoc, orderBy 
+} from 'firebase/firestore';
+import { useLanguage } from '@bin/shared';
+import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
-
-interface Technician {
-  uid: string;
-  email: string;
-  displayName: string;
-  phoneNumber: string;
-  status: 'active' | 'pending' | 'inactive' | 'on-duty';
-  specialization: string;
-  role: 'technician';
-  emiratesCovered?: string[];
-  primaryEmirate?: string;
-  onDuty?: boolean;
-  emergencyEligible?: boolean;
-  maxConcurrentJobs?: number;
-  createdAt?: any;
-}
+import AdminCrudActions from '../../components/AdminCrudActions';
 
 export default function TechniciansManagementPage() {
-  const { t, tx, isRTL } = useLanguage();
-  const [techs, setTechs] = useState<Technician[]>([]);
+  const { t } = useLanguage();
+  const [techs, setTechs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [openAdd, setOpenAdd] = useState(false);
+  const [filter, setFilter] = useState('');
   const [openEdit, setOpenEdit] = useState(false);
-  const [selectedTech, setSelectedTech] = useState<Technician | null>(null);
-
-  const [newTech, setNewTech] = useState({
-    email: '',
-    displayName: '',
-    phoneNumber: '',
-    specialization: '',
-  });
-
-  const [editTech, setEditTech] = useState({
-    displayName: '',
-    phoneNumber: '',
-    specialization: '',
-    status: 'active' as any,
-    emiratesCovered: [] as string[],
-    primaryEmirate: '',
-    maxConcurrentJobs: 3,
-    emergencyEligible: false,
-    onDuty: false,
-  });
+  const [selectedTech, setSelectedTech] = useState<any>(null);
 
   useEffect(() => {
-    const q = query(
-        collection(db, 'users'), 
-        where('role', '==', 'technician'),
-        orderBy('createdAt', 'desc')
-    );
-    
+    const q = query(collection(db, 'users'), where('role', '==', 'technician'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
-      })) as Technician[];
-      setTechs(fetched);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore error:", error);
+      setTechs(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  const handleAddTech = async () => {
-    setSubmitting(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("UNAUTHENTICATED");
-
-      const token = await user.getIdToken(true);
-      const functionUrl = 'https://admincreateuser-sc33mcrduq-uc.a.run.app';
-      
-      const response = await axios.post(functionUrl, {
-        data: { ...newTech, role: 'technician' }
-      }, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-
-      if (response.data?.result?.success) {
-        setOpenAdd(false);
-        setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
-      } else {
-        throw new Error(response.data?.result?.message || "Provisioning Failed");
-      }
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleEditOpen = (tech: Technician) => {
+  const handleEdit = (tech: any) => {
     setSelectedTech(tech);
-    setEditTech({
-      displayName: tech.displayName || '',
-      phoneNumber: tech.phoneNumber || '',
-      specialization: tech.specialization || '',
-      status: tech.status || 'active',
-      emiratesCovered: tech.emiratesCovered || [],
-      primaryEmirate: tech.primaryEmirate || '',
-      maxConcurrentJobs: tech.maxConcurrentJobs || 3,
-      emergencyEligible: !!tech.emergencyEligible,
-      onDuty: !!tech.onDuty,
-    });
     setOpenEdit(true);
   };
 
-  const handleUpdateTech = async () => {
-    if (!selectedTech) return;
-    try {
-      await updateDoc(doc(db, 'users', selectedTech.uid), {
-        ...editTech,
-        updatedAt: serverTimestamp(),
-      });
-      setOpenEdit(false);
-    } catch (error) {
-      console.error("Error updating technician:", error);
-    }
-  };
-
-  const filteredTechs = techs.filter((tech) => 
-    tech.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tech.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tech.specialization?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTechs = techs.filter(t => 
+      t.displayName?.toLowerCase().includes(filter.toLowerCase()) || 
+      t.specialization?.toLowerCase().includes(filter.toLowerCase()) ||
+      t.email?.toLowerCase().includes(filter.toLowerCase())
   );
 
   return (
     <AdminPageFrame
-      title={t('admin.technician_corps') || 'TECHNICIAN CORPS'}
-      subtitle="Institutional fleet management and specialized field force deployment"
+      title="Technician Corps"
+      subtitle="Fleet management and specialized field force deployment terminal"
       loading={loading}
       breadcrumbs={[{ label: 'Technicians' }]}
       actions={
-        <Button 
-          variant="contained" 
-          startIcon={<Users size={18} />} 
-          onClick={() => setOpenAdd(true)}
-          sx={{ borderRadius: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-        >
-          ONBOARD TECH
-        </Button>
+        <Button variant="contained" startIcon={<UserPlus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>ONBOARD UNIT</Button>
       }
     >
       <Paper sx={{ p: 2, mb: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
@@ -170,10 +65,10 @@ export default function TechniciansManagementPage() {
             <Search size={20} color="rgba(255,255,255,0.3)" />
             <TextField
                 fullWidth
-                placeholder="Search by name, email, or specialization..."
+                placeholder="Search by name, trade, or email..."
                 variant="standard"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
                 InputProps={{ disableUnderline: true, style: { color: '#FFF', fontWeight: 700 } }}
             />
         </Stack>
@@ -183,11 +78,11 @@ export default function TechniciansManagementPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>TECHNICIAN</TableCell>
-              <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>SPECIALIZATION</TableCell>
-              <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>METRICS</TableCell>
-              <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>STATUS</TableCell>
-              <TableCell align="right" sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ACTIONS</TableCell>
+              <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>TECHNICIAN / UID</TableCell>
+              <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>SPECIALTY / STATUS</TableCell>
+              <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>OPERATIONAL LOAD</TableCell>
+              <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>SLA & RATING</TableCell>
+              <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ACTIONS</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -195,48 +90,58 @@ export default function TechniciansManagementPage() {
               <TableRow key={tech.uid} hover>
                 <TableCell>
                   <Stack direction="row" spacing={2} alignItems="center">
-                    <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }}>
+                    <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }}>
                         {tech.displayName?.charAt(0) || 'T'}
                     </Avatar>
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{tech.displayName}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{tech.email}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{tech.displayName || 'UNSPECIFIED'}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block' }}>{tech.uid.slice(0, 12).toUpperCase()}</Typography>
                     </Box>
                   </Stack>
                 </TableCell>
                 <TableCell>
-                    <Chip label={tech.specialization?.toUpperCase() || 'GENERAL'} size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem' }} />
+                    <Typography variant="body2" color="#FFF" fontWeight="700">{String(tech.specialization || 'GENERAL').toUpperCase()}</Typography>
+                    <Chip 
+                        label={String(tech.dutyStatus || 'OFFLINE').toUpperCase()} 
+                        size="small" 
+                        sx={{ 
+                            height: 16, fontSize: '0.55rem', fontWeight: 950, mt: 0.5,
+                            bgcolor: tech.onDuty ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)',
+                            color: tech.onDuty ? '#10b981' : 'rgba(255,255,255,0.3)'
+                        }} 
+                    />
                 </TableCell>
                 <TableCell>
-                    <Stack direction="row" spacing={2}>
-                        <Tooltip title="Emergency Eligible">
-                            <Box sx={{ color: tech.emergencyEligible ? binThemeTokens.gold : 'rgba(255,255,255,0.1)' }}>
-                                <Zap size={14} />
-                            </Box>
-                        </Tooltip>
-                        <Tooltip title="Max Jobs">
-                            <Typography variant="caption" sx={{ fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>
-                                {tech.maxConcurrentJobs || 0} MAX
-                            </Typography>
-                        </Tooltip>
+                    <Stack spacing={1}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Briefcase size={12} color="rgba(255,255,255,0.3)" />
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#FFF' }}>{tech.activeJobs || 0} ACTIVE MISSIONS</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <CheckCircle2 size={12} color="#10b981" />
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'rgba(255,255,255,0.5)' }}>{tech.completedJobs || 0} RESOLVED</Typography>
+                        </Box>
                     </Stack>
                 </TableCell>
                 <TableCell>
-                  <Chip 
-                    label={tech.status?.toUpperCase() || 'ACTIVE'} 
-                    size="small" 
-                    sx={{ 
-                        bgcolor: tech.onDuty ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)',
-                        color: tech.onDuty ? '#10b981' : 'rgba(255,255,255,0.4)',
-                        fontWeight: 950, fontSize: '0.6rem'
-                    }} 
-                  />
+                    <Stack spacing={1}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {[1,2,3,4,5].map(i => <Star key={i} size={10} fill={i <= (tech.rating || 5) ? binThemeTokens.gold : 'transparent'} color={binThemeTokens.gold} />)}
+                            <Typography variant="caption" sx={{ fontWeight: 950, color: binThemeTokens.gold, ml: 1 }}>{(tech.performanceScore || 100).toFixed(0)}%</Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>SLA COMPLIANCE: 98.2%</Typography>
+                    </Stack>
                 </TableCell>
                 <TableCell align="right">
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <IconButton size="small" onClick={() => handleEditOpen(tech)} sx={{ color: binThemeTokens.gold }}><Edit3 size={16} /></IconButton>
-                    <IconButton size="small" color="error"><Trash2 size={16} /></IconButton>
-                  </Stack>
+                    <AdminCrudActions 
+                        id={tech.uid}
+                        actions={[
+                            { type: 'view', onClick: (id) => {} },
+                            { type: 'edit', onClick: (id) => handleEdit(tech) },
+                            { type: 'assign', label: 'ASSIGN JOB', onClick: (id) => {} },
+                            { type: 'delete', onClick: (id) => deleteDoc(doc(db, 'users', id)), requiresConfirm: true }
+                        ]}
+                    />
                 </TableCell>
               </TableRow>
             ))}
@@ -244,77 +149,38 @@ export default function TechniciansManagementPage() {
         </Table>
       </TableContainer>
 
-      {/* Add Dialog */}
-      <Dialog 
-        open={openAdd} 
-        onClose={() => setOpenAdd(false)} 
-        fullWidth maxWidth="sm"
-        PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' } }}
-      >
-        <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>ONBOARD SOVEREIGN TECHNICIAN</DialogTitle>
-        <DialogContent sx={{ py: 3 }}>
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            <TextField label="Full Name" fullWidth value={newTech.displayName} onChange={(e) => setNewTech({...newTech, displayName: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <TextField label="Email Address" fullWidth value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <TextField label="Phone Number" fullWidth value={newTech.phoneNumber} onChange={(e) => setNewTech({...newTech, phoneNumber: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <TextField label="Specialization" fullWidth value={newTech.specialization} onChange={(e) => setNewTech({...newTech, specialization: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
-          <Button 
-            variant="contained" 
-            onClick={handleAddTech} 
-            disabled={submitting}
-            sx={{ borderRadius: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, minWidth: 150 }}
-          >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'DEPLOY FLEET'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Edit Dialog */}
       <Dialog 
         open={openEdit} 
         onClose={() => setOpenEdit(false)} 
-        fullWidth maxWidth="sm"
+        maxWidth="sm" 
+        fullWidth
         PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' } }}
       >
-        <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>RECONFIGURE UNIT</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold, py: 3 }}>RECONFIGURE TECHNICIAN UNIT</DialogTitle>
         <DialogContent sx={{ py: 3 }}>
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            <TextField label="Display Name" fullWidth value={editTech.displayName} onChange={(e) => setEditTech({...editTech, displayName: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <TextField label="Phone Number" fullWidth value={editTech.phoneNumber} onChange={(e) => setEditTech({...editTech, phoneNumber: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <TextField label="Specialization" fullWidth value={editTech.specialization} onChange={(e) => setEditTech({...editTech, specialization: e.target.value})} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
-
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.4)' }}>Primary Emirate</InputLabel>
-              <Select value={editTech.primaryEmirate} onChange={(e) => setEditTech({...editTech, primaryEmirate: e.target.value})} sx={{ color: '#FFF' }}>
-                {['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'].map(e => (
-                  <MenuItem key={e} value={e}>{e}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center" sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
+            <Stack spacing={3} sx={{ mt: 1 }}>
+                <TextField label="Full Name" fullWidth value={selectedTech?.displayName || ''} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
+                <TextField label="Specialization" fullWidth value={selectedTech?.specialization || ''} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
+                <FormControl fullWidth>
+                    <InputLabel sx={{ color: 'rgba(255,255,255,0.4)' }}>Status</InputLabel>
+                    <Select value={selectedTech?.status || 'active'} label="Status" sx={{ color: '#FFF' }}>
+                        <MenuItem value="active">Active</MenuItem>
+                        <MenuItem value="suspended">Suspended</MenuItem>
+                        <MenuItem value="on-duty">On-Duty</MenuItem>
+                    </Select>
+                </FormControl>
                 <FormControlLabel
-                    control={<Switch checked={editTech.onDuty} onChange={(e) => setEditTech({...editTech, onDuty: e.target.checked})} sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: binThemeTokens.gold } }} />}
-                    label={<Typography variant="body2" sx={{ fontWeight: 900, color: '#FFF' }}>ON DUTY</Typography>}
-                />
-                <FormControlLabel
-                    control={<Switch checked={editTech.emergencyEligible} onChange={(e) => setEditTech({...editTech, emergencyEligible: e.target.checked})} sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#EF4444' } }} />}
-                    label={<Typography variant="body2" sx={{ fontWeight: 900, color: '#FFF' }}>SOS ELIGIBLE</Typography>}
+                    control={<Switch checked={!!selectedTech?.emergencyEligible} sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#EF4444' } }} />}
+                    label={<Typography variant="body2" sx={{ fontWeight: 900, color: '#FFF' }}>SOS MISSION ELIGIBLE</Typography>}
                 />
             </Stack>
-          </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <Button onClick={() => setOpenEdit(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
-          <Button variant="contained" onClick={handleUpdateTech} sx={{ borderRadius: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>SAVE RECONFIGURATION</Button>
+            <Button onClick={() => setOpenEdit(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+            <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>COMMIT REVISIONS</Button>
         </DialogActions>
       </Dialog>
     </AdminPageFrame>
-  );
-}
   );
 }

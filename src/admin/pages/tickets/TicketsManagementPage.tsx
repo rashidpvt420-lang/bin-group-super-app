@@ -124,8 +124,8 @@ export default function TicketsManagementPage() {
       }
   };
 
-  const getStatusStyle = (status: string) => {
-    const s = status?.toUpperCase();
+  const getStatusStyle = (status: any) => {
+    const s = String(status || '').toUpperCase();
     if (s === 'OPEN') return { bg: alpha('#EF4444', 0.1), color: '#EF4444' };
     if (['ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'].includes(s)) return { bg: alpha('#F59E0B', 0.1), color: '#F59E0B' };
     if (s === 'COMPLETED') return { bg: alpha('#10B981', 0.1), color: '#10B981' };
@@ -211,7 +211,7 @@ export default function TicketsManagementPage() {
               return (
                 <TableRow key={ticket.ticketId} hover>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>#{ticket.ticketId.slice(0, 8).toUpperCase()}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>#{String(ticket.ticketId || '').slice(0, 8).toUpperCase()}</Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>
                         {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : 'N/A'}
                     </Typography>
@@ -221,7 +221,7 @@ export default function TicketsManagementPage() {
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>UNIT {ticket.unitNumber || ticket.unit || 'N/A'}</Typography>
                   </TableCell>
                   <TableCell>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>{ticket.category?.toUpperCase() || 'GENERAL'}</Typography>
+                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>{String(ticket.category || '').toUpperCase() || 'GENERAL'}</Typography>
                       <Chip label={ticket.priority} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 16, mt: 0.5, borderColor: ticket.priority === 'EMERGENCY' ? '#EF4444' : 'rgba(255,255,255,0.1)' }} />
                   </TableCell>
                   <TableCell>
@@ -268,7 +268,7 @@ export default function TicketsManagementPage() {
           <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>FLEET DISPATCH</DialogTitle>
           <DialogContent>
               <Typography variant="body2" sx={{ mb: 3, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                  Select an authorized specialist for Mission #{assigningTicket?.ticketId.substring(0,8).toUpperCase()}.
+                  Select an authorized specialist for Mission #{String(assigningTicket?.ticketId || '').substring(0,8).toUpperCase()}.
               </Typography>
               <List>
                 {technicians.map(tech => (
@@ -365,8 +365,6 @@ export default function TicketsManagementPage() {
           </DialogActions>
       </Dialog>
     </AdminPageFrame>
-  );
-}
   );
 }
 

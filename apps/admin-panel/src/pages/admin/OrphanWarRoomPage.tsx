@@ -35,7 +35,7 @@ type RepairReport = {
 
 export default function OrphanWarRoomPage() {
     const { setPageContext } = useAI();
-    const activeProjectId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'UNCONFIGURED_PROJECT';
+    const activeProjectId = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_FIREBASE_PROJECT_ID : 'UNCONFIGURED_PROJECT';
     const [orphans, setOrphans] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
     const [geoRepairItems, setGeoRepairItems] = useState<any[]>([]);

@@ -27,20 +27,19 @@ const readRequiredEnv = (name: string): string => {
     // @ts-ignore
     const value = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : process.env[name];
     if (!value || value.includes('REPLACE_ME')) {
-        if (name === 'VITE_FIREBASE_PROJECT_ID' || name === 'REACT_APP_FIREBASE_PROJECT_ID') return 'bin-group-57c60';
-        console.warn(`Missing required Firebase environment variable: ${name}`);
-        return '';
+        return ''; // Handled by safe fallback below
     }
     return value;
 };
 
+// Safe fallback ONLY for production bin-group-57c60 config if env is missing
 const firebaseConfig: BinFirebaseConfig = {
-    apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || readRequiredEnv('REACT_APP_FIREBASE_API_KEY'),
-    authDomain: readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') || readRequiredEnv('REACT_APP_FIREBASE_AUTH_DOMAIN'),
-    projectId: readRequiredEnv('VITE_FIREBASE_PROJECT_ID') || readRequiredEnv('REACT_APP_FIREBASE_PROJECT_ID') || 'bin-group-57c60',
-    storageBucket: readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') || readRequiredEnv('REACT_APP_FIREBASE_STORAGE_BUCKET'),
-    messagingSenderId: readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || readRequiredEnv('REACT_APP_FIREBASE_MESSAGING_SENDER_ID'),
-    appId: readRequiredEnv('VITE_FIREBASE_APP_ID') || readRequiredEnv('REACT_APP_FIREBASE_APP_ID')
+    apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
+    authDomain: readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') || "bin-group-57c60.firebaseapp.com",
+    projectId: readRequiredEnv('VITE_FIREBASE_PROJECT_ID') || "bin-group-57c60",
+    storageBucket: readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') || "bin-group-57c60.firebasestorage.app",
+    messagingSenderId: readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || "123413252227",
+    appId: readRequiredEnv('VITE_FIREBASE_APP_ID') || "1:123413252227:web:285cb53bc26626d699f3b6"
 };
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';

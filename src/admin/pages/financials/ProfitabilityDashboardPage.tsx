@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import { safeText, safeCurrency, safeDate, safeNumber } from '../../utils/safeFormatters';
 
 interface Transaction {
     id: string;
@@ -74,28 +75,28 @@ export default function ProfitabilityDashboardPage() {
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.05) }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('fin.kpi.total_collection').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#FFF', mt: 1 }}>{formatCurrency(totalCollection)}</Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#FFF', mt: 1 }}>{safeCurrency(totalCollection, lang)}</Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>SOVEREIGN LEDGER</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' }}>
                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800 }}>{t('fin.sovereign_payout').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.gold, mt: 1 }}>{formatCurrency(totalDeductions)}</Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.gold, mt: 1 }}>{safeCurrency(totalDeductions, lang)}</Typography>
                         <Typography variant="caption" color="textSecondary">LIQUIDITY DISPATCHED</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' }}>
                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800 }}>{t('fin.net_position').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#10b981', mt: 1 }}>{formatCurrency(netPosition)}</Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#10b981', mt: 1 }}>{safeCurrency(netPosition, lang)}</Typography>
                         <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700 }}>MARGIN: {margin.toFixed(1)}%</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: alpha(binThemeTokens.danger, 0.05), border: `1px solid ${alpha(binThemeTokens.danger, 0.1)}` }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.danger, fontWeight: 900 }}>{t('fin.overdue_deficit').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.danger, mt: 1 }}>{formatCurrency(0)}</Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.danger, mt: 1 }}>{safeCurrency(0, lang)}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.danger, opacity: 0.7 }}>CRITICAL LEAKAGE</Typography>
                     </Paper>
                 </Grid>
@@ -127,20 +128,20 @@ export default function ProfitabilityDashboardPage() {
                         {transactions.slice(0, 10).map((tx) => (
                             <TableRow key={tx.id} hover>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                                    {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString() : 'PENDING'}
+                                    {safeDate(tx.createdAt, lang)}
                                 </TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#FFF' }}>{tx.description}</TableCell>
+                                <TableCell sx={{ fontWeight: 700, color: '#FFF' }}>{String(tx.description || '')}</TableCell>
                                 <TableCell>
                                     <Typography variant="caption" sx={{ bgcolor: 'rgba(255,255,255,0.05)', px: 1, py: 0.5, borderRadius: 1, color: binThemeTokens.gold, fontWeight: 800 }}>
-                                        {tx.category?.toUpperCase()}
+                                        {String(tx.category || '').toUpperCase()}
                                     </Typography>
                                 </TableCell>
                                 <TableCell sx={{ fontWeight: 900, color: tx.type === 'credit' ? '#10b981' : binThemeTokens.danger }}>
-                                    {tx.type === 'credit' ? '+' : '-'} {tx.amount.toLocaleString()}
+                                    {tx.type === 'credit' ? '+' : '-'} {safeNumber(tx.amount)}
                                 </TableCell>
                                 <TableCell align="right">
                                     <Typography variant="caption" sx={{ fontWeight: 900, color: tx.status === 'settled' ? '#10b981' : binThemeTokens.gold }}>
-                                        {tx.status?.toUpperCase()}
+                                        {safeText(tx.status).toUpperCase()}
                                     </Typography>
                                 </TableCell>
                             </TableRow>

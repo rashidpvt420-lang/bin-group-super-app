@@ -89,14 +89,14 @@ export default function DesignStudioAdminPage() {
                                 </TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{req.propertyName || 'GENERAL ASSET'}</TableCell>
                                 <TableCell>
-                                    <Chip label={req.roomType?.toUpperCase() || 'UNKNOWN'} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.6rem' }} />
+                                    <Chip label={String(req.roomType || 'UNKNOWN').toUpperCase()} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.6rem' }} />
                                 </TableCell>
                                 <TableCell sx={{ fontWeight: 950, color: '#FFF' }}>
                                     {req.budget ? `AED ${req.budget.toLocaleString()}` : 'FLEXIBLE'}
                                 </TableCell>
                                 <TableCell>
                                     <Chip 
-                                        label={req.status?.toUpperCase() || 'SUBMITTED'} 
+                                        label={String(req.status || 'SUBMITTED').toUpperCase()} 
                                         size="small"
                                         sx={{ 
                                             bgcolor: req.status === 'approved' ? alpha('#10b981', 0.1) : req.status === 'rejected' ? alpha('#EF4444', 0.1) : 'rgba(255,255,255,0.05)',

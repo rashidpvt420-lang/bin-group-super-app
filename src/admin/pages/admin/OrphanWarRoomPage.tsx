@@ -107,7 +107,7 @@ export default function OrphanWarRoomPage() {
                                                         {getIcon(o.type)}
                                                     </Box>
                                                     <Box>
-                                                        <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.danger }}>{o.label.toUpperCase()}</Typography>
+                                                        <Typography variant="body2" fontWeight="900" sx={{ color: binThemeTokens.danger }}>{String(o.label || 'ORPHAN NODE').toUpperCase()}</Typography>
                                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>ID: {o.id.substring(0,12)}</Typography>
                                                     </Box>
                                                 </Stack>

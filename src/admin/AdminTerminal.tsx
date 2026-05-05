@@ -21,6 +21,7 @@ import InstitutionalReportsPanel from './components/reports/InstitutionalReports
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { safeText } from './utils/safeFormatters';
 
 // Pages
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -51,6 +52,7 @@ import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import SovereignControlPage from './pages/admin/SovereignControlPage';
 import { adminTheme } from './theme/adminTheme';
 
 const cacheRtl = createCache({
@@ -105,14 +107,54 @@ function AdminLayout() {
 }
 
 function AdminContent() {
-    const { isAuthenticated, loading } = useAuth();
-    if (loading) return <CircularProgress />;
+    const { isAuthenticated, loading, error } = useAuth();
+    const [showTimeout, setShowTimeout] = React.useState(false);
+
+    React.useEffect(() => {
+        if (loading) {
+            const timer = setTimeout(() => setShowTimeout(true), 8000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading]);
+
+    if (loading) {
+        if (!showTimeout) {
+            return (
+                <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617' }}>
+                    <CircularProgress sx={{ color: '#DAA520' }} />
+                </Box>
+            );
+        }
+        return (
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center' }}>
+                <Typography variant="h5" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>ADMIN GATEWAY TIMEOUT</Typography>
+                <Typography variant="body1" sx={{ color: '#fff', mb: 4, maxWidth: 500 }}>
+                    The Admin Sovereign Connection failed to resolve within 8 seconds. Please check your credentials or reset your session.
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button variant="outlined" color="error" onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.href = '/login'; }}>RESET SESSION</Button>
+                    <Button variant="contained" sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }} onClick={() => window.location.reload()}>RELOAD GATEWAY</Button>
+                </Box>
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center' }}>
+                <Typography variant="h5" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>ADMIN ACCESS DENIED</Typography>
+                <Typography variant="body1" sx={{ color: '#fff', mb: 4 }}>{safeText(error)}</Typography>
+                <Button variant="contained" sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }} onClick={() => window.location.href = '/login'}>RETURN TO LOGIN</Button>
+            </Box>
+        );
+    }
 
     return (
         <Routes>
             <Route element={<AdminLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="sovereign-control" element={<SovereignControlPage />} />
                 
                 {/* Core Operations */}
                 <Route path="financials" element={<ProfitabilityDashboardPage />} />
@@ -125,7 +167,8 @@ function AdminContent() {
                 <Route path="orphans" element={<OrphanWarRoomPage />} />
                 <Route path="manual-approvals" element={<AdminPaymentApproval />} />
                 <Route path="control-center" element={<ProductionControlCenter />} />
-                <Route path="admin/pricing-matrix" element={<PricingMatrixPage />} />
+                <Route path="pricing-matrix" element={<PricingMatrixPage />} />
+                <Route path="pricing" element={<PricingMatrixPage />} />
                 
                 {/* Management */}
                 <Route path="owners" element={<OwnersPage />} />
@@ -136,6 +179,7 @@ function AdminContent() {
                 <Route path="technicians" element={<TechniciansPage />} />
                 <Route path="technicians/map" element={<LiveMapPage />} />
                 <Route path="ops/technicians" element={<TechnicianDutyMonitorPage />} />
+                <Route path="duty-command" element={<TechnicianDutyMonitorPage />} />
                 <Route path="tickets" element={<TicketsPage />} />
                 <Route path="sos" element={<SOSFeedPage />} />
                 <Route path="hr" element={<HRManagementPage />} />

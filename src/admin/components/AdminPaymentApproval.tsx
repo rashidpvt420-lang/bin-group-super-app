@@ -128,7 +128,7 @@ export default function AdminPaymentApproval() {
                                         <TableCell>
                                             <Stack spacing={0.5}>
                                                 <Typography variant="body2" fontWeight="900" sx={{ fontFamily: 'monospace' }}>
-                                                    {contract.paymentId || contract.id.substring(0, 12)}
+                                                    {String(contract.paymentId || contract.id).substring(0, 12)}
                                                 </Typography>
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
                                                     INITIATED: {contract.createdAt?.toDate ? contract.createdAt.toDate().toLocaleDateString() : 'N/A'}
@@ -148,7 +148,7 @@ export default function AdminPaymentApproval() {
                                         </TableCell>
                                         <TableCell>
                                             <Chip 
-                                                label={contract.provider?.toUpperCase() || 'MANUAL'} 
+                                                label={String(contract.provider || 'MANUAL').toUpperCase()} 
                                                 size="small" 
                                                 sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.6rem' }} 
                                             />

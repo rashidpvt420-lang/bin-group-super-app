@@ -944,6 +944,7 @@ const translations: Record<Language, Record<string, string>> = {
         'common.system': 'النظام',
         'common.sys_init_fault': 'خطأ في تهيئة النظام',
         'common.reload_sys': 'إعادة تحميل النظام',
+        'common.auth_sync': 'جاري توثيق هوية مجموعة بن...',
         'status.owner': 'مالك',
         'common.asset': 'أصل',
         'status.pending': 'قيد الانتظار',
