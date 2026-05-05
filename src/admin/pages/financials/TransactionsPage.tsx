@@ -20,6 +20,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { ArrowUpCircle, ArrowDownCircle, Activity } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
+import { safeText, safeCurrency, safeDate, safeNumber } from '../../utils/safeFormatters';
 
 interface Transaction {
   id: string;
@@ -68,7 +69,7 @@ export default function TransactionsPage() {
                 <Typography variant="overline" sx={{ fontWeight: 'bold' }}>{t('fin.total_income')}</Typography>
                 <ArrowUpCircle color="#10b981" size={20} />
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 900, color: '#10b981' }}>{t('common.currency_aed')} {formatAED(income)}</Typography>
+              <Typography variant="h4" sx={{ fontWeight: 950, color: '#10b981' }}>{safeCurrency(income, lang)}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -79,7 +80,7 @@ export default function TransactionsPage() {
                 <Typography variant="overline" sx={{ fontWeight: 'bold' }}>{t('fin.total_expenses')}</Typography>
                 <ArrowDownCircle color="#ef4444" size={20} />
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 900, color: '#ef4444' }}>{t('common.currency_aed')} {formatAED(expenses)}</Typography>
+              <Typography variant="h4" sx={{ fontWeight: 950, color: '#ef4444' }}>{safeCurrency(expenses, lang)}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -90,7 +91,7 @@ export default function TransactionsPage() {
                 <Typography variant="overline" sx={{ fontWeight: 'bold', opacity: 0.8 }}>{t('fin.net_position')}</Typography>
                 <Activity color="#fff" size={20} />
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 900 }}>{t('common.currency_aed')} {formatAED(income - expenses)}</Typography>
+              <Typography variant="h4" sx={{ fontWeight: 950 }}>{safeCurrency(income - expenses, lang)}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -110,11 +111,13 @@ export default function TransactionsPage() {
           <TableBody>
             {transactions.map((tx) => (
               <TableRow key={tx.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tx.createdAt?.toDate().toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') || t('status.pending')}</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{tx.description}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={tx.category.toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                  {safeDate(tx.createdAt, lang)}
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{String(tx.description || '')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={String(tx.category || '').toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
                 <TableCell sx={{ fontWeight: 900, color: tx.type === 'credit' ? '#10b981' : '#ef4444', textAlign: isRTL ? 'right' : 'left' }}>
-                  {tx.type === 'credit' ? '+' : '-'} {formatAED(tx.amount)}
+                  {tx.type === 'credit' ? '+' : '-'} {safeCurrency(tx.amount, lang)}
                 </TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   <Chip 

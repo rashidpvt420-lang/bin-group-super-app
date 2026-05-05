@@ -1,141 +1,170 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Box, Grid, Paper, Table, TableBody, TableCell, 
-    TableContainer, TableHead, TableRow, Chip, Button, Stack, alpha, Divider, Typography 
+    TableContainer, TableHead, TableRow, Chip, Button, Stack, alpha, Divider, Typography,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
-import { Download, FileText, TrendingUp, Info } from 'lucide-react';
+import { Download, FileText, Plus, Save, Trash2, RefreshCw, AlertTriangle, Zap } from 'lucide-react';
 import { UAE_PRICING_MATRIX_2026, binThemeTokens } from '@bin/shared';
 import { useLanguage } from '@bin/shared';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, doc, setDoc, updateDoc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import AdminCrudActions from '../../components/AdminCrudActions';
 
 export default function PricingMatrixPage() {
     const { t } = useLanguage();
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [assetClasses, setAssetClasses] = useState<any[]>([]);
+    const [zones, setZones] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [openAdd, setOpenAdd] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
-    const categories = Array.from(new Set(UAE_PRICING_MATRIX_2026.assetClasses.map(a => a.category)));
-    const filteredClasses = selectedCategory 
-        ? UAE_PRICING_MATRIX_2026.assetClasses.filter(a => a.category === selectedCategory)
-        : UAE_PRICING_MATRIX_2026.assetClasses;
+    useEffect(() => {
+        const unsubClasses = onSnapshot(collection(db, 'pricing_asset_classes'), (snap) => {
+            setAssetClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        });
+
+        const unsubZones = onSnapshot(collection(db, 'pricing_zones'), (snap) => {
+            setZones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => {
+            unsubClasses();
+            unsubZones();
+        };
+    }, []);
+
+    const seedPricing = async () => {
+        setSubmitting(true);
+        try {
+            const batch = writeBatch(db);
+            
+            // Seed Asset Classes
+            UAE_PRICING_MATRIX_2026.assetClasses.forEach(ac => {
+                const ref = doc(db, 'pricing_asset_classes', ac.id);
+                batch.set(ref, ac);
+            });
+
+            // Seed Zones
+            Object.entries(UAE_PRICING_MATRIX_2026.zones).forEach(([key, zone]) => {
+                const ref = doc(db, 'pricing_zones', key);
+                batch.set(ref, zone);
+            });
+
+            await batch.commit();
+            alert("Pricing Matrix Seeded: Institutional benchmarks established.");
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (id: string, coll: string) => {
+        try {
+            await deleteDoc(doc(db, coll, id));
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     return (
         <AdminPageFrame
-            title={t('pricing.title') || 'PRICING MATRIX 2026'}
-            subtitle={`Institutional Benchmarks · Version ${UAE_PRICING_MATRIX_2026.version}`}
-            breadcrumbs={[{ label: 'Pricing Matrix' }]}
+            title="Pricing Matrix 2026"
+            subtitle="Sovereign valuation models and emirate-wide multipliers"
+            loading={loading}
+            breadcrumbs={[{ label: 'Pricing' }]}
             actions={
                 <Stack direction="row" spacing={2}>
                     <Button 
                         variant="outlined" 
-                        startIcon={<Download size={16} />} 
-                        sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}
+                        startIcon={<RefreshCw size={18} />} 
+                        onClick={seedPricing}
+                        disabled={submitting}
+                        sx={{ borderColor: 'rgba(255,255,255,0.1)', color: binThemeTokens.gold, fontWeight: 900 }}
                     >
-                        EXPORT
+                        SEED SYSTEM
                     </Button>
                     <Button 
                         variant="contained" 
-                        startIcon={<FileText size={16} />} 
+                        startIcon={<Plus size={18} />} 
+                        onClick={() => setOpenAdd(true)}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                     >
-                        GENERATE REPORT
+                        ADD RULE
                     </Button>
                 </Stack>
             }
         >
-            <Grid container spacing={3}>
+            <Grid container spacing={4}>
+                {/* ZONE CONTROL */}
                 <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Stack spacing={3}>
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>ZONE MULTIPLIERS</Typography>
-                                <Stack spacing={1}>
-                                    {Object.entries(UAE_PRICING_MATRIX_2026.zones).map(([key, zone]) => (
-                                        <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-                                            <Box>
-                                                <Typography variant="body2" fontWeight="800" color="#FFF">Zone {key}: {zone.label}</Typography>
-                                                <Typography variant="caption" color="rgba(255,255,255,0.3)">{zone.description}</Typography>
-                                            </Box>
-                                            <Chip label={`${zone.multiplier}x`} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} />
+                    <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Zap size={20} color={binThemeTokens.gold} /> ZONE MULTIPLIERS
+                        </Typography>
+                        <Stack spacing={2}>
+                            {zones.map(zone => (
+                                <Box key={zone.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                        <Box>
+                                            <Typography variant="body2" fontWeight="950" color="#FFF">{zone.label}</Typography>
+                                            <Typography variant="caption" color="textSecondary">ID: {zone.id}</Typography>
                                         </Box>
-                                    ))}
-                                </Stack>
-                            </Box>
-
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>EMIRATE ADJUSTMENTS</Typography>
-                                <Grid container spacing={1}>
-                                    {UAE_PRICING_MATRIX_2026.emirateMultipliers.map((em) => (
-                                        <Grid item xs={6} key={em.label}>
-                                            <Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2, textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{em.label}</Typography>
-                                                <Typography variant="body2" fontWeight="950" color={em.isPremium ? binThemeTokens.gold : '#FFF'}>{em.value}</Typography>
-                                            </Paper>
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            </Box>
+                                        <Chip label={`${zone.multiplier}x`} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} />
+                                    </Stack>
+                                </Box>
+                            ))}
                         </Stack>
                     </Paper>
                 </Grid>
 
+                {/* ASSET CLASSES */}
                 <Grid item xs={12} md={8}>
-                    <Paper sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                        <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            <Chip 
-                                label="ALL CLASSES" 
-                                size="small"
-                                onClick={() => setSelectedCategory(null)}
-                                sx={{ 
-                                    bgcolor: selectedCategory === null ? binThemeTokens.gold : 'transparent',
-                                    color: selectedCategory === null ? '#000' : 'rgba(255,255,255,0.4)',
-                                    fontWeight: 900, fontSize: '0.65rem'
-                                }} 
-                            />
-                            {categories.map(cat => (
-                                <Chip 
-                                    key={cat} label={cat.toUpperCase()} 
-                                    size="small"
-                                    onClick={() => setSelectedCategory(cat)}
-                                    sx={{ 
-                                        bgcolor: selectedCategory === cat ? binThemeTokens.gold : 'transparent',
-                                        color: selectedCategory === cat ? '#000' : 'rgba(255,255,255,0.4)',
-                                        fontWeight: 900, fontSize: '0.65rem'
-                                    }} 
-                                />
-                            ))}
+                    <Paper sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" fontWeight="950">ASSET CLASS BENCHMARKS</Typography>
                         </Box>
-                        <TableContainer sx={{ maxHeight: '60vh' }}>
+                        <TableContainer sx={{ maxHeight: 600 }}>
                             <Table stickyHeader>
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ASSET CLASS</TableCell>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>MIN AMC</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>CLASS</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>MIN ANNUAL</TableCell>
                                         <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>PM RATE</TableCell>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>UNIT</TableCell>
                                         <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>RISK</TableCell>
+                                        <TableCell align="right" sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ACTIONS</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {filteredClasses.map((ac) => (
+                                    {assetClasses.map((ac) => (
                                         <TableRow key={ac.id} hover>
                                             <TableCell>
-                                                <Typography variant="body2" fontWeight="900" color="#FFF">{ac.label}</Typography>
-                                                <Typography variant="caption" color="rgba(255,255,255,0.3)">{ac.category}</Typography>
+                                                <Typography variant="body2" fontWeight="950" color="#FFF">{ac.label}</Typography>
+                                                <Typography variant="caption" color="textSecondary">{ac.category}</Typography>
                                             </TableCell>
-                                            <TableCell sx={{ color: '#FFF', fontWeight: 800 }}>AED {ac.minimumAnnualContract.toLocaleString()}</TableCell>
-                                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{ac.pmRate}</TableCell>
-                                            <TableCell>
-                                                <Chip label={ac.pricingUnit.toUpperCase()} size="small" variant="outlined" sx={{ color: 'rgba(255,255,255,0.3)', borderColor: 'rgba(255,255,255,0.05)', fontSize: '0.6rem' }} />
-                                            </TableCell>
+                                            <TableCell sx={{ color: '#FFF', fontWeight: 800 }}>AED {ac.minimumAnnualContract?.toLocaleString()}</TableCell>
+                                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{ac.pmRate}</TableCell>
                                             <TableCell>
                                                 <Chip 
-                                                    label={ac.riskLevel.toUpperCase()} size="small" 
+                                                    label={String(ac.riskLevel || 'STANDARD').toUpperCase()} 
+                                                    size="small" 
                                                     sx={{ 
                                                         bgcolor: ac.riskLevel === 'Critical' ? alpha('#EF4444', 0.1) : 'rgba(255,255,255,0.05)',
                                                         color: ac.riskLevel === 'Critical' ? '#EF4444' : 'rgba(255,255,255,0.5)',
                                                         fontWeight: 950, fontSize: '0.6rem'
                                                     }} 
+                                                />
+                                            </TableCell>
+                                            <TableCell align="right">
+                                                <AdminCrudActions 
+                                                    id={ac.id}
+                                                    actions={[
+                                                        { type: 'edit', onClick: (id) => {} },
+                                                        { type: 'delete', onClick: (id) => handleDelete(id, 'pricing_asset_classes'), requiresConfirm: true }
+                                                    ]}
                                                 />
                                             </TableCell>
                                         </TableRow>
@@ -146,6 +175,30 @@ export default function PricingMatrixPage() {
                     </Paper>
                 </Grid>
             </Grid>
+
+            {/* ADD RULE DIALOG */}
+            <Dialog open={openAdd} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' } }}>
+                <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>DEFINE PRICING RULE</DialogTitle>
+                <DialogContent sx={{ py: 3, minWidth: 400 }}>
+                    <Stack spacing={3} sx={{ mt: 1 }}>
+                        <TextField label="Rule Label" fullWidth InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
+                        <FormControl fullWidth>
+                            <InputLabel sx={{ color: 'rgba(255,255,255,0.4)' }}>Category</InputLabel>
+                            <Select value="Residential" sx={{ color: '#FFF' }}>
+                                <MenuItem value="Residential">Residential</MenuItem>
+                                <MenuItem value="Commercial">Commercial</MenuItem>
+                                <MenuItem value="Industrial">Industrial</MenuItem>
+                                <MenuItem value="Specialized">Specialized</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <TextField label="Minimum Annual Contract (AED)" type="number" fullWidth InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }} InputProps={{ style: { color: '#FFF' } }} />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>PUBLISH RULE</Button>
+                </DialogActions>
+            </Dialog>
         </AdminPageFrame>
     );
 }

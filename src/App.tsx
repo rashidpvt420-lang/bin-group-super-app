@@ -57,6 +57,29 @@ import IOSPwaGuardian from './components/IOSPwaGuardian';
  */
 function LoadingScreen() {
   const { t } = useLanguage();
+  const [showRecovery, setShowRecovery] = React.useState(false);
+  const [diagnostics, setDiagnostics] = React.useState<any>({});
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowRecovery(true);
+      setDiagnostics({
+        userAgent: navigator.userAgent,
+        authReady: window.__BIN_GROUPS_BOOT__?.authReady,
+        reactMounted: window.__BIN_GROUPS_BOOT__?.reactMounted,
+        timeElapsed: Date.now() - (window.__BIN_GROUPS_BOOT__?.startedAt || Date.now()),
+        pathname: window.location.pathname
+      });
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleClearSession = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/login';
+  };
+
   return (
     <Box sx={{ 
       height: '100vh', 
@@ -69,12 +92,40 @@ function LoadingScreen() {
       position: 'fixed',
       top: 0,
       left: 0,
-      zIndex: 9999
+      zIndex: 9999,
+      p: 4
     }}>
-      <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
-      <Typography variant="h6" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 4, textTransform: 'uppercase' }}>
-        {t('common.auth_sync') || 'Authenticating BIN-Groups Identity...'}
-      </Typography>
+      {!showRecovery ? (
+        <>
+          <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
+          <Typography variant="h6" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 4, textTransform: 'uppercase' }}>
+            {t('common.auth_sync') || 'Authenticating BIN-Groups Identity...'}
+          </Typography>
+        </>
+      ) : (
+        <Box sx={{ maxWidth: 600, width: '100%', textAlign: 'center', bgcolor: 'rgba(255,0,0,0.1)', border: '1px solid #ef4444', borderRadius: 2, p: 4 }}>
+          <Typography variant="h5" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>SOVEREIGN CONNECTION TIMEOUT</Typography>
+          <Typography variant="body2" sx={{ color: '#fff', opacity: 0.8, mb: 3 }}>
+            The authentication gateway failed to resolve within the 8-second SLA. Please verify your connection or reset your secure session.
+          </Typography>
+          
+          <Box sx={{ textAlign: 'left', bgcolor: '#000', p: 2, borderRadius: 1, mb: 3, border: '1px solid rgba(255,255,255,0.1)' }}>
+             <Typography variant="caption" sx={{ color: '#C6A75E', fontWeight: 700, display: 'block', mb: 1 }}>DIAGNOSTICS:</Typography>
+             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace', display: 'block' }}>
+               Route: {diagnostics.pathname}<br/>
+               React Mounted: {String(diagnostics.reactMounted)}<br/>
+               Auth Ready: {String(diagnostics.authReady)}<br/>
+               Firebase Connected: {auth ? 'ESTABLISHED' : 'FAULT'}
+             </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+            <Button variant="outlined" color="error" onClick={handleClearSession}>RESET SESSION</Button>
+            <Button variant="contained" sx={{ bgcolor: '#C6A75E', color: '#000' }} onClick={() => window.location.reload()}>RELOAD NODE</Button>
+            <Button variant="outlined" sx={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }} onClick={() => window.location.href = '/login'}>GO TO LOGIN</Button>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -152,7 +152,7 @@ export const IntakeVaultPage: React.FC = () => {
                                 </TableCell>
                                 <TableCell>
                                     <Chip 
-                                        label={intake.status?.toUpperCase()} 
+                                        label={String(intake.status || 'PENDING').toUpperCase()} 
                                         size="small"
                                         color={intake.status === 'CONVERTED_TO_OWNER' ? 'success' : 'warning'}
                                         sx={{ fontWeight: 900, fontSize: '0.65rem' }}
@@ -160,7 +160,7 @@ export const IntakeVaultPage: React.FC = () => {
                                 </TableCell>
                                 <TableCell>
                                     <Chip 
-                                        label={intake.payment?.state?.toUpperCase() || 'PENDING'} 
+                                        label={String(intake.payment?.state || 'PENDING').toUpperCase()} 
                                         variant="outlined"
                                         size="small"
                                         sx={{ fontSize: '0.6rem', fontWeight: 800 }}

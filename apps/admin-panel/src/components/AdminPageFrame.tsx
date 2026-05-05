@@ -49,22 +49,11 @@ export default function AdminPageFrame({
     const navigate = useNavigate();
     const location = useLocation();
 
-    const safeRender = (val: any): React.ReactNode => {
-        if (val === null || val === undefined) return "";
-        if (typeof val === 'string' || typeof val === 'number') return val;
-        if (val.toDate && typeof val.toDate === 'function') return val.toDate().toLocaleString();
-        if (val.seconds !== undefined) return new Date(val.seconds * 1000).toLocaleString();
-        if (typeof val === 'object') {
-            try { return JSON.stringify(val); } catch(e) { return "[Object]"; }
-        }
-        return String(val);
-    };
-
     const handleBack = () => {
         if (window.history.length > 1) {
             navigate(-1);
         } else {
-            navigate('/admin/dashboard');
+            navigate('/dashboard');
         }
     };
 
@@ -77,7 +66,7 @@ export default function AdminPageFrame({
                     Your administrative credentials do not authorize access to this specific operational node. 
                     Contact the System Administrator for privilege escalation.
                 </Typography>
-                <Button variant="contained" onClick={() => navigate('/admin/dashboard')}>RETURN TO TERMINAL</Button>
+                <Button variant="contained" onClick={() => navigate('/dashboard')}>RETURN TO TERMINAL</Button>
             </Box>
         );
     }
@@ -104,8 +93,8 @@ export default function AdminPageFrame({
                         <Link 
                             underline="hover" 
                             color="inherit" 
-                            href="/admin/dashboard"
-                            onClick={(e) => { e.preventDefault(); navigate('/admin/dashboard'); }}
+                            href="/dashboard"
+                            onClick={(e) => { e.preventDefault(); navigate('/dashboard'); }}
                             sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
                         >
                             <Home size={12} /> ADMIN
@@ -123,7 +112,7 @@ export default function AdminPageFrame({
                                     }
                                 }}
                             >
-                                {safeRender(bc.label).toString().toUpperCase()}
+                                {bc.label.toUpperCase()}
                             </Link>
                         ))}
                     </Breadcrumbs>
@@ -133,11 +122,11 @@ export default function AdminPageFrame({
                     <Box>
                         <Stack direction="row" spacing={2} alignItems="center">
                             <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>
-                                {safeRender(title)}
+                                {title.toUpperCase()}
                             </Typography>
                             {status && (
                                 <Chip 
-                                    label={safeRender(status)} 
+                                    label={status.toUpperCase()} 
                                     size="small" 
                                     sx={{ 
                                         bgcolor: alpha(binThemeTokens.gold, 0.1), 
@@ -150,7 +139,7 @@ export default function AdminPageFrame({
                         </Stack>
                         {subtitle && (
                             <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, mt: 0.5 }}>
-                                {safeRender(subtitle)}
+                                {subtitle}
                             </Typography>
                         )}
                     </Box>
@@ -160,11 +149,7 @@ export default function AdminPageFrame({
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'rgba(255,255,255,0.3)' }}>
                                 <Clock size={14} />
                                 <Typography variant="caption" fontWeight="700">
-                                    SYNCED: {
-                                        lastUpdated.toDate ? lastUpdated.toDate().toLocaleTimeString() : 
-                                        lastUpdated instanceof Date ? lastUpdated.toLocaleTimeString() : 
-                                        typeof lastUpdated === 'string' ? lastUpdated : 'UNKNOWN'
-                                    }
+                                    SYNCED: {lastUpdated.toDate ? lastUpdated.toDate().toLocaleTimeString() : lastUpdated}
                                 </Typography>
                             </Box>
                         )}

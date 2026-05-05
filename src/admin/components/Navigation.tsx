@@ -9,13 +9,12 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
 import FileTextIcon from '@mui/icons-material/Description';
-import { Sparkles, Users } from 'lucide-react';
+import { Sparkles, Users, Zap, ShieldCheck, MapPin, Activity, DollarSign, LayoutDashboard } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useLanguage } from '@bin/shared';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import CeoContactButtons from './CeoContactButtons';
-
 import { useAuth } from '../context/AuthContext';
 
 const Navigation = () => {
@@ -24,34 +23,22 @@ const Navigation = () => {
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
 
-const primaryMenu = [
-    { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/admin/dashboard' },
-    { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/admin/financials/payroll', color: '#6366f1' },
-    { text: tx('fin.title', 'Financials'), icon: <AccountBalanceWalletIcon />, path: '/admin/financials', color: binThemeTokens.gold },
-    { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/admin/document-vault', color: binThemeTokens.gold },
-    { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/audit-shield', color: binThemeTokens.gold },
-    { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/admin/design-studio', color: binThemeTokens.gold },
-    { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/admin/orphans', color: '#ef4444' },
-    { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/admin/manual-approvals', color: '#10b981' },
-    { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/admin/control-center', color: '#ef4444' },
-    { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
-];
-
-    const managementMenu = [
-        { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/admin/owners' },
-        { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/admin/broker' },
-        { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/admin/tenants' },
-        { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/admin/properties/passport', color: binThemeTokens.gold },
-        { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/admin/technicians' },
-        { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/admin/ops/technicians', color: binThemeTokens.gold },
-        { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/admin/tickets' },
-        { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/admin/sos' },
-        { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/admin/audit' },
-        ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/admin/hr', color: binThemeTokens.gold }] : []),
+    const primaryMenu = [
+        { text: tx('nav.dashboard', 'Dashboard'), icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
+        { text: 'Sovereign Control', icon: <ShieldCheck size={20} />, path: '/admin/sovereign-control', color: binThemeTokens.gold },
+        { text: tx('fin.title', 'Financials'), icon: <DollarSign size={20} />, path: '/admin/financials', color: binThemeTokens.gold },
+        { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/admin/document-vault', color: binThemeTokens.gold },
+        { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/audit-shield', color: binThemeTokens.gold },
+        { text: 'Pricing Matrix 2026', icon: <Zap size={20} />, path: '/admin/pricing', color: binThemeTokens.gold },
     ];
 
-    const systemMenu = [
-        { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/admin/settings' },
+    const managementMenu = [
+        { text: tx('nav.owners', 'Owner Registry'), icon: <PeopleIcon />, path: '/admin/owners' },
+        { text: tx('nav.tenants', 'Tenant Registry'), icon: <PeopleIcon />, path: '/admin/tenants' },
+        { text: tx('nav.technicians', 'Technician Corps'), icon: <Users size={20} />, path: '/admin/technicians' },
+        { text: "Duty Command Center", icon: <Activity size={20} />, path: '/admin/duty-command', color: binThemeTokens.gold },
+        { text: tx('nav.tickets', 'Maintenance Logs'), icon: <ReceiptIcon />, path: '/admin/tickets' },
+        { text: 'HR Command', icon: <Users size={20} />, path: '/admin/hr', color: binThemeTokens.gold, hidden: !isHRAuthorized },
     ];
 
     return (
@@ -67,25 +54,23 @@ const primaryMenu = [
                     bgcolor: '#020617',
                     borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
                     borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
-                    right: isRTL ? 0 : 'auto',
-                    left: isRTL ? 'auto' : 0
                 },
             }}
         >
             <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.gold, letterSpacing: 2 }}>
                     BIN GROUP
                 </Typography>
-                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 4 }}>
-                    {t('nav.administry')}
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', letterSpacing: 4, fontWeight: 900 }}>
+                    SOVEREIGN ADMIN
                 </Typography>
             </Box>
             
             <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
             
             <List sx={{ px: 2, pt: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
-                    {t('nav.sovereign_core')}
+                <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                    COMMAND CORE
                 </Typography>
                 {primaryMenu.map((item) => (
                     <ListItem 
@@ -94,82 +79,45 @@ const primaryMenu = [
                         to={item.path} 
                         sx={{ 
                             borderRadius: 2, mb: 0.5,
-                            flexDirection: isRTL ? 'row-reverse' : 'row',
-                            textAlign: isRTL ? 'right' : 'left',
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: 40 }}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />
                     </ListItem>
                 ))}
             </List>
 
-            <List sx={{ px: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
-                    {t('nav.operations')}
+            <List sx={{ px: 2, mt: 2 }}>
+                <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                    OPERATIONS
                 </Typography>
-                {managementMenu.map((item) => (
+                {managementMenu.filter(i => !i.hidden).map((item) => (
                     <ListItem 
                         key={item.text} 
                         component={NavLink} 
                         to={item.path}
                         sx={{ 
                             borderRadius: 2, mb: 0.5,
-                            flexDirection: isRTL ? 'row-reverse' : 'row',
-                            textAlign: isRTL ? 'right' : 'left',
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: 40 }}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />
                     </ListItem>
                 ))}
             </List>
 
             <Box sx={{ mt: 'auto', p: 2 }}>
-                <List>
-                    {systemMenu.map((item) => (
-                        <ListItem 
-                            key={item.text} 
-                            component={NavLink} 
-                            to={item.path}
-                            sx={{ borderRadius: 2, textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
-                        >
-                            <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
-                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                        </ListItem>
-                    ))}
-                    <ListItem
-                        component="a"
-                        href="mailto:Ceo@bin-groups.com"
-                        target="_blank"
-                        sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#DAA520', 0.05), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
-                    >
-                        <ListItemIcon sx={{ color: '#DAA520', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><SecurityIcon /></ListItemIcon>
-                        <ListItemText primary={t('nav.support')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#DAA520' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                    </ListItem>
-                    <Box sx={{ mt: 2, mb: 1, px: 2 }}>
-                        <CeoContactButtons compact />
-                    </Box>
-                    <ListItem
-                        component="a"
-                        href="https://bin-groups.com"
-                        target="_blank"
-                        sx={{ borderRadius: 2, mt: 1, bgcolor: alpha('#10b981', 0.05), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
-                    >
-                        <ListItemIcon sx={{ color: '#10b981', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><PeopleIcon /></ListItemIcon>
-                        <ListItemText primary={t('nav.owner_portal_link')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#10b981' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                    </ListItem>
-                    <ListItem
-                        button
-                        onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
-                        sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
-                    >
-                        <ListItemIcon sx={{ color: '#ef4444', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><LogoutIcon /></ListItemIcon>
-                        <ListItemText primary={t('nav.logout') || 'Sign Out'} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#ef4444' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                    </ListItem>
-                </List>
+                <CeoContactButtons compact />
+                <ListItem
+                    button
+                    onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
+                    sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#ef4444', 0.1), '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
+                >
+                    <ListItemIcon sx={{ color: '#ef4444', minWidth: 40 }}><LogoutIcon /></ListItemIcon>
+                    <ListItemText primary="SECURE LOGOUT" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.75rem', color: '#ef4444' }} />
+                </ListItem>
             </Box>
         </Drawer>
     );

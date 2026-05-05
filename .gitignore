@@ -56,6 +56,9 @@ hosting/public/
 .env.production
 .env.development
 .env.*.local
+apps/**/.env
+apps/**/.env.local
+**/.env.local
 
 # IDE / OS
 .vscode/

@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             try {
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 15000);
+                    setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 8000);
                 });
 
                 const authResolutionPromise = Promise.all([

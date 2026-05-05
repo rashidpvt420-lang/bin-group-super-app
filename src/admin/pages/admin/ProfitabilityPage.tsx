@@ -231,7 +231,7 @@ export default function CFODashboard() {
                             <TableBody>
                                 {stats?.portfolioCount ? snapshotData.map((row: any) => (
                                     <TableRow key={row.id} hover>
-                                        <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || 'Unnamed Asset'}</TableCell>
+                                        <TableCell sx={{ fontWeight: 800 }}>{String(row.propertyName || row.address || 'Unnamed Asset')}</TableCell>
                                         <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
                                         <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
                                         <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>

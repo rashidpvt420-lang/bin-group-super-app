@@ -1,20 +1,17 @@
-// admin-panel/src/pages/sos/SOSFeedPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
-  Paper,
-  Typography,
-  Chip,
-  Grid,
-  Button,
-  Box,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
+  Paper, Typography, Chip, Grid, Button, Box,
+  Avatar, List, ListItem, ListItemText, ListItemAvatar,
+  alpha, Stack, IconButton, Tooltip
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { 
+    AlertTriangle, ShieldAlert, CheckCircle, Clock, 
+    Activity, Bell, User, MapPin, Zap, Siren
+} from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, limit, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useLanguage, binThemeTokens } from '@bin/shared';
+import AdminPageFrame from '../../components/AdminPageFrame';
 
 interface SOSEvent {
   sosId: string;
@@ -23,293 +20,178 @@ interface SOSEvent {
   status: 'ACTIVE' | 'RESPONDED' | 'RESOLVED';
   description: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
-  createdAt: string;
-  respondedAt?: string;
-  resolvedAt?: string;
+  createdAt: any;
+  respondedAt?: any;
+  resolvedAt?: any;
   assignedTechnician?: string;
   emergencyChargeApplied: number;
 }
 
 export default function SOSFeedPage() {
+  const { t, isRTL } = useLanguage();
   const [sosEvents, setSOSEvents] = useState<SOSEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
-    fetchSOSFeed();
-
-    if (autoRefresh) {
-      const interval = setInterval(fetchSOSFeed, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh]);
-
-  const fetchSOSFeed = async () => {
-    try {
-      const response = await apiClient.get('/api/admin/sos-feed');
-      setSOSEvents(response?.data?.sosEvents || []);
-    } catch (error) {
-      console.error('Failed to fetch SOS feed:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const q = query(collection(db, 'sos_alerts'), orderBy('createdAt', 'desc'), limit(20));
+    const unsubscribe = onSnapshot(q, (snap) => {
+        setSOSEvents(snap.docs.map(d => ({ sosId: d.id, ...d.data() } as SOSEvent)));
+        setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleRespond = async (sosId: string) => {
     try {
-      await apiClient.post(`/api/admin/sos/${sosId}/respond`);
-      alert('SOS acknowledged');
-      fetchSOSFeed();
-    } catch (error) {
-      console.error('Failed to respond to SOS:', error);
-      alert('Failed to respond');
+      await updateDoc(doc(db, 'sos_alerts', sosId), {
+        status: 'RESPONDED',
+        respondedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const handleResolve = async (sosId: string) => {
     try {
-      await apiClient.post(`/api/admin/sos/${sosId}/resolve`);
-      alert('SOS resolved');
-      fetchSOSFeed();
-    } catch (error) {
-      console.error('Failed to resolve SOS:', error);
-      alert('Failed to resolve');
+      await updateDoc(doc(db, 'sos_alerts', sosId), {
+        status: 'RESOLVED',
+        resolvedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const getStatusColor = (status: string): any => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'error';
-      case 'RESPONDED':
-        return 'warning';
-      case 'RESOLVED':
-        return 'success';
-      default:
-        return 'default';
-    }
+  const getPriorityStyle = (priority: string) => {
+    if (priority === 'CRITICAL') return { color: '#EF4444', icon: <Siren size={24} className="animate-pulse" /> };
+    if (priority === 'HIGH') return { color: '#F59E0B', icon: <AlertTriangle size={24} /> };
+    return { color: '#10B981', icon: <Bell size={24} /> };
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'CRITICAL':
-        return '#d32f2f';
-      case 'HIGH':
-        return '#f57c00';
-      case 'MEDIUM':
-        return '#fbc02d';
-      default:
-        return '#666';
-    }
-  };
-
-  const getMinutesSince = (date: string) => {
-    const mins = Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60));
-    if (mins < 1) return 'Now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
-  };
-
-  const activeCount = (sosEvents || []).filter((e) => e.status === 'ACTIVE').length;
-  const respondedCount = (sosEvents || []).filter((e) => e.status === 'RESPONDED').length;
-  const resolvedCount = (sosEvents || []).filter((e) => e.status === 'RESOLVED').length;
-
-  if (loading) {
-    return <Typography>Loading SOS Feed...</Typography>;
-  }
+  const activeCount = sosEvents.filter(e => e.status === 'ACTIVE').length;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">SOS Emergency Feed (LIVE)</Typography>
-        <Button
-          variant={autoRefresh ? 'contained' : 'outlined'}
-          onClick={() => setAutoRefresh(!autoRefresh)}
-        >
-          {autoRefresh ? '🔴 Live' : '⚪ Paused'}
-        </Button>
-      </Box>
-
-      {/* Statistics */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#ffebee', borderLeft: '4px solid #d32f2f' }}>
-            <Typography color="textSecondary" gutterBottom>
-              Active Emergencies
-            </Typography>
-            <Typography variant="h5" color="error">
-              {activeCount}
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#fff3e0', borderLeft: '4px solid #f57c00' }}>
-            <Typography color="textSecondary" gutterBottom>
-              Responded
-            </Typography>
-            <Typography variant="h5" style={{ color: '#f57c00' }}>
-              {respondedCount}
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#e8f5e9', borderLeft: '4px solid #4caf50' }}>
-            <Typography color="textSecondary" gutterBottom>
-              Resolved
-            </Typography>
-            <Typography variant="h5" color="success">
-              {resolvedCount}
-            </Typography>
-          </Paper>
-        </Grid>
+    <AdminPageFrame
+      title={t('sos.feed_title') || 'EMERGENCY SOS COMMAND'}
+      subtitle="Critical real-time monitoring of life-safety incidents and rapid dispatch"
+      loading={loading}
+      breadcrumbs={[{ label: 'SOS Feed' }]}
+      actions={
+          <Stack direction="row" spacing={2} alignItems="center">
+              <Box sx={{ px: 2, py: 1, bgcolor: alpha('#EF4444', 0.1), borderRadius: 2, border: '1px solid rgba(239,68,68,0.2)' }}>
+                  <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Activity size={14} /> LIVE TELEMETRY
+                  </Typography>
+              </Box>
+          </Stack>
+      }
+    >
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+          {[
+              { label: 'ACTIVE ALERTS', val: activeCount, color: '#EF4444', icon: <ShieldAlert size={20} /> },
+              { label: 'PENDING RESOLUTION', val: sosEvents.filter(e => e.status === 'RESPONDED').length, color: '#F59E0B', icon: <Clock size={20} /> },
+              { label: 'TOTAL RESOLVED (24H)', val: sosEvents.filter(e => e.status === 'RESOLVED').length, color: '#10B981', icon: <CheckCircle size={20} /> }
+          ].map((stat, i) => (
+              <Grid item xs={12} md={4} key={i}>
+                  <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: `1px solid ${alpha(stat.color, 0.1)}` }}>
+                      <Stack direction="row" spacing={2} alignItems="center">
+                          <Box sx={{ p: 1.5, bgcolor: alpha(stat.color, 0.1), color: stat.color, borderRadius: 2 }}>{stat.icon}</Box>
+                          <Box>
+                              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950 }}>{stat.label}</Typography>
+                              <Typography variant="h4" sx={{ fontWeight: 950, color: '#FFF' }}>{stat.val}</Typography>
+                          </Box>
+                      </Stack>
+                  </Paper>
+              </Grid>
+          ))}
       </Grid>
 
-      {/* SOS Events List */}
-      <List>
-        {(sosEvents || []).map((event) => (
-          <ListItem
-            component={Paper}
-            key={event.sosId}
-            sx={{
-              mb: 2,
-              border: `2px solid ${getPriorityColor(event.priority)}`,
-              borderRadius: 1,
-            }}
-          >
-            <ListItemAvatar>
-              <Avatar
-                sx={{
-                  backgroundColor: getPriorityColor(event.priority),
-                  mr: 2,
-                  width: 56,
-                  height: 56,
-                }}
-              >
-                🚨
-              </Avatar>
-            </ListItemAvatar>
+      <List sx={{ p: 0 }}>
+        {sosEvents.map((event) => {
+          const style = getPriorityStyle(event.priority);
+          return (
+            <ListItem
+              key={event.sosId}
+              sx={{
+                mb: 2,
+                borderRadius: 4,
+                bgcolor: 'rgba(255,255,255,0.01)',
+                border: `1px solid ${event.status === 'ACTIVE' ? alpha(style.color, 0.3) : 'rgba(255,255,255,0.05)'}`,
+                p: 3,
+                transition: 'all 0.3s ease',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' }
+              }}
+            >
+              <ListItemAvatar>
+                <Avatar sx={{ width: 60, height: 60, bgcolor: alpha(style.color, 0.1), color: style.color, mr: 2 }}>
+                  {style.icon}
+                </Avatar>
+              </ListItemAvatar>
 
-            <ListItemText
-              primary={
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
-                  <Typography variant="h6">{event.sosId}</Typography>
-                  <Chip label={event.priority} size="small" color="error" />
-                  <Chip label={event.status} size="small" color={getStatusColor(event.status)} />
-                </Box>
-              }
-              secondary={
-                <Box>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    <strong>Unit:</strong> {event.unitId} | <strong>Charge:</strong> AED {event.emergencyChargeApplied}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {event.description}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    📅 {getMinutesSince(event.createdAt)} | {new Date(event.createdAt).toLocaleTimeString()}
-                  </Typography>
-                  {event.assignedTechnician && (
-                    <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
-                      👨‍🔧 Assigned to: {event.assignedTechnician}
-                    </Typography>
-                  )}
-                </Box>
-              }
-            />
+              <ListItemText
+                primary={
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 950, color: '#FFF' }}>#{String(event.sosId || '').slice(0,8).toUpperCase()}</Typography>
+                    <Chip label={String(event.priority || '').toUpperCase()} size="small" sx={{ bgcolor: alpha(style.color, 0.1), color: style.color, fontWeight: 950, fontSize: '0.65rem' }} />
+                    <Chip 
+                        label={event.status} 
+                        size="small" 
+                        sx={{ 
+                            bgcolor: event.status === 'RESOLVED' ? alpha('#10B981', 0.1) : 'rgba(255,255,255,0.05)', 
+                            color: event.status === 'RESOLVED' ? '#10B981' : 'rgba(255,255,255,0.4)',
+                            fontWeight: 950, fontSize: '0.65rem'
+                        }} 
+                    />
+                  </Stack>
+                }
+                secondary={
+                  <Box>
+                    <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 600, mb: 1 }}>{event.description}</Typography>
+                    <Stack direction="row" spacing={3}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <MapPin size={14} color={binThemeTokens.gold} />
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>UNIT {event.unitId || 'N/A'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Zap size={14} color="#EF4444" />
+                            <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 900 }}>SURGE: AED {event.emergencyChargeApplied}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Clock size={14} color="rgba(255,255,255,0.3)" />
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                                {event.createdAt?.toDate ? event.createdAt.toDate().toLocaleString() : 'N/A'}
+                            </Typography>
+                        </Box>
+                    </Stack>
+                  </Box>
+                }
+              />
 
-            {/* Actions */}
-            <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
-              {event.status === 'ACTIVE' && (
-                <>
+              <Stack direction="row" spacing={2} sx={{ ml: 4 }}>
+                {event.status === 'ACTIVE' && (
                   <Button
-                    size="small"
                     variant="contained"
-                    color="warning"
+                    sx={{ bgcolor: '#F59E0B', color: '#000', fontWeight: 950, borderRadius: 2 }}
                     onClick={() => handleRespond(event.sosId)}
                   >
-                    Respond
+                    RESPOND
                   </Button>
+                )}
+                {['ACTIVE', 'RESPONDED'].includes(event.status) && (
                   <Button
-                    size="small"
                     variant="contained"
-                    color="success"
+                    sx={{ bgcolor: '#10B981', color: '#000', fontWeight: 950, borderRadius: 2 }}
                     onClick={() => handleResolve(event.sosId)}
                   >
-                    Resolve
+                    RESOLVE
                   </Button>
-                </>
-              )}
-              {event.status === 'RESPONDED' && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="success"
-                  onClick={() => handleResolve(event.sosId)}
-                >
-                  Resolve
-                </Button>
-              )}
-              {event.status === 'RESOLVED' && (
-                <Chip label="✓ Resolved" color="success" />
-              )}
-            </Box>
-          </ListItem>
-        ))}
+                )}
+              </Stack>
+            </ListItem>
+          );
+        })}
       </List>
-
-      {/* Verified risk controls */}
-      <Box sx={{ mt: 8 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: '#0f172a' }}>
-          Risk Management Controls
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Tenant Access Review</Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Account restrictions must be handled from verified tenant records with an audit reason. This SOS page does not change user access from a simulated list.
-              </Typography>
-              <List>
-                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
-                  <ListItemText
-                    primary="Verified tenant record required"
-                    secondary="Use Tenant Management to review tenancy status, payment records, complaint history, and supporting evidence."
-                  />
-                </ListItem>
-                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
-                  <ListItemText
-                    primary="Audit reason required"
-                    secondary="Any restriction must be linked to an authenticated admin action and preserved in the audit log."
-                  />
-                </ListItem>
-              </List>
-              <Button variant="outlined" color="inherit" size="small" disabled>
-                Use Tenant Management for audited restrictions
-              </Button>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Technician Safety Monitor</Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Live tracking must come from technician location telemetry. This panel does not display simulated field pulses.
-              </Typography>
-              <Box sx={{ p: 2, bgcolor: '#0f172a', color: '#fff', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: '#10b981', display: 'block' }}>Telemetry source required</Typography>
-                <Typography variant="caption" sx={{ color: '#fff', opacity: 0.7 }}>Last pulse appears only after a real technician location update.</Typography>
-              </Box>
-              <Button 
-                variant="outlined" 
-                fullWidth 
-                sx={{ mt: 2 }}
-                disabled
-              >
-                Live tracker pending telemetry
-              </Button>
-            </Paper>
-          </Grid>
-        </Grid>
-      </Box>
-    </Container>
+    </AdminPageFrame>
   );
 }

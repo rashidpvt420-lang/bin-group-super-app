@@ -3,10 +3,11 @@ import {
     Grid, Typography, Box, Paper, Button, Chip, 
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Dialog, DialogTitle, DialogContent, DialogActions, Alert, 
-    CircularProgress, alpha, Stack, IconButton
+    CircularProgress, alpha, Stack, IconButton, Avatar
 } from '@mui/material';
 import { 
-    Wallet, Clock, FileText, Send, CheckCircle, AlertCircle
+    Wallet, Clock, FileText, Send, CheckCircle, AlertCircle,
+    TrendingDown, ArrowUpRight, DollarSign, Download, Settings
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -34,7 +35,7 @@ interface PayrollRecord {
 }
 
 export default function PayrollManagementPage() {
-    const { t, lang } = useLanguage();
+    const { t } = useLanguage();
     const [techs, setTechs] = useState<Technician[]>([]);
     const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -79,17 +80,6 @@ export default function PayrollManagementPage() {
                     status: 'pending',
                     createdAt: serverTimestamp(),
                 });
-
-                const txRef = doc(collection(db, 'transactions'));
-                batch.set(txRef, {
-                    techId: tech.uid,
-                    amount,
-                    type: 'debit',
-                    category: 'payroll',
-                    description: `Salary for ${tech.displayName || tech.email} - ${currentMonth}`,
-                    status: 'PENDING',
-                    createdAt: serverTimestamp(),
-                });
             }
             await batch.commit();
             setOpenAdd(false);
@@ -100,139 +90,146 @@ export default function PayrollManagementPage() {
         }
     };
 
-    const handleSettlePayment = async (record: PayrollRecord) => {
-        setProcessing(true);
-        try {
-            const payslipNode = httpsCallable(functions, 'processStaffPayslip');
-            await payslipNode({ payrollId: record.id });
-        } catch (err) {
-            console.error("Payslip Node Fault:", err);
-        } finally {
-            setProcessing(false);
-        }
-    };
-
     const totalPayroll = payroll
         .filter(p => p.month === currentMonth)
         .reduce((sum, p) => sum + p.amount, 0);
 
+    const StatCard = ({ label, value, sub, icon: Icon, color }: any) => (
+        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
+            <Box sx={{ position: 'absolute', top: -10, right: -10, opacity: 0.05 }}>
+                <Icon size={120} color={color} />
+            </Box>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>{label}</Typography>
+            <Typography variant="h3" fontWeight="950" sx={{ color: color || '#FFF', my: 1 }}>{value}</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>{sub}</Typography>
+        </Paper>
+    );
+
     return (
         <AdminPageFrame
-            title={t('fin.payroll_title') || 'Payroll Management'}
-            subtitle={t('fin.payroll_subtitle') || 'Institutional disbursement & staff compensation'}
+            title="Payroll Hub"
+            subtitle="Institutional staff compensation and financial disbursement terminal"
             loading={loading}
-            isEmpty={payroll.length === 0}
-            emptyMessage={t('fin.payroll_empty') || 'No payroll records found.'}
-            breadcrumbs={[{ label: t('fin.payroll') }]}
+            breadcrumbs={[{ label: 'Financials' }, { label: 'Payroll' }]}
             actions={
-                <Button 
-                    variant="contained" 
-                    startIcon={<Wallet size={18} />}
-                    onClick={() => setOpenAdd(true)}
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                >
-                    {t('fin.gen_payroll_btn')}
-                </Button>
+                <Stack direction="row" spacing={2}>
+                    <Button variant="outlined" startIcon={<Download size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}>EXPORT CSV</Button>
+                    <Button 
+                        variant="contained" 
+                        startIcon={<Wallet size={18} />}
+                        onClick={() => setOpenAdd(true)}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                    >
+                        INITIALIZE CYCLE
+                    </Button>
+                </Stack>
             }
         >
             <Grid container spacing={4}>
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
-                        <Typography variant="overline" color="textSecondary" sx={{ fontWeight: 900 }}>{t('fin.active_liabilities')}</Typography>
-                        <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.gold }}>
-                            AED {totalPayroll.toLocaleString()}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">{currentMonth}</Typography>
-                    </Paper>
+                {/* FINANCIAL OVERVIEW */}
+                <Grid item xs={12} md={4}>
+                    <StatCard label="Total Liability" value={`AED ${totalPayroll.toLocaleString()}`} sub={`Month: ${currentMonth}`} icon={TrendingDown} color={binThemeTokens.gold} />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <StatCard label="Personnel Count" value={techs.length} sub="Active Tech Corps" icon={Users} color="#6366f1" />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <StatCard label="Pending Payouts" value={payroll.filter(p => p.status === 'pending').length} sub="Requiring Authorization" icon={Clock} color="#ef4444" />
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}>
-                            <Clock size={32} color={binThemeTokens.gold} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" color="textSecondary" sx={{ fontWeight: 900 }}>{t('fin.pending_disbursement')}</Typography>
-                            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>
-                                {payroll.filter(p => p.status === 'pending').length} {t('common.staff')}
-                            </Typography>
-                        </Box>
-                    </Paper>
-                </Grid>
-
+                {/* MAIN LEDGER */}
                 <Grid item xs={12}>
-                    <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)' }}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>{t('fin.table.technician').toUpperCase()}</TableCell>
-                                    <TableCell>{t('fin.table.month').toUpperCase()}</TableCell>
-                                    <TableCell>{t('fin.table.amount').toUpperCase()}</TableCell>
-                                    <TableCell>{t('design.table.status').toUpperCase()}</TableCell>
-                                    <TableCell align="right">{t('common.actions').toUpperCase()}</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {payroll.sort((a,b) => b.month.localeCompare(a.month)).map((record) => (
-                                    <TableRow key={record.id} hover>
-                                        <TableCell sx={{ fontWeight: 800, color: '#FFF' }}>{record.techName}</TableCell>
-                                        <TableCell>{record.month}</TableCell>
-                                        <TableCell sx={{ fontWeight: 900, color: binThemeTokens.gold }}>
-                                            AED {record.amount.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip 
-                                                label={record.status?.toUpperCase()} 
-                                                size="small"
-                                                color={record.status === 'paid' ? 'success' : 'warning'}
-                                                sx={{ fontWeight: 900, fontSize: '0.65rem' }}
-                                            />
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            {record.status === 'pending' ? (
-                                                <Button 
-                                                    size="small" 
-                                                    variant="contained" 
-                                                    color="success" 
-                                                    onClick={() => handleSettlePayment(record)}
-                                                    disabled={processing}
-                                                    startIcon={processing ? <CircularProgress size={14} color="inherit" /> : <Send size={14} />}
-                                                    sx={{ borderRadius: 2, fontWeight: 900 }}
-                                                >
-                                                    {t('fin.settle_payment') || 'PAY'}
-                                                </Button>
-                                            ) : (
-                                                <IconButton size="small">
-                                                    <FileText size={18} color={binThemeTokens.gold} />
-                                                </IconButton>
-                                            )}
-                                        </TableCell>
+                    <Paper sx={{ p: 0, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="h6" fontWeight="950" color="#FFF">STAFF DISBURSEMENT LEDGER</Typography>
+                            <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}><Settings size={18} /></IconButton>
+                        </Box>
+                        <TableContainer>
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>PERSONNEL</TableCell>
+                                        <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>CYCLE</TableCell>
+                                        <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>GROSS AMOUNT</TableCell>
+                                        <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>DISBURSEMENT STATUS</TableCell>
+                                        <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>ACTIONS</TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                </TableHead>
+                                <TableBody>
+                                    {payroll.sort((a,b) => b.month.localeCompare(a.month)).map((record) => (
+                                        <TableRow key={record.id} hover>
+                                            <TableCell>
+                                                <Stack direction="row" spacing={2} alignItems="center">
+                                                    <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(binThemeTokens.gold, 0.2), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.8rem' }}>
+                                                        {record.techName?.charAt(0)}
+                                                    </Avatar>
+                                                    <Typography variant="body2" fontWeight="800" color="#FFF">{record.techName}</Typography>
+                                                </Stack>
+                                            </TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{record.month}</TableCell>
+                                            <TableCell sx={{ fontWeight: 950, color: binThemeTokens.gold }}>
+                                                AED {record.amount.toLocaleString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip 
+                                                    label={record.status?.toUpperCase()} 
+                                                    size="small"
+                                                    sx={{ 
+                                                        fontWeight: 950, fontSize: '0.6rem',
+                                                        bgcolor: record.status === 'paid' ? alpha('#10b981', 0.1) : alpha('#f59e0b', 0.1),
+                                                        color: record.status === 'paid' ? '#10b981' : '#f59e0b'
+                                                    }}
+                                                />
+                                            </TableCell>
+                                            <TableCell align="right">
+                                                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                                    <Button size="small" startIcon={<FileText size={14} />} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: '0.65rem' }}>DOCS</Button>
+                                                    {record.status === 'pending' && (
+                                                        <Button 
+                                                            size="small" 
+                                                            variant="contained" 
+                                                            startIcon={<Send size={14} />}
+                                                            sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, fontSize: '0.65rem', borderRadius: 2 }}
+                                                        >
+                                                            DISBURSE
+                                                        </Button>
+                                                    )}
+                                                </Stack>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Paper>
                 </Grid>
             </Grid>
 
-            <Dialog open={openProcess} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' } }}>
-                <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>{t('fin.gen_payroll_title')}</DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2, color: 'rgba(255,255,255,0.6)' }}>
-                        {t('fin.gen_payroll_desc')}
+            {/* INITIALIZE DIALOG */}
+            <Dialog open={openProcess} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 5, border: '1px solid rgba(255,255,255,0.1)' } }}>
+                <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold, borderBottom: '1px solid rgba(255,255,255,0.05)', py: 3 }}>
+                    INITIALIZE PAYROLL CYCLE
+                </DialogTitle>
+                <DialogContent sx={{ py: 3 }}>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>
+                        This will generate pending payroll records for all active technicians for the current cycle ({currentMonth}).
                     </Typography>
-                    <Alert severity="info" icon={<AlertCircle />}>
-                        {t('fin.gen_payroll_info', { count: techs.length })}
-                    </Alert>
+                    <Paper sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 3 }}>
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <AlertCircle color={binThemeTokens.gold} size={24} />
+                            <Typography variant="body2" fontWeight="900" color="#FFF">
+                                {techs.length} Technicians detected in current roster.
+                            </Typography>
+                        </Stack>
+                    </Paper>
                 </DialogContent>
-                <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('common.cancel')}</Button>
-                    <Button variant="contained" onClick={handleProcessPayroll} disabled={processing} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                        {t('fin.confirm_execute')}
+                <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+                    <Button variant="contained" onClick={handleProcessPayroll} disabled={processing} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
+                        {processing ? <CircularProgress size={18} color="inherit" /> : 'EXECUTE GENERATION'}
                     </Button>
                 </DialogActions>
             </Dialog>
         </AdminPageFrame>
     );
 }
-

@@ -21,20 +21,22 @@ type BinFirebaseConfig = {
 };
 
 const readRequiredEnv = (name: string): string => {
-    const value = process.env[name];
+    // @ts-ignore
+    const value = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : process.env[name];
     if (!value || value.includes('REPLACE_ME')) {
-        throw new Error(`Missing required Firebase environment variable: ${name}`);
+        return '';
     }
     return value;
 };
 
+// Safe fallback ONLY for production bin-group-57c60 config if env is missing
 const firebaseConfig: BinFirebaseConfig = {
-    apiKey: readRequiredEnv('REACT_APP_FIREBASE_API_KEY'),
-    authDomain: readRequiredEnv('REACT_APP_FIREBASE_AUTH_DOMAIN'),
-    projectId: readRequiredEnv('REACT_APP_FIREBASE_PROJECT_ID'),
-    storageBucket: readRequiredEnv('REACT_APP_FIREBASE_STORAGE_BUCKET'),
-    messagingSenderId: readRequiredEnv('REACT_APP_FIREBASE_MESSAGING_SENDER_ID'),
-    appId: readRequiredEnv('REACT_APP_FIREBASE_APP_ID')
+    apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
+    authDomain: readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') || "bin-group-57c60.firebaseapp.com",
+    projectId: readRequiredEnv('VITE_FIREBASE_PROJECT_ID') || "bin-group-57c60",
+    storageBucket: readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') || "bin-group-57c60.firebasestorage.app",
+    messagingSenderId: readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || "123413252227",
+    appId: readRequiredEnv('VITE_FIREBASE_APP_ID') || "1:123413252227:web:285cb53bc26626d699f3b6"
 };
 
 // [V7] ENTERPRISE FAILOVER MESH

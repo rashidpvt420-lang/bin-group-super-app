@@ -5,6 +5,7 @@ import {
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
     IconButton, Alert
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { 
     DollarSign, 
     FileText, UserPlus, ChevronRight, Search as SearchIcon
@@ -18,6 +19,7 @@ import { auth, functions } from '@/lib/firebase';
 
 export default function HRManagementPage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [tab, setTab] = useState(0);
     const [staff, setStaff] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -39,7 +41,7 @@ export default function HRManagementPage() {
     }, []);
 
     const getStatusColor = (status: string) => {
-        switch (status?.toUpperCase()) {
+        switch (String(status || '').toUpperCase()) {
             case 'ACTIVE': return '#10b981';
             case 'ON_LEAVE': return '#f59e0b';
             case 'INACTIVE': return '#ef4444';
@@ -80,14 +82,22 @@ export default function HRManagementPage() {
                             HR <Box component="span" sx={{ color: binThemeTokens.gold }}>Command</Box>
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={2}>
-                        {isHRManager && (
-                            <Button variant="contained" startIcon={<UserPlus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                REGISTER STAFF
+                        <Stack direction="row" spacing={2}>
+                            <Button 
+                                variant="outlined" 
+                                startIcon={<DollarSign size={18} />} 
+                                onClick={() => navigate('/admin/financials/payroll')}
+                                sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}
+                            >
+                                OPEN PAYROLL / FINANCIALS
                             </Button>
-                        )}
-                    </Stack>
-                </Box>
+                            {isHRManager && (
+                                <Button variant="contained" startIcon={<UserPlus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                    REGISTER STAFF
+                                </Button>
+                            )}
+                        </Stack>
+                    </Box>
 
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 4, '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}>
                     <Tab label="STAFF REGISTRY" />
@@ -150,7 +160,7 @@ export default function HRManagementPage() {
                                                 </Stack>
                                             </TableCell>
                                             <TableCell>
-                                                <Typography variant="body2" fontWeight="700" color="#FFF">{s.role?.toUpperCase()}</Typography>
+                                                <Typography variant="body2" fontWeight="700" color="#FFF">{String(s.role || 'STAFF').toUpperCase()}</Typography>
                                                 <Typography variant="caption" color="textSecondary">{s.specialization || 'N/A'}</Typography>
                                             </TableCell>
                                             <TableCell>
