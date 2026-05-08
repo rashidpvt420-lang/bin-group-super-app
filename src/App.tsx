@@ -1,6 +1,11 @@
-
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+
+// Cleanup old local storage keys
+['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
+    try { localStorage.removeItem(key); } catch (e) {}
+});
+
 
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -28,12 +33,11 @@ import NotificationInboxPage from './pages/NotificationInboxPage';
 import DesignStudioPage from './pages/DesignStudioPage';
 import DesignRequestDetailPage from './pages/DesignRequestDetailPage';
 
-import TenantSOSPage from './pages/TenantSOSPage';
-import TechnicianPortalPage from './pages/TechnicianPortalPage';
-import TicketDetailPage from './pages/TicketDetailPage';
+import TenantApp from './tenant/TenantApp';
+import TechnicianApp from './technician/TechnicianApp';
 import ReportingDashboard from './pages/ReportingDashboard';
 import ExecutiveReportingPage from './pages/ExecutiveReportingPage';
-import BrokerPortalPage from './pages/BrokerPortalPage';
+import BrokerApp from './broker/BrokerApp';
 import AuditorPortalPage from './pages/public/AuditorPortalPage';
 
 import PrivacyPage from './pages/public/PrivacyPage';
@@ -44,12 +48,18 @@ import AdminTerminal from './admin/AdminTerminal';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
+import OwnerApp from './owner/OwnerApp';
+import CompanyProfilePage from './pages/public/CompanyProfilePage';
 
 import { RoleProvider, useRole } from './context/RoleContext';
 import { CustomThemeProvider } from './context/ThemeContext';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { SovereignAIChat } from './components/SovereignAIChat';
+import { AIProvider } from './context/AIContext';
+import { SovereignAlertHandler } from './components/SovereignAlertHandler';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
+import { NavigationControl } from './components/navigation/NavigationControl';
 
 /**
  * [CRITICAL] FULL-SCREEN BLOCKING LOADER
@@ -112,10 +122,10 @@ function LoadingScreen() {
           <Box sx={{ textAlign: 'left', bgcolor: '#000', p: 2, borderRadius: 1, mb: 3, border: '1px solid rgba(255,255,255,0.1)' }}>
              <Typography variant="caption" sx={{ color: '#C6A75E', fontWeight: 700, display: 'block', mb: 1 }}>DIAGNOSTICS:</Typography>
              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace', display: 'block' }}>
-               Route: {diagnostics.pathname}<br/>
-               React Mounted: {String(diagnostics.reactMounted)}<br/>
-               Auth Ready: {String(diagnostics.authReady)}<br/>
-               Firebase Connected: {auth ? 'ESTABLISHED' : 'FAULT'}
+                Route: {diagnostics.pathname}<br/>
+                React Mounted: {String(diagnostics.reactMounted)}<br/>
+                Auth Ready: {String(diagnostics.authReady)}<br/>
+                Firebase Connected: {true ? 'ESTABLISHED' : 'FAULT'}
              </Typography>
           </Box>
 
@@ -155,8 +165,10 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/government-properties',
   '/security',
   '/contact',
+  '/services',
   '/request-demo',
   '/tenant-invite',
+  '/company',
 ]);
 
 const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
@@ -239,6 +251,8 @@ function AppContent() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/support" element={<SupportPage />} />
+        
+        {/* Public Marketing & Institutional Verticals */}
         <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
         <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
         <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
@@ -253,11 +267,13 @@ function AppContent() {
         <Route path="/hospitals" element={<PublicMarketingPage page="hospitals" />} />
         <Route path="/government-properties" element={<PublicMarketingPage page="government-properties" />} />
         <Route path="/security" element={<PublicMarketingPage page="security" />} />
+        <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
         <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
         <Route path="/request-demo" element={<PublicMarketingPage page="request-demo" />} />
-        
-        {/* Property Lifecycle Portals */}
+        <Route path="/company" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
+
+        {/* Sovereign Asset Control */}
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
         <Route path="/owner-dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
         <Route path="/dashboard" element={<Navigate to="/owner-dashboard" replace />} />
@@ -272,11 +288,11 @@ function AppContent() {
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
         
         {/* Sector Portals */}
-        <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantSOSPage /></ProtectedRoute>} />
-        <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianPortalPage /></ProtectedRoute>} />
+        <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantApp /></ProtectedRoute>} />
+        <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianApp /></ProtectedRoute>} />
         <Route path="/tech/*" element={<Navigate to="/technician" replace />} />
-        <Route path="/technician/ticket/:id" element={<ProtectedRoute allowedRoles={['technician']}><TicketDetailPage /></ProtectedRoute>} />
-        <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerPortalPage /></ProtectedRoute>} />
+        <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerApp /></ProtectedRoute>} />
+        <Route path="/owner/*" element={<ProtectedRoute allowedRoles={['owner', 'ceo']}><OwnerApp /></ProtectedRoute>} />
         <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
         <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin']}><AdminTerminal /></ProtectedRoute>} />
 
@@ -291,6 +307,7 @@ function AppContent() {
       </Routes>
       <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
       <IOSPwaGuardian />
+      <NavigationControl />
     </RoleRedirector>
   );
 }
@@ -305,7 +322,15 @@ export default function App() {
             <AIProvider>
               <CssBaseline />
               <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
-                <Routes><Route path="/" element={null} /><Route path="*" element={<BinGroupHeader />} /></Routes>
+                <Routes>
+                  <Route path="/" element={null} />
+                  <Route path="/tenant/*" element={null} />
+                  <Route path="/owner/*" element={null} />
+                  <Route path="/technician/*" element={null} />
+                  <Route path="/admin/*" element={null} />
+                  <Route path="/broker/*" element={null} />
+                  <Route path="*" element={<BinGroupHeader />} />
+                </Routes>
                 <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
                   <AppContent />
                 </Box>

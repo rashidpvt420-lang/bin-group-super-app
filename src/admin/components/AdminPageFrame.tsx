@@ -13,7 +13,7 @@ import {
     Clock
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../theme/adminTheme';
 
 interface AdminPageFrameProps {

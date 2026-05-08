@@ -110,7 +110,7 @@ async function runPilot() {
             const rawToken = crypto.randomBytes(32).toString('hex');
             const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-            const inviteLink = "https://bin-group-57c60.web.app/tenant-invite?token=" + rawToken;
+            const inviteLink = "https://bin-groups.com/tenant-invite?token=" + rawToken;
             console.log(chalk.magenta(`🔗 Invitation Link for ${invite.tenantEmail}: ${inviteLink}`));
 
             mailBatch.update(inviteRef, {

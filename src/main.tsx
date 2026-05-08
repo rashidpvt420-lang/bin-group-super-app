@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import SovereignErrorBoundary from './components/SovereignErrorBoundary';
-import { setupSovereignAlertInterceptor } from '@bin/shared';
+import { setupSovereignAlertInterceptor } from './components/SovereignAlertHandler';
 
 setupSovereignAlertInterceptor();
 

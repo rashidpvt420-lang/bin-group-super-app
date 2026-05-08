@@ -4,7 +4,7 @@ import {
     Divider, IconButton, TextField, Typography, InputAdornment,
     Alert, CircularProgress, Stack, Grid, alpha
 } from '@mui/material';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -34,12 +34,7 @@ const LoginPage: React.FC = () => {
             else if (role === 'technician') navigate('/technician');
             else if (role === 'broker') navigate('/broker');
             else if (role === 'admin' || isAdmin) {
-                const adminUrl = 'https://bin-group-57c60-admin.web.app';
-                if (window.location.hostname.includes('admin')) {
-                    navigate('/dashboard');
-                } else {
-                    window.location.href = adminUrl;
-                }
+                navigate('/admin');
             }
             else navigate('/owner-dashboard');
         }

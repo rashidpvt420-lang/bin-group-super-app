@@ -3,15 +3,16 @@ import {
   Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Button, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, Chip, Grid,
-  Typography, alpha, Stack, IconButton, Avatar
+  Typography, alpha, Stack, IconButton, Avatar, Box
 } from '@mui/material';
 import { 
     Users, Shield, ExternalLink, Mail, Phone, 
     Building2, Layout, Wallet, History
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, doc, updateDoc, orderBy } from 'firebase/firestore';
-import { useLanguage, binThemeTokens } from '@bin/shared';
+import { collection, onSnapshot, query, where, doc, updateDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useLanguage } from '../../../context/LanguageContext';
+import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { useNavigate } from 'react-router-dom';
 
@@ -88,6 +89,34 @@ export default function OwnerManagementPage() {
     }
   };
 
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newOwnerData, setNewOwnerData] = useState({ name: '', email: '', phone: '' });
+  const [generatedInviteLink, setGeneratedInviteLink] = useState('');
+
+  const handleAddOwner = async () => {
+    if (!newOwnerData.name || (!newOwnerData.email && !newOwnerData.phone)) {
+        alert('Name and at least Email or Phone are required.');
+        return;
+    }
+    try {
+        const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        await addDoc(collection(db, 'ownerInvites'), {
+            ownerName: newOwnerData.name,
+            ownerEmail: newOwnerData.email,
+            ownerPhone: newOwnerData.phone,
+            token,
+            status: 'PENDING',
+            createdAt: serverTimestamp()
+        });
+        
+        const inviteLink = `https://bin-groups.com/owner-invite?token=${token}`;
+        setGeneratedInviteLink(inviteLink);
+    } catch (error) {
+        console.error('Failed to create owner invite:', error);
+        alert('Failed to generate invite. Check permissions.');
+    }
+  };
+
   return (
     <AdminPageFrame
       title={t('admin.owner_management') || 'OWNER REGISTRY'}
@@ -98,6 +127,7 @@ export default function OwnerManagementPage() {
         <Button 
             variant="contained" 
             startIcon={<Users size={18} />} 
+            onClick={() => { setGeneratedInviteLink(''); setNewOwnerData({ name: '', email: '', phone: '' }); setAddDialogOpen(true); }}
             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
         >
             ADD OWNER
@@ -219,6 +249,89 @@ export default function OwnerManagementPage() {
           <Button onClick={handleSuspend} variant="contained" color="error" sx={{ fontWeight: 950, borderRadius: 2 }}>
             EXECUTE SUSPENSION
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Owner Dialog */}
+      <Dialog 
+        open={addDialogOpen} 
+        onClose={() => setAddDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        PaperProps={{ sx: { bgcolor: '#020617', borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` } }}
+      >
+        <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>INVITE ASSET OWNER</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography sx={{ mb: 3, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+            Generate a secure onboarding link for a new institutional or private property owner.
+          </Typography>
+          <Stack spacing={2}>
+            <TextField
+                fullWidth
+                label="Owner/Company Name"
+                value={newOwnerData.name}
+                onChange={(e) => setNewOwnerData({...newOwnerData, name: e.target.value})}
+                variant="outlined"
+                InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }}
+                InputProps={{ style: { color: '#FFF' } }}
+                sx={{ '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
+            />
+            <TextField
+                fullWidth
+                label="Email Address"
+                value={newOwnerData.email}
+                onChange={(e) => setNewOwnerData({...newOwnerData, email: e.target.value})}
+                variant="outlined"
+                InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }}
+                InputProps={{ style: { color: '#FFF' } }}
+                sx={{ '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
+            />
+            <TextField
+                fullWidth
+                label="Phone/WhatsApp"
+                value={newOwnerData.phone}
+                onChange={(e) => setNewOwnerData({...newOwnerData, phone: e.target.value})}
+                variant="outlined"
+                InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }}
+                InputProps={{ style: { color: '#FFF' } }}
+                sx={{ '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
+            />
+          </Stack>
+          
+          {generatedInviteLink && (
+              <Box sx={{ mt: 3, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>INVITATION LINK GENERATED:</Typography>
+                  <Typography variant="body2" sx={{ color: '#FFF', wordBreak: 'break-all', mb: 2 }}>{generatedInviteLink}</Typography>
+                  <Stack direction="row" spacing={1}>
+                      <Button 
+                          variant="outlined" 
+                          size="small"
+                          href={`mailto:${newOwnerData.email}?subject=BIN GROUP - Owner Invitation&body=Please use this secure link to access your institutional property portal: ${generatedInviteLink}`}
+                          target="_blank"
+                          sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}
+                      >
+                          Email
+                      </Button>
+                      <Button 
+                          variant="outlined" 
+                          size="small"
+                          href={`https://wa.me/${newOwnerData.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Welcome to BIN GROUP. Access your institutional property portal here: ${generatedInviteLink}`)}`}
+                          target="_blank"
+                          sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}
+                      >
+                          WhatsApp
+                      </Button>
+                  </Stack>
+              </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <Button onClick={() => setAddDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{generatedInviteLink ? 'CLOSE' : 'CANCEL'}</Button>
+          {!generatedInviteLink && (
+              <Button onClick={handleAddOwner} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
+                GENERATE SECURE LINK
+              </Button>
+          )}
         </DialogActions>
       </Dialog>
     </AdminPageFrame>

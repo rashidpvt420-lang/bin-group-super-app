@@ -10,7 +10,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, limit, where } from 'firebase/firestore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
 
 export default function TechnicianPerformancePage() {
     const { t, isRTL } = useLanguage();

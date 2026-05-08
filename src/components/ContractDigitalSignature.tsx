@@ -97,8 +97,27 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
 
     const getContractContent = () => {
         const pType = propertyData?.propertyType;
-        if (pType === 'GOVERNMENT_MAJLIS') {
-            return { title: t('contract.govt_majlis.title'), body: t('contract.govt_majlis.body') };
+        const isMajlis = pType === 'GOVERNMENT_MAJLIS' || pType?.toLowerCase() === 'majlis' || propertyData?.majlis;
+        
+        if (isMajlis) {
+            return { 
+                title: 'SOVEREIGN MAJLIS MAINTENANCE AGREEMENT', 
+                body: `The Provider shall furnish comprehensive maintenance and event-readiness services specifically engineered for sovereign/government Majlis operations.
+                
+Inclusions:
+- Comprehensive AC & HVAC maintenance
+- Specialized Electrical & Lighting systems
+- Elite Plumbing & Water Features
+- Civil works & Handyman services
+- Specialized Cleaning add-on
+- Dedicated Majlis/Event Standby Technician
+- Rapid Emergency Response protocol
+- Pre-event Readiness Inspection
+- Post-event Clearance Inspection
+- Sovereign VIP support option
+- Scheduled Frequency of Visits (as per tier)
+- Elite SLA Level compliance`
+            };
         }
         if (pType === 'GOVERNMENT_PROPERTY') {
             return { title: t('contract.govt_property.title'), body: t('contract.govt_property.body') };

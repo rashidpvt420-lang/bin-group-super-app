@@ -9,20 +9,20 @@ import {
     Activity, Clock, MapPin, Power, Play, 
     ShieldAlert, RefreshCcw, UserCheck, ExternalLink,
     AlertTriangle, CheckCircle2, ChevronRight, UserPlus,
-    Briefcase, Zap
+    Briefcase, Zap, Shield
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { 
     collection, onSnapshot, query, where, doc, 
     updateDoc, serverTimestamp, orderBy, getDocs 
 } from 'firebase/firestore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
-import AdminCrudActions from '../../components/AdminCrudActions';
+import { notifyTechnicianAssigned } from '../../../services/notificationService';
 
 export default function TechnicianDutyMonitorPage() {
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const [techs, setTechs] = useState<any[]>([]);
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function TechnicianDutyMonitorPage() {
             setTechs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        const qTickets = query(collection(db, 'maintenanceTickets'), where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS']));
+        const qTickets = query(collection(db, 'maintenanceTickets'), where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS']), orderBy('createdAt', 'desc'));
         const unsubTickets = onSnapshot(qTickets, (snap) => {
             setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
@@ -51,9 +51,11 @@ export default function TechnicianDutyMonitorPage() {
     const handleAssign = async () => {
         if (!selectedTicket || !assignTechId) return;
         try {
+            const tech = techs.find(t => t.id === assignTechId);
             await updateDoc(doc(db, 'maintenanceTickets', selectedTicket.id), {
                 status: 'ASSIGNED',
-                technicianId: assignTechId,
+                assignedTechnicianId: assignTechId,
+                assignedTechnicianName: tech?.displayName || 'Technician',
                 assignedAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
@@ -62,6 +64,13 @@ export default function TechnicianDutyMonitorPage() {
                 currentTicketId: selectedTicket.id,
                 activeJobs: (techs.find(t => t.id === assignTechId)?.activeJobs || 0) + 1
             });
+            // Phase 9A: Notify technician
+            notifyTechnicianAssigned(
+                selectedTicket.id,
+                assignTechId,
+                selectedTicket.propertyName || 'Property',
+                selectedTicket.category || 'Maintenance'
+            ).catch(console.warn);
             setOpenAssign(false);
             setSelectedTicket(null);
             setAssignTechId('');
@@ -96,7 +105,7 @@ export default function TechnicianDutyMonitorPage() {
                 </Stack>
             }
         >
-            <Grid container spacing={4}>
+            <Grid container spacing={4} sx={{ direction: lang === 'ar' ? 'rtl' : 'ltr' }}>
                 {/* LIVE METRICS */}
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
@@ -132,20 +141,27 @@ export default function TechnicianDutyMonitorPage() {
                     <Paper sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                         <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="h6" fontWeight="950" color="#FFF">ACTIVE MISSIONS & TICKETS</Typography>
-                            <Chip label={`${tickets.length} QUEUED`} size="small" sx={{ fontWeight: 950, bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold }} />
+                            <Chip label={`${tickets.length} ${t('common.queued') || 'QUEUED'}`} size="small" sx={{ fontWeight: 950, bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold }} />
                         </Box>
                         <TableContainer sx={{ maxHeight: 500 }}>
                             <Table stickyHeader>
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>MISSION / ID</TableCell>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>LOCATION</TableCell>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ASSIGNED UNIT</TableCell>
-                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>STATUS</TableCell>
-                                        <TableCell align="right" sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>ACTIONS</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, textAlign: lang === 'ar' ? 'right' : 'left' }}>{t('admin.table.mission') || 'MISSION / ID'}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, textAlign: lang === 'ar' ? 'right' : 'left' }}>{t('admin.table.location') || 'LOCATION'}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, textAlign: lang === 'ar' ? 'right' : 'left' }}>{t('admin.table.unit') || 'ASSIGNED UNIT'}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, textAlign: lang === 'ar' ? 'right' : 'left' }}>{t('admin.table.status') || 'STATUS'}</TableCell>
+                                        <TableCell align={lang === 'ar' ? "left" : "right"} sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{t('admin.table.action') || 'ACTIONS'}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
+                                    {tickets.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>
+                                                {t('admin.status.no_missions') || 'NO ACTIVE MISSIONS'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                     {tickets.map((ticket) => (
                                         <TableRow key={ticket.id} hover>
                                             <TableCell>
@@ -160,13 +176,13 @@ export default function TechnicianDutyMonitorPage() {
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>UNIT {ticket.unitNumber || 'N/A'}</Typography>
                                             </TableCell>
                                             <TableCell>
-                                                {ticket.technicianId ? (
+                                                {ticket.assignedTechnicianId ? (
                                                     <Stack direction="row" spacing={1} alignItems="center">
                                                         <Avatar sx={{ width: 24, height: 24, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.6rem', fontWeight: 950 }}>
-                                                            {techs.find(t => t.id === ticket.technicianId)?.displayName?.charAt(0) || 'T'}
+                                                            {techs.find(t => t.id === ticket.assignedTechnicianId)?.displayName?.charAt(0) || 'T'}
                                                         </Avatar>
                                                         <Typography variant="caption" fontWeight="900" color="#FFF">
-                                                            {techs.find(t => t.id === ticket.technicianId)?.displayName || 'Assigned'}
+                                                            {techs.find(t => t.id === ticket.assignedTechnicianId)?.displayName || 'Assigned'}
                                                         </Typography>
                                                     </Stack>
                                                 ) : (
@@ -192,7 +208,7 @@ export default function TechnicianDutyMonitorPage() {
                                                         onClick={() => { setSelectedTicket(ticket); setOpenAssign(true); }}
                                                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.6rem', height: 24 }}
                                                     >
-                                                        {ticket.technicianId ? 'REASSIGN' : 'ASSIGN'}
+                                                        {ticket.assignedTechnicianId ? 'REASSIGN' : 'ASSIGN'}
                                                     </Button>
                                                 </Stack>
                                             </TableCell>

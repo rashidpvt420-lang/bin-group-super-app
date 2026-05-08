@@ -5,7 +5,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { ArrowRight, Shield, Globe, Building, TrendingUp, Crown, Mail, Phone, MapPin, Info, MessageSquare, Zap } from 'lucide-react';
 import BinGroupHeader from '../components/SovereignHeader';
-import CeoContactButtons from '../components/CeoContactButtons';
+import { CeoContactButtons } from '../components/CeoContactButtons';
 
 const LandingPage: React.FC = () => {
     const navigate = useNavigate();
@@ -306,3 +306,4 @@ const LandingPage: React.FC = () => {
 };
 
 export default LandingPage;
+

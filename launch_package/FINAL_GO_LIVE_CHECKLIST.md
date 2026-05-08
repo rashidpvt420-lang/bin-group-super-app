@@ -5,8 +5,8 @@ Before the first real client is onboarded, the following must be verified as "GR
 ## 1. Technical Infrastructure
 - [ ] **Firebase Billing:** Confirm valid payment method attached (Production usage).
 - [ ] **SendGrid:** API Key verified and "Domain Authentication" complete for `@bin-groups.com`.
-- [ ] **Auth Domains:** `bin-group-57c60.web.app` and `bin-group-57c60-admin.web.app` added to Firebase Auth whitelist.
-- [ ] **Hosting:** Final production builds deployed to both sites.
+- [ ] **Auth Domains:** `bin-groups.com` and `www.bin-groups.com` added to Firebase Auth whitelist.
+- [ ] **Hosting:** Final production builds deployed to `https://bin-groups.com`.
 - [ ] **Cloud Functions:** All 8+ Second-Gen functions deployed and "Active".
 
 ## 2. Application Logic

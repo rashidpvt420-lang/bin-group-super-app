@@ -12,7 +12,10 @@ import { signOut } from 'firebase/auth';
 // Re-using admin specific logic
 import { auth } from '@/lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
+import { SovereignAIChat } from '../components/SovereignAIChat';
+import { AIProvider } from '../context/AIContext';
+import { SovereignAlertHandler } from '../components/SovereignAlertHandler';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
@@ -53,6 +56,11 @@ import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import SovereignControlPage from './pages/admin/SovereignControlPage';
+import SmartBuildingMonitorPage from './pages/dashboard/SmartBuildingMonitorPage';
+import AddPropertyPage from './pages/properties/AddPropertyPage';
+import AdminContractsPage from './pages/contracts/AdminContractsPage';
+import AdminPermissionsPage from './pages/admin/AdminPermissionsPage';
+import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
 import { adminTheme } from './theme/adminTheme';
 
 const cacheRtl = createCache({
@@ -154,6 +162,7 @@ function AdminContent() {
             <Route element={<AdminLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="smart-building" element={<SmartBuildingMonitorPage />} />
                 <Route path="sovereign-control" element={<SovereignControlPage />} />
                 
                 {/* Core Operations */}
@@ -197,6 +206,18 @@ function AdminContent() {
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="onboard-property" element={<PropertyOnboardingPage />} />
+                <Route path="add-property" element={<AddPropertyPage />} />
+
+                {/* Phase 2B — Command Center routes */}
+                <Route path="contracts" element={<AdminContractsPage />} />
+                <Route path="permissions" element={<AdminPermissionsPage />} />
+                {/* Aliases for required Phase 2B routes */}
+                <Route path="payments" element={<AdminPaymentApproval />} />
+                <Route path="property-passports" element={<PropertyPassportPage />} />
+                <Route path="active-tenants" element={<TenantsPage />} />
+                <Route path="owners-registry" element={<OwnersPage />} />
+                <Route path="documents" element={<InstitutionalDocumentVaultPage />} />
+                <Route path="company-profile" element={<CompanyProfileAdminPage />} />
             </Route>
         </Routes>
     );

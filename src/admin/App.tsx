@@ -1,9 +1,10 @@
+import { alpha } from '@mui/material/styles';
 // admin-panel/src/App.tsx
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Button, Typography, CssBaseline, CircularProgress, alpha } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
@@ -14,7 +15,11 @@ import rtlPlugin from 'stylis-plugin-rtl';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
+import { LanguageProvider } from '../context/LanguageContext';
+import { SovereignAIChat } from '../components/SovereignAIChat';
+import { AIProvider } from '../context/AIContext';
+import { SovereignAlertHandler } from '../components/SovereignAlertHandler';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
@@ -53,7 +58,7 @@ import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
 import { TechnicianMapPage } from './pages/Placeholders';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
-import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import AdminDutyCommandPage from './pages/technicians/AdminDutyCommandPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -134,7 +139,7 @@ function AppContent() {
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
-                    <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
+                    <Route path="/admin/duty-command" element={<ProtectedRoute adminOnly><AdminDutyCommandPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
@@ -309,3 +314,4 @@ function AdminThemeProviderWrapper() {
         </CacheProvider>
     );
 }
+

@@ -1,5 +1,6 @@
+import { alpha } from '@mui/material/styles';
 import { NavLink } from 'react-router-dom';
-import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography, alpha } from '@mui/material';
+import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -9,9 +10,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
 import FileTextIcon from '@mui/icons-material/Description';
-import { Sparkles, Users, Zap, ShieldCheck, MapPin, Activity, DollarSign, LayoutDashboard } from 'lucide-react';
+import { Sparkles, Users, Zap, Shield, MapPin, Activity, DollarSign, LayoutDashboard, Cpu, Building2 } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../context/LanguageContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import CeoContactButtons from './CeoContactButtons';
@@ -25,9 +26,11 @@ const Navigation = () => {
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
-        { text: 'Sovereign Control', icon: <ShieldCheck size={20} />, path: '/admin/sovereign-control', color: binThemeTokens.gold },
+        { text: 'Smart Building Monitor', icon: <Cpu size={20} />, path: '/admin/smart-building', color: binThemeTokens.gold },
+        { text: 'Sovereign Control', icon: <Shield size={20} />, path: '/admin/sovereign-control', color: binThemeTokens.gold },
         { text: tx('fin.title', 'Financials'), icon: <DollarSign size={20} />, path: '/admin/financials', color: binThemeTokens.gold },
         { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/admin/document-vault', color: binThemeTokens.gold },
+        { text: 'Company Identity', icon: <Building2 size={20} />, path: '/admin/company-profile', color: binThemeTokens.gold },
         { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/audit-shield', color: binThemeTokens.gold },
         { text: 'Pricing Matrix 2026', icon: <Zap size={20} />, path: '/admin/pricing', color: binThemeTokens.gold },
     ];
@@ -124,3 +127,4 @@ const Navigation = () => {
 };
 
 export default Navigation;
+

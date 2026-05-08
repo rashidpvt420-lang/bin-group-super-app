@@ -14,7 +14,7 @@ import Papa from 'papaparse';
 import { db, collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useAI } from '@bin/shared';
-import CeoContactButtons from '../components/CeoContactButtons';
+import { CeoContactButtons } from '../components/CeoContactButtons';
 
 export default function BrokerPortalPage() {
     const { t, tx, isRTL } = useLanguage();
@@ -302,3 +302,4 @@ export default function BrokerPortalPage() {
         </Container>
     );
 }
+

@@ -40,7 +40,7 @@ Production environment files (`.env.local`) have been synchronized for total par
 
 ## 5. Deployment & Release Status
 - **Security Rules:** [🟢 DEPLOYED] Firestore & Storage rules hardened.
-- **Hosting:** [🟢 DEPLOYED] Live at `bin-group-57c60.web.app` and `bin-group-57c60-admin.web.app`.
+- **Hosting:** [🟢 DEPLOYED] Live at `https://bin-groups.com`. Administrative portal accessible via production gateway.
 - **Functions:** [🟡 STAGED] Deployment prepared; pending manual secret activation.
 
 ---

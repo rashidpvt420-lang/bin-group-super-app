@@ -6,7 +6,7 @@ import {
   InputLabel, Button, Dialog, DialogTitle,
   DialogContent, DialogActions, List, ListItem,
   ListItemText, ListItemAvatar, Avatar, Stack,
-  Divider, Alert, alpha, Tooltip, IconButton
+  Divider, Alert, alpha, Tooltip, IconButton, Box
 } from '@mui/material';
 import { 
     Ticket as TicketIcon, Wrench, Search, Filter, 
@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, where, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { useLanguage, binThemeTokens } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
+import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
 interface Ticket {

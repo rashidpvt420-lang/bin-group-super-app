@@ -131,7 +131,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
         {
             id: 'security',
             icon: ShieldAlert,
-            name: 'Security Services',
+            name: 'Security Services / CCTV',
             desc: 'Guarding, access control coordination, incident logging and patrol support.',
             price: 12000,
             mandatory: false,
@@ -141,12 +141,62 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
         {
             id: 'cleaning',
             icon: Droplets,
-            name: 'Cleaning Services',
-            desc: 'Common area cleaning and scheduled hygiene operations.',
+            name: 'Cleaning Team / Deep Cleaning',
+            desc: 'Common area cleaning and scheduled hygiene operations. Deep cleaning available.',
             price: 9000,
             mandatory: false,
             showIf: true,
-            reason: 'Recommended for shared facilities and tenant-heavy properties.'
+            reason: 'Recommended for shared facilities and Majlis readiness.'
+        },
+        {
+            id: 'technician_standby',
+            icon: Activity,
+            name: 'Technician Standby / Event Support',
+            desc: 'Dedicated on-site technician for VIP events, Majlis gatherings, or critical operations.',
+            price: 5000,
+            mandatory: false,
+            showIf: activeProperty?.propertyType === 'GOVERNMENT_MAJLIS' || activeProperty?.majlis || activeProperty?.propertyType === 'Hotel',
+            reason: 'Crucial for sovereign and VIP operational continuity.'
+        },
+        {
+            id: 'pest_control',
+            icon: ShieldAlert,
+            name: 'Pest Control',
+            desc: 'Quarterly municipality-approved pest control treatments.',
+            price: 1500,
+            mandatory: false,
+            showIf: true,
+            reason: 'Standard preventive hygiene measure.'
+        },
+        {
+            id: 'landscaping',
+            icon: Waves,
+            name: 'Landscaping & Irrigation',
+            desc: 'Garden maintenance, pruning, and irrigation system checks.',
+            price: 4000,
+            mandatory: false,
+            showIf: activeProperty?.propertyType === 'Villa' || activeProperty?.propertyType === 'GOVERNMENT_MAJLIS' || activeProperty?.majlis,
+            reason: 'Essential for properties with outdoor and garden spaces.'
+        },
+        {
+            id: 'fit_out_quote',
+            icon: Wrench,
+            name: 'Fit-out Quotation',
+            desc: 'Initial assessment and quotation for property fit-out or renovation.',
+            price: 0,
+            mandatory: false,
+            showIf: true,
+            reason: 'Optional service for newly acquired or aging assets.'
+        },
+        {
+            id: 'move_in_out',
+            icon: Check,
+            name: 'Move-in / Move-out Inspection',
+            desc: 'Detailed snagging and condition report before/after tenancy or event.',
+            price: 800,
+            mandatory: false,
+            showIf: true,
+            reason: 'Protects asset condition and lifecycle.'
         },
         {
             id: 'manpower',

@@ -1279,7 +1279,7 @@ export const sendTenantInvitations = onCall({ cors: true }, async (request) => {
         });
 
         // Email Job
-        const inviteLink = "https://bin-group-57c60.web.app/tenant-invite?token=" + rawToken;
+        const inviteLink = "https://bin-groups.com/tenant-invite?token=" + rawToken;
         const region = "europe-west3";
         const projectId = admin.app().options.projectId || process.env.GCLOUD_PROJECT || "bin-group-57c60";
         const trackingPixel = `https://${region}-${projectId}.cloudfunctions.net/trackTenantInvitationOpen?token=${rawToken}`;
@@ -1388,7 +1388,7 @@ export const resendTenantInvitation = onCall({ cors: true }, async (request) => 
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    const inviteLink = "https://bin-group-57c60.web.app/tenant-invite?token=" + rawToken;
+    const inviteLink = "https://bin-groups.com/tenant-invite?token=" + rawToken;
 
     batch.set(mailRef, {
         to: invite.tenantEmail,
@@ -2204,7 +2204,6 @@ export const closeTechnicianJob = onCall({ cors: true }, async (request) => {
 
     const isAdmin = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!isAdmin) throw new HttpsError("permission-denied", "Only administrators can close tickets.");
-
     await db.collection("maintenanceTickets").doc(ticketId).update({
         status: "CLOSED",
         technicianStatus: "CLOSED",
@@ -2242,4 +2241,80 @@ export const registerFCMToken = onCall({ cors: true }, async (request) => {
     }, { merge: true });
 
     return { success: true };
+});
+
+/**
+ * [V14] IOT GATEWAY TRIGGER
+ * Standardized endpoint for Smart Building Sensors to pulse telemetry or trigger alarms.
+ */
+export const triggerIoTEvent = onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+    try {
+        const payload = req.body;
+        const { device_id, property_id, event_type, urgency, telemetry, auth_token } = payload;
+        if (!auth_token || auth_token !== "BIN_IOT_CORE_SECURE_2026") {
+            res.status(401).send("Unauthorized Device Node");
+            return;
+        }
+        const timestamp = admin.firestore.FieldValue.serverTimestamp();
+        const eventId = `iot_${Date.now()}_${device_id}`;
+        await db.collection("telemetry_logs").doc(eventId).set({
+            deviceId: device_id, propertyId: property_id, type: event_type,
+            urgency: urgency || "nominal", telemetry: telemetry || {},
+            timestamp, processed: false
+        });
+        if (urgency === "critical" || event_type === "leak_detected" || event_type === "fire_alarm") {
+            const ticketId = `auto_${Date.now()}_${property_id}`;
+            await db.collection("maintenanceTickets").doc(ticketId).set({
+                propertyId: property_id, title: `IOT ALERT: ${event_type.replace("_", " ").toUpperCase()}`,
+                description: `Automated alert triggered by device ${device_id}. Telemetry: ${JSON.stringify(telemetry)}`,
+                status: "OPEN", priority: "EMERGENCY", category: "PLUMBING", source: "IOT_SENSOR",
+                deviceId: device_id, createdAt: timestamp, updatedAt: timestamp
+            });
+            await logAudit({
+                actorId: device_id, actorRole: "iot_device", action: "IOT_CRITICAL_TRIGGER",
+                targetType: "maintenanceTickets", targetId: ticketId, metadata: { event_type, urgency }
+            });
+        }
+        res.status(200).json({ success: true, eventId, message: urgency === "critical" ? "Triage initiated" : "Telemetry logged" });
+    } catch (error: any) {
+        console.error("IoT Gateway Failure:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * [V12] PENDING TENANT ONBOARDING TRIGGER
+ * Automates welcome email generation when an admin pre-loads a tenant.
+ */
+export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenantId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const email = data.email;
+    if (!email) return;
+    await db.collection("mail").add({
+        to: email,
+        message: {
+            subject: "Institutional Access Granted: BIN GROUP Portal",
+            html: `
+                <div style="font-family: sans-serif; padding: 40px; color: #000; border: 1px solid #EEE; border-radius: 8px; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #C6A75E; font-size: 24px; margin-bottom: 20px;">Institutional Onboarding</h1>
+                    <p style="font-size: 16px; line-height: 1.6;">You have been granted access to the BIN GROUP institutional asset management platform.</p>
+                    <div style="background: #F8FAFC; padding: 20px; border-radius: 4px; margin: 24px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #64748B;"><b>Property:</b> ${data.propertyName || 'Institutional Asset'}</p>
+                        <p style="margin: 8px 0 0; font-size: 14px; color: #64748B;"><b>Unit:</b> ${data.unitNumber || 'N/A'}</p>
+                    </div>
+                    <p style="font-size: 16px; line-height: 1.6;">Please sign up using your email (<b>${email}</b>) to claim your dashboard and access SOS dispatch services.</p>
+                    <a href="https://bin-groups.com/login" style="display: inline-block; background: #C6A75E; color: #000; padding: 14px 32px; text-decoration: none; font-weight: 900; border-radius: 100px; margin-top: 20px;">Sign Up Now</a>
+                    <hr style="border: 0; border-top: 1px solid #EEE; margin: 32px 0;">
+                    <p style="font-size: 12px; color: #94A3B8;">This is a sovereign institutional communication. Unauthorized access is monitored.</p>
+                </div>
+            `
+        },
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
 });

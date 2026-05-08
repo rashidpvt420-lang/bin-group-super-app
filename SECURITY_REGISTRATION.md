@@ -11,7 +11,7 @@ To transition from "Unverified" to "Verified" traffic:
 3. Click **Register** or **Manage** and select **reCAPTCHA v3**.
 4. You will be prompted to enter a **Site Secret** and **Site Key**.
 5. Get these from the [reCAPTCHA v3 Admin Console](https://www.google.com/recaptcha/admin/).
-   - *Ensure the domain `bin-group.web.app` and your custom domains are allow-listed.*
+   - *Ensure the domain `bin-groups.com` and `www.bin-groups.com` are allow-listed.*
 6. **DESTRUCTIVE ACTION**: Once you have the Site Key, update `apps/owner-app/src/lib/firebase.ts` (Line 59):
 
    ```typescript
@@ -27,7 +27,7 @@ The "Unenforced" status in the screenshot means anyone with your API key can cal
 1. Go to **Google Cloud Console** -> **APIs & Services** -> **Credentials**.
 2. Locate the key `AIzaSyCM...CpfAs`.
 3. Click **Edit API Key**.
-4. **Website Restrictions**: Add `https://bin-group.web.app/*` and your other domains.
+4. **Website Restrictions**: Add `https://bin-groups.com/*` and `https://www.bin-groups.com/*`.
 5. **API Restrictions**: Limit the key specifically to:
    - Maps JavaScript API
    - Places API

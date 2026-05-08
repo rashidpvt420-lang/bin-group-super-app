@@ -11,16 +11,32 @@ import {
 import {
     AccountBalance,
     Payments,
-    Scale,
     PieChart,
     NorthEast,
     ReceiptLong,
     Security
 } from '@mui/icons-material';
+import { Scale } from 'lucide-react';
 import type { QuerySnapshot, DocumentData } from 'firebase/firestore';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
+
+// --- Extreme Safety Helper ---
+const safe = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (val && val.toDate && typeof val.toDate === 'function') return val.toDate().toLocaleDateString();
+    if (val && typeof val.seconds === 'number') return new Date(val.seconds * 1000).toLocaleDateString();
+    if (typeof val === 'object') {
+        try {
+            return val.displayName || val.name || val.label || val.title || JSON.stringify(val);
+        } catch(e) {
+            return "[Object]";
+        }
+    }
+    return String(val);
+};
 
 interface CFOStats {
     mrr: number;
@@ -124,7 +140,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Annual Recurring Revenue" 
-                                value={`AED ${(stats?.arr || 0).toLocaleString()}`} 
+                                value={`AED ${safe((stats?.arr || 0).toLocaleString())}`} 
                                 delta="+12.4%" 
                                 icon={<AccountBalance />} 
                                 color="#1e293b" 
@@ -133,7 +149,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Net Profit Margin" 
-                                value={`${stats?.profitMargin}%`} 
+                                value={`${safe(stats?.profitMargin)}%`} 
                                 delta="+2.1%" 
                                 icon={<PieChart />} 
                                 color="#16a34a" 
@@ -142,7 +158,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Mrr (Active Coverage)" 
-                                value={`AED ${(stats?.mrr || 0).toLocaleString()}`} 
+                                value={`AED ${safe((stats?.mrr || 0).toLocaleString())}`} 
                                 icon={<Payments />} 
                                 color="#1976d2" 
                             />
@@ -152,8 +168,8 @@ export default function CFODashboard() {
                     {/* ── 3. REVENUE HORIZON ── */}
                     <Card sx={{ mt: 4, borderRadius: 6, border: '1px solid #e2e8f0', boxShadow: 'none', overflow: 'hidden' }}>
                         <CardContent sx={{ p: 4 }}>
-                            <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Scale color="primary" /> Revenue Risk Horizon
+                            <Typography variant="h6" fontWeight="900" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Scale color="#1976d2" size={20} /> Revenue Risk Horizon
                             </Typography>
                             <Divider sx={{ my: 2 }} />
                             <Grid container spacing={4} sx={{ mt: 1 }}>
@@ -162,8 +178,8 @@ export default function CFODashboard() {
                                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
                                             Outstanding Invoices
                                         </Typography>
-                                        <Typography variant="h4" fontWeight={900} color="#fbbf24">
-                                            AED {stats?.outstandingInvoices.toLocaleString()}
+                                        <Typography variant="h4" fontWeight="900" color="#fbbf24">
+                                            AED {safe((stats?.outstandingInvoices || 0).toLocaleString())}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={70} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
                                         <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Expected settlement within 14 days</Typography>
@@ -174,8 +190,8 @@ export default function CFODashboard() {
                                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
                                             Overdue Recovery
                                         </Typography>
-                                        <Typography variant="h4" fontWeight={900} color="#ef4444">
-                                            AED {stats?.overdueInvoices.toLocaleString()}
+                                        <Typography variant="h4" fontWeight="900" color="#ef4444">
+                                            AED {safe((stats?.overdueInvoices || 0).toLocaleString())}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={28} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
                                         <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#ef4444' }}>⚠️ Enforcement actions required</Typography>
@@ -190,10 +206,10 @@ export default function CFODashboard() {
                 <Grid item xs={12} lg={4}>
                     <Card sx={{ borderRadius: 6, bgcolor: '#0f172a', color: 'white', height: '100%', p: 2 }}>
                         <CardContent>
-                            <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="h6" fontWeight="900" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Security sx={{ color: '#fbbf24' }} /> Alpha Insights
                             </Typography>
-                            <Box sx={{ mt: 4, spaceY: 4 }}>
+                            <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <InsightRow label="Client Churn Rate" value="1.25%" status="OPTIMAL" />
                                 <InsightRow label="Portfolio ARR Density" value="94.2%" status="HIGH" />
                                 <InsightRow label="Service Margin" value="55.8%" status="GROWING" />
@@ -214,8 +230,8 @@ export default function CFODashboard() {
                 <Grid item xs={12}>
                     <TableContainer component={Paper} sx={{ borderRadius: 6, boxShadow: 'none', border: '1px solid #e2e8f0' }}>
                         <Box sx={{ p: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6" fontWeight={900}>Portfolio Profitability Audit</Typography>
-                            <Chip label={`${stats?.portfolioCount} Active Assets`} sx={{ fontWeight: 900, bgcolor: '#f1f5f9' }} />
+                            <Typography variant="h6" fontWeight="900">Portfolio Profitability Audit</Typography>
+                            <Chip label={`${safe(stats?.portfolioCount)} Active Assets`} sx={{ fontWeight: 900, bgcolor: '#f1f5f9' }} />
                         </Box>
                         <Table sx={{ minWidth: 650 }}>
                             <TableHead sx={{ bgcolor: '#f8fafc' }}>
@@ -231,13 +247,13 @@ export default function CFODashboard() {
                             <TableBody>
                                 {stats?.portfolioCount ? snapshotData.map((row: any) => (
                                     <TableRow key={row.id} hover>
-                                        <TableCell sx={{ fontWeight: 800 }}>{String(row.propertyName || row.address || 'Unnamed Asset')}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ fontWeight: 800 }}>{safe(row.propertyName || row.address || 'Unnamed Asset')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>AED {safe((row.annualAMC || 0).toLocaleString())}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {safe((Number(row.annualAMC || 0) * 0.4).toLocaleString())}</TableCell>
+                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {safe((Number(row.annualAMC || 0) * 0.6).toLocaleString())}</TableCell>
                                         <TableCell>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body2" fontWeight={800}>60%</Typography>
+                                                <Typography variant="body2" fontWeight="800">60%</Typography>
                                                 <Box sx={{ flexGrow: 1, height: 4, bgcolor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
                                                     <Box sx={{ width: `60%`, height: '100%', bgcolor: '#16a34a' }} />
                                                 </Box>
@@ -281,15 +297,15 @@ function MetricCard({ label, value, delta, icon, color }: any) {
                         <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: `${color}10`, color: color }}>{icon}</Box>
                         {delta && (
                             <Typography variant="caption" sx={{ fontWeight: 900, color: '#16a34a', bgcolor: '#dcfce7', px: 1.5, py: 0.5, borderRadius: 2 }}>
-                                {delta}
+                                {safe(delta)}
                             </Typography>
                         )}
                     </Box>
                     <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
-                        {label}
+                        {safe(label)}
                     </Typography>
-                    <Typography variant="h4" fontWeight={950} sx={{ color: '#0f172a', letterSpacing: -1, mt: 0.5 }}>
-                        {value}
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#0f172a', letterSpacing: -1, mt: 0.5 }}>
+                        {safe(value)}
                     </Typography>
                 </CardContent>
             </Card>
@@ -301,10 +317,10 @@ function InsightRow({ label, value, status }: any) {
     return (
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Box>
-                <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>{label}</Typography>
-                <Typography variant="h6" fontWeight={800} sx={{ color: 'white' }}>{value}</Typography>
+                <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>{safe(label)}</Typography>
+                <Typography variant="h6" fontWeight="800" sx={{ color: 'white' }}>{safe(value)}</Typography>
             </Box>
-            <Chip label={status} size="small" sx={{ fontWeight: 900, fontSize: 8, bgcolor: 'rgba(255,255,255,0.05)', color: '#fbbf24', border: '1px solid rgba(251,158,11,0.2)' }} />
+            <Chip label={safe(status)} size="small" sx={{ fontWeight: 900, fontSize: 8, bgcolor: 'rgba(255,255,255,0.05)', color: '#fbbf24', border: '1px solid rgba(251,158,11,0.2)' }} />
         </Box>
     );
 }

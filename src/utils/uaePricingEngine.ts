@@ -1,5 +1,6 @@
 import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
-import { generateSmartQuote, SmartQuoteAdvisory } from '@bin/shared';
+import { generateSmartQuote } from './uaePricingEngine_v2';
+import type { SmartQuoteAdvisory } from './uaePricingEngine_v2';
 
 export interface IntegratedIntelligenceResponse {
     property: any;

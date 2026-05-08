@@ -379,7 +379,7 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
             unitNumber: r.data.unitNumber,
             tenantName: r.data.tenantName,
             email: r.data.email,
-            inviteLink: `https://bin-group-57c60.web.app/tenant-invite?token=invite_...` // Token would need to be captured during import
+            inviteLink: `https://bin-groups.com/tenant-invite?token=invite_...` // Token would need to be captured during import
         }));
 
         const csv = Papa.unparse(inviteRows);
