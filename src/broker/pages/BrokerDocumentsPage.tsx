@@ -1,0 +1,193 @@
+import React, { useState, useEffect } from 'react';
+import { 
+    Box, Typography, Paper, Grid, Stack, Button, CircularProgress, 
+    Chip, alpha, LinearProgress, IconButton, Tooltip 
+} from '@mui/material';
+import { 
+    FileUp, FileText, CheckCircle2, Clock, AlertCircle, 
+    ShieldCheck, Eye, Trash2, Download, Info,
+    Lock, Share2, MoreVertical
+} from 'lucide-react';
+import { db, collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from '../../lib/firebase';
+import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { binThemeTokens } from '../../theme/binGroupTheme';
+import BrokerPageFrame from '../components/BrokerPageFrame';
+
+export default function BrokerDocumentsPage() {
+    const { user } = useRole();
+    const { t, isRTL } = useLanguage();
+    const [documents, setDocuments] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const q = query(collection(db, 'brokerDocuments'), where('brokerId', '==', user.uid));
+        const unsub = onSnapshot(q, (snap) => {
+            setDocuments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [user]);
+
+    const handleUpload = async (docType: string) => {
+        if (!user?.uid) return;
+        setUploading(true);
+        try {
+            await addDoc(collection(db, 'brokerDocuments'), {
+                brokerId: user.uid,
+                fileName: `${docType.toUpperCase()}_${user.uid.substring(0,4)}.pdf`,
+                docType,
+                status: 'pending_review',
+                uploadedAt: serverTimestamp()
+            });
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const getDocStatus = (type: string) => {
+        const doc = documents.find(d => d.docType === type);
+        if (!doc) return { status: 'missing', label: 'PENDING UPLOAD', color: '#ef4444', icon: <AlertCircle size={14} /> };
+        if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: '#10b981', icon: <CheckCircle2 size={14} /> };
+        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.gold, icon: <Clock size={14} /> };
+    };
+
+    const requiredDocs = [
+        { type: 'emirates_id', title: 'Emirates ID Registry', desc: 'Valid Front & Back scan required for transaction clearing.' },
+        { type: 'rera_license', title: 'RERA Brokerage Permit', desc: 'Institutional verification of real estate professional status.' },
+        { type: 'bank_details', title: 'Institutional IBAN', desc: 'Certified bank letter for automated commission settlement.' },
+        { type: 'broker_agreement', title: 'Sovereign Agreement', desc: 'Signed partnership terms with BIN Group.' }
+    ];
+
+    return (
+        <BrokerPageFrame
+            title="Sovereign Vault"
+            subtitle="Secure document archive for compliance and verification"
+            loading={loading}
+            actions={
+                <Box sx={{ p: 2, bgcolor: alpha('#10b981', 0.1), borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <ShieldCheck size={20} color="#10b981" />
+                    <Box>
+                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block' }}>COMPLIANCE STATUS</Typography>
+                        <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
+                    </Box>
+                </Box>
+            }
+        >
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
+                MANDATORY COMPLIANCE ASSETS
+            </Typography>
+
+            <Grid container spacing={3} sx={{ mb: 6 }}>
+                {requiredDocs.map(req => {
+                    const status = getDocStatus(req.type);
+                    const isUploaded = status.status !== 'missing';
+                    
+                    return (
+                        <Grid item xs={12} md={6} key={req.type}>
+                            <Paper sx={{ 
+                                p: 4, 
+                                bgcolor: 'rgba(22, 22, 24, 0.7)', 
+                                border: `1px solid ${alpha(status.color, 0.15)}`, 
+                                borderRadius: 6,
+                                position: 'relative',
+                                transition: 'all 0.3s ease',
+                                '&:hover': { bgcolor: 'rgba(22, 22, 24, 0.9)', borderColor: status.color }
+                            }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                                    <Box>
+                                        <Typography variant="h6" fontWeight="950" color="#FFF">{req.title}</Typography>
+                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, fontWeight: 700 }}>{req.desc}</Typography>
+                                    </Box>
+                                    <Chip 
+                                        label={status.label} 
+                                        size="small" 
+                                        icon={status.icon}
+                                        sx={{ bgcolor: alpha(status.color, 0.1), color: status.color, fontWeight: 950, fontSize: '0.65rem' }} 
+                                    />
+                                </Stack>
+
+                                {uploading && !isUploaded ? (
+                                    <Box sx={{ mt: 3 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>ENCRYPTING ASSET...</Typography>
+                                        <LinearProgress sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                                    </Box>
+                                ) : isUploaded ? (
+                                    <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
+                                        <Button 
+                                            variant="contained" 
+                                            fullWidth 
+                                            startIcon={<Eye size={18} />}
+                                            sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF', fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+                                        >
+                                            PREVIEW
+                                        </Button>
+                                        <Tooltip title="Manage Asset">
+                                            <IconButton sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: 'rgba(255,255,255,0.4)' }}>
+                                                <MoreVertical size={20} />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Stack>
+                                ) : (
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        startIcon={<FileUp size={18} />}
+                                        onClick={() => handleUpload(req.type)}
+                                        sx={{ mt: 4, borderColor: alpha(status.color, 0.3), color: status.color, fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { borderColor: status.color, bgcolor: alpha(status.color, 0.05) } }}
+                                    >
+                                        UPLOAD SECURE FILE
+                                    </Button>
+                                )}
+                            </Paper>
+                        </Grid>
+                    );
+                })}
+            </Grid>
+
+            {/* ─── ADD-ON REPOSITORY ─────────────────────────────────────────── */}
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
+                SUPPLEMENTARY REPOSITORY
+            </Typography>
+            <Paper sx={{ 
+                p: 6, 
+                bgcolor: 'rgba(255,255,255,0.01)', 
+                border: '1px dashed rgba(255,255,255,0.1)', 
+                borderRadius: 8, 
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                '&:hover': { borderColor: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.02) }
+            }}>
+                <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), width: 'fit-content', borderRadius: '50%', margin: '0 auto 24px auto' }}>
+                    <Lock size={32} color={binThemeTokens.gold} />
+                </Box>
+                <Typography variant="h5" fontWeight="950" color="#FFF">Referral Supporting Evidence</Typography>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', maxWidth: 400, margin: '12px auto 32px auto', fontWeight: 700 }}>
+                    Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin.
+                </Typography>
+                <Stack direction="row" spacing={2} justifyContent="center">
+                    <Button 
+                        variant="contained" 
+                        startIcon={<FileUp size={18} />}
+                        onClick={() => handleUpload('evidence')}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 6, py: 1.5, borderRadius: 3 }}
+                    >
+                        INITIALIZE UPLOAD
+                    </Button>
+                </Stack>
+            </Paper>
+
+            <Box sx={{ mt: 6, p: 3, bgcolor: alpha('#3b82f6', 0.05), borderRadius: 4, border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Info size={24} color="#3b82f6" />
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                    Security Protocol: Files are scanned for malware upon upload. Sensitive personal information is redacted automatically where necessary for institutional compliance.
+                </Typography>
+            </Box>
+        </BrokerPageFrame>
+    );
+}

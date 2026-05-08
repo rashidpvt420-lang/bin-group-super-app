@@ -1,19 +1,19 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useRole } from '../context/RoleContext';
+import { useRole, SovereignPermission } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { Box, Typography, CircularProgress, Button, Stack } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { Lock, LogOut } from 'lucide-react';
 import { auth } from '../lib/firebase';
-
 interface ProtectedRouteProps {
     children: React.ReactNode;
     allowedRoles?: string[];
+    requiredPermission?: SovereignPermission;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-    const { user, role, status, isAdmin, loading } = useRole();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, requiredPermission }) => {
+    const { user, role, status, isAdmin, loading, hasPermission } = useRole();
     const { t } = useLanguage();
     const location = useLocation();
 
@@ -37,12 +37,50 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
         return <Navigate to="/dashboard" replace />;
     }
 
+    // 1B. [GRANULAR PERMISSION ENFORCEMENT]
+    if (requiredPermission && !hasPermission(requiredPermission)) {
+        return (
+            <Box sx={{ 
+                height: '100vh', 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                justifyContent: 'center',
+                bgcolor: '#000',
+                color: '#fff',
+                textAlign: 'center',
+                p: 4,
+            }}>
+                <Lock size={64} color="#ef4444" />
+                <Typography variant="h4" sx={{ color: '#ef4444', fontWeight: 900, mt: 3, mb: 1 }}>
+                    ACCESS RESTRICTED
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, maxWidth: 400 }}>
+                    Your account does not have the required institutional permission: <strong>{requiredPermission}</strong>. Contact your administrator to request access.
+                </Typography>
+                <Button 
+                    variant="outlined" 
+                    onClick={() => window.history.back()}
+                    sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800 }}
+                >
+                    RETURN TO SAFETY
+                </Button>
+            </Box>
+        );
+    }
+
     // 2. [OWNER LOCK PROTOCOL]
     // Only lock out owners who are pending or haven't paid. 
     // Tenants/Technicians bypass this as their status is managed differently.
     const ownerLockedStatuses = ['pending', 'pending_approval', 'payment_pending', 'awaiting_verification', 'awaiting_approval', 'rejected', 'onboarding'];
-    if (normalizedRole === 'owner' && ownerLockedStatuses.includes(currentStatus) && !isAdmin) {
-        if (!location.pathname.startsWith('/onboarding')) {
+    
+    const isProtectedPortal = location.pathname.startsWith('/admin') || 
+                              location.pathname.startsWith('/tenant') || 
+                              location.pathname.startsWith('/technician') || 
+                              location.pathname.startsWith('/broker');
+
+    if (normalizedRole === 'owner' && ownerLockedStatuses.includes(currentStatus) && !isAdmin && !isProtectedPortal) {
+        if (!location.pathname.startsWith('/onboarding') && !user?.onboardingComplete) {
             const isPendingApproval = currentStatus === 'pending_approval' || currentStatus === 'awaiting_verification' || currentStatus === 'payment_pending';
 
             return (

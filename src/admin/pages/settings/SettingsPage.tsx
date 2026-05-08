@@ -14,8 +14,12 @@ import {
   Alert,
   Card,
   CardContent,
+  alpha
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { Building2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { binThemeTokens } from '@/theme/binGroupTheme';
+import { apiClient } from '@/services/api';
 
 interface SystemSettings {
   maintenanceMode: boolean;
@@ -32,6 +36,7 @@ interface SystemSettings {
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<SystemSettings>({
     maintenanceMode: false,
     autoDispatchEnabled: true,
@@ -75,6 +80,42 @@ export default function SettingsPage() {
       </Typography>
 
       {saved && <Alert severity="success" sx={{ mb: 2 }}>Settings saved successfully!</Alert>}
+
+      {/* Institutional Profile Link */}
+      <Card sx={{ 
+          mb: 4, 
+          background: 'linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(218, 165, 32, 0.05) 100%)', 
+          border: '1px solid rgba(218, 165, 32, 0.3)',
+          borderRadius: 4
+      }}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Box sx={{ p: 2, bgcolor: 'rgba(218, 165, 32, 0.1)', borderRadius: 3, color: '#DAA520' }}>
+              <Building2 size={32} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Sovereign Institutional Profile</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>
+                Manage company services, licenses, UAE coverage, and public profile data.
+              </Typography>
+            </Box>
+          </Box>
+          <Button 
+            variant="contained" 
+            endIcon={<ArrowRight size={18} />}
+            onClick={() => navigate('/admin/company-profile')}
+            sx={{ 
+                bgcolor: '#DAA520', 
+                color: '#000', 
+                fontWeight: 950,
+                px: 3,
+                '&:hover': { bgcolor: alpha('#DAA520', 0.8) }
+            }}
+          >
+            MANAGE IDENTITY
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* System Status */}
       <Card sx={{ mb: 3 }}>

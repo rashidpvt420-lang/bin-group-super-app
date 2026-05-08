@@ -34,9 +34,9 @@ const LoginPage: React.FC = () => {
             else if (role === 'technician') navigate('/technician');
             else if (role === 'broker') navigate('/broker');
             else if (role === 'admin' || isAdmin) {
-                const adminUrl = 'https://bin-group-57c60-admin.web.app';
-                if (window.location.hostname.includes('admin')) {
-                    navigate('/dashboard');
+                const adminUrl = 'https://bin-groups.com/admin';
+                if (window.location.hostname.includes('bin-groups.com') && window.location.pathname.startsWith('/admin')) {
+                    navigate('/admin');
                 } else {
                     window.location.href = adminUrl;
                 }

@@ -1,154 +1,215 @@
+// src/admin/pages/financials/ProfitabilityDashboardPage.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Grid, Typography, Box, Paper, Stack, alpha, LinearProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button } from '@mui/material';
-import { Download } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { 
+    Grid, Typography, Box, Paper, Stack, alpha, 
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
+    Button, Chip, LinearProgress
+} from '@mui/material';
+import { 
+    Download, DollarSign, Clock, FileText, 
+    TrendingUp, Wallet, AlertCircle,
+    ArrowRight, CheckCircle2
+} from 'lucide-react';
+import { collection, onSnapshot, query, orderBy, limit, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
-import { safeText, safeCurrency, safeDate, safeNumber } from '../../utils/safeFormatters';
 
-interface Transaction {
-    id: string;
-    amount: number;
-    type: 'credit' | 'debit';
-    category: string;
-    description: string;
-    status: string;
-    createdAt: any;
-}
+// --- Extreme Safety Helper ---
+const safe = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (val && val.toDate && typeof val.toDate === 'function') return val.toDate().toLocaleDateString();
+    if (val && typeof val.seconds === 'number') return new Date(val.seconds * 1000).toLocaleDateString();
+    if (typeof val === 'object') {
+        try {
+            return val.displayName || val.name || val.label || val.title || JSON.stringify(val);
+        } catch(e) {
+            return "[Object]";
+        }
+    }
+    return String(val);
+};
+
+const safeCurrency = (val: any, lang: string): string => {
+    const num = Number(val || 0);
+    return isNaN(num) ? "AED 0" : num.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE', { 
+        style: 'currency', 
+        currency: 'AED',
+        maximumFractionDigits: 0
+    });
+};
 
 export default function ProfitabilityDashboardPage() {
-    const { t, lang, isRTL } = useLanguage();
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const { lang } = useLanguage();
+    
+    // Data State
+    const [summary, setSummary] = useState<any>(null);
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [submissions, setSubmissions] = useState<any[]>([]);
+    const [contracts, setContracts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [lastUpdated, setLastUpdated] = useState<any>(null);
+    const [lastSync, setLastSync] = useState<any>(null);
 
     useEffect(() => {
-        const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const txs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Transaction[];
-            setTransactions(txs);
-            setLoading(false);
-            setLastUpdated(new Date());
-        }, (error) => {
-            console.error("Financial Data Fetch Error:", error);
-            setLoading(false);
-        });
+        const unsubs: (() => void)[] = [];
 
-        return () => unsubscribe();
+        // 1. Global Summary
+        unsubs.push(onSnapshot(doc(db, "admin_summaries", "global"), (snap) => {
+            if (snap.exists()) setSummary(snap.data());
+        }));
+
+        // 2. Recent Transactions
+        unsubs.push(onSnapshot(query(collection(db, "transactions"), orderBy("createdAt", "desc"), limit(10)), (snap) => {
+            setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }));
+
+        // 3. Payment Submissions (Pending)
+        unsubs.push(onSnapshot(query(collection(db, "paymentSubmissions"), orderBy("createdAt", "desc"), limit(5)), (snap) => {
+            setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }));
+
+        // 4. Contracts Pipeline
+        unsubs.push(onSnapshot(query(collection(db, "contracts"), orderBy("createdAt", "desc"), limit(5)), (snap) => {
+            setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }));
+
+        setLoading(false);
+        setLastSync(new Date());
+
+        return () => unsubs.forEach(u => u());
     }, []);
 
-    const totalCollection = transactions
-        .filter(tx => tx.type === 'credit' && tx.status === 'settled')
-        .reduce((sum, tx) => sum + tx.amount, 0);
-
-    const totalDeductions = transactions
-        .filter(tx => tx.type === 'debit')
-        .reduce((sum, tx) => sum + tx.amount, 0);
-
-    const netPosition = totalCollection - totalDeductions;
-    const margin = totalCollection > 0 ? (netPosition / totalCollection) * 100 : 0;
-
-    const formatCurrency = (val: number) => {
-        return val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE', { 
-            style: 'currency', 
-            currency: 'AED',
-            maximumFractionDigits: 0
-        });
-    };
+    const kpis = [
+        { label: 'Total Collection', val: summary?.totalCollections || 0, icon: <Wallet size={20} />, color: '#10b981' },
+        { label: 'Pending Liquidity', val: summary?.pendingLiquidity || 0, icon: <Clock size={20} />, color: binThemeTokens.gold },
+        { label: 'Overdue Payments', val: summary?.overduePayments || 0, icon: <AlertCircle size={20} />, color: binThemeTokens.danger },
+        { label: 'Payroll Pending', val: summary?.payrollPending || 0, icon: <DollarSign size={20} />, color: '#6366f1' },
+    ];
 
     return (
         <AdminPageFrame
-            title={t('fin.title')}
-            subtitle={t('fin.subtitle')}
+            title="Financial Command"
+            subtitle="V2.5 SOVEREIGN TREASURY GATEWAY"
             loading={loading}
-            lastUpdated={lastUpdated}
-            isEmpty={transactions.length === 0}
-            emptyMessage={t('dash.empty_title')}
-            breadcrumbs={[{ label: t('nav.financials') }]}
+            lastUpdated={lastSync}
+            breadcrumbs={[{ label: 'Financials' }]}
         >
-            <Grid container spacing={4} sx={{ mb: 6 }}>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.05) }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{t('fin.kpi.total_collection').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#FFF', mt: 1 }}>{safeCurrency(totalCollection, lang)}</Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>SOVEREIGN LEDGER</Typography>
-                    </Paper>
+            <Box sx={{ pb: 8 }}>
+                {/* KPI ROW */}
+                <Grid container spacing={3} sx={{ mb: 6 }}>
+                    {kpis.map((kpi, i) => (
+                        <Grid item xs={12} sm={6} md={3} key={i}>
+                            <Paper sx={{ p: 4, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Box sx={{ color: kpi.color, mb: 2 }}>{kpi.icon}</Box>
+                                <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>{safe(kpi.label)}</Typography>
+                                <Typography variant="h4" sx={{ fontWeight: 950, color: '#FFF', my: 1 }}>{safeCurrency(kpi.val, lang)}</Typography>
+                                <LinearProgress variant="determinate" value={100} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: kpi.color } }} />
+                            </Paper>
+                        </Grid>
+                    ))}
                 </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' }}>
-                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800 }}>{t('fin.sovereign_payout').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.gold, mt: 1 }}>{safeCurrency(totalDeductions, lang)}</Typography>
-                        <Typography variant="caption" color="textSecondary">LIQUIDITY DISPATCHED</Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.02)' }}>
-                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800 }}>{t('fin.net_position').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: '#10b981', mt: 1 }}>{safeCurrency(netPosition, lang)}</Typography>
-                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700 }}>MARGIN: {margin.toFixed(1)}%</Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: alpha(binThemeTokens.danger, 0.05), border: `1px solid ${alpha(binThemeTokens.danger, 0.1)}` }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.danger, fontWeight: 900 }}>{t('fin.overdue_deficit').toUpperCase()}</Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.danger, mt: 1 }}>{safeCurrency(0, lang)}</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.danger, opacity: 0.7 }}>CRITICAL LEAKAGE</Typography>
-                    </Paper>
-                </Grid>
-            </Grid>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 900 }}>{t('fin.ledger')}</Typography>
-                <Button 
-                    startIcon={<Download size={18} />} 
-                    variant="outlined" 
-                    sx={{ borderRadius: 2, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}
-                >
-                    {t('fin.export_btn')}
-                </Button>
+                <Grid container spacing={4}>
+                    {/* TRANSACTIONS LEDGER */}
+                    <Grid item xs={12} lg={8}>
+                        <Paper sx={{ p: 0, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <TrendingUp color={binThemeTokens.gold} /> INSTITUTIONAL LEDGER
+                                </Typography>
+                                <Button startIcon={<Download size={16} />} sx={{ fontWeight: 900, color: 'rgba(255,255,255,0.4)' }}>EXPORT REPORT</Button>
+                            </Box>
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>DATE</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>DESCRIPTION</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>AMOUNT</TableCell>
+                                            <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>STATUS</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {transactions.map((tx) => (
+                                            <TableRow key={tx.id} hover>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{safe(tx.createdAt)}</TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#FFF' }}>{safe(tx.description)}</Typography>
+                                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>{safe(tx.category).toUpperCase()}</Typography>
+                                                </TableCell>
+                                                <TableCell sx={{ fontWeight: 950, color: tx.type === 'credit' ? '#10b981' : binThemeTokens.danger }}>
+                                                    {tx.type === 'credit' ? '+' : '-'} {safeCurrency(tx.amount, lang)}
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Chip label={safe(tx.status).toUpperCase()} size="small" sx={{ fontWeight: 900, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold }} />
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {transactions.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} align="center" sx={{ py: 10, color: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>NO TRANSACTIONS LOGGED</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    </Grid>
+
+                    {/* SUBMISSIONS & PIPELINE */}
+                    <Grid item xs={12} lg={4}>
+                        <Stack spacing={4}>
+                            {/* PAYMENT SUBMISSIONS */}
+                            <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="subtitle2" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CheckCircle2 size={18} color={binThemeTokens.gold} /> PAYMENT SUBMISSIONS
+                                </Typography>
+                                <Stack spacing={2}>
+                                    {submissions.map((sub) => (
+                                        <Box key={sub.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>REF: {safe(sub.id).substring(0,8)}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{safe(sub.createdAt)}</Typography>
+                                            </Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 800 }}>{safe(sub.method || 'Transfer')}</Typography>
+                                            <Typography variant="h6" sx={{ fontWeight: 950, my: 0.5 }}>{safeCurrency(sub.amount, lang)}</Typography>
+                                            <Button fullWidth size="small" variant="outlined" sx={{ mt: 1, fontWeight: 900, fontSize: '0.65rem' }}>VERIFY</Button>
+                                        </Box>
+                                    ))}
+                                    {submissions.length === 0 && (
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 2 }}>NO PENDING SUBMISSIONS</Typography>
+                                    )}
+                                </Stack>
+                            </Paper>
+
+                            {/* CONTRACT PIPELINE */}
+                            <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="subtitle2" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <FileText size={18} color="#6366f1" /> CONTRACT PIPELINE
+                                </Typography>
+                                <Stack spacing={2}>
+                                    {contracts.map((con) => (
+                                        <Box key={con.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Box>
+                                                <Typography variant="body2" sx={{ fontWeight: 800 }}>{safe(con.propertyName || 'New Contract')}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{safe(con.type || 'Standard')}</Typography>
+                                            </Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 900, color: '#10b981' }}>{safeCurrency(con.annualAMC, lang)}</Typography>
+                                        </Box>
+                                    ))}
+                                    {contracts.length === 0 && (
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 2 }}>NO ACTIVE CONTRACTS</Typography>
+                                    )}
+                                </Stack>
+                                <Button fullWidth endIcon={<ArrowRight size={16} />} sx={{ mt: 3, fontWeight: 900, color: binThemeTokens.gold }}>VIEW ALL CONTRACTS</Button>
+                            </Paper>
+                        </Stack>
+                    </Grid>
+                </Grid>
             </Box>
-
-            <TableContainer component={Paper} sx={{ borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(255,255,255,0.01)' }}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>{t('fin.table.date').toUpperCase()}</TableCell>
-                            <TableCell>{t('fin.table.description').toUpperCase()}</TableCell>
-                            <TableCell>{t('fin.table.category').toUpperCase()}</TableCell>
-                            <TableCell>{t('fin.table.amount').toUpperCase()}</TableCell>
-                            <TableCell align="right">{t('fin.table.type').toUpperCase()}</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {transactions.slice(0, 10).map((tx) => (
-                            <TableRow key={tx.id} hover>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                                    {safeDate(tx.createdAt, lang)}
-                                </TableCell>
-                                <TableCell sx={{ fontWeight: 700, color: '#FFF' }}>{String(tx.description || '')}</TableCell>
-                                <TableCell>
-                                    <Typography variant="caption" sx={{ bgcolor: 'rgba(255,255,255,0.05)', px: 1, py: 0.5, borderRadius: 1, color: binThemeTokens.gold, fontWeight: 800 }}>
-                                        {String(tx.category || '').toUpperCase()}
-                                    </Typography>
-                                </TableCell>
-                                <TableCell sx={{ fontWeight: 900, color: tx.type === 'credit' ? '#10b981' : binThemeTokens.danger }}>
-                                    {tx.type === 'credit' ? '+' : '-'} {safeNumber(tx.amount)}
-                                </TableCell>
-                                <TableCell align="right">
-                                    <Typography variant="caption" sx={{ fontWeight: 900, color: tx.status === 'settled' ? '#10b981' : binThemeTokens.gold }}>
-                                        {safeText(tx.status).toUpperCase()}
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
         </AdminPageFrame>
     );
 }

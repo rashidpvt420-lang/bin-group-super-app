@@ -18,7 +18,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../utils/geoAnchor';
-import CeoContactButtons from '../components/CeoContactButtons';
+import { CeoContactButtons } from '../components/CeoContactButtons';
 import { logAuditAction } from '@bin/shared';
 
 interface UnitData {
@@ -813,3 +813,4 @@ export default function TenantSOSPage() {
         </Container>
     );
 }
+

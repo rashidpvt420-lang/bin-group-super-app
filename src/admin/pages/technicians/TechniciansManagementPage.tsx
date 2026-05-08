@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Paper, Table, TableBody, TableCell, TableContainer,
+  Box, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, TextField, Typography,
   Button, Dialog, DialogTitle, DialogContent,
   DialogActions, IconButton, Tooltip, CircularProgress,
   FormControl, InputLabel, Select, MenuItem,
-  FormControlLabel, Switch, alpha, Stack, Avatar
+  FormControlLabel, Switch, Stack, Avatar
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { 
     Users, Wrench, Edit3, Trash2, Shield, Search, 
     Zap, Clock, MapPin, Activity, Star, 
@@ -17,10 +18,11 @@ import {
     collection, onSnapshot, query, where, serverTimestamp, 
     doc, updateDoc, deleteDoc, orderBy 
 } from 'firebase/firestore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import AdminCrudActions from '../../components/AdminCrudActions';
+import AddTechnicianDialog from '../../components/technicians/AddTechnicianDialog';
 
 export default function TechniciansManagementPage() {
   const { t } = useLanguage();
@@ -28,13 +30,18 @@ export default function TechniciansManagementPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [openEdit, setOpenEdit] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
   const [selectedTech, setSelectedTech] = useState<any>(null);
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'technician'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setTechs(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
       setLoading(false);
+    }, (err) => {
+        console.error("Tech Sync Error:", err);
+        setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -45,9 +52,9 @@ export default function TechniciansManagementPage() {
   };
 
   const filteredTechs = techs.filter(t => 
-      t.displayName?.toLowerCase().includes(filter.toLowerCase()) || 
-      t.specialization?.toLowerCase().includes(filter.toLowerCase()) ||
-      t.email?.toLowerCase().includes(filter.toLowerCase())
+      (t.displayName || '').toLowerCase().includes(filter.toLowerCase()) || 
+      (t.specialization || '').toLowerCase().includes(filter.toLowerCase()) ||
+      (t.email || '').toLowerCase().includes(filter.toLowerCase())
   );
 
   return (
@@ -57,7 +64,14 @@ export default function TechniciansManagementPage() {
       loading={loading}
       breadcrumbs={[{ label: 'Technicians' }]}
       actions={
-        <Button variant="contained" startIcon={<UserPlus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>ONBOARD UNIT</Button>
+        <Button 
+            variant="contained" 
+            startIcon={<UserPlus size={18} />} 
+            onClick={() => setOpenAdd(true)}
+            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
+        >
+            ADD TECHNICIAN
+        </Button>
       }
     >
       <Paper sx={{ p: 2, mb: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
@@ -91,11 +105,11 @@ export default function TechniciansManagementPage() {
                 <TableCell>
                   <Stack direction="row" spacing={2} alignItems="center">
                     <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }}>
-                        {tech.displayName?.charAt(0) || 'T'}
+                        {(tech.displayName || 'T').charAt(0)}
                     </Avatar>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{tech.displayName || 'UNSPECIFIED'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block' }}>{tech.uid.slice(0, 12).toUpperCase()}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', display: 'block' }}>{(tech.uid || '').slice(0, 12).toUpperCase()}</Typography>
                     </Box>
                   </Stack>
                 </TableCell>
@@ -145,6 +159,11 @@ export default function TechniciansManagementPage() {
                 </TableCell>
               </TableRow>
             ))}
+            {filteredTechs.length === 0 && !loading && (
+                <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 10, color: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>NO TECHNICIAN UNITS FOUND</TableCell>
+                </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -181,6 +200,12 @@ export default function TechniciansManagementPage() {
             <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>COMMIT REVISIONS</Button>
         </DialogActions>
       </Dialog>
+
+      <AddTechnicianDialog 
+        open={openAdd}
+        onClose={() => setOpenAdd(false)}
+        onSuccess={(msg) => setSuccess(msg)}
+      />
     </AdminPageFrame>
   );
 }

@@ -17,7 +17,7 @@ import {
     Trash2, Shield, User, MapPin, Link as LinkIcon,
     AlertTriangle, ExternalLink, Mail, Phone
 } from 'lucide-react';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import AdminCrudActions from '../../components/AdminCrudActions';
@@ -71,17 +71,44 @@ export default function TenantsManagementPage() {
       if (!selectedTenant) return;
       setSubmitting(true);
       try {
-          await updateDoc(doc(db, 'users', selectedTenant.uid), {
+          const batch = writeBatch(db);
+          
+          // 1. Update User Profile
+          const userRef = doc(db, 'users', selectedTenant.uid);
+          batch.update(userRef, {
               displayName: selectedTenant.displayName,
               phoneNumber: selectedTenant.phoneNumber,
               propertyId: selectedTenant.propertyId,
               unitId: selectedTenant.unitId,
+              unitNumber: units.find(u => u.id === selectedTenant.unitId)?.unitNumber || '',
+              propertyName: properties.find(p => p.id === selectedTenant.propertyId)?.name || '',
               updatedAt: serverTimestamp()
           });
-          setSuccess("Tenant profile updated.");
+
+          // 2. Clear old unit if changed
+          const oldTenant = tenants.find(t => t.uid === selectedTenant.uid);
+          if (oldTenant?.unitId && oldTenant.unitId !== selectedTenant.unitId) {
+              const oldUnitRef = doc(db, 'units', oldTenant.unitId);
+              batch.update(oldUnitRef, { tenantId: null, tenantName: null, tenantEmail: null, status: 'vacant' });
+          }
+
+          // 3. Link new unit
+          if (selectedTenant.unitId) {
+              const unitRef = doc(db, 'units', selectedTenant.unitId);
+              batch.update(unitRef, { 
+                  tenantId: selectedTenant.uid, 
+                  tenantName: selectedTenant.displayName,
+                  tenantEmail: selectedTenant.email,
+                  status: 'occupied' 
+              });
+          }
+
+          await batch.commit();
+          setSuccess("Tenant profile and unit linkage synchronized.");
           setOpenEdit(false);
       } catch (err) {
-          setError("Update failed.");
+          console.error(err);
+          setError("Synchronization failed.");
       } finally {
           setSubmitting(false);
       }

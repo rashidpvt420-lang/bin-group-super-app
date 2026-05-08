@@ -66,11 +66,21 @@ export default function PropertyManagementPage() {
         lat: '',
         lng: '',
         ownerId: '',
+        ownerName: '',
+        ownerEmail: '',
+        ownerPhone: '',
         emirate: '',
         serviceZone: '',
         unitsCount: '',
-        floorsCount: ''
+        floorsCount: '',
+        lifts: '',
+        shops: '',
+        sizeSqft: '',
+        propertyAge: '',
+        titleDeedUrl: ''
     });
+
+    const [generatedInviteLink, setGeneratedInviteLink] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'properties'));
@@ -94,7 +104,26 @@ export default function PropertyManagementPage() {
                 city: formData.serviceZone,
                 area: formData.serviceZone
             });
-            await addDoc(collection(db, 'properties'), {
+            
+            // 1. Create Owner Invite
+            let ownerInviteId = formData.ownerId;
+            let inviteToken = '';
+            
+            if (!ownerInviteId && formData.ownerName) {
+                inviteToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                const inviteRef = await addDoc(collection(db, 'ownerInvites'), {
+                    ownerName: formData.ownerName,
+                    ownerEmail: formData.ownerEmail,
+                    ownerPhone: formData.ownerPhone,
+                    token: inviteToken,
+                    status: 'PENDING',
+                    createdAt: serverTimestamp()
+                });
+                ownerInviteId = inviteRef.id;
+            }
+
+            // 2. Create Property
+            const propertyRef = await addDoc(collection(db, 'properties'), {
                 companyId: 'BIN_GROUP',
                 name: formData.name,
                 propertyName: formData.name,
@@ -104,18 +133,61 @@ export default function PropertyManagementPage() {
                 geo,
                 location: { lat: geo.lat, lng: geo.lng },
                 coordinates: { lat: geo.lat, lng: geo.lng },
-                ownerId: formData.ownerId,
+                ownerId: ownerInviteId,
+                ownerInviteId,
                 emirate: formData.emirate,
                 city: formData.serviceZone || formData.emirate,
                 area: formData.serviceZone || formData.emirate,
                 serviceZone: formData.serviceZone,
                 unitsCount: parseInt(formData.unitsCount) || 0,
                 floorsCount: parseInt(formData.floorsCount) || 0,
+                lifts: parseInt(formData.lifts) || 0,
+                shops: parseInt(formData.shops) || 0,
+                sizeSqft: parseInt(formData.sizeSqft) || 0,
+                propertyAge: parseInt(formData.propertyAge) || 0,
+                titleDeedUrl: formData.titleDeedUrl,
                 status: 'active',
                 createdAt: serverTimestamp(),
             });
-            setOpenAdd(false);
-            resetForm();
+
+            // 3. Create Property Passport
+            await addDoc(collection(db, 'propertyPassports'), {
+                propertyId: propertyRef.id,
+                propertyName: formData.name,
+                healthScore: 100,
+                status: 'active',
+                createdAt: serverTimestamp()
+            });
+
+            // 4. Create Default Units
+            const uCount = parseInt(formData.unitsCount) || 0;
+            if (uCount > 0 && uCount < 500) {
+                const batchPromises = [];
+                for (let i = 1; i <= uCount; i++) {
+                    batchPromises.push(addDoc(collection(db, 'units'), {
+                        propertyId: propertyRef.id,
+                        unitNumber: String(i),
+                        status: 'vacant',
+                        createdAt: serverTimestamp()
+                    }));
+                }
+                await Promise.all(batchPromises);
+            }
+
+            // 5. Create Audit Log
+            await addDoc(collection(db, 'auditLogs'), {
+                action: 'CREATE_PROPERTY',
+                propertyId: propertyRef.id,
+                propertyName: formData.name,
+                timestamp: serverTimestamp()
+            });
+
+            if (inviteToken) {
+                setGeneratedInviteLink(`https://bin-groups.com/owner-invite?token=${inviteToken}`);
+            } else {
+                setOpenAdd(false);
+                resetForm();
+            }
         } catch (error: any) {
             console.error("Error adding property:", error);
             alert(error?.message || 'We could not verify this location. Admin review is required.');
@@ -378,31 +450,140 @@ export default function PropertyManagementPage() {
                                 onChange={(e) => setFormData({...formData, floorsCount: e.target.value})}
                             />
                         </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Lifts/Elevators" 
+                                fullWidth 
+                                type="number"
+                                value={formData.lifts}
+                                onChange={(e) => setFormData({...formData, lifts: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Shops/Offices Count" 
+                                fullWidth 
+                                type="number"
+                                value={formData.shops}
+                                onChange={(e) => setFormData({...formData, shops: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Total Size (SqFt)" 
+                                fullWidth 
+                                type="number"
+                                value={formData.sizeSqft}
+                                onChange={(e) => setFormData({...formData, sizeSqft: e.target.value})}
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Property Age (Years)" 
+                                fullWidth 
+                                type="number"
+                                value={formData.propertyAge}
+                                onChange={(e) => setFormData({...formData, propertyAge: e.target.value})}
+                            />
+                        </Grid>
                         <Grid item xs={12}>
                             <TextField 
-                                label="Owner UID (Association)" 
+                                label="Title Deed / Document URL (Optional)" 
+                                fullWidth 
+                                value={formData.titleDeedUrl}
+                                onChange={(e) => setFormData({...formData, titleDeedUrl: e.target.value})}
+                            />
+                        </Grid>
+                        
+                        <Grid item xs={12}>
+                            <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mt: 2, mb: 1, fontWeight: 900 }}>OWNER ASSIGNMENT / INVITATION</Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField 
+                                label="Existing Owner UID (Leave blank to invite new)" 
                                 fullWidth 
                                 value={formData.ownerId}
                                 onChange={(e) => setFormData({...formData, ownerId: e.target.value})}
                             />
                         </Grid>
+                        {!formData.ownerId && (
+                            <>
+                                <Grid item xs={12} md={4}>
+                                    <TextField 
+                                        label="New Owner Name" 
+                                        fullWidth 
+                                        value={formData.ownerName}
+                                        onChange={(e) => setFormData({...formData, ownerName: e.target.value})}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} md={4}>
+                                    <TextField 
+                                        label="Owner Email" 
+                                        fullWidth 
+                                        value={formData.ownerEmail}
+                                        onChange={(e) => setFormData({...formData, ownerEmail: e.target.value})}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} md={4}>
+                                    <TextField 
+                                        label="Owner Phone/WhatsApp" 
+                                        fullWidth 
+                                        value={formData.ownerPhone}
+                                        onChange={(e) => setFormData({...formData, ownerPhone: e.target.value})}
+                                    />
+                                </Grid>
+                            </>
+                        )}
                     </Grid>
+                    
+                    {generatedInviteLink && (
+                        <Box sx={{ mt: 3, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>PROPERTY SAVED. SEND INVITATION LINK:</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', wordBreak: 'break-all', mb: 2 }}>{generatedInviteLink}</Typography>
+                            <Grid container spacing={1}>
+                                <Grid item>
+                                    <Button 
+                                        variant="outlined" 
+                                        size="small"
+                                        href={`mailto:${formData.ownerEmail}?subject=BIN GROUP - Property Setup Complete&body=Please use this secure link to access your institutional property portal: ${generatedInviteLink}`}
+                                        target="_blank"
+                                        sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}
+                                    >
+                                        Email Link
+                                    </Button>
+                                </Grid>
+                                <Grid item>
+                                    <Button 
+                                        variant="outlined" 
+                                        size="small"
+                                        href={`https://wa.me/${formData.ownerPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Welcome to BIN GROUP. Access your institutional property portal here: ${generatedInviteLink}`)}`}
+                                        target="_blank"
+                                        sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}
+                                    >
+                                        WhatsApp Link
+                                    </Button>
+                                </Grid>
+                            </Grid>
+                        </Box>
+                    )}
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => { setOpenAdd(false); setOpenEdit(false); resetForm(); }}>Cancel</Button>
-                    <Button 
-                        variant="contained" 
-                        onClick={openAdd ? handleAddProperty : handleUpdateProperty}
-                        sx={{ 
-                            borderRadius: 100, 
-                            px: 4, 
-                            fontWeight: 900,
-                            background: binThemeTokens.goldGradient,
-                            color: binThemeTokens.black
-                        }}
-                    >
-                        {openAdd ? 'Finalize Asset' : 'Save DNA Changes'}
-                    </Button>
+                    <Button onClick={() => { setOpenAdd(false); setOpenEdit(false); resetForm(); setGeneratedInviteLink(''); }}>{generatedInviteLink ? 'Close' : 'Cancel'}</Button>
+                    {!generatedInviteLink && (
+                        <Button 
+                            variant="contained" 
+                            onClick={openAdd ? handleAddProperty : handleUpdateProperty}
+                            sx={{ 
+                                borderRadius: 100, 
+                                px: 4, 
+                                fontWeight: 900,
+                                background: binThemeTokens.goldGradient,
+                                color: binThemeTokens.black
+                            }}
+                        >
+                            {openAdd ? 'Finalize Asset' : 'Save DNA Changes'}
+                        </Button>
+                    )}
                 </DialogActions>
             </Dialog>
         </Container>

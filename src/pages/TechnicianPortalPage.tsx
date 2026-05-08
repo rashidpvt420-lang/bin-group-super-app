@@ -345,3 +345,4 @@ function PoolCard({ mission, onAccept, disabled }: { mission: any, onAccept: () 
         </Card>
     );
 }
+

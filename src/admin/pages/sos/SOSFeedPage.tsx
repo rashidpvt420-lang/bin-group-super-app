@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { useLanguage, binThemeTokens } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
+import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
 interface SOSEvent {

@@ -87,3 +87,22 @@ build/Release
 DRAG_THIS_FOLDER_TO_NETLIFY/
 y/
 bin-group-super-app/
+
+# Scratch / temp files
+scratch/
+temp_mission.txt
+full_prompt.txt
+build_log.txt
+
+# Legacy env backups (contain secrets)
+*.legacy-backup
+*.env.legacy-backup
+
+# JSON data exports (may contain user data)
+users.json
+
+# Verification scripts (one-off scripts)
+verify_live_data.js
+verify_live_data.cjs
+qa-verify-all.cjs
+qa-verify-all.js

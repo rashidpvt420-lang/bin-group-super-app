@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { ThemeProvider as MuiThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import { binThemeTokens } from "../theme/binGroupTheme";
-import { useLanguage } from "@bin/shared";
+import { useLanguage } from "./LanguageContext";
 import rtlPlugin from 'stylis-plugin-rtl';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';

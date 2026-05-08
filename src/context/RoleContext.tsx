@@ -37,7 +37,22 @@ export interface SovereignUser extends User {
     userAgent?: string;
     legalAcceptedAt?: string;
     adminApproved?: boolean;
+    onboardingComplete?: boolean;
+    permissions?: Record<string, boolean>;
 }
+
+export type SovereignPermission = 
+    | 'canViewPayments'
+    | 'canVerifyPayments'
+    | 'canManageTenants'
+    | 'canManageTechnicians'
+    | 'canManageContracts'
+    | 'canViewFinancials'
+    | 'canEditPricing'
+    | 'canManageCompanyProfile'
+    | 'canDispatchJobs'
+    | 'canViewAuditLogs'
+    | 'canExportReports';
 
 interface RoleContextType {
     role: string | null;
@@ -50,6 +65,7 @@ interface RoleContextType {
     legalAccepted: boolean;
     enableNotifications: () => Promise<boolean>;
     refreshRole: () => Promise<void>;
+    hasPermission: (permission: SovereignPermission) => boolean;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -71,6 +87,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [legalAccepted, setLegalAccepted] = useState(true);
+    const [permissions, setPermissions] = useState<Record<string, boolean>>({});
     const loadingRef = useRef(loading);
 
     const enableNotifications = async (): Promise<boolean> => {
@@ -83,7 +100,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         try {
             // 1. Force Token Refresh to pick up new Custom Claims
             console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (Force Refresh)...");
-            const tokenResult = await currentUser.getIdTokenResult(true);
+            
+            // Timeout to prevent infinite hang on local/network failure
+            const tokenPromise = currentUser.getIdTokenResult(true);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), 5000));
+            
+            const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
+                console.warn("🛡️ [AUTH] Token refresh failed or timed out. Proceeding with existing claims.", err);
+                return currentUser.getIdTokenResult(false); // Fallback to cached
+            });
+            
             const claims = tokenResult.claims;
             console.log("🔍 [AUTH_DIAG] Custom Claims Detected:", claims);
 
@@ -145,16 +171,26 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     console.warn("🛡️ [REPAIR] Grant check bypassed:", grantErr);
                 }
 
-                setUser({ ...currentUser, ...data, role: finalRole, isAdmin: finalIsAdmin } as any);
+                let resolvedOnboardingComplete = data.onboardingComplete;
 
                 // 2. Resolve Role (Priority: Claims > Firestore > Default)
                 const resolvedRole = String(claims.role || finalRole || 'tenant').toLowerCase();
                 const resolvedStatus = (data.status || 'active').toLowerCase();
                 const resolvedIsAdmin = !!(claims.admin || finalIsAdmin);
 
+                // Auto-fix non-owners to have onboardingComplete: true
+                if (resolvedRole !== 'owner' && !resolvedOnboardingComplete) {
+                     resolvedOnboardingComplete = true;
+                     // Auto-heal firestore in background
+                     updateDoc(userDocRef, { onboardingComplete: true }).catch(console.error);
+                }
+
+                setUser({ ...currentUser, ...data, role: finalRole, isAdmin: finalIsAdmin, onboardingComplete: resolvedOnboardingComplete } as any);
+
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
+                setPermissions(data.permissions || {});
                 setPropertyId(data.propertyId || data.unitId || null);
                 setLegalAccepted(!!data.legalAcceptedAt);
 
@@ -184,6 +220,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setRole(String(claims.role || 'tenant'));
                 setIsAdmin(!!claims.admin);
                 setStatus('active');
+                setPermissions({});
                 setLoading(false);
             }
         } catch (err: any) {
@@ -192,6 +229,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         } finally {
             setLoading(false);
         }
+    };
+
+    const hasPermission = (permission: SovereignPermission): boolean => {
+        if (isAdmin || role === 'ceo' || role === 'admin') return true;
+        return !!permissions[permission];
     };
 
     const refreshRole = async () => {
@@ -252,7 +294,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ role, status, isAdmin, loading, error, user, propertyId, legalAccepted, enableNotifications, refreshRole }}>
+        <RoleContext.Provider value={{ 
+            role, status, isAdmin, loading, error, user, propertyId, legalAccepted, 
+            enableNotifications, refreshRole, hasPermission 
+        }}>
             {user && !legalAccepted && !loading && !error && (
                 <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />
             )}

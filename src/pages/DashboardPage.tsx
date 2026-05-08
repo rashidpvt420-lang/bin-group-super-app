@@ -16,7 +16,7 @@ import { ArrowRight, ArrowLeft, ShieldAlert, Crown, AlertCircle } from 'lucide-r
 import { db, collection, query, where, orderBy, limit, getDocs } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
 import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { calculateComplianceScore } from '../utils/complianceScoreEngine';
@@ -32,8 +32,8 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import MissionGuidanceFeed from '../components/MissionGuidanceFeed';
 import OwnerReportGenerator from '../components/OwnerReportGenerator';
-import CeoContactButtons from '../components/CeoContactButtons';
-import { SovereignSupportChat } from '@bin/shared';
+import { CeoContactButtons } from '../components/CeoContactButtons';
+import { SovereignSupportChat } from '../components/SovereignSupportChat';
 
 export default function DashboardPage() {
     const { user, role } = useRole();
@@ -146,6 +146,12 @@ export default function DashboardPage() {
 
     const totalProperties = properties.length;
     
+    // [ONBOARDING CHECK]
+    if (!loading && totalProperties === 0 && !user?.onboardingComplete) {
+        window.location.href = '/onboarding';
+        return null;
+    }
+
     if (totalProperties === 0) {
         return (
             <Container maxWidth="md" sx={{ py: 15, textAlign: 'center' }}>

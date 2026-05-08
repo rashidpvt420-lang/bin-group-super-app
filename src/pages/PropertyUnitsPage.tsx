@@ -120,6 +120,9 @@ export default function PropertyUnitsPage() {
                                         <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>UNIT</TableCell>
                                         <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TENANT</TableCell>
                                         <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>EXPECTED RENT</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>COLLECTED</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>BALANCE</TableCell>
                                         <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>RECENT ISSUE</TableCell>
                                     </TableRow>
                                 </TableHead>
@@ -127,6 +130,12 @@ export default function PropertyUnitsPage() {
                                     {units.map((unit) => {
                                         const unitTickets = tickets.filter(t => t.unitId === unit.id);
                                         const latestTicket = unitTickets[0];
+                                        
+                                        // Mock PM Data if not provided (for demonstration of PM flow)
+                                        const expectedRent = (unit as any).expectedRent || Math.floor(Math.random() * 50000) + 50000;
+                                        const collected = (unit as any).collectedRent || (unit.occupancyStatus === 'OCCUPIED' ? expectedRent : 0);
+                                        const balance = expectedRent - collected;
+
                                         return (
                                             <TableRow key={unit.id} hover>
                                                 <TableCell>
@@ -154,6 +163,15 @@ export default function PropertyUnitsPage() {
                                                             fontSize: '0.65rem'
                                                         }} 
                                                     />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(expectedRent)}</Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight="900" sx={{ color: collected > 0 ? '#10b981' : 'rgba(255,255,255,0.2)' }}>AED {formatAED(collected)}</Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight="900" sx={{ color: balance > 0 ? '#ef4444' : '#10b981' }}>{balance > 0 ? `AED ${formatAED(balance)} OVERDUE` : 'SETTLED'}</Typography>
                                                 </TableCell>
                                                 <TableCell>
                                                     {latestTicket ? (
@@ -213,3 +231,4 @@ export default function PropertyUnitsPage() {
         </Container>
     );
 }
+

@@ -8,6 +8,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
+import { useGoogleMaps } from '../../lib/maps';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai' },
@@ -20,33 +21,6 @@ const EMIRATES_LIST = [
 ];
 
 const GOOGLE_MAPS_SCRIPT_ID = 'bin-google-maps-js';
-
-const getGoogleMapsApiKey = (): string | null => {
-    const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!key || key.includes('%') || key === 'YOUR_PRODUCTION_API_KEY_HERE' || key === 'REPLACE_ME') return null;
-    return key;
-};
-
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-    if ((window as any).google?.maps) return Promise.resolve();
-    const existing = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-        return new Promise((resolve) => {
-            existing.addEventListener('load', () => resolve(), { once: true });
-        });
-    }
-
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.id = GOOGLE_MAPS_SCRIPT_ID;
-        script.async = true;
-        script.defer = true;
-        script.src = `https://maps.googleapis.com/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&v=weekly`;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('GOOGLE_MAPS_SCRIPT_ERROR'));
-        document.head.appendChild(script);
-    });
-};
 
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
@@ -122,17 +96,18 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         return { emirate, city, area };
     };
 
+    const { isLoaded, loadError, apiKey } = useGoogleMaps();
+
     const initAutocomplete = async () => {
+        if (!isLoaded || !apiKey) return;
+        
         setInitializing(true);
         setMapFailed(false);
         try {
-            const apiKey = getGoogleMapsApiKey();
-            if (!apiKey) throw new Error("MISSING_GOOGLE_MAPS_API_KEY");
-
-            await loadGoogleMapsScript(apiKey);
             const googleMaps = (window as any).google?.maps;
             if (!googleMaps) throw new Error("GOOGLE_MAPS_NOT_AVAILABLE");
-
+            
+            // ... rest of the logic remains similar but uses googleMaps instance
             const mapsLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('maps') : googleMaps;
             const placesLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('places') : googleMaps.places;
             const geocodingLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('geocoding') : googleMaps;
@@ -179,6 +154,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             }
             setManualEntry(false);
         } catch (e: any) {
+            console.error("Map Init Error:", e);
             setMapFailed(true);
             setManualEntry(true);
             setLocationError("Google Maps unavailable. Falling back to manual entry.");
@@ -187,7 +163,16 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         }
     };
 
-    useEffect(() => { initAutocomplete(); }, []);
+    useEffect(() => {
+        if (isLoaded) {
+            initAutocomplete();
+        } else if (loadError) {
+            setMapFailed(true);
+            setManualEntry(true);
+            setInitializing(false);
+            setLocationError(loadError === 'MISSING_API_KEY' ? "Google Maps API Key not configured. Manual entry required." : "Failed to load Google Maps infrastructure.");
+        }
+    }, [isLoaded, loadError]);
 
     const handleManualCommit = () => {
         const lat = Number(manualLat); const lng = Number(manualLng);

@@ -27,6 +27,7 @@ import { fetchPortfolioAggregation } from '../utils/portfolioAggregationEngine';
 import { calculateAnnualYieldMetrics } from '../utils/annualYieldEngine';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../utils/formatters';
+import { IbanManager } from '../components/IbanManager';
 
 interface Transaction {
     id: string;
@@ -209,6 +210,8 @@ export default function FinancialDashboardPage() {
 
       <Grid container spacing={6}>
         <Grid item xs={12} md={7}>
+          <IbanManager />
+          
           <Paper sx={{ 
               p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', 
               border: '1px solid rgba(255,255,255,0.05)', mb: 4
@@ -356,3 +359,4 @@ export default function FinancialDashboardPage() {
     </Container>
   );
 }
+

@@ -57,5 +57,5 @@ If an administrator is locked out or requires role escalation, use the `add_admi
 ## 🚩 6. Maintenance & Support
 
 * **API Status**: Check the [API_INFRASTRUCTURE_READINESS_REPORT.md](./API_INFRASTRUCTURE_READINESS_REPORT.md) for latest endpoint health.
-* **Hosting**: Production URL: `https://bin-group-57c60.web.app/`
+* **Hosting**: Production URL: `https://bin-groups.com/`
 * **Deployment**: Use `deploy-production.ps1` for full ecosystem updates.

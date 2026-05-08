@@ -57,11 +57,15 @@ async function runVerification() {
         
         console.log("   - Created test technician with token: fake_token_android_12345");
         
-        // Create ticket in that zone
+        // Create ticket in that zone with geo data to satisfy autoRouteTicket
         const ticketRef = await db.collection('maintenanceTickets').add({
             tenantId: "tenant_test_" + Date.now(),
             serviceZone: "Test Zone",
             emirate: "Dubai",
+            city: "Dubai",
+            area: "Test Zone",
+            location: { lat: 25.2048, lng: 55.2708 }, // Burj Khalifa area
+            geo: { lat: 25.2048, lng: 55.2708, emirate: "Dubai", city: "Dubai", area: "Test Zone" },
             trade: "AC",
             status: "OPEN",
             description: "Test Ticket for Dispatch",

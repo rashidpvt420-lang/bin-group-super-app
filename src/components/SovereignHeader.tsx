@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Box, Button, IconButton, alpha, Badge } from '@mui/material';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
 import { useCustomTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import Brightness4Icon from '@mui/icons-material/Brightness4';

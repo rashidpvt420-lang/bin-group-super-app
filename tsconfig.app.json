@@ -31,9 +31,9 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "shared/*": [
-        "../Desktop/bin app/packages/shared/src/*"
-      ]
+      "@bin/shared": ["./src/shared-exports.ts"],
+      "@/*": ["./src/*"],
+      "shared/*": ["../Desktop/bin app/packages/shared/src/*"]
     }
   },
   "include": [

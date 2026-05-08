@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateUaeQuote2026 } from '@bin/shared';
-import type { QuoteOutput } from '@bin/shared';
+import { calculateUaeQuote2026 } from '../utils/calculateUaeQuote2026';
+import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const createOnboardingSessionId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -276,7 +276,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'luxury_estate_villa' : 'standard_villa';
     else if (property.propertyType === 'Building') assetClassId = 'commercial_tower';
     else if (property.propertyType === 'Commercial') assetClassId = 'small_office';
-    else if (property.propertyType === 'Government Majlis') assetClassId = 'government_majlis';
+    else if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) assetClassId = 'government_majlis';
     else if (property.propertyType === 'Hotel') assetClassId = 'mid_scale_hotel';
     
     // Map emirate to camelCase
@@ -530,7 +530,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             })
         }),
         {
-            name: 'bin-group-onboarding-v2',
+            name: 'bin-group-onboarding-v3',
             partialize: (state) => ({
                 ...state,
                 proofDocuments: {

@@ -43,10 +43,34 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         }
     ];
 
+    const isMajlis = property.majlis || property.propertyType?.toLowerCase() === 'majlis' || property.useType === 'Government';
+
+    // If it's a Majlis, force FM_ONLY and filter out PM/BOTH.
+    const availablePlans = isMajlis ? plans.filter(p => p.id === 'FM_ONLY') : plans;
+
+    // Auto-select FM_ONLY for Majlis if not already set or set incorrectly
+    useEffect(() => {
+        if (isMajlis && property.strategy !== 'fm_only') {
+            handleUpdate({ strategy: 'fm_only' });
+        }
+    }, [isMajlis, property.strategy]);
+
     const slaTiers = [
-        { id: 'standard', label: t('onboarding.sla.standard'), desc: t('onboarding.sla.standard_desc') },
-        { id: 'premium', label: t('onboarding.sla.premium'), desc: t('onboarding.sla.premium_desc') },
-        { id: 'elite', label: t('onboarding.sla.elite'), desc: t('onboarding.sla.elite_desc') }
+        { 
+            id: 'standard', 
+            label: isMajlis ? 'Majlis Basic Maintenance' : t('onboarding.sla.standard'), 
+            desc: isMajlis ? 'Core maintenance for government/private majlis' : t('onboarding.sla.standard_desc') 
+        },
+        { 
+            id: 'premium', 
+            label: isMajlis ? 'Majlis Premium Maintenance' : t('onboarding.sla.premium'), 
+            desc: isMajlis ? 'Enhanced priority with VIP support' : t('onboarding.sla.premium_desc') 
+        },
+        { 
+            id: 'elite', 
+            label: isMajlis ? 'Majlis Elite / Standby Maintenance' : t('onboarding.sla.elite'), 
+            desc: isMajlis ? 'Event standby technician, 24/7 dedicated response' : t('onboarding.sla.elite_desc') 
+        }
     ];
 
     const paymentPlans = [
@@ -80,8 +104,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 1. {t('onboarding.plan_select')}
                             </Typography>
                             <Grid container spacing={2}>
-                                {plans.map((plan) => (
-                                    <Grid item xs={12} sm={4} key={plan.id}>
+                                {availablePlans.map((plan) => (
+                                    <Grid item xs={12} sm={isMajlis ? 12 : 4} key={plan.id}>
                                         <Paper 
                                             onClick={() => handleUpdate({ strategy: plan.id === 'FM_ONLY' ? 'fm_only' : (plan.id === 'PM_ONLY' ? 'pm_only' : 'both') })}
                                             sx={{ 
@@ -93,8 +117,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                             }}
                                         >
                                             <Box sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', justifyContent: 'center' }}>{plan.icon}</Box>
-                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{plan.name}</Typography>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', display: 'block', mb: 2 }}>{plan.desc}</Typography>
+                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{isMajlis ? 'MAJLIS MAINTENANCE PROTOCOL' : plan.name}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', display: 'block', mb: 2 }}>{isMajlis ? 'Specialized maintenance, VIP standby & rapid response infrastructure.' : plan.desc}</Typography>
                                         </Paper>
                                     </Grid>
                                 ))}

@@ -2,9 +2,9 @@
 
 ## 🚀 Production Infrastructure
 - **Firebase Project**: `bin-group-57c60`
-- **Hosting URL**: [https://bin-group-57c60.web.app](https://bin-group-57c60.web.app)
 - **Primary Domain**: [https://bin-groups.com](https://bin-groups.com)
 - **Secondary Domain**: [https://www.bin-groups.com](https://www.bin-groups.com)
+- **Firebase Project ID**: `bin-group-57c60`
 
 ---
 

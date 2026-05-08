@@ -3,8 +3,8 @@ import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, TextField, T
 import { ArrowRight, Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { useParams, Link } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import CeoContactButtons from '../../components/CeoContactButtons';
-import { useLanguage } from '@bin/shared';
+import { CeoContactButtons } from '../../components/CeoContactButtons';
+import { useLanguage } from '../../context/LanguageContext';
 import { Languages } from 'lucide-react';
 import IconButton from '@mui/material/IconButton';
 

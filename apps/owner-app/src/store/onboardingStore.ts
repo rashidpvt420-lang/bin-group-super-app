@@ -524,7 +524,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             })
         }),
         {
-            name: 'bin-group-onboarding-v2',
+            name: 'bin-group-onboarding-v3',
             partialize: (state) => ({
                 ...state,
                 proofDocuments: {
