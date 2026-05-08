@@ -32,11 +32,21 @@ export const NavigationControl: React.FC = () => {
   const getDashboardRoute = () => {
     const r = (role || '').toLowerCase();
     if (r === 'admin') return '/admin/dashboard';
-    if (r === 'tenant') return '/tenant/dashboard';
-    if (r === 'technician') return '/technician/dashboard';
-    if (r === 'broker') return '/broker/dashboard';
+    if (r === 'tenant') return '/tenant';
+    if (r === 'technician') return '/technician';
+    if (r === 'broker') return '/broker';
     if (r === 'owner' || r === 'ceo') return '/owner/dashboard';
     return '/';
+  };
+
+  const canAccessAIStudio = () => {
+    const r = (role || '').toLowerCase();
+    return user && ['owner', 'tenant', 'admin', 'ceo'].includes(r);
+  };
+
+  const getAIStudioRoute = () => {
+    if (canAccessAIStudio()) return '/design-studio';
+    return '/ai-design-studio';
   };
 
   const handleBack = () => {
@@ -73,7 +83,7 @@ export const NavigationControl: React.FC = () => {
         {showScrollTop && <Tooltip title={t('nav.scroll_top') || 'Scroll to top'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={scrollToTop} sx={buttonSx}><ArrowUp size={20} /></IconButton></Tooltip>}
         <Tooltip title={t('nav.back') || 'Back'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleBack} sx={buttonSx}>{isRTL ? <ArrowRight size={20} /> : <ArrowLeft size={20} />}</IconButton></Tooltip>
         <Tooltip title={t('nav.dashboard') || 'Dashboard'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getDashboardRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><LayoutDashboard size={20} /></IconButton></Tooltip>
-        <Tooltip title="AI Studio" placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate('/design-studio')} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><Paintbrush size={20} /></IconButton></Tooltip>
+        <Tooltip title="AI Studio" placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getAIStudioRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><Paintbrush size={20} /></IconButton></Tooltip>
         {user ? <Tooltip title="Logout" placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleSignOut} sx={{ ...buttonSx, color: '#ef4444' }}><LogOut size={20} /></IconButton></Tooltip> : <Tooltip title="Login" placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate('/login')} sx={{ ...buttonSx, color: binThemeTokens.gold }}><LogIn size={20} /></IconButton></Tooltip>}
         {showScrollBottom && <Tooltip title={t('nav.scroll_bottom') || 'Scroll to bottom'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={scrollToBottom} sx={buttonSx}><ArrowDown size={20} /></IconButton></Tooltip>}
         <Button size="small" onClick={() => navigate('/company')} sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.62rem', fontWeight: 950, color: binThemeTokens.gold }}>Profile</Button>
