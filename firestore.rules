@@ -122,6 +122,14 @@ service cloud.firestore {
             'status', 'techNotes', 'technicianNotes', 'materialsUsed',
             'actualCost', 'completedAt', 'beforePhotoUrl', 'afterPhotoUrl',
             'signatureUrl', 'notes', 'tenantApprovalRequired', 'updatedAt'
+          ])) ||
+        // Technician: Claim unassigned ticket (Institutional Self-Assignment)
+        (userDoc().role == 'technician' && 
+          (!('assignedTechnicianId' in resource.data) || resource.data.assignedTechnicianId == null || resource.data.assignedTechnicianId == "") &&
+          resource.data.status in ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment'] &&
+          request.resource.data.assignedTechnicianId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'assignedTechnicianId', 'technicianId', 'acceptedAt', 'updatedAt'
           ]));
       allow delete: if isAdmin();
 
