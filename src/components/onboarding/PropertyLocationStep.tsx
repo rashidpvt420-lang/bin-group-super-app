@@ -232,14 +232,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             return;
         }
 
+        const isMapEntry = !!(activeProperty?.googlePlaceId && activeProperty?.googlePlaceId !== 'MANUAL');
+
         // Final commit to ensure data is correct
         commitGeoAnchor({
             lat,
             lng,
             address: activeProperty?.address,
             emirate: activeProperty?.emirate,
-            source: activeProperty?.googlePlaceId && activeProperty?.googlePlaceId !== 'MANUAL' ? 'google_maps' : 'admin_manual',
-            placeId: activeProperty?.googlePlaceId === 'MANUAL' ? undefined : activeProperty?.googlePlaceId
+            source: isMapEntry ? 'google_maps' : 'admin_manual',
+            placeId: isMapEntry ? activeProperty?.googlePlaceId : 'MANUAL',
+            verified: isMapEntry,
+            requiresGeoReview: !isMapEntry,
+            dispatchReady: isMapEntry
         });
         
         onNext();

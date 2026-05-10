@@ -631,7 +631,9 @@ const translations: Record<Language, Record<string, string>> = {
         'admin.node.financial_command': 'Financial Command',
         'admin.node.audit_shield': 'Audit Shield',
         'admin.node.pricing_matrix': 'Pricing Matrix',
-        'admin.node.system_audit': 'System Audit'
+        'admin.node.system_audit': 'System Audit',
+        'dash.hello': 'Hello',
+        'onboarding.retry_scan': 'Retry Scan'
     },
     ar: {
         'nav.dashboard': 'لوحة القيادة',
@@ -1210,7 +1212,9 @@ const translations: Record<Language, Record<string, string>> = {
         'admin.node.financial_command': 'القيادة المالية',
         'admin.node.audit_shield': 'درع التدقيق',
         'admin.node.pricing_matrix': 'مصفوفة التسعير',
-        'admin.node.system_audit': 'تدقيق النظام'
+        'admin.node.system_audit': 'تدقيق النظام',
+        'dash.hello': 'مرحباً',
+        'onboarding.retry_scan': 'إعادة المحاولة'
     }
 };
 
@@ -1239,7 +1243,15 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     }, [lang]);
 
     const t = (key: string, variables?: Record<string, any>) => {
-        let text = translations[lang]?.[key] || translations['en']?.[key] || key;
+        let text = translations[lang]?.[key] || translations['en']?.[key];
+        
+        if (!text) {
+            // Humanize the key for fallback
+            const parts = key.split('.');
+            const lastPart = parts[parts.length - 1];
+            text = lastPart.charAt(0).toUpperCase() + lastPart.slice(1).replace(/_/g, ' ');
+        }
+
         if (variables) {
             Object.entries(variables).forEach(([k, v]) => {
                 text = text.replace(`{${k}}`, String(v));

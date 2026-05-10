@@ -3,11 +3,11 @@ import { Stack, Button, Typography, Box, alpha } from '@mui/material';
 import { MessageSquare, Mail, Phone, ShieldAlert } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
-export const CeoContactButtons: React.FC<{ variant?: 'minimal' | 'full' }> = ({ variant = 'full' }) => {
+export const CeoContactButtons: React.FC<{ variant?: 'minimal' | 'full', compact?: boolean }> = ({ variant = 'full', compact = false }) => {
     const handleWhatsApp = () => window.open('https://wa.me/971552423233', '_blank');
     const handleEmail = () => window.location.href = 'mailto:Ceo@bin-groups.com';
 
-    if (variant === 'minimal') {
+    if (variant === 'minimal' || compact) {
         return (
             <Stack direction="row" spacing={1}>
                 <Button 

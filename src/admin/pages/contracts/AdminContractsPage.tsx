@@ -21,6 +21,8 @@ import {
 } from '../../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
+import { BIN_CONTRACT_TYPES } from '../../../utils/uaePricingMatrix2026';
+
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
     ACTIVE:    { color: '#4ade80', icon: <CheckCircle2 size={14} /> },
     PENDING:   { color: '#f59e0b', icon: <Clock size={14} /> },
@@ -28,8 +30,6 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = 
     DRAFT:     { color: '#94a3b8', icon: <FileText size={14} /> },
     SUSPENDED: { color: '#f97316', icon: <XCircle size={14} /> },
 };
-
-import { BIN_CONTRACT_TYPES } from '../../../utils/uaePricingMatrix2026';
 
 const CONTRACT_TYPES = ['ALL', ...Object.keys(BIN_CONTRACT_TYPES)];
 const TYPE_LABELS: Record<string, string> = {

@@ -1,11 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
-// Cleanup old local storage keys
-['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
-    try { localStorage.removeItem(key); } catch (e) {}
-});
-
 
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -60,6 +55,11 @@ import { SovereignAlertHandler } from './components/SovereignAlertHandler';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
+
+// Cleanup old local storage keys
+['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
+    try { localStorage.removeItem(key); } catch (e) {}
+});
 
 /**
  * [CRITICAL] FULL-SCREEN BLOCKING LOADER
