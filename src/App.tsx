@@ -58,7 +58,7 @@ import { NavigationControl } from './components/navigation/NavigationControl';
 
 // Cleanup old local storage keys
 ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
-    try { localStorage.removeItem(key); } catch (e) {}
+    try { localStorage.removeItem(key); } catch (e) { console.warn('[APP] Storage cleanup failed', e); }
 });
 
 /**
@@ -125,7 +125,7 @@ function LoadingScreen() {
                 Route: {diagnostics.pathname}<br/>
                 React Mounted: {String(diagnostics.reactMounted)}<br/>
                 Auth Ready: {String(diagnostics.authReady)}<br/>
-                Firebase Connected: {true ? 'ESTABLISHED' : 'FAULT'}
+                Firebase Connected: {diagnostics.authReady ? 'ESTABLISHED' : 'FAULT'}
              </Typography>
           </Box>
 

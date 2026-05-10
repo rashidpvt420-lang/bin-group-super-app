@@ -58,9 +58,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     }) => {
         try {
             const isManual = payload.source === 'admin_manual' || !payload.placeId;
-            let resolvedEmirate = payload.emirate || activeProperty?.emirate;
-            let resolvedCity = payload.city || activeProperty?.city;
-            let resolvedArea = payload.area || activeProperty?.area;
+            const resolvedEmirate = payload.emirate || activeProperty?.emirate;
+            const resolvedCity = payload.city || activeProperty?.city;
+            const resolvedArea = payload.area || activeProperty?.area;
 
             const geo = buildPersistableGeoAnchor({
                 lat: payload.lat,

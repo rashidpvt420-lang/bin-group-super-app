@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-// @ts-ignore
 import Papa from 'papaparse';
 import { db, collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';

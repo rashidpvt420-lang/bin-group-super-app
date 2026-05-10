@@ -4,9 +4,7 @@ import { binThemeTokens } from "../theme/binGroupTheme";
 import { useLanguage } from "./LanguageContext";
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
-// @ts-ignore
 import { prefixer } from 'stylis';
-// @ts-ignore
 import rtlPlugin from 'stylis-plugin-rtl';
 
 // Create rtl cache
