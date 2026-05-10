@@ -12,7 +12,7 @@ import {
     Lock,
     Clock
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/adminTheme';
 
@@ -47,7 +47,6 @@ export default function AdminPageFrame({
 }: AdminPageFrameProps) {
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
-    const location = useLocation();
 
     const handleBack = () => {
         if (window.history.length > 1) {

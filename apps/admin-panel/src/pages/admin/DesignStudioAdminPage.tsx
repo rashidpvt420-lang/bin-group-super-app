@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { 
     UploadCloud, Wand2, Image as ImageIcon, Download, 
-    RefreshCw, Layers, Sparkles, AlertCircle 
+    RefreshCw, Sparkles, AlertCircle 
 } from 'lucide-react';
 
 // ----------------------------------------------------------------------

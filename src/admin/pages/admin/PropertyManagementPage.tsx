@@ -203,10 +203,18 @@ export default function PropertyManagementPage() {
             lat: (prop.geo?.lat ?? prop.coordinates?.lat)?.toString() || '',
             lng: (prop.geo?.lng ?? prop.coordinates?.lng)?.toString() || '',
             ownerId: prop.ownerId || '',
+            ownerName: '',
+            ownerEmail: '',
+            ownerPhone: '',
             emirate: prop.emirate || '',
             serviceZone: prop.serviceZone || '',
             unitsCount: prop.unitsCount?.toString() || '',
-            floorsCount: prop.floorsCount?.toString() || ''
+            floorsCount: prop.floorsCount?.toString() || '',
+            lifts: '',
+            shops: '',
+            sizeSqft: '',
+            propertyAge: '',
+            titleDeedUrl: ''
         });
         setOpenEdit(true);
     };
@@ -267,10 +275,18 @@ export default function PropertyManagementPage() {
             lat: '',
             lng: '',
             ownerId: '',
+            ownerName: '',
+            ownerEmail: '',
+            ownerPhone: '',
             emirate: '',
             serviceZone: '',
             unitsCount: '',
-            floorsCount: ''
+            floorsCount: '',
+            lifts: '',
+            shops: '',
+            sizeSqft: '',
+            propertyAge: '',
+            titleDeedUrl: ''
         });
     };
 

@@ -40,7 +40,6 @@ export default function TenantsManagementPage() {
   const [success, setSuccess] = useState<string | null>(null);
   
   // Current admin status
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [currentAdminUid, setCurrentAdminUid] = useState<string | null>(null);
   
   const [view, setView] = useState<'registry' | 'history'>('registry');
@@ -94,16 +93,11 @@ export default function TenantsManagementPage() {
     };
     fetchInitialData();
 
-    // Check super admin status
+    // Check admin status
     const checkAdminStatus = async () => {
         const user = auth.currentUser;
         if (user) {
             setCurrentAdminUid(user.uid);
-            const snap = await getDocs(query(collection(db, 'users'), where('uid', '==', user.uid), limit(1)));
-            if (!snap.empty) {
-                const data = snap.docs[0].data();
-                setIsSuperAdmin(data.isSuperAdmin === true);
-            }
         }
     };
     checkAdminStatus();

@@ -30,7 +30,7 @@ export default function UnifiedLogin() {
             authDomain: auth.config?.authDomain,
             currentUrl: window.location.href,
             provider: code.includes('google') ? 'google.com' : 'password',
-            env: process.env.NODE_ENV,
+            env: import.meta.env.MODE,
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
             emailAttempted: email.replace(/(.{3}).*@/, "$1***@")

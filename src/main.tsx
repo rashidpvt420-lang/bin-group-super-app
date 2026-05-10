@@ -19,23 +19,35 @@ declare global {
   }
 }
 
+function applyGlobalScrollRepair() {
+  document.documentElement.style.minHeight = '100%';
+  document.documentElement.style.overflowX = 'hidden';
+  document.documentElement.style.scrollBehavior = 'smooth';
+  document.body.style.minHeight = '100%';
+  document.body.style.overflowX = 'hidden';
+  document.body.style.overflowY = 'auto';
+  (document.body.style as any).webkitOverflowScrolling = 'touch';
+}
+
 /**
  * [BOOT-SIGNAL]
  * Signals to the HTML-layer watchdog that React has successfully initialized.
  */
 function BootSignal() {
   React.useEffect(() => {
+    applyGlobalScrollRepair();
+
     window.__BIN_GROUPS_BOOT__ = {
       ...(window.__BIN_GROUPS_BOOT__ || {}),
       reactMounted: true,
       mountedAt: Date.now(),
     };
 
-    document.documentElement.setAttribute("data-bin-groups-react", "mounted");
+    document.documentElement.setAttribute('data-bin-groups-react', 'mounted');
 
-    const timeoutNode = document.getElementById("bin-groups-timeout");
+    const timeoutNode = document.getElementById('bin-groups-timeout');
     if (timeoutNode) {
-      timeoutNode.style.display = "none";
+      timeoutNode.style.display = 'none';
     }
 
     const loaderNode = document.getElementById('bin-boot-loader');
@@ -61,6 +73,7 @@ const mountApp = () => {
     }
 
     try {
+        applyGlobalScrollRepair();
         const root = ReactDOM.createRoot(rootElement);
         root.render(
             <React.StrictMode>

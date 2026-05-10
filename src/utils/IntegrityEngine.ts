@@ -6,7 +6,7 @@ export interface ProfileHealth {
 }
 
 export const checkProfileIntegrity = (user: any, role: string): ProfileHealth => {
-    let missingFields: string[] = [];
+    const missingFields: string[] = [];
     let requirements: string[] = [];
     const normalizedRole = role?.toUpperCase();
 

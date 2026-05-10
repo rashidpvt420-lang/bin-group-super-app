@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Grid, Paper, CircularProgress, 
-    Stack, alpha, Button, IconButton, Tooltip 
+    Stack, alpha, Button, IconButton, Tooltip, Chip, Divider
 } from '@mui/material';
 import { 
     FolderOpen, FileText, Download, Eye, 
@@ -74,7 +74,7 @@ export default function OwnerDocumentsPage() {
                                         <FileText size={22} />
                                     </Box>
                                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                        <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', noWrap: true, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <Typography variant="subtitle2" fontWeight="950" noWrap sx={{ color: '#FFF' }}>
                                             {doc.name || 'Untitled Document'}
                                         </Typography>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>

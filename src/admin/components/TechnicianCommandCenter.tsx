@@ -12,7 +12,7 @@ import {
     Search,
     Filter,
     Radar,
-    LucideIcon
+    type LucideIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './TechnicianCommandCenter.css';

@@ -21,7 +21,7 @@ export default function TenantProfilePage() {
                 }
                 
                 if (!unitSnap.empty) {
-                    const uData = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
+                    const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
                     setUnitData(uData);
 
                     if (uData.propertyId) {

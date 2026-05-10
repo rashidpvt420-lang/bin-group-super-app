@@ -199,7 +199,7 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
                 const tenantName = row.data.tenantName;
 
                 // 1. Resolve Unit
-                let unit = units.find(u => String(u.unitNumber) === String(row.data.unitNumber));
+                const unit = units.find(u => String(u.unitNumber) === String(row.data.unitNumber));
                 let unitId = unit?.id;
 
                 if (!unit && autoCreateUnits) {

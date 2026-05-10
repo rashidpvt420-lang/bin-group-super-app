@@ -574,7 +574,7 @@ export default function DashboardPage() {
                                                 {String(log.actor || 'SYSTEM')} <Box component="span" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>{String(log.action || 'ACTIVITY')}</Box>
                                             </Typography>
                                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800, display: 'block', mt: 0.5 }}>
-                                                {log.module} • {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString() : 'Just now'}
+                                                {log.module} • {(log.timestamp as any)?.toDate ? (log.timestamp as any).toDate().toLocaleTimeString() : 'Just now'}
                                             </Typography>
                                         </Box>
                                     </Box>

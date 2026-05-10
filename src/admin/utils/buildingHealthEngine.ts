@@ -27,7 +27,7 @@ export function calculateBuildingHealth(data: {
     const systems: SystemHealth[] = [];
 
     // 1. HVAC Health
-    let hvacScore = Math.max(95 - (data.age * 2.5) - (data.hvacCount > 50 ? 5 : 0), 30);
+    const hvacScore = Math.max(95 - (data.age * 2.5) - (data.hvacCount > 50 ? 5 : 0), 30);
     systems.push({
         system: 'HVAC Infrastructure',
         score: Math.round(hvacScore),
@@ -36,7 +36,7 @@ export function calculateBuildingHealth(data: {
     });
 
     // 2. Electrical Distribution
-    let elecScore = Math.max(98 - (data.age * 1.5), 45);
+    const elecScore = Math.max(98 - (data.age * 1.5), 45);
     systems.push({
         system: 'Electrical Grid',
         score: Math.round(elecScore),
@@ -45,7 +45,7 @@ export function calculateBuildingHealth(data: {
     });
 
     // 3. Plumbing & Hydraulics
-    let plumbScore = Math.max(92 - (data.age * 3) - (data.floors > 40 ? 10 : 0), 25);
+    const plumbScore = Math.max(92 - (data.age * 3) - (data.floors > 40 ? 10 : 0), 25);
     systems.push({
         system: 'Plumbing & Hydraulic',
         score: Math.round(plumbScore),
@@ -54,7 +54,7 @@ export function calculateBuildingHealth(data: {
     });
 
     // 4. Civil & Structural
-    let civilScore = Math.max(99 - (data.age * 0.8), 65);
+    const civilScore = Math.max(99 - (data.age * 0.8), 65);
     systems.push({
         system: 'Civil & Structural',
         score: Math.round(civilScore),
@@ -63,7 +63,7 @@ export function calculateBuildingHealth(data: {
     });
 
     // 5. Compliance & Safety (Simulated based on age/sector)
-    let complianceScore = Math.max(100 - (data.age * 1) - (data.sector === 'Industrial' ? 10 : 0), 50);
+    const complianceScore = Math.max(100 - (data.age * 1) - (data.sector === 'Industrial' ? 10 : 0), 50);
 
     const overallScore = Math.round(
         (systems.reduce((acc, s) => acc + s.score, 0) / systems.length) * 0.7 +

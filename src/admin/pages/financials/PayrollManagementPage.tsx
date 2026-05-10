@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import { 
     Wallet, Clock, FileText, Send, CheckCircle, AlertCircle,
-    TrendingDown, ArrowUpRight, DollarSign, Download, Settings
+    TrendingDown, ArrowUpRight, DollarSign, Download, Settings, Users
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';

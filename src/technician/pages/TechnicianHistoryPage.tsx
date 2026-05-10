@@ -41,7 +41,7 @@ export default function TechnicianHistoryPage() {
         );
 
         const unsub = onSnapshot(q, (snap) => {
-            const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const docs: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setHistory(docs);
             
             const closed = docs.filter(d => d.status === 'CLOSED').length;

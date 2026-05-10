@@ -3,7 +3,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Button, Typography, CssBaseline, CircularProgress, alpha } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
@@ -12,7 +12,7 @@ import { prefixer } from 'stylis';
 // ─── LIVE PRODUCTION IMPORTS ──────────────────────────────────────────
 import rtlPlugin from 'stylis-plugin-rtl';
 import { signOut } from 'firebase/auth';
-import { auth, db } from './lib/firebase';
+import { auth } from './lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import ProtectedRoute from './components/ProtectedRoute';

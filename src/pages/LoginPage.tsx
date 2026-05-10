@@ -36,7 +36,7 @@ const LoginPage: React.FC = () => {
             else if (role === 'admin' || isAdmin) {
                 navigate('/admin');
             }
-            else navigate('/owner-dashboard');
+            else navigate('/owner/dashboard');
         }
     }, [role, isAdmin, roleLoading, navigate]);
     
@@ -51,7 +51,7 @@ const LoginPage: React.FC = () => {
             authDomain: auth.config?.authDomain,
             currentUrl: window.location.href,
             provider: code.includes('google') ? 'google.com' : 'password',
-            env: process.env.NODE_ENV,
+            env: import.meta.env.MODE,
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
             emailAttempted: email.replace(/(.{3}).*@/, "$1***@")

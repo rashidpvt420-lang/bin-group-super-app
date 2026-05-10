@@ -1,6 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
+// Cleanup old local storage keys
+['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
+    try { localStorage.removeItem(key); } catch (e) {}
+});
+
 
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -55,11 +60,6 @@ import { SovereignAlertHandler } from './components/SovereignAlertHandler';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
-
-// Cleanup old local storage keys
-['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
-    try { localStorage.removeItem(key); } catch (e) { console.warn('[APP] Storage cleanup failed', e); }
-});
 
 /**
  * [CRITICAL] FULL-SCREEN BLOCKING LOADER
@@ -125,7 +125,7 @@ function LoadingScreen() {
                 Route: {diagnostics.pathname}<br/>
                 React Mounted: {String(diagnostics.reactMounted)}<br/>
                 Auth Ready: {String(diagnostics.authReady)}<br/>
-                Firebase Connected: {diagnostics.authReady ? 'ESTABLISHED' : 'FAULT'}
+                Firebase Connected: {true ? 'ESTABLISHED' : 'FAULT'}
              </Typography>
           </Box>
 
@@ -196,7 +196,7 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
     if (normalizedRole === 'technician') return <Navigate to="/technician" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
     if (normalizedRole === 'admin') return <Navigate to="/admin" replace />;
-    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/owner/dashboard" replace />;
+    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/owner-dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -275,16 +275,16 @@ function AppContent() {
 
         {/* Sovereign Asset Control */}
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
-        <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
-        <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
+        <Route path="/owner-dashboard" element={<ProtectedRoute allowedRoles={['owner']}><DashboardPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<Navigate to="/owner-dashboard" replace />} />
         <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute allowedRoles={['owner', 'admin', 'technician']}><MaintenanceCalendarPage /></ProtectedRoute>} />
         <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
         <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
         <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'technician', 'broker']}><NotificationInboxPage /></ProtectedRoute>} />
-        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'admin', 'ceo']}><DesignStudioPage /></ProtectedRoute>} />
-        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'admin', 'ceo']}><DesignRequestDetailPage /></ProtectedRoute>} />
+        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignStudioPage /></ProtectedRoute>} />
+        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignRequestDetailPage /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
         
         {/* Sector Portals */}

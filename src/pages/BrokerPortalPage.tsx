@@ -117,7 +117,7 @@ export default function BrokerPortalPage() {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            complete: async (results) => {
+            complete: async (results: any) => {
                 const rows = results.data as any[];
                 let count = 0;
                 for (const row of rows) {
@@ -150,7 +150,7 @@ export default function BrokerPortalPage() {
                 setUploading(false);
                 alert(`${count} assets successfully added to the intake queue.`);
             },
-            error: (err) => {
+            error: (err: any) => {
                 console.error("CSV Parse Error:", err);
                 setUploading(false);
             }
@@ -172,7 +172,7 @@ export default function BrokerPortalPage() {
                     <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>SOVEREIGN REFERRAL ENGINE</Typography>
                     <Chip label={`Broker Code: ${brokerCode}`} size="small" sx={{ mt: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
                     <Box sx={{ mt: 1.5 }}>
-                        <CeoContactButtons compact />
+                        <CeoContactButtons variant="minimal" />
                     </Box>
                 </Box>
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 }, '& .Mui-selected': { color: binThemeTokens.gold } }}>

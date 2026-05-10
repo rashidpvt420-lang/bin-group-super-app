@@ -1,0 +1,18 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+
+console.log('💎 [BOOT] MINI-MAIN script execution started');
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<div style={{color: 'white', padding: '50px', fontSize: '24px'}}>MINI-MAIN MOUNTED SUCCESS</div>);
+    
+    // Hide loader
+    const loaderNode = document.getElementById('bin-boot-loader');
+    if (loaderNode) {
+      loaderNode.style.display = 'none';
+    }
+} else {
+    console.error('Root element not found');
+}
