@@ -36,7 +36,7 @@ export default function OwnerContractsPage() {
         const contractQ = query(collection(db, 'contracts'), where('ownerEmail', '==', email));
         
         const unsubscribe = onSnapshot(contractQ, (snap) => {
-            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const data: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setContracts(data);
             
             // Derive active selection from first contract or property passport if exists

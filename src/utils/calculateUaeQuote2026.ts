@@ -181,7 +181,7 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   const addOnTotal = (input.addOns?.length || 0) * 1500; // Simplified for now, can be asset specific
 
   // 8. Calculations
-  let subtotal = (emirateAdjustedQuote * ageMultiplier * slaMultiplier) + complexityPremium + addOnTotal;
+  const subtotal = (emirateAdjustedQuote * ageMultiplier * slaMultiplier) + complexityPremium + addOnTotal;
 
   // 9. Payment Plan Surcharge
   let paymentSurcharge = 0;

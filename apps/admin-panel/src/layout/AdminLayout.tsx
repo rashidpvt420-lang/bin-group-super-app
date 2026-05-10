@@ -41,7 +41,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, currentPage }: AdminLayoutProps) {
-  const { t, isRTL, lang } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [sosCount] = useState(3); // Mock SOS count

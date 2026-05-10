@@ -33,7 +33,7 @@ async function testBrokerCSVReconciliation() {
         });
         console.error("[FAIL] Malformed CSV ALLOWED. Critical security rule gap detected.");
     } catch (err) {
-        
+        console.warn('[AUDIT_PROOF] Malformed CSV successfully rejected by security rules.', err);
     }
 }
 

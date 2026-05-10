@@ -8,7 +8,18 @@ import {
     TrendingUp, Activity, ShieldCheck 
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { PredictiveMaintenanceReport, PredictionAdvisory } from '@bin/shared';
+export interface PredictionAdvisory {
+    system: string;
+    warning: string;
+    timeframe: string;
+    probability: number;
+    riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface PredictiveMaintenanceReport {
+    overallRiskScore: number;
+    advisories: PredictionAdvisory[];
+}
 
 interface Props {
     report: PredictiveMaintenanceReport;
@@ -50,7 +61,7 @@ const PredictiveMaintenancePanel: React.FC<Props> = ({ report }) => {
             </Box>
 
             <Stack spacing={3}>
-                {report.advisories.map((adv, i) => (
+                {report.advisories.map((adv: PredictionAdvisory, i: number) => (
                     <Box key={i} sx={{ 
                         p: 3, bgcolor: alpha(getRiskColor(adv.riskLevel), 0.03), 
                         border: `1px solid ${alpha(getRiskColor(adv.riskLevel), 0.15)}`,

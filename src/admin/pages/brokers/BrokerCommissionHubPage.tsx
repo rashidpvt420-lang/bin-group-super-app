@@ -46,7 +46,9 @@ export default function BrokerCommissionHubPage() {
                 updatedAt: serverTimestamp()
             });
             setCommissions(prev => prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c));
-        } catch (e) {}
+        } catch (e) {
+            console.warn('[COMMISSION_HUB] Failed to approve commission.', e);
+        }
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;

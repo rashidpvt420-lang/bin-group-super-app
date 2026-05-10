@@ -1,18 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Zap, 
-    Shield, 
-    Activity, 
-    Wifi, 
+    Activity,
     MapPin, 
     Battery, 
     AlertTriangle,
     Clock,
-    ChevronRight,
     Search,
-    Filter,
-    Radar,
-    LucideIcon
+    Radar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './TechnicianCommandCenter.css';

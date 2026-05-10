@@ -3,7 +3,7 @@ import {
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Table, TableBody, TableCell, TableContainer, TableHead, 
     TableRow, TextField, InputAdornment, alpha, Button,
-    Tooltip, IconButton
+    Tooltip, IconButton, Grid
 } from '@mui/material';
 import { 
     Search, Building2, DollarSign, Users, 
@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function OwnerUnitsPage() {
     const { user } = useRole();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [units, setUnits] = useState<any[]>([]);
     const [search, setSearch] = useState('');

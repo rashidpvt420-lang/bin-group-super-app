@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useRole, SovereignPermission } from '../context/RoleContext';
+import { useRole, type SovereignPermission } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { Box, Typography, CircularProgress, Button, Stack } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';

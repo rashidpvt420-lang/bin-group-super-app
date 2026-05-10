@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Grid, Card, CardContent, Button, 
-    Stack, CircularProgress, alpha, Divider, Table, 
+    Stack, CircularProgress, alpha, Table, 
     TableBody, TableCell, TableContainer, TableHead, 
     TableRow, Paper, Chip, IconButton, Alert
 } from '@mui/material';
@@ -9,12 +9,10 @@ import {
     Activity, 
     Shield, 
     Users, 
-    Home, 
     CreditCard, 
     AlertTriangle, 
     RefreshCcw, 
     FileText, 
-    Download,
     Mail,
     CheckCircle,
     XCircle,
@@ -28,7 +26,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function ProductionControlCenter() {
-    const { tx, t, isRTL } = useLanguage();
+    useLanguage();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [metrics, setMetrics] = useState({
@@ -42,7 +40,7 @@ export default function ProductionControlCenter() {
         openTickets: 0
     });
     const [latestBatches, setLatestBatches] = useState<any[]>([]);
-    const [systemHealth, setSystemHealth] = useState({
+    const [systemHealth] = useState({
         sendGrid: 'operational',
         functions: 'operational',
         firestore: 'operational'

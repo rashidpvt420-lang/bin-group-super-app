@@ -122,7 +122,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     variant="contained"
                     onClick={() => {
                         reset();
-                        navigate('/owner-dashboard');
+                        navigate('/owner/dashboard');
                     }}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 5, py: 1.5 }}
                 >

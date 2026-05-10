@@ -8,22 +8,18 @@ import {
 import { 
     Search as SearchIcon,
     RefreshCcw as RefreshIcon,
-    FileText as FileIcon,
     TrendingUp,
     Users,
     Home,
     AlertCircle,
-    ChevronRight,
-    ArrowUpRight
+    ChevronRight
 } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
-import { useNavigate } from 'react-router-dom';
 
 export default function PropertyPassportPage() {
-    const { tx, t, isRTL } = useLanguage();
-    const navigate = useNavigate();
+    const { isRTL } = useLanguage();
     const [passports, setPassports] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -140,9 +136,6 @@ export default function PropertyPassportPage() {
                     <TableBody>
                         {filteredPassports.map((p) => {
                             const occupancyRate = p.totalUnits > 0 ? (p.occupiedUnits / p.totalUnits) * 100 : 0;
-                            const paymentRate = (p.rentCollectedTotal + p.rentOutstandingTotal) > 0 
-                                ? (p.rentCollectedTotal / (p.rentCollectedTotal + p.rentOutstandingTotal)) * 100 
-                                : 100;
 
                             return (
                                 <TableRow key={p.id} sx={{ 

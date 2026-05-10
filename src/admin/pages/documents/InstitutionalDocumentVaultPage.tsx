@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { 
     Landmark, Download, ShieldCheck, Eye, Trash2, Clock, FileText,
-    Search, Filter, Folder, Share2
+    Search, Filter, Folder, Share2, MoreVertical
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -166,7 +166,7 @@ export default function InstitutionalDocumentVaultPage() {
                                                 <Share2 size={16} color="rgba(255,255,255,0.3)" />
                                             </IconButton>
                                             <IconButton size="small">
-                                                <MoreHorizontal size={16} color="rgba(255,255,255,0.3)" />
+                                                <MoreVertical size={16} color="rgba(255,255,255,0.3)" />
                                             </IconButton>
                                         </Stack>
                                     </Box>

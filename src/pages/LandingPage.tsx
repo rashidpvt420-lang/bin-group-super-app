@@ -294,7 +294,7 @@ const LandingPage: React.FC = () => {
                         ))}
                     </Stack>
                     <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
-                        <CeoContactButtons compact />
+                        <CeoContactButtons variant="minimal" />
                     </Box>
                     <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900, display: 'block', mt: 1, opacity: 0.6 }}>
                         {t('footer.copyright')}
