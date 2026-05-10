@@ -53,7 +53,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setManualLat(String(fallbackEmirate.lat));
             setManualLng(String(fallbackEmirate.lng));
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        
     }, []);
 
     const commitGeoAnchor = (payload: {
@@ -218,7 +218,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setMapFailed(true);
             setInitializing(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        
     }, [isLoaded, loadError]);
 
     const handleEmirateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
