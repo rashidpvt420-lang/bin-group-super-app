@@ -681,7 +681,6 @@ const translations: Record<Language, Record<string, string>> = {
         'admin.node.audit_shield': 'Audit Shield',
         'admin.node.pricing_matrix': 'Pricing Matrix',
         'admin.node.system_audit': 'System Audit',
-<<<<<<< HEAD
         'admin.kpi.properties': 'Total Properties',
         'admin.kpi.units': 'Total Units',
         'admin.kpi.tenants': 'Active Tenants',
@@ -1050,12 +1049,10 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.type.farm': 'مزرعة / عقار',
         'login.get_started': 'ابدأ الآن',
         'gateway.login': 'تسجيل الدخول',
-=======
         'dash.hello': 'Hello',
         'onboarding.retry_scan': 'Retry Scan'
     },
     ar: {
->>>>>>> f34eb4a3ca6d36c632cd8199f01c74f2eb37eadd
         'nav.dashboard': 'لوحة القيادة',
         'nav.onboarding': 'التسجيل',
         'nav.financial': 'المالية',
@@ -1619,7 +1616,6 @@ const translations: Record<Language, Record<string, string>> = {
         'admin.node.audit_shield': 'درع التدقيق',
         'admin.node.pricing_matrix': 'مصفوفة التسعير',
         'admin.node.system_audit': 'تدقيق النظام',
-<<<<<<< HEAD
         'admin.kpi.properties': 'إجمالي العقارات',
         'admin.kpi.units': 'إجمالي الوحدات',
         'admin.kpi.tenants': 'المستأجرون النشطون',
