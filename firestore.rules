@@ -57,7 +57,8 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName','name','phone','mobile','photoURL','language',
           'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
-          'gpsConsent','onboardingComplete','fcmTokens'
+          'gpsConsent','onboardingComplete','fcmTokens',
+          'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt'
         ])
       );
       allow delete: if isAdmin() || hasPermission('canManageStaff');
@@ -210,6 +211,31 @@ service cloud.firestore {
         signedIn() && resource.data.ownerId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt'])
       );
+      allow delete: if isAdmin();
+    }
+
+    match /hrProfiles/{profileId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || isOwner(profileId);
+      allow write: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /attendanceLogs/{logId} {
+      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /hrRequests/{requestId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || hasPermission('canManageStaff');
+      allow delete: if isAdmin();
+    }
+
+    match /design_requests/{requestId} {
+      allow read: if isAdmin() || owns(resource.data) || hasPermission('canManageProperties');
+      allow create: if signedIn();
+      allow update: if isAdmin() || owns(resource.data) || hasPermission('canManageProperties');
       allow delete: if isAdmin();
     }
 
