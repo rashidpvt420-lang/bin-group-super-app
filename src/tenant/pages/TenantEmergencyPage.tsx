@@ -18,7 +18,7 @@ export default function TenantEmergencyPage() {
             try {
                 let unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
                 if (!unitSnap.empty) {
-                    const uData = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
+                    const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
                     setUnitData(uData);
                     if (uData.propertyId) {
                         const propSnap = await getDocs(query(collection(db, "properties"), where("__name__", "==", uData.propertyId)));

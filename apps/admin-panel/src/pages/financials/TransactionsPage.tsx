@@ -34,13 +34,11 @@ interface Transaction {
 export default function TransactionsPage() {
   const { t, lang, isRTL } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'), limit(100));
     const unsubscribe = onSnapshot(q, (snap) => {
       setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

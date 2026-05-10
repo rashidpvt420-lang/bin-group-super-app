@@ -29,6 +29,7 @@ interface AdminPageFrameProps {
     onRefresh?: () => void;
     permissionDenied?: boolean;
     breadcrumbs?: { label: string; path?: string }[];
+    actions?: React.ReactNode;
 }
 
 export default function AdminPageFrame({
@@ -43,7 +44,8 @@ export default function AdminPageFrame({
     lastUpdated,
     onRefresh,
     permissionDenied = false,
-    breadcrumbs = []
+    breadcrumbs = [],
+    actions
 }: AdminPageFrameProps) {
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
@@ -123,7 +125,7 @@ export default function AdminPageFrame({
                                     }
                                 }}
                             >
-                                {safeRender(bc.label).toString().toUpperCase()}
+                                {String(safeRender(bc.label || '')).toUpperCase()}
                             </Link>
                         ))}
                     </Breadcrumbs>
@@ -133,7 +135,7 @@ export default function AdminPageFrame({
                     <Box>
                         <Stack direction="row" spacing={2} alignItems="center">
                             <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>
-                                {safeRender(title)}
+                                {String(safeRender(title)).toUpperCase()}
                             </Typography>
                             {status && (
                                 <Chip 
@@ -183,6 +185,7 @@ export default function AdminPageFrame({
                                 {t('dash.sync_btn') || 'REFRESH'}
                             </Button>
                         )}
+                        {actions}
                     </Stack>
                 </Box>
             </Box>

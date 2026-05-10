@@ -556,7 +556,7 @@ export default function TenantSOSPage() {
                     >
                         AI DESIGN STUDIO
                     </Button>
-                    <CeoContactButtons compact />
+                    <CeoContactButtons variant="minimal" />
                 </Stack>
             </Box>
             {renderReportCard()}

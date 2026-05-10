@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Grid, Paper, Typography, Box, Chip, Table, TableBody, 
     TableCell, TableHead, TableRow, TableContainer, Skeleton, Stack,
-    Alert, Snackbar, Button, alpha, CircularProgress,
+    Alert, Snackbar, Button, alpha,
     Tooltip, Divider
 } from '@mui/material';
 import { 
@@ -15,11 +15,9 @@ import {
     Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useLanguage, useAI } from '@bin/shared';
 import { 
     db, collection, query, where, onSnapshot, 
-    orderBy, doc, serverTimestamp, limit, 
-    Timestamp 
+    orderBy, doc, limit, Timestamp 
 } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
@@ -46,8 +44,6 @@ type ActivityItem = {
 };
 
 export default function DashboardPage() {
-    const { lang, t } = useLanguage();
-    const { setPageContext } = useAI();
     const navigate = useNavigate();
     
     // UI State
@@ -518,7 +514,7 @@ export default function DashboardPage() {
                                                 {log.actor} <Box component="span" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>{log.action}</Box>
                                             </Typography>
                                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700, display: 'block', mt: 0.5 }}>
-                                                {log.module} • {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString() : 'Just now'}
+                                                {log.module} • {(log.timestamp as any)?.toDate ? (log.timestamp as any).toDate().toLocaleTimeString() : 'Just now'}
                                             </Typography>
                                         </Box>
                                     </Box>

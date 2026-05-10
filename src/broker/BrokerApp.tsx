@@ -19,6 +19,7 @@ import { ArrowLeft, Bell, Briefcase, Building, FileUp, Globe, Home, Paintbrush, 
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { auth } from '../lib/firebase';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -30,8 +31,13 @@ import BrokerProfilePage from './pages/BrokerProfilePage';
 const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useRole();
+  const { user } = useRole();
   const { toggleLanguage, isRTL, language } = useLanguage();
+
+  const handleLogout = () => {
+    auth.signOut();
+    navigate('/login');
+  };
 
   const menuItems = [
     { label: 'Dashboard', path: '/broker/dashboard', icon: <Home size={18} /> },
@@ -72,7 +78,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
               </Avatar>
             </Box>
             <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.1)', mx: 1 }} />
-            <Button onClick={logout} startIcon={<ArrowLeft size={16} />} sx={{ color: '#ef4444', fontWeight: 950 }}>
+            <Button onClick={handleLogout} startIcon={<ArrowLeft size={16} />} sx={{ color: '#ef4444', fontWeight: 950 }}>
               Logout
             </Button>
           </Stack>

@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Container, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, IconButton, Stack, 
-    alpha, CircularProgress, Tooltip, Button
+    alpha, CircularProgress, Tooltip
 } from '@mui/material';
 import { 
-    Activity, Clock, MapPin, Power, Coffee, Play, 
+    Clock, MapPin, 
     ShieldAlert, RefreshCcw, UserCheck, ExternalLink
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';

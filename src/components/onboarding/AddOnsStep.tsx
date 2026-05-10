@@ -24,7 +24,8 @@ import {
     Trash2,
     Info,
     Building,
-    ArrowLeft
+    ArrowLeft,
+    Wrench
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';

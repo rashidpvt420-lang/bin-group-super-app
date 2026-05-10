@@ -34,7 +34,7 @@ export const NavigationControl: React.FC = () => {
         if (r === 'tenant') return '/tenant';
         if (r === 'technician') return '/technician';
         if (r === 'broker') return '/broker';
-        if (r === 'owner' || r === 'ceo') return '/owner-dashboard';
+        if (r === 'owner' || r === 'ceo') return '/owner/dashboard';
         return '/';
     };
 

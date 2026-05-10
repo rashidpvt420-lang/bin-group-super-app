@@ -10,7 +10,6 @@ import {
     FileText, UserPlus, ChevronRight, Search as SearchIcon
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
-import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable } from 'firebase/functions';
