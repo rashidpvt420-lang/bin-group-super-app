@@ -71,76 +71,33 @@ const PropertyOnboardingPage = () => {
         }}>
             <CssBaseline />
             
-            {/* STICKY HEADER */}
-            <Box sx={{ 
-                py: 3, px: 2, bgcolor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(15px)',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                position: 'sticky', top: 0, zIndex: 1100
-            }}>
-                <Container maxWidth="lg">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                        <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.gold }}>
-                            BIN GROUP
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Button
-                                variant="text"
-                                size="small"
-                                onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                                sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}
+            <Container maxWidth="lg" sx={{ py: 4 }}>
+                <Stepper activeStep={step - 1} alternativeLabel={!isMobile} sx={{ 
+                    mb: 4,
+                    minHeight: isMobile ? 34 : 'auto', 
+                    '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' },
+                    '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr' }
+                }}>
+                    {onboardingSteps.map((label) => (
+                        <Step key={label}>
+                            <StepLabel 
+                                StepIconProps={{
+                                    sx: {
+                                        '&.Mui-active': { color: binThemeTokens.gold },
+                                        '&.Mui-completed': { color: '#4ADE80' }
+                                    }
+                                }}
                             >
-                                {lang === 'en' ? 'عربي' : 'English'}
-                            </Button>
-                            <Button
-                                component="a"
-                                href="/"
-                                variant="text"
-                                size="small"
-                                sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'none', fontWeight: 800 }}
-                            >
-                                {t('onboarding.back_website')}
-                            </Button>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <ShieldIcon color="#10b981" size={18} />
-                                <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{t('onboarding.institutional')}</Typography>
-                            </Box>
-                            <Button
-                                variant="outlined" 
-                                size="small"
-                                onClick={() => alert('Your progress is automatically saved to this browser. Return to /onboarding to continue.')}
-                                sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.3), textTransform: 'none', fontWeight: 700 }}
-                            >
-                                {t('onboarding.save_later')}
-                            </Button>
-                        </Box>
-                    </Box>
-
-                    <Stepper activeStep={step - 1} alternativeLabel={!isMobile} sx={{ 
-                        minHeight: isMobile ? 34 : 'auto', 
-                        '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' },
-                        '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr' }
-                    }}>
-                        {onboardingSteps.map((label) => (
-                            <Step key={label}>
-                                <StepLabel 
-                                    StepIconProps={{
-                                        sx: {
-                                            '&.Mui-active': { color: binThemeTokens.gold },
-                                            '&.Mui-completed': { color: '#4ADE80' }
-                                        }
-                                    }}
-                                >
-                                    {!isMobile && (
-                                        <Typography variant="caption" fontWeight="700" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                                            {label}
-                                        </Typography>
-                                    )}
-                                </StepLabel>
-                            </Step>
-                        ))}
-                    </Stepper>
-                </Container>
-            </Box>
+                                {!isMobile && (
+                                    <Typography variant="caption" fontWeight="700" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                                        {label}
+                                    </Typography>
+                                )}
+                            </StepLabel>
+                        </Step>
+                    ))}
+                </Stepper>
+            </Container>
 
             <Container maxWidth="lg" sx={{ py: 6, minHeight: '60vh' }}>
                 {renderStepContent(step)}
