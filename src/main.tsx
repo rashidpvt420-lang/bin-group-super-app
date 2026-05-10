@@ -20,13 +20,31 @@ declare global {
 }
 
 function applyGlobalScrollRepair() {
+  const rootNode = document.getElementById('root');
+
   document.documentElement.style.minHeight = '100%';
+  document.documentElement.style.height = 'auto';
   document.documentElement.style.overflowX = 'hidden';
+  document.documentElement.style.overflowY = 'auto';
   document.documentElement.style.scrollBehavior = 'smooth';
+  document.documentElement.style.touchAction = 'auto';
+
   document.body.style.minHeight = '100%';
+  document.body.style.height = 'auto';
+  document.body.style.margin = '0';
   document.body.style.overflowX = 'hidden';
   document.body.style.overflowY = 'auto';
+  document.body.style.position = 'static';
+  document.body.style.touchAction = 'auto';
   (document.body.style as any).webkitOverflowScrolling = 'touch';
+
+  if (rootNode) {
+    rootNode.style.minHeight = '100%';
+    rootNode.style.height = 'auto';
+    rootNode.style.overflowX = 'hidden';
+    rootNode.style.overflowY = 'visible';
+    rootNode.style.touchAction = 'auto';
+  }
 }
 
 /**
@@ -36,6 +54,8 @@ function applyGlobalScrollRepair() {
 function BootSignal() {
   React.useEffect(() => {
     applyGlobalScrollRepair();
+
+    const repairTimer = window.setInterval(applyGlobalScrollRepair, 1500);
 
     window.__BIN_GROUPS_BOOT__ = {
       ...(window.__BIN_GROUPS_BOOT__ || {}),
@@ -56,6 +76,8 @@ function BootSignal() {
     }
 
     window._BIN_MOUNT_SUCCESS?.();
+
+    return () => window.clearInterval(repairTimer);
   }, []);
 
   return null;
