@@ -1,22 +1,15 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-
-
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
-
 
 import LandingPage from './pages/LandingPage';
 import OwnerLandingPage from './pages/OwnerLandingPage';
-
 import LoginPage from './pages/LoginPage';
 import RoleGatewayPage from './pages/RoleGatewayPage';
-
 import InvoiceVerificationPage from './pages/public/InvoiceVerificationPage';
 import CertificateVerificationPage from './pages/public/CertificateVerificationPage';
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
 import PropertyOnboardingPage from './pages/PropertyOnboardingPage';
-
-import DashboardPage from './pages/DashboardPage';
 import FinancialDashboardPage from './pages/FinancialDashboardPage';
 import HealthScorePage from './pages/HealthScorePage';
 import MaintenanceCalendarPage from './pages/MaintenanceCalendarPage';
@@ -27,25 +20,21 @@ import PropertyUnitsPage from './pages/PropertyUnitsPage';
 import NotificationInboxPage from './pages/NotificationInboxPage';
 import DesignStudioPage from './pages/DesignStudioPage';
 import DesignRequestDetailPage from './pages/DesignRequestDetailPage';
-
 import TenantApp from './tenant/TenantApp';
 import TechnicianApp from './technician/TechnicianApp';
 import ReportingDashboard from './pages/ReportingDashboard';
 import ExecutiveReportingPage from './pages/ExecutiveReportingPage';
 import BrokerApp from './broker/BrokerApp';
 import AuditorPortalPage from './pages/public/AuditorPortalPage';
-
 import PrivacyPage from './pages/public/PrivacyPage';
 import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import TenantInvitePage from './pages/TenantInvitePage';
 import AdminTerminal from './admin/AdminTerminal';
-
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 import OwnerApp from './owner/OwnerApp';
 import CompanyProfilePage from './pages/public/CompanyProfilePage';
-
 import { RoleProvider, useRole } from './context/RoleContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -56,15 +45,10 @@ import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
 
-// Cleanup old local storage keys
 ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
     try { localStorage.removeItem(key); } catch (e) { console.warn('[APP] Storage cleanup failed', e); }
 });
 
-/**
- * [CRITICAL] FULL-SCREEN BLOCKING LOADER
- * Prevents any UI bleed or incorrect route rendering during role resolution.
- */
 function LoadingScreen() {
   const { t } = useLanguage();
   const [showRecovery, setShowRecovery] = React.useState(false);
@@ -91,19 +75,21 @@ function LoadingScreen() {
   };
 
   return (
-    <Box sx={{ 
-      height: '100vh', 
-      width: '100vw', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
+    <Box sx={{
+      height: '100dvh',
+      width: '100vw',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
       bgcolor: '#000',
       position: 'fixed',
       top: 0,
       left: 0,
       zIndex: 9999,
-      p: 4
+      p: 4,
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch',
     }}>
       {!showRecovery ? (
         <>
@@ -118,7 +104,6 @@ function LoadingScreen() {
           <Typography variant="body2" sx={{ color: '#fff', opacity: 0.8, mb: 3 }}>
             The authentication gateway failed to resolve within the 8-second SLA. Please verify your connection or reset your secure session.
           </Typography>
-          
           <Box sx={{ textAlign: 'left', bgcolor: '#000', p: 2, borderRadius: 1, mb: 3, border: '1px solid rgba(255,255,255,0.1)' }}>
              <Typography variant="caption" sx={{ color: '#C6A75E', fontWeight: 700, display: 'block', mb: 1 }}>DIAGNOSTICS:</Typography>
              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace', display: 'block' }}>
@@ -128,8 +113,7 @@ function LoadingScreen() {
                 Firebase Connected: {diagnostics.authReady ? 'ESTABLISHED' : 'FAULT'}
              </Typography>
           </Box>
-
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button variant="outlined" color="error" onClick={handleClearSession}>RESET SESSION</Button>
             <Button variant="contained" sx={{ bgcolor: '#C6A75E', color: '#000' }} onClick={() => window.location.reload()}>RELOAD NODE</Button>
             <Button variant="outlined" sx={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }} onClick={() => window.location.href = '/login'}>GO TO LOGIN</Button>
@@ -141,34 +125,10 @@ function LoadingScreen() {
 }
 
 const PUBLIC_ROUTE_PATHS = new Set([
-  '/',
-  '/owner-landing',
-  '/v1',
-  '/login',
-  '/terms-of-service',
-  '/privacy-policy',
-  '/terms',
-  '/privacy',
-  '/support',
-  '/owners',
-  '/tenants',
-  '/technicians',
-  '/brokers',
-  '/property-management',
-  '/maintenance',
-  '/ai-design-studio',
-  '/majlis-care',
-  '/stadiums',
-  '/hotels',
-  '/malls',
-  '/hospitals',
-  '/government-properties',
-  '/security',
-  '/contact',
-  '/services',
-  '/request-demo',
-  '/tenant-invite',
-  '/company',
+  '/', '/owner-landing', '/v1', '/login', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
+  '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance', '/ai-design-studio',
+  '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
+  '/services', '/request-demo', '/tenant-invite', '/company',
 ]);
 
 const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
@@ -177,10 +137,6 @@ function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTE_PATHS.has(pathname) || PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-/**
- * [INSTITUTIONAL ROUTER]
- * Handles strict redirection for authenticated users who land on the root or login pages.
- */
 function RoleRedirector({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useRole();
   const location = useLocation();
@@ -188,14 +144,13 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
 
   if (loading && !publicRoute) return <LoadingScreen />;
 
-  // Only redirect if on login, root landing page, or role gateway
   const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
   if (user && !loading && isAuthEntryPage) {
     const normalizedRole = (role || '').toLowerCase();
-    if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
-    if (normalizedRole === 'technician') return <Navigate to="/technician" replace />;
-    if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
-    if (normalizedRole === 'admin') return <Navigate to="/admin" replace />;
+    if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
+    if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
+    if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
+    if (normalizedRole === 'admin') return <Navigate to="/admin/dashboard" replace />;
     if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/owner/dashboard" replace />;
   }
 
@@ -209,24 +164,11 @@ function AppContent() {
   const location = useLocation();
   const publicRoute = isPublicRoute(location.pathname);
 
-  // [STRICT BLOCK]
-  if (roleLoading && !publicRoute) {
-    return <LoadingScreen />;
-  }
+  if (roleLoading && !publicRoute) return <LoadingScreen />;
 
   if (roleError && !user && !publicRoute) {
     return (
-      <Box sx={{ 
-        height: '100vh', 
-        width: '100vw', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        bgcolor: '#000',
-        p: 4,
-        textAlign: 'center'
-      }}>
+      <Box sx={{ height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#000', p: 4, textAlign: 'center', overflowY: 'auto' }}>
         <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.identity_fault')}</Typography>
         <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>
           {t('common.role_error_prefix')} {roleError}
@@ -251,8 +193,6 @@ function AppContent() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/support" element={<SupportPage />} />
-        
-        {/* Public Marketing & Institutional Verticals */}
         <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
         <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
         <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
@@ -273,7 +213,6 @@ function AppContent() {
         <Route path="/company" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
 
-        {/* Sovereign Asset Control */}
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
@@ -283,25 +222,19 @@ function AppContent() {
         <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
         <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'technician', 'broker']}><NotificationInboxPage /></ProtectedRoute>} />
-        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'admin', 'ceo']}><DesignStudioPage /></ProtectedRoute>} />
-        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'admin', 'ceo']}><DesignRequestDetailPage /></ProtectedRoute>} />
+        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'broker', 'admin', 'ceo']}><DesignStudioPage /></ProtectedRoute>} />
+        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'broker', 'admin', 'ceo']}><DesignRequestDetailPage /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
-        
-        {/* Sector Portals */}
         <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantApp /></ProtectedRoute>} />
         <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianApp /></ProtectedRoute>} />
-        <Route path="/tech/*" element={<Navigate to="/technician" replace />} />
+        <Route path="/tech/*" element={<Navigate to="/technician/dashboard" replace />} />
         <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerApp /></ProtectedRoute>} />
         <Route path="/owner/*" element={<ProtectedRoute allowedRoles={['owner', 'ceo']}><OwnerApp /></ProtectedRoute>} />
         <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
         <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin']}><AdminTerminal /></ProtectedRoute>} />
-
-        {/* Public Protocol Validators */}
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
-
-        {/* Institutional Recovery Redirects */}
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -313,7 +246,6 @@ function AppContent() {
 }
 
 export default function App() {
-  
   return (
     <Router>
       <LanguageProvider>
@@ -321,7 +253,7 @@ export default function App() {
           <RoleProvider>
             <AIProvider>
               <CssBaseline />
-              <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
                 <Routes>
                   <Route path="/" element={null} />
                   <Route path="/tenant/*" element={null} />
@@ -331,7 +263,7 @@ export default function App() {
                   <Route path="/broker/*" element={null} />
                   <Route path="*" element={<BinGroupHeader />} />
                 </Routes>
-                <Box component="main" sx={{ flexGrow: 1, position: 'relative' }}>
+                <Box component="main" sx={{ flexGrow: 1, position: 'relative', minHeight: 0, overflow: 'visible' }}>
                   <AppContent />
                 </Box>
                 <SovereignAlertHandler />
