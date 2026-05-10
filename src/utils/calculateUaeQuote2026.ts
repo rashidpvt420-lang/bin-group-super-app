@@ -44,12 +44,52 @@ export interface QuoteOutput {
   riskFlags: string[];
 }
 
+const ASSET_CLASS_ALIASES: Record<string, string> = {
+  standard_apartment: 'apt-std',
+  luxury_apartment: 'apt-lux',
+  standard_villa: 'villa-std',
+  luxury_estate_villa: 'villa-lux',
+  commercial_tower: 'com-twr',
+  small_office: 'off-sml',
+  retail_mall: 'rtl-mall',
+  mall: 'rtl-mall',
+  labor_camp: 'lab-camp',
+  labour_camp: 'lab-camp',
+  hospital: 'hosp',
+  clinic: 'hosp',
+  large_hospital: 'hosp',
+  primary_clinic: 'hosp',
+  data_center: 'data-ctr',
+  mixed_use: 'mix-dev',
+  mixed_use_development: 'mix-dev',
+  mixed_use_tower: 'mix-dev',
+  hotel: 'mid_scale_hotel',
+  mid_scale_hotel: 'mid_scale_hotel',
+  government_majlis: 'government_majlis',
+  private_majlis: 'private_majlis',
+  majlis: 'government_majlis'
+};
+
+function normalizeAssetClassId(assetClassId?: string): string {
+  const raw = String(assetClassId || '').trim();
+  if (!raw) return 'apt-std';
+  return ASSET_CLASS_ALIASES[raw] || ASSET_CLASS_ALIASES[raw.toLowerCase()] || raw;
+}
+
 export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
-  const assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === input.assetClassId);
-  if (!assetClass) throw new Error("Invalid Asset Class ID");
+  const normalizedAssetClassId = normalizeAssetClassId(input.assetClassId);
+  let assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === normalizedAssetClassId);
 
   const pricingExplanation: string[] = [];
   const riskFlags: string[] = [];
+
+  if (!assetClass) {
+    assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === 'apt-std') || UAE_PRICING_MATRIX_2026.assetClasses[0];
+    pricingExplanation.push(`Unknown asset class '${input.assetClassId}' was normalized to '${assetClass.id}'. Admin review required.`);
+    riskFlags.push('Asset Class Review Required');
+  } else if (normalizedAssetClassId !== input.assetClassId) {
+    pricingExplanation.push(`Asset class '${input.assetClassId}' normalized to '${normalizedAssetClassId}'.`);
+  }
 
   // 1. Base Quote Calculation
   let baseRate = 0;
@@ -118,7 +158,7 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   if (input.hasBmu) complexityPremiumPercent += 6;
   if (input.hasCivilDefenseSystem) complexityPremiumPercent += 5;
 
-  if (['large_hospital', 'primary_clinic', 'data_center'].includes(input.assetClassId)) {
+  if (['hosp', 'data-ctr'].includes(normalizedAssetClassId)) {
       complexityPremiumPercent += 20;
       riskFlags.push("Critical Systems Coverage Required");
   }

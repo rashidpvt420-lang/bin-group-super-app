@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Button, IconButton, alpha, Badge } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Button, IconButton, alpha, Badge, Stack } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import { useCustomTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
@@ -8,7 +8,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import TranslateIcon from '@mui/icons-material/Translate';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { auth, db, collection, query, where, onSnapshot } from '../lib/firebase';
+import { auth, db, collection, query, where, onSnapshot } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
@@ -55,15 +55,42 @@ const BinGroupHeader: React.FC = () => {
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
                     <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1 }}>
-                        {['owner', 'tenant', 'technician', 'broker', 'security'].map((item) => (
-                            <Button 
-                                key={item} 
-                                onClick={() => navigate(`/${item}`)} 
-                                sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}
-                            >
-                                {t(`gateway.role.${item}`)}
-                            </Button>
-                        ))}
+                        {!user ? (
+                            ['owner', 'tenant', 'technician', 'broker'].map((item) => (
+                                <Button 
+                                    key={item} 
+                                    onClick={() => navigate(`/${item}`)} 
+                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}
+                                >
+                                    {t(`gateway.role.${item}`)}
+                                </Button>
+                            ))
+                        ) : (
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Button 
+                                    onClick={() => {
+                                        if (role === 'admin' || role === 'ceo') navigate('/admin/dashboard');
+                                        else if (role === 'owner') navigate('/owner/dashboard');
+                                        else navigate(`/${role}`);
+                                    }} 
+                                    sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}
+                                >
+                                    {t('nav.dashboard')}
+                                </Button>
+                                <Button 
+                                    onClick={() => navigate('/admin/identity')}
+                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
+                                >
+                                    {t('nav.company_profile')}
+                                </Button>
+                                <Button 
+                                    onClick={() => navigate('/design-studio')}
+                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
+                                >
+                                    {t('nav.ai_studio')}
+                                </Button>
+                            </Stack>
+                        )}
                     </Box>
                     
                     <Button 
@@ -149,3 +176,4 @@ const BinGroupHeader: React.FC = () => {
 };
 
 export default BinGroupHeader;
+
