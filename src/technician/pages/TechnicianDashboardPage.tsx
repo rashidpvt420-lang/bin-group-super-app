@@ -49,7 +49,7 @@ export default function TechnicianDashboardPage() {
         );
 
         const unsubAssigned = onSnapshot(qAssigned, (snap) => {
-            let assigned = 0, emergency = 0, inProgress = 0, completed = 0;
+            let assigned = 0, emergency = 0, inProgress = 0;
             const jobs: any[] = [];
             snap.docs.forEach(d => {
                 const data = d.data();

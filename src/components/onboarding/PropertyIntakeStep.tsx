@@ -13,7 +13,6 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatNumber, formatAED } from '../../utils/formatters';
-// @ts-ignore
 import Papa from 'papaparse';
 
 const VisuallyHiddenInput = styled('input')({
@@ -77,7 +76,6 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                             address, 
                             emirate, 
                             area: area || activeProperty?.area,
-                            // @ts-ignore: location is defined in some local types but TS complains
                             location: {
                                 lat: place.geometry.location.lat(),
                                 lng: place.geometry.location.lng()

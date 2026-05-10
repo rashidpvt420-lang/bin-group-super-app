@@ -7,7 +7,7 @@ import { apiClient } from '../../services/api';
 
 jest.mock('../../services/api');
 jest.mock('recharts', () => {
-  const React = require('react');
+  // React is already imported at the top
   return {
     LineChart: (props: any) => <div data-testid="line-chart">{props.children}</div>,
     BarChart: (props: any) => <div data-testid="bar-chart">{props.children}</div>,

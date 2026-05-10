@@ -111,5 +111,7 @@ export const savePricingAudit = async (ownerId: string, propertyData: any, resul
             result,
             createdAt: serverTimestamp()
         });
-    } catch (e) {}
+    } catch (e) {
+        console.warn('[PRICING_ENGINE] Failed to save pricing audit log.', e);
+    }
 };
