@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, ArrowBack, ArrowForward, Lock, Mail, Phone, Person, Login, Info } from '@mui/icons-material';
 import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
-import { auth, db, doc, serverTimestamp, setDoc, collection, query, where, getDocs } from '../../lib/firebase';
+import { auth, db, doc, serverTimestamp, setDoc } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -78,76 +78,71 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
         const fullName = formData.fullName.trim();
 
         try {
-            const userQuery = query(collection(db, 'users'), where('email', '==', email));
-            const userSnap = await getDocs(userQuery);
+            const userCredential = await createUserWithEmailAndPassword(auth, email, formData.password);
+            const user = userCredential.user;
 
-            if (!userSnap.empty) {
-                const existingUser = userSnap.docs[0].data();
-                if (existingUser.role && existingUser.role !== 'owner') {
-                    setError({ message: errorText('onboarding.error.role_conflict', 'This email is already registered under a different role. Please use another email or contact support.'), type: 'error' });
-                    setLoading(false);
-                    return;
-                }
-            }
+            await setDoc(doc(db, 'users', user.uid), {
+                uid: user.uid,
+                email: user.email?.toLowerCase(),
+                displayName: fullName,
+                name: fullName,
+                phone: mobile,
+                mobile,
+                role: 'owner',
+                status: 'pending_admin_approval',
+                dashboardLocked: true,
+                adminApproved: false,
+                paymentVerified: false,
+                onboardingSubmissionId: intakeId || 'legacy',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
 
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, formData.password);
-                const user = userCredential.user;
-
-                await setDoc(doc(db, 'users', user.uid), {
-                    uid: user.uid,
-                    email: user.email?.toLowerCase(),
-                    displayName: fullName,
-                    phone: mobile,
-                    role: 'owner',
-                    status: 'pending_admin_approval',
-                    dashboardLocked: true,
-                    adminApproved: false,
-                    paymentVerified: false,
-                    onboardingSubmissionId: intakeId || 'legacy',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                }, { merge: true });
-
-                if (intakeId) {
+            if (intakeId) {
+                try {
                     await setDoc(doc(db, 'intake_submissions', intakeId), {
                         ownerUid: user.uid,
                         ownerEmail: email,
                         accountCreated: true,
-                        accountCreatedAt: serverTimestamp()
+                        accountCreatedAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
                     }, { merge: true });
+                } catch (intakeErr) {
+                    console.warn('[ONBOARDING] Optional intake account link failed; owner account still created.', intakeErr);
                 }
+            }
 
-                setOwnerAccount({
-                    uid: user.uid,
-                    fullName,
-                    email,
-                    mobile
-                });
+            setOwnerAccount({
+                uid: user.uid,
+                fullName,
+                email,
+                mobile
+            });
 
-                setSuccess(true);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                setTimeout(() => onNext(), 1200);
-            } catch (authErr: any) {
-                if (authErr.code === 'auth/email-already-in-use') {
+            setSuccess(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => onNext(), 1200);
+        } catch (err: any) {
+            console.error('Account Creation Error:', err);
+            if (err.code === 'auth/email-already-in-use') {
+                try {
                     const methods = await fetchSignInMethodsForEmail(auth, email);
                     if (methods.includes('google.com') && !methods.includes('password')) {
                         setError({ message: errorText('onboarding.error.google_only', 'This email uses Google sign-in. Please log in with Google or use another email.'), type: 'info' });
                     } else {
                         setError({ message: errorText('onboarding.error.email_exists', 'This email already exists. Please sign in or use another email.'), type: 'warning', action: 'signin' });
                     }
-                } else {
-                    throw authErr;
+                } catch {
+                    setError({ message: errorText('onboarding.error.email_exists', 'This email already exists. Please sign in or use another email.'), type: 'warning', action: 'signin' });
                 }
+            } else {
+                let msg = errorText('onboarding.error.generic', 'Account creation failed. Please check the details and try again.');
+                if (err.code === 'auth/invalid-email') msg = errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
+                else if (err.code === 'auth/weak-password') msg = errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
+                else if (err.code === 'permission-denied') msg = 'Owner account was created, but Firestore rejected the owner profile write. Deploy the latest Firestore rules and try again.';
+                else if (err.code === 'unavailable') msg = 'Firebase is temporarily unavailable. Please try again in a moment.';
+                setError({ message: msg, type: 'error' });
             }
-        } catch (err: any) {
-            console.error('Account Creation Error:', err);
-            let msg = errorText('onboarding.error.generic', 'Account creation failed. Please check the details and try again.');
-            if (err.code === 'auth/invalid-email') msg = errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
-            else if (err.code === 'auth/weak-password') msg = errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
-            else if (err.code === 'permission-denied') msg = 'Permission denied while creating your owner profile. Please contact support.';
-            else if (err.code === 'unavailable') msg = 'Firebase is temporarily unavailable. Please try again in a moment.';
-            setError({ message: msg, type: 'error' });
         } finally {
             setLoading(false);
         }
