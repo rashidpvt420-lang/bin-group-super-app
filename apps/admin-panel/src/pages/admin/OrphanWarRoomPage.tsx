@@ -35,7 +35,7 @@ type RepairReport = {
 
 export default function OrphanWarRoomPage() {
     const { setPageContext } = useAI();
-    const activeProjectId = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.VITE_FIREBASE_PROJECT_ID : 'UNCONFIGURED_PROJECT';
+    const activeProjectId = 'bin-group-57c60';
     const [orphans, setOrphans] = useState<any[]>([]);
     const [properties, setProperties] = useState<any[]>([]);
     const [geoRepairItems, setGeoRepairItems] = useState<any[]>([]);
@@ -54,7 +54,7 @@ export default function OrphanWarRoomPage() {
             setPageContext(null);
         }
         return () => setPageContext(null);
-    }, [orphans]);
+    }, [orphans, setPageContext]);
     
     const [selectedOrphan, setSelectedOrphan] = useState<any>(null);
     const [targetPropId, setTargetPropId] = useState('');

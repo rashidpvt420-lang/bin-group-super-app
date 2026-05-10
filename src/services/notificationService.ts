@@ -96,7 +96,6 @@ export async function notifyTicketCreated(ticketId: string, tenantName: string, 
         title: `New ${priority.toUpperCase()} Request`,
         body: `${tenantName} submitted a ${category} complaint. Requires assignment.`,
         ticketId,
-        recipientRole: 'admin',
         metadata: { category, priority }
     });
 }
@@ -152,7 +151,6 @@ export async function notifyTenantApproved(ticketId: string, tenantName: string)
         title: 'Job Approved & Closed',
         body: `${tenantName} approved the completion. Ticket is now CLOSED.`,
         ticketId,
-        recipientRole: 'admin',
     });
 }
 
@@ -163,7 +161,6 @@ export async function notifyTenantRejected(ticketId: string, tenantName: string,
         title: '⚠️ Job Rejected — Dispute Opened',
         body: `${tenantName} rejected the completion. Reason: ${reason}`,
         ticketId,
-        recipientRole: 'admin',
         metadata: { reason }
     });
 }
@@ -178,8 +175,8 @@ export async function notifyEmergency(ticketId: string, tenantName: string, prop
         metadata: { propertyName, unitNumber }
     };
     await Promise.all([
-        notifyAdmins({ ...sosPayload, recipientRole: 'admin' }),
-        notifyOnDutyTechnicians({ ...sosPayload, recipientRole: 'technician' })
+        notifyAdmins(sosPayload),
+        notifyOnDutyTechnicians(sosPayload)
     ]);
 }
 

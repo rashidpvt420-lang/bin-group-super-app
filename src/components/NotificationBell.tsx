@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Bell, BellRing, CheckCheck, Zap, Wrench, MessageSquare, AlertTriangle, Check, X } from 'lucide-react';
 import { useRole } from '../context/RoleContext';
-import { subscribeToNotifications, markNotificationRead, BinNotification } from '../services/notificationService';
+import { subscribeToNotifications, markNotificationRead, type BinNotification } from '../services/notificationService';
 
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
     TICKET_CREATED:     { icon: <Wrench size={14} />,       color: '#C6A75E' },

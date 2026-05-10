@@ -5,12 +5,13 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "apps/*",
     "functions"
   ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint src --ext .ts,.tsx",
     "preview": "vite preview",
     "deploy": "firebase deploy --project bin-group-57c60"
   },

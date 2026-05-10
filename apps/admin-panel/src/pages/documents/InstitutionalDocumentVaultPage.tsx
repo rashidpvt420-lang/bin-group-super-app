@@ -5,10 +5,8 @@ import {
     alpha
 } from '@mui/material';
 import { 
-    Landmark
+    Landmark, ShieldCheck, Download
 } from 'lucide-react';
-import { useLanguage } from '@bin/shared';
-import { Download, ShieldCheck } from 'lucide-react';
 
 const InstitutionalDocumentVaultPage: React.FC = () => {
     const complianceDocs = [

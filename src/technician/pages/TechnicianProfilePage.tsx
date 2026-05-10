@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Grid, Stack, Avatar, CircularProgress, Chip, TextField, Button, Switch, FormControlLabel } from '@mui/material';
+import { Box, Typography, Paper, Grid, Stack, Avatar, CircularProgress, Chip, TextField, Button, Switch, FormControlLabel, Divider } from '@mui/material';
 import { useRole } from '../../context/RoleContext';
 import { db, doc, updateDoc, getDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';

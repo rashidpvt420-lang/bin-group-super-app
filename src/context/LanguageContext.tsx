@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { Box } from "@mui/material";
 
 type Language = 'en' | 'ar';

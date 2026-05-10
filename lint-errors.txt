@@ -1,0 +1,418 @@
+
+> bin-group-super-app@1.0.0 lint
+> eslint .
+
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\public\firebase-messaging-sw.js
+   2:1   error  'importScripts' is not defined  no-undef
+   3:1   error  'importScripts' is not defined  no-undef
+   5:1   error  'firebase' is not defined       no-undef
+  14:19  error  'firebase' is not defined       no-undef
+  25:3   error  Unexpected use of 'self'        no-restricted-globals
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\App.tsx
+   6:66  warning  'alpha' is defined but never used  @typescript-eslint/no-unused-vars
+  15:16  warning  'db' is defined but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\components\AdminPageFrame.tsx
+  50:11  warning  'location' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\components\AdminRadar.tsx
+  4:18  warning  'AnimatePresence' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\components\TechnicianCommandCenter.tsx
+   3:5  warning  'Zap' is defined but never used           @typescript-eslint/no-unused-vars
+   4:5  warning  'Shield' is defined but never used        @typescript-eslint/no-unused-vars
+   6:5  warning  'Wifi' is defined but never used          @typescript-eslint/no-unused-vars
+  11:5  warning  'ChevronRight' is defined but never used  @typescript-eslint/no-unused-vars
+  13:5  warning  'Filter' is defined but never used        @typescript-eslint/no-unused-vars
+  15:5  warning  'LucideIcon' is defined but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\layout\AdminLayout.tsx
+  44:21  warning  'lang' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\ProductionControlCenter.tsx
+   4:37  warning  'Divider' is defined but never used                   @typescript-eslint/no-unused-vars
+  12:5   warning  'Home' is defined but never used                      @typescript-eslint/no-unused-vars
+  17:5   warning  'Download' is defined but never used                  @typescript-eslint/no-unused-vars
+  31:13  warning  'tx' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  31:17  warning  't' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  31:20  warning  'isRTL' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  45:26  warning  'setSystemHealth' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\admin\DesignStudioAdminPage.tsx
+  8:16  warning  'Layers' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\admin\HRManagementPage.tsx
+  13:10  warning  'useLanguage' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\admin\OrphanWarRoomPage.tsx
+  57:8  warning  React Hook useEffect has a missing dependency: 'setPageContext'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\brokers\BrokerCommissionHubPage.tsx
+  2:51  warning  'Stack' is defined but never used         @typescript-eslint/no-unused-vars
+  2:66  warning  'Divider' is defined but never used       @typescript-eslint/no-unused-vars
+  3:10  warning  'Users' is defined but never used         @typescript-eslint/no-unused-vars
+  3:17  warning  'FileText' is defined but never used      @typescript-eslint/no-unused-vars
+  3:27  warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  3:41  warning  'XCircle' is defined but never used       @typescript-eslint/no-unused-vars
+  3:50  warning  'Clock' is defined but never used         @typescript-eslint/no-unused-vars
+  3:57  warning  'DollarSign' is defined but never used    @typescript-eslint/no-unused-vars
+  3:69  warning  'ArrowUpRight' is defined but never used  @typescript-eslint/no-unused-vars
+  3:83  warning  'Search' is defined but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\dashboard\DashboardPage.tsx
+   7:37  warning  'CircularProgress' is defined but never used         @typescript-eslint/no-unused-vars
+  21:19  warning  'serverTimestamp' is defined but never used          @typescript-eslint/no-unused-vars
+  49:13  warning  'lang' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  49:19  warning  't' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  50:13  warning  'setPageContext' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\documents\InstitutionalDocumentVaultPage.tsx
+  10:10  warning  'useLanguage' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\financials\TransactionsPage.tsx
+  37:10  warning  'loading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\properties\PropertyPassportPage.tsx
+   11:17  warning  'FileIcon' is defined but never used              @typescript-eslint/no-unused-vars
+   17:5   warning  'ArrowUpRight' is defined but never used          @typescript-eslint/no-unused-vars
+   25:13  warning  'tx' is assigned a value but never used           @typescript-eslint/no-unused-vars
+   25:17  warning  't' is assigned a value but never used            @typescript-eslint/no-unused-vars
+   26:11  warning  'navigate' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  143:35  warning  'paymentRate' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\technicians\TechnicianDutyMonitorPage.tsx
+  6:39  warning  'Button' is defined but never used    @typescript-eslint/no-unused-vars
+  9:5   warning  'Activity' is defined but never used  @typescript-eslint/no-unused-vars
+  9:30  warning  'Power' is defined but never used     @typescript-eslint/no-unused-vars
+  9:37  warning  'Coffee' is defined but never used    @typescript-eslint/no-unused-vars
+  9:45  warning  'Play' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\pages\tenants\TenantsManagementPage.tsx
+  43:10  warning  'isSuperAdmin' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\src\setupTests.ts
+  21:3  warning  Useless constructor  @typescript-eslint/no-useless-constructor
+
+C:\Users\My-PC\Desktop\bin app\apps\admin-panel\verification_v2.ts
+   2:45  warning  'orderBy' is defined but never used       @typescript-eslint/no-unused-vars
+  26:15  warning  'doc' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\apps\owner-app\craco.config.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\apps\owner-app\public\firebase-messaging-sw.js
+  14:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\audit.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\audit_all_tickets.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\public\firebase-messaging-sw.js
+   2:1   error  'importScripts' is not defined  no-undef
+   3:1   error  'importScripts' is not defined  no-undef
+   5:1   error  'firebase' is not defined       no-undef
+  14:19  error  'firebase' is not defined       no-undef
+  25:3   error  Unexpected use of 'self'        no-restricted-globals
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\App.tsx
+   6:66  warning  'alpha' is defined but never used  @typescript-eslint/no-unused-vars
+  15:16  warning  'db' is defined but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\components\AdminPageFrame.tsx
+  50:11  warning  'location' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\components\AdminRadar.tsx
+  4:18  warning  'AnimatePresence' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\components\TechnicianCommandCenter.tsx
+   3:5  warning  'Zap' is defined but never used           @typescript-eslint/no-unused-vars
+   4:5  warning  'Shield' is defined but never used        @typescript-eslint/no-unused-vars
+   6:5  warning  'Wifi' is defined but never used          @typescript-eslint/no-unused-vars
+  11:5  warning  'ChevronRight' is defined but never used  @typescript-eslint/no-unused-vars
+  13:5  warning  'Filter' is defined but never used        @typescript-eslint/no-unused-vars
+  15:5  warning  'LucideIcon' is defined but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\layout\AdminLayout.tsx
+  44:21  warning  'lang' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\ProductionControlCenter.tsx
+   4:37  warning  'Divider' is defined but never used                   @typescript-eslint/no-unused-vars
+  12:5   warning  'Home' is defined but never used                      @typescript-eslint/no-unused-vars
+  17:5   warning  'Download' is defined but never used                  @typescript-eslint/no-unused-vars
+  31:13  warning  'tx' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  31:17  warning  't' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  31:20  warning  'isRTL' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  45:26  warning  'setSystemHealth' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\admin\DesignStudioAdminPage.tsx
+  8:16  warning  'Layers' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\admin\HRManagementPage.tsx
+  13:10  warning  'useLanguage' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\admin\OrphanWarRoomPage.tsx
+  57:8  warning  React Hook useEffect has a missing dependency: 'setPageContext'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\brokers\BrokerCommissionHubPage.tsx
+  2:51  warning  'Stack' is defined but never used         @typescript-eslint/no-unused-vars
+  2:66  warning  'Divider' is defined but never used       @typescript-eslint/no-unused-vars
+  3:10  warning  'Users' is defined but never used         @typescript-eslint/no-unused-vars
+  3:17  warning  'FileText' is defined but never used      @typescript-eslint/no-unused-vars
+  3:27  warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  3:41  warning  'XCircle' is defined but never used       @typescript-eslint/no-unused-vars
+  3:50  warning  'Clock' is defined but never used         @typescript-eslint/no-unused-vars
+  3:57  warning  'DollarSign' is defined but never used    @typescript-eslint/no-unused-vars
+  3:69  warning  'ArrowUpRight' is defined but never used  @typescript-eslint/no-unused-vars
+  3:83  warning  'Search' is defined but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\dashboard\DashboardPage.tsx
+   7:37  warning  'CircularProgress' is defined but never used         @typescript-eslint/no-unused-vars
+  21:19  warning  'serverTimestamp' is defined but never used          @typescript-eslint/no-unused-vars
+  49:13  warning  'lang' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  49:19  warning  't' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  50:13  warning  'setPageContext' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\documents\InstitutionalDocumentVaultPage.tsx
+  10:10  warning  'useLanguage' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\financials\TransactionsPage.tsx
+  37:10  warning  'loading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\properties\PropertyPassportPage.tsx
+   11:17  warning  'FileIcon' is defined but never used              @typescript-eslint/no-unused-vars
+   17:5   warning  'ArrowUpRight' is defined but never used          @typescript-eslint/no-unused-vars
+   25:13  warning  'tx' is assigned a value but never used           @typescript-eslint/no-unused-vars
+   25:17  warning  't' is assigned a value but never used            @typescript-eslint/no-unused-vars
+   26:11  warning  'navigate' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  143:35  warning  'paymentRate' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\technicians\TechnicianDutyMonitorPage.tsx
+  6:39  warning  'Button' is defined but never used    @typescript-eslint/no-unused-vars
+  9:5   warning  'Activity' is defined but never used  @typescript-eslint/no-unused-vars
+  9:30  warning  'Power' is defined but never used     @typescript-eslint/no-unused-vars
+  9:37  warning  'Coffee' is defined but never used    @typescript-eslint/no-unused-vars
+  9:45  warning  'Play' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\pages\tenants\TenantsManagementPage.tsx
+  43:10  warning  'isSuperAdmin' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\src\setupTests.ts
+  21:3  warning  Useless constructor  @typescript-eslint/no-useless-constructor
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\admin-panel\verification_v2.ts
+   2:45  warning  'orderBy' is defined but never used       @typescript-eslint/no-unused-vars
+  26:15  warning  'doc' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\owner-app\craco.config.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\apps\owner-app\public\firebase-messaging-sw.js
+  14:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\audit.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\audit_all_tickets.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\copy_script.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\diag.js
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\fetch_proof.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\fix_auth.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\fix_lang.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\functions\create_admin_grant.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\functions\setup_test_data.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\functions\verify-live.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\patch-routes.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\production_repair_runner.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\qa-step1-admin.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\qa-step2-owner-onboarding.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\qa-step3-geo.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\repair_technician_feed.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\rest_audit.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\rest_dump.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scratch\audit_passports.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scratch\create_secrets_dir.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\assign-role.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\bulk_import.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\create_qa_accounts.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\geo-routing-acceptance-test.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\live-onboarding-test.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\migrate-relational-ids.js
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\migration-repair.js
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\provision-production-qa-users.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\repair-missions-v2.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\scripts\smoke-test-setup.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\src\scripts\setup_test_data.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\bin-group-super-app\translate.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\copy_script.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\diag.js
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+C:\Users\My-PC\Desktop\bin app\fetch_proof.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\fix_auth.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\fix_lang.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\create_admin_grant.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\lib\BillingService.js
+  37:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\lib\index.js
+  37:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\lib\ocrEngine.js
+  4:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\lib\pdfEngine.js
+  8:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\lib\tempAudit.js
+  37:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\setup_test_data.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\functions\verify-live.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\patch-routes.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\production_repair_runner.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\qa-step1-admin.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\qa-step2-owner-onboarding.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\qa-step3-geo.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\repair_technician_feed.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\rest_audit.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\rest_dump.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scratch\audit_passports.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scratch\create_secrets_dir.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\assign-role.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\bulk_import.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\create_qa_accounts.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\geo-routing-acceptance-test.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\live-onboarding-test.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\migrate-relational-ids.js
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\migration-repair.js
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\provision-production-qa-users.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\repair-missions-v2.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\scripts\smoke-test-setup.js
+  2:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\src\scripts\setup_test_data.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+C:\Users\My-PC\Desktop\bin app\translate.js
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+Γ£û 189 problems (83 errors, 106 warnings)
+

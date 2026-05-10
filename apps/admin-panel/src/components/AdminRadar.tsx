@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDatabase, ref, onValue } from 'firebase/database';
 import { getApps, getApp } from 'firebase/app';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 // ── Firebase RTDB — reuse the app already initialised in AuthContext/firebase config ──
 // If no app exists yet, the DB calls will simply fail gracefully; ensure FirebaseApp
@@ -129,7 +129,6 @@ export default function AdminRadar() {
                                 <button
                                     title="Dispatch Maintenance Technician"
                                     className="bg-[#64FFDA]/10 text-[#64FFDA] border border-[#64FFDA]/30 rounded-lg px-3 py-1.5 text-[11px] cursor-pointer font-bold uppercase tracking-wider hover:bg-[#64FFDA]/20 transition-colors"
-                                    onClick={() => alert}
                                 >
                                     Dispatch Tech →
                                 </button>

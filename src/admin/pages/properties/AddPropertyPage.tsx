@@ -15,7 +15,7 @@ import { db, collection, addDoc, serverTimestamp, doc, setDoc } from '../../../l
 import { useRole } from '../../../context/RoleContext';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
-import { generateSmartQuote, QuoteInputs } from '../../../utils/uaePricingEngine_v2';
+import { generateSmartQuote, type QuoteInputs } from '../../../utils/uaePricingEngine_v2';
 import { BIN_CONTRACT_TYPES, MAJLIS_MAINTENANCE_PACKAGES, SERVICE_ADDONS } from '../../../utils/uaePricingMatrix2026';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Fujairah', 'Ras Al Khaimah', 'Umm Al Quwain'];

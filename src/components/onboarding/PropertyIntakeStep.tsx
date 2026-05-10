@@ -8,11 +8,12 @@ import {
     Building2, Plus, Trash2, FileSpreadsheet, ArrowRight, MapPin, AlertCircle, Info, ShieldAlert,
     Landmark, Gem, Workflow, Hotel, School, Briefcase, Home
 } from 'lucide-react';
-import { useOnboardingStore, PropertyData } from '../../store/onboardingStore';
+import { useOnboardingStore, type PropertyData } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatNumber, formatAED } from '../../utils/formatters';
+// @ts-ignore
 import Papa from 'papaparse';
 
 const VisuallyHiddenInput = styled('input')({
@@ -131,7 +132,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         if (!file) return;
         Papa.parse(file, {
             header: true, skipEmptyLines: true,
-            complete: (results) => {
+            complete: (results: any) => {
                 const parsedData = results.data as any[];
                 if (!Array.isArray(parsedData) || parsedData.length === 0) return;
                 const newProps: PropertyData[] = parsedData.slice(0, 500).map((row, i) => ({

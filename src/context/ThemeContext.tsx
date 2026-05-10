@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { ThemeProvider as MuiThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import { binThemeTokens } from "../theme/binGroupTheme";
 import { useLanguage } from "./LanguageContext";
-import rtlPlugin from 'stylis-plugin-rtl';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
+// @ts-ignore
 import { prefixer } from 'stylis';
+// @ts-ignore
+import rtlPlugin from 'stylis-plugin-rtl';
 
 // Create rtl cache
 const cacheRtl = createCache({
