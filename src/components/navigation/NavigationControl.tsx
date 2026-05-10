@@ -32,16 +32,16 @@ export const NavigationControl: React.FC = () => {
   const getDashboardRoute = () => {
     const r = (role || '').toLowerCase();
     if (r === 'admin') return '/admin/dashboard';
-    if (r === 'tenant') return '/tenant';
-    if (r === 'technician') return '/technician';
-    if (r === 'broker') return '/broker';
+    if (r === 'tenant') return '/tenant/dashboard';
+    if (r === 'technician') return '/technician/dashboard';
+    if (r === 'broker') return '/broker/dashboard';
     if (r === 'owner' || r === 'ceo') return '/owner/dashboard';
     return '/';
   };
 
   const canAccessAIStudio = () => {
     const r = (role || '').toLowerCase();
-    return user && ['owner', 'tenant', 'admin', 'ceo'].includes(r);
+    return user && ['owner', 'tenant', 'broker', 'admin', 'ceo'].includes(r);
   };
 
   const getAIStudioRoute = () => {
@@ -62,7 +62,7 @@ export const NavigationControl: React.FC = () => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 
-  if (['/', '/login', '/gateway'].includes(location.pathname)) return null;
+  if (['/', '/login', '/gateway'].includes(location.pathname) || location.pathname.startsWith('/onboarding')) return null;
 
   const buttonSx = {
     bgcolor: alpha('#020617', 0.92),
