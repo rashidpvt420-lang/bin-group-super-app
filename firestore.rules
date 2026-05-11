@@ -11,10 +11,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function role() {
-      return signedIn() ? userDoc().role : null;
-    }
-
     function isAdmin() {
       return signedIn() && userDoc().role in ['admin', 'ceo'];
     }
@@ -49,10 +45,6 @@ service cloud.firestore {
 
     function isOwnerRole() {
       return signedIn() && userDoc().role == 'owner';
-    }
-
-    function isTenantRole() {
-      return signedIn() && userDoc().role == 'tenant';
     }
 
     function isTechnicianRole() {
@@ -186,7 +178,13 @@ service cloud.firestore {
 
     match /technicianLocations/{techId} {
       allow read: if isAdmin() || hasPermission('canDispatchJobs') || isTechnician(techId);
-      allow create, update: if isTechnician(techId) &&
+      allow create: if isTechnician(techId) &&
+        request.resource.data.technicianId == request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          'technicianId', 'lat', 'lng', 'geohash', 'geo', 'heading', 'speed',
+          'accuracy', 'dutyStatus', 'onDuty', 'activeTicketId', 'lastSeenAt', 'updatedAt'
+        ]);
+      allow update: if isTechnician(techId) &&
         request.resource.data.technicianId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'technicianId', 'lat', 'lng', 'geohash', 'geo', 'heading', 'speed',
@@ -319,7 +317,7 @@ service cloud.firestore {
       );
       allow create: if isAdmin() || hasPermission('canManageContracts') || (
         signedIn() && isOwnerRole() &&
-        validContractType(request.resource.data.contractType ?? request.resource.data.planType ?? 'hybrid') &&
+        (validContractType(request.resource.data.contractType) || validContractType(request.resource.data.planType)) &&
         (
           request.resource.data.ownerId == request.auth.uid ||
           request.resource.data.ownerEmail == request.auth.token.email ||
