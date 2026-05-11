@@ -14,6 +14,11 @@ export interface RoleNotification {
     language?: 'en' | 'ar';
 }
 
+const readViteEnv = (key: string): string => {
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    return metaEnv?.[key] || '';
+};
+
 /**
  * [SOVEREIGN NOTIFICATION ENGINE]
  * Dispatches a notification record to Firestore. 
@@ -45,7 +50,7 @@ export const NotificationEvents = {
         PAYMENT_VERIFIED: (userId: string, amount: number) =>
             sendRoleNotification({ userId, role: 'owner', title: 'PAYMENT SECURED', body: `Mobilization deposit (AED ${amount}) verified. Operations commencing.`, type: 'PAYMENT_VERIFIED', link: '/financials' }),
         QUOTE_READY: (userId: string, propertyName: string, ticketId: string) => 
-            sendRoleNotification({ userId, role: 'owner', title: 'QUOTE AWAITING APPROVAL', body: `A new maintenance quote for ${propertyName} requires your authorization.`, type: 'QUOTE_APPROVAL', link: `/dashboard` }),
+            sendRoleNotification({ userId, role: 'owner', title: 'QUOTE AWAITING APPROVAL', body: `A new maintenance quote for ${propertyName} requires your authorization.`, type: 'QUOTE_APPROVAL', link: `/dashboard`, data: { ticketId } }),
         REVISED_QUOTE_SENT: (userId: string, propertyName: string) =>
             sendRoleNotification({ userId, role: 'owner', title: 'QUOTE REVISED', body: `A revised quote for ${propertyName} has been submitted.`, type: 'QUOTE_REVISED', link: `/dashboard` }),
         SLA_BREACH: (userId: string, ticketId: string) =>
@@ -119,8 +124,7 @@ export async function requestAndRegisterNotificationPermission() {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || 
-                             (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY;
+            const vapidKey = readViteEnv('VITE_FIREBASE_VAPID_KEY');
             
             const token = await getToken(messaging, {
                 vapidKey
