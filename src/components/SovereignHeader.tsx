@@ -22,7 +22,7 @@ const BinGroupHeader: React.FC = () => {
 
     useEffect(() => {
         if (!user?.uid) return;
-        const q = query(collection(db, 'notifications'), where('userId', '==', user.uid), where('read', '==', false));
+        const q = query(collection(db, 'notifications'), where('recipientId', '==', user.uid), where('read', '==', false));
         const unsubscribe = onSnapshot(q, (snap) => setUnreadCount(snap.size));
         return () => unsubscribe();
     }, [user]);
@@ -69,9 +69,10 @@ const BinGroupHeader: React.FC = () => {
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <Button 
                                     onClick={() => {
-                                        if (role === 'admin' || role === 'ceo') navigate('/admin/dashboard');
-                                        else if (role === 'owner') navigate('/owner/dashboard');
-                                        else navigate(`/${role}`);
+                                        const r = (role || '').toLowerCase();
+                                        if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
+                                        else if (r === 'owner') navigate('/owner/dashboard');
+                                        else navigate(`/${r}/dashboard`);
                                     }} 
                                     sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}
                                 >

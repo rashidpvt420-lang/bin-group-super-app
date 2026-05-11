@@ -150,8 +150,8 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
     if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
-    if (normalizedRole === 'admin') return <Navigate to="/admin/dashboard" replace />;
-    if (normalizedRole === 'owner' || normalizedRole === 'ceo') return <Navigate to="/owner/dashboard" replace />;
+    if (normalizedRole === 'admin' || normalizedRole === 'ceo') return <Navigate to="/admin/dashboard" replace />;
+    if (normalizedRole === 'owner') return <Navigate to="/owner/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -231,7 +231,7 @@ function AppContent() {
         <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerApp /></ProtectedRoute>} />
         <Route path="/owner/*" element={<ProtectedRoute allowedRoles={['owner', 'ceo']}><OwnerApp /></ProtectedRoute>} />
         <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
-        <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin']}><AdminTerminal /></ProtectedRoute>} />
+        <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin', 'ceo']}><AdminTerminal /></ProtectedRoute>} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />

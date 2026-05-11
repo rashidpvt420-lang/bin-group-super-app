@@ -61,13 +61,18 @@ service cloud.firestore {
         isOwner(userId) &&
         request.resource.data.role == resource.data.role &&
         request.resource.data.permissions == resource.data.permissions &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName','name','phone','mobile','photoURL','language',
-          'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
-          'gpsConsent','onboardingComplete','fcmTokens',
-          'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
-          'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId'
-        ])
+        (
+          (resource.data.role == 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt', 'updatedAt'
+          ])) ||
+          (resource.data.role != 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName','name','phone','mobile','photoURL','language',
+            'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
+            'gpsConsent','onboardingComplete','fcmTokens',
+            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
+            'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId'
+          ]))
+        )
       );
       allow delete: if isAdmin() || hasPermission('canManageStaff');
     }
