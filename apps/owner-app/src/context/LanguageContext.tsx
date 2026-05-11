@@ -1112,7 +1112,7 @@ const translations: Record<Language, Record<string, string>> = {
     }
 };
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const LanguageProvider: React.FC<{ children: any }> = ({ children }) => {
     // Fixed SSR issue with typeof window check
     const [lang, setLang] = useState<Language>(() => {
         if (typeof window !== 'undefined') {

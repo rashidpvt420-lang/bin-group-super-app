@@ -61,7 +61,7 @@ const markGlobalAuthReady = () => {
     };
 };
 
-export function RoleProvider({ children }: { children: ReactNode }) {
+export function RoleProvider({ children }: { children: any }) {
     const [role, setRole] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);

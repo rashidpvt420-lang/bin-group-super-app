@@ -13,10 +13,10 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
     const activeProperty = properties[0];
 
-    const SummarySection = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
+    const SummarySection = ({ SectionIcon, title, children }: { SectionIcon: any, title: string, children: any }) => (
         <Box sx={{ mb: 4 }}>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-                <Box sx={{ color: binThemeTokens.gold }}>{icon}</Box>
+                <Box sx={{ color: binThemeTokens.gold }}>{SectionIcon}</Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
                     {title}
                 </Typography>
@@ -39,7 +39,7 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
             </Box>
 
             <Container maxWidth="md">
-                <SummarySection icon={<Building size={20} />} title="ASSET SPECIFICATION">
+                <SummarySection SectionIcon={<Building size={20} />} title="ASSET SPECIFICATION">
                     <Grid container spacing={3}>
                         <Grid item xs={6} md={4}>
                             <Typography variant="caption" color="text.secondary">CATEGORY</Typography>
@@ -56,12 +56,12 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     </Grid>
                 </SummarySection>
 
-                <SummarySection icon={<MapPin size={20} />} title="LOCATION DATA">
+                <SummarySection SectionIcon={<MapPin size={20} />} title="LOCATION DATA">
                     <Typography variant="body1" fontWeight="700" sx={{ mb: 1 }}>{activeProperty?.address}</Typography>
                     <Typography variant="body2" color="text.secondary">{activeProperty?.area}, {activeProperty?.emirate}</Typography>
                 </SummarySection>
 
-                <SummarySection icon={<Wrench size={20} />} title="SERVICE PROTOCOL">
+                <SummarySection SectionIcon={<Wrench size={20} />} title="SERVICE PROTOCOL">
                     <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>{selectedPlan?.name}</Typography>
                     <Typography variant="body2" color="text.secondary">{selectedPlan?.desc}</Typography>
                     <Box sx={{ mt: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>

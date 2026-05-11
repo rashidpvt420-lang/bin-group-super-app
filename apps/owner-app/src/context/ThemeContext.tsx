@@ -26,7 +26,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function CustomThemeProvider({ children }: { children: ReactNode }) {
+export function CustomThemeProvider({ children }: { children: any }) {
     const [mode, setMode] = useState<ThemeMode>(() => {
         return (localStorage.getItem('app_theme') as ThemeMode) || 'dark';
     });

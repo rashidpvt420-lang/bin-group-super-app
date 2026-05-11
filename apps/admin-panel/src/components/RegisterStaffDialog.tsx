@@ -1,205 +1,229 @@
 import React, { useState } from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Grid,
-    MenuItem,
-    Stack,
-    TextField,
-    Typography,
-    CircularProgress,
+import { 
+    Dialog, DialogTitle, DialogContent, DialogActions, 
+    Button, TextField, MenuItem, Grid, Box, Typography,
+    CircularProgress, Alert, IconButton, alpha, Stack
 } from '@mui/material';
-import { UserPlus } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp } from '../lib/firebase';
+import { X, UserPlus, Shield, Smartphone, Mail, Briefcase } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
+import { db, collection, addDoc, serverTimestamp, auth } from '../lib/firebase';
 
-type RegisterStaffDialogProps = {
+interface RegisterStaffDialogProps {
     open: boolean;
     onClose: () => void;
-};
+}
 
-type StaffDraft = {
-    displayName: string;
-    email: string;
-    mobile: string;
-    role: string;
-    specialization: string;
-    emirate: string;
-    salary: string;
-};
-
-const initialDraft: StaffDraft = {
-    displayName: '',
-    email: '',
-    mobile: '',
-    role: 'technician',
-    specialization: 'general_maintenance',
-    emirate: 'Abu Dhabi',
-    salary: '',
-};
+const ROLES = [
+    { value: 'technician', label: 'Field Technician' },
+    { value: 'hr_staff', label: 'HR Administrator' },
+    { value: 'manager', label: 'Operations Manager' },
+    { value: 'admin', label: 'System Admin' }
+];
 
 export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDialogProps) {
-    const [draft, setDraft] = useState<StaffDraft>(initialDraft);
-    const [submitting, setSubmitting] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState(false);
+    
+    const [formData, setFormData] = useState({
+        fullName: '',
+        email: '',
+        mobile: '',
+        role: 'technician',
+        employeeId: '',
+        emiratesId: '',
+        department: '',
+        initialPassword: 'BinGroupPass2026!'
+    });
 
-    const updateField = (field: keyof StaffDraft) => (event: React.ChangeEvent<HTMLInputElement>) => {
-        setDraft((current) => ({ ...current, [field]: event.target.value }));
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const resetAndClose = () => {
-        if (submitting) return;
-        setDraft(initialDraft);
-        setError(null);
-        onClose();
-    };
-
-    const handleSubmit = async () => {
-        const displayName = draft.displayName.trim();
-        const email = draft.email.trim().toLowerCase();
-
-        if (!displayName || !email) {
-            setError('Full name and email are required before registering staff.');
-            return;
-        }
-
-        setSubmitting(true);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
         setError(null);
 
         try {
-            await addDoc(collection(db, 'users'), {
-                displayName,
-                email,
-                mobile: draft.mobile.trim(),
-                role: draft.role,
-                specialization: draft.specialization,
-                emirate: draft.emirate,
-                salary: Number(draft.salary || 0),
-                status: 'ACTIVE',
-                onboardingStatus: 'PENDING_CREDENTIAL_SETUP',
-                source: 'ADMIN_HR_REGISTER_STAFF_DIALOG',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+            const staffRef = collection(db, 'staff_registration_requests');
+            await addDoc(staffRef, {
+                ...formData,
+                status: 'pending_provisioning',
+                requestedBy: auth.currentUser?.uid,
+                requestedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
             });
 
-            resetAndClose();
-        } catch (err) {
-            console.error('[HR] Staff registration failed:', err);
-            setError('Staff record could not be created. Check Firestore rules or admin permissions.');
+            setSuccess(true);
+            setTimeout(() => {
+                onClose();
+                setSuccess(false);
+                setFormData({
+                    fullName: '',
+                    email: '',
+                    mobile: '',
+                    role: 'technician',
+                    employeeId: '',
+                    emiratesId: '',
+                    department: '',
+                    initialPassword: 'BinGroupPass2026!'
+                });
+            }, 2000);
+        } catch (err: any) {
+            console.error('[HR] Registration failed:', err);
+            setError(err.message || 'Failed to submit registration request.');
         } finally {
-            setSubmitting(false);
+            setLoading(false);
         }
     };
 
     return (
-        <Dialog
-            open={open}
-            onClose={resetAndClose}
+        <Dialog 
+            open={open} 
+            onClose={onClose}
+            maxWidth="sm"
             fullWidth
-            maxWidth="md"
             PaperProps={{
                 sx: {
-                    bgcolor: '#020617',
-                    color: '#fff',
-                    border: '1px solid rgba(212, 175, 55, 0.35)',
-                    borderRadius: 4,
-                },
+                    bgcolor: '#111',
+                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0))',
+                    border: '1px solid rgba(198,167,94,0.2)',
+                    borderRadius: 3
+                }
             }}
         >
-            <DialogTitle>
-                <Stack direction="row" spacing={2} alignItems="center">
-                    <Box
-                        sx={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 2,
-                            display: 'grid',
-                            placeItems: 'center',
-                            bgcolor: 'rgba(212, 175, 55, 0.12)',
-                            color: binThemeTokens.gold,
-                        }}
-                    >
-                        <UserPlus size={22} />
-                    </Box>
-                    <Box>
-                        <Typography variant="h6" fontWeight={950}>Register Staff</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            Create a controlled staff profile for HR, payroll, and technician dispatch workflows.
-                        </Typography>
-                    </Box>
-                </Stack>
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <UserPlus color={binThemeTokens.gold} size={24} />
+                    <Typography variant="h6" fontWeight="900" sx={{ color: '#fff', letterSpacing: 1 }}>
+                        REGISTER NEW <Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>STAFF</Typography>
+                    </Typography>
+                </Box>
+                <IconButton onClick={onClose} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                    <X size={20} />
+                </IconButton>
             </DialogTitle>
 
-            <DialogContent>
-                {error && (
-                    <Alert severity="error" sx={{ mb: 3, bgcolor: 'rgba(239,68,68,0.1)', color: '#fecaca' }}>
-                        {error}
+            <DialogContent dividers sx={{ borderColor: 'rgba(198,167,94,0.1)', p: 3 }}>
+                {success ? (
+                    <Alert severity="success" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid #10b981', fontWeight: 700 }}>
+                        Staff registration request submitted successfully!
                     </Alert>
-                )}
+                ) : (
+                    <Box component="form" onSubmit={handleSubmit}>
+                        <Grid container spacing={2.5}>
+                            <Grid item xs={12}>
+                                <TextField
+                                    fullWidth
+                                    label="Full Name"
+                                    name="fullName"
+                                    value={formData.fullName}
+                                    onChange={handleChange}
+                                    required
+                                    variant="outlined"
+                                    InputProps={{ startAdornment: <Shield size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Email Address"
+                                    name="email"
+                                    type="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    required
+                                    InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Mobile Number"
+                                    name="mobile"
+                                    value={formData.mobile}
+                                    onChange={handleChange}
+                                    required
+                                    InputProps={{ startAdornment: <Smartphone size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    select
+                                    label="Assigned Role"
+                                    name="role"
+                                    value={formData.role}
+                                    onChange={handleChange}
+                                    required
+                                    InputProps={{ startAdornment: <Briefcase size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
+                                >
+                                    {ROLES.map((option) => (
+                                        <MenuItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Employee ID"
+                                    name="employeeId"
+                                    value={formData.employeeId}
+                                    onChange={handleChange}
+                                    required
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Emirates ID"
+                                    name="emiratesId"
+                                    value={formData.emiratesId}
+                                    onChange={handleChange}
+                                    required
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Department"
+                                    name="department"
+                                    value={formData.department}
+                                    onChange={handleChange}
+                                    placeholder="e.g. Facilities Management"
+                                />
+                            </Grid>
+                        </Grid>
 
-                <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                    <Grid item xs={12} md={6}>
-                        <TextField label="Full name" fullWidth value={draft.displayName} onChange={updateField('displayName')} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField label="Email" fullWidth value={draft.email} onChange={updateField('email')} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField label="Mobile" fullWidth value={draft.mobile} onChange={updateField('mobile')} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField select label="Role" fullWidth value={draft.role} onChange={updateField('role')}>
-                            <MenuItem value="technician">Technician</MenuItem>
-                            <MenuItem value="hr_staff">HR Staff</MenuItem>
-                            <MenuItem value="hr_manager">HR Manager</MenuItem>
-                            <MenuItem value="manager">Operations Manager</MenuItem>
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField select label="Specialization" fullWidth value={draft.specialization} onChange={updateField('specialization')}>
-                            <MenuItem value="general_maintenance">General Maintenance</MenuItem>
-                            <MenuItem value="hvac">HVAC</MenuItem>
-                            <MenuItem value="plumbing">Plumbing</MenuItem>
-                            <MenuItem value="electrical">Electrical</MenuItem>
-                            <MenuItem value="cleaning">Cleaning</MenuItem>
-                            <MenuItem value="security">Security</MenuItem>
-                            <MenuItem value="hr_operations">HR Operations</MenuItem>
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField select label="Emirate" fullWidth value={draft.emirate} onChange={updateField('emirate')}>
-                            <MenuItem value="Abu Dhabi">Abu Dhabi</MenuItem>
-                            <MenuItem value="Dubai">Dubai</MenuItem>
-                            <MenuItem value="Sharjah">Sharjah</MenuItem>
-                            <MenuItem value="Ajman">Ajman</MenuItem>
-                            <MenuItem value="Ras Al Khaimah">Ras Al Khaimah</MenuItem>
-                            <MenuItem value="Fujairah">Fujairah</MenuItem>
-                            <MenuItem value="Umm Al Quwain">Umm Al Quwain</MenuItem>
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <TextField label="Salary / Month (AED)" type="number" fullWidth value={draft.salary} onChange={updateField('salary')} />
-                    </Grid>
-                </Grid>
+                        {error && (
+                            <Alert severity="error" sx={{ mt: 3, bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid #ef4444' }}>
+                                {error}
+                            </Alert>
+                        )}
+                    </Box>
+                )}
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 3 }}>
-                <Button onClick={resetAndClose} disabled={submitting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            <DialogActions sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.2)' }}>
+                <Button onClick={onClose} sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
                     Cancel
                 </Button>
-                <Button
+                <Button 
+                    variant="contained" 
                     onClick={handleSubmit}
-                    disabled={submitting}
-                    variant="contained"
-                    startIcon={submitting ? <CircularProgress size={16} /> : <UserPlus size={16} />}
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                    disabled={loading || success}
+                    sx={{ 
+                        bgcolor: binThemeTokens.gold, 
+                        color: '#000', 
+                        fontWeight: 900,
+                        minWidth: 140,
+                        '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.8) }
+                    }}
                 >
-                    Create Staff Profile
+                    {loading ? <CircularProgress size={24} color="inherit" /> : 'REGISTER STAFF'}
                 </Button>
             </DialogActions>
         </Dialog>

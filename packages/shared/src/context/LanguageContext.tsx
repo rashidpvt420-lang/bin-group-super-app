@@ -169,7 +169,6 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.bulk_intake': 'Bulk Property Intake (1–500)',
         'onboarding.analysis': 'Asset Analysis',
         'onboarding.quote': 'BIN-Groups Quote',
-        'onboarding.payment': 'Activation',
         'step.intake': 'Property Intake',
         'step.analysis': 'Asset Analysis',
         'step.quote': 'BIN-Groups Quote',
@@ -834,7 +833,6 @@ const translations: Record<Language, Record<string, string>> = {
         'onboarding.bulk_intake': 'إدخال العقارات بالجملة (1–500)',
         'onboarding.analysis': 'تحليل الأصول',
         'onboarding.quote': 'تسعيرة مجموعة بن',
-        'onboarding.payment': 'التفعيل',
         'step.intake': 'إدخال العقار',
         'step.analysis': 'تحليل الأصول',
         'step.quote': 'تسعيرة مجموعة بن',
@@ -1312,7 +1310,7 @@ const translations: Record<Language, Record<string, string>> = {
     }
 };
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const LanguageProvider: React.FC<{ children: any }> = ({ children }) => {
     // Fixed SSR issue with typeof window check
     const [lang, setLang] = useState<Language>(() => {
         if (typeof window !== 'undefined') {
