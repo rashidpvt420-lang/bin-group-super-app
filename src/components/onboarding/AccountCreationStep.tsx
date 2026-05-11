@@ -7,7 +7,7 @@ import { Visibility, VisibilityOff, ArrowBack, ArrowForward, Lock, Mail, Phone, 
 import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
 import { auth, db, doc, serverTimestamp, setDoc } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 interface AccountCreationStepProps {
@@ -24,7 +24,7 @@ const normalizePhone = (value: string) => value.replace(/[^0-9+]/g, '').trim();
 
 export default function AccountCreationStep({ onBack, onNext }: AccountCreationStepProps) {
     const { companyProfile, setOwnerAccount, intakeId } = useOnboardingStore();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
 
     const [formData, setFormData] = useState({
         fullName: companyProfile.contactPerson || '',
@@ -53,7 +53,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             return errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
         }
         if (mobile.length < 8) {
-            return 'Enter a valid mobile number.';
+            return lang === 'ar' ? 'يرجى إدخال رقم هاتف صحيح.' : 'Enter a valid mobile number.';
         }
         if (formData.password.length < 8) {
             return errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
@@ -139,8 +139,10 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 let msg = errorText('onboarding.error.generic', 'Account creation failed. Please check the details and try again.');
                 if (err.code === 'auth/invalid-email') msg = errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
                 else if (err.code === 'auth/weak-password') msg = errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
-                else if (err.code === 'permission-denied') msg = 'Owner account was created, but Firestore rejected the owner profile write. Deploy the latest Firestore rules and try again.';
-                else if (err.code === 'unavailable') msg = 'Firebase is temporarily unavailable. Please try again in a moment.';
+                else if (err.code === 'auth/operation-not-allowed') msg = lang === 'ar' ? 'تسجيل البريد وكلمة المرور غير مفعّل في Firebase Authentication.' : 'Email/password signup is not enabled in Firebase Authentication.';
+                else if (err.code === 'permission-denied') msg = lang === 'ar' ? 'تم إنشاء الحساب، لكن Firestore رفض إنشاء ملف المالك. يرجى نشر قواعد Firestore الجديدة ثم المحاولة مرة أخرى.' : 'Owner account was created, but Firestore rejected the owner profile write. Deploy the latest Firestore rules and try again.';
+                else if (err.code === 'unavailable') msg = lang === 'ar' ? 'Firebase غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.' : 'Firebase is temporarily unavailable. Please try again in a moment.';
+                else if (err?.message) msg = `${msg} (${err.code || err.message})`;
                 setError({ message: msg, type: 'error' });
             }
         } finally {
@@ -150,7 +152,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
 
     if (success) {
         return (
-            <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }}>
+            <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid #4ADE80', backdropFilter: 'blur(10px)' }}>
                     <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
                         <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(74, 222, 128, 0.1)' }}>
@@ -168,7 +170,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
     }
 
     return (
-        <Box sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
             <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 4 } }}>
                 <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom sx={{ fontSize: { xs: '1.8rem', md: '2.125rem' } }}>
                     {readable(t('onboarding.acc_creation'), 'Create Owner Account')}
@@ -194,7 +196,6 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                         color: binThemeTokens.gold,
                         border: '1px solid rgba(212, 175, 55, 0.2)',
                         '& .MuiAlert-icon': { alignItems: 'center', color: binThemeTokens.gold },
-                        flexDirection: isRTL ? 'row-reverse' : 'row'
                     }}
                 >
                     {readable(t('onboarding.acc_creation_warning'), 'Your account will remain locked until contract/payment verification and admin approval are completed.')}
@@ -203,9 +204,9 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 {error && (
                     <Alert
                         severity={error.type}
-                        sx={{ mb: 3, borderRadius: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}
+                        sx={{ mb: 3, borderRadius: 2 }}
                         action={error.action === 'signin' && (
-                            <Button color="inherit" size="small" onClick={() => window.location.href = '/login'} startIcon={<Login sx={{ fontSize: 16 }} />}>
+                            <Button color="inherit" size="small" onClick={() => window.location.href = '/login'} startIcon={!isRTL ? <Login sx={{ fontSize: 16 }} /> : undefined}>
                                 {readable(t('login.signin'), 'Sign in')}
                             </Button>
                         )}
@@ -223,12 +224,13 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         InputProps={{
                             sx: { color: '#FFF', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 2 },
-                            startAdornment: <Person sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} />
+                            startAdornment: !isRTL ? <Person sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} /> : undefined,
+                            endAdornment: isRTL ? <Person sx={{ color: binThemeTokens.gold, ml: 1.5, fontSize: 20 }} /> : undefined,
                         }}
                         InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)', textAlign: isRTL ? 'right' : 'left', width: '100%' } }}
                     />
 
-                    <Grid container spacing={{ xs: 2, md: 3 }} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Grid container spacing={{ xs: 2, md: 3 }}>
                         <Grid item xs={12} md={6}>
                             <TextField
                                 label={readable(t('onboarding.mobile'), 'Mobile')}
@@ -238,7 +240,8 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                                 onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                                 InputProps={{
                                     sx: { color: '#FFF', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 2 },
-                                    startAdornment: <Phone sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} />
+                                    startAdornment: !isRTL ? <Phone sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} /> : undefined,
+                                    endAdornment: isRTL ? <Phone sx={{ color: binThemeTokens.gold, ml: 1.5, fontSize: 20 }} /> : undefined,
                                 }}
                                 InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                             />
@@ -253,14 +256,15 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 InputProps={{
                                     sx: { color: '#FFF', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 2 },
-                                    startAdornment: <Mail sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} />
+                                    startAdornment: !isRTL ? <Mail sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} /> : undefined,
+                                    endAdornment: isRTL ? <Mail sx={{ color: binThemeTokens.gold, ml: 1.5, fontSize: 20 }} /> : undefined,
                                 }}
                                 InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                             />
                         </Grid>
                     </Grid>
 
-                    <Grid container spacing={{ xs: 2, md: 3 }} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Grid container spacing={{ xs: 2, md: 3 }}>
                         <Grid item xs={12} md={6}>
                             <TextField
                                 label={readable(t('onboarding.password'), 'Password')}
@@ -271,7 +275,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 InputProps={{
                                     sx: { color: '#FFF', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 2 },
-                                    startAdornment: <Lock sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} />,
+                                    startAdornment: !isRTL ? <Lock sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} /> : undefined,
                                     endAdornment: (
                                         <InputAdornment position="end">
                                             <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: 'rgba(255,255,255,0.5)' }}>
@@ -293,18 +297,19 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                                 InputProps={{
                                     sx: { color: '#FFF', bgcolor: 'rgba(0,0,0,0.5)', borderRadius: 2 },
-                                    startAdornment: <Lock sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} />
+                                    startAdornment: !isRTL ? <Lock sx={{ color: binThemeTokens.gold, mr: 1.5, fontSize: 20 }} /> : undefined,
+                                    endAdornment: isRTL ? <Lock sx={{ color: binThemeTokens.gold, ml: 1.5, fontSize: 20 }} /> : undefined,
                                 }}
                                 InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                             />
                         </Grid>
                     </Grid>
 
-                    <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ pt: 3 }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 3 }}>
                         <Button
                             variant="outlined"
-                            startIcon={!isRTL ? <ArrowBack /> : null}
-                            endIcon={isRTL ? <ArrowBack sx={{ transform: 'rotate(180deg)' }} /> : null}
+                            startIcon={!isRTL ? <ArrowBack /> : undefined}
+                            endIcon={isRTL ? <ArrowForward /> : undefined}
                             onClick={onBack}
                             disabled={loading}
                             fullWidth
@@ -328,9 +333,9 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                             }}
                         >
                             {loading ? <CircularProgress size={24} color="inherit" /> : (
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     {readable(t('onboarding.create_btn'), 'Create Account')}
-                                    {!isRTL ? <ArrowForward sx={{ ml: 1, fontSize: 20 }} /> : <ArrowForward sx={{ mr: 1, fontSize: 20, transform: 'rotate(180deg)' }} />}
+                                    {!isRTL ? <ArrowForward sx={{ fontSize: 20 }} /> : <ArrowBack sx={{ fontSize: 20 }} />}
                                 </Box>
                             )}
                         </Button>
