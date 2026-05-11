@@ -11,11 +11,12 @@ import {
     FileText, UserPlus, ChevronRight, Search as SearchIcon
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, where } from '@/lib/firebase';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '@/lib/firebase';
+import RegisterStaffDialog from '../../components/RegisterStaffDialog';
 
 export default function HRManagementPage() {
     const { user } = useAuth();
@@ -24,8 +25,10 @@ export default function HRManagementPage() {
     const [staff, setStaff] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { setSearchTerm(e.target.value); };
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [payrollError, setPayrollError] = useState<string | null>(null);
+    const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -92,12 +95,22 @@ export default function HRManagementPage() {
                                 OPEN PAYROLL / FINANCIALS
                             </Button>
                             {isHRManager && (
-                                <Button variant="contained" startIcon={<UserPlus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                <Button 
+                                    variant="contained" 
+                                    startIcon={<UserPlus size={18} />} 
+                                    onClick={() => setIsRegisterDialogOpen(true)}
+                                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                                >
                                     REGISTER STAFF
                                 </Button>
                             )}
                         </Stack>
                     </Box>
+
+                <RegisterStaffDialog 
+                    open={isRegisterDialogOpen} 
+                    onClose={() => setIsRegisterDialogOpen(false)} 
+                />
 
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 4, '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}>
                     <Tab label="STAFF REGISTRY" />
