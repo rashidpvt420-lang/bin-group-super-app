@@ -63,7 +63,8 @@ service cloud.firestore {
         request.resource.data.permissions == resource.data.permissions &&
         (
           (resource.data.role == 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt', 'updatedAt'
+            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt', 
+            'dutyStartedAt', 'dutyEndedAt', 'lastLocation', 'lastSeenAt', 'updatedAt'
           ])) ||
           (resource.data.role != 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'displayName','name','phone','mobile','photoURL','language',

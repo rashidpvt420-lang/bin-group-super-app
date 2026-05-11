@@ -7,7 +7,7 @@ import {
     Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { storage, ref, uploadBytes, getDownloadURL, functions } from '../../lib/firebase';
 import { httpsCallable } from 'firebase/functions';

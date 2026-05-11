@@ -35,15 +35,11 @@ import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 import OwnerApp from './owner/OwnerApp';
 import CompanyProfilePage from './pages/public/CompanyProfilePage';
-import { RoleProvider, useRole } from './context/RoleContext';
-import { CustomThemeProvider } from './context/ThemeContext';
-import { LanguageProvider, useLanguage } from './context/LanguageContext';
-import { SovereignAIChat } from './components/SovereignAIChat';
-import { AIProvider } from './context/AIContext';
-import { SovereignAlertHandler } from './components/SovereignAlertHandler';
+import { AuthProvider, useRole, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
+import { CustomThemeProvider } from './context/ThemeContext';
 
 ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
     try { localStorage.removeItem(key); } catch (e) { console.warn('[APP] Storage cleanup failed', e); }
@@ -250,7 +246,7 @@ export default function App() {
     <Router>
       <LanguageProvider>
         <CustomThemeProvider>
-          <RoleProvider>
+          <AuthProvider>
             <AIProvider>
               <CssBaseline />
               <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
@@ -269,7 +265,7 @@ export default function App() {
                 <SovereignAlertHandler />
               </Box>
             </AIProvider>
-          </RoleProvider>
+          </AuthProvider>
         </CustomThemeProvider>
       </LanguageProvider>
     </Router>

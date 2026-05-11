@@ -2318,3 +2318,141 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 });
+
+/**
+ * [V15] SOVEREIGN PAYMENT PROCESSOR
+ * Atomic transaction processing for AED institutional payments.
+ */
+export const processPayment = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
+    
+    const { invoiceId, paymentMethod, amount } = request.data;
+    if (!invoiceId || !amount) throw new HttpsError("invalid-argument", "Transaction payload incomplete.");
+
+    const uid = request.auth.uid;
+    const invoiceRef = db.collection("invoices").doc(invoiceId);
+    
+    return await db.runTransaction(async (transaction) => {
+        const invoiceSnap = await transaction.get(invoiceRef);
+        if (!invoiceSnap.exists) throw new HttpsError("not-found", "Invoice node not found.");
+        
+        const invoiceData = invoiceSnap.data()!;
+        if (invoiceData.status === "PAID") throw new HttpsError("failed-precondition", "Transaction already settled.");
+
+        const txId = `TXN-${Date.now()}-${uid.substring(0, 5)}`;
+        const receiptId = `RCPT-${Date.now()}`;
+
+        // 1. Log Atomic Transaction
+        transaction.set(db.collection("transactions").doc(txId), {
+            txId, uid, invoiceId, amount, 
+            currency: "AED",
+            status: "SUCCESS",
+            method: paymentMethod || "SOVEREIGN_WALLET",
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            metadata: { 
+                ip: request.rawRequest.ip || "unknown",
+                userAgent: request.rawRequest.headers["user-agent"] || "unknown"
+            }
+        });
+
+        // 2. Update Invoice Status
+        transaction.update(invoiceRef, {
+            status: "PAID",
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            transactionId: txId,
+            receiptId
+        });
+
+        // 3. Generate Digital Receipt (Audit collections)
+        transaction.set(db.collection("receipts").doc(receiptId), {
+            receiptId, txId, invoiceId, uid, amount,
+            taxAmount: amount * 0.05, // 5% VAT UAE
+            netAmount: amount * 0.95,
+            issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+            complianceCode: "UAE-VAT-COMPLIANT-2026"
+        });
+
+        // 4. Update Sovereign Ledger
+        const ledgerRef = db.collection("ledgers").doc(uid);
+        transaction.set(ledgerRef, {
+            totalPaid: admin.firestore.FieldValue.increment(amount),
+            lastPaymentAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: "CURRENT"
+        }, { merge: true });
+
+        return { 
+            status: "SUCCESS", 
+            transactionId: txId, 
+            receiptId,
+            message: "Sovereign settlement complete." 
+        };
+    });
+});
+
+/**
+ * [V16] AI DISPATCH & AUTO-ROUTING
+ * Geospatial technician assignment for maintenance tickets.
+ */
+export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const ticketData = snap.data();
+    if (ticketData.technicianId || ticketData.status !== "OPEN") return;
+
+    const propertyId = ticketData.propertyId;
+    if (!propertyId) return;
+
+    // 1. Get Property Location
+    const propDoc = await db.collection("properties").doc(propertyId).get();
+    const propGeo = propDoc.data()?.geo;
+    if (!propGeo) return;
+
+    // 2. Find Available Technicians in Zone
+    const techQuery = await db.collection("users")
+        .where("role", "==", "technician")
+        .where("onDuty", "==", true)
+        .where("dutyStatus", "==", "ON_DUTY")
+        .get();
+
+    let bestTechId = null;
+    let minDistance = 50; // 50km radius max
+
+    techQuery.forEach(doc => {
+        const techData = doc.data();
+        if (techData.lastLocation) {
+            const d = distanceKm(propGeo, techData.lastLocation);
+            if (d < minDistance) {
+                minDistance = d;
+                bestTechId = doc.id;
+            }
+        }
+    });
+
+    if (bestTechId) {
+        await snap.ref.update({
+            technicianId: bestTechId,
+            status: "assigned",
+            technicianStatus: "PENDING_ACCEPTANCE",
+            assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+            autoRouted: true,
+            routingDistance: minDistance
+        });
+
+        await createNotification(bestTechId, {
+            title: "New Mission Assigned",
+            message: `Emergency dispatch for ${propDoc.data()?.propertyName || "Asset"}. Distance: ${minDistance.toFixed(1)}km.`,
+            type: "TICKET_UPDATE",
+            ticketId: event.params.id,
+            source: "AI_DISPATCH"
+        });
+
+        await logAudit({
+            actorId: "AI_DISPATCH",
+            actorRole: "system",
+            action: "AUTO_ROUTE_TICKET",
+            targetType: "maintenanceTickets",
+            targetId: event.params.id,
+            metadata: { technicianId: bestTechId, distance: minDistance }
+        });
+    }
+});
