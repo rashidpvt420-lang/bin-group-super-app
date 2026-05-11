@@ -15,7 +15,6 @@ console.log("⚡ [SHARED-LOAD] Exported Theme Tokens.");
 export * from './components/SovereignAIChat';
 export * from './context/AIContext';
 export * from './lib/notificationService';
-export { NotificationEvents } from '../../../src/services/notificationService';
 export * from './utils/DesignStudioPricingEngine';
 export * from './context/LanguageContext';
 export * from './context/AuthProvider';
