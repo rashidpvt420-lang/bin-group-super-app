@@ -9,20 +9,12 @@ import {
     query, where, onSnapshot, updateDoc, doc, getDocs, orderBy, limit
 } from '../lib/firebase';
 
-export type NotificationType =
-    | 'TICKET_CREATED'
-    | 'TICKET_ASSIGNED'
-    | 'STATUS_UPDATE'
-    | 'COMPLETION_REQUEST'
-    | 'TENANT_APPROVED'
-    | 'TENANT_REJECTED'
-    | 'EMERGENCY_SOS'
-    | 'CHAT_MESSAGE';
+export type NotificationType = string;
 
 export interface BinNotification {
     id?: string;
-    recipientId: string;       // UID of the target user
-    recipientRole: string;     // 'admin' | 'tenant' | 'technician'
+    recipientId: string;
+    recipientRole: string;
     type: NotificationType;
     title: string;
     body: string;
@@ -30,6 +22,7 @@ export interface BinNotification {
     read: boolean;
     createdAt: any;
     metadata?: Record<string, any>;
+    link?: string;
 }
 
 // ─── Send a notification to a specific user ──────────────────────────────────
@@ -86,6 +79,132 @@ export async function notifyOnDutyTechnicians(payload: Omit<BinNotification, 'id
         console.error('[Notifications] On-duty tech broadcast failed:', err);
     }
 }
+
+// ─── General 5-profile notification event facade ─────────────────────────────
+export const NotificationEvents = {
+    OWNER: {
+        DESIGN_STUDIO_NOC: (userId: string, tenantName: string, zone: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'owner',
+                type: 'DESIGN_NOC',
+                title: 'DESIGN STUDIO: NOC REQUIRED',
+                body: `${tenantName} submitted an AI redesign concept for ${zone}. Approval required.`,
+                link: '/notifications',
+                metadata: { tenantName, zone }
+            }),
+        ONBOARDING_APPROVED: (userId: string, propertyName: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'owner',
+                type: 'ONBOARDING_VERIFIED',
+                title: 'ONBOARDING APPROVED',
+                body: `Asset ${propertyName} is now active in your portfolio.`,
+                link: '/dashboard',
+                metadata: { propertyName }
+            }),
+        PAYMENT_VERIFIED: (userId: string, amount: number) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'owner',
+                type: 'PAYMENT_VERIFIED',
+                title: 'PAYMENT SECURED',
+                body: `Mobilization deposit AED ${amount} verified. Operations commencing.`,
+                link: '/financials',
+                metadata: { amount }
+            }),
+        QUOTE_READY: (userId: string, propertyName: string, ticketId: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'owner',
+                type: 'QUOTE_APPROVAL',
+                title: 'QUOTE AWAITING APPROVAL',
+                body: `A new maintenance quote for ${propertyName} requires authorization.`,
+                ticketId,
+                link: '/dashboard',
+                metadata: { propertyName, ticketId }
+            }),
+    },
+    TENANT: {
+        DESIGN_APPROVED: (userId: string, zone: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'tenant',
+                type: 'DESIGN_APPROVED',
+                title: 'DESIGN STUDIO: APPROVED',
+                body: `Your owner has granted NOC for the ${zone} redesign. You may proceed with payment.`,
+                link: '/design-studio',
+                metadata: { zone }
+            }),
+        TICKET_RECEIVED: (userId: string, ticketId: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'tenant',
+                type: 'TICKET_RECEIVED',
+                title: 'MISSION ACKNOWLEDGED',
+                body: `Request #${ticketId} received. Awaiting specialist dispatch.`,
+                ticketId,
+                link: '/tenant'
+            }),
+        TECH_ASSIGNED: (userId: string, techName: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'tenant',
+                type: 'TECH_ASSIGNED',
+                title: 'SPECIALIST ASSIGNED',
+                body: `${techName} has been assigned to your request.`,
+                link: '/tenant',
+                metadata: { techName }
+            }),
+    },
+    TECH: {
+        NEW_JOB: (userId: string, propertyName: string, ticketId: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'technician',
+                type: 'NEW_JOB',
+                title: 'NEW MISSION ASSIGNED',
+                body: `Urgent request received for ${propertyName}. View node for coordinates.`,
+                ticketId,
+                link: `/tech/ticket/${ticketId}`,
+                metadata: { propertyName }
+            }),
+    },
+    BROKER: {
+        LEAD_ACCEPTED: (userId: string, leadName: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'broker',
+                type: 'LEAD_ACCEPTED',
+                title: 'LEAD ACCEPTED',
+                body: `Your referral for ${leadName} has been accepted into the pipeline.`,
+                link: '/broker',
+                metadata: { leadName }
+            }),
+    },
+    ADMIN: {
+        NEW_ONBOARDING: (propertyName: string) =>
+            sendNotification({
+                recipientId: 'ADMIN_GROUP',
+                recipientRole: 'admin',
+                type: 'NEW_ONBOARDING',
+                title: 'NEW ASSET INTAKE',
+                body: `A new asset (${propertyName}) requires verification.`,
+                link: '/dashboard',
+                metadata: { propertyName }
+            }),
+        EMERGENCY_TICKET: (propertyName: string, category: string) =>
+            sendNotification({
+                recipientId: 'ADMIN_GROUP',
+                recipientRole: 'admin',
+                type: 'EMERGENCY_SOS',
+                title: 'CRITICAL SOS DETECTED',
+                body: `Emergency ${category} issue at ${propertyName}. Ensure immediate dispatch.`,
+                link: '/tickets',
+                metadata: { propertyName, category }
+            }),
+    }
+};
 
 // ─── Convenience wrappers for lifecycle events ────────────────────────────────
 
@@ -181,11 +300,6 @@ export async function notifyEmergency(ticketId: string, tenantName: string, prop
 }
 
 // ─── Real-time notification listener hook ────────────────────────────────────
-/**
- * Call this in a React component:
- * const unsub = subscribeToNotifications(user.uid, setNotifications);
- * return () => unsub();
- */
 export function subscribeToNotifications(
     userId: string,
     onUpdate: (notifications: BinNotification[]) => void,
