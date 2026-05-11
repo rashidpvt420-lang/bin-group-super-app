@@ -19,7 +19,6 @@ import AssetProfileStep from '../components/onboarding/AssetProfileStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
-import AddOnsStep from '../components/onboarding/AddOnsStep';
 import ProofUploadStep from '../components/onboarding/ProofUploadStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
@@ -30,8 +29,10 @@ const readable = (value: string | undefined, fallback: string) => {
   return value;
 };
 
+const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
+
 const PropertyOnboardingPage = () => {
-    const { step, nextStep, prevStep } = useOnboardingStore();
+    const { step, setStep, nextStep, prevStep } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -40,14 +41,19 @@ const PropertyOnboardingPage = () => {
         readable(t('onboarding.company'), 'Company'),
         readable(t('onboarding.asset'), 'Asset'),
         readable(t('onboarding.location'), 'Location'),
-        readable(t('onboarding.systems'), 'Systems'),
+        readable(t('onboarding.systems'), 'Systems + Add-ons'),
         readable(t('onboarding.service_plan'), 'Service Plan'),
-        readable(t('onboarding.addons'), 'Add-ons'),
         readable(t('onboarding.documents'), 'Documents'),
-        readable(t('onboarding.verification'), 'Verification'),
+        readable(t('onboarding.verification'), 'Account'),
         readable(t('onboarding.review'), 'Review'),
         readable(t('onboarding.payment'), 'Payment'),
     ];
+
+    const safeStep = clampStep(step, onboardingSteps.length);
+
+    React.useEffect(() => {
+        if (step !== safeStep) setStep(safeStep);
+    }, [safeStep, setStep, step]);
 
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
@@ -56,11 +62,10 @@ const PropertyOnboardingPage = () => {
             case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
             case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
             case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <AddOnsStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
-            case 8: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
-            case 9: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
-            case 10: return <PaymentSubmissionStep onBack={prevStep} />;
+            case 6: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
+            case 9: return <PaymentSubmissionStep onBack={prevStep} />;
             default: return <CompanyProfileStep onNext={nextStep} />;
         }
     };
@@ -84,10 +89,10 @@ const PropertyOnboardingPage = () => {
 
             <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 1, md: 2 }, px: { xs: 1.5, sm: 3 } }}>
                 <Typography variant="caption" sx={{ display: { xs: 'block', sm: 'none' }, color: binThemeTokens.gold, fontWeight: 950, textAlign: 'center', mb: 1 }}>
-                    Step {step} of {onboardingSteps.length}: {onboardingSteps[Math.max(0, step - 1)]}
+                    {isRTL ? `الخطوة ${safeStep} من ${onboardingSteps.length}: ${onboardingSteps[Math.max(0, safeStep - 1)]}` : `Step ${safeStep} of ${onboardingSteps.length}: ${onboardingSteps[Math.max(0, safeStep - 1)]}`}
                 </Typography>
                 <Stepper
-                    activeStep={step - 1}
+                    activeStep={safeStep - 1}
                     alternativeLabel={!isMobile}
                     sx={{
                         mb: { xs: 1.5, md: 4 },
@@ -129,7 +134,7 @@ const PropertyOnboardingPage = () => {
                     overflow: 'visible',
                 }}
             >
-                {renderStepContent(step)}
+                {renderStepContent(safeStep)}
             </Container>
         </Box>
     );
