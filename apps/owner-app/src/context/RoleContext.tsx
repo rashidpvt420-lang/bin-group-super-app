@@ -248,7 +248,7 @@ export function RoleProvider({ children }: { children: any }) {
             {user && !legalAccepted && !loading && !error && (
                 <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />
             )}
-            {children}
+            {children as any}
         </RoleContext.Provider>
     );
 }

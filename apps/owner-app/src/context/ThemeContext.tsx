@@ -116,7 +116,7 @@ export function CustomThemeProvider({ children }: { children: any }) {
         <ThemeContext.Provider value={{ mode, toggleTheme }}>
             <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
                 <MuiThemeProvider theme={theme}>
-                    {children}
+                    {children as any}
                 </MuiThemeProvider>
             </CacheProvider>
         </ThemeContext.Provider>

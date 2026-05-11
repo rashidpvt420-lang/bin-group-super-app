@@ -43,12 +43,7 @@ service cloud.firestore {
       return isTechnician(data.assignedTechnicianId) || isTechnician(data.technicianId);
     }
 
-    function isSafeOwnerSignupProfile(userId) {
-      return signedIn() && request.auth.uid == userId &&
-        request.resource.data.uid == request.auth.uid &&
-        request.resource.data.email == request.auth.token.email.lower() &&
-        request.resource.data.role == 'owner';
-    }
+
 
     // ─── Core Collections ─────────────────────────────────────────────────────
 
