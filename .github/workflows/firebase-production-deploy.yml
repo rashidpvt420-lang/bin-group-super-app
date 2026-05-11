@@ -1,0 +1,67 @@
+name: Firebase Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firebase-production-deploy
+  cancel-in-progress: true
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+  REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+  CI: false
+
+jobs:
+  validate-build-deploy:
+    name: Validate, build, and deploy Firebase production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create production environment file
+        run: |
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
+
+      - name: Validate root source lint
+        run: npm run lint
+
+      - name: Validate TypeScript
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build main public app
+        run: npm run build
+
+      - name: Build admin panel
+        run: npm run build --workspace apps/admin-panel
+
+      - name: Deploy Firebase Hosting, Firestore rules, and Firestore indexes
+        run: npx firebase deploy --only hosting,firestore:rules,firestore:indexes --project "${GCP_PROJECT_ID}" --non-interactive
