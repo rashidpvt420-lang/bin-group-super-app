@@ -12,6 +12,8 @@ import {
   sendPasswordResetEmail,
   signOut,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
   type Auth,
   type User,
 } from 'firebase/auth';
@@ -112,6 +114,8 @@ export {
   sendPasswordResetEmail,
   signOut,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
   // Firestore
   collection,
   collectionGroup,
