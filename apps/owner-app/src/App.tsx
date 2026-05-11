@@ -44,14 +44,11 @@ import TenantInvitePage from './pages/TenantInvitePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 
-import { RoleProvider, useRole } from './context/RoleContext';
-import { LanguageProvider, useLanguage } from './context/LanguageContext';
-import { CustomThemeProvider } from './context/ThemeContext';
-
-import ErrorBoundary from './components/ErrorBoundary';
-import { SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { AuthProvider, useRole, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
+import ErrorBoundary from './components/ErrorBoundary';
+import { CustomThemeProvider } from './context/ThemeContext';
 
 /**
  * [CRITICAL] FULL-SCREEN BLOCKING LOADER
@@ -251,7 +248,7 @@ export default function App() {
       <ErrorBoundary>
         <LanguageProvider>
           <CustomThemeProvider>
-            <RoleProvider>
+            <AuthProvider>
               <AIProvider>
                 <CssBaseline />
                 <Box sx={{ minHeight: '100vh', bgcolor: '#000', display: 'flex', flexDirection: 'column' }}>
@@ -262,7 +259,7 @@ export default function App() {
                   <SovereignAlertHandler />
                 </Box>
               </AIProvider>
-            </RoleProvider>
+            </AuthProvider>
           </CustomThemeProvider>
         </LanguageProvider>
       </ErrorBoundary>

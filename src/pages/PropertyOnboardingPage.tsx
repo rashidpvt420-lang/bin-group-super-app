@@ -11,7 +11,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { useOnboardingStore } from '../store/onboardingStore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';

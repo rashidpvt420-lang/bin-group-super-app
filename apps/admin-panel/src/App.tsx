@@ -13,8 +13,7 @@ import { prefixer } from 'stylis';
 import rtlPlugin from 'stylis-plugin-rtl';
 import { signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { AuthProvider, useAuth, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
@@ -51,7 +50,7 @@ import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
-import { TechnicianMapPage } from './pages/Placeholders';
+import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import { adminTheme } from './theme/adminTheme';
@@ -122,7 +121,7 @@ function AppContent() {
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
-                    <Route path="/technicians/map" element={<ProtectedRoute><TechnicianMapPage /></ProtectedRoute>} />
+                    <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
                     <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
@@ -152,16 +151,13 @@ function AppContent() {
 
 function Layout() {
     const { t, isRTL } = useLanguage();
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
         try {
             console.log("[ADMIN] Initiating global logout sequence...");
-            localStorage.clear();
-            sessionStorage.clear();
-            await signOut(auth);
-            window.location.href = '/login';
+            await logout();
         } catch (err) {
             console.error("Logout failure:", err);
             window.location.href = '/login';
@@ -299,7 +295,7 @@ function AdminThemeProviderWrapper() {
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <Router>
-                    <AuthProvider>
+                    <AuthProvider requireAdmin>
                         <AIProvider>
                             <AppContent />
                         </AIProvider>

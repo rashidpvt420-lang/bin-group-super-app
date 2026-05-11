@@ -272,10 +272,10 @@ const calculateAddOnAnnualValue = (property: PropertyData, selectedAddOns: strin
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
     // Map internal types to Pricing Matrix types
-    let assetClassId = 'standard_apartment';
-    if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'luxury_estate_villa' : 'standard_villa';
-    else if (property.propertyType === 'Building') assetClassId = 'commercial_tower';
-    else if (property.propertyType === 'Commercial') assetClassId = 'small_office';
+    let assetClassId = 'apt-std';
+    if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
+    else if (property.propertyType === 'Building') assetClassId = 'com-twr';
+    else if (property.propertyType === 'Commercial') assetClassId = 'off-sml';
     else if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) assetClassId = 'government_majlis';
     else if (property.propertyType === 'Hotel') assetClassId = 'mid_scale_hotel';
     

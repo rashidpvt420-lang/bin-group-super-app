@@ -56,6 +56,14 @@ export default function DesignStudioPage() {
 
     const [selectedPropertyId, setSelectedPropertyId] = useState('');
     const [designStyle, setDesignStyle] = useState('Modern');
+    
+    // Detailed Context Fields
+    const [unitNumber, setUnitNumber] = useState('');
+    const [floorLevel, setFloorLevel] = useState('');
+    const [existingCondition, setExistingCondition] = useState('');
+    const [requiredWork, setRequiredWork] = useState('');
+    const [adminNotes, setAdminNotes] = useState('');
+    const [staffInstructions, setStaffInstructions] = useState('');
 
     useEffect(() => {
         const fetchProperties = async () => {
@@ -178,7 +186,15 @@ export default function DesignStudioPage() {
                     ...scope,
                     scopeDescription,
                     keepConstraints,
-                    referenceImages
+                    referenceImages,
+                    unitNumber,
+                    floorLevel,
+                    existingCondition,
+                    requiredWork
+                },
+                metadata: {
+                    adminNotes,
+                    staffInstructions
                 },
                 designStyle,
                 quote,
@@ -246,7 +262,7 @@ export default function DesignStudioPage() {
                             <Button size="small" color="inherit" onClick={() => setUploadError(null)} startIcon={<RefreshCcw size={14}/>}>RETRY</Button>
                             <Button size="small" color="inherit" component="label">
                                 CHANGE IMAGE
-                                <input type="file" hidden accept="image/*" onChange={handleImageUpload} />
+                                <input type="file" hidden accept="image/*" capture="environment" onChange={handleImageUpload} />
                             </Button>
                         </Stack>
                     }
@@ -290,7 +306,7 @@ export default function DesignStudioPage() {
                                         >
                                             <Camera size={24} />
                                             <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>
-                                            <input type="file" hidden accept="image/*" multiple onChange={handleImageUpload} />
+                                            <input type="file" hidden accept="image/*" capture="environment" multiple onChange={handleImageUpload} />
                                         </Button>
                                     )}
                                     {uploading && (
@@ -325,6 +341,22 @@ export default function DesignStudioPage() {
                                 placeholder="e.g. Keep the flooring, avoid dark colors..."
                                 value={keepConstraints}
                                 onChange={(e) => setKeepConstraints(e.target.value)}
+                                sx={{ mb: 3 }}
+                            />
+
+                            <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Existing Condition & Required Work</Typography>
+                            <TextField 
+                                multiline rows={2} fullWidth 
+                                placeholder="Describe current state..."
+                                value={existingCondition}
+                                onChange={(e) => setExistingCondition(e.target.value)}
+                                sx={{ mb: 2 }}
+                            />
+                            <TextField 
+                                multiline rows={2} fullWidth 
+                                placeholder="List required work..."
+                                value={requiredWork}
+                                onChange={(e) => setRequiredWork(e.target.value)}
                             />
                         </Paper>
 
@@ -361,6 +393,15 @@ export default function DesignStudioPage() {
                                 <MenuItem value="Traditional Majlis">TRADITIONAL MAJLIS</MenuItem>
                                 <MenuItem value="Industrial">INDUSTRIAL</MenuItem>
                             </TextField>
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={6}>
+                                    <TextField fullWidth label="Unit #" value={unitNumber} onChange={(e) => setUnitNumber(e.target.value)} />
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <TextField fullWidth label="Floor" value={floorLevel} onChange={(e) => setFloorLevel(e.target.value)} />
+                                </Grid>
+                            </Grid>
                         </Paper>
                     </Stack>
                 </Grid>

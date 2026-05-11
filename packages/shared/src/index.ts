@@ -17,6 +17,8 @@ export * from './context/AIContext';
 export * from './lib/notificationService';
 export * from './utils/DesignStudioPricingEngine';
 export * from './context/LanguageContext';
+export * from './context/AuthProvider';
+export * from './components/LegalModal';
 export * from './components/CeoContactButtons';
 export * from './components/SovereignSupportChat';
 export * from './components/SovereignAlertHandler';
