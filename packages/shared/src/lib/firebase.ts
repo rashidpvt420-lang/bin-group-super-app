@@ -1,6 +1,8 @@
 // packages/shared/src/lib/firebase.ts
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
+
 import {
   getAuth,
   onAuthStateChanged,
@@ -14,10 +16,25 @@ import {
   connectAuthEmulator,
 } from 'firebase/auth';
 import type { Auth, User } from 'firebase/auth';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+
+import {
+  getStorage,
+  connectStorageEmulator,
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
 import type { FirebaseStorage } from 'firebase/storage';
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
+
+import {
+  getFunctions,
+  httpsCallable,
+  connectFunctionsEmulator,
+} from 'firebase/functions';
 import type { Functions } from 'firebase/functions';
+
 import {
   getFirestore,
   connectFirestoreEmulator,
@@ -48,6 +65,7 @@ import {
   documentId,
   Timestamp,
 } from 'firebase/firestore';
+
 import type {
   Firestore,
   DocumentData,
@@ -57,7 +75,13 @@ import type {
   QueryDocumentSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
-import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
+} from 'firebase/messaging';
 import type { Messaging } from 'firebase/messaging';
 
 type BinFirebaseConfig = {
@@ -70,29 +94,68 @@ type BinFirebaseConfig = {
 };
 
 const readRequiredEnv = (name: string): string => {
-  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
-  const value = metaEnv?.[name] ?? (typeof process !== 'undefined' ? process.env?.[name] : undefined);
-  if (!value || String(value).includes('REPLACE_ME')) return '';
+  const metaEnv =
+    typeof import.meta !== 'undefined'
+      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      : undefined;
+
+  const processEnv =
+    typeof process !== 'undefined'
+      ? process.env?.[name]
+      : undefined;
+
+  const value = metaEnv?.[name] ?? processEnv;
+
+  if (!value || String(value).includes('REPLACE_ME')) {
+    return '';
+  }
+
   return String(value);
 };
 
 const firebaseConfig: BinFirebaseConfig = {
-  apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
-  authDomain: readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') || 'bin-group-57c60.firebaseapp.com',
-  projectId: readRequiredEnv('VITE_FIREBASE_PROJECT_ID') || 'bin-group-57c60',
-  storageBucket: readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') || 'bin-group-57c60.firebasestorage.app',
-  messagingSenderId: readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || '123413252227',
-  appId: readRequiredEnv('VITE_FIREBASE_APP_ID') || '1:123413252227:web:285cb53bc26626d699f3b6',
+  apiKey:
+    readRequiredEnv('VITE_FIREBASE_API_KEY') ||
+    'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
+  authDomain:
+    readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') ||
+    'bin-group-57c60.firebaseapp.com',
+  projectId:
+    readRequiredEnv('VITE_FIREBASE_PROJECT_ID') ||
+    'bin-group-57c60',
+  storageBucket:
+    readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') ||
+    'bin-group-57c60.firebasestorage.app',
+  messagingSenderId:
+    readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') ||
+    '123413252227',
+  appId:
+    readRequiredEnv('VITE_FIREBASE_APP_ID') ||
+    '1:123413252227:web:285cb53bc26626d699f3b6',
 };
 
-const _app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const firebaseApp: FirebaseApp =
+  getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const app = _app;
-export const db: Firestore = getFirestore(_app);
-export const auth: Auth = getAuth(_app);
-export const storage: FirebaseStorage = getStorage(_app);
-export const functions: Functions = getFunctions(_app);
-export const messaging: Messaging | null = typeof window !== 'undefined' ? getMessaging(_app) : null;
+const getSafeMessaging = (): Messaging | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return getMessaging(firebaseApp);
+  } catch (error) {
+    console.warn('[Firebase] Messaging unavailable in this environment:', error);
+    return null;
+  }
+};
+
+export const app = firebaseApp;
+export const db: Firestore = getFirestore(firebaseApp);
+export const auth: Auth = getAuth(firebaseApp);
+export const storage: FirebaseStorage = getStorage(firebaseApp);
+export const functions: Functions = getFunctions(firebaseApp);
+export const messaging: Messaging | null = getSafeMessaging();
 
 export {
   onAuthStateChanged,
@@ -144,8 +207,6 @@ export {
   connectStorageEmulator,
   connectFunctionsEmulator,
 };
-
-import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 export type {
   Auth,
