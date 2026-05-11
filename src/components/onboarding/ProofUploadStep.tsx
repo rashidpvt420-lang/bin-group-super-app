@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { 
+import {
     Alert,
-    Box, Typography, Grid, Paper, Button, Stack, Container, Divider, Chip, LinearProgress
+    Box, Typography, Grid, Paper, Button, Stack, Container, Chip, LinearProgress
 } from '@mui/material';
-import { FileText, Upload, CheckCircle2, ArrowRight, ArrowLeft, ScanLine, LockKeyhole, AlertTriangle } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, ArrowRight, ArrowLeft, ScanLine, LockKeyhole } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { useLanguage } from '@bin/shared';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
@@ -18,14 +18,14 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
 
     const requiredDocs = [
         { key: 'propertyProof' as const, label: t('onboarding.doc.title_deed') },
-        { key: 'emiratesId' as const, label: t('onboarding.doc.passport') }, // Reusing keys for simplicity
+        { key: 'emiratesId' as const, label: t('onboarding.doc.emirates_id') },
         { key: 'passport' as const, label: t('onboarding.doc.passport') },
     ];
 
-    const canProceed = proofDocuments.propertyProof && proofDocuments.emiratesId && proofDocuments.passport;
+    const canProceed = Boolean(proofDocuments.propertyProof && proofDocuments.emiratesId && proofDocuments.passport);
     const stagedCount = requiredDocs.filter((doc) => proofDocuments[doc.key]).length;
     const progress = Math.round((stagedCount / requiredDocs.length) * 100);
-    
+
     const titleDeedPreview = useMemo(() => {
         const file = proofDocuments.propertyProof;
         if (!file) return null;
@@ -41,22 +41,22 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         setScannerState('scanning');
         try {
             const analyzeFn = httpsCallable(functions, 'processTitleDeedOCR');
-            const result = await analyzeFn({ fileUrl: 'https://storage.googleapis.com/bin-group-public/sample-title-deed.pdf' });
+            const result = await analyzeFn({ fileUrl: 'manual-title-deed-upload' });
             setOcrData(result.data);
             setScannerState('review');
         } catch (err) {
-            console.error("OCR Analysis failed:", err);
+            console.warn('[ONBOARDING] OCR unavailable; document remains uploaded for admin review.', err);
             setScannerState('error');
         }
     };
 
     return (
-        <Box sx={{ py: 4 }}>
+        <Box sx={{ py: 4 }} dir={isRTL ? 'rtl' : 'ltr'}>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
                     {t('onboarding.documents_title')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 760, mx: 'auto' }}>
                     {t('onboarding.docs_subtitle')}
                 </Typography>
             </Box>
@@ -103,7 +103,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                     {scannerState === 'scanning' ? t('onboarding.scanner_analyzing') : (scannerState === 'error' ? t('onboarding.scanner_retry') : t('onboarding.scanner_analyze_btn'))}
                                 </Button>
                             </Stack>
-                            
+
                             {ocrData && scannerState === 'review' && (
                                 <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198, 167, 94, 0.05)', borderRadius: 2, border: '1px solid rgba(198, 167, 94, 0.2)' }}>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>
@@ -135,13 +135,13 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                             {t('onboarding.docs_max_size')}
                                         </Typography>
                                     </Box>
-                                    <Paper sx={{ 
-                                        p: 3, border: `1px dashed ${file ? '#10b981' : 'rgba(198, 167, 94, 0.3)'}`, 
+                                    <Paper sx={{
+                                        p: 3, border: `1px dashed ${file ? '#10b981' : 'rgba(198, 167, 94, 0.3)'}`,
                                         bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4,
                                         display: 'flex', flexDirection: 'column', gap: 2
                                     }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
+                                            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
                                                 {file ? <CheckCircle2 color="#10b981" /> : <FileText color="rgba(255,255,255,0.2)" />}
                                                 <Typography variant="body2" sx={{ color: file ? '#FFF' : 'rgba(255,255,255,0.3)', wordBreak: 'break-all' }}>
                                                     {file ? `${t('onboarding.docs_ready')}: ${file.name}` : t('onboarding.docs_awaiting')}
@@ -151,13 +151,13 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                                 variant="outlined"
                                                 component="label"
                                                 startIcon={<Upload size={16} />}
-                                                sx={{ borderRadius: 100, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, whiteSpace: 'nowrap', ml: isRTL ? 0 : 2, mr: isRTL ? 2 : 0 }}
+                                                sx={{ borderRadius: 100, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, whiteSpace: 'nowrap' }}
                                             >
                                                 {file ? t('onboarding.docs_change') : t('onboarding.docs_select')}
                                                 <input type="file" accept=".pdf,image/png,image/jpeg" hidden onChange={(e) => {
                                                     const f = e.target.files?.[0];
                                                     if (f) {
-                                                        if (f.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; }
+                                                        if (f.size > 10 * 1024 * 1024) { alert('File size exceeds 10MB limit.'); return; }
                                                         setProofDocument(doc.key, f);
                                                     }
                                                 }} />
@@ -171,7 +171,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                             <Button variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>{t('onboarding.back')}</Button>
                             <Button
-                                variant="contained" size="large" 
+                                variant="contained" size="large"
                                 onClick={onNext} disabled={!canProceed}
                                 endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
                                 sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
