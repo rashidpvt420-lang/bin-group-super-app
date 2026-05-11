@@ -64,7 +64,7 @@ const ADMIN_ROLES = new Set([
     'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'
 ]);
 
-export function AuthProvider({ children, requireAdmin = false }: { children: ReactNode, requireAdmin?: boolean }) {
+export function AuthProvider({ children, requireAdmin = false }: { children: any, requireAdmin?: boolean }) {
     const [role, setRole] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -235,7 +235,7 @@ export function AuthProvider({ children, requireAdmin = false }: { children: Rea
     };
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser: User | null) => {
             if (currentUser) {
                 await syncProfile(currentUser);
             } else {

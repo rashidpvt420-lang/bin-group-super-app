@@ -7,7 +7,7 @@ export interface AIContextType {
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
-export const AIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AIProvider: React.FC<{ children: any }> = ({ children }) => {
     const [pageContext, setPageContext] = useState<any>(null);
 
     return (

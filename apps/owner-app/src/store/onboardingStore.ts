@@ -292,7 +292,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         assetClassId,
         emirate: emirateMap[property.emirate] || 'dubai',
         zone: property.zone || 'B',
-        contractType: property.strategy === 'rent' ? 'PM' : (property.strategy === 'fm' ? 'IFM' : 'AMC'),
+        contractType: property.strategy === 'rent' ? 'PM_ONLY' : (property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
         sqft: property.sqft,
         units: property.units,
         annualRent: property.annualRent,
