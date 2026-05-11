@@ -4,7 +4,7 @@ import {
     CircularProgress, InputAdornment, IconButton, Paper, Grid, Container
 } from '@mui/material';
 import { Visibility, VisibilityOff, ArrowBack, ArrowForward, Lock, Mail, Phone, Person, Login, Info } from '@mui/icons-material';
-import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
+import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, doc, serverTimestamp, setDoc, collection, query, where, getDocs } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -31,6 +31,46 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<{ message: string; type: 'error' | 'warning' | 'info'; action?: 'signin' } | null>(null);
     const [success, setSuccess] = useState(false);
+
+    const writeOwnerProfile = async (user: any, fullName: string, email: string, mobile: string) => {
+        console.log("📝 [ONBOARDING] Writing/Merging owner profile...");
+        // 4. LOCK THE FIRESTORE PROFILE (PENDING_APPROVAL)
+        await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            email: email.toLowerCase(),
+            displayName: fullName,
+            phone: mobile,
+            role: 'owner',
+            status: 'pending_admin_approval',
+            dashboardLocked: true,
+            adminApproved: false,
+            paymentVerified: false,
+            onboardingSubmissionId: intakeId || 'legacy',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // 5. Link Intake Submission
+        if (intakeId) {
+            await setDoc(doc(db, 'intake_submissions', intakeId), {
+                ownerUid: user.uid,
+                ownerEmail: email,
+                accountCreated: true,
+                accountCreatedAt: serverTimestamp()
+            }, { merge: true });
+        }
+
+        // 6. Update Local Store
+        setOwnerAccount({ 
+            uid: user.uid, 
+            fullName: fullName, 
+            email: email, 
+            mobile: mobile 
+        });
+        
+        setSuccess(true);
+        setTimeout(() => onNext(), 2000);
+    };
 
     const handleSignup = async () => {
         setError(null);
@@ -69,57 +109,28 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 }
             }
 
-            // 3. Create the Authentication Record
-            console.log("🛡️ [ONBOARDING] Creating Firebase Auth record...");
+            // 3. Create or Sign In to the Authentication Record
+            console.log("🛡️ [ONBOARDING] Attempting Auth record creation...");
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, formData.password);
-                const user = userCredential.user;
-
-                // 4. LOCK THE FIRESTORE PROFILE (PENDING_APPROVAL)
-                await setDoc(doc(db, 'users', user.uid), {
-                    uid: user.uid,
-                    email: user.email?.toLowerCase(),
-                    displayName: formData.fullName,
-                    phone: formData.mobile,
-                    role: 'owner',
-                    status: 'pending_admin_approval',
-                    dashboardLocked: true,
-                    adminApproved: false,
-                    paymentVerified: false,
-                    onboardingSubmissionId: intakeId || 'legacy',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-
-                // 5. Link Intake Submission
-                if (intakeId) {
-                    await setDoc(doc(db, 'intake_submissions', intakeId), {
-                        ownerUid: user.uid,
-                        ownerEmail: email,
-                        accountCreated: true,
-                        accountCreatedAt: serverTimestamp()
-                    }, { merge: true });
-                }
-
-                // 6. Update Local Store
-                setOwnerAccount({ 
-                    uid: user.uid, 
-                    fullName: formData.fullName, 
-                    email: email, 
-                    mobile: formData.mobile 
-                });
-                
-                setSuccess(true);
-                setTimeout(() => onNext(), 2000);
-
+                await writeOwnerProfile(userCredential.user, formData.fullName, email, formData.mobile);
             } catch (authErr: any) {
-                // 7. Handle Provider Collisions
+                // 7. Handle Provider Collisions / Existing Accounts
                 if (authErr.code === 'auth/email-already-in-use') {
-                    const methods = await fetchSignInMethodsForEmail(auth, email);
-                    if (methods.includes('google.com') && !methods.includes('password')) {
-                        setError({ message: t('onboarding.error.google_only'), type: 'info' });
-                    } else {
-                        setError({ message: t('onboarding.error.email_exists'), type: 'warning', action: 'signin' });
+                    console.log("🔄 [ONBOARDING] Email already exists. Attempting sign-in fallback...");
+                    try {
+                        const signinCred = await signInWithEmailAndPassword(auth, email, formData.password);
+                        console.log("✅ [ONBOARDING] Sign-in successful. Merging profile...");
+                        await writeOwnerProfile(signinCred.user, formData.fullName, email, formData.mobile);
+                    } catch (signinErr: any) {
+                        console.error("❌ [ONBOARDING] Sign-in fallback failed:", signinErr);
+                        const methods = await fetchSignInMethodsForEmail(auth, email);
+                        if (methods.includes('google.com') && !methods.includes('password')) {
+                            setError({ message: t('onboarding.error.google_only'), type: 'info' });
+                        } else {
+                            // If sign-in failed, it's probably a wrong password for the existing email
+                            setError({ message: t('onboarding.error.email_exists'), type: 'warning', action: 'signin' });
+                        }
                     }
                 } else {
                     throw authErr;
