@@ -31,7 +31,6 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == technicianId;
     }
 
-    // Helper for data ownership
     function owns(data) {
       return isOwner(data.ownerId) || isOwner(data.userId) || isOwner(data.createdBy);
     }
@@ -44,12 +43,20 @@ service cloud.firestore {
       return isTechnician(data.assignedTechnicianId) || isTechnician(data.technicianId);
     }
 
+    function isSafeOwnerSignupProfile(userId) {
+      return signedIn() && request.auth.uid == userId &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.email == request.auth.token.email.lower() &&
+        request.resource.data.role == 'owner';
+    }
+
     // ─── Core Collections ─────────────────────────────────────────────────────
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin() || hasPermission('canViewAuditLogs') || hasPermission('canManageStaff');
-      allow create: if signedIn() && isOwner(userId) &&
-        request.resource.data.role in ['tenant', 'owner', 'broker', 'technician'];
+      allow create: if (
+        signedIn() && isOwner(userId) && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician']
+      );
       allow update: if isAdmin() || hasPermission('canManageStaff') || (
         isOwner(userId) &&
         request.resource.data.role == resource.data.role &&
@@ -58,10 +65,31 @@ service cloud.firestore {
           'displayName','name','phone','mobile','photoURL','language',
           'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
           'gpsConsent','onboardingComplete','fcmTokens',
-          'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt'
+          'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
+          'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId'
         ])
       );
       allow delete: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /intake_submissions/{intakeId} {
+      allow read: if isAdmin() || (
+        signedIn() && (
+          resource.data.ownerUid == request.auth.uid ||
+          resource.data.ownerEmail == request.auth.token.email
+        )
+      );
+      allow create: if signedIn() &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.ownerEmail == request.auth.token.email;
+      allow update: if isAdmin() || (
+        signedIn() &&
+        (resource.data.ownerUid == request.auth.uid || resource.data.ownerEmail == request.auth.token.email) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ownerUid', 'ownerEmail', 'accountCreated', 'accountCreatedAt', 'updatedAt'
+        ])
+      );
+      allow delete: if isAdmin();
     }
 
     match /staffAccess/{accessId} {
@@ -94,11 +122,8 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin() || hasPermission('canManageTechnicians');
     }
 
-    // ─── Maintenance Tickets + Chat Messages (Phase 9B) ──────────────────────
-
-    // ─── Phase 9: Company Profile ─────────────────────────────────────────────
     match /settings/companyProfile {
-      allow read: if true; // Public access
+      allow read: if true;
       allow write: if isAdmin() || hasPermission('canManageCompanyProfile');
     }
 
@@ -106,25 +131,21 @@ service cloud.firestore {
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || (signedIn() && tenantOwns(request.resource.data));
       allow read: if isAdmin() || owns(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) || hasPermission('canDispatchJobs');
       allow update: if isAdmin() || hasPermission('canDispatchJobs') ||
-        // Tenant: approve/reject completion only
         (tenantOwns(resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'rating', 'feedback', 'tenantApproved',
             'rejectionReason', 'closedAt', 'updatedAt'
           ])) ||
-        // Owner: cost approval
         (owns(resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'approvedAt', 'estimatedCostApproved', 'updatedAt'
           ])) ||
-        // Technician: job execution updates
         (techOwns(resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'techNotes', 'technicianNotes', 'materialsUsed',
             'actualCost', 'completedAt', 'beforePhotoUrl', 'afterPhotoUrl',
             'signatureUrl', 'notes', 'tenantApprovalRequired', 'updatedAt'
           ])) ||
-        // Technician: Claim unassigned ticket (Institutional Self-Assignment)
         (userDoc().role == 'technician' && 
           (!('assignedTechnicianId' in resource.data) || resource.data.assignedTechnicianId == null || resource.data.assignedTechnicianId == "") &&
           resource.data.status in ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment'] &&
@@ -134,7 +155,6 @@ service cloud.firestore {
           ]));
       allow delete: if isAdmin();
 
-      // ── Phase 9B: Chat Messages subcollection ──────────────────────────────
       match /messages/{messageId} {
         allow read: if isAdmin() ||
           tenantOwns(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data) ||
@@ -167,8 +187,7 @@ service cloud.firestore {
 
     match /brokerReferrals/{referralId} {
       allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.brokerId == request.auth.uid);
+      allow create: if isAdmin() || (signedIn() && request.resource.data.brokerId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -214,7 +233,12 @@ service cloud.firestore {
           resource.data.createdBy == request.auth.uid
         )
       );
-      allow create: if signedIn();
+      allow create: if signedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.resource.data.ownerEmail == request.auth.token.email ||
+        request.resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
       allow update: if isAdmin() || hasPermission('canManageContracts') || (
         signedIn() && resource.data.ownerId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt'])
