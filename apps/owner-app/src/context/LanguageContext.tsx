@@ -1174,7 +1174,7 @@ export const LanguageProvider: React.FC<{ children: any }> = ({ children }) => {
                     direction: isRTL ? 'rtl' : 'ltr'
                 }}
             >
-                {children}
+                {children as any}
             </Box>
         </LanguageContext.Provider>
     );

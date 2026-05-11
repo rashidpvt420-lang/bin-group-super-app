@@ -160,7 +160,7 @@ const PaperWithLabel: React.FC<{ label: string, icon: any, children: any }> = ({
         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             {icon} {String(label)}
         </Typography>
-        <Stack spacing={2}>{children}</Stack>
+        <Stack spacing={2}>{children as any}</Stack>
     </Box>
 );
 
