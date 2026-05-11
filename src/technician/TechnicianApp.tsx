@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Avatar } from '@mui/material';
-import { ArrowLeft, Home, Bell, Globe, Wrench, ChevronRight } from 'lucide-react';
+import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Avatar, Badge, Tooltip } from '@mui/material';
+import { ArrowLeft, Home, Bell, Globe, Wrench, ChevronRight, LogOut, Briefcase, UserCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { auth, signOut, db, collection, query, where, onSnapshot } from '../lib/firebase';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -19,8 +20,25 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
     const { user } = useRole();
     const { toggleLanguage, isRTL, language, t } = useLanguage();
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const q = query(
+            collection(db, 'notifications'),
+            where('recipientId', '==', user.uid),
+            where('read', '==', false)
+        );
+        const unsub = onSnapshot(q, (snap) => setUnreadCount(snap.size), () => setUnreadCount(0));
+        return () => unsub();
+    }, [user?.uid]);
+
+    const handleLogout = async () => {
+        await signOut(auth);
+        navigate('/login', { replace: true });
+    };
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -34,7 +52,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 }} 
                 elevation={0}
             >
-                <Toolbar sx={{ justifyContent: 'space-between', px: 0 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: 0, gap: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         {location.pathname !== '/technician' && location.pathname !== '/technician/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: '#FFF' }}>
@@ -54,21 +72,43 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 fontSize: { xs: '0.9rem', md: '1.25rem' }
                             }}
                         >
-                            <Wrench size={20} /> {t('dash.terminal.technician') || 'FIELD SOVEREIGN'}
+                            <Wrench size={20} /> {t('dash.terminal.technician') || 'TECHNICIAN'}
                         </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                        <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, px: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1.5 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Tooltip title="Dashboard">
+                            <IconButton onClick={() => navigate('/technician/dashboard')} sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                                <Home size={19} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Jobs">
+                            <IconButton onClick={() => navigate('/technician/jobs')} sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                                <Briefcase size={19} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Notifications">
+                            <IconButton onClick={() => navigate('/notifications')} sx={{ color: binThemeTokens.gold }}>
+                                <Badge badgeContent={unreadCount} color="error" max={99}>
+                                    <Bell size={20} />
+                                </Badge>
+                            </IconButton>
+                        </Tooltip>
+                        <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, px: { xs: 1, md: 2 } }}>
                             <Globe size={18} />
-                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 900 }}>
+                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 900, display: { xs: 'none', sm: 'block' } }}>
                                 {language === 'en' ? 'العربية' : 'ENGLISH'}
                             </Typography>
                         </IconButton>
-                        
-                        <IconButton onClick={() => navigate('/technician/profile')} sx={{ color: 'rgba(255,255,255,0.4)' }}>
-                            <Bell size={20} />
-                        </IconButton>
-
+                        <Tooltip title="Profile">
+                            <IconButton onClick={() => navigate('/technician/profile')} sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                                <UserCircle size={20} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Logout">
+                            <IconButton onClick={handleLogout} sx={{ color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', bgcolor: 'rgba(239,68,68,0.05)' }}>
+                                <LogOut size={18} />
+                            </IconButton>
+                        </Tooltip>
                         <Avatar 
                             sx={{ 
                                 width: 36, 
