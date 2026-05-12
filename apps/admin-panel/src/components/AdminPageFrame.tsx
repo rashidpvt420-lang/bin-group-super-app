@@ -25,11 +25,39 @@ interface AdminPageFrameProps {
     isEmpty?: boolean;
     emptyMessage?: string;
     status?: string;
-    lastUpdated?: any;
+    lastUpdated?: unknown;
     onRefresh?: () => void;
     permissionDenied?: boolean;
     breadcrumbs?: { label: string; path?: string }[];
 }
+
+const formatLastUpdated = (value: unknown): string => {
+    if (!value) return '';
+
+    try {
+        const maybeTimestamp = value as { toDate?: () => Date };
+        if (typeof maybeTimestamp.toDate === 'function') {
+            return maybeTimestamp.toDate().toLocaleTimeString();
+        }
+
+        if (value instanceof Date) {
+            return value.toLocaleTimeString();
+        }
+
+        if (typeof value === 'number' || typeof value === 'string') {
+            const date = new Date(value);
+            if (!Number.isNaN(date.getTime())) {
+                return date.toLocaleTimeString();
+            }
+            return String(value);
+        }
+
+        return JSON.stringify(value);
+    } catch (err) {
+        console.warn('[ADMIN_PAGE_FRAME] Failed to format lastUpdated value', err);
+        return 'recent';
+    }
+};
 
 export default function AdminPageFrame({
     title,
@@ -47,6 +75,7 @@ export default function AdminPageFrame({
 }: AdminPageFrameProps) {
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
+    const lastUpdatedLabel = formatLastUpdated(lastUpdated);
 
     const handleBack = () => {
         if (window.history.length > 1) {
@@ -111,7 +140,7 @@ export default function AdminPageFrame({
                                     }
                                 }}
                             >
-                                {bc.label.toUpperCase()}
+                                {String(bc.label || '').toUpperCase()}
                             </Link>
                         ))}
                     </Breadcrumbs>
@@ -121,11 +150,11 @@ export default function AdminPageFrame({
                     <Box>
                         <Stack direction="row" spacing={2} alignItems="center">
                             <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>
-                                {title.toUpperCase()}
+                                {String(title || '').toUpperCase()}
                             </Typography>
                             {status && (
                                 <Chip 
-                                    label={status.toUpperCase()} 
+                                    label={String(status).toUpperCase()} 
                                     size="small" 
                                     sx={{ 
                                         bgcolor: alpha(binThemeTokens.gold, 0.1), 
@@ -138,17 +167,17 @@ export default function AdminPageFrame({
                         </Stack>
                         {subtitle && (
                             <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600, mt: 0.5 }}>
-                                {subtitle}
+                                {String(subtitle)}
                             </Typography>
                         )}
                     </Box>
 
                     <Stack direction="row" spacing={2} alignItems="center">
-                        {lastUpdated && (
+                        {lastUpdatedLabel && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'rgba(255,255,255,0.3)' }}>
                                 <Clock size={14} />
                                 <Typography variant="caption" fontWeight="700">
-                                    SYNCED: {lastUpdated.toDate ? lastUpdated.toDate().toLocaleTimeString() : lastUpdated}
+                                    SYNCED: {lastUpdatedLabel}
                                 </Typography>
                             </Box>
                         )}
