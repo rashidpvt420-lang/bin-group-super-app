@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Camera, X, MapPin, AlertCircle, ChevronLeft, Info } from 'lucide-react';
-import { db, collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc } from '../../lib/firebase';
+import { db, storage, collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTicketCreated, notifyEmergency } from '../../services/notificationService';
@@ -20,6 +20,7 @@ export default function TenantRequestPage() {
     const [description, setDescription] = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [uploadingPhotos, setUploadingPhotos] = useState(false);
     
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<any>(null);
@@ -68,6 +69,34 @@ export default function TenantRequestPage() {
         setPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
+    const uploadPhotosToStorage = async (): Promise<string[]> => {
+        if (photos.length === 0) return [];
+
+        const photoUrls: string[] = [];
+        const timestamp = Date.now();
+
+        try {
+            for (let i = 0; i < photos.length; i++) {
+                const file = photos[i];
+                const fileName = `${timestamp}_${file.name}`;
+                const storagePath = `maintenanceTickets/${user?.uid}/${fileName}`;
+                const fileRef = ref(storage, storagePath);
+
+                // Upload file to Firebase Storage
+                await uploadBytes(fileRef, file);
+
+                // Get download URL
+                const downloadUrl = await getDownloadURL(fileRef);
+                photoUrls.push(downloadUrl);
+            }
+        } catch (err) {
+            console.error("Photo upload failed:", err);
+            throw new Error("Failed to upload photos to Storage");
+        }
+
+        return photoUrls;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !unitData) {
@@ -77,9 +106,10 @@ export default function TenantRequestPage() {
 
         setSubmitting(true);
         try {
-            // In a real app, we would upload to Firebase Storage here and get URLs
-            // For now, we'll store placeholder URLs if photos exist
-            const photoUrls = previews.map((_, i) => `https://via.placeholder.com/600?text=Issue+Photo+${i+1}`);
+            setUploadingPhotos(true);
+            // Upload photos to Firebase Storage and get URLs
+            const photoUrls = await uploadPhotosToStorage();
+            setUploadingPhotos(false);
 
             const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
                 tenantId: user.uid,
@@ -88,6 +118,8 @@ export default function TenantRequestPage() {
                 tenantPhone: user.phoneNumber || '',
                 propertyId: unitData.propertyId || '',
                 propertyName: propertyData?.name || propertyData?.propertyName || 'BIN TEST TOWER',
+                ownerId: propertyData?.ownerId || '',
+                ownerEmail: propertyData?.ownerEmail || '',
                 unitId: unitData.id,
                 unitNumber: unitData.unitNumber || '',
                 floor: unitData.floorNumber || '',
@@ -96,7 +128,10 @@ export default function TenantRequestPage() {
                 description,
                 specificLocation,
                 photos: photoUrls,
+                photoEvidenceRequired: true,
+                source: 'TENANT_PORTAL',
                 status: 'OPEN',
+                technicianId: null,
                 assignedTechnicianId: null,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -116,9 +151,10 @@ export default function TenantRequestPage() {
             navigate('/tenant/tickets');
         } catch (err) {
             console.error("Submit failed", err);
-            alert("Failed to submit request");
+            alert("Failed to submit request: " + (err instanceof Error ? err.message : String(err)));
         } finally {
             setSubmitting(false);
+            setUploadingPhotos(false);
         }
     };
 
@@ -188,8 +224,14 @@ export default function TenantRequestPage() {
                         {/* Photo Upload Section */}
                         <Box>
                             <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Camera size={18} /> ATTACH PHOTOS
+                                <Camera size={18} /> ATTACH PHOTOS (Firebase Storage)
                             </Typography>
+                            {uploadingPhotos && (
+                                <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <CircularProgress size={20} sx={{ color: binThemeTokens.gold }} />
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to Storage...</Typography>
+                                </Box>
+                            )}
                             <Grid container spacing={2}>
                                 {previews.map((src, i) => (
                                     <Grid item xs={4} md={3} key={i}>
@@ -205,7 +247,7 @@ export default function TenantRequestPage() {
                                         </Box>
                                     </Grid>
                                 ))}
-                                {previews.length < 5 && (
+                                {previews.length < 5 && !uploadingPhotos && (
                                     <Grid item xs={4} md={3}>
                                         <Button
                                             component="label"
@@ -248,7 +290,7 @@ export default function TenantRequestPage() {
                             type="submit" 
                             variant="contained" 
                             size="large" 
-                            disabled={submitting} 
+                            disabled={submitting || uploadingPhotos} 
                             sx={{ 
                                 bgcolor: binThemeTokens.gold, 
                                 color: '#000', 
@@ -260,7 +302,7 @@ export default function TenantRequestPage() {
                                 '&:hover': { bgcolor: '#b4954e' }
                             }}
                         >
-                            {submitting ? <CircularProgress size={24} color="inherit" /> : 'DISPATCH REQUEST'}
+                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : 'DISPATCH REQUEST'}
                         </Button>
                     </Stack>
                 </form>
