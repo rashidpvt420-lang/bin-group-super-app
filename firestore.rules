@@ -59,14 +59,17 @@ service cloud.firestore {
         (
           (resource.data.role == 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt', 
-            'dutyStartedAt', 'dutyEndedAt', 'lastLocation', 'lastSeenAt', 'updatedAt'
+            'dutyStartedAt', 'dutyEndedAt', 'lastLocation', 'lastSeenAt', 'updatedAt',
+            'status', 'dashboardUnlocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId',
+            'dashboardLocked', 'activeContractId', 'latestIntakeId'
           ])) ||
           (resource.data.role != 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'displayName','name','phone','mobile','photoURL','language',
             'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
             'gpsConsent','onboardingComplete','fcmTokens',
             'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
-            'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId'
+            'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId',
+            'dashboardUnlocked', 'activeContractId', 'latestIntakeId', 'approvedAt', 'approvedBy'
           ]))
         )
       );
@@ -145,7 +148,9 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'techNotes', 'technicianNotes', 'materialsUsed',
             'actualCost', 'completedAt', 'beforePhotoUrl', 'afterPhotoUrl',
-            'signatureUrl', 'notes', 'tenantApprovalRequired', 'updatedAt'
+            'signatureUrl', 'notes', 'tenantApprovalRequired', 'updatedAt',
+            'startedAt', 'arrivedAt', 'onTheWayAt', 'waitingPartsAt', 'escalatedAt',
+            'beforePhotos', 'afterPhotos', 'evidencePhotos', 'proofPhotos', 'completionPhotos'
           ])) ||
         (userDoc().role == 'technician' && 
           (!('assignedTechnicianId' in resource.data) || resource.data.assignedTechnicianId == null || resource.data.assignedTechnicianId == "") &&
