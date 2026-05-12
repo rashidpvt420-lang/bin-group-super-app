@@ -8,10 +8,10 @@ import {
 import { 
     Building2, FileText, DollarSign, Users, TrendingUp, 
     CreditCard, Wrench, Shield, ChevronRight, ArrowUpRight,
-    CheckCircle2, Activity, Plus, Sparkles
+    CheckCircle2, Activity, Plus, Sparkles, Clock, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, onSnapshot, doc, getDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -34,6 +34,7 @@ export default function OwnerDashboardPage() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [dashboardState, setDashboardState] = useState<'locked' | 'pending' | 'active'>('locked');
     const [stats, setStats] = useState({
         properties: 0,
         units: 0,
@@ -54,110 +55,153 @@ export default function OwnerDashboardPage() {
             return;
         }
 
-        const email = user.email?.toLowerCase() || '';
-        const propQ = email
-            ? query(collection(db, 'properties'), where('ownerEmail', '==', email))
-            : query(collection(db, 'properties'), where('ownerId', '==', user.uid));
-
-        const unsubscribe = onSnapshot(propQ, async (snap) => {
+        const checkDashboardState = async () => {
             try {
-                setLoadError('');
-                const props: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                setProperties(props);
-
-                let unitCount = 0;
-                let tenantCount = 0;
-                let rent = 0;
-                let maint = 0;
-                let unitsMissingDetails = false;
-
-                const passportQ = email
-                    ? query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email))
-                    : query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid));
-                const passportSnap = await getDocs(passportQ);
-                passportSnap.docs.forEach(d => {
-                    const data = d.data();
-                    unitCount += Number(data.totalUnits || data.units || 0);
-                    tenantCount += Number(data.occupiedUnits || data.activeTenants || 0);
-                    rent += Number(data.rentCollectedTotal || 0);
-                    maint += Number(data.maintenanceCostTotal || 0);
-                    if (!Array.isArray(data.rentPerUnitTable) || data.rentPerUnitTable.length === 0) unitsMissingDetails = true;
-                });
-
-                const contractQ = email
-                    ? query(collection(db, 'contracts'), where('ownerEmail', '==', email))
-                    : query(collection(db, 'contracts'), where('ownerId', '==', user.uid));
-                const contractSnap = await getDocs(contractQ);
-                let scope = '';
-                if (!contractSnap.empty) {
-                    const contract = contractSnap.docs[0].data();
-                    scope = String(contract.managementScope || contract.contractType || contract.planType || '').toUpperCase();
-                    setContractScope(scope);
+                // Check owners collection first
+                const ownerRef = doc(db, 'owners', user.uid!);
+                const ownerSnap = await getDoc(ownerRef);
+                
+                if (ownerSnap.exists()) {
+                    const ownerData = ownerSnap.data();
+                    if (ownerData.dashboardUnlocked === true && ownerData.status === 'ACTIVE') {
+                        setDashboardState('active');
+                    } else {
+                        setDashboardState('pending');
+                        setLoading(false);
+                        return; // Stop loading data, just show pending panel
+                    }
                 } else {
-                    setContractScope('');
-                }
-
-                const bankQ = email
-                    ? query(collection(db, 'ownerBankAccounts'), where('ownerEmail', '==', email))
-                    : query(collection(db, 'ownerBankAccounts'), where('ownerId', '==', user.uid));
-                const bankSnap = await getDocs(bankQ);
-                setMissingInfo({ iban: bankSnap.empty, units: unitsMissingDetails });
-
-                // SAFE FETCHING: Instead of "in" query which is limited and unsafe for large portfolios,
-                // we query tickets by ownerEmail or ownerId if available, or fetch per property safely.
-                let openTicketCount = 0;
-                try {
-                    const ticketQ = email 
-                        ? query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email))
-                        : query(collection(db, 'maintenanceTickets'), where('ownerId', '==', user.uid));
+                    // Fallback: check users collection
+                    const userRef = doc(db, 'users', user.uid!);
+                    const userSnap = await getDoc(userRef);
                     
-                    const ticketSnap = await getDocs(ticketQ);
-                    if (!ticketSnap.empty) {
-                        openTicketCount = ticketSnap.docs.filter(docSnap => 
-                            ACTIVE_TICKET_STATUSES.includes(String(docSnap.data().status || '').toUpperCase())
-                        ).length;
-                    } else if (props.length > 0) {
-                        // Fallback: fetch for first few properties to avoid heavy load
-                        for (const prop of props.slice(0, 5)) {
-                            const pTicketQ = query(collection(db, 'maintenanceTickets'), where('propertyId', '==', prop.id));
-                            const pTicketSnap = await getDocs(pTicketQ);
-                            openTicketCount += pTicketSnap.docs.filter(docSnap => 
+                    if (userSnap.exists()) {
+                        const userData = userSnap.data();
+                        if (userData.dashboardUnlocked === true && userData.status === 'ACTIVE') {
+                            setDashboardState('active');
+                        } else {
+                            setDashboardState('pending');
+                            setLoading(false);
+                            return;
+                        }
+                    } else {
+                        setDashboardState('locked');
+                        setLoading(false);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('[OwnerDashboard] Error checking dashboard state:', err);
+                setDashboardState('locked');
+                setLoading(false);
+                return;
+            }
+
+            // If we get here, dashboard is active - load properties
+            const email = user.email?.toLowerCase() || '';
+            const propQ = email
+                ? query(collection(db, 'properties'), where('ownerEmail', '==', email))
+                : query(collection(db, 'properties'), where('ownerId', '==', user.uid));
+
+            const unsubscribe = onSnapshot(propQ, async (snap) => {
+                try {
+                    setLoadError('');
+                    const props: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setProperties(props);
+
+                    let unitCount = 0;
+                    let tenantCount = 0;
+                    let rent = 0;
+                    let maint = 0;
+                    let unitsMissingDetails = false;
+
+                    const passportQ = email
+                        ? query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email))
+                        : query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid));
+                    const passportSnap = await getDocs(passportQ);
+                    passportSnap.docs.forEach(d => {
+                        const data = d.data();
+                        unitCount += Number(data.totalUnits || data.units || 0);
+                        tenantCount += Number(data.occupiedUnits || data.activeTenants || 0);
+                        rent += Number(data.rentCollectedTotal || 0);
+                        maint += Number(data.maintenanceCostTotal || 0);
+                        if (!Array.isArray(data.rentPerUnitTable) || data.rentPerUnitTable.length === 0) unitsMissingDetails = true;
+                    });
+
+                    const contractQ = email
+                        ? query(collection(db, 'contracts'), where('ownerEmail', '==', email))
+                        : query(collection(db, 'contracts'), where('ownerId', '==', user.uid));
+                    const contractSnap = await getDocs(contractQ);
+                    let scope = '';
+                    if (!contractSnap.empty) {
+                        const contract = contractSnap.docs[0].data();
+                        scope = String(contract.managementScope || contract.contractType || contract.planType || '').toUpperCase();
+                        setContractScope(scope);
+                    } else {
+                        setContractScope('');
+                    }
+
+                    const bankQ = email
+                        ? query(collection(db, 'ownerBankAccounts'), where('ownerEmail', '==', email))
+                        : query(collection(db, 'ownerBankAccounts'), where('ownerId', '==', user.uid));
+                    const bankSnap = await getDocs(bankQ);
+                    setMissingInfo({ iban: bankSnap.empty, units: unitsMissingDetails });
+
+                    let openTicketCount = 0;
+                    try {
+                        const ticketQ = email 
+                            ? query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email))
+                            : query(collection(db, 'maintenanceTickets'), where('ownerId', '==', user.uid));
+                        
+                        const ticketSnap = await getDocs(ticketQ);
+                        if (!ticketSnap.empty) {
+                            openTicketCount = ticketSnap.docs.filter(docSnap => 
                                 ACTIVE_TICKET_STATUSES.includes(String(docSnap.data().status || '').toUpperCase())
                             ).length;
+                        } else if (props.length > 0) {
+                            for (const prop of props.slice(0, 5)) {
+                                const pTicketQ = query(collection(db, 'maintenanceTickets'), where('propertyId', '==', prop.id));
+                                const pTicketSnap = await getDocs(pTicketQ);
+                                openTicketCount += pTicketSnap.docs.filter(docSnap => 
+                                    ACTIVE_TICKET_STATUSES.includes(String(docSnap.data().status || '').toUpperCase())
+                                ).length;
+                            }
                         }
+                    } catch (ticketErr) {
+                        console.warn("Could not fetch tickets by owner, skipping count.");
                     }
-                } catch (ticketErr) {
-                    console.warn("Could not fetch tickets by owner, skipping count.");
+
+                    const fallbackUnits = props.reduce((acc, p) => acc + Number(p.unitsCount || p.numberOfUnits || p.units || 0), 0);
+                    setStats({
+                        properties: props.length,
+                        units: unitCount || fallbackUnits,
+                        tenants: tenantCount,
+                        tickets: openTicketCount,
+                        rentCollected: rent,
+                        payoutsPending: rent * 0.92,
+                        maintenanceCost: maint
+                    });
+                    setLoading(false);
+                } catch (error: any) {
+                    console.error('[OwnerDashboard] Portfolio load failed:', error);
+                    setLoadError(error?.message || 'Portfolio data could not be loaded.');
+                    setLoading(false);
                 }
-
-                const fallbackUnits = props.reduce((acc, p) => acc + Number(p.unitsCount || p.numberOfUnits || p.units || 0), 0);
-                setStats({
-                    properties: props.length,
-                    units: unitCount || fallbackUnits,
-                    tenants: tenantCount,
-                    tickets: openTicketCount,
-                    rentCollected: rent,
-                    payoutsPending: rent * 0.92,
-                    maintenanceCost: maint
-                });
+            }, (error) => {
+                console.error('[OwnerDashboard] Property listener failed:', error);
+                setLoadError(error?.message || 'Property listener failed.');
                 setLoading(false);
-            } catch (error: any) {
-                console.error('[OwnerDashboard] Portfolio load failed:', error);
-                setLoadError(error?.message || 'Portfolio data could not be loaded.');
-                setLoading(false);
-            }
-        }, (error) => {
-            console.error('[OwnerDashboard] Property listener failed:', error);
-            setLoadError(error?.message || 'Property listener failed.');
-            setLoading(false);
-        });
+            });
 
-        return () => unsubscribe();
+            return () => unsubscribe();
+        };
+
+        checkDashboardState();
     }, [user?.email, user?.uid]);
 
     const KPI_CARDS = [
-        { label: t('dash.kpi.total_revenue') || 'Total Revenue', value: `AED ${stats.rentCollected.toLocaleString()}`, icon: <DollarSign size={20} />, color: '#10b981', sub: t('dash.kpi.gross_rent') || 'Gross Rent Collected' },
-        { label: t('dash.kpi.net_payout') || 'Net Payout', value: `AED ${stats.payoutsPending.toLocaleString()}`, icon: <CreditCard size={20} />, color: binThemeTokens.gold, sub: t('status.pending') || 'Pending Verification' },
+        { label: t('dash.kpi.total_revenue') || 'Total Revenue', value: `AED ${stats.rentCollected.toLocaleString()}`, icon: <DollarSign size={20} />, color: '#10b981', sub: t('dash.kpi.gross_rent') || 'Gross Rent' },
+        { label: t('dash.kpi.net_payout') || 'Net Payout', value: `AED ${stats.payoutsPending.toLocaleString()}`, icon: <CreditCard size={20} />, color: binThemeTokens.gold, sub: t('status.pending') || 'Pending Settlement' },
         { label: t('dash.kpi.portfolio') || 'Asset Portfolio', value: stats.properties, icon: <Building2 size={20} />, color: '#3b82f6', sub: `${stats.units} ${t('field.units') || 'Units'}` },
         { label: t('dash.kpi.ops_load') || 'Operational Load', value: stats.tickets, icon: <Wrench size={20} />, color: '#ef4444', sub: t('dash.kpi.open_tasks') || 'Open Maintenance Tasks' },
     ];
@@ -178,6 +222,67 @@ export default function OwnerDashboardPage() {
         </Box>
     );
 
+    // Show pending activation panel
+    if (dashboardState === 'pending') {
+        return (
+            <Box sx={{ height: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, pb: 6 }}>
+                <Paper sx={{ p: 6, textAlign: 'center', maxWidth: 500, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                    <Clock size={64} color={binThemeTokens.gold} style={{ margin: '0 auto 24px' }} />
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+                        {t('dash.onboarding_submitted') || 'Onboarding Submitted'}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3, lineHeight: 1.6 }}>
+                        {t('dash.onboarding_pending_desc') || 'Your onboarding is submitted. Admin is verifying documents, payment, and contract activation. This typically takes 1-3 business days.'}
+                    </Typography>
+                    <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold, textAlign: 'left' }}>
+                        <Typography variant="caption" fontWeight="900" sx={{ display: 'block', mb: 1 }}>WHAT HAPPENS NEXT:</Typography>
+                        <Typography variant="caption" component="div" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                            ✓ Admin reviews your property documents and KYC
+                        </Typography>
+                        <Typography variant="caption" component="div" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                            ✓ Payment verification and settlement
+                        </Typography>
+                        <Typography variant="caption" component="div" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                            ✓ Contract activation and dashboard unlock
+                        </Typography>
+                    </Alert>
+                    <Button 
+                        variant="outlined" 
+                        sx={{ mt: 4, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900, px: 4 }}
+                        onClick={() => navigate('/owner/onboarding-status')}
+                    >
+                        {t('dash.check_status') || 'Check Status'}
+                    </Button>
+                </Paper>
+            </Box>
+        );
+    }
+
+    // Show locked state
+    if (dashboardState === 'locked') {
+        return (
+            <Box sx={{ height: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, pb: 6 }}>
+                <Paper sx={{ p: 6, textAlign: 'center', maxWidth: 500, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                    <Lock size={64} color="#ef4444" style={{ margin: '0 auto 24px' }} />
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+                        {t('dash.dashboard_locked') || 'Dashboard Locked'}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>
+                        {t('dash.dashboard_locked_desc') || 'Your dashboard will unlock after successful onboarding activation.'}
+                    </Typography>
+                    <Button 
+                        variant="contained" 
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4 }}
+                        onClick={() => navigate('/onboarding')}
+                    >
+                        {t('dash.start_onboarding') || 'Start Onboarding'}
+                    </Button>
+                </Paper>
+            </Box>
+        );
+    }
+
+    // Active dashboard state
     const subtotal = stats.rentCollected;
     const vatAmount = subtotal * 0.05;
     const totalWithVat = subtotal + vatAmount;
@@ -196,8 +301,8 @@ export default function OwnerDashboardPage() {
                         <Typography variant="subtitle2" fontWeight="950">{t('dash.action_required') || 'ACTION REQUIRED: PORTAL INCOMPLETE'}</Typography>
                         <Typography variant="caption">{t('dash.missing_info_desc') || 'Your contract scope requires additional information to enable full management features:'}</Typography>
                         <Stack direction="row" spacing={2} flexWrap="wrap">
-                            {missingInfo.iban && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/iban')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.link_iban') || 'Link IBAN'}</Button>}
-                            {missingInfo.units && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/units')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.setup_units') || 'Setup Unit Rent Table'}</Button>}
+                            {missingInfo.iban && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/iban')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.setup_iban') || 'Setup IBAN'}</Button>}
+                            {missingInfo.units && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/units')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.add_units') || 'Add Units'}</Button>}
                         </Stack>
                     </Stack>
                 </Alert>
@@ -233,13 +338,13 @@ export default function OwnerDashboardPage() {
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {KPI_CARDS.map((kpi, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: `1px solid ${alpha(kpi.color, 0.2)}`, borderRadius: 6, position: 'relative', overflow: 'hidden', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-4px)', borderColor: kpi.color } }}>
+                        <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: `1px solid ${alpha(kpi.color, 0.2)}`, borderRadius: 6, position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
                                 <ArrowUpRight size={16} color="rgba(255,255,255,0.2)" />
                             </Box>
                             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 0.5, textAlign: isRTL ? 'right' : 'left' }}>{kpi.value}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>{String(kpi.label).toUpperCase()}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>{kpi.label.toUpperCase()}</Typography>
                             <Typography variant="caption" sx={{ color: alpha(kpi.color, 0.8), fontWeight: 700, mt: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>{kpi.sub}</Typography>
                         </Paper>
                     </Grid>
@@ -276,18 +381,20 @@ export default function OwnerDashboardPage() {
                                 <Box sx={{ py: 10, textAlign: 'center' }}>
                                     <Building2 size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
                                     <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{t('dash.no_properties') || 'NO PROPERTIES LINKED'}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1, display: 'block' }}>{t('dash.contact_sync') || 'Contact admin@bin-groups.com to synchronize your portfolio.'}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1, display: 'block' }}>{t('dash.add_first_property') || 'Add your first property to get started'}</Typography>
                                 </Box>
                             ) : (
                                 <Grid container spacing={2}>
                                     {properties.slice(0, 4).map(prop => (
                                         <Grid item xs={12} md={6} key={prop.id}>
-                                            <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }} onClick={() => navigate(`/owner/properties/${prop.id}`)}>
+                                            <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
                                                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                                                    <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold }}><Building2 size={24} /></Box>
+                                                    <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Building2 size={24} color={binThemeTokens.gold} />
+                                                    </Box>
                                                     <Box sx={{ flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
                                                         <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF' }}>{prop.propertyName || prop.name || 'Property'}</Typography>
-                                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{prop.emirate || prop.location || 'UAE'} · {prop.unitsCount || prop.numberOfUnits || prop.units || 0} {t('field.units') || 'Units'}</Typography>
+                                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{prop.emirate || prop.location || 'UAE'} · {prop.units || 0} units</Typography>
                                                     </Box>
                                                     <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.2)' }}><ChevronRight size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>
                                                 </Stack>
@@ -306,7 +413,7 @@ export default function OwnerDashboardPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)', textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 2 }}>{t('dash.revenue_summary') || 'REVENUE SUMMARY (INC. VAT)'}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 2 }}>{t('dash.revenue_summary') || 'REVENUE SUMMARY'}</Typography>
                                     <Stack spacing={1.5}>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Subtotal</Typography>
@@ -328,10 +435,10 @@ export default function OwnerDashboardPage() {
                                 <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)', textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 2 }}>{t('dash.deductions') || 'DEDUCTIONS & PAYOUT'}</Typography>
                                     <Stack spacing={1.5}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BIN GROUP Fee (5%)</Typography><Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 950 }}>- AED {Math.round(stats.rentCollected * 0.05).toLocaleString()}</Typography></Box>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Maintenance Costs</Typography><Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 950 }}>- AED {stats.maintenanceCost.toLocaleString()}</Typography></Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Service Fee (8%)</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 950 }}>- AED {(subtotal * 0.08).toLocaleString()}</Typography></Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Maintenance Reserve</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 950 }}>- AED {(subtotal * 0.04).toLocaleString()}</Typography></Box>
                                         <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Owner Net Payout</Typography><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>AED {Math.round(stats.rentCollected * 0.95 - stats.maintenanceCost).toLocaleString()}</Typography></Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Your Net Payout</Typography><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>AED {stats.payoutsPending.toLocaleString()}</Typography></Box>
                                     </Stack>
                                 </Box>
                             </Grid>
@@ -341,11 +448,11 @@ export default function OwnerDashboardPage() {
 
                 <Grid item xs={12} lg={4}>
                     <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, mb: 4 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{t('dash.command_nodes') || 'COMMAND NODES'}</Typography>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{t('dash.quick_access') || 'QUICK ACCESS'}</Typography>
                         <Grid container spacing={2}>
-                            {[...QUICK_LINKS, { label: 'Property Passport', path: '/owner/property-passport', icon: <FileText size={18} /> }, { label: 'Documents', path: '/owner/documents', icon: <FileText size={18} /> }, { label: 'Unit Ledger', path: '/owner/units', icon: <Building2 size={18} /> }].map((link, idx) => (
+                            {[...QUICK_LINKS, { label: 'Property Passport', path: '/owner/property-passport', icon: <FileText size={18} /> }, { label: 'Documents', path: '/owner/documents', icon: <FileText size={18} /> }].map((link, idx) => (
                                 <Grid item xs={6} key={idx}>
-                                    <Button fullWidth variant="outlined" onClick={() => navigate(link.path)} sx={{ flexDirection: 'column', gap: 1.5, py: 2.5, borderRadius: 4, borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.6)', '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.05), borderColor: binThemeTokens.gold, color: '#FFF' } }}>
+                                    <Button fullWidth variant="outlined" onClick={() => navigate(link.path)} sx={{ flexDirection: 'column', gap: 1.5, py: 2.5, borderRadius: 4, borderColor: 'rgba(255,255,255,0.1)', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.02) } }}>
                                         <Box sx={{ color: binThemeTokens.gold }}>{link.icon}</Box>
                                         <Typography sx={{ fontSize: '0.65rem', fontWeight: 950 }}>{link.label.toUpperCase()}</Typography>
                                     </Button>
@@ -361,7 +468,7 @@ export default function OwnerDashboardPage() {
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
                             {t('dash.sovereignty_desc') || 'Your asset data is strictly partitioned and stored under UAE sovereign standards. BIN GROUP utilizes institutional encryption for all records.'}
                         </Typography>
-                        <Button fullWidth size="small" sx={{ mt: 2, color: 'rgba(255,255,255,0.4)', fontWeight: 900, flexDirection: isRTL ? 'row-reverse' : 'row' }} startIcon={<CheckCircle2 size={12} />}>
+                        <Button fullWidth size="small" sx={{ mt: 2, color: 'rgba(255,255,255,0.4)', fontWeight: 900, flexDirection: isRTL ? 'row-reverse' : 'row' }} startIcon={<CheckCircle2 size={14} />}>
                             {t('dash.compliance_verified') || 'Compliance Verified'}
                         </Button>
                     </Paper>
@@ -370,4 +477,3 @@ export default function OwnerDashboardPage() {
         </Box>
     );
 }
-
