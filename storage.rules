@@ -27,14 +27,45 @@ service firebase.storage {
       return hasRole('AUDITOR') || hasRole('compliance_officer');
     }
 
+    function isTenantRole() {
+      return hasRole('tenant') || hasRole('TENANT');
+    }
+
+    function isTechnicianRole() {
+      return hasRole('technician') || hasRole('TECHNICIAN');
+    }
+
+    function isOwnerRole() {
+      return hasRole('owner') || hasRole('OWNER');
+    }
+
+    function isImageUpload(maxSizeMb) {
+      return request.resource != null &&
+             request.resource.size < maxSizeMb * 1024 * 1024 &&
+             request.resource.contentType.matches('image/.*');
+    }
+
+    // ─── [V12] MAINTENANCE TICKET PHOTO EVIDENCE ───────────────────────────
+
+    // Tenant issue photos uploaded by TenantRequestPage.tsx:
+    // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
+    match /maintenanceTickets/{tenantId}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+    }
+
+    // Technician/admin job completion evidence for maintenance tickets.
+    match /maintenanceTickets/{ticketId}/proofs/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
+    }
+
     // ─── [V11] INSTITUTIONAL PROOF & DOCUMENTS ────────────────────────────────
     
     // Proofs: before/after photos for tickets
     match /proofs/{ticketId}/{allPaths=**} {
       allow read: if isAuth(); // Tenant/Owner can read their mission proof
-      allow write: if isAuth() && (hasRole('technician') || isAdmin()) &&
-                   request.resource.size < 10 * 1024 * 1024 &&
-                   request.resource.contentType.matches('image/.*');
+      allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
     }
 
     // Owner Documents: title deeds, passports, etc.
@@ -53,13 +84,13 @@ service firebase.storage {
 
     // Contracts: Institutional agreements
     match /contracts/{contractId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || request.auth.token.role == 'owner');
+      allow read: if isAuth() && (isAdmin() || isOwnerRole());
       allow write: if isAdmin(); // Only Admin can upload authoritative contracts
     }
 
     // Invoices: Financial records
     match /invoices/{invoiceId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || request.auth.token.role == 'owner');
+      allow read: if isAuth() && (isAdmin() || isOwnerRole());
       allow write: if isAdmin();
     }
 
