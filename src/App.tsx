@@ -234,7 +234,9 @@ function AppContent() {
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
+      {!location.pathname.startsWith('/onboarding') && (
+        <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
+      )}
       <IOSPwaGuardian />
       <NavigationControl />
     </RoleRedirector>
