@@ -11,9 +11,8 @@ import { prefixer } from 'stylis';
 
 // ─── LIVE PRODUCTION IMPORTS ──────────────────────────────────────────
 import rtlPlugin from 'stylis-plugin-rtl';
-import { signOut } from 'firebase/auth';
-import { auth } from './lib/firebase';
-import { AuthProvider, useAuth, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
@@ -53,6 +52,7 @@ import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -128,6 +128,8 @@ function AppContent() {
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
                     <Route path="/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
+                    <Route path="/admin/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
                     <Route path="/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
                     <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
@@ -295,7 +297,7 @@ function AdminThemeProviderWrapper() {
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <Router>
-                    <AuthProvider requireAdmin>
+                    <AuthProvider>
                         <AIProvider>
                             <AppContent />
                         </AIProvider>
