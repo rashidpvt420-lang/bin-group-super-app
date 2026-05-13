@@ -63,5 +63,8 @@ jobs:
       - name: Build admin panel
         run: npm run build --workspace apps/admin-panel
 
-      - name: Deploy Firebase Hosting, Firestore rules, and Firestore indexes
-        run: npx firebase deploy --only hosting,firestore:rules,firestore:indexes --project "${GCP_PROJECT_ID}" --non-interactive
+      - name: Build Firebase Functions
+        run: npm run build --workspace functions
+
+      - name: Deploy Firebase Hosting, Functions, Firestore rules/indexes, and Storage rules
+        run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive
