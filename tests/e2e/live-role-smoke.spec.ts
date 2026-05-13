@@ -25,12 +25,27 @@ const publicRoutes = [
   '/terms',
 ];
 
-const criticalText = [/BIN/i, /Group/i];
+const homepageBrandText = [/BIN/i, /Group/i, /maintenance/i, /property/i];
+const routeFailureText = /404|not found|page not found|application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|access denied|permission-denied/i;
 
 async function expectNoRuntimeCrash(page: Page) {
   await expect(page.locator('body')).toBeVisible();
   const bodyText = await page.locator('body').innerText({ timeout: 15_000 });
   expect(bodyText).not.toMatch(/Application error|Unhandled Runtime Error|ChunkLoadError|FirebaseError: Missing|Minified React error/i);
+}
+
+async function expectHealthyPublicRoute(page: Page, route: string) {
+  const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+  expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
+  await expectNoRuntimeCrash(page);
+
+  const bodyText = (await page.locator('body').innerText({ timeout: 15_000 })).trim();
+  expect(bodyText.length, `${route} should render visible body content`).toBeGreaterThan(0);
+  expect(bodyText, `${route} should not render an error, 404, or access-denied page`).not.toMatch(routeFailureText);
+
+  if (route === '/') {
+    expect(homepageBrandText.some((pattern) => pattern.test(bodyText)), 'Homepage should render BIN GROUP/property-care brand content').toBeTruthy();
+  }
 }
 
 async function login(page: Page, email: string, password: string) {
@@ -54,11 +69,7 @@ async function login(page: Page, email: string, password: string) {
 test.describe('BIN GROUP production public smoke', () => {
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
-      const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
-      expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
-      await expectNoRuntimeCrash(page);
-      const bodyText = await page.locator('body').innerText();
-      expect(criticalText.some((pattern) => pattern.test(bodyText)), `${route} should render BIN GROUP content`).toBeTruthy();
+      await expectHealthyPublicRoute(page, route);
     });
   }
 });
