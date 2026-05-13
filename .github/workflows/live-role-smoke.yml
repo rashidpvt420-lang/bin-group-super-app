@@ -1,0 +1,61 @@
+name: Live Role Smoke Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+
+permissions:
+  contents: read
+
+env:
+  E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://bin-groups.com' }}
+  E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+  E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+  E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+  E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+  E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+  E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+  E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+  E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+  E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+  E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+
+jobs:
+  live-role-smoke:
+    name: Verify production public and role flows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run live smoke tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-role-report
+          path: playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-role-test-results
+          path: test-results
+          if-no-files-found: ignore
