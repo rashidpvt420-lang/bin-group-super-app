@@ -2393,7 +2393,7 @@ export const processPayment = onCall({ cors: true }, async (request) => {
  * [V16] AI DISPATCH & AUTO-ROUTING
  * Geospatial technician assignment for maintenance tickets.
  */
-export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
+export const autoRouteTicketV2 = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
     const snap = event.data;
     if (!snap) return;
     const ticketData = snap.data();
