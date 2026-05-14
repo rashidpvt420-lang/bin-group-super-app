@@ -20,6 +20,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
+import AdminContractActivationApproval from './components/AdminContractActivationApproval';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
@@ -174,7 +175,7 @@ function AdminContent() {
                 <Route path="audit-shield" element={<AuditShieldPage />} />
                 <Route path="design-studio" element={<DesignStudioAdminPage />} />
                 <Route path="orphans" element={<OrphanWarRoomPage />} />
-                <Route path="manual-approvals" element={<AdminPaymentApproval />} />
+                <Route path="manual-approvals" element={<AdminContractActivationApproval />} />
                 <Route path="control-center" element={<ProductionControlCenter />} />
                 <Route path="pricing-matrix" element={<PricingMatrixPage />} />
                 <Route path="pricing" element={<PricingMatrixPage />} />
@@ -212,7 +213,8 @@ function AdminContent() {
                 <Route path="contracts" element={<AdminContractsPage />} />
                 <Route path="permissions" element={<AdminPermissionsPage />} />
                 {/* Aliases for required Phase 2B routes */}
-                <Route path="payments" element={<AdminPaymentApproval />} />
+                <Route path="payments" element={<AdminContractActivationApproval />} />
+                <Route path="legacy-payments" element={<AdminPaymentApproval />} />
                 <Route path="property-passports" element={<PropertyPassportPage />} />
                 <Route path="active-tenants" element={<TenantsPage />} />
                 <Route path="owners-registry" element={<OwnersPage />} />
