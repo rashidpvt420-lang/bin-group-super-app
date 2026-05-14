@@ -44,7 +44,7 @@ export default function OwnerUnitRegistryPage() {
       }
 
       const propertySnaps = await Promise.all(propertyQueries);
-      const properties = unique(propertySnaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() } as PropertyDoc))));
+      const properties = unique(propertySnaps.flatMap((snap) => snap.docs.map((d) => ({ ...(d.data() as Omit<PropertyDoc, 'id'>), id: d.id } as PropertyDoc))));
       const propIds = properties.map((p) => p.id);
       const propName = new Map(properties.map((p) => [p.id, p.propertyName || p.name || 'Property']));
 
@@ -54,8 +54,8 @@ export default function OwnerUnitRegistryPage() {
       if (email) unitSnaps.push(await getDocs(query(collection(db, 'units'), where('ownerEmail', '==', email))));
 
       const merged = unique(unitSnaps.flatMap((snap) => snap.docs.map((d) => {
-        const data = d.data() as UnitDoc;
-        return { id: d.id, ...data, propertyName: data.propertyName || (data.propertyId ? propName.get(data.propertyId) : undefined) || 'Property' };
+        const data = d.data() as Omit<UnitDoc, 'id'>;
+        return { ...data, id: d.id, propertyName: data.propertyName || (data.propertyId ? propName.get(data.propertyId) : undefined) || 'Property' };
       })));
 
       if (!cancelled) {
