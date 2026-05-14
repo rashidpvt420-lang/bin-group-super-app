@@ -19,8 +19,26 @@ declare global {
   }
 }
 
+function getStoredLanguage(): 'en' | 'ar' {
+  const stored = localStorage.getItem('app_lang') || localStorage.getItem('language') || localStorage.getItem('lang');
+  return stored === 'ar' ? 'ar' : 'en';
+}
+
+function applyLanguageRepair() {
+  const lang = getStoredLanguage();
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+  document.documentElement.lang = lang;
+  document.documentElement.dir = dir;
+  document.documentElement.setAttribute('data-language', lang);
+  document.documentElement.setAttribute('data-direction', dir);
+  document.body.dir = dir;
+}
+
 function applyGlobalScrollRepair() {
   const rootNode = document.getElementById('root');
+
+  applyLanguageRepair();
 
   document.documentElement.style.minHeight = '100%';
   document.documentElement.style.height = 'auto';
