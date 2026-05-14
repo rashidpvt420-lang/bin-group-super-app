@@ -17,6 +17,7 @@ import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
 import OwnerUnitsPage from './pages/OwnerUnitsPage';
+import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportPage';
 import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportDetailPage';
@@ -114,7 +115,8 @@ export default function OwnerApp() {
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
                 <Route path="/iban" element={<OwnerIbanPage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
-                <Route path="/units" element={<OwnerUnitsPage />} />
+                <Route path="/units" element={<OwnerUnitRegistryPage />} />
+                <Route path="/legacy-units" element={<OwnerUnitsPage />} />
                 <Route path="/tenants" element={<OwnerTenantsPage />} />
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
