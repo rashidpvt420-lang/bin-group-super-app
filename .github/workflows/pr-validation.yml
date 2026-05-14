@@ -1,0 +1,51 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: false
+  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+
+jobs:
+  validate:
+    name: Install, typecheck, lint, and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Lint root app
+        run: npm run lint
+
+      - name: Build root app
+        run: npm run build
+
+      - name: Build admin panel
+        run: npm run build --workspace=home-os-admin-panel
+
+      - name: Build functions
+        run: npm run build --workspace=functions
