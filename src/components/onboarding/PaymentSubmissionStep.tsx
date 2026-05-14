@@ -31,6 +31,8 @@ import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
+const cleanFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const navigate = useNavigate();
     const {
@@ -45,17 +47,72 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         paymentMethod,
         setPaymentMethod,
         setIntakeId,
+        updateKycUrls,
         reset
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
     const [submitting, setSubmitting] = useState(false);
+    const [uploadingProofs, setUploadingProofs] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submissionResult, setSubmissionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
+
+    const uploadProofDocuments = async (uid: string) => {
+        const required: Array<[string, File | null]> = [
+            ['titleDeed', proofDocuments.propertyProof],
+            ['emiratesId', proofDocuments.emiratesId],
+            ['passport', proofDocuments.passport],
+        ];
+        const missing = required.filter(([, file]) => !file).map(([key]) => key);
+        if (missing.length) throw new Error(`Missing required documents: ${missing.join(', ')}`);
+
+        const optional: Array<[string, File | null]> = [
+            ['tradeLicense', proofDocuments.tradeLicense],
+            ['tenancySupport', proofDocuments.tenancySupport],
+        ];
+
+        const allDocs = [...required, ...optional].filter(([, file]) => !!file) as Array<[string, File]>;
+        const uploaded: Record<string, any> = {};
+        const urls: Record<string, string> = {};
+        const basePath = `ownerOnboarding/${uid}/${onboardingSessionId}`;
+
+        setUploadingProofs(true);
+        for (const [key, file] of allDocs) {
+            const path = `${basePath}/${key}_${Date.now()}_${cleanFileName(file.name)}`;
+            const storageRef = ref(storage, path);
+            await uploadBytes(storageRef, file, {
+                contentType: file.type || 'application/octet-stream',
+                customMetadata: {
+                    ownerUid: uid,
+                    onboardingSessionId,
+                    documentType: key,
+                    originalName: file.name,
+                }
+            });
+            const url = await getDownloadURL(storageRef);
+            urls[key] = url;
+            uploaded[key] = {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                storagePath: path,
+                downloadUrl: url,
+                uploadedAt: new Date().toISOString(),
+            };
+        }
+        setUploadingProofs(false);
+        updateKycUrls({
+            titleDeed: urls.titleDeed,
+            emiratesId: urls.emiratesId,
+            passport: urls.passport,
+            tradeLicense: urls.tradeLicense,
+        });
+        return uploaded;
+    };
     
     const handleSubmit = async () => {
         if (!ownerAccount?.uid) {
@@ -69,9 +126,15 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             return;
         }
 
+        if (!paymentMethod) {
+            setError(t('onboarding.payment_method_required') || 'Select a payment method before submission.');
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
         try {
+            const uploadedProofDocuments = await uploadProofDocuments(currentUser.uid);
             const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
             const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
             
@@ -84,6 +147,13 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 selectedPlan,
                 selectedAddOns,
                 portfolioSummary,
+                proofDocuments: uploadedProofDocuments,
+                kycUrls: {
+                    titleDeed: uploadedProofDocuments.titleDeed?.downloadUrl,
+                    emiratesId: uploadedProofDocuments.emiratesId?.downloadUrl,
+                    passport: uploadedProofDocuments.passport?.downloadUrl,
+                    tradeLicense: uploadedProofDocuments.tradeLicense?.downloadUrl,
+                },
                 pricing: {
                     annualContractValue: estimatedAnnualValue,
                     mobilizationAmount,
@@ -105,6 +175,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             setError(err?.message || 'Onboarding submission failed.');
         } finally {
             setSubmitting(false);
+            setUploadingProofs(false);
         }
     };
 
@@ -184,15 +255,16 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
                                 {t('onboarding.admin_lock_desc')}
                             </Typography>
+                            {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
                             {error && <Alert severity="error">{error}</Alert>}
                             <Button
                                 variant="contained"
                                 fullWidth
-                                disabled={submitting}
+                                disabled={submitting || uploadingProofs}
                                 onClick={handleSubmit}
                                 sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
-                                {submitting ? t('onboarding.submitting') : t('onboarding.submit_btn')}
+                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : t('onboarding.submit_btn')}
                             </Button>
                             <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
                                 {t('onboarding.back')}
