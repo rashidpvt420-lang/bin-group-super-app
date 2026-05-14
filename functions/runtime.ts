@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 export * from "./index";
+export * from "./contractActivation";
 
 if (!admin.apps.length) {
     admin.initializeApp();
