@@ -52,6 +52,7 @@ import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
+import BuildingRegistryPage from './pages/properties/BuildingRegistryPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
@@ -186,6 +187,7 @@ function AdminContent() {
                 <Route path="tenants" element={<TenantsPage />} />
                 <Route path="broker" element={<BrokerManagementPage />} />
                 <Route path="properties/passport" element={<PropertyPassportPage />} />
+                <Route path="properties/registry" element={<BuildingRegistryPage />} />
                 <Route path="technicians" element={<TechniciansPage />} />
                 <Route path="technicians/map" element={<LiveMapPage />} />
                 <Route path="ops/technicians" element={<TechnicianDutyMonitorPage />} />
@@ -216,6 +218,7 @@ function AdminContent() {
                 <Route path="payments" element={<AdminContractActivationApproval />} />
                 <Route path="legacy-payments" element={<AdminPaymentApproval />} />
                 <Route path="property-passports" element={<PropertyPassportPage />} />
+                <Route path="building-registry" element={<BuildingRegistryPage />} />
                 <Route path="active-tenants" element={<TenantsPage />} />
                 <Route path="owners-registry" element={<OwnersPage />} />
                 <Route path="documents" element={<InstitutionalDocumentVaultPage />} />
