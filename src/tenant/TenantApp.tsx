@@ -17,6 +17,7 @@ import TenantChatPage from './pages/TenantChatPage';
 import TenantEmergencyPage from './pages/TenantEmergencyPage';
 import TenantProfilePage from './pages/TenantProfilePage';
 import TenantDocumentsPage from './pages/TenantDocumentsPage';
+import TenantUnitPage from './pages/TenantUnitPage';
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -144,6 +145,7 @@ export default function TenantApp() {
             <Routes>
                 <Route path="/" element={<TenantDashboardPage />} />
                 <Route path="/dashboard" element={<TenantDashboardPage />} />
+                <Route path="/unit" element={<TenantUnitPage />} />
                 <Route path="/request" element={<TenantRequestPage />} />
                 <Route path="/tickets" element={<TenantTicketsPage />} />
                 <Route path="/ticket/:id" element={<TenantTicketDetailPage />} />
