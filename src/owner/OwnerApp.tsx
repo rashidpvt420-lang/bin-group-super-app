@@ -8,6 +8,7 @@ import { ArrowLeft, Globe, LayoutDashboard, Paintbrush, Settings } from 'lucide-
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
+import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 
 import OwnerDashboardPage from './pages/OwnerDashboardPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
@@ -18,7 +19,9 @@ import OwnerRoiPage from './pages/OwnerRoiPage';
 import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportPage';
+import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
+import OwnerActivationPage from './pages/OwnerActivationPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -50,6 +53,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
 
                     <Stack direction="row" spacing={1} alignItems="center">
+                        <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
+                            Property Passport
+                        </Button>
                         <Button onClick={() => navigate('/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
                             AI Studio
                         </Button>
@@ -80,7 +86,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         ))}
                     </Breadcrumbs>
                 )}
-                <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
+                <OwnerActivationGuard>
+                    <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
+                </OwnerActivationGuard>
             </Container>
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
@@ -100,6 +108,7 @@ export default function OwnerApp() {
             <Routes>
                 <Route path="/" element={<OwnerDashboardPage />} />
                 <Route path="/dashboard" element={<OwnerDashboardPage />} />
+                <Route path="/activation" element={<OwnerActivationPage />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
@@ -108,6 +117,7 @@ export default function OwnerApp() {
                 <Route path="/units" element={<OwnerUnitsPage />} />
                 <Route path="/tenants" element={<OwnerTenantsPage />} />
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
+                <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
             </Routes>
         </OwnerLayout>
