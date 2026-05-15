@@ -41,6 +41,7 @@ const primaryMenu = [
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
         { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
+        { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
         { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
