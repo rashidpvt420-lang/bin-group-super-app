@@ -10,11 +10,12 @@ import {
     ShieldCheck, ArrowRight, MapPin, MessageSquare,
     AlertTriangle, Target, TrendingUp, Star
 } from 'lucide-react';
-import { db, doc, updateDoc, collection, query, where, onSnapshot, limit, orderBy, serverTimestamp, addDoc } from '../../lib/firebase';
+import { db, doc, updateDoc, collection, query, where, onSnapshot, limit, orderBy, serverTimestamp, runTransaction } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
+import type { SnapshotDoc } from '../../utils/queryUtils';
 
 export default function TechnicianDashboardPage() {
     const { user } = useRole();
@@ -33,7 +34,7 @@ export default function TechnicianDashboardPage() {
     });
 
     const [missionPool, setMissionPool] = useState<any[]>([]);
-    const [activeJobs, setActiveJobs] = useState<any[]>([]);
+    const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -48,11 +49,12 @@ export default function TechnicianDashboardPage() {
             { field: 'assignedTechnicianId', value: user.uid },
             'status',
             ALL_TECHNICIAN_ACTIVE_STATUSES,
-            (jobs) => {
+            (jobs: SnapshotDoc[]) => {
                 let assigned = 0, emergency = 0, inProgress = 0;
-                jobs.forEach(data => {
+                jobs.forEach((data: SnapshotDoc) => {
                     assigned++;
-                    if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(data.status)) inProgress++;
+                    const status = String(data.status || '');
+                    if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(status)) inProgress++;
                     if (data.priority === 'emergency') emergency++;
                 });
                 setActiveJobs(jobs);
@@ -242,107 +244,63 @@ export default function TechnicianDashboardPage() {
                     <Paper sx={{ p: 4, bgcolor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 6, textAlign: 'center' }}>
                         <CheckCircle2 color="#10b981" style={{ margin: '0 auto 12px auto' }} />
                         <Typography variant="h4" fontWeight="950" color="#FFF">{stats.completedToday}</Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.success_rate') || 'COMPLETED TODAY'}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.closed_today') || 'COMPLETED TODAY'}</Typography>
                     </Paper>
                 </Grid>
             </Grid>
 
-            <Grid container spacing={4} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                {/* Mission Pool (Unassigned) */}
-                <Grid item xs={12} lg={7}>
-                    <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Target size={20} color={binThemeTokens.gold} /> {t('dash.mission_pool') || 'MISSION POOL'}
-                            <Chip label={missionPool.length} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
-                        </Typography>
-                        <Button size="small" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('common.view_all_pool') || 'REFRESH'}</Button>
-                    </Box>
-
+            {/* Active Mission Feed */}
+            {activeJobs.length > 0 && (
+                <Box sx={{ mb: 6 }}>
+                    <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">{t('dash.active_missions') || 'ACTIVE MISSION FEED'}</Typography>
+                        <Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('common.view_all') || 'VIEW ALL'}</Button>
+                    </Stack>
                     <Stack spacing={2}>
-                        {missionPool.map(job => (
-                            <Paper key={job.id} sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4, transition: 'all 0.2s', '&:hover': { bgcolor: 'rgba(255,255,255,0.04)', borderColor: binThemeTokens.gold } }}>
-                                <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="center">
-                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>{job.category?.toUpperCase()} · #{job.id.substring(0,6)}</Typography>
-                                        <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>{job.propertyName || 'Property'}</Typography>
-                                        <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                                            <MapPin size={12} /> Unit {job.unitNumber} · Level {job.floor}
-                                        </Typography>
+                        {activeJobs.slice(0, 2).map(job => (
+                            <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, cursor: 'pointer', '&:hover': { borderColor: binThemeTokens.gold }, textAlign: isRTL ? 'right' : 'left' }}>
+                                <Stack direction={isRTL ? "row-reverse" : "row"} spacing={2} alignItems="center">
+                                    <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.gold }}><MapPin size={20} /></Box>
+                                    <Box flex={1}>
+                                        <Typography fontWeight="900" color="#FFF">{String(job.category || 'Maintenance')} - {String(job.unitNumber || '')}</Typography>
+                                        <Typography variant="caption" color="rgba(255,255,255,0.4)">{String(job.propertyName || 'Property')}</Typography>
                                     </Box>
-                                    <Button 
-                                        variant="contained" 
-                                        size="small" 
-                                        onClick={() => handleAcceptJob(job.id)}
-                                        disabled={!isOnDuty}
-                                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
-                                    >
-                                        {t('common.accept') || 'ACCEPT MISSION'}
-                                    </Button>
+                                    <ArrowRight size={16} color="rgba(255,255,255,0.3)" style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                 </Stack>
                             </Paper>
                         ))}
-                        {missionPool.length === 0 && (
-                            <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: 4 }}>
-                                <Typography variant="body2" color="textSecondary" fontWeight="900">MISSION POOL CLEAR</Typography>
-                            </Paper>
-                        )}
                     </Stack>
-                </Grid>
+                </Box>
+            )}
 
-                {/* Performance Analytics */}
-                <Grid item xs={12} lg={5}>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
-                        {t('dash.operator_analytics') || 'OPERATOR ANALYTICS'}
-                    </Typography>
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8 }}>
-                        <Stack spacing={4}>
-                            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="center">
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950 }}>SLA COMPLIANCE</Typography>
-                                    <Typography variant="body1" fontWeight="950" color="#4ade80">98.2%</Typography>
-                                </Stack>
-                                <Box sx={{ mt: 1, height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                                    <Box sx={{ width: '98.2%', height: '100%', bgcolor: '#4ade80', borderRadius: 2 }} />
-                                </Box>
-                            </Box>
-                            
-                            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="center">
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950 }}>QUALITY RATING</Typography>
-                                    <Stack direction="row" spacing={0.5} alignItems="center">
-                                        <Star size={14} color={binThemeTokens.gold} fill={binThemeTokens.gold} />
-                                        <Typography variant="body1" fontWeight="950" color={binThemeTokens.gold}>4.9</Typography>
+            {/* Mission Pool */}
+            {missionPool.length > 0 && isOnDuty && (
+                <Box>
+                    <Stack direction={isRTL ? "row-reverse" : "row"} spacing={1} alignItems="center" sx={{ mb: 3 }}>
+                        <Target size={20} color={binThemeTokens.gold} />
+                        <Typography variant="h6" fontWeight="950" color="#FFF">{t('dash.available_missions') || 'AVAILABLE MISSION POOL'}</Typography>
+                    </Stack>
+                    <Grid container spacing={3}>
+                        {missionPool.map(job => (
+                            <Grid item xs={12} md={6} key={job.id}>
+                                <Paper sx={{ p: 4, bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.08) : 'rgba(22, 22, 24, 0.7)', border: `1px solid ${job.priority === 'emergency' ? alpha('#ef4444', 0.3) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6, textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
+                                        <Box>
+                                            <Typography variant="overline" sx={{ color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold, fontWeight: 950 }}>{String(job.priority || 'normal').toUpperCase()}</Typography>
+                                            <Typography variant="h6" fontWeight="950" color="#FFF">{String(job.category || 'Issue')}</Typography>
+                                        </Box>
+                                        {job.priority === 'emergency' && <Zap color="#ef4444" />}
                                     </Stack>
-                                </Stack>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>Based on 124 residency approvals</Typography>
-                            </Box>
-
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-
-                            <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, mb: 2, display: 'block' }}>DAILY MISSION TREND</Typography>
-                                <Stack direction="row" spacing={1} alignItems="flex-end" sx={{ height: 60 }}>
-                                    {[30, 45, 25, 60, 80, 50, 70].map((h, i) => (
-                                        <Tooltip key={i} title={`Day ${i+1}: ${h}% capacity`}>
-                                            <Box sx={{ flex: 1, bgcolor: i === 4 ? binThemeTokens.gold : 'rgba(255,255,255,0.05)', height: `${h}%`, borderRadius: '2px 2px 0 0' }} />
-                                        </Tooltip>
-                                    ))}
-                                </Stack>
-                            </Box>
-                        </Stack>
-                    </Paper>
-                </Grid>
-            </Grid>
-
-            <style>
-                {`
-                    @keyframes pulse {
-                        0% { box-shadow: 0 0 0 0 ${alpha(binThemeTokens.gold, 0.4)}; }
-                        70% { box-shadow: 0 0 0 10px ${alpha(binThemeTokens.gold, 0)}; }
-                        100% { box-shadow: 0 0 0 0 ${alpha(binThemeTokens.gold, 0)}; }
-                    }
-                `}
-            </style>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mb: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{String(job.description || '')}</Typography>
+                                    <Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3 }}>
+                                        {t('dash.claim_job') || 'CLAIM MISSION'}
+                                    </Button>
+                                </Paper>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+            )}
         </Box>
     );
 }
