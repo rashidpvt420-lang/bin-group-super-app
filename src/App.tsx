@@ -41,9 +41,20 @@ import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
 import { CustomThemeProvider } from './context/ThemeContext';
 
-['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'].forEach(key => {
-    try { localStorage.removeItem(key); } catch (e) { console.warn('[APP] Storage cleanup failed', e); }
-});
+const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'];
+const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';
+
+function runOneTimeLegacyOnboardingCleanup() {
+  try {
+    if (localStorage.getItem(MIGRATION_KEY) === 'true') return;
+    LEGACY_ONBOARDING_KEYS.forEach((key) => localStorage.removeItem(key));
+    localStorage.setItem(MIGRATION_KEY, 'true');
+  } catch (error) {
+    console.warn('[APP] One-time legacy onboarding cleanup failed', error);
+  }
+}
+
+runOneTimeLegacyOnboardingCleanup();
 
 function LoadingScreen() {
   const { t } = useLanguage();
