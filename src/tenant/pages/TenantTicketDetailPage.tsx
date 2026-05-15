@@ -14,6 +14,7 @@ import { db, doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from 
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
+import TechnicianArrivalCard from '../components/TechnicianArrivalCard';
 
 export default function TenantTicketDetailPage() {
     const { id } = useParams();
@@ -182,13 +183,13 @@ export default function TenantTicketDetailPage() {
                                     <Grid item xs={6}>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>BEFORE</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
-                                            {ticket.beforePhotos?.[0] ? <img src={ticket.beforePhotos[0]} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
+                                            {ticket.beforePhotos?.[0] ? <img src={ticket.beforePhotos[0]} alt="Before maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>AFTER</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
-                                            {ticket.afterPhotos?.[0] ? <img src={ticket.afterPhotos[0]} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
+                                            {ticket.afterPhotos?.[0] ? <img src={ticket.afterPhotos[0]} alt="After maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
                                     </Grid>
                                 </Grid>
@@ -264,6 +265,10 @@ export default function TenantTicketDetailPage() {
                 </Grid>
 
                 <Grid item xs={12} lg={4}>
+                    <Box sx={{ mb: 4 }}>
+                        <TechnicianArrivalCard ticket={ticket} />
+                    </Box>
+
                     {/* Technician Profile Card */}
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>ASSIGNED EXPERT</Typography>
@@ -325,5 +330,4 @@ export default function TenantTicketDetailPage() {
         </Box>
     );
 }
-
 
