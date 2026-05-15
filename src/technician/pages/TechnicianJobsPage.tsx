@@ -5,6 +5,7 @@ import { Clock, MapPin, Navigation, ArrowRight } from 'lucide-react';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 
 export default function TechnicianJobsPage() {
     const { user } = useRole();
@@ -14,15 +15,16 @@ export default function TechnicianJobsPage() {
 
     useEffect(() => {
         if (!user?.uid) return;
-        const q = query(
+        const unsub = onSnapshotSplitIn(
             collection(db, 'maintenanceTickets'),
-            where('assignedTechnicianId', '==', user.uid),
-            where('status', 'in', ['ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS'])
+            { field: 'assignedTechnicianId', value: user.uid },
+            'status',
+            ALL_TECHNICIAN_ACTIVE_STATUSES,
+            (jobs) => {
+                setAssignedJobs(jobs);
+                setLoading(false);
+            }
         );
-        const unsub = onSnapshot(q, (snap) => {
-            setAssignedJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoading(false);
-        });
         return () => unsub();
     }, [user]);
 
