@@ -14,6 +14,7 @@ import { db, doc, updateDoc, collection, query, where, onSnapshot, limit, orderB
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
 
 export default function TechnicianDashboardPage() {
     const { user } = useRole();
@@ -42,28 +43,23 @@ export default function TechnicianDashboardPage() {
         today.setHours(0,0,0,0);
 
         // Active Assigned Jobs
-        const qAssigned = query(
+        const unsubAssigned = onSnapshotSplitIn(
             collection(db, 'maintenanceTickets'),
-            where('assignedTechnicianId', '==', user.uid),
-            where('status', 'in', ['accepted', 'on_the_way', 'arrived', 'in_progress', 'waiting_parts', 'escalated'])
+            { field: 'assignedTechnicianId', value: user.uid },
+            'status',
+            ALL_TECHNICIAN_ACTIVE_STATUSES,
+            (jobs) => {
+                let assigned = 0, emergency = 0, inProgress = 0;
+                jobs.forEach(data => {
+                    assigned++;
+                    if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(data.status)) inProgress++;
+                    if (data.priority === 'emergency') emergency++;
+                });
+                setActiveJobs(jobs);
+                setStats(prev => ({ ...prev, assigned, emergency, inProgress }));
+                setLoading(false);
+            }
         );
-
-        const unsubAssigned = onSnapshot(qAssigned, (snap) => {
-            let assigned = 0, emergency = 0, inProgress = 0;
-            const jobs: any[] = [];
-            snap.docs.forEach(d => {
-                const data = d.data();
-                const job = { id: d.id, ...data };
-                jobs.push(job);
-                
-                assigned++;
-                if (['on_the_way', 'arrived', 'in_progress'].includes(data.status)) inProgress++;
-                if (data.priority === 'emergency') emergency++;
-            });
-            setActiveJobs(jobs);
-            setStats(prev => ({ ...prev, assigned, emergency, inProgress }));
-            setLoading(false);
-        });
 
         // Mission Pool (Unassigned Jobs)
         const qPool = query(
@@ -107,11 +103,13 @@ export default function TechnicianDashboardPage() {
                 updatedAt: serverTimestamp()
             });
             
-            await addDoc(collection(db, 'auditLogs'), {
-                action: 'TECHNICIAN_DUTY_CHANGE',
-                technicianId: user.uid,
-                newStatus,
-                timestamp: serverTimestamp()
+            await logAuditAction({
+                action: TICKET_AUDIT_ACTIONS.DUTY_CHANGE,
+                actorId: user.uid,
+                actorRole: 'technician',
+                targetType: 'users',
+                targetId: user.uid,
+                metadata: { newStatus }
             });
 
             setDutyStatus(newStatus);
@@ -125,19 +123,25 @@ export default function TechnicianDashboardPage() {
     const handleAcceptJob = async (jobId: string) => {
         if (!user?.uid) return;
         try {
-            await updateDoc(doc(db, 'maintenanceTickets', jobId), {
-                assignedTechnicianId: user.uid,
-                assignedTechnicianName: user.displayName || 'Technician',
-                status: 'accepted',
-                acceptedAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
+            await runTransaction(db, async (transaction) => {
+                const jobRef = doc(db, 'maintenanceTickets', jobId);
+                transaction.update(jobRef, {
+                    assignedTechnicianId: user.uid,
+                    assignedTechnicianName: user.displayName || 'Technician',
+                    status: 'accepted',
+                    acceptedAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
 
-            await addDoc(collection(db, 'auditLogs'), {
-                action: 'JOB_ACCEPTED_FROM_POOL',
-                ticketId: jobId,
-                technicianId: user.uid,
-                timestamp: serverTimestamp()
+                const auditRef = doc(collection(db, 'audit_logs'));
+                transaction.set(auditRef, {
+                    action: TICKET_AUDIT_ACTIONS.JOB_ACCEPTED,
+                    targetType: 'maintenanceTickets',
+                    targetId: jobId,
+                    actorId: user.uid,
+                    actorRole: 'technician',
+                    createdAt: serverTimestamp()
+                });
             });
 
             navigate(`/technician/job/${jobId}`);

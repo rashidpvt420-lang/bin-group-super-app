@@ -18,6 +18,7 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyStatusUpdate, notifyCompletionRequest } from '../../services/notificationService';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, logAuditAction } from '../../shared-exports';
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -53,7 +54,7 @@ export default function TechnicianJobDetailPage() {
 
     // SLA Timer Logic
     useEffect(() => {
-        if (!ticket || !['accepted', 'on_the_way', 'arrived', 'in_progress'].includes(ticket.status)) return;
+        if (!ticket || !['accepted', 'on_the_way', 'arrived', 'in_progress', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(ticket.status)) return;
 
         const interval = setInterval(() => {
             const start = ticket.createdAt?.toDate() || new Date();
@@ -98,14 +99,15 @@ export default function TechnicianJobDetailPage() {
 
             await updateDoc(doc(db, 'maintenanceTickets', id), updatePayload);
             
-            await addDoc(collection(db, 'auditLogs'), {
-                action: 'TECHNICIAN_STATUS_UPDATE',
-                ticketId: id,
+            await logAuditAction({
+                action: TICKET_AUDIT_ACTIONS.STATUS_UPDATE,
+                targetType: 'maintenanceTickets',
+                targetId: id,
                 actorId: user.uid,
                 actorRole: 'technician',
-                oldStatus: ticket.status,
-                newStatus,
-                timestamp: serverTimestamp()
+                before: { status: ticket.status },
+                after: { status: newStatus },
+                metadata: { ...updatePayload }
             });
 
             // Notification Engine
@@ -130,11 +132,16 @@ export default function TechnicianJobDetailPage() {
 
     const getStatusColor = (status: string) => {
         switch(status) {
-            case 'accepted': return '#3b82f6';
-            case 'on_the_way': return '#f59e0b';
-            case 'arrived': return '#6366f1';
-            case 'in_progress': return '#10b981';
-            case 'waiting_parts': return '#ef4444';
+            case 'accepted':
+            case 'ASSIGNED': return '#3b82f6';
+            case 'on_the_way':
+            case 'EN_ROUTE': return '#f59e0b';
+            case 'arrived':
+            case 'ARRIVED': return '#6366f1';
+            case 'in_progress':
+            case 'IN_PROGRESS': return '#10b981';
+            case 'waiting_parts':
+            case 'WAITING_PARTS': return '#ef4444';
             case 'escalated': return '#dc2626';
             default: return 'rgba(255,255,255,0.4)';
         }
@@ -229,7 +236,7 @@ export default function TechnicianJobDetailPage() {
                                         key={step.id}
                                         variant={ticket.status === step.id ? 'contained' : 'outlined'}
                                         onClick={() => handleStatusUpdate(step.id)}
-                                        disabled={actionLoading || ticket.status === 'completed' || (step.id === 'on_the_way' && ticket.status !== 'accepted')}
+                                        disabled={actionLoading || ticket.status === 'completed' || (step.id === 'on_the_way' && !['accepted', 'ASSIGNED'].includes(ticket.status))}
                                         startIcon={step.icon}
                                         sx={{ 
                                             flex: 1, minWidth: '140px',

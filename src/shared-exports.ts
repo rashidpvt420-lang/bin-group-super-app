@@ -20,4 +20,6 @@ export * from './components/CeoContactButtons';
 export * from './components/SovereignSupportChat';
 export * from './components/SovereignAlertHandler';
 export * from './utils/auditLogger';
+export * from './utils/ticketConstants';
+export * from './utils/queryUtils';
 export * from './lib/firebase';
