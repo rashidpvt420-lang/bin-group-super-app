@@ -52,7 +52,7 @@ export default function TenantTicketDetailPage() {
                 closedAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
-            await addDoc(collection(db, 'auditLogs'), {
+            await addDoc(collection(db, 'audit_logs'), {
                 action: 'TENANT_APPROVED_COMPLETION',
                 ticketId: id,
                 actorId: user.uid,
@@ -85,6 +85,14 @@ export default function TenantTicketDetailPage() {
                 status: 'open',
                 createdAt: serverTimestamp()
             });
+            await addDoc(collection(db, 'audit_logs'), {
+                action: 'TENANT_DISPUTED_COMPLETION',
+                ticketId: id,
+                actorId: user.uid,
+                actorRole: 'tenant',
+                reason: rejectReason,
+                timestamp: serverTimestamp()
+            });
             setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false }));
             notifyTenantRejected(id, user.displayName || 'Tenant', rejectReason).catch(console.warn);
             setShowRejectInput(false);
@@ -116,7 +124,6 @@ export default function TenantTicketDetailPage() {
 
             <Grid container spacing={4}>
                 <Grid item xs={12} lg={8}>
-                    {/* Main Content */}
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4 }}>
                             <Box>
@@ -144,7 +151,6 @@ export default function TenantTicketDetailPage() {
                                 <Typography variant="body1" color="rgba(255,255,255,0.8)" sx={{ mt: 1, lineHeight: 1.7 }}>{ticket.description}</Typography>
                             </Box>
 
-                            {/* Ticket Photos Gallery */}
                             {ticket.photos && ticket.photos.length > 0 && (
                                 <Box>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, mb: 2, display: 'block' }}>SUBMITTED PHOTOS</Typography>
@@ -160,7 +166,6 @@ export default function TenantTicketDetailPage() {
                         </Stack>
                     </Paper>
 
-                    {/* Completion / Rejection Workflow */}
                     {isCompleted && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid #10b981', borderRadius: 6 }}>
                             <Typography variant="h6" fontWeight="950" color="#10b981" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -177,7 +182,6 @@ export default function TenantTicketDetailPage() {
                                 </Box>
                             )}
 
-                            {/* Before/After Comparison */}
                             {(ticket.beforePhotos || ticket.afterPhotos) && (
                                 <Grid container spacing={2} sx={{ mb: 4 }}>
                                     <Grid item xs={6}>
@@ -197,36 +201,16 @@ export default function TenantTicketDetailPage() {
 
                             {!showRejectInput ? (
                                 <Stack direction="row" spacing={2}>
-                                    <Button 
-                                        fullWidth variant="contained" 
-                                        color="success" 
-                                        startIcon={<Check />} 
-                                        onClick={handleApprove}
-                                        disabled={actionLoading}
-                                        sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}
-                                    >
+                                    <Button fullWidth variant="contained" color="success" startIcon={<Check />} onClick={handleApprove} disabled={actionLoading} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
                                         APPROVE COMPLETION
                                     </Button>
-                                    <Button 
-                                        fullWidth variant="outlined" 
-                                        color="error" 
-                                        startIcon={<X />} 
-                                        onClick={() => setShowRejectInput(true)}
-                                        disabled={actionLoading}
-                                        sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}
-                                    >
+                                    <Button fullWidth variant="outlined" color="error" startIcon={<X />} onClick={() => setShowRejectInput(true)} disabled={actionLoading} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
                                         DISPUTE
                                     </Button>
                                 </Stack>
                             ) : (
                                 <Stack spacing={2}>
-                                    <TextField 
-                                        fullWidth multiline rows={3} 
-                                        label="Reason for Disputing Resolution" 
-                                        value={rejectReason} 
-                                        onChange={(e) => setRejectReason(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' } }}
-                                    />
+                                    <TextField fullWidth multiline rows={3} label="Reason for Disputing Resolution" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' } }} />
                                     <Stack direction="row" spacing={2}>
                                         <Button fullWidth variant="contained" color="error" onClick={handleReject} disabled={actionLoading || !rejectReason.trim()} sx={{ fontWeight: 950, borderRadius: 3 }}>
                                             CONFIRM DISPUTE
@@ -269,7 +253,6 @@ export default function TenantTicketDetailPage() {
                         <TechnicianArrivalCard ticket={ticket} />
                     </Box>
 
-                    {/* Technician Profile Card */}
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>ASSIGNED EXPERT</Typography>
                         
@@ -298,13 +281,7 @@ export default function TenantTicketDetailPage() {
                                     </Box>
                                 </Stack>
 
-                                <Button 
-                                    fullWidth 
-                                    variant="contained" 
-                                    startIcon={<MessageSquare />} 
-                                    onClick={() => navigate(`/tenant/chat/${ticket.id}`)}
-                                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}
-                                >
+                                <Button fullWidth variant="contained" startIcon={<MessageSquare />} onClick={() => navigate(`/tenant/chat/${ticket.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>
                                     DIRECT CHAT
                                 </Button>
                             </Stack>
@@ -316,7 +293,6 @@ export default function TenantTicketDetailPage() {
                         )}
                     </Paper>
 
-                    {/* Support Context */}
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 6 }}>
                         <Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Info size={16} /> NEED ASSISTANCE?
@@ -330,4 +306,3 @@ export default function TenantTicketDetailPage() {
         </Box>
     );
 }
-
