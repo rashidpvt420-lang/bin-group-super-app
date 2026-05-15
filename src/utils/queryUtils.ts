@@ -1,43 +1,65 @@
 // src/utils/queryUtils.ts
-import { query, where, onSnapshot, type Query, type DocumentData } from '../lib/firebase';
+import { query, where, onSnapshot, type DocumentData, type Unsubscribe } from '../lib/firebase';
+import type { CollectionReference, Query as FirestoreQuery, QuerySnapshot } from 'firebase/firestore';
+
+type EqualityFilter = {
+    field: string;
+    value: unknown;
+};
+
+export type SnapshotDoc = {
+    id: string;
+    [key: string]: unknown;
+};
+
+function snapshotToRows(snap: QuerySnapshot<DocumentData>): SnapshotDoc[] {
+    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+}
 
 /**
- * Execute a query with a split 'in' filter if items > 10 to bypass Firestore limits.
- * Deduplicates results by document ID.
+ * Execute a Firestore query with a split `in` filter when values exceed the
+ * Firestore 10-value limit. Results from concurrent listeners are merged and
+ * deduplicated by document ID.
  */
-export const onSnapshotSplitIn = (
-    queryBuilder: (chunk: string[]) => Query<DocumentData>,
+export function onSnapshotSplitIn(
+    baseQuery: FirestoreQuery<DocumentData> | CollectionReference<DocumentData>,
+    equalityFilter: EqualityFilter,
+    inField: string,
     values: string[],
-    callback: (mergedDocs: any[]) => void
-) => {
-    // If values are within single query limit, use standard path
-    if (values.length <= 10) {
-        return onSnapshot(queryBuilder(values), (snap) => {
-            callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-    }
-
-    // Split into chunks of 10
+    callback: (mergedDocs: SnapshotDoc[]) => void
+): Unsubscribe {
+    const uniqueValues = Array.from(new Set(values.filter(Boolean)));
     const chunks: string[][] = [];
-    for (let i = 0; i < values.length; i += 10) {
-        chunks.push(values.slice(i, i + 10));
+
+    for (let i = 0; i < uniqueValues.length; i += 10) {
+        chunks.push(uniqueValues.slice(i, i + 10));
     }
 
-    const resultsMap = new Map<number, any[]>();
+    if (chunks.length === 0) {
+        callback([]);
+        return () => undefined;
+    }
+
+    const resultsMap = new Map<number, SnapshotDoc[]>();
+
     const unsubscribers = chunks.map((chunk, index) => {
-        return onSnapshot(queryBuilder(chunk), (snap) => {
-            resultsMap.set(index, snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            
-            // Merge all results from all listeners
-            const allDocs = Array.from(resultsMap.values()).flat();
-            
-            // Deduplicate by ID
-            const uniqueDocsMap = new Map<string, any>();
-            allDocs.forEach(doc => uniqueDocsMap.set(doc.id, doc));
-            
+        const q = query(
+            baseQuery,
+            where(equalityFilter.field, '==', equalityFilter.value),
+            where(inField, 'in', chunk)
+        );
+
+        return onSnapshot(q, (snap: QuerySnapshot<DocumentData>) => {
+            resultsMap.set(index, snapshotToRows(snap));
+
+            const uniqueDocsMap = new Map<string, SnapshotDoc>();
+            Array.from(resultsMap.values())
+                .flat()
+                .forEach((row) => uniqueDocsMap.set(row.id, row));
+
             callback(Array.from(uniqueDocsMap.values()));
         });
     });
 
-    return () => unsubscribers.forEach(unsub => unsub());
-};
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+}
