@@ -53,6 +53,7 @@ import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
+import UnitStatusPage from './pages/admin/UnitStatusPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -143,6 +144,8 @@ function AppContent() {
                     <Route path="/hr" element={<ProtectedRoute adminOnly><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
+                    <Route path="/admin/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                 </Route>
             )}
 

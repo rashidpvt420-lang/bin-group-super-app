@@ -2390,7 +2390,7 @@ export const processPayment = onCall({ cors: true }, async (request) => {
 });
 
 /**
- * [V16] AI DISPATCH & AUTO-ROUTING
+ * [V16] AI DISPATCH & AUTO-ROUTING V2
  * Geospatial technician assignment for maintenance tickets.
  */
 export const autoRouteTicketV2 = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
@@ -2456,3 +2456,75 @@ export const autoRouteTicketV2 = onDocumentCreated("maintenanceTickets/{id}", as
         });
     }
 });
+
+/**
+ * [PHASE 5] ADMIN UNIT OPERATIONS CONTROL
+ * Allows administrators to update unit lifecycle state, occupancy, and maintenance status.
+ */
+export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Admin identity required.");
+    const adminUid = request.auth.uid;
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "ceo"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Only administrators can update unit lifecycle states.");
+
+    const payload = assertPlainObject(request.data || {}, "Unit update payload");
+    const unitId = safeString(payload.unitId);
+    
+    if (!unitId) throw new HttpsError("invalid-argument", "Unit ID is required.");
+
+    const occupancyStatus = safeString(payload.occupancyStatus);
+    const tenantStatus = safeString(payload.tenantStatus);
+    const maintenanceStatus = safeString(payload.maintenanceStatus);
+    const adminStatusNotes = safeString(payload.adminStatusNotes);
+
+    // Validation
+    const validOccupancy = ["vacant", "occupied", "under_maintenance"];
+    const validTenantStatus = ["none", "invited", "active", "moved_out"];
+    const validMaintenance = ["normal", "under_maintenance", "blocked"];
+
+    if (occupancyStatus && !validOccupancy.includes(occupancyStatus)) {
+        throw new HttpsError("invalid-argument", `Invalid occupancyStatus: ${occupancyStatus}`);
+    }
+    if (tenantStatus && !validTenantStatus.includes(tenantStatus)) {
+        throw new HttpsError("invalid-argument", `Invalid tenantStatus: ${tenantStatus}`);
+    }
+    if (maintenanceStatus && !validMaintenance.includes(maintenanceStatus)) {
+        throw new HttpsError("invalid-argument", `Invalid maintenanceStatus: ${maintenanceStatus}`);
+    }
+
+    const unitRef = db.collection("units").doc(unitId);
+    const unitSnap = await unitRef.get();
+    if (!unitSnap.exists) throw new HttpsError("not-found", "Unit record not found.");
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const updates: any = {
+        updatedAt: timestamp,
+        statusUpdatedAt: timestamp,
+        statusUpdatedBy: adminUid
+    };
+
+    if (occupancyStatus) updates.occupancyStatus = occupancyStatus;
+    if (tenantStatus) updates.tenantStatus = tenantStatus;
+    if (maintenanceStatus) updates.maintenanceStatus = maintenanceStatus;
+    if (adminStatusNotes !== undefined) updates.adminStatusNotes = adminStatusNotes;
+
+    await db.runTransaction(async (transaction) => {
+        transaction.update(unitRef, updates);
+
+        // Audit Log
+        const auditRef = db.collection("audit_logs").doc();
+        transaction.set(auditRef, {
+            action: "UNIT_OPS_UPDATE",
+            actorId: adminUid,
+            actorRole: "admin",
+            targetType: "units",
+            targetId: unitId,
+            before: unitSnap.data(),
+            after: { ...unitSnap.data(), ...updates },
+            createdAt: timestamp
+        });
+    });
+
+    return { success: true };
+});
+
