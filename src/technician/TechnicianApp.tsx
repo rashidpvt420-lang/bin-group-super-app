@@ -1,10 +1,11 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Avatar } from '@mui/material';
-import { ArrowLeft, Home, Bell, Globe, Wrench, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Globe, Wrench, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { NotificationBell } from '../components/NotificationBell';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -65,11 +66,10 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                             </Typography>
                         </IconButton>
                         
-                        <IconButton onClick={() => navigate('/technician/profile')} sx={{ color: 'rgba(255,255,255,0.4)' }}>
-                            <Bell size={20} />
-                        </IconButton>
+                        <NotificationBell />
 
                         <Avatar 
+                            onClick={() => navigate('/technician/profile')}
                             sx={{ 
                                 width: 36, 
                                 height: 36, 
@@ -77,7 +77,8 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, 
                                 color: binThemeTokens.gold,
                                 fontSize: '0.8rem',
-                                fontWeight: 900
+                                fontWeight: 900,
+                                cursor: 'pointer'
                             }}
                         >
                             {user?.displayName?.charAt(0) || 'T'}
