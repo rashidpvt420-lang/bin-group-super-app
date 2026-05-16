@@ -3,12 +3,10 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
   
-    // Helper: Is Authenticated
     function isAuth() {
       return request.auth != null;
     }
 
-    // Helper: Role Verification (Sovereign Role Protocol)
     function hasRole(role) {
       return isAuth() && request.auth.token.role == role;
     }
@@ -45,8 +43,6 @@ service firebase.storage {
              request.resource.contentType.matches('image/.*');
     }
 
-    // ─── [V12] MAINTENANCE TICKET PHOTO EVIDENCE ───────────────────────────
-
     // Tenant issue photos uploaded by TenantRequestPage.tsx:
     // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
     match /maintenanceTickets/{tenantId}/{fileName} {
@@ -60,11 +56,16 @@ service firebase.storage {
       allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
     }
 
-    // ─── [V11] INSTITUTIONAL PROOF & DOCUMENTS ────────────────────────────────
-    
+    // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
+    // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
+    match /design_requests/{userId}/{fileName} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole());
+      allow write: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+    }
+
     // Proofs: before/after photos for tickets
     match /proofs/{ticketId}/{allPaths=**} {
-      allow read: if isAuth(); // Tenant/Owner can read their mission proof
+      allow read: if isAuth();
       allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
     }
 
@@ -85,7 +86,7 @@ service firebase.storage {
     // Contracts: Institutional agreements
     match /contracts/{contractId}/{allPaths=**} {
       allow read: if isAuth() && (isAdmin() || isOwnerRole());
-      allow write: if isAdmin(); // Only Admin can upload authoritative contracts
+      allow write: if isAdmin();
     }
 
     // Invoices: Financial records
@@ -94,7 +95,6 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
-    // ─── LEGACY COMPATIBILITY ──────────────────────────────────────────────
     match /kyc_documents/{documentId} {
       allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
