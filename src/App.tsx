@@ -40,6 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import { NavigationControl } from './components/navigation/NavigationControl';
 import { CustomThemeProvider } from './context/ThemeContext';
+import { attachForegroundPushListener, registerPushNotifications, shouldRequestPushForRole } from './services/pushNotificationService';
 
 const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'];
 const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';
@@ -82,22 +83,7 @@ function LoadingScreen() {
   };
 
   return (
-    <Box sx={{
-      height: '100dvh',
-      width: '100vw',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      bgcolor: '#000',
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      zIndex: 9999,
-      p: 4,
-      overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch',
-    }}>
+    <Box sx={{ height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#000', position: 'fixed', top: 0, left: 0, zIndex: 9999, p: 4, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       {!showRecovery ? (
         <>
           <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
@@ -129,6 +115,35 @@ function LoadingScreen() {
       )}
     </Box>
   );
+}
+
+function PushNotificationBootstrap() {
+  const { user, role } = useRole();
+
+  React.useEffect(() => {
+    let detach: undefined | (() => void);
+    let cancelled = false;
+
+    if (!user?.uid || !shouldRequestPushForRole(role)) return undefined;
+
+    registerPushNotifications(user.uid, role)
+      .then((result) => {
+        if (!result.enabled) console.warn('[Push] Registration skipped:', result.reason);
+      })
+      .catch((error) => console.warn('[Push] Registration failed:', error));
+
+    attachForegroundPushListener().then((unsubscribe) => {
+      if (cancelled && typeof unsubscribe === 'function') unsubscribe();
+      else detach = typeof unsubscribe === 'function' ? unsubscribe : undefined;
+    });
+
+    return () => {
+      cancelled = true;
+      if (detach) detach();
+    };
+  }, [user?.uid, role]);
+
+  return null;
 }
 
 const PUBLIC_ROUTE_PATHS = new Set([
@@ -187,6 +202,7 @@ function AppContent() {
 
   return (
     <RoleRedirector>
+      <PushNotificationBootstrap />
       <Routes>
         <Route path="/" element={<PublicMarketingPage page="home" />} />
         <Route path="/owner-landing" element={<OwnerLandingPage />} />
@@ -219,7 +235,6 @@ function AppContent() {
         <Route path="/request-demo" element={<PublicMarketingPage page="request-demo" />} />
         <Route path="/company" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
-
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
