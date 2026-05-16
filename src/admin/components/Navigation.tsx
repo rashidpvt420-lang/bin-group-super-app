@@ -4,13 +4,10 @@ import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typog
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import SecurityIcon from '@mui/icons-material/Security';
-import SettingsIcon from '@mui/icons-material/Settings';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import LogoutIcon from '@mui/icons-material/Logout';
 import FileTextIcon from '@mui/icons-material/Description';
-import { Sparkles, Users, Zap, Shield, MapPin, Activity, DollarSign, LayoutDashboard, Cpu, Building2 } from 'lucide-react';
+import LogoutIcon from '@mui/icons-material/Logout';
+import { Sparkles, Users, Zap, Shield, Activity, DollarSign, LayoutDashboard, Cpu, Building2, FileSignature } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import { auth } from '@/lib/firebase';
@@ -19,7 +16,7 @@ import CeoContactButtons from './CeoContactButtons';
 import { useAuth } from '../context/AuthContext';
 
 const Navigation = () => {
-    const { t, tx, isRTL } = useLanguage();
+    const { tx, isRTL } = useLanguage();
     const { user } = useAuth();
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
@@ -29,6 +26,7 @@ const Navigation = () => {
         { text: 'Smart Building Monitor', icon: <Cpu size={20} />, path: '/admin/smart-building', color: binThemeTokens.gold },
         { text: 'Sovereign Control', icon: <Shield size={20} />, path: '/admin/sovereign-control', color: binThemeTokens.gold },
         { text: tx('fin.title', 'Financials'), icon: <DollarSign size={20} />, path: '/admin/financials', color: binThemeTokens.gold },
+        { text: 'Document OS™', icon: <FileSignature size={20} />, path: '/admin/document-os', color: binThemeTokens.gold },
         { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/admin/document-vault', color: binThemeTokens.gold },
         { text: 'Company Identity', icon: <Building2 size={20} />, path: '/admin/company-profile', color: binThemeTokens.gold },
         { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/admin/audit-shield', color: binThemeTokens.gold },
@@ -127,4 +125,3 @@ const Navigation = () => {
 };
 
 export default Navigation;
-
