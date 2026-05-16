@@ -47,24 +47,21 @@ service cloud.firestore {
       allow create: if signedIn() && isOwner(userId) && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician'];
       allow update: if isAdmin() || hasPermission('canManageStaff') || (
         isOwner(userId) &&
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.permissions == resource.data.permissions &&
         (
-          (resource.data.role == 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
-            'dutyStartedAt', 'dutyEndedAt', 'lastLocation', 'lastSeenAt', 'updatedAt',
-            'status', 'dashboardUnlocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId',
-            'dashboardLocked', 'activeContractId', 'latestIntakeId', 'fcmTokens', 'pushEnabled', 'pushUpdatedAt'
-          ])) ||
-          (resource.data.role != 'technician' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'displayName','name','phone','mobile','photoURL','language',
-            'updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance',
-            'gpsConsent','onboardingComplete','fcmTokens','pushEnabled','pushUpdatedAt',
-            'dutyStatus', 'onDuty', 'shiftStartedAt', 'shiftEndedAt', 'breakStartedAt', 'breakEndedAt',
-            'status', 'dashboardLocked', 'adminApproved', 'paymentVerified', 'onboardingSubmissionId',
-            'dashboardUnlocked', 'activeContractId', 'latestIntakeId', 'approvedAt', 'approvedBy'
-          ]))
-        )
+          (resource.data.role == null && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician']) ||
+          request.resource.data.role == resource.data.role
+        ) &&
+        (
+          !('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid','email','displayName','name','phone','mobile','photoURL','language',
+          'role','status','dashboardLocked','dashboardUnlocked','adminApproved','paymentVerified',
+          'onboardingSubmissionId','activeContractId','latestIntakeId','approvedAt','approvedBy',
+          'createdAt','updatedAt','lastLoginAt','legalAcceptedAt','pdplCompliance','gpsConsent','onboardingComplete',
+          'fcmTokens','pushEnabled','pushUpdatedAt','dutyStatus','onDuty','shiftStartedAt','shiftEndedAt',
+          'breakStartedAt','breakEndedAt','dutyStartedAt','dutyEndedAt','lastLocation','lastSeenAt'
+        ])
       );
       allow delete: if isAdmin() || hasPermission('canManageStaff');
 
@@ -88,7 +85,8 @@ service cloud.firestore {
 
     match /owners/{ownerId} {
       allow read: if isOwner(ownerId) || isAdmin() || hasPermission('canManageTenants');
-      allow create, update, delete: if isAdmin() || hasPermission('canManageTenants');
+      allow create, update: if isOwner(ownerId) || isAdmin() || hasPermission('canManageTenants');
+      allow delete: if isAdmin() || hasPermission('canManageTenants');
     }
 
     match /properties/{propertyId} {
