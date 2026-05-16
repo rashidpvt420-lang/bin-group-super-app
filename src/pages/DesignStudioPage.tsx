@@ -22,10 +22,17 @@ import { NotificationEvents } from '../lib/notificationService';
 import { logAuditAction } from '../utils/auditLogger';
 import { LinearProgress } from '@mui/material';
 
+const TENANT_ALLOWED_DESIGN_ADDONS: string[] = [];
+const isOwnerSideRole = (role?: string | null) => ['owner', 'admin', 'ceo', 'super_admin', 'manager'].includes(String(role || '').toLowerCase());
+
 export default function DesignStudioPage() {
     const { user, role } = useRole();
     const { t, tx } = useLanguage();
     const navigate = useNavigate();
+    const tenantMode = String(role || '').toLowerCase() === 'tenant';
+    const visibleAddonServices = tenantMode
+        ? ADDON_SERVICES.filter((addon) => TENANT_ALLOWED_DESIGN_ADDONS.includes(addon.id))
+        : ADDON_SERVICES;
     
     const [properties, setProperties] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,7 +42,6 @@ export default function DesignStudioPage() {
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
 
-    // New Input States
     const [referenceImages, setReferenceImages] = useState<string[]>([]);
     const [scopeDescription, setScopeDescription] = useState('');
     const [keepConstraints, setKeepConstraints] = useState('');
@@ -58,8 +64,6 @@ export default function DesignStudioPage() {
 
     const [selectedPropertyId, setSelectedPropertyId] = useState('');
     const [designStyle, setDesignStyle] = useState('Modern');
-    
-    // Detailed Context Fields
     const [unitNumber, setUnitNumber] = useState('');
     const [floorLevel, setFloorLevel] = useState('');
     const [existingCondition, setExistingCondition] = useState('');
@@ -84,6 +88,17 @@ export default function DesignStudioPage() {
         };
         fetchProperties();
     }, [user, role]);
+
+    useEffect(() => {
+        if (!tenantMode) return;
+        setScope((prev) => ({
+            ...prev,
+            addons: prev.addons.filter((id) => TENANT_ALLOWED_DESIGN_ADDONS.includes(id)),
+            hasMEP: false,
+            hasStructural: false,
+            isNightWork: false,
+        }));
+    }, [tenantMode]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -114,7 +129,14 @@ export default function DesignStudioPage() {
                 const storageRef = ref(storage, `design_requests/${currentUser.uid}/${Date.now()}_${i}_${safeName}`);
                 
                 await new Promise<void>((resolve, reject) => {
-                    const uploadTask = uploadBytesResumable(storageRef, file);
+                    const uploadTask = uploadBytesResumable(storageRef, file, {
+                        contentType: file.type || 'image/jpeg',
+                        customMetadata: {
+                            uploadedBy: currentUser.uid,
+                            feature: 'design_studio',
+                            role: String(role || 'user'),
+                        },
+                    });
                     uploadTask.on('state_changed', 
                         (snapshot) => {
                             const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -149,8 +171,8 @@ export default function DesignStudioPage() {
             console.error("Upload failure:", err);
             const code = (err as any)?.code || '';
             setUploadError(
-                code.includes('unauthorized')
-                    ? "Image upload is blocked for this account. Please sign in again or contact support."
+                code.includes('unauthorized') || code.includes('storage/unauthorized')
+                    ? "Image upload is not allowed for this account yet. Please refresh, sign in again, and retry."
                     : "Image upload failed. Please retry or choose another image."
             );
         } finally {
@@ -164,6 +186,7 @@ export default function DesignStudioPage() {
     };
 
     const handleAddonToggle = (id: string) => {
+        if (tenantMode && !TENANT_ALLOWED_DESIGN_ADDONS.includes(id)) return;
         setScope(prev => ({
             ...prev,
             addons: prev.addons.includes(id) 
@@ -176,7 +199,10 @@ export default function DesignStudioPage() {
         setSubmitting(true);
         try {
             const property = properties.find(p => p.id === selectedPropertyId);
-            const quote = calculateDesignStudioQuote(scope);
+            const safeScope = tenantMode
+                ? { ...scope, addons: [], hasMEP: false, hasStructural: false, isNightWork: false }
+                : scope;
+            const quote = calculateDesignStudioQuote(safeScope);
             
             const requestData = {
                 userId: user?.uid,
@@ -185,7 +211,7 @@ export default function DesignStudioPage() {
                 propertyName: property?.name || property?.propertyName || 'Selected Property',
                 ownerId: property?.ownerId || 'SYSTEM',
                 scope: {
-                    ...scope,
+                    ...safeScope,
                     scopeDescription,
                     keepConstraints,
                     referenceImages,
@@ -195,8 +221,9 @@ export default function DesignStudioPage() {
                     requiredWork
                 },
                 metadata: {
-                    adminNotes,
-                    staffInstructions
+                    adminNotes: isOwnerSideRole(role) ? adminNotes : '',
+                    staffInstructions: isOwnerSideRole(role) ? staffInstructions : '',
+                    tenantMode
                 },
                 designStyle,
                 quote,
@@ -225,7 +252,8 @@ export default function DesignStudioPage() {
                     propertyId: selectedPropertyId, 
                     zoneType: scope.zoneType,
                     style: designStyle,
-                    imageCount: referenceImages.length
+                    imageCount: referenceImages.length,
+                    tenantMode
                 }
             });
 
@@ -329,67 +357,29 @@ export default function DesignStudioPage() {
                             </Box>
 
                             <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Redesign Objective</Typography>
-                            <TextField 
-                                multiline rows={3} fullWidth 
-                                placeholder="Describe what you want to achieve..."
-                                value={scopeDescription}
-                                onChange={(e) => setScopeDescription(e.target.value)}
-                                sx={{ mb: 3 }}
-                            />
+                            <TextField multiline rows={3} fullWidth placeholder="Describe what you want to achieve..." value={scopeDescription} onChange={(e) => setScopeDescription(e.target.value)} sx={{ mb: 3 }} />
 
                             <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Constraints (Must keep / Must avoid)</Typography>
-                            <TextField 
-                                multiline rows={2} fullWidth 
-                                placeholder="e.g. Keep the flooring, avoid dark colors..."
-                                value={keepConstraints}
-                                onChange={(e) => setKeepConstraints(e.target.value)}
-                                sx={{ mb: 3 }}
-                            />
+                            <TextField multiline rows={2} fullWidth placeholder="e.g. Keep the flooring, avoid dark colors..." value={keepConstraints} onChange={(e) => setKeepConstraints(e.target.value)} sx={{ mb: 3 }} />
 
                             <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Existing Condition & Required Work</Typography>
-                            <TextField 
-                                multiline rows={2} fullWidth 
-                                placeholder="Describe current state..."
-                                value={existingCondition}
-                                onChange={(e) => setExistingCondition(e.target.value)}
-                                sx={{ mb: 2 }}
-                            />
-                            <TextField 
-                                multiline rows={2} fullWidth 
-                                placeholder="List required work..."
-                                value={requiredWork}
-                                onChange={(e) => setRequiredWork(e.target.value)}
-                            />
+                            <TextField multiline rows={2} fullWidth placeholder="Describe current state..." value={existingCondition} onChange={(e) => setExistingCondition(e.target.value)} sx={{ mb: 2 }} />
+                            <TextField multiline rows={2} fullWidth placeholder="List required work..." value={requiredWork} onChange={(e) => setRequiredWork(e.target.value)} />
                         </Paper>
 
                         <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <Home color={binThemeTokens.gold} /> 2. SELECT ASSET
                             </Typography>
-                            <TextField 
-                                select fullWidth label="Property Node" 
-                                value={selectedPropertyId} 
-                                onChange={(e) => setSelectedPropertyId(e.target.value)}
-                                sx={{ mb: 3 }}
-                            >
+                            <TextField select fullWidth label="Property Node" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} sx={{ mb: 3 }}>
                                 {properties.map(p => <MenuItem key={p.id} value={p.id}>{p.name || p.propertyName}</MenuItem>)}
                             </TextField>
 
-                            <TextField 
-                                select fullWidth label="Redesign Zone" 
-                                value={scope.zoneType} 
-                                onChange={(e) => setScope({...scope, zoneType: e.target.value})}
-                                sx={{ mb: 3 }}
-                            >
+                            <TextField select fullWidth label="Redesign Zone" value={scope.zoneType} onChange={(e) => setScope({...scope, zoneType: e.target.value})} sx={{ mb: 3 }}>
                                 {DESIGN_ZONES.map(z => <MenuItem key={z} value={z}>{z.toUpperCase()}</MenuItem>)}
                             </TextField>
 
-                            <TextField 
-                                select fullWidth label="Design Style" 
-                                value={designStyle} 
-                                onChange={(e) => setDesignStyle(e.target.value)}
-                                sx={{ mb: 3 }}
-                            >
+                            <TextField select fullWidth label="Design Style" value={designStyle} onChange={(e) => setDesignStyle(e.target.value)} sx={{ mb: 3 }}>
                                 <MenuItem value="Modern">MODERN</MenuItem>
                                 <MenuItem value="Luxury">LUXURY</MenuItem>
                                 <MenuItem value="Minimalist">MINIMALIST</MenuItem>
@@ -418,56 +408,50 @@ export default function DesignStudioPage() {
                             
                             <Box sx={{ mb: 4 }}>
                                 <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>AREA: {scope.dimensions} SQ FT</Typography>
-                                <Slider 
-                                    value={scope.dimensions} 
-                                    min={10} max={5000} 
-                                    onChange={(_, v) => setScope({...scope, dimensions: v as number})}
-                                    sx={{ color: binThemeTokens.gold }}
-                                />
+                                <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, v) => setScope({...scope, dimensions: v as number})} sx={{ color: binThemeTokens.gold }} />
                             </Box>
 
-                            <Box sx={{ mb: 4 }}>
-                                <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>FURNITURE BUDGET: AED {scope.furnitureBudget.toLocaleString()}</Typography>
-                                <Slider 
-                                    value={scope.furnitureBudget} 
-                                    min={0} max={500000} step={5000}
-                                    onChange={(_, v) => setScope({...scope, furnitureBudget: v as number})}
-                                    sx={{ color: binThemeTokens.gold }}
-                                />
-                            </Box>
+                            {!tenantMode && (
+                                <Box sx={{ mb: 4 }}>
+                                    <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>FURNITURE BUDGET: AED {scope.furnitureBudget.toLocaleString()}</Typography>
+                                    <Slider value={scope.furnitureBudget} min={0} max={500000} step={5000} onChange={(_, v) => setScope({...scope, furnitureBudget: v as number})} sx={{ color: binThemeTokens.gold }} />
+                                </Box>
+                            )}
 
-                            <Stack spacing={1}>
-                                <FormControlLabel control={<Checkbox checked={scope.hasMEP} onChange={(e) => setScope({...scope, hasMEP: e.target.checked})} />} label="MEP Changes (Electrical/Plumbing)" />
-                                <FormControlLabel control={<Checkbox checked={scope.hasStructural} onChange={(e) => setScope({...scope, hasStructural: e.target.checked})} />} label="Structural Changes (Walls/Partitions)" />
-                                <FormControlLabel control={<Checkbox checked={scope.isNightWork} onChange={(e) => setScope({...scope, isNightWork: e.target.checked})} />} label="Night-shift Execution" />
-                            </Stack>
+                            {!tenantMode && (
+                                <Stack spacing={1}>
+                                    <FormControlLabel control={<Checkbox checked={scope.hasMEP} onChange={(e) => setScope({...scope, hasMEP: e.target.checked})} />} label="MEP Changes (Electrical/Plumbing)" />
+                                    <FormControlLabel control={<Checkbox checked={scope.hasStructural} onChange={(e) => setScope({...scope, hasStructural: e.target.checked})} />} label="Structural Changes (Walls/Partitions)" />
+                                    <FormControlLabel control={<Checkbox checked={scope.isNightWork} onChange={(e) => setScope({...scope, isNightWork: e.target.checked})} />} label="Night-shift Execution" />
+                                </Stack>
+                            )}
+
+                            {tenantMode && (
+                                <Alert severity="info" icon={<Info />} sx={{ mt: 2, bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
+                                    Tenant requests are submitted as owner NOC design concepts. Paid execution add-ons are hidden until owner approval.
+                                </Alert>
+                            )}
                         </Paper>
 
-                        <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', flexGrow: 1 }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <ImageIcon color={binThemeTokens.gold} /> 4. SELECT ADD-ON SERVICES
-                            </Typography>
-                            <Grid container spacing={1}>
-                                {ADDON_SERVICES.map(addon => (
-                                    <Grid item xs={12} key={addon.id}>
-                                        <Paper 
-                                            onClick={() => handleAddonToggle(addon.id)}
-                                            sx={{ 
-                                                p: 2, cursor: 'pointer',
-                                                bgcolor: scope.addons.includes(addon.id) ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
-                                                border: `1px solid ${scope.addons.includes(addon.id) ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
-                                                borderRadius: 2, transition: 'all 0.2s ease'
-                                            }}
-                                        >
-                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                                <Typography variant="body2" fontWeight={scope.addons.includes(addon.id) ? 900 : 400}>{addon.label}</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>+AED {addon.price.toLocaleString()}</Typography>
-                                            </Stack>
-                                        </Paper>
-                                    </Grid>
-                                ))}
-                            </Grid>
-                        </Paper>
+                        {!tenantMode && (
+                            <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', flexGrow: 1 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <ImageIcon color={binThemeTokens.gold} /> 4. SELECT ADD-ON SERVICES
+                                </Typography>
+                                <Grid container spacing={1}>
+                                    {visibleAddonServices.map(addon => (
+                                        <Grid item xs={12} key={addon.id}>
+                                            <Paper onClick={() => handleAddonToggle(addon.id)} sx={{ p: 2, cursor: 'pointer', bgcolor: scope.addons.includes(addon.id) ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)', border: `1px solid ${scope.addons.includes(addon.id) ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 2, transition: 'all 0.2s ease' }}>
+                                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                    <Typography variant="body2" fontWeight={scope.addons.includes(addon.id) ? 900 : 400}>{addon.label}</Typography>
+                                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>+AED {addon.price.toLocaleString()}</Typography>
+                                                </Stack>
+                                            </Paper>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+                            </Paper>
+                        )}
                     </Stack>
                 </Grid>
 
@@ -479,12 +463,7 @@ export default function DesignStudioPage() {
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
                                 Our Sovereign AI will synthesize your requirements and generate a free conceptual layout and scope-locked execution quote.
                             </Typography>
-                            <Button 
-                                variant="contained" fullWidth size="large" 
-                                onClick={handleInitializeStudio} disabled={submitting || !selectedPropertyId}
-                                endIcon={submitting ? <CircularProgress size={20} /> : <ArrowRight />}
-                                sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
-                            >
+                            <Button variant="contained" fullWidth size="large" onClick={handleInitializeStudio} disabled={submitting || !selectedPropertyId} endIcon={submitting ? <CircularProgress size={20} /> : <ArrowRight />} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
                                 INITIALIZE STUDIO
                             </Button>
                         </Paper>
@@ -509,4 +488,3 @@ export default function DesignStudioPage() {
         </Container>
     );
 }
-
