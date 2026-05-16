@@ -4,21 +4,56 @@ import {
     Divider, alpha, CircularProgress, Chip, Alert
 } from '@mui/material';
 import { 
-    Sparkles, ArrowLeft, Download, ShieldCheck, CreditCard, 
-    CheckCircle2, Clock, XCircle, DollarSign, FileText
+    Sparkles, ArrowLeft, ShieldCheck, CreditCard, 
+    Clock, FileText, Image as ImageIcon, UserCheck, Building2, ClipboardList
 } from 'lucide-react';
-import { db, doc, onSnapshot, updateDoc, serverTimestamp } from '../lib/firebase';
+import { db, doc, onSnapshot, updateDoc, serverTimestamp, addDoc, collection } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
 import { NotificationEvents, ADDON_SERVICES } from '@bin/shared';
+import { logAuditAction } from '../utils/auditLogger';
+
+const terminalStatuses = ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED'];
+
+function text(value: unknown, fallback = '—') {
+    const resolved = String(value ?? '').trim();
+    return resolved || fallback;
+}
+
+function buildExecutionScope(request: any) {
+    const scope = request?.scope || {};
+    const quote = request?.quote || {};
+    return {
+        zoneType: text(scope.zoneType, 'Design zone'),
+        dimensions: Number(scope.dimensions || 0),
+        unitNumber: text(scope.unitNumber),
+        floorLevel: text(scope.floorLevel),
+        propertyName: text(request?.propertyName),
+        designStyle: text(request?.designStyle),
+        finishTier: text(scope.finishTier),
+        emirate: text(scope.emirate),
+        existingCondition: text(scope.existingCondition, 'Not declared'),
+        requiredWork: text(scope.requiredWork, 'Not declared'),
+        scopeDescription: text(scope.scopeDescription, 'Not declared'),
+        keepConstraints: text(scope.keepConstraints, 'No constraints declared'),
+        imageCount: Array.isArray(scope.referenceImages) ? scope.referenceImages.length : 0,
+        finalTotal: Number(quote.finalTotal || 0),
+        materialsEstimate: Number(quote.materialsEstimate || 0),
+        laborEstimate: Number(quote.laborEstimate || 0),
+        approvalsAllowance: Number(quote.approvalsAllowance || 0),
+        logisticsAllowance: Number(quote.logisticsAllowance || 0),
+        contingency: Number(quote.contingency || 0),
+        binMargin: Number(quote.binMargin || 0),
+    };
+}
 
 export default function DesignRequestDetailPage() {
     const { id } = useParams();
     const { user, role } = useRole();
-    const { t, tx } = useLanguage();
+    const { t } = useLanguage();
     const navigate = useNavigate();
     
     const [request, setRequest] = useState<any>(null);
@@ -37,17 +72,32 @@ export default function DesignRequestDetailPage() {
     }, [id]);
 
     const handleOwnerAction = async (action: 'APPROVE' | 'REJECT' | 'TAKEOVER') => {
-        if (!id || !request) return;
+        if (!id || !request || !user?.uid) return;
         setProcessing(true);
         try {
-            const status = action === 'APPROVE' ? 'OWNER_APPROVED' : action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_TAKEOVER_PAYMENT';
+            const status = action === 'APPROVE' ? 'OWNER_APPROVED_TENANT_TO_PAY' : action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED_OWNER_TO_PAY';
+            const payerRole = action === 'TAKEOVER' ? 'owner' : request.role === 'tenant' ? 'tenant' : 'owner';
+            const payerId = payerRole === 'owner' ? user.uid : request.userId;
+
             await updateDoc(doc(db, 'design_requests', id), {
                 status,
+                payerRole,
+                payerId,
+                ownerId: user.uid,
+                ownerAction: action,
                 updatedAt: serverTimestamp(),
                 ownerActionAt: serverTimestamp()
             });
 
-            // Trigger Notification for Tenant
+            await logAuditAction({
+                actorId: user.uid,
+                actorRole: role || 'owner',
+                action: `DESIGN_OWNER_${action}`,
+                targetType: 'design_requests',
+                targetId: id,
+                metadata: { payerRole, payerId, quoteTotal: request.quote?.finalTotal || 0 }
+            });
+
             if (action === 'APPROVE' && request.userId && request.role === 'tenant') {
                 await NotificationEvents.TENANT.DESIGN_APPROVED(
                     request.userId,
@@ -55,22 +105,99 @@ export default function DesignRequestDetailPage() {
                 );
             }
         } catch (err) {
-            console.error("Action Fault:", err);
+            console.error('Design owner action failed:', err);
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleAcceptQuote = async () => {
-        if (!id) return;
+    const handleCreatePaymentRequest = async () => {
+        if (!id || !request || !user?.uid) return;
         setProcessing(true);
         try {
+            const payerRole = request.payerRole || (request.role === 'tenant' ? 'tenant' : 'owner');
+            const payerId = request.payerId || user.uid;
+            const executionScope = buildExecutionScope(request);
+            const amount = Number(request.quote?.finalTotal || 0);
+
+            const paymentRef = await addDoc(collection(db, 'payment_transactions'), {
+                type: 'DESIGN_STUDIO_EXECUTION',
+                source: 'AI_DESIGN_STUDIO',
+                designRequestId: id,
+                propertyId: request.propertyId || null,
+                propertyName: request.propertyName || null,
+                ownerId: request.ownerId || null,
+                tenantId: request.role === 'tenant' ? request.userId : null,
+                payerId,
+                payerRole,
+                ownerEmail: request.ownerEmail || null,
+                ownerName: request.ownerName || null,
+                userId: payerId,
+                amount,
+                amountReceived: 0,
+                currency: 'AED',
+                status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+                paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+                verificationState: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+                paymentMethod: 'Manual / Admin Verification',
+                internalNotes: 'AI Design Studio execution quote payment pending admin verification.',
+                executionScope,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                activationRequestedAt: serverTimestamp(),
+            });
+
             await updateDoc(doc(db, 'design_requests', id), {
                 status: 'PAYMENT_PENDING',
-                updatedAt: serverTimestamp()
+                paymentId: paymentRef.id,
+                paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+                executionStatus: 'AWAITING_PAYMENT_VERIFICATION',
+                adminHandoffStatus: 'PAYMENT_QUEUE',
+                engineerHandoffStatus: 'WAITING_PAYMENT',
+                executionScope,
+                updatedAt: serverTimestamp(),
+                paymentRequestedAt: serverTimestamp(),
+            });
+
+            await logAuditAction({
+                actorId: user.uid,
+                actorRole: role || payerRole,
+                action: 'DESIGN_PAYMENT_REQUEST_CREATED',
+                targetType: 'design_requests',
+                targetId: id,
+                metadata: { paymentId: paymentRef.id, amount, payerRole }
             });
         } catch (err) {
-            console.error("Acceptance Fault:", err);
+            console.error('Design payment request failed:', err);
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleAdminEngineerHandoff = async () => {
+        if (!id || !request || !user?.uid) return;
+        setProcessing(true);
+        try {
+            const executionScope = request.executionScope || buildExecutionScope(request);
+            await updateDoc(doc(db, 'design_requests', id), {
+                status: 'ENGINEER_REVIEW',
+                adminHandoffStatus: 'ENGINEER_REVIEW',
+                engineerHandoffStatus: 'READY_FOR_SCOPE_REVIEW',
+                executionScope,
+                updatedAt: serverTimestamp(),
+                engineerHandoffAt: serverTimestamp(),
+            });
+
+            await logAuditAction({
+                actorId: user.uid,
+                actorRole: role || 'admin',
+                action: 'DESIGN_ENGINEER_HANDOFF_READY',
+                targetType: 'design_requests',
+                targetId: id,
+                metadata: executionScope
+            });
+        } catch (err) {
+            console.error('Engineer handoff failed:', err);
         } finally {
             setProcessing(false);
         }
@@ -79,10 +206,17 @@ export default function DesignRequestDetailPage() {
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (!request) return <Container sx={{ py: 10 }}><Typography>Request not found in Sovereign Registry.</Typography></Container>;
 
-    const { scope, quote } = request;
-    const isOwner = role === 'owner';
+    const { scope = {}, quote = {} } = request;
+    const isOwner = role === 'owner' || role === 'ceo';
+    const isTenant = role === 'tenant';
+    const isAdmin = ['admin', 'ceo'].includes(String(role || '').toLowerCase());
+    const isTenantRequest = request.role === 'tenant';
+    const isPayer = request.payerId ? request.payerId === user?.uid : request.userId === user?.uid || request.ownerId === user?.uid;
     const canApprove = isOwner && request.status === 'PENDING_OWNER_NOC';
-    const canAccept = (isOwner || request.status === 'OWNER_APPROVED') && request.status !== 'PAYMENT_PENDING' && request.status !== 'PAID';
+    const canCreatePayment = isPayer && !terminalStatuses.includes(request.status) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'AI_CONCEPT_READY'].includes(request.status);
+    const canAdminHandoff = isAdmin && ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID'].includes(request.status);
+    const referenceImages: string[] = Array.isArray(scope.referenceImages) ? scope.referenceImages : [];
+    const executionScope = request.executionScope || buildExecutionScope(request);
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
@@ -91,137 +225,160 @@ export default function DesignRequestDetailPage() {
             </Button>
 
             <Grid container spacing={6}>
-                {/* LEFT: CONCEPT & SCOPE */}
                 <Grid item xs={12} lg={7}>
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                         <Box sx={{ p: 4, borderBottom: '1px solid rgba(255,255,255,0.05)', bgcolor: alpha(binThemeTokens.gold, 0.05) }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>AI CONCEPT PREVIEW</Typography>
-                            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{scope.zoneType.toUpperCase()}</Typography>
+                            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{text(scope.zoneType, 'DESIGN').toUpperCase()}</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+                                {isTenantRequest ? 'Tenant request requires owner NOC before payment and execution.' : 'Owner request can proceed directly to payment and admin execution.'}
+                            </Typography>
                         </Box>
                         
-                        <Box sx={{ p: 0, height: 400, bgcolor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                            <Box component="img" src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80" sx={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
-                            <Box sx={{ position: 'absolute', bottom: 20, left: 20, right: 20, p: 2, bgcolor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
+                        <Box sx={{ p: 0, minHeight: 360, bgcolor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                            {referenceImages[0] ? (
+                                <Box component="img" src={referenceImages[0]} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.85 }} />
+                            ) : (
+                                <Box component="img" src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80" sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.7 }} />
+                            )}
+                            <Box sx={{ position: 'absolute', bottom: 20, left: 20, right: 20, p: 2, bgcolor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                                 <Typography variant="body2" sx={{ color: '#FFF', fontStyle: 'italic' }}>
-                                    "{quote.conceptDesignResult}"
+                                    "{quote.conceptDesignResult || `Concept generated for ${text(scope.zoneType, 'requested zone')}.`}"
                                 </Typography>
                             </Box>
                         </Box>
 
                         <Box sx={{ p: 4 }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 3 }}>DECLARED SCOPE PARAMETERS</Typography>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 3 }}>EXECUTION SCOPE FOR ADMIN / ENGINEER</Typography>
                             <Grid container spacing={3}>
-                                <Grid item xs={6} md={3}>
-                                    <Typography variant="caption" color="textSecondary">DIMENSIONS</Typography>
-                                    <Typography variant="body1" fontWeight="900">{scope.dimensions} SQ FT</Typography>
+                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">UNIT</Typography><Typography variant="body1" fontWeight="900">{executionScope.unitNumber}</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">FLOOR</Typography><Typography variant="body1" fontWeight="900">{executionScope.floorLevel}</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">DIMENSIONS</Typography><Typography variant="body1" fontWeight="900">{executionScope.dimensions} SQ FT</Typography></Grid>
+                                <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">FINISH TIER</Typography><Typography variant="body1" fontWeight="900">{executionScope.finishTier.toUpperCase()}</Typography></Grid>
+                            </Grid>
+
+                            <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+                            <Grid container spacing={3}>
+                                <Grid item xs={12} md={6}>
+                                    <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.025)', borderRadius: 3 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>CURRENT CONDITION</Typography>
+                                        <Typography variant="body2" sx={{ color: '#FFF', mt: 1 }}>{executionScope.existingCondition}</Typography>
+                                    </Paper>
                                 </Grid>
-                                <Grid item xs={6} md={3}>
-                                    <Typography variant="caption" color="textSecondary">FINISH TIER</Typography>
-                                    <Typography variant="body1" fontWeight="900">{scope.finishTier.toUpperCase()}</Typography>
+                                <Grid item xs={12} md={6}>
+                                    <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.025)', borderRadius: 3 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>REQUIRED WORK</Typography>
+                                        <Typography variant="body2" sx={{ color: '#FFF', mt: 1 }}>{executionScope.requiredWork}</Typography>
+                                    </Paper>
                                 </Grid>
-                                <Grid item xs={6} md={3}>
-                                    <Typography variant="caption" color="textSecondary">ACCESS</Typography>
-                                    <Typography variant="body1" fontWeight="900">{scope.accessLevel.toUpperCase()}</Typography>
-                                </Grid>
-                                <Grid item xs={6} md={3}>
-                                    <Typography variant="caption" color="textSecondary">EMIRATE</Typography>
-                                    <Typography variant="body1" fontWeight="900">{scope.emirate.toUpperCase()}</Typography>
-                                </Grid>
+                            </Grid>
+
+                            <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+                            <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>REFERENCE IMAGES</Typography>
+                            <Grid container spacing={2}>
+                                {referenceImages.map((url) => (
+                                    <Grid item xs={6} md={4} key={url}>
+                                        <Box component="img" src={url} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }} />
+                                    </Grid>
+                                ))}
+                                {referenceImages.length === 0 && (
+                                    <Grid item xs={12}>
+                                        <Alert icon={<ImageIcon size={18} />} severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe' }}>No reference images uploaded.</Alert>
+                                    </Grid>
+                                )}
                             </Grid>
 
                             <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
 
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>SELECTED ADD-ONS</Typography>
                             <Stack direction="row" spacing={1} flexWrap="wrap">
-                                {scope.addons.map((a: string) => (
-                                    <Chip key={a} label={ADDON_SERVICES.find(s => s.id === a)?.label} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF' }} />
+                                {(scope.addons || []).map((a: string) => (
+                                    <Chip key={a} label={ADDON_SERVICES.find(s => s.id === a)?.label || a} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF' }} />
                                 ))}
-                                {scope.addons.length === 0 && <Typography variant="body2" color="textSecondary">No additional services selected.</Typography>}
+                                {(scope.addons || []).length === 0 && <Typography variant="body2" color="textSecondary">No additional services selected.</Typography>}
                             </Stack>
                         </Box>
                     </Paper>
                 </Grid>
 
-                {/* RIGHT: BINDING QUOTE */}
                 <Grid item xs={12} lg={5}>
-                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}` }}>
-                        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION PROTOCOL</Typography>
-                                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal)}</Typography>
+                    <Stack spacing={4}>
+                        <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}` }}>
+                            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <Box>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION QUOTE</Typography>
+                                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal || 0)}</Typography>
+                                </Box>
+                                <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} />
                             </Box>
-                            <Chip label={request.status.replace('_', ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} />
-                        </Box>
 
-                        <Stack spacing={2} sx={{ mb: 4 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Materials Estimate</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.materialsEstimate)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Labor & Technical Execution</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.laborEstimate)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Approvals & Logistics Allowance</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.approvalsAllowance + quote.logisticsAllowance)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Add-on Services Subtotal</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.addonSubtotal)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Furniture Procurement Fee (25%)</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.furnitureProcurementFee)}</Typography>
-                            </Box>
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">Contingency (15%)</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.contingency)}</Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" color="textSecondary">BIN Group Management Margin</Typography>
-                                <Typography variant="body2" fontWeight="900">{formatAED(quote.binMargin)}</Typography>
-                            </Box>
-                        </Stack>
-
-                        <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#60A5FA', mb: 4, '& .MuiAlert-message': { fontSize: '0.75rem', lineHeight: 1.4 } }}>
-                            {quote.bindingClause}
-                        </Alert>
-
-                        {canApprove && (
-                            <Stack spacing={2}>
-                                <Button variant="contained" fullWidth size="large" onClick={() => handleOwnerAction('APPROVE')} disabled={processing} sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
-                                    APPROVE DESIGN & QUOTE
-                                </Button>
-                                <Stack direction="row" spacing={2}>
-                                    <Button variant="outlined" fullWidth onClick={() => handleOwnerAction('TAKEOVER')} disabled={processing} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
-                                        TAKEOVER PAYMENT
-                                    </Button>
-                                    <Button variant="outlined" fullWidth color="error" onClick={() => handleOwnerAction('REJECT')} disabled={processing} sx={{ fontWeight: 950 }}>
-                                        REJECT
-                                    </Button>
-                                </Stack>
+                            <Stack spacing={2} sx={{ mb: 4 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">Materials Estimate</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.materialsEstimate || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">Labor & Technical Execution</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.laborEstimate || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">Approvals & Logistics</Typography><Typography variant="body2" fontWeight="900">{formatAED((quote.approvalsAllowance || 0) + (quote.logisticsAllowance || 0))}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">Add-on Services</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.addonSubtotal || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">Contingency</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.contingency || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" color="textSecondary">BIN Group Management Margin</Typography><Typography variant="body2" fontWeight="900">{formatAED(quote.binMargin || 0)}</Typography></Box>
                             </Stack>
-                        )}
 
-                        {canAccept && (
-                            <Button variant="contained" fullWidth size="large" onClick={handleAcceptQuote} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                                ACCEPT & PROCEED TO PAYMENT
-                            </Button>
-                        )}
+                            <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#60A5FA', mb: 4, '& .MuiAlert-message': { fontSize: '0.75rem', lineHeight: 1.4 } }}>
+                                {quote.bindingClause || 'Scope locked quote. Any hidden condition or owner/admin variation requires updated approval.'}
+                            </Alert>
 
-                        {request.status === 'PAYMENT_PENDING' && (
-                            <Box sx={{ textAlign: 'center', py: 2 }}>
-                                <CreditCard size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
-                                <Typography variant="h6" fontWeight="950" sx={{ mb: 2 }}>AWAITING SETTLEMENT</Typography>
-                                <Button variant="contained" fullWidth sx={{ bgcolor: '#10b981', fontWeight: 950 }}>PAY NOW</Button>
-                            </Box>
-                        )}
-                    </Paper>
+                            {canApprove && (
+                                <Stack spacing={2}>
+                                    <Button variant="contained" fullWidth size="large" onClick={() => handleOwnerAction('APPROVE')} disabled={processing} sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
+                                        APPROVE NOC — TENANT TO PAY
+                                    </Button>
+                                    <Stack direction="row" spacing={2}>
+                                        <Button variant="outlined" fullWidth onClick={() => handleOwnerAction('TAKEOVER')} disabled={processing} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+                                            OWNER PAYS
+                                        </Button>
+                                        <Button variant="outlined" fullWidth color="error" onClick={() => handleOwnerAction('REJECT')} disabled={processing} sx={{ fontWeight: 950 }}>
+                                            REJECT
+                                        </Button>
+                                    </Stack>
+                                </Stack>
+                            )}
+
+                            {canCreatePayment && (
+                                <Button variant="contained" fullWidth size="large" onClick={handleCreatePaymentRequest} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
+                                    CREATE PAYMENT REQUEST
+                                </Button>
+                            )}
+
+                            {request.status === 'PAYMENT_PENDING' && (
+                                <Box sx={{ textAlign: 'center', py: 2 }}>
+                                    <CreditCard size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
+                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>AWAITING PAYMENT VERIFICATION</Typography>
+                                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Payment ID: {text(request.paymentId)}</Typography>
+                                    <Alert severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>Admin must verify payment before execution handoff.</Alert>
+                                </Box>
+                            )}
+                        </Paper>
+
+                        <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <ClipboardList color={binThemeTokens.gold} /> ADMIN / ENGINEER HANDOFF
+                            </Typography>
+                            <Stack spacing={2}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Building2 size={18} color={binThemeTokens.gold} /><Typography variant="body2">Property: {executionScope.propertyName}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><UserCheck size={18} color={binThemeTokens.gold} /><Typography variant="body2">Payer: {text(request.payerRole || (isTenantRequest ? 'tenant' : 'owner')).toUpperCase()}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Clock size={18} color={binThemeTokens.gold} /><Typography variant="body2">Engineer Status: {text(request.engineerHandoffStatus || 'WAITING_PAYMENT')}</Typography></Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText size={18} color={binThemeTokens.gold} /><Typography variant="body2">Admin Status: {text(request.adminHandoffStatus || 'REQUEST_CREATED')}</Typography></Box>
+                            </Stack>
+
+                            {canAdminHandoff && (
+                                <Button fullWidth variant="contained" onClick={handleAdminEngineerHandoff} disabled={processing} sx={{ mt: 3, bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
+                                    MARK READY FOR ENGINEER REVIEW
+                                </Button>
+                            )}
+                        </Paper>
+                    </Stack>
                 </Grid>
             </Grid>
         </Container>
     );
 }
-
