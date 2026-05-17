@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { randomUUID } from "crypto";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -13,6 +14,12 @@ function cleanText(value: unknown, fieldName: string, maxLength: number) {
   if (!text) throw new HttpsError("invalid-argument", `${fieldName} is required.`);
   if (text.length > maxLength) throw new HttpsError("invalid-argument", `${fieldName} is too long.`);
   return text;
+}
+
+function cleanEmail(value: unknown) {
+  const email = cleanText(value, "Email", 160).toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("invalid-argument", "Valid email is required.");
+  return email;
 }
 
 function cleanPhone(value: unknown) {
@@ -34,30 +41,19 @@ function normalizeRole(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-export const upsertOwnerOnboardingProfile = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
-
-  const uid = request.auth.uid;
-  const tokenEmail = String(request.auth.token?.email || "").trim().toLowerCase();
-  const email = String(request.data?.email || tokenEmail).trim().toLowerCase();
-  if (!tokenEmail || email !== tokenEmail) {
-    throw new HttpsError("permission-denied", "Profile email must match the authenticated account.");
-  }
-
-  const fullName = cleanText(request.data?.fullName, "Full name", 120);
-  const mobile = cleanPhone(request.data?.mobile);
-  const intakeId = cleanOptionalId(request.data?.intakeId || request.data?.onboardingSubmissionId);
-
-  const userRef = db.collection("users").doc(uid);
-  const ownerRef = db.collection("owners").doc(uid);
-  const existingSnap = await userRef.get();
+async function assertOwnerCompatible(uid: string) {
+  const existingSnap = await db.collection("users").doc(uid).get();
   const existing = existingSnap.data() || {};
   const existingRole = normalizeRole(existing.role || existing.userRole || existing.primaryRole);
-
   if (existingRole && !["tenant", "owner", "pending", "new", "guest"].includes(existingRole)) {
     throw new HttpsError("failed-precondition", `This account is already registered as ${existingRole}. Use another email for owner onboarding.`);
   }
+  return { existingSnap, existing, existingRole };
+}
 
+async function writeOwnerProfile(uid: string, email: string, fullName: string, mobile: string, intakeId: string, existing: Record<string, unknown>, existingSnapExists: boolean, existingRole: string | null) {
+  const userRef = db.collection("users").doc(uid);
+  const ownerRef = db.collection("owners").doc(uid);
   const now = serverTimestamp();
   const ownerProfile: Record<string, unknown> = {
     uid,
@@ -78,7 +74,7 @@ export const upsertOwnerOnboardingProfile = onCall({ cors: true }, async (reques
     updatedAt: now
   };
 
-  if (!existingSnap.exists) {
+  if (!existingSnapExists) {
     ownerProfile.createdAt = now;
   }
 
@@ -107,6 +103,63 @@ export const upsertOwnerOnboardingProfile = onCall({ cors: true }, async (reques
   });
 
   await batch.commit();
+}
+
+export const registerOwnerOnboardingAccount = onCall({ cors: true }, async (request) => {
+  const fullName = cleanText(request.data?.fullName, "Full name", 120);
+  const email = cleanEmail(request.data?.email);
+  const mobile = cleanPhone(request.data?.mobile);
+  const intakeId = cleanOptionalId(request.data?.intakeId || request.data?.onboardingSubmissionId);
+
+  let userRecord: admin.auth.UserRecord;
+  try {
+    userRecord = await admin.auth().createUser({
+      email,
+      displayName: fullName,
+      disabled: false,
+      emailVerified: false,
+      password: `${randomUUID()}A1!`
+    });
+  } catch (error: any) {
+    if (error?.code === "auth/email-already-exists") {
+      throw new HttpsError("already-exists", "This email already exists. Please use another email or sign in first.");
+    }
+    throw new HttpsError("internal", error?.message || "Unable to create owner account.");
+  }
+
+  const { existingSnap, existing, existingRole } = await assertOwnerCompatible(userRecord.uid);
+  await admin.auth().setCustomUserClaims(userRecord.uid, { role: "owner", admin: false, isAdmin: false });
+  await writeOwnerProfile(userRecord.uid, email, fullName, mobile, intakeId, existing, existingSnap.exists, existingRole || null);
+  const customToken = await admin.auth().createCustomToken(userRecord.uid, { role: "owner" });
+
+  return {
+    status: "SUCCESS",
+    uid: userRecord.uid,
+    email,
+    role: "owner",
+    profileStatus: "pending_admin_approval",
+    dashboardLocked: true,
+    customToken
+  };
+});
+
+export const upsertOwnerOnboardingProfile = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
+
+  const uid = request.auth.uid;
+  const tokenEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+  const email = String(request.data?.email || tokenEmail).trim().toLowerCase();
+  if (!tokenEmail || email !== tokenEmail) {
+    throw new HttpsError("permission-denied", "Profile email must match the authenticated account.");
+  }
+
+  const fullName = cleanText(request.data?.fullName, "Full name", 120);
+  const mobile = cleanPhone(request.data?.mobile);
+  const intakeId = cleanOptionalId(request.data?.intakeId || request.data?.onboardingSubmissionId);
+  const { existingSnap, existing, existingRole } = await assertOwnerCompatible(uid);
+
+  await admin.auth().setCustomUserClaims(uid, { role: "owner", admin: false, isAdmin: false });
+  await writeOwnerProfile(uid, email, fullName, mobile, intakeId, existing, existingSnap.exists, existingRole || null);
 
   return {
     status: "SUCCESS",
