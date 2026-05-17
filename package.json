@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "deploy": "firebase deploy --project bin-group-57c60",
     "test": "node --test test/security-rules.test.js",
+    "test:stability": "node scripts/production-stability-guard.mjs",
     "test:e2e": "playwright test",
     "test:e2e:public": "playwright test --grep \"production public smoke\""
   },
