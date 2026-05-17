@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Production stability guard
+        run: npm run test:stability
+
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
 
