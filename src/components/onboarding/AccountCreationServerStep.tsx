@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Paper, Stack, TextField, Typography } from '@mui/material';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithCustomToken } from 'firebase/auth';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -36,36 +36,37 @@ export default function AccountCreationServerStep({ onNext, onBack }: Props) {
     return null;
   };
 
-  const callServerProfileWriter = async (user: any, cleanEmail: string, cleanMobile: string, cleanName: string) => {
-    const callable = httpsCallable(functions, 'upsertOwnerOnboardingProfile');
-    await callable({ fullName: cleanName, email: cleanEmail, mobile: cleanMobile, intakeId: intakeId || undefined });
-    try { await user.getIdToken(true); } catch (err) { console.warn('[Owner onboarding] Token refresh failed after profile writer.', err); }
-    setOwnerAccount({ uid: user.uid, fullName: cleanName, email: cleanEmail, mobile: cleanMobile });
-    setSuccess(true);
-    setTimeout(onNext, 1000);
-  };
-
   const submit = async () => {
     setError(null);
     const validationError = validate();
     if (validationError) { setError(validationError); return; }
     setBusy(true);
+
     const cleanEmail = email.trim().toLowerCase();
     const cleanMobile = normalizePhone(mobile);
     const cleanName = fullName.trim();
+
     try {
-      let credential;
-      try {
-        credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      } catch (authErr: any) {
-        if (authErr.code !== 'auth/email-already-in-use') throw authErr;
-        credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-      }
-      await callServerProfileWriter(credential.user, cleanEmail, cleanMobile, cleanName);
+      const registerOwnerOnboardingAccount = httpsCallable(functions, 'registerOwnerOnboardingAccount');
+      const result: any = await registerOwnerOnboardingAccount({
+        fullName: cleanName,
+        email: cleanEmail,
+        mobile: cleanMobile,
+        intakeId: intakeId || undefined
+      });
+
+      const customToken = result?.data?.customToken;
+      const uid = result?.data?.uid;
+      if (!customToken || !uid) throw new Error('Owner registration did not return a sign-in token.');
+
+      await signInWithCustomToken(auth, customToken);
+      setOwnerAccount({ uid, fullName: cleanName, email: cleanEmail, mobile: cleanMobile });
+      setSuccess(true);
+      setTimeout(onNext, 1000);
     } catch (err: any) {
-      console.error('[Owner onboarding] Account creation failed:', err);
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') setError(label('onboarding.error.email_exists', 'This email already exists. Please sign in or use another email.'));
-      else if (err.code === 'functions/not-found') setError(lang === 'ar' ? 'خدمة إنشاء ملف المالك ما زالت قيد النشر. حاول بعد اكتمال النشر.' : 'Owner profile service is still deploying. Try again after deployment completes.');
+      console.error('[Owner onboarding] Server registration failed:', err);
+      if (err.code === 'functions/already-exists' || err.code === 'already-exists') setError(label('onboarding.error.email_exists', 'This email already exists. Please sign in or use another email.'));
+      else if (err.code === 'functions/not-found') setError(lang === 'ar' ? 'خدمة إنشاء حساب المالك ما زالت قيد النشر. حاول بعد اكتمال النشر.' : 'Owner account service is still deploying. Try again after deployment completes.');
       else if (err.code === 'functions/failed-precondition') setError(err.message || 'This account is registered with another role. Use another email.');
       else setError(`${label('onboarding.error.generic', 'Account creation failed. Please check the details and try again.')} (${err.code || err.message || 'unknown'})`);
     } finally {
