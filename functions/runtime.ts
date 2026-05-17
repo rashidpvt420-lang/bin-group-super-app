@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 
 export * from "./index";
 export * from "./contractActivation";
+export * from "./ownerOnboarding";
 
 if (!admin.apps.length) {
     admin.initializeApp();
