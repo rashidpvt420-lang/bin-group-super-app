@@ -29,6 +29,7 @@ import ReportsPage from './pages/reports/ReportsPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
 import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
+import DocumentOSPage from './pages/documents/DocumentOSPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
 import ProfitabilityPage from './pages/admin/ProfitabilityPage';
 import CompliancePage from './pages/admin/CompliancePage';
@@ -138,6 +139,7 @@ function AdminContent() {
                 <Route path="financials" element={<ProfitabilityDashboardPage />} />
                 <Route path="financials/payroll" element={<PayrollManagementPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
+                <Route path="document-os" element={<DocumentOSPage />} />
                 <Route path="document-vault" element={<InstitutionalDocumentVaultPage />} />
                 <Route path="vault" element={<IntakeVaultPage />} />
                 <Route path="audit-shield" element={<AuditShieldPage />} />
