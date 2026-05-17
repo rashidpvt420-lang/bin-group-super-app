@@ -1,6 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { randomUUID } from "crypto";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -20,6 +19,12 @@ function cleanEmail(value: unknown) {
   const email = cleanText(value, "Email", 160).toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("invalid-argument", "Valid email is required.");
   return email;
+}
+
+function cleanPassword(value: unknown) {
+  const password = cleanText(value, "Password", 256);
+  if (password.length < 8) throw new HttpsError("invalid-argument", "Password must be at least 8 characters.");
+  return password;
 }
 
 function cleanPhone(value: unknown) {
@@ -95,7 +100,7 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
   batch.set(db.collection("audit_logs").doc(), {
     actorId: uid,
     actorRole: "owner",
-    action: "UPSERT_OWNER_ONBOARDING_PROFILE",
+    action: "REGISTER_OWNER_ONBOARDING_ACCOUNT",
     targetType: "users",
     targetId: uid,
     metadata: { intakeId: intakeId || null, previousRole: existingRole || null },
@@ -109,28 +114,39 @@ export const registerOwnerOnboardingAccount = onCall({ cors: true }, async (requ
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const email = cleanEmail(request.data?.email);
   const mobile = cleanPhone(request.data?.mobile);
+  const password = cleanPassword(request.data?.password);
   const intakeId = cleanOptionalId(request.data?.intakeId || request.data?.onboardingSubmissionId);
 
   let userRecord: admin.auth.UserRecord;
   try {
     userRecord = await admin.auth().createUser({
       email,
+      password,
       displayName: fullName,
       disabled: false,
-      emailVerified: false,
-      password: `${randomUUID()}A1!`
+      emailVerified: false
     });
   } catch (error: any) {
     if (error?.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "This email already exists. Please use another email or sign in first.");
     }
-    throw new HttpsError("internal", error?.message || "Unable to create owner account.");
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("failed-precondition", error?.message || "Unable to create owner account in Firebase Authentication.");
   }
 
-  const { existingSnap, existing, existingRole } = await assertOwnerCompatible(userRecord.uid);
-  await admin.auth().setCustomUserClaims(userRecord.uid, { role: "owner", admin: false, isAdmin: false });
-  await writeOwnerProfile(userRecord.uid, email, fullName, mobile, intakeId, existing, existingSnap.exists, existingRole || null);
-  const customToken = await admin.auth().createCustomToken(userRecord.uid, { role: "owner" });
+  try {
+    const { existingSnap, existing, existingRole } = await assertOwnerCompatible(userRecord.uid);
+    await admin.auth().setCustomUserClaims(userRecord.uid, { role: "owner", admin: false, isAdmin: false });
+    await writeOwnerProfile(userRecord.uid, email, fullName, mobile, intakeId, existing, existingSnap.exists, existingRole || null);
+  } catch (error: any) {
+    try {
+      await admin.auth().deleteUser(userRecord.uid);
+    } catch (rollbackError) {
+      console.error("[Owner onboarding] Failed to roll back Auth user after profile write failure", rollbackError);
+    }
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", error?.message || "Owner profile creation failed after Auth account creation.");
+  }
 
   return {
     status: "SUCCESS",
@@ -138,8 +154,7 @@ export const registerOwnerOnboardingAccount = onCall({ cors: true }, async (requ
     email,
     role: "owner",
     profileStatus: "pending_admin_approval",
-    dashboardLocked: true,
-    customToken
+    dashboardLocked: true
   };
 });
 
