@@ -89,7 +89,8 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
-export const functions: Functions = getFunctions(app);
+export const FUNCTIONS_REGION = 'europe-west3';
+export const functions: Functions = getFunctions(app, FUNCTIONS_REGION);
 
 let cachedMessaging: Messaging | null | undefined;
 export const getSafeMessaging = async (): Promise<Messaging | null> => {
@@ -104,7 +105,7 @@ export const getSafeMessaging = async (): Promise<Messaging | null> => {
   return cachedMessaging;
 };
 
-export const messaging: Messaging | null = typeof window !== 'undefined' ? getMessaging(app) : null;
+export const messaging: Messaging | null = null;
 
 export {
   // Auth
