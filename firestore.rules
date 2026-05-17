@@ -51,10 +51,29 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/propertyMembers/$(propertyId)/members/$(request.auth.uid)).data;
     }
 
+    function safeOwnerOnboardingProfileUpdate(userId) {
+      return signedIn() && userId == request.auth.uid &&
+        resource.data.role in ['tenant', 'owner'] &&
+        request.resource.data.role == 'owner' &&
+        request.resource.data.status in ['pending_admin_approval', 'pending_approval', 'active'] &&
+        request.resource.data.adminApproved == false &&
+        request.resource.data.paymentVerified == false &&
+        request.resource.data.dashboardLocked == true &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+        (!('admin' in request.resource.data) || request.resource.data.admin == false) &&
+        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid','email','displayName','name','phone','mobile','photoURL','language',
+          'role','status','dashboardLocked','adminApproved','paymentVerified',
+          'onboardingSubmissionId','latestIntakeId','createdAt','updatedAt','lastLoginAt','legalAcceptedAt',
+          'pdplCompliance','gpsConsent','onboardingComplete'
+        ]);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin() || hasPermission('canViewAuditLogs') || hasPermission('canManageStaff');
       allow create: if signedIn() && isOwner(userId) && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician'];
-      allow update: if isAdmin() || hasPermission('canManageStaff') || (
+      allow update: if isAdmin() || hasPermission('canManageStaff') || safeOwnerOnboardingProfileUpdate(userId) || (
         isOwner(userId) &&
         (
           (resource.data.role == null && request.resource.data.role in ['tenant', 'owner', 'broker', 'technician']) ||
