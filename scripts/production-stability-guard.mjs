@@ -26,18 +26,25 @@ assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy 
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase config must deploy firestore.rules.');
 assert(productionWorkflow.includes('firestore:rules'), 'Production deploy workflow must deploy Firestore rules.');
 assert(productionWorkflow.includes('functions'), 'Production deploy workflow must deploy Functions.');
+assert(productionWorkflow.includes('VITE_APP_CHECK_SITE_KEY'), 'Production deploy workflow must inject VITE_APP_CHECK_SITE_KEY.');
 
 assert(rootOnboardingPage.includes('AccountCreationServerStep'), 'Root property onboarding must use the server-backed account creation step.');
 assert(!rootOnboardingPage.includes("../components/onboarding/AccountCreationStep"), 'Root property onboarding must not import the legacy direct-Firestore account step.');
 
 assert(serverStep.includes('httpsCallable'), 'Server-backed account step must use a callable function.');
-assert(serverStep.includes('upsertOwnerOnboardingProfile'), 'Server-backed account step must call upsertOwnerOnboardingProfile.');
+assert(serverStep.includes('registerOwnerOnboardingAccount'), 'Server-backed account step must call registerOwnerOnboardingAccount.');
+assert(serverStep.includes('signInWithCustomToken'), 'Server-backed account step must sign in using the custom token returned by the server.');
+assert(!serverStep.includes('createUserWithEmailAndPassword'), 'Server-backed account step must not call browser-side Firebase Auth signup.');
+assert(!serverStep.includes('signInWithEmailAndPassword'), 'Server-backed account step must not call browser-side password sign-in during owner onboarding.');
 assert(!serverStep.includes("setDoc(doc(db, 'users'"), 'Server-backed account step must not directly write users/{uid}.');
 assert(!serverStep.includes('collection(db, \'users\')'), 'Server-backed account step must not query users collection client-side for role collision.');
 
 assert(runtime.includes('export * from "./ownerOnboarding"'), 'Functions runtime must export ownerOnboarding callables.');
-assert(ownerOnboardingFunction.includes('upsertOwnerOnboardingProfile'), 'ownerOnboarding function must define upsertOwnerOnboardingProfile.');
-assert(ownerOnboardingFunction.includes('admin.firestore()'), 'Owner onboarding must write with Admin SDK.');
+assert(ownerOnboardingFunction.includes('registerOwnerOnboardingAccount'), 'ownerOnboarding function must define registerOwnerOnboardingAccount.');
+assert(ownerOnboardingFunction.includes('createUser'), 'Owner onboarding server function must create Auth users with Admin SDK.');
+assert(ownerOnboardingFunction.includes('createCustomToken'), 'Owner onboarding server function must return a custom sign-in token.');
+assert(ownerOnboardingFunction.includes('upsertOwnerOnboardingProfile'), 'ownerOnboarding function must keep authenticated profile upsert fallback.');
+assert(ownerOnboardingFunction.includes('admin.firestore()'), 'Owner onboarding must write profiles with Admin SDK.');
 
 assert(legacyStep.includes("setDoc(doc(db, 'users'"), 'Legacy AccountCreationStep still contains direct Firestore write; keep it unused until removed or migrated.');
 
