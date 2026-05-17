@@ -1,6 +1,6 @@
 // src/utils/queryUtils.ts
 import { query, where, onSnapshot, type DocumentData, type Unsubscribe } from '../lib/firebase';
-import type { CollectionReference, Query as FirestoreQuery, QuerySnapshot } from 'firebase/firestore';
+import type { CollectionReference, QuerySnapshot } from 'firebase/firestore';
 
 type EqualityFilter = {
     field: string;
@@ -22,7 +22,7 @@ function snapshotToRows(snap: QuerySnapshot<DocumentData>): SnapshotDoc[] {
  * deduplicated by document ID.
  */
 export function onSnapshotSplitIn(
-    baseQuery: FirestoreQuery<DocumentData> | CollectionReference<DocumentData>,
+    baseQuery: CollectionReference<DocumentData>,
     equalityFilter: EqualityFilter,
     inField: string,
     values: string[],
