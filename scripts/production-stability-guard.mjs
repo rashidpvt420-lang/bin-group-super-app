@@ -33,16 +33,18 @@ assert(!rootOnboardingPage.includes("../components/onboarding/AccountCreationSte
 
 assert(serverStep.includes('httpsCallable'), 'Server-backed account step must use a callable function.');
 assert(serverStep.includes('registerOwnerOnboardingAccount'), 'Server-backed account step must call registerOwnerOnboardingAccount.');
-assert(serverStep.includes('signInWithCustomToken'), 'Server-backed account step must sign in using the custom token returned by the server.');
+assert(serverStep.includes('password'), 'Server-backed account step must pass the owner password to the server registration callable.');
 assert(!serverStep.includes('createUserWithEmailAndPassword'), 'Server-backed account step must not call browser-side Firebase Auth signup.');
 assert(!serverStep.includes('signInWithEmailAndPassword'), 'Server-backed account step must not call browser-side password sign-in during owner onboarding.');
+assert(!serverStep.includes('signInWithCustomToken'), 'Server-backed account step must not depend on custom-token signing.');
+assert(!serverStep.includes('customToken'), 'Server-backed account step must not require a custom token from the server.');
 assert(!serverStep.includes("setDoc(doc(db, 'users'"), 'Server-backed account step must not directly write users/{uid}.');
 assert(!serverStep.includes('collection(db, \'users\')'), 'Server-backed account step must not query users collection client-side for role collision.');
 
 assert(runtime.includes('export * from "./ownerOnboarding"'), 'Functions runtime must export ownerOnboarding callables.');
 assert(ownerOnboardingFunction.includes('registerOwnerOnboardingAccount'), 'ownerOnboarding function must define registerOwnerOnboardingAccount.');
 assert(ownerOnboardingFunction.includes('createUser'), 'Owner onboarding server function must create Auth users with Admin SDK.');
-assert(ownerOnboardingFunction.includes('createCustomToken'), 'Owner onboarding server function must return a custom sign-in token.');
+assert(!ownerOnboardingFunction.includes('createCustomToken'), 'Owner onboarding server function must not rely on custom-token signing.');
 assert(ownerOnboardingFunction.includes('upsertOwnerOnboardingProfile'), 'ownerOnboarding function must keep authenticated profile upsert fallback.');
 assert(ownerOnboardingFunction.includes('admin.firestore()'), 'Owner onboarding must write profiles with Admin SDK.');
 
