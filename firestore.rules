@@ -31,7 +31,7 @@ service cloud.firestore {
     }
 
     function owns(data) {
-      return isOwner(data.ownerId) || isOwner(data.userId) || isOwner(data.createdBy);
+      return isOwner(data.ownerId) || isOwner(data.ownerUid) || isOwner(data.userId) || isOwner(data.createdBy);
     }
 
     function tenantOwns(data) {
@@ -40,6 +40,43 @@ service cloud.firestore {
 
     function techOwns(data) {
       return isTechnician(data.assignedTechnicianId) || isTechnician(data.technicianId);
+    }
+
+    function ownerEmailMatches(data) {
+      return signedIn() && request.auth.token.email != null && data.ownerEmail == request.auth.token.email;
+    }
+
+    function brokerOwns(data) {
+      return signedIn() && (data.brokerId == request.auth.uid || data.referredBy == request.auth.uid);
+    }
+
+    function idInList(listValue) {
+      return signedIn() && listValue is list && request.auth.uid in listValue;
+    }
+
+    function propertyAccess(data) {
+      return isAdmin() ||
+        hasPermission('canManageProperties') ||
+        owns(data) ||
+        ownerEmailMatches(data) ||
+        tenantOwns(data) ||
+        techOwns(data) ||
+        brokerOwns(data) ||
+        idInList(data.ownerIds) ||
+        idInList(data.tenantIds) ||
+        idInList(data.assignedTenantIds) ||
+        idInList(data.technicianIds) ||
+        idInList(data.assignedTechnicianIds) ||
+        idInList(data.brokerIds);
+    }
+
+    function unitAccess(data) {
+      return propertyAccess(data) ||
+        isOwner(data.ownerId) ||
+        isTenant(data.tenantId) ||
+        isTechnician(data.assignedTechnicianId) ||
+        idInList(data.tenantIds) ||
+        idInList(data.assignedTenantIds);
     }
 
     match /users/{userId} {
@@ -90,12 +127,12 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow read: if signedIn();
+      allow read: if propertyAccess(resource.data);
       allow create, update, delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
     match /units/{unitId} {
-      allow read: if signedIn();
+      allow read: if unitAccess(resource.data);
       allow create, update, delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
