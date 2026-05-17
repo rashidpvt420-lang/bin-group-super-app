@@ -63,6 +63,7 @@ import {
   type FirebaseStorage,
 } from 'firebase/storage';
 import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaV3Provider, type AppCheck } from 'firebase/app-check';
 import {
   getMessaging,
   getToken,
@@ -86,11 +87,38 @@ const firebaseConfig = {
 };
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+let appCheckInstance: AppCheck | null = null;
+const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
+if (typeof window !== 'undefined' && appCheckSiteKey) {
+  try {
+    appCheckInstance = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+    console.info('[Firebase] App Check initialized for root app.');
+  } catch (error) {
+    console.warn('[Firebase] App Check initialization failed:', error);
+  }
+} else if (typeof window !== 'undefined') {
+  console.warn('[Firebase] VITE_APP_CHECK_SITE_KEY is missing. If Firebase Auth App Check enforcement is enabled, signup can fail with auth/internal-error.');
+}
+
+export const appCheck = appCheckInstance;
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
 export const FUNCTIONS_REGION = 'europe-west3';
 export const functions: Functions = getFunctions(app, FUNCTIONS_REGION);
+
+export const getFirebaseRuntimeDiagnostics = () => ({
+  projectId: firebaseConfig.projectId,
+  authDomain: firebaseConfig.authDomain,
+  functionsRegion: FUNCTIONS_REGION,
+  hasAppCheckSiteKey: Boolean(appCheckSiteKey),
+  appCheckInitialized: Boolean(appCheckInstance),
+  host: typeof window !== 'undefined' ? window.location.host : 'server',
+});
 
 let cachedMessaging: Messaging | null | undefined;
 export const getSafeMessaging = async (): Promise<Messaging | null> => {
