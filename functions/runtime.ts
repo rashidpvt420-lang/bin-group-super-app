@@ -33,6 +33,79 @@ function requirePaymentId(data: any) {
     return paymentId;
 }
 
+export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "User authentication required.");
+
+    const method = String(request.data?.method || "").trim().toUpperCase();
+    if (!["CASH", "CHEQUE", "BANK_TRANSFER", "DIGITAL"].includes(method)) {
+        throw new HttpsError("invalid-argument", "Invalid payment method. Allowed methods: CASH, CHEQUE, BANK_TRANSFER, DIGITAL.");
+    }
+
+    const ownerId = String(request.data?.ownerId || "").trim();
+    if (!ownerId) {
+        throw new HttpsError("invalid-argument", "ownerId is required.");
+    }
+
+    if (ownerId !== request.auth.uid) {
+        await assertAdmin(request.auth);
+    }
+
+    const amount = Number(request.data?.amount || 0);
+    const contractId = String(request.data?.contractId || "").trim();
+    const propertyId = String(request.data?.propertyId || "").trim();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const isPspConfigured = Boolean(process.env.PSP_SECRET_KEY || process.env.STRIPE_SECRET_KEY || process.env.TAP_SECRET_KEY);
+    let paymentData: any = {
+        method,
+        amount,
+        ownerId,
+        contractId,
+        propertyId,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: request.auth.uid
+    };
+
+    if (method === "DIGITAL") {
+        if (!isPspConfigured) {
+            paymentData.status = "PSP_CONFIGURATION_REQUIRED";
+            paymentData.gateway = "UNCONFIGURED_PSP";
+            paymentData.paymentVerified = false;
+            paymentData.unlocksDashboard = false;
+            paymentData.productionBlockedReason = "Production PSP gateway is not configured. Webhook and checkout capabilities are disabled until PSP integration keys are provided.";
+        } else {
+            paymentData.status = "PENDING_PSP_CHECKOUT";
+            paymentData.gateway = "DIGITAL_PSP";
+            paymentData.paymentVerified = false;
+            paymentData.unlocksDashboard = false;
+        }
+    } else {
+        paymentData.status = "PENDING";
+        paymentData.gateway = "MANUAL";
+        paymentData.paymentVerified = false;
+        paymentData.unlocksDashboard = false;
+        paymentData.requiresAdminVerification = true;
+    }
+
+    const batch = runtimeDb.batch();
+    const newPaymentRef = runtimeDb.collection("payment_transactions").doc();
+    batch.set(newPaymentRef, paymentData);
+
+    batch.set(runtimeDb.collection("audit_logs").doc(), {
+        actorId: request.auth.uid,
+        actorRole: request.auth.uid === ownerId ? "owner" : "admin",
+        action: "CREATE_PAYMENT_TRANSACTION",
+        targetType: "payment_transactions",
+        targetId: newPaymentRef.id,
+        metadata: { method, amount, ownerId, contractId, propertyId, gateway: paymentData.gateway, status: paymentData.status },
+        createdAt: now
+    });
+
+    await batch.commit();
+    return { status: "SUCCESS", paymentId: newPaymentRef.id, ...paymentData };
+});
+
 export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     await assertAdmin(request.auth);
 
@@ -42,6 +115,12 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
     const payment = paymentSnap.data() || {};
+    if (payment.gateway === "UNCONFIGURED_PSP" || payment.status === "PSP_CONFIGURATION_REQUIRED") {
+        throw new HttpsError("failed-precondition", "Cannot approve a payment transaction requiring PSP configuration.");
+    }
+    if (payment.method === "DIGITAL" && payment.gateway !== "MANUAL") {
+        throw new HttpsError("failed-precondition", "Digital payments must be verified via PSP webhook, not manual admin approval.");
+    }
     const now = admin.firestore.FieldValue.serverTimestamp();
     const batch = runtimeDb.batch();
 

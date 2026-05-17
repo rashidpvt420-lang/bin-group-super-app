@@ -112,7 +112,13 @@ function AdminContent() {
                 <Typography variant="h5" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>ADMIN GATEWAY TIMEOUT</Typography>
                 <Typography variant="body1" sx={{ color: '#fff', mb: 4, maxWidth: 500 }}>The Admin Sovereign Connection failed to resolve within 8 seconds. Please check your credentials or reset your session.</Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button variant="outlined" color="error" onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.href = '/login'; }}>RESET SESSION</Button>
+                    <Button variant="outlined" color="error" onClick={() => { 
+                        const currentLang = localStorage.getItem('bin_language');
+                        localStorage.clear(); 
+                        if (currentLang) localStorage.setItem('bin_language', currentLang);
+                        sessionStorage.clear(); 
+                        window.location.href = '/login'; 
+                    }}>RESET SESSION</Button>
                     <Button variant="contained" sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }} onClick={() => window.location.reload()}>RELOAD GATEWAY</Button>
                 </Box>
             </Box>
