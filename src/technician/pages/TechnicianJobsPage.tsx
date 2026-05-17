@@ -6,11 +6,12 @@ import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
+import type { SnapshotDoc } from '../../utils/queryUtils';
 
 export default function TechnicianJobsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
-    const [assignedJobs, setAssignedJobs] = useState<any[]>([]);
+    const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -20,7 +21,7 @@ export default function TechnicianJobsPage() {
             { field: 'assignedTechnicianId', value: user.uid },
             'status',
             ALL_TECHNICIAN_ACTIVE_STATUSES,
-            (jobs) => {
+            (jobs: SnapshotDoc[]) => {
                 setAssignedJobs(jobs);
                 setLoading(false);
             }
@@ -41,14 +42,14 @@ export default function TechnicianJobsPage() {
             ) : (
                 <Stack spacing={3}>
                     {assignedJobs.map(job => (
-                        <Paper key={job.id} sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)', borderColor: binThemeTokens.gold } }}>
+                        <Paper key={job.id} sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)', borderColor: 'rgba(255,255,255,0.1)' } }}>
                             <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 3 }}>
                                 <Box>
-                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>REF #{job.id.substring(0,8)}</Typography>
-                                    <Typography variant="h6" fontWeight="950" color="#FFF">{job.category || 'Maintenance'}</Typography>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>REF #{String(job.id).substring(0,8)}</Typography>
+                                    <Typography variant="h6" fontWeight="950" color="#FFF">{String(job.category || 'Maintenance')}</Typography>
                                 </Box>
                                 <Chip 
-                                    label={job.priority === 'emergency' ? 'EMERGENCY' : job.status?.replace('_', ' ')} 
+                                    label={job.priority === 'emergency' ? 'EMERGENCY' : String(job.status || 'pending').replace('_', ' ')} 
                                     color={job.priority === 'emergency' ? 'error' : 'default'}
                                     sx={{ bgcolor: job.priority !== 'emergency' ? 'rgba(255,255,255,0.1)' : undefined, color: job.priority !== 'emergency' ? '#FFF' : undefined, fontWeight: 900 }} 
                                 />
@@ -57,13 +58,13 @@ export default function TechnicianJobsPage() {
                             <Grid container spacing={3} sx={{ mb: 4 }}>
                                 <Grid item xs={12} sm={6}>
                                     <Typography variant="caption" color="textSecondary">LOCATION</Typography>
-                                    <Typography variant="body1" fontWeight="900" color="#FFF">{job.propertyName || 'Property'}</Typography>
-                                    <Typography variant="body2" color="textSecondary">Unit: {job.unitNumber} | Floor: {job.floor}</Typography>
+                                    <Typography variant="body1" fontWeight="900" color="#FFF">{String(job.propertyName || 'Property')}</Typography>
+                                    <Typography variant="body2" color="textSecondary">Unit: {String(job.unitNumber || 'N/A')} | Floor: {String(job.floor || 'N/A')}</Typography>
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <Typography variant="caption" color="textSecondary">TENANT</Typography>
-                                    <Typography variant="body1" fontWeight="900" color="#FFF">{job.tenantName}</Typography>
-                                    <Typography variant="body2" color="textSecondary">{job.tenantPhone}</Typography>
+                                    <Typography variant="body1" fontWeight="900" color="#FFF">{String(job.tenantName || 'N/A')}</Typography>
+                                    <Typography variant="body2" color="textSecondary">{String(job.tenantPhone || 'N/A')}</Typography>
                                 </Grid>
                             </Grid>
 
