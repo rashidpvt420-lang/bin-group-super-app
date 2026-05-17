@@ -125,7 +125,7 @@ export default function TechnicianDashboardPage() {
     const handleAcceptJob = async (jobId: string) => {
         if (!user?.uid) return;
         try {
-            await runTransaction(db, async (transaction) => {
+            await runTransaction(db, async (transaction: any) => {
                 const jobRef = doc(db, 'maintenanceTickets', jobId);
                 transaction.update(jobRef, {
                     assignedTechnicianId: user.uid,
@@ -179,7 +179,7 @@ export default function TechnicianDashboardPage() {
                 <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Grid item xs={12} md={6}>
                         <Stack direction={isRTL ? "row-reverse" : "row"} spacing={3} alignItems="center">
-                            <Box sx={{ p: 2, bgcolor: isOnDuty ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.05)', borderRadius: 4, color: isOnDuty ? binThemeTokens.gold : 'rgba(255,255,255,0.3)', animation: isOnDuty ? 'pulse 2s infinite' : 'none' }}>
+                            <Box sx={{ p: 2, bgcolor: isOnDuty ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.05)', borderRadius: 4, color: isOnDuty ? binThemeTokens.gold : 'rgba(255,255,255,0.3)' }}>
                                 {dutyStatus === 'BREAK' ? <Coffee size={32} /> : <Power size={32} />}
                             </Box>
                             <Box>
@@ -193,7 +193,7 @@ export default function TechnicianDashboardPage() {
                     <Grid item xs={12} md={6}>
                         <Stack direction={isRTL ? "row-reverse" : "row"} spacing={2} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>
                             {dutyStatus === 'OFF' ? (
-                                <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 6, py: 1.5, borderRadius: 4, boxShadow: `0 10px 30px ${alpha(binThemeTokens.gold, 0.3)}` }}>
+                                <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 4 }}>
                                     {t('dash.start_duty') || 'ACTIVATE PROTOCOL'}
                                 </Button>
                             ) : (
@@ -258,7 +258,7 @@ export default function TechnicianDashboardPage() {
                     </Stack>
                     <Stack spacing={2}>
                         {activeJobs.slice(0, 2).map(job => (
-                            <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, cursor: 'pointer', '&:hover': { borderColor: binThemeTokens.gold }, textAlign: isRTL ? 'right' : 'left' }}>
+                            <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: alpha(binThemeTokens.gold, 0.3) } }}>
                                 <Stack direction={isRTL ? "row-reverse" : "row"} spacing={2} alignItems="center">
                                     <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.gold }}><MapPin size={20} /></Box>
                                     <Box flex={1}>
@@ -283,16 +283,18 @@ export default function TechnicianDashboardPage() {
                     <Grid container spacing={3}>
                         {missionPool.map(job => (
                             <Grid item xs={12} md={6} key={job.id}>
-                                <Paper sx={{ p: 4, bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.08) : 'rgba(22, 22, 24, 0.7)', border: `1px solid ${job.priority === 'emergency' ? alpha('#ef4444', 0.3) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6, textAlign: isRTL ? 'right' : 'left' }}>
+                                <Paper sx={{ p: 4, bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.08) : 'rgba(22, 22, 24, 0.7)', border: `1px solid ${job.priority === 'emergency' ? alpha('#ef4444', 0.3) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6, transition: 'all 0.2s', '&:hover': { transform: 'translateY(-4px)', borderColor: alpha(binThemeTokens.gold, 0.3) } }}>
                                     <Stack direction={isRTL ? "row-reverse" : "row"} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
                                         <Box>
-                                            <Typography variant="overline" sx={{ color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold, fontWeight: 950 }}>{String(job.priority || 'normal').toUpperCase()}</Typography>
+                                            <Typography variant="overline" sx={{ color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography>
                                             <Typography variant="h6" fontWeight="950" color="#FFF">{String(job.category || 'Issue')}</Typography>
                                         </Box>
                                         {job.priority === 'emergency' && <Zap color="#ef4444" />}
                                     </Stack>
-                                    <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mb: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{String(job.description || '')}</Typography>
-                                    <Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3 }}>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mb: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                        {String(job.description || 'No description')}
+                                    </Typography>
+                                    <Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5, '&:hover': { bgcolor: '#b4954e' } }}>
                                         {t('dash.claim_job') || 'CLAIM MISSION'}
                                     </Button>
                                 </Paper>
