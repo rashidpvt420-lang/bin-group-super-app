@@ -56,7 +56,7 @@ import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
-import { TechnicianMapPage } from './pages/Placeholders';
+import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import AdminDutyCommandPage from './pages/technicians/AdminDutyCommandPage';
 import { adminTheme } from './theme/adminTheme';
@@ -127,7 +127,7 @@ function AppContent() {
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
-                    <Route path="/technicians/map" element={<ProtectedRoute><TechnicianMapPage /></ProtectedRoute>} />
+                    <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
                     <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
@@ -163,7 +163,9 @@ function Layout() {
     const handleLogout = async () => {
         try {
             console.log("[ADMIN] Initiating global logout sequence...");
+            const currentLang = localStorage.getItem('bin_language');
             localStorage.clear();
+            if (currentLang) localStorage.setItem('bin_language', currentLang);
             sessionStorage.clear();
             await signOut(auth);
             window.location.href = '/login';

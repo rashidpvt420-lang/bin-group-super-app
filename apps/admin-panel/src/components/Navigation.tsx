@@ -163,7 +163,12 @@ const primaryMenu = [
                     </ListItem>
                     <ListItem
                         button
-                        onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
+                        onClick={() => { 
+                            const currentLang = localStorage.getItem('bin_language');
+                            localStorage.clear(); 
+                            if (currentLang) localStorage.setItem('bin_language', currentLang);
+                            signOut(auth).then(() => window.location.href = '/'); 
+                        }}
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                     >
                         <ListItemIcon sx={{ color: '#ef4444', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><LogoutIcon /></ListItemIcon>

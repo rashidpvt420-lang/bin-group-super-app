@@ -113,7 +113,12 @@ const Navigation = () => {
                 <CeoContactButtons compact />
                 <ListItem
                     button
-                    onClick={() => { localStorage.clear(); signOut(auth).then(() => window.location.href = '/'); }}
+                    onClick={() => { 
+                        const currentLang = localStorage.getItem('bin_language');
+                        localStorage.clear(); 
+                        if (currentLang) localStorage.setItem('bin_language', currentLang);
+                        signOut(auth).then(() => window.location.href = '/'); 
+                    }}
                     sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#ef4444', 0.1), '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                 >
                     <ListItemIcon sx={{ color: '#ef4444', minWidth: 40 }}><LogoutIcon /></ListItemIcon>

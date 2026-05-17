@@ -20,7 +20,7 @@ declare global {
 }
 
 function getStoredLanguage(): 'en' | 'ar' {
-  const stored = localStorage.getItem('app_lang') || localStorage.getItem('language') || localStorage.getItem('lang');
+  const stored = localStorage.getItem('bin_language') || localStorage.getItem('language') || localStorage.getItem('lang');
   return stored === 'ar' ? 'ar' : 'en';
 }
 
