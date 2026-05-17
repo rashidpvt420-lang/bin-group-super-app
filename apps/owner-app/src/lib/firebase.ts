@@ -22,7 +22,7 @@ type BinFirebaseConfig = {
 
 const readRequiredEnv = (name: string): string => {
     // @ts-ignore
-    const value = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : process.env[name];
+    const value = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : '';
     if (!value || value.includes('REPLACE_ME')) {
         return '';
     }
@@ -50,15 +50,19 @@ try {
 
 // App Check (Monitoring Mode)
 if (typeof window !== 'undefined') {
-    const siteKey = process.env.REACT_APP_APP_CHECK_SITE_KEY || "6Lc_REPLACE_ME_WITH_REAL_KEY";
-    try {
-        initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider(siteKey),
-            isTokenAutoRefreshEnabled: true
-        });
-        console.log("🛡️ [SECURITY] App Check active in MONITORING mode.");
-    } catch (err) {
-        console.warn("App Check initialization failed:", err);
+    const siteKey = readRequiredEnv('VITE_APP_CHECK_SITE_KEY');
+    if (siteKey) {
+        try {
+            initializeAppCheck(app, {
+                provider: new ReCaptchaV3Provider(siteKey),
+                isTokenAutoRefreshEnabled: true
+            });
+            console.log("🛡️ [SECURITY] App Check active in MONITORING mode.");
+        } catch (err) {
+            console.warn("App Check initialization failed:", err);
+        }
+    } else {
+        console.warn("VITE_APP_CHECK_SITE_KEY missing or placeholder. App Check not initialized.");
     }
 }
 

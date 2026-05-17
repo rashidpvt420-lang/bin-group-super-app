@@ -14,6 +14,7 @@
     "lint": "eslint src --ext .ts,.tsx",
     "preview": "vite preview",
     "deploy": "firebase deploy --project bin-group-57c60",
+    "test": "node --test test/security-rules.test.js",
     "test:e2e": "playwright test",
     "test:e2e:public": "playwright test --grep \"production public smoke\""
   },
@@ -41,6 +42,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@playwright/test": "^1.54.0",
     "@types/node": "^20.11.17",
     "@types/react": "^18.2.55",

@@ -1116,14 +1116,14 @@ export const LanguageProvider: React.FC<{ children: any }> = ({ children }) => {
     // Fixed SSR issue with typeof window check
     const [lang, setLang] = useState<Language>(() => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('app_lang');
+            const saved = localStorage.getItem('bin_language');
             return (saved as Language) || 'en';
         }
         return 'en';
     });
 
     useEffect(() => {
-        localStorage.setItem('app_lang', lang);
+        localStorage.setItem('bin_language', lang);
         const dir = lang === 'ar' ? 'rtl' : 'ltr';
         document.dir = dir;
         document.documentElement.dir = dir;
@@ -1132,7 +1132,7 @@ export const LanguageProvider: React.FC<{ children: any }> = ({ children }) => {
         console.info("[BIN i18n]", {
             lang,
             dir: document.documentElement.dir,
-            stored: localStorage.getItem("app_lang")
+            stored: localStorage.getItem("bin_language")
         });
     }, [lang]);
 

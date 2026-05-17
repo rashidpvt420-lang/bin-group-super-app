@@ -77,7 +77,9 @@ function LoadingScreen() {
   }, []);
 
   const handleClearSession = () => {
+    const currentLang = localStorage.getItem('bin_language');
     localStorage.clear();
+    if (currentLang) localStorage.setItem('bin_language', currentLang);
     sessionStorage.clear();
     window.location.href = '/login';
   };

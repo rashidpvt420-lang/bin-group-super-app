@@ -103,7 +103,7 @@ const ar: Record<string, string> = {
 };
 
 function language() {
-  return localStorage.getItem('app_lang') === 'ar' || document.documentElement.lang === 'ar' ? 'ar' : 'en';
+  return localStorage.getItem('bin_language') === 'ar' || document.documentElement.lang === 'ar' ? 'ar' : 'en';
 }
 
 function humanize(key: string) {
