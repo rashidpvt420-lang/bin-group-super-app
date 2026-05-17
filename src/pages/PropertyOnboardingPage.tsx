@@ -20,7 +20,7 @@ import PropertyLocationStep from '../components/onboarding/PropertyLocationStep'
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
 import ProofUploadStep from '../components/onboarding/ProofUploadStep';
-import AccountCreationStep from '../components/onboarding/AccountCreationStep';
+import AccountCreationStep from '../components/onboarding/AccountCreationServerStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
 import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
