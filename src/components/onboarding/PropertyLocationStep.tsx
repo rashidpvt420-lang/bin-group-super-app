@@ -43,6 +43,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [locationError, setLocationError] = useState<string | null>(null);
     const [mapFailed, setMapFailed] = useState(false);
     const [mapFailureReason, setMapFailureReason] = useState<string | null>(null);
+    const [authFailed, setAuthFailed] = useState(false);
     const [initializing, setInitializing] = useState(true);
     const [locating, setLocating] = useState(false);
     const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
@@ -54,6 +55,21 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         address: activeProperty?.address,
         emirate: activeProperty?.emirate || fallbackEmirate.id
     });
+
+    const failMap = (reason?: string) => {
+        console.warn('[MAPS] failMap triggered:', reason);
+        setMapFailed(true);
+        setAuthFailed(true);
+        if (reason) setMapFailureReason(reason);
+        setInitializing(false);
+
+        if (mapRef.current) {
+            mapRef.current.innerHTML = '';
+        }
+        document.querySelectorAll('.gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message, .gm-style, .pac-container').forEach((el) => {
+            (el as HTMLElement).style.display = 'none';
+        });
+    };
 
     useEffect(() => {
         if (!activeProperty?.emirate) {
@@ -131,14 +147,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         return { emirate, city, area };
     };
 
-    const { isLoaded, loadError, apiKey, authFailed } = useGoogleMaps();
-
-    const failMap = (reason: string) => {
-        console.warn('[PropertyLocationStep] Map fallback activated:', reason);
-        setMapFailed(true);
-        setMapFailureReason(reason);
-        setInitializing(false);
-    };
+    const { isLoaded, loadError, apiKey, authFailed: mapAuthFailed } = useGoogleMaps();
 
     const validateMapRender = () => {
         if (mapHealthTimerRef.current) window.clearTimeout(mapHealthTimerRef.current);
@@ -146,14 +155,14 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             if (!mapRef.current) return;
             const errorText = mapRef.current.textContent || '';
             const hasGoogleError = errorText.includes('Something went wrong') || errorText.includes("didn't load Google Maps correctly");
-            if (hasGoogleError || authFailed || (window as any).__BIN_GOOGLE_MAPS_AUTH_FAILED__ === true) {
+            if (hasGoogleError || authFailed || mapAuthFailed || (window as any).__BIN_GOOGLE_MAPS_AUTH_FAILED__ === true) {
                 failMap('GOOGLE_MAPS_RENDER_AUTH_OR_BILLING_FAILURE');
             }
         }, 1200);
     };
 
     const initAutocomplete = async () => {
-        if (!isLoaded || !apiKey) return;
+        if (!isLoaded || !apiKey || loadError || authFailed || mapAuthFailed) return;
 
         setInitializing(true);
         setMapFailed(false);
@@ -222,9 +231,21 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     };
 
     useEffect(() => {
-        if (isLoaded && !authFailed) initAutocomplete();
-        else if (loadError || authFailed) failMap(loadError?.message || 'GOOGLE_MAPS_NOT_AVAILABLE');
-    }, [isLoaded, loadError, authFailed]);
+        const origAuthFailure = (window as any).gm_authFailure;
+        (window as any).gm_authFailure = () => {
+            failMap('GOOGLE_MAPS_AUTH_FAILED');
+            if (origAuthFailure) origAuthFailure();
+        };
+
+        if (isLoaded && !authFailed && !mapAuthFailed) initAutocomplete();
+        else if (loadError || authFailed || mapAuthFailed) {
+            failMap(loadError?.message || 'GOOGLE_MAPS_NOT_AVAILABLE');
+        }
+
+        return () => {
+            if (origAuthFailure) (window as any).gm_authFailure = origAuthFailure;
+        };
+    }, [isLoaded, loadError, authFailed, mapAuthFailed]);
 
     const handleEmirateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = e.target.value;
@@ -327,6 +348,13 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
     return (
         <Box sx={{ py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
+            <style>{`
+                .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message {
+                    display: none !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }
+            `}</style>
             <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 6 } }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, fontSize: { xs: '1.65rem', md: '2.125rem' } }}>
                     {readable(t('onboarding.location_title'), 'Property Location')}
@@ -390,7 +418,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                         <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Open Navigation</Button>
                                         <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use Current GPS</Button>
                                     </Stack>
-                                    {mapFailureReason && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>Diagnostic: {mapFailureReason}</Typography>}
+                                    {mapFailureReason && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,:0.35)', fontFamily: 'monospace' }}>Diagnostic: {mapFailureReason}</Typography>}
                                 </Stack>
                             </Paper>
                         )}
