@@ -14,7 +14,7 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
     auth,
@@ -23,7 +23,8 @@ import {
     httpsCallable,
     ref,
     storage,
-    uploadBytes
+    uploadBytes,
+    signInWithEmailAndPassword
 } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
@@ -80,6 +81,12 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     const [submissionResult, setSubmissionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const [reauthRequired, setReauthRequired] = useState(false);
+    const [reauthPassword, setReauthPassword] = useState('');
+    const [reauthLoading, setReauthLoading] = useState(false);
+
+    const ownerEmail = ownerAccount?.email || companyProfile.email || '';
+
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
 
@@ -135,20 +142,9 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         });
         return uploaded;
     };
-    
-    const handleSubmit = async () => {
-        if (!ownerAccount?.uid) {
-            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
-            return;
-        }
 
-        const currentUser = await waitForCurrentUser();
-        if (!currentUser) {
-            setError(readable(t('onboarding.error.session_expired'), 'Your secure login session is not active. Please sign in from Gateway Login, then return to complete payment submission.'));
-            return;
-        }
-
-        if (currentUser.uid !== ownerAccount.uid) {
+    const submitWithUser = async (currentUser: any) => {
+        if (currentUser.uid !== ownerAccount?.uid) {
             setError(readable(t('onboarding.error.session_mismatch'), 'The active login does not match this owner onboarding session.'));
             return;
         }
@@ -204,6 +200,50 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         } finally {
             setSubmitting(false);
             setUploadingProofs(false);
+        }
+    };
+    
+    const handleSubmit = async () => {
+        if (!ownerAccount?.uid) {
+            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
+            return;
+        }
+
+        const currentUser = await waitForCurrentUser();
+        if (!currentUser) {
+            setReauthRequired(true);
+            setError('Your secure login session is not active. Enter the owner password below to reconnect and submit without losing this onboarding form.');
+            return;
+        }
+
+        await submitWithUser(currentUser);
+    };
+
+    const handleInlineReauth = async () => {
+        if (!ownerEmail) {
+            setError('Owner email is missing. Go back to Account step and confirm the owner email.');
+            return;
+        }
+
+        if (!reauthPassword) {
+            setError('Enter the owner account password to reconnect this onboarding session.');
+            return;
+        }
+
+        setReauthLoading(true);
+        setError(null);
+
+        try {
+            const credential = await signInWithEmailAndPassword(auth, ownerEmail.toLowerCase(), reauthPassword);
+            await submitWithUser(credential.user);
+        } catch (err: any) {
+            setError(
+                err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential'
+                    ? 'Password is incorrect for this owner account.'
+                    : err?.message || 'Unable to reconnect owner session.'
+            );
+        } finally {
+            setReauthLoading(false);
         }
     };
 
@@ -298,15 +338,53 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                     {error}
                                 </Alert>
                             )}
-                            <Button
-                                variant="contained"
-                                fullWidth
-                                disabled={submitting || uploadingProofs}
-                                onClick={handleSubmit}
-                                sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                            >
-                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
-                            </Button>
+
+                            {reauthRequired && (
+                                <Paper sx={{ p: 3, mt: 1, borderRadius: 4, bgcolor: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <Stack spacing={2}>
+                                        <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <LogIn size={16} /> Reconnect Owner Session
+                                        </Typography>
+                                        <TextField
+                                            fullWidth
+                                            label="Owner Email"
+                                            value={ownerEmail}
+                                            disabled
+                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: 'rgba(255,255,255,0.7)' } }}
+                                        />
+                                        <TextField
+                                            fullWidth
+                                            type="password"
+                                            label="Owner Password"
+                                            placeholder="Enter password to reconnect"
+                                            value={reauthPassword}
+                                            onChange={(e) => setReauthPassword(e.target.value)}
+                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                                        />
+                                        <Button
+                                            variant="contained"
+                                            fullWidth
+                                            disabled={reauthLoading || submitting || uploadingProofs}
+                                            onClick={handleInlineReauth}
+                                            sx={{ py: 1.5, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                                        >
+                                            {reauthLoading || submitting || uploadingProofs ? <CircularProgress size={20} color="inherit" /> : 'Sign in and submit'}
+                                        </Button>
+                                    </Stack>
+                                </Paper>
+                            )}
+
+                            {!reauthRequired && (
+                                <Button
+                                    variant="contained"
+                                    fullWidth
+                                    disabled={submitting || uploadingProofs}
+                                    onClick={handleSubmit}
+                                    sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                                >
+                                    {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
+                                </Button>
+                            )}
                             <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
                                 {readable(t('onboarding.back'), 'Back')}
                             </Button>
