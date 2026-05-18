@@ -33,6 +33,28 @@ import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
 const cleanFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
 
+const readable = (value: string | undefined, fallback: string) => {
+    if (!value || value.includes('.')) return fallback;
+    return value;
+};
+
+const waitForCurrentUser = () => {
+    return new Promise<any>((resolve) => {
+        if (auth.currentUser) {
+            resolve(auth.currentUser);
+            return;
+        }
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            unsubscribe();
+            resolve(user);
+        });
+        setTimeout(() => {
+            unsubscribe();
+            resolve(auth.currentUser);
+        }, 4000);
+    });
+};
+
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const navigate = useNavigate();
     const {
@@ -116,24 +138,30 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     
     const handleSubmit = async () => {
         if (!ownerAccount?.uid) {
-            setError(t('onboarding.error.acc_required') || 'Account creation is required before payment submission.');
+            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
             return;
         }
 
-        const currentUser = auth.currentUser;
+        const currentUser = await waitForCurrentUser();
         if (!currentUser) {
-            setError(t('onboarding.error.session_expired') || 'Your session expired. Please sign in again.');
+            setError(readable(t('onboarding.error.session_expired'), 'Your secure login session is not active. Please sign in from Gateway Login, then return to complete payment submission.'));
+            return;
+        }
+
+        if (currentUser.uid !== ownerAccount.uid) {
+            setError(readable(t('onboarding.error.session_mismatch'), 'The active login does not match this owner onboarding session.'));
             return;
         }
 
         if (!paymentMethod) {
-            setError(t('onboarding.payment_method_required') || 'Select a payment method before submission.');
+            setError(readable(t('onboarding.payment_method_required'), 'Select a payment method before submission.'));
             return;
         }
 
         setSubmitting(true);
         setError(null);
         try {
+            await currentUser.getIdToken(true);
             const uploadedProofDocuments = await uploadProofDocuments(currentUser.uid);
             const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
             const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
@@ -184,10 +212,10 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
                 <CheckCircle2 size={88} color="#10b981" style={{ marginBottom: 24 }} />
                 <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                    {t('onboarding.submission_secured')}
+                    {readable(t('onboarding.submission_secured'), 'Submission Secured')}
                 </Typography>
                 <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4 }}>
-                    {t('onboarding.dashboard_locked_info')}
+                    {readable(t('onboarding.dashboard_locked_info'), 'Your dashboard will activate upon admin verification.')}
                 </Typography>
                 <Button
                     variant="contained"
@@ -197,7 +225,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     }}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 5, py: 1.5 }}
                 >
-                    {t('onboarding.go_dashboard')}
+                    {readable(t('onboarding.go_dashboard'), 'Go to Dashboard')}
                 </Button>
             </Container>
         );
@@ -207,10 +235,10 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         <Container maxWidth="lg" sx={{ py: 4 }}>
             <Box sx={{ textAlign: 'center', mb: 5 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-                    {t('onboarding.payment_submission')}
+                    {readable(t('onboarding.payment_submission'), 'Payment Submission')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {t('onboarding.payment_confirm_desc')}
+                    {readable(t('onboarding.payment_confirm_desc'), 'Submit your selected payment method for admin verification and contract activation.')}
                 </Typography>
             </Box>
 
@@ -219,29 +247,29 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.62)', border: '1px solid rgba(255,255,255,0.06)', textAlign: isRTL ? 'right' : 'left' }}>
                         <Stack spacing={3}>
                             <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('onboarding.selected_contract')}</Typography>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{readable(t('onboarding.selected_contract'), 'Selected Contract')}</Typography>
                                 <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{selectedPlan?.name || 'Institutional Package'}</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                             <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('onboarding.portfolio_addons')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF' }}>{t('onboarding.total_assets')}: {properties.length}</Typography>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{readable(t('onboarding.portfolio_addons'), 'Portfolio Add-ons')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF' }}>{readable(t('onboarding.total_assets'), 'Total Assets')}: {properties.length}</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                             <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">{t('onboarding.annual_val')}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{readable(t('onboarding.annual_val'), 'Annual Value')}</Typography>
                                     <Typography variant="h6" fontWeight="950" color="#FFF">{formatAED(estimatedAnnualValue)}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">{t('onboarding.mobilization_due')}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{readable(t('onboarding.mobilization_due'), 'Mobilization Due')}</Typography>
                                     <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{formatAED(mobilizationAmount)}</Typography>
                                 </Grid>
                             </Grid>
-                            <TextField select fullWidth label={t('onboarding.payment_method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as any)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                <MenuItem value="BANK_TRANSFER">{t('onboarding.bank_transfer')}</MenuItem>
-                                <MenuItem value="CHEQUE">{t('onboarding.corp_cheque')}</MenuItem>
-                                <MenuItem value="CASH">{t('onboarding.cash_payment')}</MenuItem>
+                            <TextField select fullWidth label={readable(t('onboarding.payment_method'), 'Payment Method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as any)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
+                                <MenuItem value="BANK_TRANSFER">{readable(t('onboarding.bank_transfer'), 'Bank Transfer')}</MenuItem>
+                                <MenuItem value="CHEQUE">{readable(t('onboarding.corp_cheque'), 'Corporate Cheque')}</MenuItem>
+                                <MenuItem value="CASH">{readable(t('onboarding.cash_payment'), 'Cash Payment')}</MenuItem>
                             </TextField>
                         </Stack>
                     </Paper>
@@ -251,12 +279,25 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(198,167,94,0.06)', border: `1px solid ${binThemeTokens.gold}`, textAlign: isRTL ? 'right' : 'left' }}>
                         <Stack spacing={2}>
                             <ShieldCheck color={binThemeTokens.gold} size={32} />
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{t('onboarding.admin_lock_title')}</Typography>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{readable(t('onboarding.admin_lock_title'), 'Admin Verification Required')}</Typography>
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
-                                {t('onboarding.admin_lock_desc')}
+                                {readable(t('onboarding.admin_lock_desc'), 'Your contract and dashboard will remain locked until BIN GROUP admin verifies the payment and documents.')}
                             </Typography>
                             {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
-                            {error && <Alert severity="error">{error}</Alert>}
+                            {error && (
+                                <Alert 
+                                    severity="error" 
+                                    action={
+                                        error.includes('login session') || error.includes('secure login') || error.includes('session') ? (
+                                            <Button color="inherit" size="small" onClick={() => navigate('/login')}>
+                                                Gateway Login
+                                            </Button>
+                                        ) : null
+                                    }
+                                >
+                                    {error}
+                                </Alert>
+                            )}
                             <Button
                                 variant="contained"
                                 fullWidth
@@ -264,10 +305,10 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                 onClick={handleSubmit}
                                 sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
-                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : t('onboarding.submit_btn')}
+                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
                             </Button>
                             <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
-                                {t('onboarding.back')}
+                                {readable(t('onboarding.back'), 'Back')}
                             </Button>
                         </Stack>
                     </Paper>
