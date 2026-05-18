@@ -163,3 +163,9 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
     return { paymentId, status: "REJECTED" };
 });
+
+// Backward-compatible exports for already deployed production callable names.
+// Keeps Admin Payment Approvals working and prevents Firebase CI from trying
+// to delete these live functions during non-interactive production deploy.
+export const adminApprovePayment = verifyOwnerPaymentTransaction;
+export const adminRejectPayment = rejectOwnerPaymentTransaction;
