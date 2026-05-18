@@ -162,7 +162,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     };
 
     const initAutocomplete = async () => {
-        if (!isLoaded || !apiKey || loadError || authFailed || mapAuthFailed || loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED') return;
+        const embeddedMapsDisabled = loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED';
+        if (!isLoaded || !apiKey || embeddedMapsDisabled || loadError || authFailed || mapAuthFailed) return;
 
         setInitializing(true);
         setMapFailed(false);
