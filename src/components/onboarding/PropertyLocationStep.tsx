@@ -162,7 +162,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     };
 
     const initAutocomplete = async () => {
-        if (!isLoaded || !apiKey || loadError || authFailed || mapAuthFailed) return;
+        if (!isLoaded || !apiKey || loadError || authFailed || mapAuthFailed || loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED') return;
 
         setInitializing(true);
         setMapFailed(false);
@@ -237,8 +237,11 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             if (origAuthFailure) origAuthFailure();
         };
 
-        if (isLoaded && !authFailed && !mapAuthFailed) initAutocomplete();
-        else if (loadError || authFailed || mapAuthFailed) {
+        if (loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED') {
+            failMap('EMBEDDED_GOOGLE_MAPS_DISABLED');
+        } else if (isLoaded && !authFailed && !mapAuthFailed) {
+            initAutocomplete();
+        } else if (loadError || authFailed || mapAuthFailed) {
             failMap(loadError?.message || 'GOOGLE_MAPS_NOT_AVAILABLE');
         }
 
@@ -410,15 +413,23 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.22)' }}>
                                 <Stack spacing={2.2} alignItems="center" textAlign="center">
                                     <Navigation size={38} color={binThemeTokens.gold} />
-                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950 }}>Map preview is unavailable, but location capture still works</Typography>
+                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950 }}>
+                                        {mapFailureReason === 'EMBEDDED_GOOGLE_MAPS_DISABLED' 
+                                            ? 'Production location capture is active'
+                                            : 'Map preview is unavailable, but location capture still works'}
+                                    </Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', maxWidth: 620 }}>
-                                        Google Maps rejected the embedded preview. Save the address and coordinates here; technicians can still open the exact property location in Google Maps.
+                                        {mapFailureReason === 'EMBEDDED_GOOGLE_MAPS_DISABLED'
+                                            ? 'Embedded Google Maps preview is disabled on this step to prevent Google auth failure overlays. Save the address and GPS coordinates here; technicians can open the exact property location in Google Maps.'
+                                            : 'Google Maps rejected the embedded preview. Save the address and coordinates here; technicians can still open the exact property location in Google Maps.'}
                                     </Typography>
                                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                                         <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Open Navigation</Button>
                                         <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use Current GPS</Button>
                                     </Stack>
-                                    {mapFailureReason && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,:0.35)', fontFamily: 'monospace' }}>Diagnostic: {mapFailureReason}</Typography>}
+                                    {mapFailureReason && mapFailureReason !== 'EMBEDDED_GOOGLE_MAPS_DISABLED' && (
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>Diagnostic: {mapFailureReason}</Typography>
+                                    )}
                                 </Stack>
                             </Paper>
                         )}

@@ -7,7 +7,7 @@ import {
 
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, signInWithEmailAndPassword, User } from 'firebase/auth';
 import { getToken, isSupported, getMessaging } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
@@ -77,7 +77,7 @@ const functions = getFunctions(app, PRIMARY_REGION);
 // Explicit Exports
 export {
     app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
-    onAuthStateChanged, getRedirectResult, signInWithPopup, type User,
+    onAuthStateChanged, getRedirectResult, signInWithPopup, signInWithEmailAndPassword, type User,
     ref, uploadBytes, uploadBytesResumable, getDownloadURL,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion
 };

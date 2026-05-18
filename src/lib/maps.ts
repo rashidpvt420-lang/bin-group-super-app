@@ -9,6 +9,11 @@ const getMapsKey = (): string => {
   return env?.VITE_GOOGLE_MAPS_API_KEY || env?.REACT_APP_GOOGLE_MAPS_API_KEY || '';
 };
 
+const isEmbeddedMapsEnabled = (): boolean => {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS === 'true';
+};
+
 const isMapsReady = () => typeof window !== 'undefined' && Boolean((window as any).google?.maps);
 const isMapsAuthFailed = () => typeof window !== 'undefined' && (window as any).__BIN_GOOGLE_MAPS_AUTH_FAILED__ === true;
 
@@ -36,6 +41,9 @@ function installAuthFailureHook() {
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('WINDOW_NOT_AVAILABLE'));
+  if (!isEmbeddedMapsEnabled()) {
+    return Promise.reject(new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'));
+  }
   if (!apiKey) return Promise.reject(new Error('GOOGLE_MAPS_API_KEY_MISSING'));
   if (isMapsAuthFailed()) return Promise.reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
   if (isMapsReady()) return Promise.resolve();
@@ -91,11 +99,21 @@ export const buildGoogleMapsSearchUrl = (args: { lat?: number | string | null; l
 
 export const useGoogleMaps = () => {
   const apiKey = getMapsKey();
-  const [isLoaded, setIsLoaded] = useState(isMapsReady() && !isMapsAuthFailed());
-  const [loadError, setLoadError] = useState<Error | null>(isMapsAuthFailed() ? new Error('GOOGLE_MAPS_AUTH_FAILED') : null);
+  const mapsEnabled = isEmbeddedMapsEnabled();
+
+  const [isLoaded, setIsLoaded] = useState(mapsEnabled && isMapsReady() && !isMapsAuthFailed());
+  const [loadError, setLoadError] = useState<Error | null>(
+    !mapsEnabled ? new Error('EMBEDDED_GOOGLE_MAPS_DISABLED') : (isMapsAuthFailed() ? new Error('GOOGLE_MAPS_AUTH_FAILED') : null)
+  );
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!isEmbeddedMapsEnabled()) {
+      setIsLoaded(false);
+      setLoadError(new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'));
+      return;
+    }
 
     installAuthFailureHook();
     const onAuthFailure = (error: Error) => {
@@ -145,6 +163,10 @@ export const useGoogleMaps = () => {
 
     return cleanup;
   }, [apiKey]);
+
+  if (!mapsEnabled) {
+    return { isLoaded: false, loadError: new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'), apiKey, authFailed: false };
+  }
 
   return { isLoaded, loadError, apiKey, authFailed: isMapsAuthFailed() };
 };
