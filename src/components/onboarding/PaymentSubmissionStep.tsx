@@ -14,7 +14,7 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck, LogIn } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
     auth,
@@ -23,14 +23,12 @@ import {
     httpsCallable,
     ref,
     storage,
-    uploadBytes,
-    signInWithEmailAndPassword
+    uploadBytes
 } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
 const cleanFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
 
@@ -56,6 +54,14 @@ const waitForCurrentUser = () => {
     });
 };
 
+const fileMetadata = (file: File | null) => file ? {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    stagedInBrowser: true,
+    requiresAdminUploadReview: true
+} : null;
+
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const navigate = useNavigate();
     const {
@@ -80,15 +86,23 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     const [submitted, setSubmitted] = useState(false);
     const [submissionResult, setSubmissionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
-
-    const [reauthRequired, setReauthRequired] = useState(false);
-    const [reauthPassword, setReauthPassword] = useState('');
-    const [reauthLoading, setReauthLoading] = useState(false);
+    const [pendingMode, setPendingMode] = useState(false);
 
     const ownerEmail = ownerAccount?.email || companyProfile.email || '';
 
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
+
+    const buildProofMetadata = () => ({
+        propertyProof: fileMetadata(proofDocuments.propertyProof),
+        titleDeed: fileMetadata(proofDocuments.propertyProof),
+        emiratesId: fileMetadata(proofDocuments.emiratesId),
+        passport: fileMetadata(proofDocuments.passport),
+        tradeLicense: fileMetadata(proofDocuments.tradeLicense),
+        tenancySupport: fileMetadata(proofDocuments.tenancySupport),
+        __uploadFallback: true,
+        note: 'Files were staged in the browser by a pending owner. Admin must request/verify final document upload before activation.'
+    });
 
     const uploadProofDocuments = async (uid: string) => {
         const required: Array<[string, File | null]> = [
@@ -143,14 +157,40 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         return uploaded;
     };
 
-    const submitWithUser = async (currentUser: any) => {
-        if (currentUser.uid !== ownerAccount?.uid) {
-            setError(readable(t('onboarding.error.session_mismatch'), 'The active login does not match this owner onboarding session.'));
-            return;
+    const buildSubmissionPayload = (proofPayload: Record<string, any>, submissionId: string) => JSON.parse(JSON.stringify({
+        idempotencyKey: submissionId,
+        onboardingSessionId,
+        ownerAccount,
+        ownerRegistrationId: ownerAccount?.uid,
+        pendingOwnerId: ownerAccount?.uid,
+        companyProfile,
+        properties,
+        selectedPlan,
+        selectedAddOns,
+        portfolioSummary,
+        proofDocuments: proofPayload,
+        proofDocumentMetadata: proofPayload,
+        kycUrls: {
+            titleDeed: proofPayload.titleDeed?.downloadUrl,
+            emiratesId: proofPayload.emiratesId?.downloadUrl,
+            passport: proofPayload.passport?.downloadUrl,
+            tradeLicense: proofPayload.tradeLicense?.downloadUrl,
+        },
+        pricing: {
+            annualContractValue: estimatedAnnualValue,
+            mobilizationAmount,
+            currency: 'AED'
+        },
+        payment: {
+            method: paymentMethod,
+            amount: mobilizationAmount,
+            currency: 'AED'
         }
+    }));
 
-        if (!paymentMethod) {
-            setError(readable(t('onboarding.payment_method_required'), 'Select a payment method before submission.'));
+    const submitWithAuthenticatedOwner = async (currentUser: any) => {
+        if (currentUser.uid !== ownerAccount?.uid) {
+            await submitPendingOwnerPackage();
             return;
         }
 
@@ -161,42 +201,48 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             const uploadedProofDocuments = await uploadProofDocuments(currentUser.uid);
             const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
             const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
-            
-            const submissionPayload = JSON.parse(JSON.stringify({
-                idempotencyKey: submissionId,
-                onboardingSessionId,
-                ownerAccount,
-                companyProfile,
-                properties,
-                selectedPlan,
-                selectedAddOns,
-                portfolioSummary,
-                proofDocuments: uploadedProofDocuments,
-                kycUrls: {
-                    titleDeed: uploadedProofDocuments.titleDeed?.downloadUrl,
-                    emiratesId: uploadedProofDocuments.emiratesId?.downloadUrl,
-                    passport: uploadedProofDocuments.passport?.downloadUrl,
-                    tradeLicense: uploadedProofDocuments.tradeLicense?.downloadUrl,
-                },
-                pricing: {
-                    annualContractValue: estimatedAnnualValue,
-                    mobilizationAmount,
-                    currency: 'AED'
-                },
-                payment: {
-                    method: paymentMethod,
-                    amount: mobilizationAmount,
-                    currency: 'AED'
-                }
-            }));
-
-            const result = await submitOwnerOnboarding(submissionPayload);
+            const result = await submitOwnerOnboarding(buildSubmissionPayload(uploadedProofDocuments, submissionId));
             const response = result.data as any;
             setSubmissionResult(response);
             setIntakeId(response?.intakeId || submissionId);
             setSubmitted(true);
         } catch (err: any) {
             setError(err?.message || 'Onboarding submission failed.');
+        } finally {
+            setSubmitting(false);
+            setUploadingProofs(false);
+        }
+    };
+
+    const submitPendingOwnerPackage = async () => {
+        if (!ownerAccount?.uid || !ownerEmail) {
+            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
+            return;
+        }
+
+        setPendingMode(true);
+        setSubmitting(true);
+        setError(null);
+        try {
+            const submissionId = `${ownerAccount.uid}_${onboardingSessionId}`;
+            const submitPendingOwnerRegistration = httpsCallable(functions, 'submitPendingOwnerRegistration');
+            const proofMetadata = buildProofMetadata();
+            const paymentSubmission = buildSubmissionPayload(proofMetadata, submissionId);
+            const result = await submitPendingOwnerRegistration({
+                ownerRegistrationId: ownerAccount.uid,
+                pendingOwnerId: ownerAccount.uid,
+                fullName: ownerAccount.fullName || companyProfile.contactPerson || companyProfile.name || 'Owner',
+                email: ownerEmail,
+                mobile: ownerAccount.mobile || companyProfile.phone || '+971000000000',
+                intakeId: submissionId,
+                paymentSubmission
+            });
+            const response = result.data as any;
+            setSubmissionResult(response);
+            setIntakeId(response?.intakeId || submissionId);
+            setSubmitted(true);
+        } catch (err: any) {
+            setError(err?.message || 'Pending owner payment submission failed.');
         } finally {
             setSubmitting(false);
             setUploadingProofs(false);
@@ -209,42 +255,18 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             return;
         }
 
+        if (!paymentMethod) {
+            setError(readable(t('onboarding.payment_method_required'), 'Select a payment method before submission.'));
+            return;
+        }
+
         const currentUser = await waitForCurrentUser();
         if (!currentUser) {
-            setReauthRequired(true);
-            setError('Your secure login session is not active. Enter the owner password below to reconnect and submit without losing this onboarding form.');
+            await submitPendingOwnerPackage();
             return;
         }
 
-        await submitWithUser(currentUser);
-    };
-
-    const handleInlineReauth = async () => {
-        if (!ownerEmail) {
-            setError('Owner email is missing. Go back to Account step and confirm the owner email.');
-            return;
-        }
-
-        if (!reauthPassword) {
-            setError('Enter the owner account password to reconnect this onboarding session.');
-            return;
-        }
-
-        setReauthLoading(true);
-        setError(null);
-
-        try {
-            const credential = await signInWithEmailAndPassword(auth, ownerEmail.toLowerCase(), reauthPassword);
-            await submitWithUser(credential.user);
-        } catch (err: any) {
-            setError(
-                err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential'
-                    ? 'Password is incorrect for this owner account.'
-                    : err?.message || 'Unable to reconnect owner session.'
-            );
-        } finally {
-            setReauthLoading(false);
-        }
+        await submitWithAuthenticatedOwner(currentUser);
     };
 
     if (submitted) {
@@ -255,7 +277,9 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     {readable(t('onboarding.submission_secured'), 'Submission Secured')}
                 </Typography>
                 <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4 }}>
-                    {readable(t('onboarding.dashboard_locked_info'), 'Your dashboard will activate upon admin verification.')}
+                    {pendingMode
+                        ? 'Your pending owner submission is secured for admin verification. BIN GROUP will verify payment and documents before activating access.'
+                        : readable(t('onboarding.dashboard_locked_info'), 'Your dashboard will activate upon admin verification.')}
                 </Typography>
                 <Button
                     variant="contained"
@@ -323,68 +347,20 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
                                 {readable(t('onboarding.admin_lock_desc'), 'Your contract and dashboard will remain locked until BIN GROUP admin verifies the payment and documents.')}
                             </Typography>
+                            <Alert severity="info" sx={{ bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
+                                Pending owners do not need a password at this stage. Submission will be secured for admin verification.
+                            </Alert>
                             {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
-                            {error && (
-                                <Alert 
-                                    severity="error" 
-                                    action={
-                                        error.includes('login session') || error.includes('secure login') || error.includes('session') ? (
-                                            <Button color="inherit" size="small" onClick={() => navigate('/login')}>
-                                                Gateway Login
-                                            </Button>
-                                        ) : null
-                                    }
-                                >
-                                    {error}
-                                </Alert>
-                            )}
-
-                            {reauthRequired && (
-                                <Paper sx={{ p: 3, mt: 1, borderRadius: 4, bgcolor: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <Stack spacing={2}>
-                                        <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <LogIn size={16} /> Reconnect Owner Session
-                                        </Typography>
-                                        <TextField
-                                            fullWidth
-                                            label="Owner Email"
-                                            value={ownerEmail}
-                                            disabled
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: 'rgba(255,255,255,0.7)' } }}
-                                        />
-                                        <TextField
-                                            fullWidth
-                                            type="password"
-                                            label="Owner Password"
-                                            placeholder="Enter password to reconnect"
-                                            value={reauthPassword}
-                                            onChange={(e) => setReauthPassword(e.target.value)}
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                        />
-                                        <Button
-                                            variant="contained"
-                                            fullWidth
-                                            disabled={reauthLoading || submitting || uploadingProofs}
-                                            onClick={handleInlineReauth}
-                                            sx={{ py: 1.5, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                                        >
-                                            {reauthLoading || submitting || uploadingProofs ? <CircularProgress size={20} color="inherit" /> : 'Sign in and submit'}
-                                        </Button>
-                                    </Stack>
-                                </Paper>
-                            )}
-
-                            {!reauthRequired && (
-                                <Button
-                                    variant="contained"
-                                    fullWidth
-                                    disabled={submitting || uploadingProofs}
-                                    onClick={handleSubmit}
-                                    sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                                >
-                                    {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
-                                </Button>
-                            )}
+                            {error && <Alert severity="error">{error}</Alert>}
+                            <Button
+                                variant="contained"
+                                fullWidth
+                                disabled={submitting || uploadingProofs}
+                                onClick={handleSubmit}
+                                sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                            >
+                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
+                            </Button>
                             <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
                                 {readable(t('onboarding.back'), 'Back')}
                             </Button>
