@@ -53,6 +53,17 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
     }, [ownerAccount, paymentMethod]);
 
+    // ─── CHECK STRIPE CALLBACK ─────────────────────────────────────
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('payment_success') === 'true' || params.get('session_id')) {
+            setSuccess(true);
+            clearStagedFiles().catch(console.error);
+        } else if (params.get('payment_failed') === 'true') {
+            setError('Payment checkout was cancelled or failed. Please try again.');
+        }
+    }, []);
+
     // ─── DOCUMENT UPLOAD TO STORAGE ───────────────────────────────
     const uploadProofDocuments = async (): Promise<{ [key: string]: string }> => {
         if (!ownerAccount?.uid) throw new Error('Owner UID missing');
@@ -148,6 +159,28 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             setUploadedUrls(urls);
 
             // 2️⃣ Submit onboarding package through backend Callable
+            if (paymentMethod === 'STRIPE') {
+                console.log('[PAYMENT] Step 2: Creating Stripe checkout session...');
+                const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
+                const sessionRes = await createCheckout({
+                    ownerUid: ownerAccount.uid,
+                    ownerEmail: ownerAccount.email,
+                    intakeId,
+                    onboardingSessionId,
+                    amount: portfolioSummary.estimatedACV
+                });
+
+                const sessionData = sessionRes.data as { url?: string };
+                if (sessionData?.url) {
+                    console.log('[PAYMENT] Step 3: Redirecting to Stripe:', sessionData.url);
+                    await clearStagedFiles();
+                    window.location.href = sessionData.url;
+                    return;
+                } else {
+                    throw new Error('Stripe redirect URL not returned by server.');
+                }
+            }
+
             console.log('[PAYMENT] Step 2: Finalizing submission via backend...');
             const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
             await submitPackage({

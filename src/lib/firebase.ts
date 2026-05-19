@@ -89,21 +89,27 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 let appCheckInstance: AppCheck | null = null;
-const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
-const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY') || '6LdJpTcqAAAAAPv9z_M7pWbB8J1mYtTRg3e_6H1D';
+const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') !== 'false';
 
-if (typeof window !== 'undefined' && appCheckExplicitlyEnabled && appCheckSiteKey) {
-  try {
-    appCheckInstance = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(appCheckSiteKey),
-      isTokenAutoRefreshEnabled: true,
-    });
-    console.info('[Firebase] App Check initialized for root app.');
-  } catch (error) {
-    console.warn('[Firebase] App Check initialization failed. Continuing without App Check token injection:', error);
+if (typeof window !== 'undefined' && appCheckExplicitlyEnabled) {
+  const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+  if (isLocal) {
+    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    console.info('🛡️ [SECURITY] App Check BYPASSED with debug token for local testing.');
   }
-} else if (typeof window !== 'undefined') {
-  console.info('[Firebase] App Check disabled for root app. Set VITE_ENABLE_FIREBASE_APPCHECK=true only after the production reCAPTCHA key and allowed domains are verified.');
+
+  if (appCheckSiteKey) {
+    try {
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.info('[Firebase] App Check initialized for root app.');
+    } catch (error) {
+      console.warn('[Firebase] App Check initialization failed. Continuing without App Check token injection:', error);
+    }
+  }
 }
 
 export const appCheck = appCheckInstance;

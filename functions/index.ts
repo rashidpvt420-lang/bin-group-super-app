@@ -904,13 +904,89 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 
 // ─── OMNI-CHANNEL NOTIFICATION ENGINE ───────────────────────────────────────
 
+async function sendTwilioSMS(to: string, message: string) {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    const from = process.env.TWILIO_FROM_NUMBER;
+    if (!sid || !token || !from) {
+        console.info(`[SMS MOCK] To: ${to}, Message: ${message}`);
+        return;
+    }
+    try {
+        const authString = Buffer.from(`${sid}:${token}`).toString("base64");
+        const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Basic ${authString}`,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({
+                To: to,
+                From: from,
+                Body: message
+            })
+        });
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error("[Twilio SMS Error]:", errText);
+        } else {
+            console.log(`[Twilio SMS Success] Message sent to ${to}`);
+        }
+    } catch (error) {
+        console.error("[Twilio SMS Exception]:", error);
+    }
+}
+
+async function sendWhatsAppTemplate(to: string, templateName: string, languageCode = "en", bodyText = "") {
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    if (!phoneId || !token) {
+        console.info(`[WhatsApp MOCK] To: ${to}, Template: ${templateName}, BodyText: ${bodyText}`);
+        return;
+    }
+    try {
+        const formattedPhone = to.replace(/[^0-9]/g, "");
+        const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                messaging_product: "whatsapp",
+                to: formattedPhone,
+                type: "template",
+                template: {
+                    name: templateName,
+                    language: { code: languageCode },
+                    components: bodyText ? [
+                        {
+                            type: "body",
+                            parameters: [{ type: "text", text: bodyText }]
+                        }
+                    ] : []
+                }
+            })
+        });
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error("[WhatsApp Error]:", errText);
+        } else {
+            console.log(`[WhatsApp Success] Template ${templateName} sent to ${to}`);
+        }
+    } catch (error) {
+        console.error("[WhatsApp Exception]:", error);
+    }
+}
+
 async function dispatchOmniNotification(userId: string, title: string, body: string, options: any = {}) {
     try {
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) return;
         const userData = userDoc.data();
-        const fcmTokens: string[] = userData?.fcmTokens || [];
         
+        // 1. Push notification (FCM)
+        const fcmTokens: string[] = userData?.fcmTokens || [];
         if (fcmTokens.length > 0) {
             const messages = fcmTokens.map(token => ({
                 token,
@@ -920,6 +996,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
             await admin.messaging().sendEach(messages);
         }
 
+        // 2. Email Notification fallback
         if (userData?.email && options.type === 'CRITICAL') {
             await db.collection("mail").add({
                 to: userData.email,
@@ -929,6 +1006,16 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                 },
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
+        }
+
+        // 3. SMS Notification fallback
+        if (userData?.phone || userData?.mobile) {
+            const phone = userData.phone || userData.mobile;
+            await sendTwilioSMS(phone, `[${title}] ${body}`);
+            
+            // 4. WhatsApp Notification fallback
+            const templateName = options.whatsappTemplate || "bin_group_alert";
+            await sendWhatsAppTemplate(phone, templateName, "en", body);
         }
     } catch (err) {
         console.error("Notification Error:", err);
