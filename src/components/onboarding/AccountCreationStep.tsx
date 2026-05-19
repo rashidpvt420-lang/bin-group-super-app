@@ -23,7 +23,7 @@ const readable = (value: string | undefined, fallback: string) => {
 const normalizePhone = (value: string) => value.replace(/[^0-9+]/g, '').trim();
 
 export default function AccountCreationStep({ onBack, onNext }: AccountCreationStepProps) {
-    const { companyProfile, setOwnerAccount, intakeId } = useOnboardingStore();
+    const { companyProfile, setOwnerAccount, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
 
     const [formData, setFormData] = useState({
@@ -90,14 +90,18 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 email,
                 mobile,
                 password: formData.password,
-                intakeId: intakeId || null
+                intakeId: intakeId || onboardingSessionId,
+                onboardingSubmissionId: intakeId || onboardingSessionId
             });
 
-            const data = result.data as { uid?: string; ownerUid?: string };
+            const data = result.data as { uid?: string; ownerUid?: string; intakeId?: string; ownerRegistrationId?: string };
             const uid = data.uid || data.ownerUid;
             if (!uid) {
                 throw new Error('Registration failed: no user identifier returned.');
             }
+
+            const resolvedIntakeId = data.intakeId || data.ownerRegistrationId || intakeId || onboardingSessionId || uid;
+            setIntakeId(resolvedIntakeId);
 
             console.log("✅ [ONBOARDING] Account registered successfully. Establishing auth session...");
             await signInWithEmailAndPassword(auth, email, formData.password);
