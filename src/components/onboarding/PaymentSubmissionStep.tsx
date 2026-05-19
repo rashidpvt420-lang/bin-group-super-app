@@ -215,7 +215,13 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     };
 
     const handleGatewayRecovery = () => {
-        navigate('/gateway', {
+        const params = new URLSearchParams({
+            intendedRole: 'owner',
+            returnTo: '/onboarding',
+        });
+        if (ownerEmail) params.set('ownerEmail', ownerEmail.toLowerCase());
+
+        navigate(`/login?${params.toString()}`, {
             state: {
                 returnTo: '/onboarding',
                 ownerEmail,
