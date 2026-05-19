@@ -23,22 +23,37 @@ const LoginPage: React.FC = () => {
     const [localLoading, setLocalLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Extract intendedRole from query params
+    // Extract intendedRole and onboarding recovery routing from query params/state.
     const queryParams = new URLSearchParams(location.search);
     const intendedRole = queryParams.get('intendedRole');
+    const returnToParam = queryParams.get('returnTo') || (location.state as any)?.returnTo || '';
+    const ownerEmailParam = queryParams.get('ownerEmail') || (location.state as any)?.ownerEmail || '';
+    const safeReturnTo = returnToParam.startsWith('/') && !returnToParam.startsWith('//') ? returnToParam : '';
+    const intendedRoleKey = intendedRole?.toLowerCase();
+
+    useEffect(() => {
+        if (ownerEmailParam && !email) {
+            setEmail(ownerEmailParam.trim().toLowerCase());
+        }
+    }, [ownerEmailParam, email]);
+
+    const resolvePostLoginTarget = () => {
+        const resolvedRole = isAdmin ? 'admin' : role;
+        const roleMatchesIntent = !intendedRoleKey || intendedRoleKey === resolvedRole || (intendedRoleKey === 'owner' && resolvedRole === 'owner');
+        if (safeReturnTo && roleMatchesIntent) return safeReturnTo;
+        if (resolvedRole === 'tenant') return '/tenant';
+        if (resolvedRole === 'technician') return '/technician';
+        if (resolvedRole === 'broker') return '/broker';
+        if (resolvedRole === 'admin') return '/admin';
+        return '/owner/dashboard';
+    };
 
     useEffect(() => {
         if (!roleLoading && role) {
             console.log("🔍 [AUTH] Role Resolved:", role);
-            if (role === 'tenant') navigate('/tenant');
-            else if (role === 'technician') navigate('/technician');
-            else if (role === 'broker') navigate('/broker');
-            else if (role === 'admin' || isAdmin) {
-                navigate('/admin');
-            }
-            else navigate('/owner/dashboard');
+            navigate(resolvePostLoginTarget(), { replace: Boolean(safeReturnTo) });
         }
-    }, [role, isAdmin, roleLoading, navigate]);
+    }, [role, isAdmin, roleLoading, navigate, safeReturnTo, intendedRoleKey]);
     
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
@@ -82,6 +97,9 @@ const LoginPage: React.FC = () => {
             if (result.user) {
                 console.log("🛡️ [AUTH] Google Auth Success:", result.user.email);
                 await refreshRole(); // Force sync after login
+                if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) {
+                    navigate(safeReturnTo, { replace: true });
+                }
             }
         } catch (err: any) {
             setError(getFriendlyAuthError(err));
@@ -98,6 +116,9 @@ const LoginPage: React.FC = () => {
             await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             console.log("🔍 [AUTH] Email Login Success");
             await refreshRole(); // Force sync after login
+            if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) {
+                navigate(safeReturnTo, { replace: true });
+            }
         } catch (err: any) {
             setError(getFriendlyAuthError(err));
             setLocalLoading(false);
