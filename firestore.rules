@@ -53,7 +53,6 @@ service cloud.firestore {
 
     function safeOwnerOnboardingProfileUpdate(userId) {
       return signedIn() && userId == request.auth.uid &&
-        resource.data.role in ['tenant', 'owner'] &&
         request.resource.data.role == 'owner' &&
         request.resource.data.status in ['pending_admin_approval', 'pending_approval', 'active'] &&
         request.resource.data.adminApproved == false &&
