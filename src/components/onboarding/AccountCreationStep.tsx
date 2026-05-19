@@ -99,7 +99,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             }
         }
 
-        // 6. Update Local Store
+        // 6. Update Local Store - PERSIST OWNER ACCOUNT INTO ONBOARDING STATE
         setOwnerAccount({
             uid: user.uid,
             fullName,
@@ -176,8 +176,8 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 let msg = errorText('onboarding.error.generic', 'Account creation failed. Please check the details and try again.');
                 if (err.code === 'auth/invalid-email') msg = errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
                 else if (err.code === 'auth/weak-password') msg = errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
-                else if (err.code === 'auth/operation-not-allowed') msg = lang === 'ar' ? 'تسجيل البريد وكلمة المرور غير مفعّل في Firebase Authentication.' : 'Email/password signup is not enabled in Firebase Authentication.';
-                else if (err.code === 'permission-denied') msg = lang === 'ar' ? 'تم إنشاء الحساب، لكن Firestore رفض إنشاء ملف المالك. يرجى نشر قواعد Firestore الجديدة ثم المحاولة مرة أخرى.' : 'Owner account was created, but Firestore rejected the owner profile write. Deploy the latest Firestore rules and try again.';
+                else if (err.code === 'auth/operation-not-allowed') msg = lang === 'ar' ? 'تسجيل البريد وكلمة المرور غير مفعّل في Firebase Authentication.' : 'Email/password sign-up is not enabled in Firebase Authentication.';
+                else if (err.code === 'permission-denied') msg = lang === 'ar' ? 'تم إنشاء الحساب، لكن Firestore رفض إنشاء ملف المالك. يرجى نشر قواعد Firestore الصحيحة.' : 'Account created but Firestore profile write was denied. Check Firestore rules.';
                 else if (err.code === 'unavailable') msg = lang === 'ar' ? 'Firebase غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.' : 'Firebase is temporarily unavailable. Please try again in a moment.';
                 else if (err?.message) msg = `${msg} (${err.code || err.message})`;
                 setError({ message: msg, type: 'error' });
