@@ -1,366 +1,445 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Chip,
-    CircularProgress,
-    Container,
-    Divider,
-    Grid,
-    MenuItem,
-    Paper,
-    Stack,
-    TextField,
-    Typography
+    Box, Typography, Button, Stack, Alert, CircularProgress, Paper, Grid, Container, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import {
-    auth,
-    functions,
-    getDownloadURL,
-    httpsCallable,
-    ref,
-    storage,
-    uploadBytes
-} from '../../lib/firebase';
+import { CheckCircle, AlertCircle, Upload, FileText, Download } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { useLanguage } from '@bin/shared';
-import { formatAED } from '../../utils/formatters';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { db, storage, doc, setDoc, serverTimestamp, collection, query, where, getDocs, httpsCallable } from '../../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const cleanFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+interface PaymentSubmissionStepProps {
+    onBack: () => void;
+}
 
 const readable = (value: string | undefined, fallback: string) => {
     if (!value || value.includes('.')) return fallback;
     return value;
 };
 
-const waitForCurrentUser = () => {
-    return new Promise<any>((resolve) => {
-        if (auth.currentUser) {
-            resolve(auth.currentUser);
-            return;
-        }
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-            unsubscribe();
-            resolve(user);
-        });
-        setTimeout(() => {
-            unsubscribe();
-            resolve(auth.currentUser);
-        }, 4000);
-    });
-};
-
-const isRealFile = (value: unknown): value is File => {
-    return typeof File !== 'undefined' && value instanceof File && value.size > 0;
-};
-
-const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-    const navigate = useNavigate();
+export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepProps) {
     const {
-        properties,
-        selectedPlan,
-        selectedAddOns,
-        portfolioSummary,
         companyProfile,
         ownerAccount,
-        onboardingSessionId,
         proofDocuments,
+        intakeId,
+        onboardingSessionId,
         paymentMethod,
-        setPaymentMethod,
-        setIntakeId,
-        updateKycUrls,
+        selectedPlan,
+        selectedAddOns,
+        properties,
+        portfolioSummary,
         reset
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
-    const [submitting, setSubmitting] = useState(false);
-    const [uploadingProofs, setUploadingProofs] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [submissionResult, setSubmissionResult] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
     const [error, setError] = useState<string | null>(null);
-    const [pendingMode, setPendingMode] = useState(false);
-    const [sessionRecoveryRequired, setSessionRecoveryRequired] = useState(false);
+    const [success, setSuccess] = useState(false);
+    const [uploadedUrls, setUploadedUrls] = useState<{ [key: string]: string }>({});
+    const [confirmDialog, setConfirmDialog] = useState(false);
 
-    const ownerEmail = ownerAccount?.email || companyProfile.email || '';
-
-    const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
-    const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
-
-    const uploadProofDocuments = async (uid: string) => {
-        const required: Array<[string, File | null]> = [
-            ['titleDeed', proofDocuments.propertyProof],
-            ['emiratesId', proofDocuments.emiratesId],
-            ['passport', proofDocuments.passport],
-        ];
-
-        const missing = required.filter(([, file]) => !isRealFile(file)).map(([key]) => key);
-        if (missing.length) {
-            throw new Error(`Missing required physical documents: ${missing.join(', ')}. Please upload the actual files before submitting.`);
-        }
-
-        const optional: Array<[string, File | null]> = [
-            ['tradeLicense', proofDocuments.tradeLicense],
-            ['tenancySupport', proofDocuments.tenancySupport],
-        ];
-
-        const allDocs = [...required, ...optional].filter(([, file]) => isRealFile(file)) as Array<[string, File]>;
-        const uploaded: Record<string, any> = {};
-        const urls: Record<string, string> = {};
-        const basePath = `onboarding-proof/${uid}/${onboardingSessionId}`;
-
-        setUploadingProofs(true);
-        for (const [key, file] of allDocs) {
-            const path = `${basePath}/${key}_${Date.now()}_${cleanFileName(file.name)}`;
-            const storageRef = ref(storage, path);
-            await uploadBytes(storageRef, file, {
-                contentType: file.type || 'application/octet-stream',
-                customMetadata: {
-                    ownerUid: uid,
-                    onboardingSessionId,
-                    documentType: key,
-                    originalName: file.name,
-                }
-            });
-            const url = await getDownloadURL(storageRef);
-            urls[key] = url;
-            uploaded[key] = {
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                storagePath: path,
-                downloadUrl: url,
-                uploadedAt: new Date().toISOString(),
-                adminAccessible: true,
-                source: 'FIREBASE_STORAGE'
-            };
-        }
-        setUploadingProofs(false);
-        updateKycUrls({
-            titleDeed: urls.titleDeed,
-            emiratesId: urls.emiratesId,
-            passport: urls.passport,
-            tradeLicense: urls.tradeLicense,
-        });
-        return uploaded;
-    };
-
-    const buildSubmissionPayload = (proofPayload: Record<string, any>, submissionId: string) => JSON.parse(JSON.stringify({
-        idempotencyKey: submissionId,
-        onboardingSessionId,
-        ownerAccount,
-        ownerRegistrationId: ownerAccount?.uid,
-        pendingOwnerId: ownerAccount?.uid,
-        companyProfile,
-        properties,
-        selectedPlan,
-        selectedAddOns,
-        portfolioSummary,
-        proofDocuments: proofPayload,
-        proofDocumentMetadata: proofPayload,
-        kycUrls: {
-            titleDeed: proofPayload.titleDeed?.downloadUrl,
-            emiratesId: proofPayload.emiratesId?.downloadUrl,
-            passport: proofPayload.passport?.downloadUrl,
-            tradeLicense: proofPayload.tradeLicense?.downloadUrl,
-        },
-        pricing: {
-            annualContractValue: estimatedAnnualValue,
-            mobilizationAmount,
-            currency: 'AED'
-        },
-        payment: {
-            method: paymentMethod,
-            amount: mobilizationAmount,
-            currency: 'AED'
-        }
-    }));
-
-    const submitWithAuthenticatedOwner = async (currentUser: any) => {
-        if (currentUser.uid !== ownerAccount?.uid) {
-            setSessionRecoveryRequired(true);
-            setError('Secure owner session mismatch. Sign in with the same owner account used in onboarding so documents can upload for Admin verification.');
-            return;
-        }
-
-        setSubmitting(true);
-        setError(null);
-        try {
-            await currentUser.getIdToken(true);
-            const uploadedProofDocuments = await uploadProofDocuments(currentUser.uid);
-            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
-            const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
-            const result = await submitOwnerOnboarding(buildSubmissionPayload(uploadedProofDocuments, submissionId));
-            const response = result.data as any;
-            setSubmissionResult(response);
-            setIntakeId(response?.intakeId || submissionId);
-            setPendingMode(false);
-            setSessionRecoveryRequired(false);
-            setSubmitted(true);
-        } catch (err: any) {
-            setError(err?.message || 'Onboarding submission failed.');
-        } finally {
-            setSubmitting(false);
-            setUploadingProofs(false);
-        }
-    };
-
-    const submitPendingOwnerPackage = async () => {
-        setPendingMode(true);
-        setSessionRecoveryRequired(true);
-        setError('Secure owner login session is required before final submission. This protects your files and lets Admin open the real uploaded documents. Please use Gateway Login with the owner account, return to this step, and submit again.');
-    };
-
-    const handleGatewayRecovery = () => {
-        const params = new URLSearchParams({
-            intendedRole: 'owner',
-            returnTo: '/onboarding',
-        });
-        if (ownerEmail) params.set('ownerEmail', ownerEmail.toLowerCase());
-
-        navigate(`/login?${params.toString()}`, {
-            state: {
-                returnTo: '/onboarding',
-                ownerEmail,
-                reason: 'OWNER_ONBOARDING_DOCUMENT_UPLOAD_SESSION_REQUIRED'
-            }
-        });
-    };
-    
-    const handleSubmit = async () => {
+    // ─── VALIDATION ───────────────────────────────────────────────
+    useEffect(() => {
         if (!ownerAccount?.uid) {
-            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
-            return;
+            setError('Account not created. Please go back and complete Step 7.');
         }
-
         if (!paymentMethod) {
-            setError(readable(t('onboarding.payment_method_required'), 'Select a payment method before submission.'));
-            return;
+            setError('Payment method not selected. Please go back and select a payment option.');
+        }
+    }, [ownerAccount, paymentMethod]);
+
+    // ─── DOCUMENT UPLOAD TO STORAGE ───────────────────────────────
+    const uploadDocumentsToStorage = async (): Promise<{ [key: string]: string }> => {
+        if (!ownerAccount?.uid) throw new Error('Owner UID missing');
+
+        const urls: { [key: string]: string } = {};
+        const docTypes = [
+            { key: 'propertyProof', label: 'Property Proof' },
+            { key: 'emiratesId', label: 'Emirates ID' },
+            { key: 'passport', label: 'Passport' },
+            { key: 'tradeLicense', label: 'Trade License' },
+            { key: 'tenancySupport', label: 'Tenancy Support' }
+        ];
+
+        for (const { key, label } of docTypes) {
+            const file = proofDocuments[key as keyof typeof proofDocuments];
+            if (!file) {
+                console.log(`[UPLOAD] Skipping ${label} (not provided)`);
+                continue;
+            }
+
+            try {
+                setUploadProgress(prev => ({ ...prev, [key]: 0 }));
+                
+                // ✅ Storage path: onboarding-proof/{uid}/{sessionId}/{docType}
+                const storagePath = `onboarding-proof/${ownerAccount.uid}/${onboardingSessionId}/${key}/${file.name}`;
+                const fileRef = ref(storage, storagePath);
+                
+                // Upload with progress tracking
+                const snapshot = await uploadBytes(fileRef, file, {
+                    customMetadata: {
+                        uploadedBy: ownerAccount.email,
+                        uploadedAt: new Date().toISOString(),
+                        docType: key,
+                        sessionId: onboardingSessionId
+                    }
+                });
+
+                // Get download URL
+                const downloadUrl = await getDownloadURL(fileRef);
+                urls[key] = downloadUrl;
+                
+                setUploadProgress(prev => ({ ...prev, [key]: 100 }));
+                console.log(`✅ [UPLOAD] ${label} uploaded: ${downloadUrl}`);
+            } catch (uploadErr: any) {
+                console.error(`❌ [UPLOAD] ${label} failed:`, uploadErr);
+                throw new Error(`Failed to upload ${label}: ${uploadErr.message}`);
+            }
         }
 
-        const currentUser = await waitForCurrentUser();
-        if (!currentUser) {
-            await submitPendingOwnerPackage();
-            return;
-        }
-
-        await submitWithAuthenticatedOwner(currentUser);
+        return urls;
     };
 
-    if (submitted) {
+    // ─── LINK DOCUMENTS TO FIRESTORE ──────────────────────────────
+    const linkDocumentsToFirestore = async (urls: { [key: string]: string }) => {
+        if (!ownerAccount?.uid || !intakeId) return;
+
+        try {
+            // Update intake submission with document URLs
+            await setDoc(doc(db, 'intake_submissions', intakeId), {
+                proofDocuments: {
+                    propertyProof: urls.propertyProof || null,
+                    emiratesId: urls.emiratesId || null,
+                    passport: urls.passport || null,
+                    tradeLicense: urls.tradeLicense || null,
+                    tenancySupport: urls.tenancySupport || null
+                },
+                documentsUploadedAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            // Store in propertyPassports collection for compliance
+            await setDoc(doc(db, 'propertyPassports', intakeId), {
+                ownerUid: ownerAccount.uid,
+                ownerEmail: ownerAccount.email,
+                intakeId,
+                onboardingSessionId,
+                documentUrls: {
+                    propertyProof: urls.propertyProof || null,
+                    emiratesId: urls.emiratesId || null,
+                    passport: urls.passport || null,
+                    tradeLicense: urls.tradeLicense || null,
+                    tenancySupport: urls.tenancySupport || null
+                },
+                uploadedAt: serverTimestamp(),
+                status: 'documents_received',
+                verificationStatus: 'pending_review'
+            }, { merge: true });
+
+            console.log('✅ [FIRESTORE] Documents linked successfully');
+        } catch (err: any) {
+            console.error('❌ [FIRESTORE] Document linking failed:', err);
+            throw err;
+        }
+    };
+
+    // ─── SUBMIT PAYMENT ───────────────────────────────────────────
+    const submitPayment = async () => {
+        setError(null);
+        setLoading(true);
+
+        try {
+            if (!ownerAccount?.uid) throw new Error('Owner account not created');
+            if (!intakeId) throw new Error('Intake ID missing');
+            if (!paymentMethod) throw new Error('Payment method not selected');
+
+            // 1️⃣ Upload proof documents to Storage
+            console.log('[PAYMENT] Step 1: Uploading documents to Storage...');
+            const urls = await uploadDocumentsToStorage();
+            setUploadedUrls(urls);
+
+            // 2️⃣ Link documents to Firestore
+            console.log('[PAYMENT] Step 2: Linking documents to Firestore...');
+            await linkDocumentsToFirestore(urls);
+
+            // 3️⃣ Create payment record
+            console.log('[PAYMENT] Step 3: Creating payment transaction...');
+            await setDoc(doc(db, 'payment_transactions', intakeId), {
+                ownerUid: ownerAccount.uid,
+                ownerEmail: ownerAccount.email,
+                intakeId,
+                onboardingSessionId,
+                paymentMethod,
+                amount: portfolioSummary.estimatedACV,
+                currency: 'AED',
+                status: 'PENDING',
+                verificationState: 'ADMIN_VERIFICATION_REQUIRED',
+                companyProfile: {
+                    name: companyProfile.name,
+                    licenseNumber: companyProfile.licenseNumber,
+                    email: companyProfile.email
+                },
+                serviceDetails: {
+                    properties: properties.length,
+                    totalUnits: portfolioSummary.totalUnits,
+                    selectedPlan: selectedPlan?.name || 'Standard',
+                    selectedAddOns: selectedAddOns || []
+                },
+                documentUrls: urls,
+                submittedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+
+            // 4️⃣ Update intake submission final status
+            console.log('[PAYMENT] Step 4: Finalizing intake submission...');
+            await setDoc(doc(db, 'intake_submissions', intakeId), {
+                paymentSubmitted: true,
+                paymentSubmittedAt: serverTimestamp(),
+                paymentMethod,
+                status: 'payment_pending_approval',
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            // 5️⃣ Create audit log
+            console.log('[PAYMENT] Step 5: Logging audit entry...');
+            await setDoc(doc(collection(db, 'audit_logs')), {
+                action: 'ONBOARDING_PAYMENT_SUBMITTED',
+                ownerUid: ownerAccount.uid,
+                ownerEmail: ownerAccount.email,
+                intakeId,
+                sessionId: onboardingSessionId,
+                paymentMethod,
+                timestamp: serverTimestamp(),
+                documentCount: Object.keys(urls).length
+            });
+
+            console.log('✅ [PAYMENT] All steps completed successfully');
+            setSuccess(true);
+        } catch (err: any) {
+            console.error('[PAYMENT] Submission failed:', err);
+            setError(`Payment submission failed: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ─── RENDER: SUCCESS STATE ────────────────────────────────────
+    if (success) {
         return (
-            <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
-                <CheckCircle2 size={88} color="#10b981" style={{ marginBottom: 24 }} />
-                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                    {readable(t('onboarding.submission_secured'), 'Submission Secured')}
-                </Typography>
-                <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4 }}>
-                    {pendingMode
-                        ? 'Your pending owner submission is secured for admin verification. BIN GROUP will verify payment and documents before activating access.'
-                        : readable(t('onboarding.dashboard_locked_info'), 'Your dashboard will activate upon admin verification.')}
-                </Typography>
-                <Button
-                    variant="contained"
-                    onClick={() => {
-                        reset();
-                        navigate('/owner/dashboard');
-                    }}
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 5, py: 1.5 }}
-                >
-                    {readable(t('onboarding.go_dashboard'), 'Go to Dashboard')}
-                </Button>
+            <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
+                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid #4ADE80', backdropFilter: 'blur(10px)' }}>
+                    <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(74, 222, 128, 0.1)' }}>
+                            <CheckCircle size={48} color="#4ADE80" />
+                        </Box>
+                    </Box>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+                        {readable(t('onboarding.payment_success_title'), 'Payment Submitted')}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>
+                        {readable(t('onboarding.payment_success_desc'), 'Your payment and documents have been submitted successfully.')}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
+                        Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId}</Box>
+                    </Typography>
+                    <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(74, 222, 128, 0.05)', borderRadius: 2, border: '1px solid rgba(74, 222, 128, 0.2)' }}>
+                        <Typography variant="caption" sx={{ color: '#4ADE80', fontWeight: 700, display: 'block', mb: 1 }}>DOCUMENTS UPLOADED:</Typography>
+                        {Object.entries(uploadedUrls).map(([key, url]) => (
+                            <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>{key}</Typography>
+                                <Box component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#4ADE80', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 700 }}>DOWNLOAD ↗</Box>
+                            </Box>
+                        ))}
+                    </Box>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 3 }}>
+                        Our admin team will review your submission within 24-48 hours. You'll receive an email confirmation.
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        onClick={() => window.location.href = '/'}
+                        sx={{
+                            bgcolor: binThemeTokens.gold,
+                            color: '#000',
+                            fontWeight: 950,
+                            py: 1.5,
+                            px: 4,
+                            borderRadius: 100,
+                            '&:hover': { bgcolor: '#FFF' }
+                        }}
+                    >
+                        {readable(t('onboarding.return_home'), 'Return to Home')}
+                    </Button>
+                </Paper>
             </Container>
         );
     }
 
+    // ─── RENDER: MAIN FORM ────────────────────────────────────────
     return (
-        <Container maxWidth="lg" sx={{ py: 4 }}>
-            <Box sx={{ textAlign: 'center', mb: 5 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
+            <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 4 } }}>
+                <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom sx={{ fontSize: { xs: '1.8rem', md: '2.125rem' } }}>
                     {readable(t('onboarding.payment_submission'), 'Payment Submission')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {readable(t('onboarding.payment_confirm_desc'), 'Submit your selected payment method for admin verification and contract activation.')}
+                <Typography variant="body1" color="rgba(255,255,255,0.5)">
+                    {readable(t('onboarding.payment_submission_desc'), 'Review and confirm your payment details. Your documents are about to be uploaded securely.')}
                 </Typography>
             </Box>
 
-            <Grid container spacing={4} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <Grid item xs={12} md={7}>
-                    <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.62)', border: '1px solid rgba(255,255,255,0.06)', textAlign: isRTL ? 'right' : 'left' }}>
-                        <Stack spacing={3}>
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{readable(t('onboarding.selected_contract'), 'Selected Contract')}</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{selectedPlan?.name || 'Institutional Package'}</Typography>
-                            </Box>
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{readable(t('onboarding.portfolio_addons'), 'Portfolio Add-ons')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF' }}>{readable(t('onboarding.total_assets'), 'Total Assets')}: {properties.length}</Typography>
-                            </Box>
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
-                            <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">{readable(t('onboarding.annual_val'), 'Annual Value')}</Typography>
-                                    <Typography variant="h6" fontWeight="950" color="#FFF">{formatAED(estimatedAnnualValue)}</Typography>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">{readable(t('onboarding.mobilization_due'), 'Mobilization Due')}</Typography>
-                                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{formatAED(mobilizationAmount)}</Typography>
-                                </Grid>
-                            </Grid>
-                            <TextField select fullWidth label={readable(t('onboarding.payment_method'), 'Payment Method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as any)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                <MenuItem value="BANK_TRANSFER">{readable(t('onboarding.bank_transfer'), 'Bank Transfer')}</MenuItem>
-                                <MenuItem value="CHEQUE">{readable(t('onboarding.corp_cheque'), 'Corporate Cheque')}</MenuItem>
-                                <MenuItem value="CASH">{readable(t('onboarding.cash_payment'), 'Cash Payment')}</MenuItem>
-                            </TextField>
-                        </Stack>
-                    </Paper>
-                </Grid>
+            <Paper sx={{
+                p: { xs: 2, sm: 3, md: 5 },
+                borderRadius: { xs: 4, md: 6 },
+                bgcolor: 'rgba(22, 22, 24, 0.6)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                backdropFilter: 'blur(10px)',
+                overflow: 'visible'
+            }}>
+                {error && (
+                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                        {error}
+                    </Alert>
+                )}
 
-                <Grid item xs={12} md={5}>
-                    <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(198,167,94,0.06)', border: `1px solid ${binThemeTokens.gold}`, textAlign: isRTL ? 'right' : 'left' }}>
-                        <Stack spacing={2}>
-                            <ShieldCheck color={binThemeTokens.gold} size={32} />
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{readable(t('onboarding.admin_lock_title'), 'Admin Verification Required')}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
-                                {readable(t('onboarding.admin_lock_desc'), 'Your contract and dashboard will remain locked until BIN GROUP admin verifies the payment and documents.')}
-                            </Typography>
-                            <Alert severity="info" sx={{ bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
-                                Documents now upload to secure Firebase Storage before Admin verification. Admin will be able to open every uploaded document from Owner Verification Inbox.
-                            </Alert>
-                            {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
-                            {error && <Alert severity="error">{error}</Alert>}
-                            {sessionRecoveryRequired && (
-                                <Button
-                                    variant="outlined"
-                                    fullWidth
-                                    onClick={handleGatewayRecovery}
-                                    sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, py: 1.5 }}
-                                >
-                                    Gateway Login / Restore Owner Session
-                                </Button>
-                            )}
-                            <Button
-                                variant="contained"
-                                fullWidth
-                                disabled={submitting || uploadingProofs}
-                                onClick={handleSubmit}
-                                sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                            >
-                                {submitting || uploadingProofs ? <CircularProgress size={22} color="inherit" /> : readable(t('onboarding.submit_btn'), 'Submit for Admin Verification')}
-                            </Button>
-                            <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
-                                {readable(t('onboarding.back'), 'Back')}
-                            </Button>
-                        </Stack>
-                    </Paper>
-                </Grid>
-            </Grid>
-        </Container>
+                {/* Payment Summary */}
+                <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>
+                        {readable(t('onboarding.payment_summary'), 'Payment Summary')}
+                    </Typography>
+                    <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Amount Due</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {portfolioSummary.estimatedACV?.toLocaleString()}</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Payment Method</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{paymentMethod || 'Not Selected'}</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Properties</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{properties.length}</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Total Units</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{portfolioSummary.totalUnits}</Typography>
+                        </Grid>
+                    </Grid>
+                </Box>
+
+                {/* Document Upload Status */}
+                <Box sx={{ mb: 4 }}>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+                        {readable(t('onboarding.documents_to_upload'), 'Documents to Upload')}
+                    </Typography>
+                    <Stack spacing={2}>
+                        {[
+                            { key: 'propertyProof', label: 'Property Proof' },
+                            { key: 'emiratesId', label: 'Emirates ID' },
+                            { key: 'passport', label: 'Passport' },
+                            { key: 'tradeLicense', label: 'Trade License' },
+                            { key: 'tenancySupport', label: 'Tenancy Support (Optional)' }
+                        ].map(({ key, label }) => {
+                            const file = proofDocuments[key as keyof typeof proofDocuments];
+                            const progress = uploadProgress[key] || 0;
+                            return (
+                                <Box key={key} sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <FileText size={16} color="#C6A75E" />
+                                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{label}</Typography>
+                                        </Box>
+                                        {file ? (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <CheckCircle size={16} color="#4ADE80" />
+                                                <Typography variant="caption" sx={{ color: '#4ADE80' }}>Ready</Typography>
+                                            </Box>
+                                        ) : (
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Not provided</Typography>
+                                        )}
+                                    </Box>
+                                    {file && (
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>{file.name}</Typography>
+                                    )}
+                                    {progress > 0 && progress < 100 && (
+                                        <Box sx={{ mt: 1, bgcolor: 'rgba(0,0,0,0.5)', height: 4, borderRadius: 2, overflow: 'hidden' }}>
+                                            <Box sx={{ width: `${progress}%`, height: '100%', bgcolor: binThemeTokens.gold, transition: 'width 0.3s ease' }} />
+                                        </Box>
+                                    )}
+                                </Box>
+                            );
+                        })}
+                    </Stack>
+                </Box>
+
+                {/* Action Buttons */}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 3 }}>
+                    <Button
+                        variant="outlined"
+                        onClick={onBack}
+                        disabled={loading}
+                        fullWidth
+                        sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, px: 4, borderRadius: 100, fontWeight: 950 }}
+                    >
+                        {readable(t('onboarding.back'), 'Back')}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => setConfirmDialog(true)}
+                        disabled={loading || !ownerAccount?.uid || !paymentMethod}
+                        fullWidth
+                        sx={{
+                            bgcolor: binThemeTokens.gold,
+                            color: '#000',
+                            fontWeight: 950,
+                            py: 1.5,
+                            px: 4,
+                            borderRadius: 100,
+                            '&:hover': { bgcolor: '#FFF' }
+                        }}
+                    >
+                        {loading ? <CircularProgress size={24} color="inherit" /> : (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Upload size={18} />
+                                {readable(t('onboarding.submit_payment'), 'Submit Payment & Documents')}
+                            </Box>
+                        )}
+                    </Button>
+                </Stack>
+            </Paper>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
+                <DialogTitle sx={{ color: '#FFF', bgcolor: '#000', fontWeight: 950 }}>Confirm Submission</DialogTitle>
+                <DialogContent sx={{ bgcolor: '#000', color: '#FFF' }}>
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" sx={{ mb: 2 }}>
+                            You're about to submit your payment and upload all documents. This action cannot be undone.
+                        </Typography>
+                        <Box sx={{ p: 2, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, display: 'block', mb: 1 }}>SUBMISSION DETAILS:</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Amount: AED {portfolioSummary.estimatedACV?.toLocaleString()}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Method: {paymentMethod}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Intake ID: {intakeId}</Typography>
+                        </Box>
+                    </Box>
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: '#000', p: 2 }}>
+                    <Button onClick={() => setConfirmDialog(false)} sx={{ color: '#FFF' }}>Cancel</Button>
+                    <Button
+                        onClick={() => {
+                            setConfirmDialog(false);
+                            submitPayment();
+                        }}
+                        variant="contained"
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                    >
+                        Confirm & Submit
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
     );
-};
-
-export default PaymentSubmissionStep;
+}
