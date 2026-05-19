@@ -2,14 +2,26 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Stack, Chip, CircularProgress,
     Table, TableBody, TableCell, TableContainer, TableHead,
-    TableRow, Button, alpha, Grid, Divider, Alert, TextField
+    TableRow, Button, alpha, Grid, Divider, TextField
 } from '@mui/material';
 import {
     FileText, Calendar, Shield, CheckCircle2,
-    Download, Zap, Settings, Briefcase, Award, PenLine, MailCheck, ExternalLink
+    Download, Zap, Briefcase, Award, PenLine, MailCheck, ExternalLink
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
-import { addDoc } from 'firebase/firestore';
+import {
+    db,
+    collection,
+    query,
+    where,
+    onSnapshot,
+    doc,
+    updateDoc,
+    serverTimestamp,
+    addDoc,
+    type QuerySnapshot,
+    type DocumentData,
+    type Unsubscribe,
+} from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -44,18 +56,19 @@ export default function OwnerContractsPage() {
     const [signingId, setSigningId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!user?.email && !user?.uid) return;
+        if (!user?.email && !user?.uid) {
+            setContracts([]);
+            setLoading(false);
+            return undefined;
+        }
 
+        setLoading(true);
         const email = String(user?.email || '').toLowerCase();
-        const queries = [
-            user?.uid ? query(collection(db, 'contracts'), where('ownerId', '==', user.uid)) : null,
-            email ? query(collection(db, 'contracts'), where('ownerEmail', '==', email)) : null
-        ].filter(Boolean) as any[];
-
         const seen = new Map<string, any>();
-        const unsubscribes = queries.map((contractQ) => onSnapshot(contractQ, (snap) => {
+
+        const applySnapshot = (snap: QuerySnapshot<DocumentData>) => {
             snap.docs.forEach((d) => seen.set(d.id, { id: d.id, ...d.data() }));
-            const data = Array.from(seen.values()).sort((a, b) => String(b.updatedAt?.seconds || 0).localeCompare(String(a.updatedAt?.seconds || 0)));
+            const data = Array.from(seen.values()).sort((a, b) => Number(b.updatedAt?.seconds || 0) - Number(a.updatedAt?.seconds || 0));
             setContracts(data);
             if (data.length > 0) {
                 const current = data[0].managementScope || data[0].contractType || data[0].planType;
@@ -63,7 +76,17 @@ export default function OwnerContractsPage() {
                 else if (current === 'hybrid' || current === 'both' || current === 'BOTH') setSelectedService('BOTH');
             }
             setLoading(false);
-        }, () => setLoading(false)));
+        };
+
+        const unsubscribes: Unsubscribe[] = [];
+        if (user?.uid) {
+            const byUid = query(collection(db, 'contracts'), where('ownerId', '==', user.uid));
+            unsubscribes.push(onSnapshot(byUid, applySnapshot, () => setLoading(false)));
+        }
+        if (email) {
+            const byEmail = query(collection(db, 'contracts'), where('ownerEmail', '==', email));
+            unsubscribes.push(onSnapshot(byEmail, applySnapshot, () => setLoading(false)));
+        }
 
         return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     }, [user?.email, user?.uid]);
