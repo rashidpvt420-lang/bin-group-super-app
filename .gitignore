@@ -44,7 +44,8 @@ releases/
 **/build/
 **/dist/
 functions/lib/
-**/lib/
+packages/*/lib/
+apps/*/lib/
 hosting/public/
 
 # Keep placeholder if needed
