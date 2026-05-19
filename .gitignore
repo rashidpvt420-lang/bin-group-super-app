@@ -107,3 +107,9 @@ verify_live_data.js
 verify_live_data.cjs
 qa-verify-all.cjs
 qa-verify-all.js
+
+# Test artifacts
+test-results/
+test_output.txt
+playwright-report/
+
