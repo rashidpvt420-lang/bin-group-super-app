@@ -25,6 +25,14 @@ function cleanMobile(value: unknown) {
   return mobile;
 }
 
+function cleanPassword(value: unknown) {
+  const password = String(value || "");
+  if (!password) return "";
+  if (password.length < 8) throw new HttpsError("invalid-argument", "Password must be at least 8 characters.");
+  if (password.length > 128) throw new HttpsError("invalid-argument", "Password is too long.");
+  return password;
+}
+
 function cleanReference(value: unknown) {
   const ref = String(value || "").trim();
   if (!ref) return "";
@@ -72,36 +80,105 @@ function extractPendingPaymentPackage(data: any) {
   });
 }
 
+async function resolveOrCreateOwnerAuth(email: string, password: string, fullName: string) {
+  if (!password) {
+    return { uid: "", accountCreated: false, accountCreationStatus: "PENDING_ADMIN_PROVISIONING" };
+  }
+
+  try {
+    const existing = await admin.auth().getUserByEmail(email);
+    const existingProfile = await db.collection("users").doc(existing.uid).get();
+    const existingRole = String(existingProfile.data()?.role || "").toLowerCase();
+    if (existingRole && !["owner", "owner_pending"].includes(existingRole)) {
+      throw new HttpsError("failed-precondition", "This email is already registered with another role. Use another email.");
+    }
+    return { uid: existing.uid, accountCreated: false, accountCreationStatus: "EXISTING_AUTH_LINKED" };
+  } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
+    if (error?.code !== "auth/user-not-found") {
+      console.error("Owner auth lookup failed:", error);
+      throw new HttpsError("internal", "Owner auth lookup failed.");
+    }
+  }
+
+  try {
+    const created = await admin.auth().createUser({
+      email,
+      password,
+      displayName: fullName,
+      disabled: false,
+      emailVerified: false
+    });
+    return { uid: created.uid, accountCreated: true, accountCreationStatus: "AUTH_CREATED" };
+  } catch (error: any) {
+    console.error("Owner auth creation failed:", error);
+    if (error?.code === "auth/email-already-exists") {
+      throw new HttpsError("already-exists", "This email already exists. Please sign in or use another email.");
+    }
+    if (error?.code === "auth/invalid-password") {
+      throw new HttpsError("invalid-argument", "Password must be at least 8 characters.");
+    }
+    throw new HttpsError("internal", "Owner auth account could not be provisioned.");
+  }
+}
+
 export const submitPendingOwnerRegistration = onCall({ cors: true }, async (request) => {
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const email = cleanEmail(request.data?.email);
   const mobile = cleanMobile(request.data?.mobile);
+  const password = cleanPassword(request.data?.password);
   const intakeId = cleanReference(request.data?.intakeId || request.data?.onboardingSubmissionId);
-  const registrationId = cleanReference(request.data?.ownerRegistrationId || request.data?.pendingOwnerId) || intakeId || db.collection("owner_registration_requests").doc().id;
+  const requestedOwnerUid = cleanReference(request.data?.ownerUid || request.data?.uid);
+  const authProvision = await resolveOrCreateOwnerAuth(email, password, fullName);
+  const registrationId = authProvision.uid || requestedOwnerUid || cleanReference(request.data?.ownerRegistrationId || request.data?.pendingOwnerId) || intakeId || db.collection("owner_registration_requests").doc().id;
   const timestamp = serverTimestamp();
   const pendingPaymentPackage = extractPendingPaymentPackage(request.data);
 
   const registration = {
     id: registrationId,
+    uid: authProvision.uid || registrationId,
     fullName,
     displayName: fullName,
     email,
     mobile,
     phone: mobile,
-    role: "owner_pending",
+    role: authProvision.uid ? "owner" : "owner_pending",
     requestedRole: "owner",
     status: pendingPaymentPackage ? "payment_pending_admin_verification" : "pending_admin_approval",
     dashboardLocked: true,
     dashboardUnlocked: false,
     adminApproved: false,
     paymentVerified: false,
-    accountCreated: false,
-    accountCreationStatus: "PENDING_ADMIN_PROVISIONING",
+    accountCreated: Boolean(authProvision.uid),
+    accountCreationStatus: authProvision.accountCreationStatus,
     latestIntakeId: intakeId || registrationId,
     updatedAt: timestamp
   };
 
   const batch = db.batch();
+
+  if (authProvision.uid) {
+    batch.set(db.collection("users").doc(authProvision.uid), {
+      uid: authProvision.uid,
+      email,
+      displayName: fullName,
+      name: fullName,
+      phone: mobile,
+      mobile,
+      role: "owner",
+      status: "pending_admin_approval",
+      dashboardLocked: true,
+      dashboardUnlocked: false,
+      adminApproved: false,
+      paymentVerified: false,
+      onboardingSubmissionId: intakeId || registrationId,
+      latestIntakeId: intakeId || registrationId,
+      accountCreationStatus: authProvision.accountCreationStatus,
+      updatedAt: timestamp,
+      createdAt: timestamp
+    }, { merge: true });
+  }
+
   batch.set(db.collection("owner_registration_requests").doc(registrationId), {
     ...registration,
     ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
@@ -110,6 +187,7 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
   batch.set(db.collection("pending_owners").doc(registrationId), {
     ...registration,
     pendingOwnerId: registrationId,
+    ownerUid: authProvision.uid || registrationId,
     ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
     createdAt: timestamp
   }, { merge: true });
@@ -120,11 +198,12 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
       intakeId: intakeId || registrationId,
       ownerRegistrationId: registrationId,
       pendingOwnerId: registrationId,
+      ownerUid: authProvision.uid || registrationId,
       ownerName: fullName,
       ownerEmail: email,
       ownerMobile: mobile,
-      accountCreated: false,
-      accountCreationStatus: "PENDING_ADMIN_PROVISIONING",
+      accountCreated: Boolean(authProvision.uid),
+      accountCreationStatus: authProvision.accountCreationStatus,
       status: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_APPROVAL",
       paymentStatus: pendingPaymentPackage ? "PENDING" : "NOT_SUBMITTED",
       adminReviewState: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_DETAILS",
@@ -134,12 +213,12 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
   }
 
   batch.set(db.collection("audit_logs").doc(), {
-    actorId: registrationId,
-    actorRole: "owner_pending",
+    actorId: authProvision.uid || registrationId,
+    actorRole: authProvision.uid ? "owner" : "owner_pending",
     action: pendingPaymentPackage ? "SUBMIT_PENDING_OWNER_PAYMENT_PACKAGE" : "SUBMIT_PENDING_OWNER_REGISTRATION",
     targetType: "owner_registration_requests",
     targetId: registrationId,
-    metadata: { intakeId: intakeId || null, email, paymentPackageSubmitted: Boolean(pendingPaymentPackage) },
+    metadata: { intakeId: intakeId || null, email, authUid: authProvision.uid || null, paymentPackageSubmitted: Boolean(pendingPaymentPackage) },
     createdAt: timestamp
   });
 
@@ -147,11 +226,14 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
 
   return {
     status: pendingPaymentPackage ? "PENDING_PAYMENT_VERIFICATION" : "SUCCESS",
-    uid: registrationId,
+    uid: authProvision.uid || registrationId,
+    ownerUid: authProvision.uid || registrationId,
     ownerRegistrationId: registrationId,
     intakeId: intakeId || registrationId,
     email,
-    role: "owner_pending",
+    role: authProvision.uid ? "owner" : "owner_pending",
+    accountCreated: Boolean(authProvision.uid),
+    accountCreationStatus: authProvision.accountCreationStatus,
     profileStatus: pendingPaymentPackage ? "payment_pending_admin_verification" : "pending_admin_approval",
     dashboardLocked: true
   };
