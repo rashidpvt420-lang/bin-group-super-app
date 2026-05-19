@@ -14,7 +14,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
 
 const BinGroupHeader: React.FC = () => {
-    const { lang, setLang, t, isRTL } = useLanguage();
+    const { lang, setLang, t } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
     const { user, role } = useRole();
     const navigate = useNavigate();
@@ -27,12 +27,14 @@ const BinGroupHeader: React.FC = () => {
         return () => unsubscribe();
     }, [user]);
 
-    const toggleLanguage = () => {
-        setLang(lang === 'en' ? 'ar' : 'en');
+    const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
+
+    const openRoleLogin = (roleId: string) => {
+        navigate(`/login?intendedRole=${encodeURIComponent(roleId)}`);
     };
 
     return (
-        <AppBar position="sticky" sx={{ 
+        <AppBar position="sticky" sx={{
             bgcolor: mode === 'dark' ? 'rgba(11,11,12,0.85)' : 'rgba(255,255,255,0.85)',
             backdropFilter: 'blur(10px)',
             borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`,
@@ -42,12 +44,7 @@ const BinGroupHeader: React.FC = () => {
         }}>
             <Toolbar sx={{ justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/')}>
-                    <Box 
-                        component="img" 
-                        src="/logo.png" 
-                        sx={{ width: 40, height: 40, borderRadius: 1 }} 
-                        onError={(e: any) => e.target.style.display = 'none'}
-                    />
+                    <Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1 }} onError={(e: any) => e.target.style.display = 'none'} />
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
                         BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
                     </Typography>
@@ -57,59 +54,36 @@ const BinGroupHeader: React.FC = () => {
                     <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1 }}>
                         {!user ? (
                             ['owner', 'tenant', 'technician', 'broker'].map((item) => (
-                                <Button 
-                                    key={item} 
-                                    onClick={() => navigate(`/${item}`)} 
-                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}
-                                >
+                                <Button key={item} onClick={() => openRoleLogin(item)} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}>
                                     {t(`gateway.role.${item}`)}
                                 </Button>
                             ))
                         ) : (
                             <Stack direction="row" spacing={1} alignItems="center">
-                                <Button 
-                                    onClick={() => {
-                                        const r = (role || '').toLowerCase();
-                                        if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
-                                        else if (r === 'owner') navigate('/owner/dashboard');
-                                        else navigate(`/${r}/dashboard`);
-                                    }} 
-                                    sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}
-                                >
+                                <Button onClick={() => {
+                                    const r = (role || '').toLowerCase();
+                                    if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
+                                    else if (r === 'owner') navigate('/owner/dashboard');
+                                    else navigate(`/${r}/dashboard`);
+                                }} sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.dashboard')}
                                 </Button>
-                                <Button 
-                                    onClick={() => navigate('/admin/identity')}
-                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
-                                >
+                                <Button onClick={() => navigate('/admin/identity')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.company_profile')}
                                 </Button>
-                                <Button 
-                                    onClick={() => navigate('/design-studio')}
-                                    sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
-                                >
+                                <Button onClick={() => navigate('/design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.ai_studio')}
                                 </Button>
                             </Stack>
                         )}
                     </Box>
-                    
-                    <Button 
-                        onClick={toggleLanguage} 
-                        sx={{ color: binThemeTokens.gold, fontWeight: 900, minWidth: 0, px: 1 }}
-                        startIcon={<TranslateIcon />}
-                    >
+
+                    <Button onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, fontWeight: 900, minWidth: 0, px: 1 }} startIcon={<TranslateIcon />}>
                         {lang === 'en' ? 'AR' : 'EN'}
                     </Button>
 
                     {role && (
-                        <Box sx={{ 
-                            px: 1.5, py: 0.5, borderRadius: 2, 
-                            bgcolor: alpha(binThemeTokens.gold, 0.1),
-                            color: binThemeTokens.gold,
-                            fontSize: '0.75rem', fontWeight: 900,
-                            display: { xs: 'none', md: 'block' }
-                        }}>
+                        <Box sx={{ px: 1.5, py: 0.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.75rem', fontWeight: 900, display: { xs: 'none', md: 'block' } }}>
                             {role.toUpperCase()}
                         </Box>
                     )}
@@ -124,17 +98,10 @@ const BinGroupHeader: React.FC = () => {
 
                     {!user && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Button 
-                                onClick={() => navigate('/login')}
-                                sx={{ color: mode === 'dark' ? '#fff' : '#000', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}
-                            >
+                            <Button onClick={() => navigate('/gateway')} sx={{ color: mode === 'dark' ? '#fff' : '#000', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                 {t('gateway.login')}
                             </Button>
-                            <Button 
-                                variant="contained"
-                                onClick={() => navigate('/onboarding')}
-                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.85rem' }}
-                            >
+                            <Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.85rem' }}>
                                 {t('login.get_started')}
                             </Button>
                         </Box>
@@ -145,28 +112,7 @@ const BinGroupHeader: React.FC = () => {
                     </IconButton>
 
                     {user && (
-                        <Button 
-                            variant="contained"
-                            size="small"
-                            onClick={() => { 
-                                const currentLang = localStorage.getItem('bin_language');
-                                localStorage.clear(); 
-                                if (currentLang) localStorage.setItem('bin_language', currentLang);
-                                sessionStorage.clear();
-                                signOut(auth).finally(() => {
-                                    window.location.href = '/';
-                                });
-                            }}
-                            startIcon={<LogoutIcon />}
-                            sx={{ 
-                                bgcolor: '#ef4444', 
-                                '&:hover': { bgcolor: '#dc2626' },
-                                color: '#fff',
-                                fontWeight: 900,
-                                fontSize: '0.75rem',
-                                display: { xs: 'none', sm: 'flex' }
-                            }}
-                        >
+                        <Button variant="contained" size="small" onClick={() => signOut(auth).finally(() => { window.location.href = '/'; })} startIcon={<LogoutIcon />} sx={{ bgcolor: '#ef4444', '&:hover': { bgcolor: '#dc2626' }, color: '#fff', fontWeight: 900, fontSize: '0.75rem', display: { xs: 'none', sm: 'flex' } }}>
                             {t('nav.logout')}
                         </Button>
                     )}
@@ -177,4 +123,3 @@ const BinGroupHeader: React.FC = () => {
 };
 
 export default BinGroupHeader;
-
