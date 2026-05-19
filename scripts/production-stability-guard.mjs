@@ -39,7 +39,7 @@ assert(!rootOnboardingPage.includes("../components/onboarding/AccountCreationSer
 
 assert(legacyStep.includes('createUserWithEmailAndPassword'), 'AccountCreationStep must create the real Firebase Auth owner account.');
 assert(legacyStep.includes("setDoc(doc(db, 'users'"), 'AccountCreationStep must create users/{uid} for the owner profile.');
-assert(legacyStep.includes('ownerAccount'), 'AccountCreationStep must persist ownerAccount into onboarding state.');
+assert(legacyStep.includes('setOwnerAccount'), 'AccountCreationStep must persist owner account details into onboarding state.');
 assert(paymentSubmissionStep.includes('uploadProofDocuments'), 'Payment submission must upload physical proof documents before admin verification.');
 assert(paymentSubmissionStep.includes('onboarding-proof'), 'Payment submission must store documents under onboarding-proof storage paths.');
 assert(paymentSubmissionStep.includes('waitForCurrentUser'), 'Payment submission must wait for Firebase Auth hydration before final submit.');
@@ -63,4 +63,3 @@ if (failures.length) {
 }
 
 console.log('Production stability guard passed.');
-
