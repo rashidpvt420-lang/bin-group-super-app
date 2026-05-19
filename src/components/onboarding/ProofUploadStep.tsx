@@ -1,189 +1,296 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
-    Alert,
-    Box, Typography, Grid, Paper, Button, Stack, Container, Chip, LinearProgress
+    Box, Typography, Button, Stack, Alert, Paper, Grid, Container, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import { FileText, Upload, CheckCircle2, ArrowRight, ArrowLeft, ScanLine, LockKeyhole } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
 
-const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { proofDocuments, setProofDocument } = useOnboardingStore();
+interface ProofUploadStepProps {
+    onNext: () => void;
+    onBack: () => void;
+}
+
+const readable = (value: string | undefined, fallback: string) => {
+    if (!value || value.includes('.')) return fallback;
+    return value;
+};
+
+export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps) {
+    const { setProofDocument, proofDocuments } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
-    const [scannerState, setScannerState] = useState<'idle' | 'scanning' | 'review' | 'error'>('idle');
-    const [ocrData, setOcrData] = useState<any>(null);
 
-    const requiredDocs = [
-        { key: 'propertyProof' as const, label: t('onboarding.doc.title_deed') },
-        { key: 'emiratesId' as const, label: t('onboarding.doc.emirates_id') },
-        { key: 'passport' as const, label: t('onboarding.doc.passport') },
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+    const documentTypes = [
+        {
+            key: 'propertyProof' as const,
+            label: 'Property Proof (Title Deed / Tenancy Contract)',
+            required: true,
+            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx'
+        },
+        {
+            key: 'emiratesId' as const,
+            label: "Owner's Emirates ID",
+            required: true,
+            accept: '.pdf,.jpg,.jpeg,.png'
+        },
+        {
+            key: 'passport' as const,
+            label: "Owner's Passport",
+            required: true,
+            accept: '.pdf,.jpg,.jpeg,.png'
+        },
+        {
+            key: 'tradeLicense' as const,
+            label: 'Trade License (if applicable)',
+            required: false,
+            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx'
+        },
+        {
+            key: 'tenancySupport' as const,
+            label: 'Additional Tenancy Support Documents',
+            required: false,
+            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx'
+        }
     ];
 
-    const canProceed = Boolean(proofDocuments.propertyProof && proofDocuments.emiratesId && proofDocuments.passport);
-    const stagedCount = requiredDocs.filter((doc) => proofDocuments[doc.key]).length;
-    const progress = Math.round((stagedCount / requiredDocs.length) * 100);
+    const handleFileSelect = (key: string, file: File | null) => {
+        setError(null);
+        if (!file) return;
 
-    const titleDeedPreview = useMemo(() => {
-        const file = proofDocuments.propertyProof;
-        if (!file) return null;
-        return {
-            fileName: file.name,
-            status: scannerState === 'review' ? t('onboarding.scanned') : (scannerState === 'error' ? t('onboarding.scanner_retry') : t('onboarding.docs_ready')),
-            confidence: scannerState === 'review' ? `${Math.round((ocrData?.confidenceScore || 0.95) * 100)}% ${t('onboarding.scanner_match')}` : t('onboarding.docs_awaiting')
-        };
-    }, [proofDocuments.propertyProof, scannerState, ocrData, t]);
+        // Validate file size (max 50MB)
+        const maxSize = 50 * 1024 * 1024;
+        if (file.size > maxSize) {
+            setError(`File too large. Maximum size is 50MB. ${(file.size / 1024 / 1024).toFixed(2)}MB provided.`);
+            return;
+        }
 
-    const handleScan = async () => {
-        if (!proofDocuments.propertyProof) return;
-        setScannerState('scanning');
-        try {
-            const analyzeFn = httpsCallable(functions, 'processTitleDeedOCR');
-            const result = await analyzeFn({ fileUrl: 'manual-title-deed-upload' });
-            setOcrData(result.data);
-            setScannerState('review');
-        } catch (err) {
-            console.warn('[ONBOARDING] OCR unavailable; document remains uploaded for admin review.', err);
-            setScannerState('error');
+        console.log(`[UPLOAD] File selected: ${key} - ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        setProofDocument(key as any, file);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = (key: string, e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverKey(null);
+        
+        if (e.dataTransfer.files.length > 0) {
+            handleFileSelect(key, e.dataTransfer.files[0]);
         }
     };
 
+    const handleRemoveFile = (key: string) => {
+        setProofDocument(key as any, null);
+        setConfirmDelete(null);
+    };
+
+    const canProceed = documentTypes.filter(doc => doc.required).every(
+        doc => proofDocuments[doc.key]
+    );
+
     return (
-        <Box sx={{ py: 4 }} dir={isRTL ? 'rtl' : 'ltr'}>
-            <Box sx={{ textAlign: 'center', mb: 6 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-                    {t('onboarding.documents_title')}
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
+            <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 4 } }}>
+                <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom sx={{ fontSize: { xs: '1.8rem', md: '2.125rem' } }}>
+                    {readable(t('onboarding.documents'), 'Upload Documents')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 760, mx: 'auto' }}>
-                    {t('onboarding.docs_subtitle')}
+                <Typography variant="body1" color="rgba(255,255,255,0.5)">
+                    {readable(t('onboarding.documents_desc'), 'Upload proof of property ownership and identity verification documents. These will be securely stored.')}
                 </Typography>
             </Box>
 
-            <Container maxWidth="md">
-                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <Stack spacing={4}>
-                        <Alert icon={<LockKeyhole size={18} />} severity="info" sx={{ bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
-                            {t('onboarding.docs_staged')}
-                        </Alert>
+            <Paper sx={{
+                p: { xs: 2, sm: 3, md: 5 },
+                borderRadius: { xs: 4, md: 6 },
+                bgcolor: 'rgba(22, 22, 24, 0.6)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                backdropFilter: 'blur(10px)',
+                overflow: 'visible'
+            }}>
+                {error && (
+                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                        {error}
+                    </Alert>
+                )}
 
-                        <Box>
-                            <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.64)', fontWeight: 900 }}>{t('onboarding.docs_required_count')}</Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{stagedCount} / {requiredDocs.length}</Typography>
-                            </Stack>
-                            <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
-                        </Box>
+                <Alert
+                    icon={<AlertCircle sx={{ color: binThemeTokens.gold }} />}
+                    sx={{
+                        mb: 3,
+                        bgcolor: 'rgba(212, 175, 55, 0.05)',
+                        color: binThemeTokens.gold,
+                        border: '1px solid rgba(212, 175, 55, 0.2)',
+                        '& .MuiAlert-icon': { alignItems: 'center', color: binThemeTokens.gold },
+                    }}
+                >
+                    {readable(t('onboarding.documents_secure'), 'All documents are encrypted and securely stored. Only authorized admin staff can access them.')}
+                </Alert>
 
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
-                            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Stack direction="row" spacing={1} alignItems="center" justifyContent={isRTL ? 'flex-end' : 'flex-start'} sx={{ mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                        <ScanLine size={20} color={binThemeTokens.gold} />
-                                        <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{t('onboarding.scanner_title')}</Typography>
-                                        <Chip label={titleDeedPreview?.status || t('onboarding.docs_awaiting')} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.gold, fontWeight: 900 }} />
-                                    </Stack>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>
-                                        {t('onboarding.scanner_desc')}
+                <Stack spacing={3}>
+                    {documentTypes.map(({ key, label, required, accept }) => {
+                        const hasFile = !!proofDocuments[key];
+                        const fileName = proofDocuments.labels[key];
+
+                        return (
+                            <Box key={key}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                    <Typography variant="subtitle2" sx={{ color: '#FFF', fontWeight: 700 }}>
+                                        {label}
+                                        {required && <span style={{ color: '#ef4444' }}> *</span>}
                                     </Typography>
-                                    {titleDeedPreview && (
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mt: 1 }}>
-                                            {titleDeedPreview.fileName} | {titleDeedPreview.confidence}
-                                        </Typography>
-                                    )}
+                                    {hasFile && <CheckCircle size={18} color="#4ADE80" />}
                                 </Box>
-                                <Button
-                                    variant="outlined"
-                                    disabled={!proofDocuments.propertyProof || scannerState === 'scanning'}
-                                    onClick={handleScan}
-                                    startIcon={<ScanLine size={16} />}
-                                    sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}
-                                >
-                                    {scannerState === 'scanning' ? t('onboarding.scanner_analyzing') : (scannerState === 'error' ? t('onboarding.scanner_retry') : t('onboarding.scanner_analyze_btn'))}
-                                </Button>
-                            </Stack>
 
-                            {ocrData && scannerState === 'review' && (
-                                <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198, 167, 94, 0.05)', borderRadius: 2, border: '1px solid rgba(198, 167, 94, 0.2)' }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>
-                                        {t('onboarding.scanner_extracted')}
-                                    </Typography>
-                                    <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                        <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                            <Typography variant="caption" color="textSecondary">{t('onboarding.asset_type')}</Typography>
-                                            <Typography variant="body2" fontWeight="900" color="#FFF">{ocrData.propertyType || '...'}</Typography>
-                                        </Grid>
-                                        <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                            <Typography variant="caption" color="textSecondary">{t('onboarding.zone')}</Typography>
-                                            <Typography variant="body2" fontWeight="900" color="#FFF">{ocrData.area || '...'}</Typography>
-                                        </Grid>
-                                    </Grid>
-                                </Box>
-                            )}
-                        </Paper>
-
-                        {requiredDocs.map((doc) => {
-                            const file = proofDocuments[doc.key];
-                            return (
-                                <Box key={doc.key}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block' }}>
-                                            {doc.label}
-                                        </Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-                                            {t('onboarding.docs_max_size')}
-                                        </Typography>
-                                    </Box>
-                                    <Paper sx={{
-                                        p: 3, border: `1px dashed ${file ? '#10b981' : 'rgba(198, 167, 94, 0.3)'}`,
-                                        bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4,
-                                        display: 'flex', flexDirection: 'column', gap: 2
+                                {hasFile ? (
+                                    <Box sx={{
+                                        p: 2,
+                                        bgcolor: 'rgba(74, 222, 128, 0.05)',
+                                        border: '1px solid rgba(74, 222, 128, 0.2)',
+                                        borderRadius: 2,
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
                                     }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
-                                            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                                                {file ? <CheckCircle2 color="#10b981" /> : <FileText color="rgba(255,255,255,0.2)" />}
-                                                <Typography variant="body2" sx={{ color: file ? '#FFF' : 'rgba(255,255,255,0.3)', wordBreak: 'break-all' }}>
-                                                    {file ? `${t('onboarding.docs_ready')}: ${file.name}` : t('onboarding.docs_awaiting')}
-                                                </Typography>
-                                            </Stack>
-                                            <Button
-                                                variant="outlined"
-                                                component="label"
-                                                startIcon={<Upload size={16} />}
-                                                sx={{ borderRadius: 100, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, whiteSpace: 'nowrap' }}
-                                            >
-                                                {file ? t('onboarding.docs_change') : t('onboarding.docs_select')}
-                                                <input type="file" accept=".pdf,image/png,image/jpeg" hidden onChange={(e) => {
-                                                    const f = e.target.files?.[0];
-                                                    if (f) {
-                                                        if (f.size > 10 * 1024 * 1024) { alert('File size exceeds 10MB limit.'); return; }
-                                                        setProofDocument(doc.key, f);
-                                                    }
-                                                }} />
-                                            </Button>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <FileText size={18} color="#4ADE80" />
+                                            <Box>
+                                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{fileName}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>✅ Ready to upload</Typography>
+                                            </Box>
                                         </Box>
-                                    </Paper>
-                                </Box>
-                            );
-                        })}
+                                        <Button
+                                            size="small"
+                                            onClick={() => setConfirmDelete(key)}
+                                            startIcon={<Trash2 size={14} />}
+                                            sx={{ color: '#ef4444', fontWeight: 700 }}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </Box>
+                                ) : (
+                                    <Box
+                                        onDragOver={handleDragOver}
+                                        onDragEnter={() => setDragOverKey(key)}
+                                        onDragLeave={() => setDragOverKey(null)}
+                                        onDrop={(e) => handleDrop(key, e)}
+                                        sx={{
+                                            p: 3,
+                                            textAlign: 'center',
+                                            border: '2px dashed',
+                                            borderColor: dragOverKey === key ? binThemeTokens.gold : 'rgba(255,255,255,0.1)',
+                                            borderRadius: 2,
+                                            bgcolor: dragOverKey === key ? 'rgba(212, 175, 55, 0.1)' : 'rgba(0,0,0,0.3)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            '&:hover': {
+                                                borderColor: binThemeTokens.gold,
+                                                bgcolor: 'rgba(212, 175, 55, 0.05)'
+                                            }
+                                        }}
+                                    >
+                                        <label style={{ cursor: 'pointer', display: 'block', width: '100%' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                                                <Upload size={24} color={binThemeTokens.gold} />
+                                                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 700 }}>
+                                                    {readable(t('onboarding.drop_file'), 'Drop file here or click to browse')}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                                                    Max 50MB
+                                                </Typography>
+                                            </Box>
+                                            <input
+                                                type="file"
+                                                accept={accept}
+                                                onChange={(e) => {
+                                                    if (e.target.files?.[0]) {
+                                                        handleFileSelect(key, e.target.files[0]);
+                                                    }
+                                                }}
+                                                style={{ display: 'none' }}
+                                            />
+                                        </label>
+                                    </Box>
+                                )}
+                            </Box>
+                        );
+                    })}
+                </Stack>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Button variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>{t('onboarding.back')}</Button>
-                            <Button
-                                variant="contained" size="large"
-                                onClick={onNext} disabled={!canProceed}
-                                endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
-                                sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                            >
-                                {t('onboarding.docs_continue')}
-                            </Button>
-                        </Box>
-                    </Stack>
-                </Paper>
-            </Container>
+                <Box sx={{ mt: 4, p: 2, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, display: 'block', mb: 1 }}>
+                        UPLOAD SUMMARY
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>
+                        {Object.values(proofDocuments).filter(Boolean).length} of {documentTypes.length} documents uploaded
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mt: 1 }}>
+                        Required documents: {documentTypes.filter(d => d.required).length}
+                    </Typography>
+                </Box>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 4 }}>
+                    <Button
+                        variant="outlined"
+                        onClick={onBack}
+                        disabled={uploading}
+                        fullWidth
+                        sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, px: 4, borderRadius: 100, fontWeight: 950 }}
+                    >
+                        {readable(t('onboarding.back'), 'Back')}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={onNext}
+                        disabled={!canProceed || uploading}
+                        fullWidth
+                        sx={{
+                            bgcolor: canProceed ? binThemeTokens.gold : 'rgba(212, 175, 55, 0.3)',
+                            color: '#000',
+                            fontWeight: 950,
+                            py: 1.5,
+                            px: 4,
+                            borderRadius: 100,
+                            '&:hover': { bgcolor: canProceed ? '#FFF' : undefined }
+                        }}
+                    >
+                        {uploading ? <CircularProgress size={24} color="inherit" /> : (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {readable(t('onboarding.continue'), 'Continue to Account')}
+                            </Box>
+                        )}
+                    </Button>
+                </Stack>
+            </Paper>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
+                <DialogTitle sx={{ bgcolor: '#000', color: '#FFF', fontWeight: 950 }}>Remove Document?</DialogTitle>
+                <DialogContent sx={{ bgcolor: '#000', color: '#FFF', mt: 2 }}>
+                    <Typography>
+                        Are you sure you want to remove this document? You'll need to upload it again to proceed.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: '#000', p: 2 }}>
+                    <Button onClick={() => setConfirmDelete(null)} sx={{ color: '#FFF' }}>Cancel</Button>
+                    <Button
+                        onClick={() => confirmDelete && handleRemoveFile(confirmDelete)}
+                        variant="contained"
+                        sx={{ bgcolor: '#ef4444', color: '#FFF', fontWeight: 950 }}
+                    >
+                        Remove
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
-};
-
-export default ProofUploadStep;
+}
