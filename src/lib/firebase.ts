@@ -90,7 +90,9 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 
 let appCheckInstance: AppCheck | null = null;
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
-if (typeof window !== 'undefined' && appCheckSiteKey) {
+const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+
+if (typeof window !== 'undefined' && appCheckExplicitlyEnabled && appCheckSiteKey) {
   try {
     appCheckInstance = initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(appCheckSiteKey),
@@ -98,10 +100,10 @@ if (typeof window !== 'undefined' && appCheckSiteKey) {
     });
     console.info('[Firebase] App Check initialized for root app.');
   } catch (error) {
-    console.warn('[Firebase] App Check initialization failed:', error);
+    console.warn('[Firebase] App Check initialization failed. Continuing without App Check token injection:', error);
   }
 } else if (typeof window !== 'undefined') {
-  console.warn('[Firebase] VITE_APP_CHECK_SITE_KEY is missing. If Firebase Auth App Check enforcement is enabled, signup can fail with auth/internal-error.');
+  console.info('[Firebase] App Check disabled for root app. Set VITE_ENABLE_FIREBASE_APPCHECK=true only after the production reCAPTCHA key and allowed domains are verified.');
 }
 
 export const appCheck = appCheckInstance;
@@ -116,6 +118,7 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   authDomain: firebaseConfig.authDomain,
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
+  appCheckExplicitlyEnabled,
   appCheckInitialized: Boolean(appCheckInstance),
   host: typeof window !== 'undefined' ? window.location.host : 'server',
 });
