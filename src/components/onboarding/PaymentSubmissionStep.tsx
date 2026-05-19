@@ -6,7 +6,7 @@ import { CheckCircle, AlertCircle, Upload, FileText, Download } from 'lucide-rea
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { db, storage, auth, doc, serverTimestamp, httpsCallable } from '../../lib/firebase';
+import { storage, auth, functions, httpsCallable } from '../../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { getStagedFile, clearStagedFiles } from '../../lib/onboardingDb';
@@ -433,3 +433,4 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         </Box>
     );
 }
+
