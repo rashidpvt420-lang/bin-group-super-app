@@ -66,8 +66,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     }, []);
 
     // ─── DOCUMENT UPLOAD TO STORAGE ───────────────────────────────
-    const uploadProofDocuments = async (): Promise<{ [key: string]: string }> => {
-        if (!ownerAccount?.uid) throw new Error('Owner UID missing');
+    const uploadProofDocuments = async (activeUser: FirebaseUser): Promise<{ [key: string]: string }> => {
+        if (!activeUser?.uid) throw new Error('Authenticated owner UID missing');
 
         const urls: { [key: string]: string } = {};
         const docTypes = [
@@ -93,17 +93,20 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
                 }
                 
-                // ✅ Storage path: onboarding-proof/{uid}/{sessionId}/{docType}
-                const storagePath = `onboarding-proof/${ownerAccount.uid}/${onboardingSessionId}/${key}/${file.name}`;
+                // ✅ Storage path must use the live Firebase Auth UID because storage.rules requires request.auth.uid == userId
+                const safeSessionId = onboardingSessionId || intakeId || activeUser.uid;
+                const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const storagePath = `onboarding-proof/${activeUser.uid}/${safeSessionId}/${key}/${Date.now()}_${safeFileName}`;
                 const fileRef = ref(storage, storagePath);
                 
                 // Upload with progress tracking
                 const snapshot = await uploadBytes(fileRef, file, {
                     customMetadata: {
-                        uploadedBy: ownerAccount.email,
+                        uploadedBy: activeUser.email || ownerAccount?.email || companyProfile.email || '',
+                        ownerUid: activeUser.uid,
                         uploadedAt: new Date().toISOString(),
                         docType: key,
-                        sessionId: onboardingSessionId
+                        sessionId: onboardingSessionId || intakeId || activeUser.uid
                     }
                 });
 
@@ -151,14 +154,23 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 throw new Error('Your session expired. Please sign in again.');
             }
             if (!ownerAccount?.uid) throw new Error('Owner account not created');
-            const effectiveIntakeId = intakeId || ownerAccount.uid || onboardingSessionId;
+            await currentUser.getIdToken(true);
+            const effectiveOwnerUid = currentUser.uid;
+            const effectiveOwnerEmail = currentUser.email || ownerAccount.email || companyProfile.email;
+            if (ownerAccount.uid !== currentUser.uid) {
+                console.warn('[PAYMENT] Stored owner UID differs from authenticated UID. Using authenticated UID for Storage upload.', {
+                    storedOwnerUid: ownerAccount.uid,
+                    authUid: currentUser.uid
+                });
+            }
+            const effectiveIntakeId = intakeId || onboardingSessionId || effectiveOwnerUid;
             setIntakeId(effectiveIntakeId);
             if (!effectiveIntakeId) throw new Error('Intake ID missing');
             if (!paymentMethod) throw new Error('Payment method not selected');
 
             // 1️⃣ Upload proof documents to Storage
             console.log('[PAYMENT] Step 1: Uploading documents to Storage...');
-            const urls = await uploadProofDocuments();
+            const urls = await uploadProofDocuments(currentUser);
             setUploadedUrls(urls);
 
             // 2️⃣ Submit onboarding package through backend Callable
@@ -166,8 +178,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 console.log('[PAYMENT] Step 2: Creating Stripe checkout session...');
                 const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
                 const sessionRes = await createCheckout({
-                    ownerUid: ownerAccount.uid,
-                    ownerEmail: ownerAccount.email,
+                    ownerUid: effectiveOwnerUid,
+                    ownerEmail: effectiveOwnerEmail,
                     intakeId: effectiveIntakeId,
                     onboardingSessionId,
                     amount: portfolioSummary.estimatedACV
@@ -187,8 +199,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             console.log('[PAYMENT] Step 2: Finalizing submission via backend...');
             const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
             await submitPackage({
-                ownerUid: ownerAccount.uid,
-                ownerEmail: ownerAccount.email,
+                ownerUid: effectiveOwnerUid,
+                ownerEmail: effectiveOwnerEmail,
                 intakeId: effectiveIntakeId,
                 onboardingSessionId,
                 paymentMethod,
