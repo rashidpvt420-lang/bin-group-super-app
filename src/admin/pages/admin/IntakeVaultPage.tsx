@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { collection, onSnapshot, doc, updateDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
@@ -37,6 +36,25 @@ const asFiniteNumber = (value: any): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
 };
+
+const safeDocId = (value: any, fallback: string) => {
+    const raw = String(value || '').trim();
+    const safe = raw.replace(/[^A-Za-z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 180);
+    return safe || fallback;
+};
+
+const stableOwnerId = (intake: any) =>
+    safeDocId(
+        intake.userId ||
+        intake.ownerUid ||
+        intake.pendingPaymentSubmission?.ownerAccount?.uid ||
+        intake.ownerAccount?.uid ||
+        intake.pendingOwnerId ||
+        intake.ownerRegistrationId ||
+        intake.ownerEmail ||
+        intake.id,
+        `owner_${intake.id}`
+    );
 
 const extractLatLng = (property: any) => {
     const lat = asFiniteNumber(
@@ -104,6 +122,7 @@ const copyText = async (text: string) => {
 interface IntakeSubmission {
     id: string;
     userId?: string;
+    ownerUid?: string;
     ownerName?: string;
     ownerEmail?: string;
     ownerMobile?: string;
@@ -193,8 +212,48 @@ const normalizeIntake = (raw: IntakeSubmission) => {
     } as IntakeSubmission;
 };
 
+const normalizePropertyForActivation = (property: any, intake: IntakeSubmission, ownerId: string, index: number, contractId: string) => {
+    const gps = extractLatLng(property);
+    const propertyId = safeDocId(property?.propertyId || property?.id || `${intake.id}_property_${index + 1}`, `${intake.id}_property_${index + 1}`);
+    const address = propertyAddress(property);
+    const emirate = emirateLabel(property);
+    return {
+        ...property,
+        id: propertyId,
+        propertyId,
+        ownerId,
+        ownerEmail: intake.ownerEmail || '',
+        ownerName: intake.ownerName || 'Owner',
+        contractId,
+        propertyName: address,
+        name: address,
+        addressLine: property?.addressLine || property?.address || address,
+        address: property?.address || property?.addressLine || address,
+        emirate,
+        city: property?.city || property?.area || emirate,
+        area: property?.area || property?.city || emirate,
+        geo: gps ? {
+            ...(property?.geo || {}),
+            lat: gps.lat,
+            lng: gps.lng,
+            verified: true,
+            dispatchReady: true,
+            verifiedAt: serverTimestamp(),
+            verifiedBy: auth.currentUser?.uid || 'ADMIN_HUB_V7'
+        } : property?.geo || null,
+        location: gps ? { lat: gps.lat, lng: gps.lng } : property?.location || null,
+        coordinates: gps ? { lat: gps.lat, lng: gps.lng } : property?.coordinates || null,
+        status: 'ACTIVE',
+        activationState: 'ACTIVE',
+        dispatchReady: Boolean(gps),
+        verified: true,
+        approved: true,
+        source: 'ADMIN_APPROVED_OWNER_ONBOARDING',
+        updatedAt: serverTimestamp()
+    };
+};
+
 export const IntakeVaultPage: React.FC = () => {
-    const { t } = useLanguage();
     const [submissions, setSubmissions] = useState<IntakeSubmission[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedIntake, setSelectedIntake] = useState<IntakeSubmission | null>(null);
@@ -287,28 +346,216 @@ export const IntakeVaultPage: React.FC = () => {
             const batch = writeBatch(db);
             const intakeRef = doc(db, 'intake_submissions', intake.id);
             const adminId = auth.currentUser?.uid || 'ADMIN_HUB_V7';
+            const ownerId = stableOwnerId(intake);
+            const ownerEmail = String(intake.ownerEmail || '').toLowerCase();
+            const ownerName = intake.ownerName || 'Owner';
+            const annualValue = Number(intake.pricing?.annualContractValue || intake.portfolioSummary?.estimatedACV || intake.payment?.annualValue || 0);
+            const mobilizationAmount = Number(intake.payment?.amount || intake.pricing?.mobilizationAmount || Math.round(annualValue * 0.15));
+            const contractId = safeDocId(intake.pendingPaymentSubmission?.contractId || intake.payment?.contractId || `${intake.id}_contract`, `${intake.id}_contract`);
+            const paymentId = safeDocId(intake.payment?.paymentId || `${intake.id}_mobilization`, `${intake.id}_mobilization`);
+            const properties = (intake.properties || []).map((property, index) => normalizePropertyForActivation(property, intake, ownerId, index, contractId));
+            const propertyIds = properties.map((property) => property.propertyId);
+            const primaryProperty = properties[0] || null;
+            const signUrl = `${window.location.origin}/owner/contracts`;
 
             batch.update(intakeRef, {
                 status: 'CONVERTED_TO_OWNER',
-                adminReviewState: 'APPROVED',
-                activationState: 'ACTIVE',
+                adminReviewState: 'APPROVED_PENDING_OWNER_SIGNATURE',
+                activationState: 'PENDING_OWNER_SIGNATURE',
                 paymentStatus: 'RECONCILED',
                 paymentState: 'PAYMENT_VERIFIED',
                 paymentVerified: true,
                 documentsVerified: true,
                 locationVerified: true,
+                ownerUid: ownerId,
+                activeOwnerId: ownerId,
+                activeContractId: contractId,
+                activePropertyIds: propertyIds,
+                contractDeliveryState: 'SIGNATURE_REQUEST_EMAIL_QUEUED',
                 approvedAt: serverTimestamp(),
                 approvedBy: adminId,
                 updatedAt: serverTimestamp()
             });
 
+            batch.set(doc(db, 'users', ownerId), {
+                uid: ownerId,
+                role: 'owner',
+                status: 'PENDING_OWNER_SIGNATURE',
+                dashboardUnlocked: true,
+                activeContractId: contractId,
+                activePropertyIds: propertyIds,
+                latestIntakeId: intake.id,
+                email: ownerEmail,
+                displayName: ownerName,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            batch.set(doc(db, 'owners', ownerId), {
+                uid: ownerId,
+                ownerId,
+                name: ownerName,
+                displayName: ownerName,
+                email: ownerEmail,
+                phone: intake.ownerMobile || '',
+                status: 'PENDING_OWNER_SIGNATURE',
+                dashboardUnlocked: true,
+                activeContractId: contractId,
+                activePropertyIds: propertyIds,
+                latestIntakeId: intake.id,
+                paymentVerified: true,
+                documentsVerified: true,
+                locationVerified: true,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            properties.forEach((property) => {
+                batch.set(doc(db, 'properties', property.propertyId), property, { merge: true });
+                batch.set(doc(db, 'propertyPassports', property.propertyId), {
+                    passportId: property.propertyId,
+                    propertyId: property.propertyId,
+                    ownerId,
+                    ownerName,
+                    ownerEmail,
+                    contractId,
+                    intakeId: intake.id,
+                    address: property.addressLine,
+                    emirate: property.emirate,
+                    city: property.city,
+                    area: property.area,
+                    gps: property.geo ? { lat: property.geo.lat, lng: property.geo.lng } : null,
+                    dispatchReady: property.dispatchReady,
+                    status: 'ACTIVE',
+                    paymentVerified: true,
+                    documentsVerified: true,
+                    locationVerified: true,
+                    annualContractValue: annualValue,
+                    mobilizationAmount,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            });
+
+            batch.set(doc(db, 'contracts', contractId), {
+                contractId,
+                id: contractId,
+                intakeId: intake.id,
+                ownerId,
+                ownerEmail,
+                ownerName,
+                propertyId: primaryProperty?.propertyId || '',
+                propertyIds,
+                propertyName: primaryProperty?.propertyName || primaryProperty?.addressLine || 'Portfolio',
+                properties,
+                status: 'PENDING_OWNER_SIGNATURE',
+                contractStatus: 'awaiting_owner_signature',
+                activationStatus: 'PENDING_OWNER_SIGNATURE',
+                paymentVerified: true,
+                paymentStatus: 'RECONCILED',
+                documentsVerified: true,
+                locationVerified: true,
+                approved: true,
+                approvedAt: serverTimestamp(),
+                approvedBy: adminId,
+                packageName: intake.selectedPlan?.name || intake.selectedPlan?.packageName || intake.portfolioSummary?.recommendedTier || 'Institutional Package',
+                planType: intake.selectedPlan?.id || intake.contractType || 'hybrid',
+                selectedPlan: intake.selectedPlan || null,
+                selectedAddOns: intake.selectedAddOns || [],
+                annualValue,
+                annualContractValue: annualValue,
+                depositAmount: mobilizationAmount,
+                paymentSchedule: {
+                    mobilizationPercent: 15,
+                    mobilizationAmount,
+                    remainingBalance: Math.max(annualValue - mobilizationAmount, 0),
+                    currency: 'AED'
+                },
+                signatureState: {
+                    ownerSigned: false,
+                    binGroupsApproved: true,
+                    binGroupsApprovedAt: new Date().toISOString(),
+                    pdfGenerated: false,
+                    emailed: true,
+                    signUrl
+                },
+                emailDelivery: {
+                    signRequestQueued: true,
+                    signRequestQueuedAt: new Date().toISOString(),
+                    recipient: ownerEmail
+                },
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            batch.set(doc(db, 'payment_transactions', paymentId), {
+                paymentId,
+                intakeId: intake.id,
+                ownerId,
+                ownerEmail,
+                contractId,
+                propertyId: primaryProperty?.propertyId || '',
+                amount: mobilizationAmount,
+                currency: 'AED',
+                method: intake.payment?.method || 'MANUAL',
+                status: 'VERIFIED',
+                verificationState: 'ADMIN_VERIFIED',
+                verified: true,
+                verifiedAt: serverTimestamp(),
+                verifiedBy: adminId,
+                unlocksDashboard: true,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            batch.set(doc(db, 'owner_dashboard_unlocks', ownerId), {
+                ownerId,
+                intakeId: intake.id,
+                contractId,
+                propertyIds,
+                unlocked: true,
+                unlockState: 'PENDING_OWNER_SIGNATURE',
+                unlockedAt: serverTimestamp(),
+                unlockedBy: adminId,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            batch.set(doc(collection(db, 'notifications')), {
+                userId: ownerId,
+                toRole: 'owner',
+                type: 'CONTRACT_SIGNATURE_REQUIRED',
+                title: 'Contract ready for signature',
+                body: 'BIN GROUP verified your onboarding. Open Contracts to sign and receive your final PDF.',
+                url: '/owner/contracts',
+                read: false,
+                createdAt: serverTimestamp()
+            });
+
+            if (ownerEmail) {
+                batch.set(doc(collection(db, 'mail')), {
+                    to: ownerEmail,
+                    message: {
+                        subject: 'BIN GROUP Contract Ready for Signature',
+                        html: `<p>Dear ${ownerName},</p><p>Your BIN GROUP onboarding has been approved. Please sign your contract inside the Owner Portal.</p><p><a href="${signUrl}">Open contract for signature</a></p><p>After signature, the final contract PDF will be generated and emailed to you.</p>`
+                    },
+                    createdAt: serverTimestamp()
+                });
+            }
+
+            batch.set(doc(collection(db, 'audit_logs')), {
+                actorId: adminId,
+                actorRole: 'admin',
+                action: 'APPROVE_OWNER_SUBMISSION_AND_ISSUE_SIGNATURE_REQUEST',
+                targetType: 'intake_submissions',
+                targetId: intake.id,
+                metadata: { ownerId, ownerEmail, contractId, propertyIds, paymentId },
+                createdAt: serverTimestamp()
+            });
+
             await batch.commit();
             setSelectedIntake(null);
             setClarificationNote('');
-            alert('Sovereign Node Activated: Intake approved for owner portfolio activation.');
+            alert('Owner approved. Contract signature email queued, dashboard unlocked, and active owner/property/payment records created.');
         } catch (err) {
             console.error('Conversion Protocol Fault:', err);
-            alert('Relational Provisioning Failure.');
+            alert('Relational Provisioning Failure. Check console and Firestore rules.');
         }
     };
 
@@ -532,6 +779,9 @@ export const IntakeVaultPage: React.FC = () => {
                                 <Typography variant="body2"><b>Plan:</b> {selected.selectedPlan?.name || selected.portfolioSummary?.recommendedTier || 'TBD'}</Typography>
                                 <Typography variant="body2"><b>Add-Ons:</b> {Array.isArray(selected.selectedAddOns) && selected.selectedAddOns.length ? selected.selectedAddOns.join(', ') : 'NONE'}</Typography>
                                 <Typography variant="body2"><b>Annual Value:</b> {money(selected.pricing?.annualContractValue || selected.portfolioSummary?.estimatedACV)}</Typography>
+                                <Alert severity="success" sx={{ mt: 2 }}>
+                                    Approval now provisions active owner records, active properties, property passports, a pending-signature contract, verified payment transaction and an owner email signing request.
+                                </Alert>
                             </Paper>
 
                             <TextField
@@ -553,7 +803,7 @@ export const IntakeVaultPage: React.FC = () => {
                                     disabled={selected.status === 'CONVERTED_TO_OWNER'}
                                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}
                                 >
-                                    {selected.status === 'CONVERTED_TO_OWNER' ? 'ACTIVE' : 'APPROVE OWNER SUBMISSION'}
+                                    {selected.status === 'CONVERTED_TO_OWNER' ? 'ACTIVE' : 'APPROVE + EMAIL CONTRACT FOR SIGNATURE'}
                                 </Button>
                                 <Button fullWidth variant="outlined" color="error" startIcon={<XCircle />} onClick={() => handleReject(selected)} sx={{ fontWeight: 900, py: 2 }}>
                                     REJECT / REQUEST CLARIFICATION
