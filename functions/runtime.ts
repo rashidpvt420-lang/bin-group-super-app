@@ -6,6 +6,7 @@ export * from "./contractActivation";
 export * from "./ownerOnboarding";
 export * from "./ownerRegistrationRequest";
 export * from "./stripePayment";
+export * from "./adminOwnerOperations";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -24,9 +25,9 @@ async function assertAdmin(auth: any) {
     if (tokenIsAdmin) return;
 
     const userDoc = await runtimeDb.collection("users").doc(auth.uid).get();
-    const user = userDoc.data() || {};
-    const userRole = normalizeRole(user.role || user.userRole || user.primaryRole);
-    const userIsAdmin = user.admin === true || user.isAdmin === true || user.superAdmin === true || user.super_admin === true || ["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"].includes(userRole);
+    const userData = userDoc.data() || {};
+    const firestoreRole = normalizeRole(userData.role || userData.userRole || userData.primaryRole);
+    const userIsAdmin = userData.isAdmin === true || userData.admin === true || userData.superAdmin === true || userData.super_admin === true || ["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"].includes(firestoreRole);
     if (!userIsAdmin) throw new HttpsError("permission-denied", "Only admins can approve or reject payments.");
 }
 
