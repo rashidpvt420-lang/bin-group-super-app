@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, ArrowBack, ArrowForward, Lock, Mail, Phone, Person, Login, Info } from '@mui/icons-material';
 import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db, doc, serverTimestamp, setDoc, collection, query, where, getDocs } from '../../lib/firebase';
+import { auth, db, doc, serverTimestamp, setDoc } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -126,22 +126,9 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
         const fullName = formData.fullName.trim();
 
         try {
-            // 2. Role Collision Check (Prevent unauthorized role switches)
-            console.log("🔍 [ONBOARDING] Checking for role collision...");
-            const userQuery = query(collection(db, 'users'), where('email', '==', email));
-            const userSnap = await getDocs(userQuery);
-
-            if (!userSnap.empty) {
-                const existingUser = userSnap.docs[0].data();
-                if (existingUser.role && existingUser.role !== 'owner') {
-                    console.error("🛡️ [AUTH_CONFLICT] Role collision detected:", existingUser.role);
-                    setError({ message: errorText('onboarding.error.role_conflict', 'This email is registered with a different role. Please use another email.'), type: 'error' });
-                    setLoading(false);
-                    return;
-                }
-            }
-
-            // 3. Create or Sign In to the Authentication Record
+            // Create or sign in to the Authentication record.
+            // Do not query /users by email before auth: public onboarding is unauthenticated at this point.
+            // Firebase Auth handles duplicate emails; Firestore profile writes happen only after auth exists.
             console.log("🛡️ [ONBOARDING] Attempting Auth record creation...");
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, formData.password);
