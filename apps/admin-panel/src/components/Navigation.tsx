@@ -165,8 +165,10 @@ const primaryMenu = [
                         button
                         onClick={() => { 
                             const currentLang = localStorage.getItem('bin_language');
+                            const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
                             localStorage.clear(); 
                             if (currentLang) localStorage.setItem('bin_language', currentLang);
+                            if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
                             signOut(auth).then(() => window.location.href = '/'); 
                         }}
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}

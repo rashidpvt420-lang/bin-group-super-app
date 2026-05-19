@@ -164,8 +164,10 @@ function Layout() {
         try {
             console.log("[ADMIN] Initiating global logout sequence...");
             const currentLang = localStorage.getItem('bin_language');
+            const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
             localStorage.clear();
             if (currentLang) localStorage.setItem('bin_language', currentLang);
+            if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
             sessionStorage.clear();
             await signOut(auth);
             window.location.href = '/login';

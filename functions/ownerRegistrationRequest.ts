@@ -238,3 +238,76 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
     dashboardLocked: true
   };
 });
+
+export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async (request) => {
+  const data = request.data || {};
+  const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
+  const ownerEmail = cleanEmail(data.ownerEmail);
+  const intakeId = cleanText(data.intakeId, "intakeId", 120);
+  const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
+  const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
+  const amount = Number(data.amount);
+  const companyProfile = cleanPlainValue(data.companyProfile || {});
+  const serviceDetails = cleanPlainValue(data.serviceDetails || {});
+  const documentUrls = cleanPlainValue(data.documentUrls || {});
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  }
+
+  const timestamp = serverTimestamp();
+  const batch = db.batch();
+
+  // 1. payment_transactions
+  const paymentRef = db.collection("payment_transactions").doc(intakeId);
+  batch.set(paymentRef, {
+    ownerUid,
+    ownerId: ownerUid,
+    ownerEmail,
+    intakeId,
+    onboardingSessionId,
+    paymentMethod,
+    amount,
+    currency: "AED",
+    status: "PENDING",
+    verificationState: "ADMIN_VERIFICATION_REQUIRED",
+    companyProfile,
+    serviceDetails,
+    documentUrls,
+    submittedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }, { merge: true });
+
+  // 2. intake_submissions
+  const intakeRef = db.collection("intake_submissions").doc(intakeId);
+  batch.set(intakeRef, {
+    paymentSubmitted: true,
+    paymentSubmittedAt: timestamp,
+    paymentMethod,
+    status: "payment_pending_approval",
+    ownerUid,
+    ownerId: ownerUid,
+    proofDocuments: documentUrls,
+    updatedAt: timestamp
+  }, { merge: true });
+
+  // 3. audit_logs
+  const auditRef = db.collection("audit_logs").doc();
+  batch.set(auditRef, {
+    action: "ONBOARDING_PAYMENT_SUBMITTED",
+    ownerUid,
+    ownerId: ownerUid,
+    ownerEmail,
+    intakeId,
+    sessionId: onboardingSessionId,
+    paymentMethod,
+    timestamp,
+    createdAt: timestamp,
+    documentCount: Object.keys(documentUrls).length
+  });
+
+  await batch.commit();
+
+  return { success: true };
+});

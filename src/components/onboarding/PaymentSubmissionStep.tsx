@@ -6,8 +6,10 @@ import { CheckCircle, AlertCircle, Upload, FileText, Download } from 'lucide-rea
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { db, storage, doc, setDoc, serverTimestamp, collection, query, where, getDocs, httpsCallable } from '../../lib/firebase';
+import { db, storage, auth, doc, serverTimestamp, httpsCallable } from '../../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { getStagedFile, clearStagedFiles } from '../../lib/onboardingDb';
 
 interface PaymentSubmissionStepProps {
     onBack: () => void;
@@ -52,7 +54,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     }, [ownerAccount, paymentMethod]);
 
     // ─── DOCUMENT UPLOAD TO STORAGE ───────────────────────────────
-    const uploadDocumentsToStorage = async (): Promise<{ [key: string]: string }> => {
+    const uploadProofDocuments = async (): Promise<{ [key: string]: string }> => {
         if (!ownerAccount?.uid) throw new Error('Owner UID missing');
 
         const urls: { [key: string]: string } = {};
@@ -65,14 +67,19 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         ];
 
         for (const { key, label } of docTypes) {
-            const file = proofDocuments[key as keyof typeof proofDocuments];
-            if (!file) {
+            const docMeta = proofDocuments[key as keyof typeof proofDocuments];
+            if (!docMeta) {
                 console.log(`[UPLOAD] Skipping ${label} (not provided)`);
                 continue;
             }
 
             try {
                 setUploadProgress(prev => ({ ...prev, [key]: 0 }));
+
+                const file = await getStagedFile(key);
+                if (!file) {
+                    throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
+                }
                 
                 // ✅ Storage path: onboarding-proof/{uid}/{sessionId}/{docType}
                 const storagePath = `onboarding-proof/${ownerAccount.uid}/${onboardingSessionId}/${key}/${file.name}`;
@@ -103,47 +110,21 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         return urls;
     };
 
-    // ─── LINK DOCUMENTS TO FIRESTORE ──────────────────────────────
-    const linkDocumentsToFirestore = async (urls: { [key: string]: string }) => {
-        if (!ownerAccount?.uid || !intakeId) return;
-
-        try {
-            // Update intake submission with document URLs
-            await setDoc(doc(db, 'intake_submissions', intakeId), {
-                proofDocuments: {
-                    propertyProof: urls.propertyProof || null,
-                    emiratesId: urls.emiratesId || null,
-                    passport: urls.passport || null,
-                    tradeLicense: urls.tradeLicense || null,
-                    tenancySupport: urls.tenancySupport || null
-                },
-                documentsUploadedAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            // Store in propertyPassports collection for compliance
-            await setDoc(doc(db, 'propertyPassports', intakeId), {
-                ownerUid: ownerAccount.uid,
-                ownerEmail: ownerAccount.email,
-                intakeId,
-                onboardingSessionId,
-                documentUrls: {
-                    propertyProof: urls.propertyProof || null,
-                    emiratesId: urls.emiratesId || null,
-                    passport: urls.passport || null,
-                    tradeLicense: urls.tradeLicense || null,
-                    tenancySupport: urls.tenancySupport || null
-                },
-                uploadedAt: serverTimestamp(),
-                status: 'documents_received',
-                verificationStatus: 'pending_review'
-            }, { merge: true });
-
-            console.log('✅ [FIRESTORE] Documents linked successfully');
-        } catch (err: any) {
-            console.error('❌ [FIRESTORE] Document linking failed:', err);
-            throw err;
-        }
+    const waitForCurrentUser = (): Promise<FirebaseUser | null> => {
+        return new Promise((resolve) => {
+            if (auth.currentUser) {
+                resolve(auth.currentUser);
+                return;
+            }
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+                unsubscribe();
+                resolve(user);
+            });
+            setTimeout(() => {
+                unsubscribe();
+                resolve(auth.currentUser);
+            }, 4000);
+        });
     };
 
     // ─── SUBMIT PAYMENT ───────────────────────────────────────────
@@ -152,31 +133,30 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         setLoading(true);
 
         try {
+            console.log('[PAYMENT] Waiting for auth hydration...');
+            const currentUser = await waitForCurrentUser();
+            if (!currentUser) {
+                throw new Error('Your session expired. Please sign in again.');
+            }
             if (!ownerAccount?.uid) throw new Error('Owner account not created');
             if (!intakeId) throw new Error('Intake ID missing');
             if (!paymentMethod) throw new Error('Payment method not selected');
 
             // 1️⃣ Upload proof documents to Storage
             console.log('[PAYMENT] Step 1: Uploading documents to Storage...');
-            const urls = await uploadDocumentsToStorage();
+            const urls = await uploadProofDocuments();
             setUploadedUrls(urls);
 
-            // 2️⃣ Link documents to Firestore
-            console.log('[PAYMENT] Step 2: Linking documents to Firestore...');
-            await linkDocumentsToFirestore(urls);
-
-            // 3️⃣ Create payment record
-            console.log('[PAYMENT] Step 3: Creating payment transaction...');
-            await setDoc(doc(db, 'payment_transactions', intakeId), {
+            // 2️⃣ Submit onboarding package through backend Callable
+            console.log('[PAYMENT] Step 2: Finalizing submission via backend...');
+            const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
+            await submitPackage({
                 ownerUid: ownerAccount.uid,
                 ownerEmail: ownerAccount.email,
                 intakeId,
                 onboardingSessionId,
                 paymentMethod,
                 amount: portfolioSummary.estimatedACV,
-                currency: 'AED',
-                status: 'PENDING',
-                verificationState: 'ADMIN_VERIFICATION_REQUIRED',
                 companyProfile: {
                     name: companyProfile.name,
                     licenseNumber: companyProfile.licenseNumber,
@@ -188,34 +168,11 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     selectedPlan: selectedPlan?.name || 'Standard',
                     selectedAddOns: selectedAddOns || []
                 },
-                documentUrls: urls,
-                submittedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
+                documentUrls: urls
             });
 
-            // 4️⃣ Update intake submission final status
-            console.log('[PAYMENT] Step 4: Finalizing intake submission...');
-            await setDoc(doc(db, 'intake_submissions', intakeId), {
-                paymentSubmitted: true,
-                paymentSubmittedAt: serverTimestamp(),
-                paymentMethod,
-                status: 'payment_pending_approval',
-                updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            // 5️⃣ Create audit log
-            console.log('[PAYMENT] Step 5: Logging audit entry...');
-            await setDoc(doc(collection(db, 'audit_logs')), {
-                action: 'ONBOARDING_PAYMENT_SUBMITTED',
-                ownerUid: ownerAccount.uid,
-                ownerEmail: ownerAccount.email,
-                intakeId,
-                sessionId: onboardingSessionId,
-                paymentMethod,
-                timestamp: serverTimestamp(),
-                documentCount: Object.keys(urls).length
-            });
+            console.log('[PAYMENT] Step 3: Clearing staged IndexedDB files...');
+            await clearStagedFiles();
 
             console.log('✅ [PAYMENT] All steps completed successfully');
             setSuccess(true);

@@ -114,8 +114,10 @@ function AdminContent() {
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button variant="outlined" color="error" onClick={() => { 
                         const currentLang = localStorage.getItem('bin_language');
+                        const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
                         localStorage.clear(); 
                         if (currentLang) localStorage.setItem('bin_language', currentLang);
+                        if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
                         sessionStorage.clear(); 
                         window.location.href = '/login'; 
                     }}>RESET SESSION</Button>

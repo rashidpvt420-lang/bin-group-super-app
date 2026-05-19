@@ -122,8 +122,10 @@ const BinGroupHeader: React.FC = () => {
                             size="small"
                             onClick={() => { 
                                 const currentLang = localStorage.getItem('bin_language');
+                                const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
                                 localStorage.clear(); 
                                 if (currentLang) localStorage.setItem('bin_language', currentLang);
+                                if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
                                 sessionStorage.clear();
                                 signOut(auth).finally(() => {
                                     window.location.href = '/';
