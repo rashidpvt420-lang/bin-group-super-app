@@ -54,13 +54,9 @@ const waitForCurrentUser = () => {
     });
 };
 
-const fileMetadata = (file: File | null) => file ? {
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    stagedInBrowser: true,
-    requiresAdminUploadReview: true
-} : null;
+const isRealFile = (value: unknown): value is File => {
+    return typeof File !== 'undefined' && value instanceof File && value.size > 0;
+};
 
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const navigate = useNavigate();
@@ -93,35 +89,27 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
 
-    const buildProofMetadata = () => ({
-        propertyProof: fileMetadata(proofDocuments.propertyProof),
-        titleDeed: fileMetadata(proofDocuments.propertyProof),
-        emiratesId: fileMetadata(proofDocuments.emiratesId),
-        passport: fileMetadata(proofDocuments.passport),
-        tradeLicense: fileMetadata(proofDocuments.tradeLicense),
-        tenancySupport: fileMetadata(proofDocuments.tenancySupport),
-        __uploadFallback: true,
-        note: 'Files were staged in the browser by a pending owner. Admin must request/verify final document upload before activation.'
-    });
-
     const uploadProofDocuments = async (uid: string) => {
         const required: Array<[string, File | null]> = [
             ['titleDeed', proofDocuments.propertyProof],
             ['emiratesId', proofDocuments.emiratesId],
             ['passport', proofDocuments.passport],
         ];
-        const missing = required.filter(([, file]) => !file).map(([key]) => key);
-        if (missing.length) throw new Error(`Missing required documents: ${missing.join(', ')}`);
+
+        const missing = required.filter(([, file]) => !isRealFile(file)).map(([key]) => key);
+        if (missing.length) {
+            throw new Error(`Missing required physical documents: ${missing.join(', ')}. Please upload the actual files before submitting.`);
+        }
 
         const optional: Array<[string, File | null]> = [
             ['tradeLicense', proofDocuments.tradeLicense],
             ['tenancySupport', proofDocuments.tenancySupport],
         ];
 
-        const allDocs = [...required, ...optional].filter(([, file]) => !!file) as Array<[string, File]>;
+        const allDocs = [...required, ...optional].filter(([, file]) => isRealFile(file)) as Array<[string, File]>;
         const uploaded: Record<string, any> = {};
         const urls: Record<string, string> = {};
-        const basePath = `ownerOnboarding/${uid}/${onboardingSessionId}`;
+        const basePath = `onboarding-proof/${uid}/${onboardingSessionId}`;
 
         setUploadingProofs(true);
         for (const [key, file] of allDocs) {
@@ -145,6 +133,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 storagePath: path,
                 downloadUrl: url,
                 uploadedAt: new Date().toISOString(),
+                adminAccessible: true,
+                source: 'FIREBASE_STORAGE'
             };
         }
         setUploadingProofs(false);
@@ -190,7 +180,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     const submitWithAuthenticatedOwner = async (currentUser: any) => {
         if (currentUser.uid !== ownerAccount?.uid) {
-            await submitPendingOwnerPackage();
+            setError('Secure owner session mismatch. Sign in with the same owner account used in onboarding so documents can upload for Admin verification.');
             return;
         }
 
@@ -215,38 +205,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     };
 
     const submitPendingOwnerPackage = async () => {
-        if (!ownerAccount?.uid || !ownerEmail) {
-            setError(readable(t('onboarding.error.acc_required'), 'Account creation is required before payment submission.'));
-            return;
-        }
-
         setPendingMode(true);
-        setSubmitting(true);
-        setError(null);
-        try {
-            const submissionId = `${ownerAccount.uid}_${onboardingSessionId}`;
-            const submitPendingOwnerRegistration = httpsCallable(functions, 'submitPendingOwnerRegistration');
-            const proofMetadata = buildProofMetadata();
-            const paymentSubmission = buildSubmissionPayload(proofMetadata, submissionId);
-            const result = await submitPendingOwnerRegistration({
-                ownerRegistrationId: ownerAccount.uid,
-                pendingOwnerId: ownerAccount.uid,
-                fullName: ownerAccount.fullName || companyProfile.contactPerson || companyProfile.name || 'Owner',
-                email: ownerEmail,
-                mobile: ownerAccount.mobile || companyProfile.phone || '+971000000000',
-                intakeId: submissionId,
-                paymentSubmission
-            });
-            const response = result.data as any;
-            setSubmissionResult(response);
-            setIntakeId(response?.intakeId || submissionId);
-            setSubmitted(true);
-        } catch (err: any) {
-            setError(err?.message || 'Pending owner payment submission failed.');
-        } finally {
-            setSubmitting(false);
-            setUploadingProofs(false);
-        }
+        setError('Secure owner login session is required before final submission. This protects your files and lets Admin open the real uploaded documents. Please use Gateway Login with the owner account, return to this step, and submit again.');
     };
     
     const handleSubmit = async () => {
@@ -348,7 +308,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                 {readable(t('onboarding.admin_lock_desc'), 'Your contract and dashboard will remain locked until BIN GROUP admin verifies the payment and documents.')}
                             </Typography>
                             <Alert severity="info" sx={{ bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
-                                Pending owners do not need a password at this stage. Submission will be secured for admin verification.
+                                Documents now upload to secure Firebase Storage before Admin verification. Admin will be able to open every uploaded document from Owner Verification Inbox.
                             </Alert>
                             {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
                             {error && <Alert severity="error">{error}</Alert>}
