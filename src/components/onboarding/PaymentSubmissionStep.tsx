@@ -27,6 +27,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         proofDocuments,
         intakeId,
         onboardingSessionId,
+        setIntakeId,
         paymentMethod,
         selectedPlan,
         selectedAddOns,
@@ -150,7 +151,9 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 throw new Error('Your session expired. Please sign in again.');
             }
             if (!ownerAccount?.uid) throw new Error('Owner account not created');
-            if (!intakeId) throw new Error('Intake ID missing');
+            const effectiveIntakeId = intakeId || ownerAccount.uid || onboardingSessionId;
+            setIntakeId(effectiveIntakeId);
+            if (!effectiveIntakeId) throw new Error('Intake ID missing');
             if (!paymentMethod) throw new Error('Payment method not selected');
 
             // 1️⃣ Upload proof documents to Storage
@@ -165,7 +168,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 const sessionRes = await createCheckout({
                     ownerUid: ownerAccount.uid,
                     ownerEmail: ownerAccount.email,
-                    intakeId,
+                    intakeId: effectiveIntakeId,
                     onboardingSessionId,
                     amount: portfolioSummary.estimatedACV
                 });
@@ -186,7 +189,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             await submitPackage({
                 ownerUid: ownerAccount.uid,
                 ownerEmail: ownerAccount.email,
-                intakeId,
+                intakeId: effectiveIntakeId,
                 onboardingSessionId,
                 paymentMethod,
                 amount: portfolioSummary.estimatedACV,
@@ -234,7 +237,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         {readable(t('onboarding.payment_success_desc'), 'Your payment and documents have been submitted successfully.')}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
-                        Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId}</Box>
+                        Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId || ownerAccount?.uid || onboardingSessionId}</Box>
                     </Typography>
                     <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(74, 222, 128, 0.05)', borderRadius: 2, border: '1px solid rgba(74, 222, 128, 0.2)' }}>
                         <Typography variant="caption" sx={{ color: '#4ADE80', fontWeight: 700, display: 'block', mb: 1 }}>DOCUMENTS UPLOADED:</Typography>
@@ -412,7 +415,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, display: 'block', mb: 1 }}>SUBMISSION DETAILS:</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Amount: AED {portfolioSummary.estimatedACV?.toLocaleString()}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Method: {paymentMethod}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Intake ID: {intakeId}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Intake ID: {intakeId || ownerAccount?.uid || onboardingSessionId}</Typography>
                         </Box>
                     </Box>
                 </DialogContent>
