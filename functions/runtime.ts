@@ -5,6 +5,7 @@ export * from "./index";
 export * from "./contractActivation";
 export * from "./ownerOnboarding";
 export * from "./ownerRegistrationRequest";
+export * from "./stripePayment";
 
 if (!admin.apps.length) {
     admin.initializeApp();

@@ -11,7 +11,7 @@ const getMapsKey = (): string => {
 
 const isEmbeddedMapsEnabled = (): boolean => {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS === 'true';
+  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS !== 'false';
 };
 
 const isMapsReady = () => typeof window !== 'undefined' && Boolean((window as any).google?.maps);

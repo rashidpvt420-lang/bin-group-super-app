@@ -60,7 +60,15 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
     const totalProperties = properties?.length || 0;
     const baseContractPrice = selectedPlan?.annualPrice || 0;
 
-    const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER') => {
+    const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE') => {
+        if (method === 'STRIPE') {
+            setPaymentMethod('STRIPE');
+            setContractId('stripe-onboarding-' + Date.now());
+            setPaymentRequested(true);
+            onNext();
+            return;
+        }
+
         setIsGenerating(true);
         setPaymentMethod(method);
         
@@ -68,7 +76,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
             const ownerId = auth.currentUser?.uid || 'anonymous';
             const propertyId = properties?.[0]?.id || 'P-PROT-1';
             
-            const result = await createPaymentIntent(method, activationDeposit, propertyId, ownerId);
+            const result = await createPaymentIntent(method as any, activationDeposit, propertyId, ownerId);
             
             setContractId(result.contractId);
             setPaymentManifest(result.paymentManifest);
@@ -251,19 +259,20 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                     <Button 
                                         variant="outlined" 
                                         fullWidth 
-                                        disabled
+                                        onClick={() => handleGenerateManifest('STRIPE')}
+                                        disabled={isGenerating}
                                         sx={{ 
-                                            py: 2, borderRadius: 4, borderColor: 'rgba(255,255,255,0.05)', 
-                                            color: 'rgba(255,255,255,0.3)', display: 'flex', justifyContent: 'space-between',
+                                            py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', 
+                                            color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
                                             flexDirection: isRTL ? 'row-reverse' : 'row',
-                                            '&.Mui-disabled': { borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }
+                                            '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
                                         }}
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <TrendingUp size={24} color="rgba(255,255,255,0.2)" />
-                                            <Typography fontWeight={700}>{t('onboarding.payment.bank_transfer')}</Typography>
+                                            <ShieldCheck size={24} color={binThemeTokens.gold} />
+                                            <Typography fontWeight={700}>{t('onboarding.payment.stripe') || 'Credit / Debit Card'}</Typography>
                                         </Box>
-                                        <Chip label={t('onboarding.payment.coming_soon')} size="small" sx={{ fontSize: '0.6rem', height: 16, bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }} />
+                                        <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                     </Button>
 
                                     {isGenerating && (
