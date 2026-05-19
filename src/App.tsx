@@ -42,14 +42,29 @@ import { NavigationControl } from './components/navigation/NavigationControl';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { attachForegroundPushListener, registerPushNotifications, shouldRequestPushForRole } from './services/pushNotificationService';
 
+/**
+ * [CRITICAL FIX #1]: One-time legacy onboarding cleanup
+ * This guard ensures ONLY old keys are removed, NEVER the active v3 store.
+ * The active v3 store ('bin-group-onboarding-v3') persists correctly and should NEVER be cleared here.
+ */
 const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'];
 const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';
+const ACTIVE_ONBOARDING_STORE_KEY = 'bin-group-onboarding-v3';
 
 function runOneTimeLegacyOnboardingCleanup() {
   try {
     if (localStorage.getItem(MIGRATION_KEY) === 'true') return;
+    
+    // SAFETY: Verify active store key exists before cleanup
+    const hasActiveStore = localStorage.getItem(ACTIVE_ONBOARDING_STORE_KEY);
+    
+    // Only clear legacy keys, never the active store
     LEGACY_ONBOARDING_KEYS.forEach((key) => localStorage.removeItem(key));
+    
+    // Mark migration complete
     localStorage.setItem(MIGRATION_KEY, 'true');
+    
+    console.log('[APP] One-time legacy cleanup done. Active store preserved:', !!hasActiveStore);
   } catch (error) {
     console.warn('[APP] One-time legacy onboarding cleanup failed', error);
   }
@@ -78,14 +93,16 @@ function LoadingScreen() {
 
   const handleClearSession = () => {
     const currentLang = localStorage.getItem('bin_language');
+    const activeOnboarding = localStorage.getItem(ACTIVE_ONBOARDING_STORE_KEY);
     localStorage.clear();
     if (currentLang) localStorage.setItem('bin_language', currentLang);
+    if (activeOnboarding) localStorage.setItem(ACTIVE_ONBOARDING_STORE_KEY, activeOnboarding);
     sessionStorage.clear();
     window.location.href = '/login';
   };
 
   return (
-    <Box sx={{ height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#000', position: 'fixed', top: 0, left: 0, zIndex: 9999, p: 4, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <Box sx={{ height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#000', position: 'fixed', top: 0, left: 0, zIndex: 9999 }}>
       {!showRecovery ? (
         <>
           <CircularProgress sx={{ color: '#C6A75E', mb: 4 }} size={60} thickness={2} />
@@ -279,7 +296,7 @@ export default function App() {
           <AuthProvider>
             <AIProvider>
               <CssBaseline />
-              <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+              <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
                 <Routes>
                   <Route path="/" element={null} />
                   <Route path="/tenant/*" element={null} />
