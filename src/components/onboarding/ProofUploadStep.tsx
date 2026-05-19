@@ -147,7 +147,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                 )}
 
                 <Alert
-                    icon={<AlertCircle sx={{ color: binThemeTokens.gold }} />}
+                    icon={<AlertCircle size={22} color={binThemeTokens.gold} />}
                     sx={{
                         mb: 3,
                         bgcolor: 'rgba(212, 175, 55, 0.05)',
@@ -228,7 +228,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                                                     {readable(t('onboarding.drop_file'), 'Drop file here or click to browse')}
                                                 </Typography>
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                                                    Max 50MB
+                                                    Max 15MB
                                                 </Typography>
                                             </Box>
                                             <input
@@ -317,3 +317,4 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
         </Box>
     );
 }
+

@@ -3,7 +3,8 @@
  * Handles document uploads with retry, progress tracking, and metadata
  */
 
-import { ref, uploadBytes, getDownloadURL, deleteObject, UploadMetadata } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import type { UploadMetadata } from 'firebase/storage';
 import { storage } from './firebase';
 
 export interface UploadOptions {
@@ -115,3 +116,4 @@ export async function getSignedUrl(filePath: string): Promise<string> {
         throw error;
     }
 }
+
