@@ -83,6 +83,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     const [submissionResult, setSubmissionResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [pendingMode, setPendingMode] = useState(false);
+    const [sessionRecoveryRequired, setSessionRecoveryRequired] = useState(false);
 
     const ownerEmail = ownerAccount?.email || companyProfile.email || '';
 
@@ -180,6 +181,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     const submitWithAuthenticatedOwner = async (currentUser: any) => {
         if (currentUser.uid !== ownerAccount?.uid) {
+            setSessionRecoveryRequired(true);
             setError('Secure owner session mismatch. Sign in with the same owner account used in onboarding so documents can upload for Admin verification.');
             return;
         }
@@ -195,6 +197,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             const response = result.data as any;
             setSubmissionResult(response);
             setIntakeId(response?.intakeId || submissionId);
+            setPendingMode(false);
+            setSessionRecoveryRequired(false);
             setSubmitted(true);
         } catch (err: any) {
             setError(err?.message || 'Onboarding submission failed.');
@@ -206,7 +210,18 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     const submitPendingOwnerPackage = async () => {
         setPendingMode(true);
+        setSessionRecoveryRequired(true);
         setError('Secure owner login session is required before final submission. This protects your files and lets Admin open the real uploaded documents. Please use Gateway Login with the owner account, return to this step, and submit again.');
+    };
+
+    const handleGatewayRecovery = () => {
+        navigate('/gateway', {
+            state: {
+                returnTo: '/onboarding',
+                ownerEmail,
+                reason: 'OWNER_ONBOARDING_DOCUMENT_UPLOAD_SESSION_REQUIRED'
+            }
+        });
     };
     
     const handleSubmit = async () => {
@@ -312,6 +327,16 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             </Alert>
                             {uploadingProofs && <Alert severity="info">Uploading owner proof documents to Firebase Storage...</Alert>}
                             {error && <Alert severity="error">{error}</Alert>}
+                            {sessionRecoveryRequired && (
+                                <Button
+                                    variant="outlined"
+                                    fullWidth
+                                    onClick={handleGatewayRecovery}
+                                    sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, py: 1.5 }}
+                                >
+                                    Gateway Login / Restore Owner Session
+                                </Button>
+                            )}
                             <Button
                                 variant="contained"
                                 fullWidth
