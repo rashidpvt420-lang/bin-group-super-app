@@ -6,6 +6,7 @@ import { Upload, FileText, CheckCircle, AlertCircle, Trash2 } from 'lucide-react
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { stageFile, removeStagedFile } from '../../lib/onboardingDb';
 
 interface ProofUploadStepProps {
     onNext: () => void;
@@ -31,7 +32,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
             key: 'propertyProof' as const,
             label: 'Property Proof (Title Deed / Tenancy Contract)',
             required: true,
-            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx'
+            accept: '.pdf,.jpg,.jpeg,.png'
         },
         {
             key: 'emiratesId' as const,
@@ -49,29 +50,45 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
             key: 'tradeLicense' as const,
             label: 'Trade License (if applicable)',
             required: false,
-            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx'
+            accept: '.pdf,.jpg,.jpeg,.png'
         },
         {
             key: 'tenancySupport' as const,
             label: 'Additional Tenancy Support Documents',
             required: false,
-            accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx'
+            accept: '.pdf,.jpg,.jpeg,.png'
         }
     ];
 
-    const handleFileSelect = (key: string, file: File | null) => {
+    const handleFileSelect = async (key: string, file: File | null) => {
         setError(null);
         if (!file) return;
 
-        // Validate file size (max 50MB)
-        const maxSize = 50 * 1024 * 1024;
+        // Validate file size (max 15MB to match storage rules)
+        const maxSize = 15 * 1024 * 1024;
         if (file.size > maxSize) {
-            setError(`File too large. Maximum size is 50MB. ${(file.size / 1024 / 1024).toFixed(2)}MB provided.`);
+            setError(`File too large. Maximum size is 15MB. ${(file.size / 1024 / 1024).toFixed(2)}MB provided.`);
             return;
         }
 
-        console.log(`[UPLOAD] File selected: ${key} - ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-        setProofDocument(key as any, file);
+        // Validate file type: PDF/JPG/PNG only
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png)$/i)) {
+            setError('Invalid file type. Only PDF, JPG, and PNG files are accepted.');
+            return;
+        }
+
+        try {
+            setUploading(true);
+            await stageFile(key, file);
+            setProofDocument(key as any, { name: file.name, size: file.size, type: file.type });
+            console.log(`[UPLOAD] File staged in IndexedDB: ${key} - ${file.name}`);
+        } catch (err: any) {
+            console.error('Staging file failed:', err);
+            setError(`Failed to stage file: ${err.message}`);
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -89,9 +106,15 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
         }
     };
 
-    const handleRemoveFile = (key: string) => {
-        setProofDocument(key as any, null);
-        setConfirmDelete(null);
+    const handleRemoveFile = async (key: string) => {
+        try {
+            await removeStagedFile(key);
+            setProofDocument(key as any, null);
+            setConfirmDelete(null);
+        } catch (err: any) {
+            console.error('Failed to remove staged file:', err);
+            setError(`Failed to remove file: ${err.message}`);
+        }
     };
 
     const canProceed = documentTypes.filter(doc => doc.required).every(

@@ -56,7 +56,7 @@ export default function PaymentApprovalsPage() {
     useEffect(() => {
         const q = query(
             collection(db, 'payment_transactions'),
-            where('status', '==', 'pending_admin_verification')
+            where('status', 'in', ['PENDING', 'pending_admin_verification', 'payment_pending_approval', 'pending_approval'])
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {

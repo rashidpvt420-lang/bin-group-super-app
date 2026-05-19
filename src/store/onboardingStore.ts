@@ -173,11 +173,11 @@ export interface OnboardingState {
         mobile: string;
     } | null;
     proofDocuments: {
-        propertyProof: File | null;
-        emiratesId: File | null;
-        passport: File | null;
-        tradeLicense: File | null;
-        tenancySupport: File | null;
+        propertyProof: { name: string; size: number; type: string } | null;
+        emiratesId: { name: string; size: number; type: string } | null;
+        passport: { name: string; size: number; type: string } | null;
+        tradeLicense: { name: string; size: number; type: string } | null;
+        tenancySupport: { name: string; size: number; type: string } | null;
         labels: Record<string, string>;
     };
     propertyData: PropertyData; // Backward compatibility
@@ -204,7 +204,7 @@ export interface OnboardingState {
     setPaymentManifest: (manifest: any) => void;
     setPaymentMethod: (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null) => void;
     setOwnerAccount: (account: OnboardingState['ownerAccount']) => void;
-    setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: File | null) => void;
+    setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: { name: string; size: number; type: string } | null) => void;
     updatePropertyData: (data: Partial<PropertyData>) => void;
     calculateSummary: () => void;
     reset: () => void;
@@ -533,14 +533,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             name: 'bin-group-onboarding-v3',
             partialize: (state) => ({
                 ...state,
-                proofDocuments: {
-                    propertyProof: null,
-                    emiratesId: null,
-                    passport: null,
-                    tradeLicense: null,
-                    tenancySupport: null,
-                    labels: state.proofDocuments.labels
-                }
+                proofDocuments: state.proofDocuments
             })
         }
     )

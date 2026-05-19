@@ -100,7 +100,7 @@ service firebase.storage {
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
     }
 
-    match /onboarding-proof/{userId}/{intakeId}/{fileName} {
+    match /onboarding-proof/{userId}/{intakeId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow write: if isAuth() && request.auth.uid == userId &&
                    request.resource.size < 15 * 1024 * 1024 &&

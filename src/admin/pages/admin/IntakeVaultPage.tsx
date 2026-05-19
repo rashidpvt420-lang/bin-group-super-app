@@ -710,16 +710,25 @@ export const IntakeVaultPage: React.FC = () => {
                                 )}
                                 <Stack spacing={1} sx={{ mt: 1 }}>
                                     {docsList.length ? docsList.map(([key, value]: any) => {
-                                        const fileUrl = value?.downloadUrl || value?.url || value?.storageUrl || value?.publicUrl;
+                                        const fileUrl = typeof value === 'string' ? value : (value?.downloadUrl || value?.url || value?.storageUrl || value?.publicUrl || null);
+                                        const hasUrl = Boolean(fileUrl);
                                         return (
                                             <Paper key={key} sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.02), display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
                                                 <Box>
                                                     <Typography variant="subtitle2" fontWeight="900">{String(key).toUpperCase()}</Typography>
-                                                    <Typography variant="caption" color="textSecondary">{value?.name || fileUrl || 'Submitted metadata'}</Typography>
+                                                    <Typography variant="caption" color="textSecondary">
+                                                        {typeof value === 'object' && value?.name ? `${value.name} (${(value.size / 1024 / 1024).toFixed(2)} MB)` : (hasUrl ? 'Document File' : 'Metadata Only')}
+                                                    </Typography>
                                                 </Box>
-                                                <Stack direction="row" spacing={1}>
-                                                    {fileUrl && (
-                                                        <IconButton size="small" onClick={() => openExternal(fileUrl)}><ExternalLink size={16} color={binThemeTokens.gold} /></IconButton>
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    {hasUrl ? (
+                                                        <Button size="small" variant="text" onClick={() => openExternal(fileUrl)} startIcon={<ExternalLink size={14} />} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
+                                                            OPEN / DOWNLOAD
+                                                        </Button>
+                                                    ) : (
+                                                        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900, px: 1, py: 0.5, bgcolor: 'rgba(239, 68, 68, 0.1)', borderRadius: 1 }}>
+                                                            Request Final Copies
+                                                        </Typography>
                                                     )}
                                                     <FileText size={16} color={binThemeTokens.gold} />
                                                 </Stack>

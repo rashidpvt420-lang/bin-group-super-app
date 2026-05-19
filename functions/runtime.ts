@@ -84,14 +84,32 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     await assertAdmin(request.auth);
 
     const paymentId = requirePaymentId(request.data);
-    const paymentRef = runtimeDb.collection("payments").doc(paymentId);
-    const paymentSnap = await paymentRef.get();
+    let collectionName = "payments";
+    let paymentRef = runtimeDb.collection("payments").doc(paymentId);
+    let paymentSnap = await paymentRef.get();
+    if (!paymentSnap.exists) {
+        const pTxRef = runtimeDb.collection("payment_transactions").doc(paymentId);
+        const pTxSnap = await pTxRef.get();
+        if (pTxSnap.exists) {
+            paymentRef = pTxRef;
+            paymentSnap = pTxSnap;
+            collectionName = "payment_transactions";
+        }
+    }
     if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
     const payment = paymentSnap.data() || {};
-    const ownerUid = String(payment.ownerUid || "").trim();
+    let ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
     const contractId = String(payment.contractId || "").trim();
     const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (!ownerUid && contractId) {
+        const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
+        if (contractSnap.exists) {
+            const contractData = contractSnap.data() || {};
+            ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+        }
+    }
 
     const batch = runtimeDb.batch();
     batch.set(paymentRef, {
@@ -104,6 +122,14 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
     if (ownerUid) {
         batch.set(runtimeDb.collection("users").doc(ownerUid), {
+            paymentVerified: true,
+            dashboardUnlocked: true,
+            dashboardLocked: false,
+            status: "ACTIVE",
+            updatedAt: now,
+        }, { merge: true });
+
+        batch.set(runtimeDb.collection("owners").doc(ownerUid), {
             paymentVerified: true,
             dashboardUnlocked: true,
             dashboardLocked: false,
@@ -125,7 +151,7 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         actorId: request.auth?.uid || "admin",
         actorRole: request.auth?.token?.role || "admin",
         action: "VERIFY_OWNER_PAYMENT_TRANSACTION",
-        targetType: "payments",
+        targetType: collectionName,
         targetId: paymentId,
         metadata: { ownerUid, contractId },
         createdAt: now,
@@ -142,7 +168,20 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     const reason = String(request.data?.reason || "").trim();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    await runtimeDb.collection("payments").doc(paymentId).set({
+    let collectionName = "payments";
+    let paymentRef = runtimeDb.collection("payments").doc(paymentId);
+    let paymentSnap = await paymentRef.get();
+    if (!paymentSnap.exists) {
+        const pTxRef = runtimeDb.collection("payment_transactions").doc(paymentId);
+        const pTxSnap = await pTxRef.get();
+        if (pTxSnap.exists) {
+            paymentRef = pTxRef;
+            paymentSnap = pTxSnap;
+            collectionName = "payment_transactions";
+        }
+    }
+
+    await paymentRef.set({
         status: "REJECTED",
         paymentVerified: false,
         rejectionReason: reason || "Rejected by admin",
@@ -151,16 +190,41 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         updatedAt: now,
     }, { merge: true });
 
-    await runtimeDb.collection("audit_logs").add({
+    const payment = paymentSnap.exists ? (paymentSnap.data() || {}) : {};
+    let ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
+    const contractId = String(payment.contractId || "").trim();
+    if (!ownerUid && contractId) {
+        const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
+        if (contractSnap.exists) {
+            const contractData = contractSnap.data() || {};
+            ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+        }
+    }
+
+    const batch = runtimeDb.batch();
+    if (ownerUid) {
+        batch.set(runtimeDb.collection("users").doc(ownerUid), {
+            status: "PAYMENT_REJECTED",
+            updatedAt: now,
+        }, { merge: true });
+
+        batch.set(runtimeDb.collection("owners").doc(ownerUid), {
+            status: "PAYMENT_REJECTED",
+            updatedAt: now,
+        }, { merge: true });
+    }
+
+    batch.set(runtimeDb.collection("audit_logs").doc(), {
         actorId: request.auth?.uid || "admin",
         actorRole: request.auth?.token?.role || "admin",
         action: "REJECT_OWNER_PAYMENT_TRANSACTION",
-        targetType: "payments",
+        targetType: collectionName,
         targetId: paymentId,
-        metadata: { reason },
+        metadata: { reason, ownerUid, contractId },
         createdAt: now,
     });
 
+    await batch.commit();
     return { paymentId, status: "REJECTED" };
 });
 
