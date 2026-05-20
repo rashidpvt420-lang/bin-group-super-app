@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { 
-    Box, Typography, Grid, Paper, alpha, TextField, 
-    InputAdornment, Button, Stack, Divider, Container, Alert, MenuItem, Checkbox, FormControlLabel, CircularProgress
+    Box, Typography, Grid, Paper, TextField, 
+    InputAdornment, Button, Stack, Container, Alert, MenuItem, CircularProgress
 } from '@mui/material';
-import { MapPin, Search, Navigation, ArrowRight, ArrowLeft, Crosshair, AlertTriangle, RefreshCcw, Info } from 'lucide-react';
+import { Search, ArrowRight, ArrowLeft, RefreshCcw, Info } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -20,19 +20,29 @@ const EMIRATES_LIST = [
 ];
 
 const GOOGLE_MAPS_SCRIPT_ID = 'bin-google-maps-js';
+const EMBEDDED_MAPS_ENABLED = process.env.REACT_APP_ENABLE_EMBEDDED_GOOGLE_MAPS === 'true';
 
 const getGoogleMapsApiKey = (): string | null => {
+    if (!EMBEDDED_MAPS_ENABLED) return null;
     const key = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
     if (!key || key.includes('%') || key === 'YOUR_PRODUCTION_API_KEY_HERE' || key === 'REPLACE_ME') return null;
     return key;
 };
 
+const hideGoogleMapsErrorOverlays = () => {
+    document.querySelectorAll('.gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message, .pac-container').forEach((el) => {
+        (el as HTMLElement).style.display = 'none';
+    });
+};
+
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
+    if (!EMBEDDED_MAPS_ENABLED) return Promise.reject(new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'));
     if ((window as any).google?.maps) return Promise.resolve();
     const existing = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as HTMLScriptElement | null;
     if (existing) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('GOOGLE_MAPS_SCRIPT_ERROR')), { once: true });
         });
     }
 
@@ -58,11 +68,11 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const geocoderRef = useRef<any>(null);
     
     const [locationError, setLocationError] = useState<string | null>(null);
-    const [mapFailed, setMapFailed] = useState(false);
-    const [manualEntry, setManualEntry] = useState(false);
+    const [mapFailed, setMapFailed] = useState(!EMBEDDED_MAPS_ENABLED);
+    const [manualEntry, setManualEntry] = useState(!EMBEDDED_MAPS_ENABLED);
     const [manualLat, setManualLat] = useState('');
     const [manualLng, setManualLng] = useState('');
-    const [initializing, setInitializing] = useState(true);
+    const [initializing, setInitializing] = useState(EMBEDDED_MAPS_ENABLED);
 
     const activeProperty = properties[0];
     const isManualMode = manualEntry || mapFailed;
@@ -70,9 +80,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const commitGeoAnchor = (payload: { lat: number; lng: number; address?: string; emirate?: string; city?: string; area?: string; placeId?: string; source?: 'google_maps' | 'title_deed' | 'admin_manual'; verified?: boolean; requiresGeoReview?: boolean; dispatchReady?: boolean }) => {
         try {
             const isManual = payload.source === 'admin_manual' || manualEntry;
-            let resolvedEmirate = payload.emirate || activeProperty?.emirate;
-            let resolvedCity = payload.city || activeProperty?.city;
-            let resolvedArea = payload.area || activeProperty?.area;
+            const resolvedEmirate = payload.emirate || activeProperty?.emirate;
+            const resolvedCity = payload.city || activeProperty?.city;
+            const resolvedArea = payload.area || activeProperty?.area;
 
             const geo = buildPersistableGeoAnchor({
                 lat: payload.lat,
@@ -101,7 +111,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setManualLng(String(geo.lng));
             setLocationError(null);
         } catch (err: any) {
-            console.error("Geo Commit Error:", err);
+            console.error('Geo Commit Error:', err);
             setLocationError(err?.message || 'Verification failed. Manual entry required.');
         }
     };
@@ -122,16 +132,27 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         return { emirate, city, area };
     };
 
+    const activateManualFallback = (reason: string) => {
+        console.warn('[PropertyLocationStep] Manual location fallback:', reason);
+        hideGoogleMapsErrorOverlays();
+        setMapFailed(true);
+        setManualEntry(true);
+        setInitializing(false);
+        setLocationError(reason === 'EMBEDDED_GOOGLE_MAPS_DISABLED'
+            ? 'Embedded map preview is disabled. Manual address and GPS capture remain available.'
+            : 'Google Maps unavailable. Falling back to manual entry.');
+    };
+
     const initAutocomplete = async () => {
         setInitializing(true);
         setMapFailed(false);
         try {
             const apiKey = getGoogleMapsApiKey();
-            if (!apiKey) throw new Error("MISSING_GOOGLE_MAPS_API_KEY");
+            if (!apiKey) throw new Error(EMBEDDED_MAPS_ENABLED ? 'MISSING_GOOGLE_MAPS_API_KEY' : 'EMBEDDED_GOOGLE_MAPS_DISABLED');
 
             await loadGoogleMapsScript(apiKey);
             const googleMaps = (window as any).google?.maps;
-            if (!googleMaps) throw new Error("GOOGLE_MAPS_NOT_AVAILABLE");
+            if (!googleMaps) throw new Error('GOOGLE_MAPS_NOT_AVAILABLE');
 
             const mapsLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('maps') : googleMaps;
             const placesLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('places') : googleMaps.places;
@@ -141,11 +162,11 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
             if (autocompleteRef.current) {
                 const autocomplete = new placesLibrary.Autocomplete(autocompleteRef.current, {
-                    componentRestrictions: { country: "ae" },
-                    fields: ["address_components", "geometry", "formatted_address", "place_id"],
+                    componentRestrictions: { country: 'ae' },
+                    fields: ['address_components', 'geometry', 'formatted_address', 'place_id'],
                 });
 
-                autocomplete.addListener("place_changed", () => {
+                autocomplete.addListener('place_changed', () => {
                     const place = autocomplete.getPlace();
                     if (!place.geometry) return;
                     const parts = extractAddressParts(place.address_components || []);
@@ -162,7 +183,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 mapInstanceRef.current = new mapsLibrary.Map(mapRef.current, {
                     center: initial, zoom: activeProperty?.location ? 16 : 10,
                     mapTypeControl: false, streetViewControl: false,
-                    styles: [{ "elementType": "geometry", "stylers": [{ "color": "#212121" }] }]
+                    styles: [{ elementType: 'geometry', stylers: [{ color: '#212121' }] }]
                 });
                 markerRef.current = new googleMaps.Marker({
                     map: mapInstanceRef.current, position: initial, draggable: true
@@ -179,19 +200,33 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             }
             setManualEntry(false);
         } catch (e: any) {
-            setMapFailed(true);
-            setManualEntry(true);
-            setLocationError("Google Maps unavailable. Falling back to manual entry.");
+            activateManualFallback(e?.message || 'GOOGLE_MAPS_NOT_AVAILABLE');
         } finally {
             setInitializing(false);
         }
     };
 
-    useEffect(() => { initAutocomplete(); }, []);
+    useEffect(() => {
+        const existingAuthFailure = (window as any).gm_authFailure;
+        (window as any).gm_authFailure = () => {
+            activateManualFallback('GOOGLE_MAPS_AUTH_FAILURE');
+            if (typeof existingAuthFailure === 'function') existingAuthFailure();
+        };
+
+        if (EMBEDDED_MAPS_ENABLED) {
+            initAutocomplete();
+        } else {
+            activateManualFallback('EMBEDDED_GOOGLE_MAPS_DISABLED');
+        }
+
+        return () => {
+            (window as any).gm_authFailure = existingAuthFailure;
+        };
+    }, []);
 
     const handleManualCommit = () => {
         const lat = Number(manualLat); const lng = Number(manualLng);
-        if (!isValidLatLng(lat, lng)) { setLocationError("Enter valid coordinates."); return; }
+        if (!isValidLatLng(lat, lng)) { setLocationError('Enter valid coordinates.'); return; }
         commitGeoAnchor({ lat, lng, source: 'admin_manual', verified: false, requiresGeoReview: true, dispatchReady: false });
         onNext();
     };
@@ -200,6 +235,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
     return (
         <Box sx={{ py: 4 }}>
+            <style>{`.gm-err-container,.gm-err-icon,.gm-err-title,.gm-err-message{display:none!important;visibility:hidden!important;pointer-events:none!important;}`}</style>
             <Box sx={{ textAlign: 'center', mb: 6 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{t('onboarding.location_title')}</Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.location_desc')}</Typography>
@@ -209,7 +245,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <Stack spacing={4}>
                         {mapFailed && (
-                            <Alert severity="warning" action={<Button size="small" color="inherit" onClick={initAutocomplete} startIcon={<RefreshCcw size={14}/>}>{t('onboarding.retry_scan')}</Button>}>
+                            <Alert severity="warning" action={EMBEDDED_MAPS_ENABLED ? <Button size="small" color="inherit" onClick={initAutocomplete} startIcon={<RefreshCcw size={14}/>}>{t('onboarding.retry_scan')}</Button> : undefined}>
                                 {locationError}
                             </Alert>
                         )}
