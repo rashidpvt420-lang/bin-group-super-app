@@ -11,7 +11,8 @@ const getMapsKey = (): string => {
 
 const isEmbeddedMapsEnabled = (): boolean => {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS !== 'false';
+  // Require an explicit 'true' to enable embedded maps. Default: disabled.
+  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS === 'true';
 };
 
 const isMapsReady = () => typeof window !== 'undefined' && Boolean((window as any).google?.maps);
@@ -109,7 +110,7 @@ export const useGoogleMaps = () => {
   useEffect(() => {
     let cancelled = false;
 
-    if (!isEmbeddedMapsEnabled()) {
+    if (!mapsEnabled) {
       setIsLoaded(false);
       setLoadError(new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'));
       return;
@@ -118,6 +119,7 @@ export const useGoogleMaps = () => {
     installAuthFailureHook();
     const onAuthFailure = (error: Error) => {
       if (cancelled) return;
+      console.warn('[Maps] auth failure detected, disabling embedded maps for UX safety.', { error: error.message });
       setIsLoaded(false);
       setLoadError(error);
     };
