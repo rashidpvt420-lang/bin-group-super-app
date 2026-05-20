@@ -14,7 +14,7 @@ import { db, doc, updateDoc, collection, query, where, onSnapshot, limit, orderB
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, TICKET_STATUS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 
 export default function TechnicianDashboardPage() {
@@ -80,7 +80,7 @@ export default function TechnicianDashboardPage() {
         const qCompleted = query(
             collection(db, 'maintenanceTickets'),
             where('assignedTechnicianId', '==', user.uid),
-            where('status', 'in', ['completed', 'CLOSED']),
+            where('status', 'in', ['completed', 'CLOSED', 'COMPLETED']),
             where('completedAt', '>=', today)
         );
 
@@ -130,7 +130,7 @@ export default function TechnicianDashboardPage() {
                 transaction.update(jobRef, {
                     assignedTechnicianId: user.uid,
                     assignedTechnicianName: user.displayName || 'Technician',
-                    status: 'accepted',
+                    status: TICKET_STATUS.ACCEPTED,
                     acceptedAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
                 });
