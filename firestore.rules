@@ -63,8 +63,7 @@ service cloud.firestore {
         (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid','email','displayName','name','phone','mobile','photoURL','language',
-          'role','status','dashboardLocked','adminApproved','paymentVerified',
-          'onboardingSubmissionId','latestIntakeId','createdAt','updatedAt','lastLoginAt','legalAcceptedAt',
+          'role','status','dashboardLocked','onboardingSubmissionId','latestIntakeId','createdAt','updatedAt','lastLoginAt','legalAcceptedAt',
           'pdplCompliance','gpsConsent','onboardingComplete'
         ]);
     }
@@ -129,6 +128,9 @@ service cloud.firestore {
       allow read: if isAdmin() || hasPermission('canManageProperties') ||
         (signedIn() && (
           resource.data.ownerId == request.auth.uid ||
+          resource.data.ownerUid == request.auth.uid ||
+          resource.data.assignedTechnicianId == request.auth.uid ||
+          resource.data.technicianId == request.auth.uid ||
           (isPropMember(propertyId) && getPropMember(propertyId).role in ['owner', 'tenant', 'technician'])
         ));
       allow create, update, delete: if isAdmin() || hasPermission('canManageProperties');
@@ -138,6 +140,7 @@ service cloud.firestore {
       allow read: if isAdmin() || hasPermission('canManageProperties') ||
         (signedIn() && (
           resource.data.ownerId == request.auth.uid ||
+          resource.data.ownerUid == request.auth.uid ||
           resource.data.tenantId == request.auth.uid ||
           (isPropMember(resource.data.propertyId) && (
             getPropMember(resource.data.propertyId).role == 'owner' ||
@@ -231,17 +234,15 @@ service cloud.firestore {
     }
 
     match /propertyPassports/{passportId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerEmail == request.auth.token.email || (isPropMember(passportId) && getPropMember(passportId).role in ['owner', 'tenant', 'technician'])));
+      allow read: if isAdmin() || hasPermission('canManageProperties') || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.ownerEmail == request.auth.token.email || (isPropMember(passportId) && getPropMember(passportId).role in ['owner', 'tenant', 'technician'])));
       allow create, update: if isAdmin() || hasPermission('canManageProperties');
       allow delete: if isAdmin();
     }
 
     match /contracts/{contractId} {
-      allow read: if isAdmin() || hasPermission('canManageContracts') || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerEmail == request.auth.token.email || resource.data.createdBy == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email || request.resource.data.createdBy == request.auth.uid || isAdmin()) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == false) &&
-        (!('status' in request.resource.data) || request.resource.data.status != 'ACTIVE');
-      allow update: if isAdmin() || hasPermission('canManageContracts') || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
+      allow read: if isAdmin() || hasPermission('canManageContracts') || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.ownerEmail == request.auth.token.email || resource.data.createdBy == request.auth.uid));
+      allow create: if isAdmin() || hasPermission('canManageContracts');
+      allow update: if isAdmin() || hasPermission('canManageContracts') || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
         (!('status' in request.resource.data) || request.resource.data.status != 'ACTIVE'));
       allow delete: if isAdmin();
