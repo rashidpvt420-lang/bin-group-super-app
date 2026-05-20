@@ -21,6 +21,7 @@ import {
     functions,
     getDownloadURL,
     httpsCallable,
+    onAuthStateChanged,
     ref,
     storage,
     uploadBytes
@@ -30,6 +31,30 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
+
+const waitForCurrentUser = (timeoutMs = 8000): Promise<any | null> => {
+    return new Promise((resolve) => {
+        if (auth.currentUser) {
+            resolve(auth.currentUser);
+            return;
+        }
+
+        let resolved = false;
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (resolved) return;
+            resolved = true;
+            unsubscribe();
+            resolve(user);
+        });
+
+        window.setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
+            unsubscribe();
+            resolve(auth.currentUser);
+        }, timeoutMs);
+    });
+};
 
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const navigate = useNavigate();
@@ -63,15 +88,26 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             return;
         }
 
-        const currentUser = auth.currentUser;
+        const currentUser = await waitForCurrentUser();
         if (!currentUser) {
-            setError(t('onboarding.error.session_expired') || 'Your session expired. Please sign in again.');
+            setError(t('onboarding.error.session_expired') || 'Your secure session is not active. Use Gateway Login, then return to finish payment submission.');
+            return;
+        }
+
+        if (currentUser.uid !== ownerAccount.uid) {
+            setError(t('onboarding.error.session_mismatch') || 'The active account does not match this owner onboarding session.');
+            return;
+        }
+
+        if (!paymentMethod) {
+            setError(t('onboarding.payment_method_required') || 'Select a payment method before submission.');
             return;
         }
 
         setSubmitting(true);
         setError(null);
         try {
+            await currentUser.getIdToken(true);
             const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
             const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
             
@@ -184,7 +220,18 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
                                 {t('onboarding.admin_lock_desc')}
                             </Typography>
-                            {error && <Alert severity="error">{error}</Alert>}
+                            {error && (
+                                <Alert
+                                    severity="error"
+                                    action={
+                                        error.includes('session') || error.includes('Gateway') ? (
+                                            <Button color="inherit" size="small" onClick={() => navigate('/login')}>Gateway Login</Button>
+                                        ) : null
+                                    }
+                                >
+                                    {error}
+                                </Alert>
+                            )}
                             <Button
                                 variant="contained"
                                 fullWidth
