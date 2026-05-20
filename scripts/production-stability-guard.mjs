@@ -14,7 +14,15 @@ function assert(condition, message) {
   if (!condition) failures.push(message);
 }
 
+function extractSection(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  if (start === -1) return '';
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  return text.slice(start, end === -1 ? undefined : end);
+}
+
 const firebaseJson = read('firebase.json');
+const firestoreRules = read('firestore.rules');
 const rootOnboardingPage = read('src/pages/PropertyOnboardingPage.tsx');
 const serverStep = read('src/components/onboarding/AccountCreationServerStep.tsx');
 const legacyStep = read('src/components/onboarding/AccountCreationStep.tsx');
@@ -55,6 +63,24 @@ assert(ownerRegistrationRequest.includes('pending_owners'), 'Pending owner regis
 
 assert(rootFirebase.includes('VITE_ENABLE_FIREBASE_APPCHECK'), 'Root Firebase app must gate App Check behind VITE_ENABLE_FIREBASE_APPCHECK.');
 assert(rootFirebase.includes('appCheckExplicitlyEnabled'), 'Root Firebase app must not initialize App Check just because a site key exists.');
+
+// Firestore launch-blocker guardrails.
+const userSection = extractSection(firestoreRules, 'match /users/{userId}', 'match /propertyMembers/{propertyId}');
+const technicianSection = extractSection(firestoreRules, 'match /technicians/{techId}', 'match /settings/companyProfile');
+const notificationsSection = extractSection(firestoreRules, 'match /notifications/{notifId}', 'match /brokerReferrals/{referralId}');
+const auditLogsSection = extractSection(firestoreRules, 'match /auditLogs/{auditId}', 'match /disputes/{disputeId}');
+const paymentTransactionsSection = extractSection(firestoreRules, 'match /payment_transactions/{paymentId}', 'match /design_requests/{requestId}');
+const designRequestsSection = extractSection(firestoreRules, 'match /design_requests/{requestId}', 'match /{document=**}');
+
+for (const blockedField of ['dashboardUnlocked', 'adminApproved', 'paymentVerified', 'activeContractId', 'approvedAt', 'approvedBy']) {
+  assert(!userSection.includes(`'${blockedField}'`), `Firestore users self-update allowlist must not include ${blockedField}; activation/payment fields must be admin/server controlled.`);
+}
+
+assert(!technicianSection.includes('allow read: if signedIn();'), 'Technician profiles must not be readable by every signed-in user.');
+assert(!notificationsSection.includes('allow create: if isAdmin() || signedIn();'), 'Notification creation must be scoped to admin/server or the recipient user.');
+assert(!auditLogsSection.includes('allow create: if signedIn();'), 'Audit log creation must require actorId to match the caller or be admin/server controlled.');
+assert(paymentTransactionsSection.includes('request.resource.data.ownerUid == request.auth.uid') || paymentTransactionsSection.includes('request.resource.data.ownerId == request.auth.uid'), 'Payment transaction creation must require an owner/payer field to match the caller UID.');
+assert(!designRequestsSection.includes('allow create: if signedIn();'), 'Design request creation must require caller-owned owner/tenant fields, not only signed-in status.');
 
 if (failures.length) {
   console.error('\nProduction stability guard failed:\n');
