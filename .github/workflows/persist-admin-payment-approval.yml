@@ -1,0 +1,46 @@
+name: Persist Admin Payment Approval Hardening
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  persist-admin-payment-approval:
+    name: Harden and persist admin payment approval
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Harden admin payment approval
+        run: node scripts/harden-admin-payment-approval.mjs
+
+      - name: Validate TypeScript
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build main public app
+        run: npm run build
+
+      - name: Commit hardened admin payment approval
+        run: |
+          if ! git diff --quiet -- src/admin/components/AdminPaymentApproval.tsx; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/admin/components/AdminPaymentApproval.tsx
+            git commit -m "fix(admin): persist payment approval hardening"
+            git push
+          else
+            echo "Admin payment approval already hardened."
+          fi
