@@ -7,6 +7,7 @@ export * from "./ownerOnboarding";
 export * from "./ownerRegistrationRequest";
 export * from "./stripePayment";
 export * from "./adminOwnerOperations";
+export * from "./mailDelivery";
 
 if (!admin.apps.length) {
     admin.initializeApp();
