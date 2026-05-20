@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Button, Stack, Alert, CircularProgress, Paper, Grid, Container, Dialog, DialogTitle, DialogContent, DialogActions
+    Box, Typography, Button, Stack, Alert, CircularProgress, Paper, Grid, Container, Dialog, DialogTitle, DialogContent, DialogActions, TextField
 } from '@mui/material';
 import { CheckCircle, AlertCircle, Upload, FileText, Download } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { storage, auth, functions, httpsCallable } from '../../lib/firebase';
+import { storage, auth, functions, httpsCallable, signInWithEmailAndPassword } from '../../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { getStagedFile, clearStagedFiles } from '../../lib/onboardingDb';
@@ -43,6 +43,12 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     const [success, setSuccess] = useState(false);
     const [uploadedUrls, setUploadedUrls] = useState<{ [key: string]: string }>({});
     const [confirmDialog, setConfirmDialog] = useState(false);
+
+    // Inline reauth state
+    const [reauthRequired, setReauthRequired] = useState(false);
+    const [reauthPassword, setReauthPassword] = useState('');
+    const [reauthLoading, setReauthLoading] = useState(false);
+    const ownerEmail = ownerAccount?.email || companyProfile.email || '';
 
     // ─── VALIDATION ───────────────────────────────────────────────
     useEffect(() => {
@@ -125,57 +131,52 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         return urls;
     };
 
-    const waitForCurrentUser = (): Promise<FirebaseUser | null> => {
+    const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => {
         return new Promise((resolve) => {
             if (auth.currentUser) {
                 resolve(auth.currentUser);
                 return;
             }
+            let resolved = false;
             const unsubscribe = onAuthStateChanged(auth, (user) => {
+                if (resolved) return;
+                resolved = true;
                 unsubscribe();
                 resolve(user);
             });
             setTimeout(() => {
+                if (resolved) return;
+                resolved = true;
                 unsubscribe();
                 resolve(auth.currentUser);
-            }, 4000);
+            }, timeoutMs);
         });
     };
 
-    // ─── SUBMIT PAYMENT ───────────────────────────────────────────
-    const submitPayment = async () => {
-        setError(null);
-        setLoading(true);
+    const submitWithUser = async (currentUser: FirebaseUser) => {
+        if (!currentUser) {
+            setError('Authenticated user missing for submission.');
+            return;
+        }
+
+        if (currentUser.uid !== ownerAccount?.uid) {
+            console.warn('[PAYMENT] Authenticated UID differs from onboarding owner uid; using authenticated UID for storage/upload.');
+        }
 
         try {
-            console.log('[PAYMENT] Waiting for auth hydration...');
-            const currentUser = await waitForCurrentUser();
-            if (!currentUser) {
-                throw new Error('Your session expired. Please sign in again.');
-            }
-            if (!ownerAccount?.uid) throw new Error('Owner account not created');
-            await currentUser.getIdToken(true);
-            const effectiveOwnerUid = currentUser.uid;
-            const effectiveOwnerEmail = currentUser.email || ownerAccount.email || companyProfile.email;
-            if (ownerAccount.uid !== currentUser.uid) {
-                console.warn('[PAYMENT] Stored owner UID differs from authenticated UID. Using authenticated UID for Storage upload.', {
-                    storedOwnerUid: ownerAccount.uid,
-                    authUid: currentUser.uid
-                });
-            }
-            const effectiveIntakeId = intakeId || onboardingSessionId || effectiveOwnerUid;
-            setIntakeId(effectiveIntakeId);
-            if (!effectiveIntakeId) throw new Error('Intake ID missing');
-            if (!paymentMethod) throw new Error('Payment method not selected');
-
-            // 1️⃣ Upload proof documents to Storage
-            console.log('[PAYMENT] Step 1: Uploading documents to Storage...');
+            await currentUser.getIdToken(true); // ensure fresh token for callable
             const urls = await uploadProofDocuments(currentUser);
             setUploadedUrls(urls);
 
-            // 2️⃣ Submit onboarding package through backend Callable
+            const effectiveOwnerUid = currentUser.uid;
+            const effectiveOwnerEmail = currentUser.email || ownerEmail;
+            const effectiveIntakeId = intakeId || onboardingSessionId || effectiveOwnerUid;
+            setIntakeId(effectiveIntakeId);
+
+            if (!effectiveIntakeId) throw new Error('Intake ID missing');
+            if (!paymentMethod) throw new Error('Payment method not selected');
+
             if (paymentMethod === 'STRIPE') {
-                console.log('[PAYMENT] Step 2: Creating Stripe checkout session...');
                 const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
                 const sessionRes = await createCheckout({
                     ownerUid: effectiveOwnerUid,
@@ -184,10 +185,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     onboardingSessionId,
                     amount: portfolioSummary.estimatedACV
                 });
-
                 const sessionData = sessionRes.data as { url?: string };
                 if (sessionData?.url) {
-                    console.log('[PAYMENT] Step 3: Redirecting to Stripe:', sessionData.url);
                     await clearStagedFiles();
                     window.location.href = sessionData.url;
                     return;
@@ -196,7 +195,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 }
             }
 
-            console.log('[PAYMENT] Step 2: Finalizing submission via backend...');
             const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
             await submitPackage({
                 ownerUid: effectiveOwnerUid,
@@ -219,16 +217,60 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 documentUrls: urls
             });
 
-            console.log('[PAYMENT] Step 3: Clearing staged IndexedDB files...');
             await clearStagedFiles();
-
-            console.log('✅ [PAYMENT] All steps completed successfully');
             setSuccess(true);
         } catch (err: any) {
+            console.error('[PAYMENT] submitWithUser failed:', err?.message || err);
+            throw err;
+        }
+    };
+
+    // ─── SUBMIT PAYMENT ───────────────────────────────────────────
+    const submitPayment = async () => {
+        setError(null);
+        setLoading(true);
+
+        try {
+            console.log('[PAYMENT] Waiting for auth hydration...');
+            const currentUser = await waitForCurrentUser();
+            if (!currentUser) {
+                // Instead of throwing immediately, show inline reauth prompt so owner can re-enter password without losing form state
+                setReauthRequired(true);
+                setError('Your secure login session is not active. Enter the owner password below to reconnect and submit without losing this onboarding form.');
+                setLoading(false);
+                return;
+            }
+            if (!ownerAccount?.uid) throw new Error('Owner account not created');
+
+            console.log('[PAYMENT] Auth present — continuing submission for user', currentUser.uid);
+            await submitWithUser(currentUser);
+        } catch (err: any) {
             console.error('[PAYMENT] Submission failed:', err);
-            setError(`Payment submission failed: ${err.message}`);
+            setError(`Payment submission failed: ${err?.message || String(err)}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleInlineReauth = async () => {
+        if (!ownerEmail) {
+            setError('Owner email missing; go back to account step and confirm owner email.');
+            return;
+        }
+        if (!reauthPassword) {
+            setError('Enter the owner account password to reconnect this onboarding session.');
+            return;
+        }
+        setReauthLoading(true);
+        setError(null);
+        try {
+            const credential = await signInWithEmailAndPassword(auth, ownerEmail.toLowerCase(), reauthPassword);
+            await submitWithUser(credential.user);
+        } catch (err: any) {
+            console.error('[PAYMENT] Inline reauth failed:', err?.code || err?.message || err);
+            setError(err?.code === 'auth/wrong-password' ? 'Password is incorrect for this owner account.' : (err?.message || 'Unable to reconnect owner session.'));
+        } finally {
+            setReauthLoading(false);
         }
     };
 
@@ -256,7 +298,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         {Object.entries(uploadedUrls).map(([key, url]) => (
                             <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>{key}</Typography>
-                                <Box component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#4ADE80', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 700 }}>DOWNLOAD ↗</Box>
+                                <Box component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#4ADE80', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 700 }}>DOWNLOAD</Box>
                             </Box>
                         ))}
                     </Box>
@@ -304,9 +346,31 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 overflow: 'visible'
             }}>
                 {error && (
-                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}
+                        action={error?.toLowerCase().includes('session') ? (
+                            <Button color="inherit" size="small" onClick={() => { setReauthRequired(true); }}>
+                                Reconnect
+                            </Button>
+                        ) : null}
+                    >
                         {error}
                     </Alert>
+                )}
+
+                {reauthRequired && (
+                    <Paper sx={{ p: 2, mb: 3, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.45)' }}>
+                        <Stack spacing={1}>
+                            <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>Reconnect Owner Session</Typography>
+                            <TextField fullWidth label="Owner Email" value={ownerEmail} disabled />
+                            <TextField fullWidth label="Owner Password" type="password" value={reauthPassword} onChange={(e) => setReauthPassword(e.target.value)} />
+                            <Stack direction="row" spacing={1}>
+                                <Button variant="contained" onClick={handleInlineReauth} disabled={reauthLoading || loading} sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}>
+                                    {reauthLoading ? <CircularProgress size={18} color="inherit" /> : 'Sign in & Submit'}
+                                </Button>
+                                <Button onClick={() => setReauthRequired(false)} disabled={reauthLoading || loading}>Cancel</Button>
+                            </Stack>
+                        </Stack>
+                    </Paper>
                 )}
 
                 {/* Payment Summary */}
@@ -448,4 +512,3 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         </Box>
     );
 }
-
