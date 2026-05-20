@@ -1,0 +1,46 @@
+name: Persist Owner App Payment Session Hardening
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  persist-owner-payment-session:
+    name: Harden and persist owner app payment session handling
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Harden owner app payment session handling
+        run: node scripts/harden-owner-app-payment-session.mjs
+
+      - name: Validate TypeScript
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build main public app
+        run: npm run build
+
+      - name: Commit hardened owner app payment step
+        run: |
+          if ! git diff --quiet -- apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx
+            git commit -m "fix(owner-app): persist payment session hardening"
+            git push
+          else
+            echo "Owner app payment step already hardened."
+          fi
