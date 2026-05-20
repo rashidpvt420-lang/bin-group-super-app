@@ -46,28 +46,29 @@ replaceRequired(
         );`
 );
 
-replaceRequired(
-  'hardcoded Cloud Run verification should use callable',
-  `            const user = auth.currentUser;
-            if (!user) throw new Error("UNAUTHENTICATED");
+const legacyVerificationBlock = [
+  '            const user = auth.currentUser;',
+  '            if (!user) throw new Error("UNAUTHENTICATED");',
+  '',
+  '            const token = await user.getIdToken(true);',
+  "            const functionUrl = 'https://adminverifypayment-sc33mcrduq-uc.a.run.app';",
+  '            ',
+  '            await axios.post(functionUrl, {',
+  '                data: {',
+  '                    contractId: selectedContract.id,',
+  '                    paymentId: selectedContract.paymentId,',
+  '                    method: selectedContract.provider,',
+  '                    referenceId,',
+  '                    amountReceived: amountReceived || selectedContract.amount,',
+  '                    notes: notes || "Verified via Admin Hub.",',
+  '                    receivedAt: new Date().toISOString()',
+  '                }',
+  '            }, {',
+  "                headers: { 'Authorization': `Bearer ${token}` }",
+  '            });'
+].join('\n');
 
-            const token = await user.getIdToken(true);
-            const functionUrl = 'https://adminverifypayment-sc33mcrduq-uc.a.run.app';
-            
-            await axios.post(functionUrl, {
-                data: {
-                    contractId: selectedContract.id,
-                    paymentId: selectedContract.paymentId,
-                    method: selectedContract.provider,
-                    referenceId,
-                    amountReceived: amountReceived || selectedContract.amount,
-                    notes: notes || "Verified via Admin Hub.",
-                    receivedAt: new Date().toISOString()
-                }
-            }, {
-                headers: { 'Authorization': \`Bearer ${token}\` }
-            });`,
-  `            const approvePayment = httpsCallable(functions, 'adminApprovePayment');
+const callableVerificationBlock = `            const approvePayment = httpsCallable(functions, 'adminApprovePayment');
             await approvePayment({
                 paymentId: selectedContract.paymentId || selectedContract.id,
                 id: selectedContract.paymentId || selectedContract.id,
@@ -78,11 +79,18 @@ replaceRequired(
                 amountReceived: amountReceived || selectedContract.amount,
                 notes: notes || "Verified via Admin Hub.",
                 receivedAt: new Date().toISOString()
-            });`
+            });`;
+
+replaceRequired(
+  'hardcoded Cloud Run verification should use callable',
+  legacyVerificationBlock,
+  callableVerificationBlock
 );
 
-source = source.replaceAll('pendingContracts', 'pendingContracts');
-source = source.replace('setPendingContracts(fetched);', 'setPendingContracts(fetched.filter((payment) => String(payment.status || "").toUpperCase() === "PENDING" || String(payment.verificationState || "").toUpperCase() === "ADMIN_VERIFICATION_REQUIRED"));');
+source = source.replace(
+  'setPendingContracts(fetched);',
+  'setPendingContracts(fetched.filter((payment) => String(payment.status || "").toUpperCase() === "PENDING" || String(payment.verificationState || "").toUpperCase() === "ADMIN_VERIFICATION_REQUIRED"));'
+);
 source = source.replace('contract.propertyName || \'ASSET NODE\'', 'contract.propertyName || contract.companyProfile?.name || contract.serviceDetails?.selectedPlan || \'ASSET NODE\'');
 source = source.replace('contract.ownerEmail || \'OWNER\'', 'contract.ownerEmail || contract.companyProfile?.email || \'OWNER\'');
 source = source.replace("contract.provider || 'MANUAL'", "contract.paymentMethod || contract.provider || 'MANUAL'");
