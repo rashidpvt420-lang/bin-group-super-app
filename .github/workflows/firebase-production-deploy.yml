@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Harden Firestore rules for production deploy
+        run: node scripts/harden-firestore-rules.mjs
+
       - name: Production stability guard
         run: npm run test:stability
 
