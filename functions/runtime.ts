@@ -52,20 +52,37 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     if (!Number.isFinite(amount) || amount <= 0) throw new HttpsError("invalid-argument", "A positive payment amount is required.");
     if (!["BANK_TRANSFER", "CARD", "TAP", "STRIPE", "MANUAL"].includes(method)) throw new HttpsError("invalid-argument", "Unsupported payment method.");
 
-    const paymentRef = runtimeDb.collection("payments").doc();
+    const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
+    if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
+
+    const contractData = contractSnap.data() || {};
+    const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || contractData.createdBy || "").trim();
+    const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
+    const authEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+    const callerOwnsContract = contractOwnerUid === request.auth.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
+    if (!callerOwnsContract) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
+
     const now = admin.firestore.FieldValue.serverTimestamp();
+    const paymentRef = runtimeDb.collection("payment_transactions").doc();
     await paymentRef.set({
         id: paymentRef.id,
         ownerUid: request.auth.uid,
+        ownerId: request.auth.uid,
+        ownerEmail: authEmail || contractOwnerEmail || null,
         contractId,
+        intakeId: contractData.intakeId || null,
+        onboardingSessionId: contractData.onboardingSessionId || null,
         amount,
         currency,
         method,
+        paymentMethod: method,
         provider,
         reference,
-        status: "PENDING_VERIFICATION",
+        status: "PENDING",
+        verificationState: "ADMIN_VERIFICATION_REQUIRED",
         paymentVerified: false,
         dashboardUnlocked: false,
+        contractActivated: false,
         createdAt: now,
         updatedAt: now,
     });
@@ -74,13 +91,13 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         actorId: request.auth.uid,
         actorRole: request.auth.token?.role || "owner",
         action: "CREATE_OWNER_PAYMENT_TRANSACTION",
-        targetType: "payments",
+        targetType: "payment_transactions",
         targetId: paymentRef.id,
         metadata: { contractId, amount, currency, method, provider },
         createdAt: now,
     });
 
-    return { paymentId: paymentRef.id, status: "PENDING_VERIFICATION" };
+    return { paymentId: paymentRef.id, status: "PENDING", verificationState: "ADMIN_VERIFICATION_REQUIRED" };
 });
 
 export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
@@ -183,6 +200,7 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
             collectionName = "payment_transactions";
         }
     }
+    if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
     await paymentRef.set({
         status: "REJECTED",
@@ -193,7 +211,7 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         updatedAt: now,
     }, { merge: true });
 
-    const payment = paymentSnap.exists ? (paymentSnap.data() || {}) : {};
+    const payment = paymentSnap.data() || {};
     let ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
     const contractId = String(payment.contractId || "").trim();
     if (!ownerUid && contractId) {
