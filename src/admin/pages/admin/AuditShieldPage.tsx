@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Table, TableBody, TableCell, 
     TableHead, TableRow, Chip, Button, Grid, alpha, Stack,
-    TableContainer, IconButton, Tooltip as MuiTooltip
+    TableContainer
 } from '@mui/material';
 import { 
-    Shield, ShieldCheck, Download, RefreshCw, Hash, 
-    Lock, ShieldAlert, Eye, Terminal, Fingerprint
+    Shield, ShieldCheck, Download, RefreshCw,
+    Lock, Terminal, Fingerprint
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
@@ -22,22 +22,28 @@ export default function AuditShieldPage() {
 
     useEffect(() => {
         const q = query(
-            collection(db, 'governanceAudit'), 
+            collection(db, 'audit_logs'),
             orderBy('createdAt', 'desc'), 
             limit(100)
         );
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const auditLogs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                timestamp: doc.data().createdAt?.toDate?.()?.toLocaleString() || new Date().toLocaleString()
-            }));
+            const auditLogs = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    action: data.action || data.eventType || 'SYSTEM',
+                    actorRole: data.actorRole || data.actor?.role || 'CORE',
+                    forensicHash: data.forensicHash || data.hash || data.sha256 || '',
+                    timestamp: data.createdAt?.toDate?.()?.toLocaleString() || data.timestamp?.toDate?.()?.toLocaleString() || new Date().toLocaleString()
+                };
+            });
             setLogs(auditLogs);
             setStats({
                 total: auditLogs.length,
                 verified: auditLogs.filter((l: any) => l.forensicHash).length,
-                anomalies: 0 // Placeholder for real logic
+                anomalies: 0
             });
             setLoading(false);
         }, (error) => {
@@ -78,7 +84,6 @@ export default function AuditShieldPage() {
             breadcrumbs={[{ label: 'Audit Shield' }]}
         >
             <Stack spacing={4}>
-                {/* HIGH DENSITY STATS */}
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={4}>
                         <StatCard label="Evidence Blocks" value={stats.total} icon={Terminal} color={binThemeTokens.gold} />
@@ -91,7 +96,6 @@ export default function AuditShieldPage() {
                     </Grid>
                 </Grid>
 
-                {/* ACTION BAR */}
                 <Paper sx={{ p: 2, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Stack direction="row" spacing={2} alignItems="center">
@@ -105,7 +109,6 @@ export default function AuditShieldPage() {
                     </Stack>
                 </Paper>
 
-                {/* FORENSIC LOG TABLE */}
                 <TableContainer component={Paper} sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                     <Table>
                         <TableHead>
