@@ -1,6 +1,23 @@
 // src/utils/ticketConstants.ts
 
 /**
+ * Ticket statuses should be written in uppercase for new production records.
+ * Lowercase values remain here only for legacy compatibility queries.
+ */
+export const TICKET_STATUS = {
+    OPEN: 'OPEN',
+    PENDING_ASSIGNMENT: 'PENDING_ASSIGNMENT',
+    ACCEPTED: 'ACCEPTED',
+    EN_ROUTE: 'EN_ROUTE',
+    ARRIVED: 'ARRIVED',
+    IN_PROGRESS: 'IN_PROGRESS',
+    WAITING_PARTS: 'WAITING_PARTS',
+    ESCALATED: 'ESCALATED',
+    COMPLETED: 'COMPLETED',
+    CLOSED: 'CLOSED'
+} as const;
+
+/**
  * Technician Active Statuses - Lowercase (Legacy/Internal)
  */
 export const TECHNICIAN_ACTIVE_STATUSES_LOWER = [
@@ -16,11 +33,13 @@ export const TECHNICIAN_ACTIVE_STATUSES_LOWER = [
  * Technician Active Statuses - Uppercase (Standard/External)
  */
 export const TECHNICIAN_ACTIVE_STATUSES_UPPER = [
-    'ASSIGNED',
-    'EN_ROUTE',
-    'ARRIVED',
-    'IN_PROGRESS',
-    'WAITING_PARTS'
+    TICKET_STATUS.ACCEPTED,
+    TICKET_STATUS.ASSIGNED,
+    TICKET_STATUS.EN_ROUTE,
+    TICKET_STATUS.ARRIVED,
+    TICKET_STATUS.IN_PROGRESS,
+    TICKET_STATUS.WAITING_PARTS,
+    TICKET_STATUS.ESCALATED
 ];
 
 /**
