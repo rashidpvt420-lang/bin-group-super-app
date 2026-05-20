@@ -21,6 +21,7 @@ import {
     functions,
     getDownloadURL,
     httpsCallable,
+    onAuthStateChanged,
     ref,
     storage,
     uploadBytes,
@@ -39,20 +40,27 @@ const readable = (value: string | undefined, fallback: string) => {
     return value;
 };
 
-const waitForCurrentUser = () => {
-    return new Promise<any>((resolve) => {
+const waitForCurrentUser = (timeoutMs = 8000): Promise<any | null> => {
+    return new Promise((resolve) => {
         if (auth.currentUser) {
             resolve(auth.currentUser);
             return;
         }
-        const unsubscribe = auth.onAuthStateChanged((user) => {
+
+        let resolved = false;
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (resolved) return;
+            resolved = true;
             unsubscribe();
             resolve(user);
         });
-        setTimeout(() => {
+
+        window.setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
             unsubscribe();
             resolve(auth.currentUser);
-        }, 4000);
+        }, timeoutMs);
     });
 };
 
@@ -194,6 +202,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             const response = result.data as any;
             setSubmissionResult(response);
             setIntakeId(response?.intakeId || submissionId);
+            setReauthRequired(false);
+            setReauthPassword('');
             setSubmitted(true);
         } catch (err: any) {
             setError(err?.message || 'Onboarding submission failed.');
@@ -329,8 +339,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                     severity="error" 
                                     action={
                                         error.includes('login session') || error.includes('secure login') || error.includes('session') ? (
-                                            <Button color="inherit" size="small" onClick={() => navigate('/login')}>
-                                                Gateway Login
+                                            <Button color="inherit" size="small" onClick={() => setReauthRequired(true)}>
+                                                Reconnect
                                             </Button>
                                         ) : null
                                     }
