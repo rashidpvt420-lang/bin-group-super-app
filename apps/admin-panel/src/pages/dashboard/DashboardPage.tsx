@@ -1,23 +1,23 @@
 // apps/admin-panel/src/pages/dashboard/DashboardPage.tsx
 
 import React, { useState, useEffect } from 'react';
-import { 
-    Grid, Paper, Typography, Box, Chip, Table, TableBody, 
+import {
+    Grid, Paper, Typography, Box, Chip, Table, TableBody,
     TableCell, TableHead, TableRow, TableContainer, Skeleton, Stack,
     Alert, Snackbar, Button, alpha,
     Tooltip, Divider
 } from '@mui/material';
-import { 
-    Activity, Shield, Briefcase, Users, Home, Wrench, 
-    AlertTriangle, DollarSign, FileText, CheckCircle2, 
-    Clock, Plus, Upload, 
+import {
+    Activity, Shield, Briefcase, Users, Home, Wrench,
+    AlertTriangle, DollarSign, FileText, CheckCircle2,
+    Clock, Plus, Upload,
     Zap, TrendingUp, Building2, Gavel, FileWarning,
     Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    db, collection, query, where, onSnapshot, 
-    orderBy, doc, limit, Timestamp 
+import {
+    db, collection, query, where, onSnapshot,
+    orderBy, doc, limit, Timestamp
 } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
@@ -43,13 +43,46 @@ type ActivityItem = {
     icon?: React.ReactNode;
 };
 
+const ACTIVE_TICKET_STATUSES = [
+    'OPEN',
+    'PENDING',
+    'PENDING_ASSIGNMENT',
+    'ASSIGNED',
+    'ACCEPTED',
+    'EN_ROUTE',
+    'ARRIVED',
+    'IN_PROGRESS',
+    'open',
+    'accepted'
+];
+
+const PENDING_OWNER_STATUSES = [
+    'PENDING',
+    'PENDING_ADMIN_APPROVAL',
+    'ADMIN_REVIEW',
+    'pending_admin_approval',
+    'pending_approval'
+];
+
+const PENDING_TECHNICIAN_STATUSES = [
+    'PENDING',
+    'PENDING_ADMIN_APPROVAL',
+    'pending_admin_approval',
+    'pending_approval'
+];
+
+const PENDING_PAYMENT_STATES = [
+    'PENDING',
+    'ADMIN_VERIFICATION_REQUIRED'
+];
+
 export default function DashboardPage() {
     const navigate = useNavigate();
-    
+
     // UI State
     const [lastSync, setLastSync] = useState<Date>(new Date());
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-    
+
     // KPIs State
     const [kpis, setKpis] = useState<Record<string, KPIState>>({
         totalProperties: { label: 'Total Properties', value: null, status: 'loading', icon: <Home size={18} />, color: '#3b82f6', path: '/properties' },
@@ -100,98 +133,111 @@ export default function DashboardPage() {
         const unsubscribers: (() => void)[] = [];
 
         // 1. Properties & Units
-        unsubscribers.push(onSnapshot(collection(db, "properties"), 
+        unsubscribers.push(onSnapshot(collection(db, "properties"),
             (snap) => {
                 updateKPI('totalProperties', snap.size);
                 let totalUnits = 0;
-                snap.docs.forEach(doc => totalUnits += (doc.data().units || 0));
+                snap.docs.forEach(doc => totalUnits += Number(doc.data().units || doc.data().totalUnits || 0));
                 updateKPI('totalUnits', totalUnits);
-            }, 
+            },
             (err) => { handleKPIError('totalProperties', err); handleKPIError('totalUnits', err); }
         ));
 
         // 2. Tenants & Invites
-        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "tenant")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "tenant")),
             (snap) => updateKPI('activeTenants', snap.size),
             (err) => handleKPIError('activeTenants', err)
         ));
-        unsubscribers.push(onSnapshot(query(collection(db, "tenant_invites"), where("status", "==", "PENDING")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "tenant_invites"), where("status", "==", "PENDING")),
             (snap) => updateKPI('pendingTenantInvites', snap.size),
             (err) => handleKPIError('pendingTenantInvites', err)
         ));
 
         // 3. Maintenance & SOS
-        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("status", "in", ["OPEN", "PENDING", "IN_PROGRESS"])), 
+        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("status", "in", ACTIVE_TICKET_STATUSES)),
             (snap) => {
                 updateKPI('openMissions', snap.size);
                 setOperationsMissions(snap.docs.slice(0, 10).map(doc => ({ id: doc.id, ...doc.data() })));
             },
             (err) => handleKPIError('openMissions', err)
         ));
-        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("priority", "==", "EMERGENCY"), where("status", "!=", "COMPLETED")), 
-            (snap) => updateKPI('emergencyRequests', snap.size),
+        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("priority", "in", ["EMERGENCY", "emergency"])),
+            (snap) => {
+                const activeEmergencyCount = snap.docs.filter(doc => !['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(doc.data().status || ''))).length;
+                updateKPI('emergencyRequests', activeEmergencyCount);
+            },
             (err) => handleKPIError('emergencyRequests', err)
         ));
 
         // 4. Technicians & Brokers
-        unsubscribers.push(onSnapshot(query(collection(db, "technicians"), where("status", "==", "ACTIVE")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "technician"), where("status", "in", ["ACTIVE", "active"])),
             (snap) => updateKPI('activeTechnicians', snap.size),
             (err) => handleKPIError('activeTechnicians', err)
         ));
-        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "broker")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "broker")),
             (snap) => updateKPI('activeBrokers', snap.size),
             (err) => handleKPIError('activeBrokers', err)
         ));
 
         // 5. Approvals Queues
-        unsubscribers.push(onSnapshot(query(collection(db, "approvals"), where("status", "==", "PENDING")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "intake_submissions"), where("status", "in", PENDING_OWNER_STATUSES)),
             (snap) => {
-                updateKPI('pendingOwnerApprovals', snap.size); 
-                const items = snap.docs.map(doc => ({ id: doc.id, origin: 'Approvals', ...doc.data() }));
+                updateKPI('pendingOwnerApprovals', snap.size);
+                const items = snap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        origin: 'Owner onboarding',
+                        type: 'OWNER_ONBOARDING',
+                        linkedName: data.companyProfile?.name || data.ownerEmail || data.ownerUid || data.ownerId,
+                        createdAt: data.submittedAt || data.createdAt,
+                        ...data
+                    };
+                });
                 setApprovalQueue(prev => {
-                    const filtered = prev.filter(p => p.origin !== 'Approvals');
+                    const filtered = prev.filter(p => p.type !== 'OWNER_ONBOARDING');
                     return [...filtered, ...items].sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
                 });
             },
             (err) => handleKPIError('pendingOwnerApprovals', err)
         ));
-        
-        unsubscribers.push(onSnapshot(query(collection(db, "pending_technicians"), where("status", "==", "PENDING")), 
+
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "technician"), where("status", "in", PENDING_TECHNICIAN_STATUSES)),
             (snap) => {
                 updateKPI('pendingTechnicianApprovals', snap.size);
-                const items = snap.docs.map(doc => ({ id: doc.id, origin: 'Technician onboarding', type: 'TECH_ONBOARD', ...doc.data() }));
+                const items = snap.docs.map(doc => ({ id: doc.id, origin: 'Technician onboarding', type: 'TECH_ONBOARD', linkedName: doc.data().displayName || doc.data().email || doc.id, createdAt: doc.data().createdAt, ...doc.data() }));
                 setApprovalQueue(prev => {
                     const filtered = prev.filter(p => p.type !== 'TECH_ONBOARD');
-                    return [...filtered, ...items];
+                    return [...filtered, ...items].sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
                 });
             },
             (err) => handleKPIError('pendingTechnicianApprovals', err)
         ));
 
-        unsubscribers.push(onSnapshot(query(collection(db, "paymentSubmissions"), where("status", "==", "PENDING")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "payment_transactions"), where("status", "in", PENDING_PAYMENT_STATES)),
             (snap) => updateKPI('pendingPaymentVerifications', snap.size),
             (err) => handleKPIError('pendingPaymentVerifications', err)
         ));
 
         // 6. Contracts & Passports
-        unsubscribers.push(onSnapshot(query(collection(db, "contracts"), where("status", "==", "ACTIVE")), 
+        unsubscribers.push(onSnapshot(query(collection(db, "contracts"), where("status", "==", "ACTIVE")),
             (snap) => updateKPI('activeContracts', snap.size),
             (err) => handleKPIError('activeContracts', err)
         ));
-        unsubscribers.push(onSnapshot(collection(db, "propertyPassports"), 
+        unsubscribers.push(onSnapshot(collection(db, "propertyPassports"),
             (snap) => updateKPI('propertyPassports', snap.size),
             (err) => handleKPIError('propertyPassports', err)
         ));
 
         // 7. Documents & Audit
-        unsubscribers.push(onSnapshot(collection(db, "documents"), 
+        unsubscribers.push(onSnapshot(collection(db, "documents"),
             (snap) => updateKPI('documentsUploaded', snap.size),
             (err) => handleKPIError('documentsUploaded', err)
         ));
-        
+
         const today = new Date();
         today.setHours(0,0,0,0);
-        unsubscribers.push(onSnapshot(query(collection(db, "auditLogs"), where("timestamp", ">=", Timestamp.fromDate(today))), 
+        unsubscribers.push(onSnapshot(query(collection(db, "audit_logs"), where("createdAt", ">=", Timestamp.fromDate(today))),
             (snap) => updateKPI('auditEventsToday', snap.size),
             (err) => handleKPIError('auditEventsToday', err)
         ));
@@ -224,11 +270,18 @@ export default function DashboardPage() {
         }));
 
         // 10. Recent Activity Feed
-        unsubscribers.push(onSnapshot(query(collection(db, "auditLogs"), orderBy("timestamp", "desc"), limit(10)), (snap) => {
-            const activities = snap.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as ActivityItem));
+        unsubscribers.push(onSnapshot(query(collection(db, "audit_logs"), orderBy("createdAt", "desc"), limit(10)), (snap) => {
+            const activities = snap.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    actor: data.actor?.displayName || data.actorRole || data.actorId || 'SYSTEM',
+                    action: data.action || data.eventType || 'updated system state',
+                    module: data.module || data.targetType || 'Audit',
+                    status: data.status || 'RECORDED',
+                    timestamp: data.createdAt || data.timestamp || new Date()
+                } as ActivityItem;
+            });
             setRecentActivity(activities);
         }));
 
@@ -276,13 +329,13 @@ export default function DashboardPage() {
         const isEmpty = kpi.value === 0 || kpi.value === 'AED 0';
 
         return (
-            <Paper 
+            <Paper
                 key={key}
                 onClick={() => kpi.path && navigate(kpi.path)}
-                sx={{ 
-                    p: 2, 
-                    bgcolor: binThemeTokens.graphite, 
-                    border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, 
+                sx={{
+                    p: 2,
+                    bgcolor: binThemeTokens.graphite,
+                    border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
                     borderRadius: 4,
                     transition: 'all 0.2s',
                     cursor: kpi.path ? 'pointer' : 'default',
@@ -304,14 +357,13 @@ export default function DashboardPage() {
     };
 
     return (
-        <AdminPageFrame 
-            title="Executive Command Center" 
+        <AdminPageFrame
+            title="Executive Command Center"
             subtitle="V2.5 SOVEREIGN OPERATIONS TERMINAL"
             lastUpdated={lastSync}
             onRefresh={() => window.location.reload()}
         >
             <Box sx={{ pb: 8 }}>
-                {/* 1. Quick Actions */}
                 <Box sx={{ mb: 4 }}>
                     <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1, '&::-webkit-scrollbar': { height: 4 } }}>
                         <Button startIcon={<Plus />} variant="contained" onClick={() => navigate('/onboard-property')}>Add Property</Button>
@@ -325,7 +377,6 @@ export default function DashboardPage() {
                     </Stack>
                 </Box>
 
-                {/* 2. Executive KPI Grid */}
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>PORTFOLIO KPIs</Typography>
                 <Grid container spacing={2} sx={{ mb: 6 }}>
                     {Object.keys(kpis).map(key => (
@@ -336,7 +387,6 @@ export default function DashboardPage() {
                 </Grid>
 
                 <Grid container spacing={4}>
-                    {/* 3. Pending Approvals Panel */}
                     <Grid item xs={12} lg={7}>
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -383,7 +433,6 @@ export default function DashboardPage() {
                         </Paper>
                     </Grid>
 
-                    {/* 4. Operations Command Panel */}
                     <Grid item xs={12} lg={5}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -394,16 +443,16 @@ export default function DashboardPage() {
                                     <Box key={job.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>MISSION #{job.id.substring(0,8)}</Typography>
-                                            <Chip 
-                                                label={job.priority} 
-                                                size="small" 
-                                                sx={{ 
-                                                    height: 18, 
-                                                    fontSize: '0.6rem', 
-                                                    bgcolor: job.priority === 'EMERGENCY' ? alpha(binThemeTokens.danger, 0.1) : 'rgba(255,255,255,0.05)',
-                                                    color: job.priority === 'EMERGENCY' ? binThemeTokens.danger : 'inherit',
+                                            <Chip
+                                                label={job.priority}
+                                                size="small"
+                                                sx={{
+                                                    height: 18,
+                                                    fontSize: '0.6rem',
+                                                    bgcolor: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? alpha(binThemeTokens.danger, 0.1) : 'rgba(255,255,255,0.05)',
+                                                    color: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? binThemeTokens.danger : 'inherit',
                                                     fontWeight: 900
-                                                }} 
+                                                }}
                                             />
                                         </Box>
                                         <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>{job.title || job.issueType}</Typography>
@@ -427,7 +476,6 @@ export default function DashboardPage() {
                         </Paper>
                     </Grid>
 
-                    {/* 5. Financial Command Panel */}
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -459,7 +507,6 @@ export default function DashboardPage() {
                         </Paper>
                     </Grid>
 
-                    {/* 6. Document & Compliance Panel */}
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -479,7 +526,7 @@ export default function DashboardPage() {
                                     <Box sx={{ p: 1, bgcolor: 'rgba(59,130,246,0.1)', borderRadius: 2, color: '#3b82f6' }}><Shield size={16} /></Box>
                                     <Box>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>Governance Audit</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Last scan: 42m ago</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Canonical audit_logs active</Typography>
                                     </Box>
                                     <Typography variant="caption" sx={{ ml: 'auto', color: '#10b981', fontWeight: 900 }}>SECURE</Typography>
                                 </Box>
@@ -496,7 +543,6 @@ export default function DashboardPage() {
                         </Paper>
                     </Grid>
 
-                    {/* 7. Activity Feed */}
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -527,13 +573,12 @@ export default function DashboardPage() {
                     </Grid>
                 </Grid>
 
-                {/* 8. Admin Support Row */}
                 <Paper sx={{ p: 3, mt: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 6 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center">
                         <Box>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>COMMAND SUPPORT TERMINAL</Typography>
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 600 }}>
-                                Sovereign support nodes are active. For critical infrastructure failure or CEO-level escalation, use the secure channels below. 
+                                Sovereign support nodes are active. For critical infrastructure failure or CEO-level escalation, use the secure channels below.
                                 Standard audit logs and system monitoring remain the primary path for routine operations.
                             </Typography>
                         </Box>
@@ -541,7 +586,7 @@ export default function DashboardPage() {
                     </Stack>
                 </Paper>
             </Box>
-            
+
             <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
                 <Alert severity={snackbar.severity} sx={{ fontWeight: 900, borderRadius: 3 }}>{snackbar.message}</Alert>
             </Snackbar>
