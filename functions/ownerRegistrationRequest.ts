@@ -80,6 +80,23 @@ function extractPendingPaymentPackage(data: any) {
   });
 }
 
+function assertAuthenticatedOwner(request: any, ownerUid: string, ownerEmail: string) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Owner authentication required.");
+  }
+
+  const callerUid = String(request.auth.uid || "").trim();
+  const tokenEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+
+  if (!callerUid || callerUid !== ownerUid) {
+    throw new HttpsError("permission-denied", "Owner UID does not match the authenticated account.");
+  }
+
+  if (tokenEmail && ownerEmail !== tokenEmail) {
+    throw new HttpsError("permission-denied", "Owner email does not match the authenticated account.");
+  }
+}
+
 async function resolveOrCreateOwnerAuth(email: string, password: string, fullName: string) {
   if (!password) {
     return { uid: "", accountCreated: false, accountCreationStatus: "PENDING_ADMIN_PROVISIONING" };
@@ -243,6 +260,8 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
+  assertAuthenticatedOwner(request, ownerUid, ownerEmail);
+
   const intakeId = cleanText(data.intakeId, "intakeId", 120);
   const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
   const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
@@ -258,7 +277,6 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const timestamp = serverTimestamp();
   const batch = db.batch();
 
-  // 1. payment_transactions
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   batch.set(paymentRef, {
     ownerUid,
@@ -279,7 +297,6 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     updatedAt: timestamp
   }, { merge: true });
 
-  // 2. intake_submissions
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
   batch.set(intakeRef, {
     paymentSubmitted: true,
@@ -288,14 +305,16 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     status: "payment_pending_approval",
     ownerUid,
     ownerId: ownerUid,
+    ownerEmail,
     proofDocuments: documentUrls,
     updatedAt: timestamp
   }, { merge: true });
 
-  // 3. audit_logs
   const auditRef = db.collection("audit_logs").doc();
   batch.set(auditRef, {
     action: "ONBOARDING_PAYMENT_SUBMITTED",
+    actorId: ownerUid,
+    actorRole: "owner",
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
