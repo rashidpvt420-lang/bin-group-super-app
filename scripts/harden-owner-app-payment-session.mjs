@@ -102,11 +102,8 @@ mustReplace(
 if (!source.includes('await currentUser.getIdToken(true);')) {
   mustReplace(
     'force token refresh before callable',
-    `        try {
-            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;`,
-    `        try {
-            await currentUser.getIdToken(true);
-            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;`
+    '        try {\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;',
+    '        try {\n            await currentUser.getIdToken(true);\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;'
   );
 }
 
