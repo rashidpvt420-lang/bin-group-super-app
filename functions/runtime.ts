@@ -38,6 +38,13 @@ function requirePaymentId(data: any) {
     return paymentId;
 }
 
+function callerOwnsContract(auth: any, contractData: FirebaseFirestore.DocumentData) {
+    const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || contractData.createdBy || "").trim();
+    const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
+    const authEmail = String(auth?.token?.email || "").trim().toLowerCase();
+    return contractOwnerUid === auth?.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
+}
+
 export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "User authentication required.");
 
@@ -56,12 +63,10 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
 
     const contractData = contractSnap.data() || {};
-    const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || contractData.createdBy || "").trim();
+    if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
+
     const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
     const authEmail = String(request.auth.token?.email || "").trim().toLowerCase();
-    const callerOwnsContract = contractOwnerUid === request.auth.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
-    if (!callerOwnsContract) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
-
     const now = admin.firestore.FieldValue.serverTimestamp();
     const paymentRef = runtimeDb.collection("payment_transactions").doc();
     await paymentRef.set({
@@ -98,6 +103,80 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     });
 
     return { paymentId: paymentRef.id, status: "PENDING", verificationState: "ADMIN_VERIFICATION_REQUIRED" };
+});
+
+export const ownerSignContract = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
+
+    const contractId = String(request.data?.contractId || "").trim();
+    const signatureName = String(request.data?.signatureName || request.auth.token?.name || request.auth.token?.email || "").trim();
+    const accepted = request.data?.acceptedTerms === true;
+
+    if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
+    if (!accepted) throw new HttpsError("failed-precondition", "Owner must accept the contract terms before signing.");
+
+    const contractRef = runtimeDb.collection("contracts").doc(contractId);
+    const contractSnap = await contractRef.get();
+    if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
+
+    const contractData = contractSnap.data() || {};
+    if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
+
+    const status = String(contractData.status || "").trim().toUpperCase();
+    const signableStatuses = ["PENDING_OWNER_SIGNATURE", "APPROVED_PENDING_OWNER_SIGNATURE", "PENDING_SIGNATURE", "DRAFT", "PENDING"];
+    if (!signableStatuses.includes(status)) {
+        throw new HttpsError("failed-precondition", `Contract cannot be signed from status ${status || "UNKNOWN"}.`);
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const batch = runtimeDb.batch();
+
+    batch.set(contractRef, {
+        status: "READY_FOR_ACTIVATION",
+        ownerSigned: true,
+        ownerSignedAt: now,
+        signedAt: now,
+        signatureStatus: "OWNER_SIGNED",
+        ownerSignature: {
+            uid: request.auth.uid,
+            email: request.auth.token?.email || contractData.ownerEmail || null,
+            name: signatureName || request.auth.token?.email || request.auth.uid,
+            acceptedTerms: true,
+            signedAt: now,
+        },
+        updatedAt: now,
+    }, { merge: true });
+
+    batch.set(runtimeDb.collection("users").doc(request.auth.uid), {
+        latestActivationContractId: contractId,
+        activeContractId: contractId,
+        contractSignatureStatus: "OWNER_SIGNED",
+        activationStatus: "READY_FOR_ACTIVATION",
+        dashboardLocked: true,
+        updatedAt: now,
+    }, { merge: true });
+
+    batch.set(runtimeDb.collection("owners").doc(request.auth.uid), {
+        latestActivationContractId: contractId,
+        activeContractId: contractId,
+        contractSignatureStatus: "OWNER_SIGNED",
+        activationStatus: "READY_FOR_ACTIVATION",
+        dashboardLocked: true,
+        updatedAt: now,
+    }, { merge: true });
+
+    batch.set(runtimeDb.collection("audit_logs").doc(), {
+        actorId: request.auth.uid,
+        actorRole: request.auth.token?.role || "owner",
+        action: "OWNER_SIGN_CONTRACT",
+        targetType: "contracts",
+        targetId: contractId,
+        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION" },
+        createdAt: now,
+    });
+
+    await batch.commit();
+    return { contractId, status: "READY_FOR_ACTIVATION", ownerSigned: true };
 });
 
 export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
