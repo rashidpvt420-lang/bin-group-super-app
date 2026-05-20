@@ -22,7 +22,7 @@ service firebase.storage {
     }
 
     function isAuditor() {
-      return hasRole('AUDITOR') || hasRole('compliance_officer');
+      return hasRole('AUDITOR') || hasRole('auditor') || hasRole('compliance_officer');
     }
 
     function isTenantRole() {
@@ -43,68 +43,70 @@ service firebase.storage {
              request.resource.contentType.matches('image/.*');
     }
 
+    function isDocumentUpload(maxSizeMb) {
+      return request.resource != null &&
+             request.resource.size < maxSizeMb * 1024 * 1024 &&
+             request.resource.contentType.matches('application/pdf|image/.*');
+    }
+
     // Tenant issue photos uploaded by TenantRequestPage.tsx:
     // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
     match /maintenanceTickets/{tenantId}/{fileName} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isTechnicianRole());
       allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
     }
 
     // Technician/admin job completion evidence for maintenance tickets.
     match /maintenanceTickets/{ticketId}/proofs/{fileName} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (isTechnicianRole() || isAdmin() || isAuditor());
       allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
     }
 
     // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
     // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow write: if isAuth() && request.auth.uid == userId && isImageUpload(10);
     }
 
     // Proofs: before/after photos for tickets
     match /proofs/{ticketId}/{allPaths=**} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (isTechnicianRole() || isAdmin() || isAuditor());
       allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
     }
 
     // Owner Documents: title deeds, passports, etc.
     match /owners/{ownerId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin());
-      allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) &&
-                   request.resource.size < 15 * 1024 * 1024;
+      allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin() || isAuditor());
+      allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) && isDocumentUpload(15);
     }
 
     // Tenant Documents: EJARI, IDs, etc.
     match /tenants/{tenantId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin());
-      allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) &&
-                   request.resource.size < 15 * 1024 * 1024;
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
+      allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) && isDocumentUpload(15);
     }
 
     // Contracts: Institutional agreements
     match /contracts/{contractId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || isOwnerRole());
-      allow write: if isAdmin();
+      allow read: if isAuth() && (isAdmin() || isOwnerRole() || isAuditor());
+      allow write: if isAdmin() && isDocumentUpload(25);
     }
 
     // Invoices: Financial records
     match /invoices/{invoiceId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || isOwnerRole());
-      allow write: if isAdmin();
+      allow read: if isAuth() && (isAdmin() || isOwnerRole() || isAuditor());
+      allow write: if isAdmin() && isDocumentUpload(15);
     }
 
     match /kyc_documents/{documentId} {
-      allow write: if isAuth() && request.resource.size < 15 * 1024 * 1024;
+      allow write: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin()) && isDocumentUpload(15);
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
     }
 
     match /onboarding-proof/{userId}/{intakeId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow write: if isAuth() && request.auth.uid == userId &&
-                   request.resource.size < 15 * 1024 * 1024 &&
-                   request.resource.contentType.matches('application/pdf|image/.*');
+      allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
     // Default lockdown for unmanaged paths
