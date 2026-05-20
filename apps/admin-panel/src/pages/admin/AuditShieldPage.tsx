@@ -22,17 +22,23 @@ export default function AuditShieldPage() {
 
     useEffect(() => {
         const q = query(
-            collection(db, 'governanceAudit'), 
+            collection(db, 'audit_logs'),
             orderBy('createdAt', 'desc'), 
             limit(50)
         );
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const auditLogs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                timestamp: doc.data().createdAt?.toDate?.()?.toLocaleString() || new Date().toLocaleString()
-            }));
+            const auditLogs = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    eventType: data.action || data.eventType || 'SYSTEM',
+                    actor: data.actor || { uid: data.actorId, role: data.actorRole },
+                    forensicHash: data.forensicHash || data.hash || data.sha256 || '',
+                    timestamp: data.createdAt?.toDate?.()?.toLocaleString() || data.timestamp?.toDate?.()?.toLocaleString() || new Date().toLocaleString()
+                };
+            });
             setLogs(auditLogs);
             setStats({
                 total: auditLogs.length,
@@ -45,7 +51,6 @@ export default function AuditShieldPage() {
 
     return (
         <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white' }}>
-            {/* Header */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
                 <SecurityIcon sx={{ fontSize: 40, color: '#3b82f6' }} />
                 <Typography variant="h4" fontWeight="900" textTransform="uppercase">
@@ -53,7 +58,6 @@ export default function AuditShieldPage() {
                 </Typography>
             </Box>
 
-            {/* Quick Stats */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
@@ -75,7 +79,6 @@ export default function AuditShieldPage() {
                 </Grid>
             </Grid>
 
-            {/* Main Ledger */}
             <Paper sx={{ bgcolor: '#0f172a', p: 4, borderRadius: 6, border: '1px solid #1e293b', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
@@ -122,7 +125,7 @@ export default function AuditShieldPage() {
                                     />
                                 </TableCell>
                                 <TableCell sx={{ color: 'white', borderBottom: '1px solid #1e293b' }}>
-                                    {row.actor?.displayName || row.actor?.uid?.slice(0, 10) || 'SYSTEM'}
+                                    {row.actor?.displayName || row.actor?.uid?.slice(0, 10) || row.actorRole || 'SYSTEM'}
                                 </TableCell>
                                 <TableCell sx={{ color: '#64748b', borderBottom: '1px solid #1e293b', fontSize: '0.7rem', fontFamily: 'monospace' }}>
                                     {row.forensicHash ? (
