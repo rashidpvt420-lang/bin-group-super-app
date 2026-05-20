@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Grid, Stack, Button, 
-    CircularProgress, Chip, alpha, Avatar, Divider,
-    Tooltip, IconButton
+    CircularProgress, alpha, Avatar
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
     Power, Coffee, Clock, Activity, Zap, CheckCircle2, 
-    ShieldCheck, ArrowRight, MapPin, MessageSquare,
-    AlertTriangle, Target, TrendingUp, Star
+    ArrowRight, MapPin, Target
 } from 'lucide-react';
 import { db, doc, updateDoc, collection, query, where, onSnapshot, limit, orderBy, serverTimestamp, runTransaction } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, TICKET_STATUS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
+import { TICKET_STATUS } from '../../utils/ticketConstants';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 
 export default function TechnicianDashboardPage() {
