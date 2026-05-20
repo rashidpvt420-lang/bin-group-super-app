@@ -123,6 +123,17 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
 
     const status = String(contractData.status || "").trim().toUpperCase();
+    const terminalStatuses = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"];
+    if (terminalStatuses.includes(status) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED") {
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        await contractRef.set({
+            ownerSigned: true,
+            signatureStatus: "OWNER_SIGNED",
+            updatedAt: now,
+        }, { merge: true });
+        return { contractId, status: status || "READY_FOR_ACTIVATION", ownerSigned: true, idempotent: true };
+    }
+
     const signableStatuses = ["PENDING_OWNER_SIGNATURE", "APPROVED_PENDING_OWNER_SIGNATURE", "PENDING_SIGNATURE", "DRAFT", "PENDING"];
     if (!signableStatuses.includes(status)) {
         throw new HttpsError("failed-precondition", `Contract cannot be signed from status ${status || "UNKNOWN"}.`);
@@ -258,78 +269,3 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
     await batch.commit();
     return { paymentId, status: "VERIFIED", ownerUid, contractId };
-});
-
-export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
-    await assertAdmin(request.auth);
-
-    const paymentId = requirePaymentId(request.data);
-    const reason = String(request.data?.reason || "").trim();
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    let collectionName = "payments";
-    let paymentRef = runtimeDb.collection("payments").doc(paymentId);
-    let paymentSnap = await paymentRef.get();
-    if (!paymentSnap.exists) {
-        const pTxRef = runtimeDb.collection("payment_transactions").doc(paymentId);
-        const pTxSnap = await pTxRef.get();
-        if (pTxSnap.exists) {
-            paymentRef = pTxRef;
-            paymentSnap = pTxSnap;
-            collectionName = "payment_transactions";
-        }
-    }
-    if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
-
-    await paymentRef.set({
-        status: "REJECTED",
-        paymentVerified: false,
-        rejectionReason: reason || "Rejected by admin",
-        rejectedAt: now,
-        rejectedBy: request.auth?.uid || "admin",
-        updatedAt: now,
-    }, { merge: true });
-
-    const payment = paymentSnap.data() || {};
-    let ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
-    const contractId = String(payment.contractId || "").trim();
-    if (!ownerUid && contractId) {
-        const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
-        if (contractSnap.exists) {
-            const contractData = contractSnap.data() || {};
-            ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
-        }
-    }
-
-    const batch = runtimeDb.batch();
-    if (ownerUid) {
-        batch.set(runtimeDb.collection("users").doc(ownerUid), {
-            status: "PAYMENT_REJECTED",
-            updatedAt: now,
-        }, { merge: true });
-
-        batch.set(runtimeDb.collection("owners").doc(ownerUid), {
-            status: "PAYMENT_REJECTED",
-            updatedAt: now,
-        }, { merge: true });
-    }
-
-    batch.set(runtimeDb.collection("audit_logs").doc(), {
-        actorId: request.auth?.uid || "admin",
-        actorRole: request.auth?.token?.role || "admin",
-        action: "REJECT_OWNER_PAYMENT_TRANSACTION",
-        targetType: collectionName,
-        targetId: paymentId,
-        metadata: { reason, ownerUid, contractId },
-        createdAt: now,
-    });
-
-    await batch.commit();
-    return { paymentId, status: "REJECTED" };
-});
-
-// Backward-compatible exports for already deployed production callable names.
-// Keeps Admin Payment Approvals working and prevents Firebase CI from trying
-// to delete these live functions during non-interactive production deploy.
-export const adminApprovePayment = verifyOwnerPaymentTransaction;
-export const adminRejectPayment = rejectOwnerPaymentTransaction;
