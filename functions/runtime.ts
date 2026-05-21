@@ -368,25 +368,38 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     batch.set(paymentRef, approvalPatch.paymentPatch, { merge: true });
 
     if (contractRef) {
-        batch.set(contractRef, approvalPatch.contractPatch, { merge: true });
+        batch.set(contractRef, {
+            ...approvalPatch.contractPatch,
+            adminApproved: true,
+            adminApprovedAt: now,
+            adminApprovedBy: adminUid,
+            paymentVerified: true,
+            paymentVerifiedAt: now,
+            dashboardUnlocked: true,
+            activationStatus: "ACTIVE",
+            status: "ACTIVE",
+        }, { merge: true });
     }
 
     if (ownerUid) {
-        batch.set(runtimeDb.collection("users").doc(ownerUid), {
+        const ownerActivationPatch = {
+            adminApproved: true,
+            adminApprovedAt: now,
+            adminApprovedBy: adminUid,
             paymentVerified: true,
+            paymentVerifiedAt: now,
             dashboardUnlocked: true,
             dashboardLocked: false,
+            activeContractId: contractId || null,
+            latestActivationContractId: contractId || null,
+            activationStatus: "ACTIVE",
+            contractSignatureStatus: "OWNER_SIGNED",
             status: "ACTIVE",
             updatedAt: now,
-        }, { merge: true });
+        };
 
-        batch.set(runtimeDb.collection("owners").doc(ownerUid), {
-            paymentVerified: true,
-            dashboardUnlocked: true,
-            dashboardLocked: false,
-            status: "ACTIVE",
-            updatedAt: now,
-        }, { merge: true });
+        batch.set(runtimeDb.collection("users").doc(ownerUid), ownerActivationPatch, { merge: true });
+        batch.set(runtimeDb.collection("owners").doc(ownerUid), ownerActivationPatch, { merge: true });
     }
 
     batch.set(runtimeDb.collection("audit_logs").doc(), {
