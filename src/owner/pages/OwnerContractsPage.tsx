@@ -42,6 +42,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const SIGNABLE_STATUSES = ['PENDING_OWNER_SIGNATURE', 'APPROVED_PENDING_OWNER_SIGNATURE', 'PENDING_SIGNATURE', 'DRAFT', 'PENDING'];
 const POST_SIGNATURE_STATUSES = ['READY_FOR_ACTIVATION', 'ACTIVE', 'SIGNED'];
+const CONTRACT_TERM_MONTHS = 13;
 
 const firstPositiveNumber = (...values: unknown[]) => {
   for (const value of values) {
@@ -114,6 +115,8 @@ const scopeCopy = (scope: ContractScope) => {
       title: 'Property Management Only',
       desc: 'Tenant relations, rent collection, reporting and legal coordination',
       features: ['Tenant Relations', 'Rent Collection', 'Legal Compliance'],
+      covered: ['Tenant coordination and owner reporting', 'Rent/payment follow-up workflow', 'Lease and document coordination support', 'Owner dashboard governance records'],
+      notCovered: ['Facility repairs and maintenance labour', 'Materials, spare parts, and replacement assets', 'Capital works or authority fees', 'Emergency technical callouts unless separately approved'],
       icon: Briefcase,
     };
   }
@@ -122,6 +125,8 @@ const scopeCopy = (scope: ContractScope) => {
       title: 'Property Management + Facility Maintenance',
       desc: 'Full property operations with maintenance, preventive scheduling and service governance',
       features: ['PM Core Features', '24/7 Facility Maintenance', 'Preventive Scheduling'],
+      covered: ['Property management coordination', 'Facility maintenance ticket handling', 'Preventive maintenance planning', 'Technician/contractor dispatch governance', 'Owner dashboard and property passport records'],
+      notCovered: ['Major capital works without separate quotation', 'Authority fines, permits, or government fees', 'Major material replacement not included in the package', 'Owner-requested upgrades outside approved scope'],
       icon: Award,
     };
   }
@@ -129,6 +134,8 @@ const scopeCopy = (scope: ContractScope) => {
     title: 'Maintenance Contract Only',
     desc: 'Facility maintenance, emergency repairs, preventive scheduling and service governance',
     features: ['24/7 Facility Maintenance', 'Emergency Repairs', 'Preventive Scheduling'],
+    covered: ['Corrective maintenance request handling', 'Preventive maintenance scheduling', 'Emergency triage according to SLA', 'Before/after evidence where applicable', 'Admin-supervised technician coordination'],
+    notCovered: ['Property management, rent collection, or tenant leasing', 'Major capital works without separate quotation', 'Authority fines, permits, or government fees', 'Materials and spare parts unless included in package'],
     icon: Shield,
   };
 };
@@ -150,7 +157,7 @@ const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
+  .replace(/\"/g, '&quot;')
   .replace(/'/g, '&#039;');
 
 const asArray = (value: any): any[] => {
@@ -168,19 +175,49 @@ const firstText = (...values: unknown[]) => {
   return '';
 };
 
-const dateText = (...values: any[]) => {
+const asDate = (...values: any[]) => {
   for (const value of values) {
     if (!value) continue;
     const candidate = value?.toDate?.() || value;
-    if (candidate instanceof Date && !Number.isNaN(candidate.getTime())) return candidate.toLocaleString();
+    if (candidate instanceof Date && !Number.isNaN(candidate.getTime())) return candidate;
     if (typeof candidate === 'string' || typeof candidate === 'number') {
-      const asDate = new Date(candidate);
-      if (!Number.isNaN(asDate.getTime())) return asDate.toLocaleString();
-      const text = String(candidate).trim();
-      if (text) return text;
+      const parsed = new Date(candidate);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    if (typeof candidate === 'object' && Number.isFinite(Number(candidate.seconds))) {
+      const parsed = new Date(Number(candidate.seconds) * 1000);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
     }
   }
+  return null;
+};
+
+const addMonths = (date: Date, months: number) => {
+  const copy = new Date(date.getTime());
+  copy.setMonth(copy.getMonth() + months);
+  return copy;
+};
+
+const dateText = (...values: any[]) => {
+  const date = asDate(...values);
+  if (date) return date.toLocaleString();
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
   return 'N/A';
+};
+
+const termDates = (contract: any) => {
+  const start = asDate(contract?.effectiveFrom, contract?.validFrom, contract?.startedAt, contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt, contract?.createdAt) || new Date();
+  const end = asDate(contract?.effectiveTo, contract?.validTo, contract?.expiresAt, contract?.endDate, contract?.expiryDate) || addMonths(start, Number(contract?.contractTermMonths || CONTRACT_TERM_MONTHS));
+  const firstMonthEnd = asDate(contract?.firstMonthWindowEndsAt, contract?.ownerCanRequestPlanChangeUntil, contract?.ownerSignature?.firstMonthWindowEndsAt) || addMonths(start, 1);
+  return { start, end, firstMonthEnd };
+};
+
+const termSummaryText = (contract: any) => {
+  const term = termDates(contract);
+  return `${CONTRACT_TERM_MONTHS} months: ${term.start.toLocaleDateString()} → ${term.end.toLocaleDateString()}`;
 };
 
 const tableRow = (label: string, value: unknown) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value || 'N/A')}</td></tr>`;
@@ -217,11 +254,12 @@ const contractHtml = (contract: any) => {
   const mobilization = mobilizationOf(contract);
   const balance = annual > 0 && mobilization > 0 ? Math.max(annual - mobilization, 0) : 0;
   const createdAt = dateText(contract?.createdAt, contract?.submittedAt);
-  const signedAt = dateText(contract?.signedAt, contract?.ownerSignedAt);
-  const approvedAt = dateText(contract?.approvedAt, contract?.adminApprovedAt, contract?.verifiedAt);
-  const validFrom = dateText(contract?.validFrom, contract?.startDate, contract?.activatedAt, contract?.createdAt);
-  const expiryText = dateText(contract?.validTo, contract?.endDate, contract?.expiryDate);
-  const validTo = expiryText === 'N/A' ? 'Continuous until expiry/termination under the agreed payment plan' : expiryText;
+  const signedAt = dateText(contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt);
+  const approvedAt = dateText(contract?.binGroupStamp?.stampedAt, contract?.binGroupsApprovedAt, contract?.approvedAt, contract?.adminApprovedAt, contract?.verifiedAt);
+  const term = termDates(contract);
+  const validFrom = term.start.toLocaleString();
+  const validTo = term.end.toLocaleString();
+  const firstMonthWindow = term.firstMonthEnd.toLocaleString();
   const ownerName = firstText(contract?.ownerName, contract?.companyProfile?.ownerName, contract?.companyProfile?.name, 'Owner / Client');
   const ownerEmail = firstText(contract?.ownerEmail, contract?.companyProfile?.email, 'N/A');
   const ownerUid = firstText(contract?.ownerUid, contract?.ownerId, contract?.createdBy, 'N/A');
@@ -230,20 +268,11 @@ const contractHtml = (contract: any) => {
   const selectedAddOns = asArray(contract?.selectedAddOns || contract?.serviceDetails?.selectedAddOns || contract?.addOns || contract?.addons).map((item) => typeof item === 'string' ? item : firstText(item?.name, item?.title, item?.label));
   const customInclusions = asArray(contract?.inclusions || contract?.scopeItems || contract?.serviceDetails?.inclusions).map((item) => typeof item === 'string' ? item : firstText(item?.name, item?.title, item?.label));
   const inclusions = customInclusions.length ? customInclusions : [
-    'Preventive maintenance planning and service governance',
-    'Corrective maintenance request handling through BIN GROUP portals',
-    'Admin-supervised contractor/technician coordination',
-    'Digital evidence trail with before/after photo controls where applicable',
-    'Owner reporting and activation-gated dashboard controls',
-    ...(scopeType !== 'FM_ONLY' ? ['Tenant-facing support coordination and property management workflow'] : []),
+    ...scope.covered,
+    ...(selectedAddOns.length ? selectedAddOns.map((item) => `Selected add-on: ${item}`) : []),
   ];
   const exclusions = asArray(contract?.exclusions || contract?.serviceDetails?.exclusions).map((item) => typeof item === 'string' ? item : firstText(item?.name, item?.title, item?.label));
-  const finalExclusions = exclusions.length ? exclusions : [
-    'Major capital works unless approved by separate quotation',
-    'Government fees, authority fines, third-party statutory charges, and owner-specific permits',
-    'Material replacement costs not expressly included in the approved package',
-    'Emergency works outside agreed SLA/package unless separately approved',
-  ];
+  const finalExclusions = exclusions.length ? exclusions : scope.notCovered;
   const slaRows = [
     ['Emergency / safety risk', 'Target response within 4 hours after valid ticket creation, subject to access and site conditions'],
     ['Urgent operational fault', 'Same day / next business day triage depending on severity and resources'],
@@ -277,6 +306,7 @@ const contractHtml = (contract: any) => {
     th, td { border: 1px solid #e5e7eb; padding: 9px; text-align: left; vertical-align: top; }
     th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #374151; }
     .warning { background: #fff7ed; border: 1px solid #f59e0b; border-radius: 12px; padding: 14px; margin-top: 14px; }
+    .stamp { border: 2px solid #9f7e2f; color: #9f7e2f; font-weight: 900; text-align: center; padding: 12px; border-radius: 999px; letter-spacing: 2px; }
     .muted { color: #6b7280; font-size: 12px; }
     .clause { margin: 8px 0; }
     .sign { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
@@ -298,8 +328,10 @@ const contractHtml = (contract: any) => {
     <div class="grid">
       <div class="card"><div class="label">Contract Reference</div><div class="value">${escapeHtml(contract?.id || contract?.contractId || 'N/A')}</div></div>
       <div class="card"><div class="label">Status</div><div class="value">${escapeHtml(contract?.status || 'N/A')}</div></div>
-      <div class="card"><div class="label">Package</div><div class="value">${escapeHtml(packageName)}</div></div>
-      <div class="card"><div class="label">Scope</div><div class="value">${escapeHtml(scope.title)}</div></div>
+      <div class="card"><div class="label">Package Selected by Owner</div><div class="value">${escapeHtml(packageName)}</div></div>
+      <div class="card"><div class="label">Scope Selected by Owner</div><div class="value">${escapeHtml(scope.title)}</div></div>
+      <div class="card"><div class="label">Contract Term</div><div class="value">${CONTRACT_TERM_MONTHS} Months</div></div>
+      <div class="card"><div class="label">First Month Change Window</div><div class="value">Until ${escapeHtml(firstMonthWindow)}</div></div>
       <div class="card"><div class="label">Annual Value</div><div class="value">${escapeHtml(money(annual))}</div></div>
       <div class="card"><div class="label">15% Mobilization</div><div class="value">${escapeHtml(money(mobilization))}</div></div>
     </div>
@@ -327,7 +359,18 @@ const contractHtml = (contract: any) => {
   </div>
 
   <div class="section">
-    <h2>4. Financial Terms</h2>
+    <h2>4. Term and Dates</h2>
+    <table><tbody>
+      ${tableRow('Owner Digital Signature Date/Time', signedAt)}
+      ${tableRow('Contract Starts', validFrom)}
+      ${tableRow('Contract Finishes', validTo)}
+      ${tableRow('Duration', `${CONTRACT_TERM_MONTHS} months from owner digital signature timestamp`)}
+      ${tableRow('First Month Cancel / Upgrade Window', `Owner may request cancellation or upgrade until ${firstMonthWindow}. Admin review is required.`)}
+    </tbody></table>
+  </div>
+
+  <div class="section">
+    <h2>5. Financial Terms</h2>
     <table><tbody>
       ${tableRow('Annual Contract Value', money(annual))}
       ${tableRow('15% Mobilization / Activation Payment', money(mobilization))}
@@ -340,52 +383,34 @@ const contractHtml = (contract: any) => {
   </div>
 
   <div class="section">
-    <h2>5. Service Scope and Inclusions</h2>
+    <h2>6. What Is Covered</h2>
     <p><strong>${escapeHtml(scope.title)}</strong> — ${escapeHtml(scope.desc)}</p>
     <ul>${bulletList([...scope.features, ...inclusions])}</ul>
     ${addOnsBlock}
   </div>
 
   <div class="section">
-    <h2>6. Exclusions and Owner Responsibilities</h2>
+    <h2>7. What Is Not Covered</h2>
     <ul>${bulletList(finalExclusions)}</ul>
-    <p class="clause">The owner must provide lawful access to the property, accurate KYC/property information, authority approvals where needed, and timely payment settlement. Any capital expenditure, replacement materials, specialist third-party works, or government fees must be separately approved unless expressly included in the package.</p>
+    <p class="clause">Owner requested works outside the selected package require admin approval and separate quotation before execution.</p>
   </div>
 
   <div class="section">
-    <h2>7. SLA and Operations Governance</h2>
+    <h2>8. SLA and Operations Governance</h2>
     <table><thead><tr><th>Priority</th><th>Service Governance</th></tr></thead><tbody>${slaRows}</tbody></table>
-    <p class="clause">SLA timing is subject to site access, availability of parts/materials, authority restrictions, emergency conditions, and accurate ticket classification. BIN GROUP may require admin approval for high-value or out-of-scope works.</p>
   </div>
 
   <div class="section">
-    <h2>8. Digital Evidence, Property Passport, and AuditShield</h2>
-    <p class="clause">BIN GROUP may maintain a digital property passport, service history, document vault, ticket records, before/after evidence, payment verification logs, and audit entries linked to this contract. These records support transparency, dispute resolution, and owner dashboard reporting.</p>
-    <p class="clause">No client-side action can independently activate the owner dashboard, mark payment verified, or override admin verification. Activation requires signed contract state, verified payment state, and admin-controlled contract/profile records.</p>
+    <h2>9. Digital Evidence, Property Passport, and Audit Trail</h2>
+    <p class="clause">BIN GROUP may maintain a digital property passport, service history, document vault, ticket records, before/after evidence, payment verification logs, and audit entries linked to this agreement.</p>
+    <p class="clause">No client-side action can independently activate the owner dashboard, mark payment verified, or override admin verification.</p>
   </div>
 
   <div class="section">
-    <h2>9. Term, Renewal, Suspension, and Termination</h2>
-    <table><tbody>
-      ${tableRow('Effective From', validFrom)}
-      ${tableRow('Valid Until', validTo)}
-      ${tableRow('Renewal', firstText(contract?.renewalTerms, 'Renewal is subject to admin-approved pricing, payment status, and owner confirmation.'))}
-      ${tableRow('Suspension', 'BIN GROUP may suspend dashboard/service access for non-payment, missing KYC, rejected verification, unlawful access issues, or material breach.')}
-      ${tableRow('Termination', firstText(contract?.terminationTerms, 'Termination is subject to written/admin-recorded notice and settlement of outstanding balances or approved close-out obligations.'))}
-    </tbody></table>
-  </div>
-
-  <div class="section">
-    <h2>10. Legal and Compliance Terms</h2>
-    <p class="clause">This agreement is generated from the BIN GROUP digital contract record and is subject to final admin verification, UAE applicable laws, authority requirements, and the approved package/payment record. If a signed PDF or final admin-issued contract exists, that final signed version prevails over this generated fallback copy.</p>
-    <p class="clause">The owner accepts that electronic signature, audit logs, payment verification records, property passport entries, and admin approval records may be used as operational evidence for service activation and governance.</p>
-  </div>
-
-  <div class="section">
-    <h2>11. Audit Trail and Signature Certificate</h2>
+    <h2>10. Audit Trail and Signature Certificate</h2>
     <table><tbody>
       ${tableRow('Created', createdAt)}
-      ${tableRow('Admin Approved / Verified', approvedAt)}
+      ${tableRow('BIN GROUP Admin Approved / Stamped', approvedAt)}
       ${tableRow('Owner Signed', signedAt)}
       ${tableRow('Signature Status', contract?.signatureStatus || (contract?.ownerSigned ? 'OWNER_SIGNED' : 'PENDING'))}
       ${tableRow('Payment Status', firstText(contract?.paymentStatus, contract?.paymentVerified ? 'VERIFIED' : 'PENDING_ADMIN_VERIFICATION'))}
@@ -395,11 +420,11 @@ const contractHtml = (contract: any) => {
 
   <div class="sign">
     <div class="line">Owner Signature / Electronic Acceptance<br />Name: ${escapeHtml(ownerName)}<br />Date: ${escapeHtml(signedAt)}</div>
-    <div class="line">BIN GROUP Admin Verification<br />Authorized Representative<br />Date: ${escapeHtml(approvedAt)}</div>
+    <div class="line">BIN GROUP Admin Verification<br /><div class="stamp">DIGITALLY APPROVED & STAMPED</div><br />Date: ${escapeHtml(approvedAt)}</div>
   </div>
 
   <div class="footer">
-    Generated by BIN GROUP Owner Portal. Fallback contract copy generated when no final stored PDF URL is available. Contract reference: ${escapeHtml(contract?.id || contract?.contractId || 'N/A')}.
+    Generated by BIN GROUP Owner Portal. Contract term: ${CONTRACT_TERM_MONTHS} months. Contract reference: ${escapeHtml(contract?.id || contract?.contractId || 'N/A')}.
   </div>
 </body>
 </html>`;
@@ -501,8 +526,9 @@ export default function OwnerContractsPage() {
     try {
       const signContract = httpsCallable(functions, 'ownerSignContract');
       const result = await signContract({ contractId: contract.id, signatureName: name, acceptedTerms: true });
-      const data = result.data as { status?: string; idempotent?: boolean };
-      setNotice({ type: 'success', text: data?.idempotent ? 'Contract is already signed and ready for activation/payment verification.' : `Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}.` });
+      const data = result.data as { status?: string; idempotent?: boolean; termSummary?: any };
+      const termMessage = data?.termSummary?.validToIso ? ` Contract valid until ${new Date(data.termSummary.validToIso).toLocaleDateString()}.` : '';
+      setNotice({ type: 'success', text: data?.idempotent ? `Contract is already signed and ready for activation/payment verification.${termMessage}` : `Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}.${termMessage}` });
       setSignatureName('');
       await refreshRole?.();
     } catch (err: any) {
@@ -584,7 +610,7 @@ export default function OwnerContractsPage() {
                   <TableRow key={contract.id} hover>
                     <TableCell><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 950 }}>{contract.propertyName || contract.companyProfile?.name || 'Portfolio Contract'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography></TableCell>
                     <TableCell><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contract.contractType?.replace('_', ' ') || contractScope.title} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }} /></TableCell>
-                    <TableCell><Stack direction="row" spacing={1} alignItems="center"><Calendar size={12} color="rgba(255,255,255,0.3)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}>Active — Continuous</Typography></Stack></TableCell>
+                    <TableCell><Stack direction="row" spacing={1} alignItems="center"><Calendar size={12} color="rgba(255,255,255,0.3)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}>{termSummaryText(contract)}</Typography></Stack></TableCell>
                     <TableCell><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{money(annual)}</Typography></TableCell>
                     <TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={1} flexWrap="wrap"><Chip label={needsSignature ? 'SIGNATURE REQUIRED' : (contract.status || 'ACTIVE')} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(color, 0.1), color }} />{needsSignature ? <Button disabled={signingId === contract.id} size="small" startIcon={<PenLine size={14} />} onClick={() => handleSignContract(contract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{signingId === contract.id ? 'Signing...' : 'Sign Contract'}</Button> : <Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{storedContractUrl(contract) ? 'PDF' : 'Download'}</Button>}</Stack></TableCell>
                   </TableRow>
