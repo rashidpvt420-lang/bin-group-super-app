@@ -26,11 +26,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
-
-type NoticeState = {
-  type: 'success' | 'error' | 'info';
-  text: string;
-};
+type NoticeState = { type: 'success' | 'error' | 'info'; text: string };
 
 const STATUS_COLOR: Record<string, string> = {
   ACTIVE: '#10b981',
@@ -47,7 +43,7 @@ const STATUS_COLOR: Record<string, string> = {
 const SIGNABLE_STATUSES = ['PENDING_OWNER_SIGNATURE', 'APPROVED_PENDING_OWNER_SIGNATURE', 'PENDING_SIGNATURE', 'DRAFT', 'PENDING'];
 const POST_SIGNATURE_STATUSES = ['READY_FOR_ACTIVATION', 'ACTIVE', 'SIGNED'];
 
-const firstPositiveNumber = (...values: any[]) => {
+const firstPositiveNumber = (...values: unknown[]) => {
   for (const value of values) {
     const num = Number(value);
     if (Number.isFinite(num) && num > 0) return num;
@@ -55,7 +51,7 @@ const firstPositiveNumber = (...values: any[]) => {
   return 0;
 };
 
-const money = (value: any) => {
+const money = (value: unknown) => {
   const numeric = Number(value || 0);
   return numeric > 0 ? `AED ${numeric.toLocaleString()}` : 'Pending Admin Confirmation';
 };
@@ -150,11 +146,11 @@ const isSignable = (contract: any) => {
 
 const storedContractUrl = (contract: any) => contract?.finalPdfUrl || contract?.pdfUrl || contract?.downloadUrl || contract?.contractUrl || contract?.signedPdfUrl || '';
 
-const escapeHtml = (value: any) => String(value ?? '')
+const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
-  .replace(/\"/g, '&quot;')
+  .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;');
 
 const asArray = (value: any): any[] => {
@@ -164,7 +160,7 @@ const asArray = (value: any): any[] => {
   return [];
 };
 
-const firstText = (...values: any[]) => {
+const firstText = (...values: unknown[]) => {
   for (const value of values) {
     const text = String(value ?? '').trim();
     if (text) return text;
@@ -177,16 +173,18 @@ const dateText = (...values: any[]) => {
     if (!value) continue;
     const candidate = value?.toDate?.() || value;
     if (candidate instanceof Date && !Number.isNaN(candidate.getTime())) return candidate.toLocaleString();
-    const asDate = new Date(candidate);
-    if (!Number.isNaN(asDate.getTime())) return asDate.toLocaleString();
-    const text = String(candidate).trim();
-    if (text) return text;
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      const asDate = new Date(candidate);
+      if (!Number.isNaN(asDate.getTime())) return asDate.toLocaleString();
+      const text = String(candidate).trim();
+      if (text) return text;
+    }
   }
   return 'N/A';
 };
 
-const tableRow = (label: string, value: any) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value || 'N/A')}</td></tr>`;
-const bulletList = (items: any[]) => items.filter(Boolean).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+const tableRow = (label: string, value: unknown) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value || 'N/A')}</td></tr>`;
+const bulletList = (items: unknown[]) => items.filter(Boolean).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
 
 const propertyRows = (contract: any) => {
   const propertyList = asArray(contract?.properties || contract?.propertyList || contract?.assets || contract?.serviceDetails?.propertiesList);
@@ -202,7 +200,14 @@ const propertyRows = (contract: any) => {
 
   const assetCount = firstPositiveNumber(contract?.assets, contract?.assetCount, contract?.serviceDetails?.properties, contract?.portfolioSummary?.properties) || 1;
   const totalUnits = firstText(contract?.totalUnits, contract?.serviceDetails?.totalUnits, contract?.portfolioSummary?.totalUnits, 'N/A');
-  return `<tr><td>1</td><td>${escapeHtml(firstText(contract?.propertyName, contract?.companyProfile?.name, 'Portfolio'))}</td><td>${escapeHtml(firstText(contract?.sector, contract?.propertyType, 'Institutional Portfolio'))}</td><td>${escapeHtml(totalUnits)}</td><td>${escapeHtml(firstText(contract?.location, contract?.emirate, 'UAE'))}</td></tr><tr><td colspan="5" class="muted">Declared asset count: ${escapeHtml(assetCount)}. Detailed asset schedule is subject to admin verification and property passport issuance.</td></tr>`;
+  const name = firstText(contract?.propertyName, contract?.companyProfile?.name, 'Portfolio');
+  const type = firstText(contract?.sector, contract?.propertyType, 'Institutional Portfolio');
+  const location = firstText(contract?.location, contract?.emirate, 'UAE');
+
+  return [
+    `<tr><td>1</td><td>${escapeHtml(name)}</td><td>${escapeHtml(type)}</td><td>${escapeHtml(totalUnits)}</td><td>${escapeHtml(location)}</td></tr>`,
+    `<tr><td colspan="5" class="muted">Declared asset count: ${escapeHtml(assetCount)}. Detailed asset schedule is subject to admin verification and property passport issuance.</td></tr>`,
+  ].join('');
 };
 
 const contractHtml = (contract: any) => {
@@ -215,7 +220,8 @@ const contractHtml = (contract: any) => {
   const signedAt = dateText(contract?.signedAt, contract?.ownerSignedAt);
   const approvedAt = dateText(contract?.approvedAt, contract?.adminApprovedAt, contract?.verifiedAt);
   const validFrom = dateText(contract?.validFrom, contract?.startDate, contract?.activatedAt, contract?.createdAt);
-  const validTo = dateText(contract?.validTo, contract?.endDate, contract?.expiryDate) === 'N/A' ? 'Continuous until expiry/termination under the agreed payment plan' : dateText(contract?.validTo, contract?.endDate, contract?.expiryDate);
+  const expiryText = dateText(contract?.validTo, contract?.endDate, contract?.expiryDate);
+  const validTo = expiryText === 'N/A' ? 'Continuous until expiry/termination under the agreed payment plan' : expiryText;
   const ownerName = firstText(contract?.ownerName, contract?.companyProfile?.ownerName, contract?.companyProfile?.name, 'Owner / Client');
   const ownerEmail = firstText(contract?.ownerEmail, contract?.companyProfile?.email, 'N/A');
   const ownerUid = firstText(contract?.ownerUid, contract?.ownerId, contract?.createdBy, 'N/A');
@@ -244,6 +250,10 @@ const contractHtml = (contract: any) => {
     ['Standard maintenance request', 'Scheduled under preventive/corrective maintenance calendar'],
     ['Owner/admin escalation', 'Governed through BIN GROUP dashboard, audit logs, and admin verification workflow'],
   ].map(([priority, response]) => `<tr><td>${escapeHtml(priority)}</td><td>${escapeHtml(response)}</td></tr>`).join('');
+  const amountWarning = annual <= 0 || mobilization <= 0
+    ? '<div class="warning"><strong>Amount pending admin confirmation.</strong> This generated copy uses the current contract record. Admin must confirm the final contract amount, mobilization amount, and payment schedule before final dashboard unlock.</div>'
+    : '';
+  const addOnsBlock = selectedAddOns.length ? `<p><strong>Selected Add-ons:</strong></p><ul>${bulletList(selectedAddOns)}</ul>` : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -252,7 +262,7 @@ const contractHtml = (contract: any) => {
   <title>BIN GROUP Contract ${escapeHtml(contract?.id || '')}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 34px; color: #111827; line-height: 1.48; background: #ffffff; }
-    button { float:right;padding:10px 16px;border-radius:8px;border:1px solid #c8a95b;background:#c8a95b;font-weight:800;cursor:pointer; }
+    button { float: right; padding: 10px 16px; border-radius: 8px; border: 1px solid #c8a95b; background: #c8a95b; font-weight: 800; cursor: pointer; }
     .header { border-bottom: 4px solid #c8a95b; padding-bottom: 18px; margin-bottom: 24px; }
     .brand { letter-spacing: 4px; color: #9f7e2f; font-weight: 900; font-size: 22px; }
     .title { font-size: 30px; font-weight: 900; margin: 12px 0 0; }
@@ -293,7 +303,7 @@ const contractHtml = (contract: any) => {
       <div class="card"><div class="label">Annual Value</div><div class="value">${escapeHtml(money(annual))}</div></div>
       <div class="card"><div class="label">15% Mobilization</div><div class="value">${escapeHtml(money(mobilization))}</div></div>
     </div>
-    ${annual <= 0 || mobilization <= 0 ? '<div class="warning"><strong>Amount pending admin confirmation.</strong> This generated copy uses the current contract record. Admin must confirm the final contract amount, mobilization amount, and payment schedule before final dashboard unlock.</div>' : ''}
+    ${amountWarning}
   </div>
 
   <div class="section">
@@ -333,7 +343,7 @@ const contractHtml = (contract: any) => {
     <h2>5. Service Scope and Inclusions</h2>
     <p><strong>${escapeHtml(scope.title)}</strong> — ${escapeHtml(scope.desc)}</p>
     <ul>${bulletList([...scope.features, ...inclusions])}</ul>
-    ${selectedAddOns.length ? `<p><strong>Selected Add-ons:</strong></p><ul>${bulletList(selectedAddOns)}</ul>` : ''}
+    ${addOnsBlock}
   </div>
 
   <div class="section">
@@ -384,8 +394,8 @@ const contractHtml = (contract: any) => {
   </div>
 
   <div class="sign">
-    <div class="line">Owner Signature / Electronic Acceptance<br/>Name: ${escapeHtml(ownerName)}<br/>Date: ${escapeHtml(signedAt)}</div>
-    <div class="line">BIN GROUP Admin Verification<br/>Authorized Representative<br/>Date: ${escapeHtml(approvedAt)}</div>
+    <div class="line">Owner Signature / Electronic Acceptance<br />Name: ${escapeHtml(ownerName)}<br />Date: ${escapeHtml(signedAt)}</div>
+    <div class="line">BIN GROUP Admin Verification<br />Authorized Representative<br />Date: ${escapeHtml(approvedAt)}</div>
   </div>
 
   <div class="footer">
