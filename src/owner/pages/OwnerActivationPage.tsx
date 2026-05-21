@@ -222,10 +222,11 @@ export default function OwnerActivationPage() {
         currency: 'AED',
         reference: `OWNER_PORTAL_${Date.now()}`,
       });
-      const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean };
+      const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean; idempotent?: boolean };
+      const requestLabel = data?.idempotent ? 'Existing payment verification request found' : 'Payment verification request submitted';
       setSuccess(data?.amountPendingAdminConfirmation
-        ? `Payment verification request submitted${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must confirm the mobilization amount and verify payment before dashboard unlock.`
-        : `Payment verification request submitted${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
+        ? `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must confirm the mobilization amount and verify payment before dashboard unlock.`
+        : `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
       await refreshAfterAction();
     } catch (err: any) {
       setError(err?.message || 'Activation request failed.');
@@ -242,6 +243,19 @@ export default function OwnerActivationPage() {
     );
   }
 
+  const PaymentRequestButton = ({ fullWidth = false }: { fullWidth?: boolean }) => (
+    <Button
+      disabled={activating || !canSubmitPaymentRequest}
+      onClick={handleManualVerificationBridge}
+      variant="contained"
+      startIcon={<CreditCard size={18} />}
+      fullWidth={fullWidth}
+      sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5, mt: fullWidth ? 1.5 : 0 }}
+    >
+      {activating ? 'Submitting...' : amountPendingAdminConfirmation ? 'Submit Verification Request — Amount Pending' : 'Submit Payment Verification Request'}
+    </Button>
+  );
+
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
@@ -257,7 +271,15 @@ export default function OwnerActivationPage() {
         {success && <Alert severity="success">{success}</Alert>}
         {activated && <Alert severity="success">Your owner profile already has verified payment and active contract access.</Alert>}
         {signedWaitingActivation && !activated && <Alert severity="info">Contract is signed and ready for payment/admin activation.</Alert>}
-        {amountPendingAdminConfirmation && !activated && <Alert severity="warning">Mobilization amount is missing from this contract. You can still submit the verification request; admin must confirm the amount before dashboard unlock.</Alert>}
+        {amountPendingAdminConfirmation && !activated && (
+          <Alert
+            severity="warning"
+            action={canSubmitPaymentRequest ? <PaymentRequestButton /> : undefined}
+            sx={{ alignItems: 'center' }}
+          >
+            Mobilization amount is missing from this contract. Submit the verification request now; admin will confirm the amount and verify payment before dashboard unlock.
+          </Alert>
+        )}
         {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
 
         <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -318,15 +340,7 @@ export default function OwnerActivationPage() {
                   </Stack>
                 )}
 
-                <Button
-                  disabled={activating || !canSubmitPaymentRequest}
-                  onClick={handleManualVerificationBridge}
-                  variant="contained"
-                  startIcon={<CreditCard size={18} />}
-                  sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}
-                >
-                  {activating ? 'Submitting...' : amountPendingAdminConfirmation ? 'Submit Verification Request — Amount Pending' : 'Submit Payment Verification Request'}
-                </Button>
+                <PaymentRequestButton fullWidth />
               </Stack>
             </Paper>
           </Grid>
