@@ -1,6 +1,8 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { OWNER_CONTRACT_TERM_MONTHS, asDate, termFieldsFromStart } from "./ownerContractTerm";
+import { buildOwnerCommercialApprovalPatch } from "./ownerCommercialSchedule";
+
 
 export * from "./index";
 export * from "./contractActivation";
@@ -306,22 +308,68 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     const contractId = String(payment.contractId || "").trim();
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    if (!ownerUid && contractId) {
-        const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
-        if (contractSnap.exists) {
-            const contractData = contractSnap.data() || {};
-            ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+    const contractRef = contractId ? runtimeDb.collection("contracts").doc(contractId) : null;
+    const contractSnap = contractRef ? await contractRef.get() : null;
+    const contractData = contractSnap?.exists ? (contractSnap.data() || {}) : {};
+
+    if (!ownerUid) {
+        ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+    }
+
+    const intakeId = String(payment.intakeId || contractData.intakeId || "").trim();
+    let intakeData: Record<string, any> = {};
+    if (intakeId) {
+        const intakeSnap = await runtimeDb.collection("intake_submissions").doc(intakeId).get();
+        if (intakeSnap.exists) {
+            intakeData = intakeSnap.data() || {};
+        }
+    } else if (ownerUid) {
+        const intakeQuery = await runtimeDb.collection("intake_submissions")
+            .where("ownerUid", "==", ownerUid)
+            .limit(1)
+            .get();
+        if (!intakeQuery.empty) {
+            intakeData = intakeQuery.docs[0].data() || {};
         }
     }
 
+    const amountReceived = Number(request.data?.amountReceived ?? payment.amount ?? payment.amountReceived ?? 0);
+    const annualContractValue = Number(request.data?.annualContractValue ?? contractData.annualContractValue ?? contractData.annualValue ?? intakeData.annualContractValue ?? intakeData.portfolioSummary?.estimatedACV ?? 0);
+    const mobilizationAmount = Number(request.data?.mobilizationAmount ?? contractData.mobilizationAmount ?? contractData.depositAmount ?? payment.mobilizationAmount ?? Math.round(annualContractValue * 0.15));
+    const remainingBalance = Number(request.data?.remainingBalance ?? Math.max(annualContractValue - amountReceived, 0));
+    const paymentPlan = String(request.data?.paymentPlan ?? contractData.paymentPlan ?? intakeData.paymentPlan ?? payment.paymentPlan ?? "ANNUAL").trim().toUpperCase();
+    const paymentReferenceId = String(request.data?.paymentReferenceId ?? request.data?.paymentId ?? payment.reference ?? payment.paymentReferenceId ?? payment.id ?? "").trim();
+
+    const approvedAtDate = new Date();
+    const approvedAt = admin.firestore.Timestamp.fromDate(approvedAtDate);
+    const effectiveDate = asDate(request.data?.effectiveFrom || contractData.effectiveFrom || contractData.validFrom || payment.effectiveFrom || approvedAtDate) || approvedAtDate;
+    const termFields = termFieldsFromStart(effectiveDate);
+    const adminUid = request.auth?.uid || "admin";
+
+    const approvalPatch = buildOwnerCommercialApprovalPatch({
+      requestData: request.data || {},
+      payment,
+      contractData,
+      intakeData,
+      amountReceived,
+      annualContractValue,
+      mobilizationAmount,
+      remainingBalance,
+      paymentPlan,
+      paymentReferenceId,
+      termFields,
+      approvedAt,
+      approvedAtIso: approvedAtDate.toISOString(),
+      now,
+      adminUid,
+    });
+
     const batch = runtimeDb.batch();
-    batch.set(paymentRef, {
-        status: "VERIFIED",
-        paymentVerified: true,
-        verifiedAt: now,
-        verifiedBy: request.auth?.uid || "admin",
-        updatedAt: now,
-    }, { merge: true });
+    batch.set(paymentRef, approvalPatch.paymentPatch, { merge: true });
+
+    if (contractRef) {
+        batch.set(contractRef, approvalPatch.contractPatch, { merge: true });
+    }
 
     if (ownerUid) {
         batch.set(runtimeDb.collection("users").doc(ownerUid), {
@@ -341,22 +389,17 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         }, { merge: true });
     }
 
-    if (contractId) {
-        batch.set(runtimeDb.collection("contracts").doc(contractId), {
-            paymentVerified: true,
-            status: "ACTIVE",
-            activatedAt: now,
-            updatedAt: now,
-        }, { merge: true });
-    }
-
     batch.set(runtimeDb.collection("audit_logs").doc(), {
         actorId: request.auth?.uid || "admin",
         actorRole: request.auth?.token?.role || "admin",
         action: "VERIFY_OWNER_PAYMENT_TRANSACTION",
         targetType: collectionName,
         targetId: paymentId,
-        metadata: { ownerUid, contractId },
+        metadata: {
+            ownerUid,
+            contractId,
+            ...approvalPatch.auditMetadata,
+        },
         createdAt: now,
     });
 
