@@ -45,18 +45,32 @@ function callerOwnsContract(auth: any, contractData: FirebaseFirestore.DocumentD
     return contractOwnerUid === auth?.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
 }
 
+function contractMoneyValue(contractData: FirebaseFirestore.DocumentData) {
+    return Number(
+        contractData.mobilizationAmount ||
+        contractData.mobilizationFee ||
+        contractData.upfrontAmount ||
+        contractData.depositAmount ||
+        contractData.pricing?.mobilizationAmount ||
+        contractData.payment?.amount ||
+        contractData.paymentAmount ||
+        contractData.amount ||
+        0
+    );
+}
+
 export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "User authentication required.");
 
     const method = String(request.data?.method || "").trim().toUpperCase();
     const contractId = String(request.data?.contractId || "").trim();
-    const amount = Number(request.data?.amount || 0);
+    const requestedAmount = Number(request.data?.amount || 0);
     const currency = String(request.data?.currency || "AED").trim().toUpperCase();
     const provider = String(request.data?.provider || "MANUAL").trim().toUpperCase();
     const reference = String(request.data?.reference || "").trim();
+    const amountSource = String(request.data?.amountSource || "CLIENT").trim().toUpperCase();
 
     if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
-    if (!Number.isFinite(amount) || amount <= 0) throw new HttpsError("invalid-argument", "A positive payment amount is required.");
     if (!["BANK_TRANSFER", "CARD", "TAP", "STRIPE", "MANUAL"].includes(method)) throw new HttpsError("invalid-argument", "Unsupported payment method.");
 
     const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
@@ -64,6 +78,16 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
     const contractData = contractSnap.data() || {};
     if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
+
+    const contractStatus = String(contractData.status || "").trim().toUpperCase();
+    const signedOrReady = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"].includes(contractStatus) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED";
+    const contractAmount = contractMoneyValue(contractData);
+    const amount = Number.isFinite(requestedAmount) && requestedAmount > 0 ? requestedAmount : contractAmount;
+    const amountPendingAdminConfirmation = !(Number.isFinite(amount) && amount > 0);
+
+    if (amountPendingAdminConfirmation && !(signedOrReady && amountSource === "OWNER_CONFIRMATION_FALLBACK")) {
+        throw new HttpsError("invalid-argument", "A positive payment amount is required unless the signed contract is pending admin amount confirmation.");
+    }
 
     const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
     const authEmail = String(request.auth.token?.email || "").trim().toLowerCase();
@@ -77,14 +101,16 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         contractId,
         intakeId: contractData.intakeId || null,
         onboardingSessionId: contractData.onboardingSessionId || null,
-        amount,
+        amount: amountPendingAdminConfirmation ? 0 : amount,
+        amountPendingAdminConfirmation,
+        amountSource: amountPendingAdminConfirmation ? "ADMIN_CONFIRMATION_REQUIRED" : amountSource,
         currency,
         method,
         paymentMethod: method,
         provider,
         reference,
         status: "PENDING",
-        verificationState: "ADMIN_VERIFICATION_REQUIRED",
+        verificationState: amountPendingAdminConfirmation ? "AMOUNT_CONFIRMATION_REQUIRED" : "ADMIN_VERIFICATION_REQUIRED",
         paymentVerified: false,
         dashboardUnlocked: false,
         contractActivated: false,
@@ -98,11 +124,11 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         action: "CREATE_OWNER_PAYMENT_TRANSACTION",
         targetType: "payment_transactions",
         targetId: paymentRef.id,
-        metadata: { contractId, amount, currency, method, provider },
+        metadata: { contractId, amount: amountPendingAdminConfirmation ? 0 : amount, currency, method, provider, amountPendingAdminConfirmation },
         createdAt: now,
     });
 
-    return { paymentId: paymentRef.id, status: "PENDING", verificationState: "ADMIN_VERIFICATION_REQUIRED" };
+    return { paymentId: paymentRef.id, status: "PENDING", verificationState: amountPendingAdminConfirmation ? "AMOUNT_CONFIRMATION_REQUIRED" : "ADMIN_VERIFICATION_REQUIRED", amountPendingAdminConfirmation };
 });
 
 export const ownerSignContract = onCall({ cors: true }, async (request) => {
