@@ -45,17 +45,45 @@ function callerOwnsContract(auth: any, contractData: FirebaseFirestore.DocumentD
     return contractOwnerUid === auth?.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
 }
 
+function firstPositiveNumber(...values: unknown[]) {
+    for (const value of values) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    }
+    return 0;
+}
+
+function contractAnnualValue(contractData: FirebaseFirestore.DocumentData) {
+    return firstPositiveNumber(
+        contractData.annualValue,
+        contractData.annualContractValue,
+        contractData.estimatedAnnualValue,
+        contractData.totalAnnual,
+        contractData.quoteTotal,
+        contractData.contractValue,
+        contractData.serviceValue,
+        contractData.pricing?.annualContractValue,
+        contractData.pricing?.annualValue,
+        contractData.quote?.annualContractValue,
+        contractData.quote?.totalAnnual,
+        contractData.payment?.annualValue
+    );
+}
+
 function contractMoneyValue(contractData: FirebaseFirestore.DocumentData) {
-    return Number(
-        contractData.mobilizationAmount ||
-        contractData.mobilizationFee ||
-        contractData.upfrontAmount ||
-        contractData.depositAmount ||
-        contractData.pricing?.mobilizationAmount ||
-        contractData.payment?.amount ||
-        contractData.paymentAmount ||
-        contractData.amount ||
-        0
+    const annualValue = contractAnnualValue(contractData);
+    return firstPositiveNumber(
+        contractData.mobilizationAmount,
+        contractData.mobilizationFee,
+        contractData.upfrontAmount,
+        contractData.depositAmount,
+        contractData.pricing?.mobilizationAmount,
+        contractData.pricing?.upfrontAmount,
+        contractData.quote?.mobilizationAmount,
+        contractData.payment?.amount,
+        contractData.paymentAmount,
+        contractData.amount,
+        annualValue > 0 ? annualValue * 0.15 : 0
     );
 }
 
@@ -78,6 +106,25 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
     const contractData = contractSnap.data() || {};
     if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
+
+    const existingPendingSnap = await runtimeDb.collection("payment_transactions")
+        .where("contractId", "==", contractId)
+        .where("ownerUid", "==", request.auth.uid)
+        .where("status", "==", "PENDING")
+        .limit(1)
+        .get();
+
+    if (!existingPendingSnap.empty) {
+        const existingDoc = existingPendingSnap.docs[0];
+        const existing = existingDoc.data() || {};
+        return {
+            paymentId: existingDoc.id,
+            status: existing.status || "PENDING",
+            verificationState: existing.verificationState || "ADMIN_VERIFICATION_REQUIRED",
+            amountPendingAdminConfirmation: existing.amountPendingAdminConfirmation === true,
+            idempotent: true,
+        };
+    }
 
     const contractStatus = String(contractData.status || "").trim().toUpperCase();
     const signedOrReady = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"].includes(contractStatus) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED";
