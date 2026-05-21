@@ -27,8 +27,10 @@ const firstNumber = (...values: any[]) => {
 };
 
 const contractValue = (contract: any) => firstNumber(
-  contract?.annualValue,
+  contract?.commercialSchedule?.annualContractValue,
+  contract?.paymentSchedule?.annualContractValue,
   contract?.annualContractValue,
+  contract?.annualValue,
   contract?.estimatedAnnualValue,
   contract?.totalAnnual,
   contract?.quoteTotal,
@@ -43,10 +45,12 @@ const contractValue = (contract: any) => firstNumber(
 );
 
 const contractMobilization = (contract: any, annualValue: number) => firstNumber(
+  contract?.commercialSchedule?.mobilizationAmount,
+  contract?.paymentSchedule?.mobilizationAmount,
   contract?.mobilizationAmount,
+  contract?.depositAmount,
   contract?.mobilizationFee,
   contract?.upfrontAmount,
-  contract?.depositAmount,
   contract?.pricing?.mobilizationAmount,
   contract?.pricing?.upfrontAmount,
   contract?.quote?.mobilizationAmount,
@@ -54,6 +58,15 @@ const contractMobilization = (contract: any, annualValue: number) => firstNumber
   contract?.paymentAmount,
   annualValue > 0 ? annualValue * 0.15 : 0
 );
+
+const hasCommercialSchedule = (contract: any) =>
+  Boolean(contract?.commercialSchedule || contract?.paymentSchedule || contract?.commercialScheduleLocked);
+
+const moneyLabel = (value: number, contract: any) => {
+  if (value > 0) return `AED ${Math.round(value).toLocaleString()}`;
+  if (hasCommercialSchedule(contract)) return "AED 0 — legacy/admin amount missing";
+  return "Pending Admin Confirmation";
+};
 
 function uniqueById(items: any[]) {
   const map = new Map<string, any>();
@@ -145,11 +158,18 @@ export default function OwnerActivationPage() {
   const status = String(primaryContract?.status || '').toUpperCase();
   const annualValue = contractValue(primaryContract);
   const mobilization = contractMobilization(primaryContract, annualValue);
+  const paymentPlanText = String(
+    primaryContract?.commercialSchedule?.paymentPlan ||
+    primaryContract?.paymentSchedule?.paymentPlan ||
+    primaryContract?.paymentPlan ||
+    primaryContract?.billingCycle ||
+    'Annual / Quarterly / Monthly'
+  );
   const profile = user as any;
   const activated = !!profile?.paymentVerified && (!!profile?.activeContractId || !!profile?.dashboardUnlocked);
   const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
   const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
-  const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0;
+  const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0 && !hasCommercialSchedule(primaryContract);
   const canSubmitPaymentRequest = !!primaryContract?.id && !activated && !canSign && signedWaitingActivation;
 
   const refreshAfterAction = async () => {
@@ -221,6 +241,11 @@ export default function OwnerActivationPage() {
         amountSource: amountPendingAdminConfirmation ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
         currency: 'AED',
         reference: `OWNER_PORTAL_${Date.now()}`,
+        annualContractValue: annualValue,
+        mobilizationAmount: mobilization,
+        paymentPlan: paymentPlanText,
+        paymentReferenceId: `OWNER_PORTAL_${Date.now()}`,
+        commercialScheduleLocked: Boolean(primaryContract?.commercialScheduleLocked),
       });
       const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean; idempotent?: boolean };
       const requestLabel = data?.idempotent ? 'Existing payment verification request found' : 'Payment verification request submitted';
@@ -304,15 +329,15 @@ export default function OwnerActivationPage() {
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>ANNUAL VALUE</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{annualValue > 0 ? fmtAED(annualValue) : 'Pending Admin Confirmation'}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{moneyLabel(annualValue, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>MOBILIZATION</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{mobilization > 0 ? fmtAED(mobilization) : 'Pending Admin Confirmation'}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{moneyLabel(mobilization, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>PAYMENT PLAN</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{primaryContract?.paymentPlan || 'Annual / Quarterly / Monthly'}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{paymentPlanText}</Typography>
                   </Grid>
                 </Grid>
 

@@ -57,14 +57,16 @@ const money = (value: unknown, contract?: any) => {
   if (numeric > 0) return `AED ${numeric.toLocaleString()}`;
   const hasSchedule = !!(contract?.commercialSchedule || contract?.paymentSchedule || contract?.commercialScheduleLocked || contract?.paymentScheduleLocked);
   if (hasSchedule) {
-    return 'AED 0';
+    return 'AED 0 — legacy/admin amount missing';
   }
   return 'Legacy record — field missing';
 };
 
 const annualValueOf = (contract: any) => firstPositiveNumber(
-  contract?.annualValue,
+  contract?.commercialSchedule?.annualContractValue,
+  contract?.paymentSchedule?.annualContractValue,
   contract?.annualContractValue,
+  contract?.annualValue,
   contract?.estimatedAnnualValue,
   contract?.totalAnnual,
   contract?.quoteTotal,
@@ -81,10 +83,12 @@ const annualValueOf = (contract: any) => firstPositiveNumber(
 const mobilizationOf = (contract: any) => {
   const annual = annualValueOf(contract);
   return firstPositiveNumber(
+    contract?.commercialSchedule?.mobilizationAmount,
+    contract?.paymentSchedule?.mobilizationAmount,
     contract?.mobilizationAmount,
+    contract?.depositAmount,
     contract?.mobilizationFee,
     contract?.upfrontAmount,
-    contract?.depositAmount,
     contract?.pricing?.mobilizationAmount,
     contract?.pricing?.upfrontAmount,
     contract?.quote?.mobilizationAmount,
@@ -96,7 +100,10 @@ const mobilizationOf = (contract: any) => {
 
 const normalizeScope = (contract: any): ContractScope => {
   const raw = String(
-    contract?.serviceType ||
+    contract?.commercialSchedule?.selectedContractType ||
+      contract?.commercialSchedule?.selectedPlan?.name ||
+      contract?.paymentSchedule?.selectedContractType ||
+      contract?.serviceType ||
       contract?.selectedContractType ||
       contract?.contractType ||
       contract?.managementScope ||
@@ -228,7 +235,7 @@ const termSummaryText = (contract: any) => {
 const tableRow = (label: string, value: unknown) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value || 'N/A')}</td></tr>`;
 const bulletList = (items: unknown[]) => items.filter(Boolean).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
 
-const propertyRows = (contract: any) => {
+const propertyRowsParallel = (contract: any) => {
   const propertyList = asArray(contract?.properties || contract?.propertyList || contract?.assets || contract?.serviceDetails?.propertiesList);
   if (propertyList.length > 0) {
     return propertyList.map((property, index) => {
@@ -236,7 +243,25 @@ const propertyRows = (contract: any) => {
       const type = firstText(property?.type, property?.propertyType, property?.sector, contract?.sector, 'Property');
       const units = firstText(property?.units, property?.totalUnits, property?.unitCount, property?.apartments, 'N/A');
       const location = firstText(property?.location, property?.area, property?.emirate, property?.address, contract?.location, 'UAE');
-      return `<tr><td>${escapeHtml(index + 1)}</td><td>${escapeHtml(name)}</td><td>${escapeHtml(type)}</td><td>${escapeHtml(units)}</td><td>${escapeHtml(location)}</td></tr>`;
+      
+      const typeAr = type === 'Property' ? 'عقار' : type;
+      const locationAr = location === 'UAE' ? 'الإمارات العربية المتحدة' : location;
+
+      return `<tr>
+        <th>Asset ${index + 1} / العقار ${index + 1}</th>
+        <td class="en">
+          <div><strong>Name:</strong> ${escapeHtml(name)}</div>
+          <div><strong>Type:</strong> ${escapeHtml(type)}</div>
+          <div><strong>Units:</strong> ${escapeHtml(units)}</div>
+          <div><strong>Location:</strong> ${escapeHtml(location)}</div>
+        </td>
+        <td class="ar" dir="rtl">
+          <div><strong>الاسم:</strong> ${escapeHtml(name)}</div>
+          <div><strong>النوع:</strong> ${escapeHtml(typeAr)}</div>
+          <div><strong>الوحدات:</strong> ${escapeHtml(units)}</div>
+          <div><strong>الموقع:</strong> ${escapeHtml(locationAr)}</div>
+        </td>
+      </tr>`;
     }).join('');
   }
 
@@ -246,28 +271,44 @@ const propertyRows = (contract: any) => {
   const type = firstText(contract?.sector, contract?.propertyType, 'Institutional Portfolio');
   const location = firstText(contract?.location, contract?.emirate, 'UAE');
 
-  return [
-    `<tr><td>1</td><td>${escapeHtml(name)}</td><td>${escapeHtml(type)}</td><td>${escapeHtml(totalUnits)}</td><td>${escapeHtml(location)}</td></tr>`,
-    `<tr><td colspan="5" class="muted">Declared asset count: ${escapeHtml(assetCount)}. Detailed asset schedule is subject to admin verification and property passport issuance.</td></tr>`,
-  ].join('');
-};
+  const typeAr = type === 'Institutional Portfolio' ? 'محفظة مؤسسية' : type;
+  const locationAr = location === 'UAE' ? 'الإمارات العربية المتحدة' : location;
 
-const bilingualRow = (labelEn: string, labelAr: string, valueEn: string, valueAr?: string) => {
   return `<tr>
-    <th>
-      <div style="font-weight: bold;">${escapeHtml(labelEn)}</div>
-      <div style="font-size: 11px; color: #6b7280; font-weight: normal; direction: rtl; text-align: right;">${escapeHtml(labelAr)}</div>
-    </th>
-    <td>
-      <div>${escapeHtml(valueEn)}</div>
-      ${valueAr ? `<div style="font-size: 13px; color: #4b5563; direction: rtl; text-align: right;">${escapeHtml(valueAr)}</div>` : ''}
+    <th>Asset 1 / العقار ١</th>
+    <td class="en">
+      <div><strong>Name:</strong> ${escapeHtml(name)}</div>
+      <div><strong>Type:</strong> ${escapeHtml(type)}</div>
+      <div><strong>Units:</strong> ${escapeHtml(totalUnits)}</div>
+      <div><strong>Location:</strong> ${escapeHtml(location)}</div>
+    </td>
+    <td class="ar" dir="rtl">
+      <div><strong>الاسم:</strong> ${escapeHtml(name)}</div>
+      <div><strong>النوع:</strong> ${escapeHtml(typeAr)}</div>
+      <div><strong>الوحدات:</strong> ${escapeHtml(totalUnits)}</div>
+      <div><strong>الموقع:</strong> ${escapeHtml(locationAr)}</div>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3" class="muted" style="font-size: 11px; color: #6b7280; text-align: center; padding: 10px;">
+      Declared asset count: ${escapeHtml(assetCount)}. Detailed asset schedule is subject to admin verification and property passport issuance. / عدد الأصول المعلن: ${escapeHtml(assetCount)}. جدول الأصول التفصيلي يخضع لتحقق المسؤول وإصدار جواز سفر العقار.
     </td>
   </tr>`;
 };
 
+const parallelRow = (clause: string, english: string, arabic: string) => `
+<tr>
+  <th>${escapeHtml(clause)}</th>
+  <td class="en">${english}</td>
+  <td class="ar" dir="rtl">${arabic}</td>
+</tr>
+`;
+
 const contractHtml = (contract: any) => {
   const scopeType = normalizeScope(contract);
   const scope = scopeCopy(scopeType);
+  const scopeTitleAr = scopeType === 'PM_ONLY' ? 'إدارة العقارات فقط' : (scopeType === 'BOTH' ? 'إدارة العقارات والمرافق معاً' : 'صيانة المرافق فقط');
+  
   const annual = contract?.annualContractValue ?? contract?.commercialSchedule?.annualContractValue ?? contract?.paymentSchedule?.annualContractValue ?? annualValueOf(contract) ?? 0;
   const mobilization = contract?.mobilizationAmount ?? contract?.commercialSchedule?.mobilizationAmount ?? contract?.paymentSchedule?.mobilizationAmount ?? mobilizationOf(contract) ?? 0;
   const balance = contract?.remainingBalance ?? contract?.commercialSchedule?.remainingBalance ?? contract?.paymentSchedule?.remainingBalance ?? (annual > 0 && mobilization > 0 ? Math.max(annual - mobilization, 0) : 0);
@@ -314,71 +355,127 @@ const contractHtml = (contract: any) => {
   const legalExclusionEn = contract?.commercialSchedule?.legalExclusionClause?.en ?? contract?.legalExclusionClause?.en ?? "Anything not expressly listed in the covered items is excluded and requires a separate written quotation and BIN GROUP admin approval before execution.";
   const legalExclusionAr = contract?.commercialSchedule?.legalExclusionClause?.ar ?? contract?.legalExclusionClause?.ar ?? "أي بند غير مذكور صراحة ضمن البنود المشمولة يعتبر مستثنى ويتطلب عرض سعر كتابي منفصل وموافقة إدارية من BIN GROUP قبل التنفيذ.";
 
-  const slaRows = [
-    ['Emergency / safety risk', 'خطر الطوارئ والسلامة', 'Target response within 4 hours after valid ticket creation, subject to access and site conditions / الاستجابة المستهدفة خلال 4 ساعات بعد إنشاء تذكرة صالحة، وتخضع لشروط الوصول والموقع'],
-    ['Urgent operational fault', 'خلل تشغيلي عاجل', 'Same day / next business day triage depending on severity and resources / الفرز في نفس اليوم أو يوم العمل التالي حسب الخطورة والموارد المتاحة'],
-    ['Standard maintenance request', 'طلب صيانة قياسي', 'Scheduled under preventive/corrective maintenance calendar / مجدول تحت تقويم الصيانة الوقائية/التصحيحية'],
-    ['Owner/admin escalation', 'التصعيد للمالك/الإدارة', 'Governed through BIN GROUP dashboard, audit logs, and admin verification workflow / يخضع للوحة تحكم BIN GROUP وسجلات التدقيق وسير عمل التحقق للمسؤول'],
-  ].map(([priorityEn, priorityAr, response]) => `<tr>
-    <th>
-      <div style="font-weight: bold;">${escapeHtml(priorityEn)}</div>
-      <div style="font-size: 11px; color: #6b7280; font-weight: normal; direction: rtl; text-align: right;">${escapeHtml(priorityAr)}</div>
-    </th>
-    <td>${escapeHtml(response)}</td>
-  </tr>`).join('');
-
   const amountWarning = (annual <= 0 || mobilization <= 0) && !(contract?.commercialSchedule || contract?.paymentSchedule)
     ? '<div class="warning"><strong>Amount pending admin confirmation.</strong> This generated copy uses the current contract record. Admin must confirm the final contract amount, mobilization amount, and payment schedule before final dashboard unlock.</div>'
     : '';
-  const addOnsBlock = selectedAddOns.length ? `<p><strong>Selected Add-ons / الإضافات المختارة:</strong></p><ul>${bulletList(selectedAddOns)}</ul>` : '';
 
   const section1Rows = [
-    bilingualRow('Contract Reference', 'مرجع العقد', contract?.id || contract?.contractId || 'N/A'),
-    bilingualRow('Status', 'الحالة', contract?.status || 'N/A'),
-    bilingualRow('Package Selected by Owner', 'الباقة المختارة من المالك', packageName),
-    bilingualRow('Scope Selected by Owner', 'نطاق العمل المختار', scope.title),
-    bilingualRow('Contract Term', 'مدة العقد', `${CONTRACT_TERM_MONTHS} Months / شهور`),
-    bilingualRow('First Month Change Window', 'فترة التغيير خلال الشهر الأول', `Until / حتى ${firstMonthWindow}`),
-    bilingualRow('Annual Value', 'القيمة السنوية', annualText),
-    bilingualRow('15% Mobilization', '15٪ دفعة التعبئة والبدء', mobilizationText),
+    parallelRow('Contract Reference / مرجع العقد', contract?.id || contract?.contractId || 'N/A', contract?.id || contract?.contractId || 'N/A'),
+    parallelRow('Status / الحالة', contract?.status || 'N/A', contract?.status || 'N/A'),
+    parallelRow('Package Selected / الباقة المختارة', packageName, packageName),
+    parallelRow('Scope Selected / نطاق العمل', scope.title, scopeTitleAr),
+    parallelRow('Contract Term / مدة العقد', `${CONTRACT_TERM_MONTHS} Months`, `${CONTRACT_TERM_MONTHS} شهور`),
+    parallelRow('First Month Change Window / فترة التغيير', `Until ${firstMonthWindow}`, `حتى ${firstMonthWindow}`),
+    parallelRow('Annual Value / القيمة السنوية', annualText, annualText),
+    parallelRow('15% Mobilization / دفعة التعبئة والبدء 15٪', mobilizationText, mobilizationText),
   ].join('');
 
   const section2Rows = [
-    bilingualRow('Service Provider', 'مقدم الخدمة', 'BIN GROUP / BIN Construction & General Maintenance / مجموعة بن / بن للمقاولات والصيانة العامة'),
-    bilingualRow('Owner / Client', 'المالك / العميل', ownerName),
-    bilingualRow('Owner Email', 'البريد الإلكتروني للمالك', ownerEmail),
-    bilingualRow('Owner UID / Reference', 'معرف المالك / المرجع', ownerUid),
-    bilingualRow('Registered Company / Portfolio', 'الشركة المسجلة / المحفظة العقارية', firstText(contract?.companyProfile?.name, contract?.propertyName, 'Portfolio')),
-    bilingualRow('Trade License / KYC Reference', 'رخصة تجارية / مرجع معرفة عميلك', firstText(contract?.companyProfile?.licenseNumber, contract?.licenseNumber, contract?.kycReference, 'Subject to admin verification')),
+    parallelRow('Service Provider / مقدم الخدمة', 'BIN GROUP / BIN Construction & General Maintenance', 'مجموعة بن / بن للمقاولات والصيانة العامة'),
+    parallelRow('Owner / Client / المالك / العميل', ownerName, ownerName),
+    parallelRow('Owner Email / البريد الإلكتروني للمالك', ownerEmail, ownerEmail),
+    parallelRow('Owner UID / Reference / معرف المالك', ownerUid, ownerUid),
+    parallelRow('Registered Company / Portfolio / المحفظة العقارية', firstText(contract?.companyProfile?.name, contract?.propertyName, 'Portfolio'), firstText(contract?.companyProfile?.name, contract?.propertyName, 'Portfolio')),
+    parallelRow('Trade License / KYC Reference / رخصة تجارية أو مرجع KYC', firstText(contract?.companyProfile?.licenseNumber, contract?.licenseNumber, contract?.kycReference, 'Subject to admin verification'), firstText(contract?.companyProfile?.licenseNumber, contract?.licenseNumber, contract?.kycReference, 'يخضع لتحقق المسؤول')),
   ].join('');
 
   const section4Rows = [
-    bilingualRow('Owner Digital Signature Date/Time', 'تاريخ ووقت توقيع المالك رقمياً', signedAt),
-    bilingualRow('Contract Starts', 'تاريخ بدء العقد', validFrom),
-    bilingualRow('Contract Finishes', 'تاريخ انتهاء العقد', validTo),
-    bilingualRow('Duration', 'المدة', `${CONTRACT_TERM_MONTHS} months from owner digital signature timestamp / ${CONTRACT_TERM_MONTHS} شهراً من تاريخ التوقيع الرقمي للمالك`),
-    bilingualRow('First Month Cancel / Upgrade Window', 'فترة الإلغاء أو الترقية خلال الشهر الأول', `Owner may request cancellation or upgrade until ${firstMonthWindow}. Admin review is required. / يمكن للمالك طلب الإلغاء أو الترقية حتى ${firstMonthWindow}، ويخضع ذلك لمراجعة المسؤول.`),
+    parallelRow('Owner Digital Signature Date/Time / تاريخ ووقت توقيع المالك', signedAt, signedAt),
+    parallelRow('Contract Starts / بدء العقد', validFrom, validFrom),
+    parallelRow('Contract Finishes / انتهاء العقد', validTo, validTo),
+    parallelRow('Duration / المدة', `${CONTRACT_TERM_MONTHS} months from digital signature`, `${CONTRACT_TERM_MONTHS} شهراً من التوقيع الرقمي`),
+    parallelRow('First Month Cancel / Upgrade Window / فترة الإلغاء أو الترقية', `Until ${firstMonthWindow}`, `حتى ${firstMonthWindow}`),
   ].join('');
 
   const section5Rows = [
-    bilingualRow('Annual Contract Value', 'قيمة العقد السنوية', annualText),
-    bilingualRow('15% Mobilization / Activation Payment', '15٪ دفعة التعبئة والتنشيط', mobilizationText),
-    bilingualRow('Amount Received', 'المبلغ المستلم', amountReceivedText),
-    bilingualRow('Remaining Contract Balance', 'رصيد العقد المتبقي', balanceText),
-    bilingualRow('Payment Plan', 'خطة الدفع', paymentPlanText),
-    bilingualRow('Currency', 'العملة', currencyText),
-    bilingualRow('Payment Reference ID', 'معرف مرجع الدفع', paymentReferenceIdText),
-    bilingualRow('Payment Verification', 'التحقق من الدفع', 'Dashboard unlock requires admin payment verification. Owner signature alone does not unlock the dashboard. / يتطلب فتح لوحة التحكم التحقق من الدفع من قِبل المسؤول. توقيع المالك وحده لا يفتح لوحة التحكم.'),
-    bilingualRow('VAT / Tax Treatment', 'معاملة ضريبة القيمة المضافة / الضرائب', firstText(contract?.vatTreatment, contract?.taxTreatment, 'Subject to UAE VAT and invoice rules where applicable. / يخضع لضريبة القيمة المضافة في دولة الإمارات وقواعد الفواتير المعمول بها.')),
+    parallelRow('Annual Contract Value / قيمة العقد السنوية', annualText, annualText),
+    parallelRow('15% Mobilization / Activation / دفعة التعبئة والتنشيط 15٪', mobilizationText, mobilizationText),
+    parallelRow('Amount Received / المبلغ المستلم', amountReceivedText, amountReceivedText),
+    parallelRow('Remaining Contract Balance / رصيد العقد المتبقي', balanceText, balanceText),
+    parallelRow('Payment Plan / خطة الدفع', paymentPlanText, paymentPlanText),
+    parallelRow('Currency / العملة', currencyText, currencyText),
+    parallelRow('Payment Reference ID / معرف مرجع الدفع', paymentReferenceIdText, paymentReferenceIdText),
+    parallelRow('Payment Verification / التحقق من الدفع', 'Dashboard unlock requires admin payment verification. Owner signature alone does not unlock the dashboard.', 'يتطلب فتح لوحة التحكم التحقق من الدفع من قِبل المسؤول. توقيع المالك وحده لا يفتح لوحة التحكم.'),
+    parallelRow('VAT / Tax Treatment / ضريبة القيمة المضافة', firstText(contract?.vatTreatment, contract?.taxTreatment, 'Subject to UAE VAT and invoice rules where applicable.'), firstText(contract?.vatTreatmentAr, 'يخضع لضريبة القيمة المضافة في دولة الإمارات وقواعد الفواتير المعمول بها.')),
   ].join('');
 
+  const coveredEn = `<div><strong>Package Name:</strong> ${escapeHtml(packageName)}</div>
+  <div><strong>Scope:</strong> ${escapeHtml(scope.title)}</div>
+  <p><strong>Covered Items:</strong></p>
+  <ul>${inclusions.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+  ${selectedAddOns.length ? `<p><strong>Selected Add-ons:</strong></p><ul>${selectedAddOns.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}`;
+
+  const coveredAr = `<div><strong>اسم الباقة:</strong> ${escapeHtml(packageName)}</div>
+  <div><strong>نطاق التغطية:</strong> ${escapeHtml(scopeTitleAr)}</div>
+  <p><strong>البنود المشمولة:</strong></p>
+  <ul>${inclusions.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+  ${selectedAddOns.length ? `<p><strong>الإضافات المختارة:</strong></p><ul>${selectedAddOns.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}`;
+
+  const section6Rows = parallelRow('Covered Scope / النطاق المشمول بالاتفاقية', coveredEn, coveredAr);
+
+  const exclusionsEn = `<p><strong>Excluded Items:</strong></p>
+  <ul>${finalExclusions.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+  <p class="clause"><strong>General Exclusion Clause:</strong> ${escapeHtml(legalExclusionEn)}</p>`;
+
+  const exclusionsAr = `<p><strong>البنود المستثناة:</strong></p>
+  <ul>${finalExclusions.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+  <p class="clause" dir="rtl"><strong>بند الاستثناء العام:</strong> ${escapeHtml(legalExclusionAr)}</p>`;
+
+  const section7Rows = parallelRow('Exclusions / المستثنيات والبنود غير المشمولة', exclusionsEn, exclusionsAr);
+
+  const section8Rows = [
+    parallelRow('Emergency / safety risk / خطر الطوارئ والسلامة', 
+                'Target response within 4 hours after valid ticket creation, subject to access and site conditions.',
+                'الاستجابة المستهدفة خلال 4 ساعات بعد إنشاء تذكرة صالحة، وتخضع لشروط الوصول والموقع.'),
+    parallelRow('Urgent operational fault / خلل تشغيلي عاجل',
+                'Same day / next business day triage depending on severity and resources.',
+                'الفرز في نفس اليوم أو يوم العمل التالي حسب الخطورة والموارد المتاحة.'),
+    parallelRow('Standard maintenance request / طلب صيانة قياسي',
+                'Scheduled under preventive/corrective maintenance calendar.',
+                'مجدول تحت تقويم الصيانة الوقائية/التصحيحية.'),
+    parallelRow('Owner/admin escalation / التصعيد للمالك/الإدارة',
+                'Governed through BIN GROUP dashboard, audit logs, and admin verification workflow.',
+                'يخضع للوحة تحكم BIN GROUP وسجلات التدقيق وسير عمل التحقق للمسؤول.')
+  ].join('');
+
+  const section9Rows = [
+    parallelRow('Good Faith & Fair Dealing / حسن النية والتعامل العادل',
+                'The parties declare their commitment to good faith and fair dealing in the performance of their obligations under this agreement in accordance with UAE Civil Code principles.',
+                'يقر الطرفان بالتزامهما بمبدأ حسن النية والتعامل العادل في تنفيذ التزاماتهما بموجب هذه الاتفاقية وفقاً لمبادئ قانون المعاملات المدنية لدولة الإمارات العربية المتحدة.'),
+    parallelRow('Disclosure Acknowledgement / الإقرار بالإفصاح والشفافية',
+                'The owner acknowledges and confirms that all material elements of the service scope, exclusions, pricing structure, and activation rules have been fully disclosed and explained.',
+                'يقر المالك ويؤكد بأنه قد تم الإفصاح له وتوضيح جميع العناصر الجوهرية المتعلقة بنطاق الخدمة، والمستثنيات، وهيكل الأسعار، وقواعد التفعيل بشكل كامل.'),
+    parallelRow('Electronic Signature / التوقيع الإلكتروني والقبول الرقمي',
+                'The parties agree that electronic signatures, digital clicks, and platform acceptances constitute valid, legally binding execution under UAE Electronic Transactions Law.',
+                'يوافق الطرفان على أن التوقيعات الإلكترونية، والنقرات الرقمية، والقبول عبر المنصة تشكل تنفيذاً صحيحاً وملزماً قانوناً بموجب قانون المعاملات الإلكترونية الإماراتي.'),
+    parallelRow('Admin Verification / التحقق والموافقة الإدارية',
+                'Owner digital signature alone does not activate services. Full dashboard unlock and commencement are subject to admin payment verification.',
+                'توقيع المالك رقمياً بمفرده لا يفعل الخدمات. يخضع فتح لوحة التحكم بالكامل وبدء الخدمات للتحقق من الدفع من قِبل المسؤول.'),
+    parallelRow('Limitation of Liability / تحديد المسؤولية القانونية',
+                'Nothing in this agreement shall limit or exclude liability for fraud, intentional breach, gross negligence, or personal injury under applicable UAE laws.',
+                'لا يوجد في هذه الاتفاقية ما يحد أو يستثني المسؤولية عن الاحتيال، أو الإخلال المتعمد، أو الخطأ الجسيم، أو الإصابة الشخصية بموجب القوانين السارية في دولة الإمارات.'),
+    parallelRow('Liquidated Damages & SLA Credits / التعويضات الاتفاقية ورصيد الخدمة',
+                'Any pre-agreed service level credits or liquidated damages are subject to UAE law principles and must reflect actual losses incurred.',
+                'تخضع أي أرصدة مستوى خدمة متفق عليها مسبقاً أو تعويضات اتفاقية لمبادئ قانون دولة الإمارات ويجب أن تعكس الخسائر الفعلية المتكبدة.'),
+    parallelRow('Language Precedence / لغة العقد والمرجعية',
+                'This agreement is bilingual. Arabic text shall control where UAE courts require Arabic for formal proceedings, otherwise the English text is the operational reference.',
+                'هذه الاتفاقية ثنائية اللغة. يسري النص العربي ويرجح عندما تتطلب محاكم دولة الإمارات اللغة العربية للإجراءات الرسمية، وخلاف ذلك يكون النص الإنجليزي هو المرجع التشغيلي.'),
+    parallelRow('Governing Law & Jurisdiction / القانون الواجب التطبيق والاختصاص القضائي',
+                'This agreement is governed by the laws of the United Arab Emirates. UAE courts have jurisdiction, unless BIN GROUP elects a separately signed arbitration agreement.',
+                'تخضع هذه الاتفاقية وتفسر وفقاً لقوانين دولة الإمارات العربية المتحدة. وتختص محاكم دولة الإمارات بالفصل في أي نزاع، ما لم تختر مجموعة بن اتفاقية تحكيم منفصلة موقعة حسب الأصول.')
+  ].join('');
+
+  const sigStatus = contract?.signatureStatus || (contract?.ownerSigned ? 'OWNER_SIGNED' : 'PENDING');
+  const payStatus = firstText(contract?.paymentStatus, contract?.paymentVerified ? 'VERIFIED' : 'PENDING_ADMIN_VERIFICATION');
+  const activeId = firstText(contract?.activeContractId, contract?.id, 'N/A');
+
   const section10Rows = [
-    bilingualRow('Created', 'تاريخ الإنشاء', createdAt),
-    bilingualRow('BIN GROUP Admin Approved / Stamped', 'معتمد ومختوم من مسؤول مجموعة بن', approvedAt),
-    bilingualRow('Owner Signed', 'موقع من المالك', signedAt),
-    bilingualRow('Signature Status', 'حالة التوقيع', contract?.signatureStatus || (contract?.ownerSigned ? 'OWNER_SIGNED' : 'PENDING')),
-    bilingualRow('Payment Status', 'حالة الدفع', firstText(contract?.paymentStatus, contract?.paymentVerified ? 'VERIFIED' : 'PENDING_ADMIN_VERIFICATION')),
-    bilingualRow('Active Contract ID', 'معرف العقد النشط', firstText(contract?.activeContractId, contract?.id, 'N/A')),
+    parallelRow('Created / تاريخ الإنشاء', createdAt, createdAt),
+    parallelRow('Approved & Stamped / المعتمد والمختوم من الإدارة', approvedAt, approvedAt),
+    parallelRow('Owner Signed / موقع من المالك', signedAt, signedAt),
+    parallelRow('Signature Status / حالة التوقيع', sigStatus, sigStatus),
+    parallelRow('Payment Status / حالة الدفع', payStatus, payStatus),
+    parallelRow('Active Contract ID / معرف العقد النشط', activeId, activeId),
   ].join('');
 
   return `<!doctype html>
@@ -395,9 +492,12 @@ const contractHtml = (contract: any) => {
     .subtitle { color: #4b5563; margin-top: 6px; }
     .section { margin-top: 24px; page-break-inside: avoid; }
     .section h2 { font-size: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #e5e7eb; padding: 9px; text-align: left; vertical-align: top; }
-    th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #374151; }
+    .parallel-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .parallel-table th, .parallel-table td { border: 1px solid #e5e7eb; padding: 9px; vertical-align: top; }
+    .parallel-table th { width: 18%; background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #374151; text-align: left; }
+    .parallel-table td { width: 41%; }
+    .en { text-align: left; direction: ltr; }
+    .ar { text-align: right; direction: rtl; font-family: Arial, "Tahoma", sans-serif; line-height: 1.8; }
     .warning { background: #fff7ed; border: 1px solid #f59e0b; border-radius: 12px; padding: 14px; margin-top: 14px; }
     .stamp { border: 2px solid #9f7e2f; color: #9f7e2f; font-weight: 900; text-align: center; padding: 12px; border-radius: 999px; letter-spacing: 2px; }
     .muted { color: #6b7280; font-size: 12px; }
@@ -405,6 +505,7 @@ const contractHtml = (contract: any) => {
     .sign { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
     .line { border-top: 1px solid #111827; padding-top: 10px; font-size: 12px; color: #374151; }
     .footer { margin-top: 34px; color: #6b7280; font-size: 11px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+    .legal-note { background: #fefaf0; border-left: 4px solid #c8a95b; padding: 14px; border-radius: 8px; }
     @media print { button { display: none; } body { margin: 22px; } .section { page-break-inside: avoid; } }
   </style>
 </head>
@@ -421,81 +522,143 @@ const contractHtml = (contract: any) => {
 
   <div class="section">
     <h2>1. Agreement Summary / ملخص الاتفاقية</h2>
-    <table><tbody>${section1Rows}</tbody></table>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section1Rows}</tbody>
+    </table>
     ${amountWarning}
   </div>
 
   <div class="section">
     <h2>2. Parties / الأطراف</h2>
-    <table><tbody>${section2Rows}</tbody></table>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section2Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
     <h2>3. Property / Asset Schedule / جدول العقارات والأصول</h2>
-    <table>
-      <thead><tr><th>#</th><th>Asset / Property (العقار/الأصل)</th><th>Type (النوع)</th><th>Units (الوحدات)</th><th>Location (الموقع)</th></tr></thead>
-      <tbody>${propertyRows(contract)}</tbody>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Asset / العقار</th>
+          <th>English Details</th>
+          <th dir="rtl" style="text-align: right;">تفاصيل العقار بالعربية</th>
+        </tr>
+      </thead>
+      <tbody>${propertyRowsParallel(contract)}</tbody>
     </table>
   </div>
 
   <div class="section">
     <h2>4. Term and Dates / المدة والتواريخ</h2>
-    <table><tbody>${section4Rows}</tbody></table>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section4Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
     <h2>5. Financial Terms / الشروط المالية</h2>
-    <table><tbody>${section5Rows}</tbody></table>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section5Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
-    <h2>6. What Is Covered / ما تشمله الاتفاقية</h2>
-    <p><strong>${escapeHtml(packageName)}</strong> (${escapeHtml(scope.title)})</p>
-    <ul>${bulletList(inclusions)}</ul>
-    ${addOnsBlock}
+    <h2>6. Covered Scope / النطاق المشمول</h2>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section6Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
-    <h2>7. What Is Not Covered / ما لا تشمله الاتفاقية</h2>
-    <ul>${bulletList(finalExclusions)}</ul>
-    <div style="margin-top: 15px; padding: 15px; border-left: 4px solid #c8a95b; background: #fefaf0; border-radius: 6px;">
-      <p style="margin: 0 0 8px 0; font-weight: bold; color: #9f7e2f;">English Legal Exclusion Clause:</p>
-      <p style="margin: 0 0 16px 0; font-size: 13.5px; line-height: 1.5; color: #374151;">${escapeHtml(legalExclusionEn)}</p>
-      <p style="margin: 0 0 8px 0; font-weight: bold; color: #9f7e2f; text-align: right; direction: rtl;">بند الاستثناء القانوني باللغة العربية:</p>
-      <p style="margin: 0; font-size: 13.5px; line-height: 1.6; color: #374151; text-align: right; direction: rtl;">${escapeHtml(legalExclusionAr)}</p>
-    </div>
+    <h2>7. Not Covered / Exclusions / المستثنيات والبنود غير المشمولة</h2>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section7Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
     <h2>8. SLA and Operations Governance / اتفاقية مستوى الخدمة وإدارة العمليات</h2>
-    <table>
+    <table class="parallel-table">
       <thead>
         <tr>
           <th>Priority / الأولوية</th>
-          <th>Service Governance / إدارة الخدمة</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
         </tr>
       </thead>
-      <tbody>${slaRows}</tbody>
+      <tbody>${section8Rows}</tbody>
     </table>
   </div>
 
   <div class="section">
     <h2>9. Legal Terms & Digital Evidence / الأحكام القانونية والأدلة الرقمية</h2>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 10px;">
-      <div style="font-size: 13px; color: #374151; line-height: 1.5;">
-        <p style="margin: 0 0 10px 0;">BIN GROUP may maintain a digital property passport, service history, document vault, ticket records, before/after evidence, payment verification logs, and audit entries linked to this agreement.</p>
-        <p style="margin: 0;">No client-side action can independently activate the owner dashboard, mark payment verified, or override admin verification.</p>
-      </div>
-      <div style="direction: rtl; text-align: right; font-size: 13px; color: #374151; line-height: 1.6;">
-        <p style="margin: 0 0 10px 0;">يجوز لـ BIN GROUP الاحتفاظ بجواز سفر رقمي للعقار، وتاريخ الخدمة، وخزينة المستندات، وسجلات التذاكر، والأدلة قبل/بعد، وسجلات التحقق من الدفع، وإدخالات التدقيق المرتبطة بهذه الاتفاقية.</p>
-        <p style="margin: 0;">لا يمكن لأي إجراء من جانب العميل تفعيل لوحة تحكم المالك بشكل مستقل، أو تحديد الدفع كـمتحقق منه، أو تجاوز تحقق المسؤول.</p>
-      </div>
-    </div>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section9Rows}</tbody>
+    </table>
   </div>
 
   <div class="section">
     <h2>10. Audit Trail and Signature Certificate / مسار التدقيق وشهادة التوقيع</h2>
-    <table><tbody>${section10Rows}</tbody></table>
+    <table class="parallel-table">
+      <thead>
+        <tr>
+          <th>Clause / بند</th>
+          <th>English</th>
+          <th dir="rtl">العربية</th>
+        </tr>
+      </thead>
+      <tbody>${section10Rows}</tbody>
+    </table>
   </div>
 
   <div class="sign">
