@@ -232,20 +232,21 @@ export default function OwnerActivationPage() {
     setError(null);
     setSuccess(null);
     try {
+      const ownerPaymentReference = `OWNER_PORTAL_${Date.now()}`;
       const createPayment = httpsCallable(functions, 'createOwnerPaymentTransaction');
       const result = await createPayment({
         contractId: primaryContract.id,
         method: 'BANK_TRANSFER',
         provider: 'MANUAL',
         amount: mobilization,
-        amountSource: amountPendingAdminConfirmation ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
+        amountSource: mobilization <= 0 ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
         currency: 'AED',
-        reference: `OWNER_PORTAL_${Date.now()}`,
+        reference: ownerPaymentReference,
         annualContractValue: annualValue,
         mobilizationAmount: mobilization,
         paymentPlan: paymentPlanText,
-        paymentReferenceId: `OWNER_PORTAL_${Date.now()}`,
-        commercialScheduleLocked: Boolean(primaryContract?.commercialScheduleLocked),
+        paymentReferenceId: ownerPaymentReference,
+        commercialScheduleLocked: hasCommercialSchedule(primaryContract),
       });
       const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean; idempotent?: boolean };
       const requestLabel = data?.idempotent ? 'Existing payment verification request found' : 'Payment verification request submitted';
