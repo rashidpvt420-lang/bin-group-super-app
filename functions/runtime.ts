@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { OWNER_CONTRACT_TERM_MONTHS, asDate, termFieldsFromStart } from "./ownerContractTerm";
 
 export * from "./index";
 export * from "./contractActivation";
@@ -199,12 +200,15 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     const terminalStatuses = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"];
     if (terminalStatuses.includes(status) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED") {
         const now = admin.firestore.FieldValue.serverTimestamp();
+        const previousStart = asDate(contractData.ownerSignature?.signedAt) || asDate(contractData.ownerSignedAt) || asDate(contractData.signedAt) || asDate(contractData.effectiveFrom) || new Date();
+        const termFields = termFieldsFromStart(previousStart);
         await contractRef.set({
             ownerSigned: true,
             signatureStatus: "OWNER_SIGNED",
+            ...termFields,
             updatedAt: now,
         }, { merge: true });
-        return { contractId, status: status || "READY_FOR_ACTIVATION", ownerSigned: true, idempotent: true };
+        return { contractId, status: status || "READY_FOR_ACTIVATION", ownerSigned: true, idempotent: true, contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary };
     }
 
     const signableStatuses = ["PENDING_OWNER_SIGNATURE", "APPROVED_PENDING_OWNER_SIGNATURE", "PENDING_SIGNATURE", "DRAFT", "PENDING"];
@@ -213,20 +217,28 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
+    const signedAtDate = new Date();
+    const signedAt = admin.firestore.Timestamp.fromDate(signedAtDate);
+    const termFields = termFieldsFromStart(signedAtDate);
     const batch = runtimeDb.batch();
 
     batch.set(contractRef, {
         status: "READY_FOR_ACTIVATION",
         ownerSigned: true,
-        ownerSignedAt: now,
-        signedAt: now,
+        ownerSignedAt: signedAt,
+        signedAt,
         signatureStatus: "OWNER_SIGNED",
+        ...termFields,
         ownerSignature: {
             uid: request.auth.uid,
             email: request.auth.token?.email || contractData.ownerEmail || null,
             name: signatureName || request.auth.token?.email || request.auth.uid,
             acceptedTerms: true,
-            signedAt: now,
+            signedAt,
+            contractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
+            effectiveFrom: termFields.effectiveFrom,
+            validTo: termFields.validTo,
+            firstMonthWindowEndsAt: termFields.firstMonthWindowEndsAt,
         },
         updatedAt: now,
     }, { merge: true });
@@ -236,6 +248,10 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         activeContractId: contractId,
         contractSignatureStatus: "OWNER_SIGNED",
         activationStatus: "READY_FOR_ACTIVATION",
+        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
+        activeContractValidFrom: termFields.effectiveFrom,
+        activeContractValidTo: termFields.validTo,
+        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
         dashboardLocked: true,
         updatedAt: now,
     }, { merge: true });
@@ -245,6 +261,10 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         activeContractId: contractId,
         contractSignatureStatus: "OWNER_SIGNED",
         activationStatus: "READY_FOR_ACTIVATION",
+        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
+        activeContractValidFrom: termFields.effectiveFrom,
+        activeContractValidTo: termFields.validTo,
+        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
         dashboardLocked: true,
         updatedAt: now,
     }, { merge: true });
@@ -255,12 +275,12 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         action: "OWNER_SIGN_CONTRACT",
         targetType: "contracts",
         targetId: contractId,
-        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION" },
+        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION", contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary },
         createdAt: now,
     });
 
     await batch.commit();
-    return { contractId, status: "READY_FOR_ACTIVATION", ownerSigned: true };
+    return { contractId, status: "READY_FOR_ACTIVATION", ownerSigned: true, contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary };
 });
 
 export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
