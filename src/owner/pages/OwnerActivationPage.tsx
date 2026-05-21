@@ -16,25 +16,43 @@ const SIGNABLE_STATUSES = [
   'PENDING',
 ];
 
-const READY_STATUSES = ['READY_FOR_ACTIVATION', 'OWNER_SIGNED', 'PENDING_ADMIN_PAYMENT_VERIFICATION'];
+const READY_STATUSES = ['READY_FOR_ACTIVATION', 'OWNER_SIGNED', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'SIGNED'];
 
-const contractValue = (contract: any) => Number(
-  contract?.annualValue ||
-  contract?.annualContractValue ||
-  contract?.estimatedAnnualValue ||
-  contract?.totalAnnual ||
-  contract?.quoteTotal ||
-  contract?.amount ||
-  contract?.pricing?.annualContractValue ||
-  0
+const firstNumber = (...values: any[]) => {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return 0;
+};
+
+const contractValue = (contract: any) => firstNumber(
+  contract?.annualValue,
+  contract?.annualContractValue,
+  contract?.estimatedAnnualValue,
+  contract?.totalAnnual,
+  contract?.quoteTotal,
+  contract?.contractValue,
+  contract?.serviceValue,
+  contract?.pricing?.annualContractValue,
+  contract?.pricing?.annualValue,
+  contract?.quote?.annualContractValue,
+  contract?.quote?.totalAnnual,
+  contract?.payment?.annualValue,
+  contract?.amount
 );
 
-const contractMobilization = (contract: any, annualValue: number) => Number(
-  contract?.mobilizationAmount ||
-  contract?.mobilizationFee ||
-  contract?.pricing?.mobilizationAmount ||
-  contract?.payment?.amount ||
-  annualValue * 0.15
+const contractMobilization = (contract: any, annualValue: number) => firstNumber(
+  contract?.mobilizationAmount,
+  contract?.mobilizationFee,
+  contract?.upfrontAmount,
+  contract?.depositAmount,
+  contract?.pricing?.mobilizationAmount,
+  contract?.pricing?.upfrontAmount,
+  contract?.quote?.mobilizationAmount,
+  contract?.payment?.amount,
+  contract?.paymentAmount,
+  annualValue > 0 ? annualValue * 0.15 : 0
 );
 
 function uniqueById(items: any[]) {
@@ -118,8 +136,8 @@ export default function OwnerActivationPage() {
   }, [user?.displayName, user?.email, user?.uid]);
 
   const primaryContract = useMemo(() => {
-    return contracts.find((c) => SIGNABLE_STATUSES.includes(String(c.status || '').toUpperCase())) ||
-      contracts.find((c) => READY_STATUSES.includes(String(c.status || '').toUpperCase())) ||
+    return contracts.find((c) => SIGNABLE_STATUSES.includes(String(c.status || '').toUpperCase()) && c.ownerSigned !== true) ||
+      contracts.find((c) => READY_STATUSES.includes(String(c.status || '').toUpperCase()) || c.ownerSigned === true || c.signatureStatus === 'OWNER_SIGNED') ||
       contracts.find((c) => String(c.status || '').toUpperCase() === 'ACTIVE') ||
       contracts[0];
   }, [contracts]);
@@ -129,8 +147,10 @@ export default function OwnerActivationPage() {
   const mobilization = contractMobilization(primaryContract, annualValue);
   const profile = user as any;
   const activated = !!profile?.paymentVerified && (!!profile?.activeContractId || !!profile?.dashboardUnlocked);
-  const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && !primaryContract?.ownerSigned;
-  const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status));
+  const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
+  const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
+  const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0;
+  const canSubmitPaymentRequest = !!primaryContract?.id && !activated && !canSign && signedWaitingActivation;
 
   const refreshAfterAction = async () => {
     await refreshRole?.();
@@ -172,8 +192,8 @@ export default function OwnerActivationPage() {
         signatureName: signatureName.trim(),
         acceptedTerms: true,
       });
-      const data = result.data as { status?: string };
-      setSuccess(`Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}. Admin can now verify payment and activate your dashboard.`);
+      const data = result.data as { status?: string; idempotent?: boolean };
+      setSuccess(data?.idempotent ? 'Contract is already signed and ready for payment/admin activation.' : `Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}. Admin can now verify payment and activate your dashboard.`);
       await refreshAfterAction();
     } catch (err: any) {
       setError(err?.message || 'Contract signing failed.');
@@ -198,11 +218,14 @@ export default function OwnerActivationPage() {
         method: 'BANK_TRANSFER',
         provider: 'MANUAL',
         amount: mobilization,
+        amountSource: amountPendingAdminConfirmation ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
         currency: 'AED',
         reference: `OWNER_PORTAL_${Date.now()}`,
       });
-      const data = result.data as { paymentId?: string };
-      setSuccess(`Payment verification request submitted${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
+      const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean };
+      setSuccess(data?.amountPendingAdminConfirmation
+        ? `Payment verification request submitted${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must confirm the mobilization amount and verify payment before dashboard unlock.`
+        : `Payment verification request submitted${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
       await refreshAfterAction();
     } catch (err: any) {
       setError(err?.message || 'Activation request failed.');
@@ -234,6 +257,7 @@ export default function OwnerActivationPage() {
         {success && <Alert severity="success">{success}</Alert>}
         {activated && <Alert severity="success">Your owner profile already has verified payment and active contract access.</Alert>}
         {signedWaitingActivation && !activated && <Alert severity="info">Contract is signed and ready for payment/admin activation.</Alert>}
+        {amountPendingAdminConfirmation && !activated && <Alert severity="warning">Mobilization amount is missing from this contract. You can still submit the verification request; admin must confirm the amount before dashboard unlock.</Alert>}
         {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
 
         <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -258,11 +282,11 @@ export default function OwnerActivationPage() {
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>ANNUAL VALUE</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{fmtAED(annualValue)}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{annualValue > 0 ? fmtAED(annualValue) : 'Pending Admin Confirmation'}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>MOBILIZATION</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{fmtAED(mobilization)}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{mobilization > 0 ? fmtAED(mobilization) : 'Pending Admin Confirmation'}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>PAYMENT PLAN</Typography>
@@ -295,13 +319,13 @@ export default function OwnerActivationPage() {
                 )}
 
                 <Button
-                  disabled={activating || !primaryContract?.id || activated || canSign || mobilization <= 0}
+                  disabled={activating || !canSubmitPaymentRequest}
                   onClick={handleManualVerificationBridge}
                   variant="contained"
                   startIcon={<CreditCard size={18} />}
                   sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}
                 >
-                  {activating ? 'Submitting...' : 'Submit Payment Verification Request'}
+                  {activating ? 'Submitting...' : amountPendingAdminConfirmation ? 'Submit Verification Request — Amount Pending' : 'Submit Payment Verification Request'}
                 </Button>
               </Stack>
             </Paper>
