@@ -46,7 +46,51 @@ const STATUS_COLOR: Record<string, string> = {
 
 const SIGNABLE_STATUSES = ['PENDING_OWNER_SIGNATURE', 'APPROVED_PENDING_OWNER_SIGNATURE', 'PENDING_SIGNATURE', 'DRAFT', 'PENDING'];
 const POST_SIGNATURE_STATUSES = ['READY_FOR_ACTIVATION', 'ACTIVE', 'SIGNED'];
-const money = (value: any) => `AED ${Number(value || 0).toLocaleString()}`;
+
+const firstPositiveNumber = (...values: any[]) => {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return 0;
+};
+
+const money = (value: any) => {
+  const numeric = Number(value || 0);
+  return numeric > 0 ? `AED ${numeric.toLocaleString()}` : 'Pending Admin Confirmation';
+};
+
+const annualValueOf = (contract: any) => firstPositiveNumber(
+  contract?.annualValue,
+  contract?.annualContractValue,
+  contract?.estimatedAnnualValue,
+  contract?.totalAnnual,
+  contract?.quoteTotal,
+  contract?.contractValue,
+  contract?.serviceValue,
+  contract?.pricing?.annualContractValue,
+  contract?.pricing?.annualValue,
+  contract?.quote?.annualContractValue,
+  contract?.quote?.totalAnnual,
+  contract?.payment?.annualValue,
+  contract?.amount
+);
+
+const mobilizationOf = (contract: any) => {
+  const annual = annualValueOf(contract);
+  return firstPositiveNumber(
+    contract?.mobilizationAmount,
+    contract?.mobilizationFee,
+    contract?.upfrontAmount,
+    contract?.depositAmount,
+    contract?.pricing?.mobilizationAmount,
+    contract?.pricing?.upfrontAmount,
+    contract?.quote?.mobilizationAmount,
+    contract?.payment?.amount,
+    contract?.paymentAmount,
+    annual > 0 ? annual * 0.15 : 0
+  );
+};
 
 const normalizeScope = (contract: any): ContractScope => {
   const raw = String(
@@ -104,10 +148,113 @@ const isSignable = (contract: any) => {
   return SIGNABLE_STATUSES.includes(status) || contract?.contractStatus === 'awaiting_owner_signature';
 };
 
-const contractPdfUrl = (contract: any) =>
-  contract?.finalPdfUrl ||
-  contract?.pdfUrl ||
-  `${typeof window !== 'undefined' ? window.location.origin : 'https://bin-groups.com'}/owner/contracts?contract=${encodeURIComponent(contract?.id || contract?.contractId || '')}`;
+const storedContractUrl = (contract: any) => contract?.finalPdfUrl || contract?.pdfUrl || contract?.downloadUrl || contract?.contractUrl || contract?.signedPdfUrl || '';
+
+const escapeHtml = (value: any) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const contractHtml = (contract: any) => {
+  const scope = scopeCopy(normalizeScope(contract));
+  const annual = annualValueOf(contract);
+  const mobilization = mobilizationOf(contract);
+  const createdAt = contract?.createdAt?.toDate?.()?.toLocaleString?.() || contract?.createdAt || 'N/A';
+  const signedAt = contract?.signedAt?.toDate?.()?.toLocaleString?.() || contract?.ownerSignedAt?.toDate?.()?.toLocaleString?.() || 'Pending/Not recorded';
+  const features = scope.features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>BIN GROUP Contract ${escapeHtml(contract?.id || '')}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #111827; line-height: 1.5; }
+    .header { border-bottom: 3px solid #c8a95b; padding-bottom: 18px; margin-bottom: 28px; }
+    .brand { letter-spacing: 4px; color: #9f7e2f; font-weight: 900; font-size: 22px; }
+    .title { font-size: 30px; font-weight: 900; margin: 12px 0 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 24px 0; }
+    .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; background: #f9fafb; }
+    .label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #6b7280; font-weight: 800; }
+    .value { font-size: 18px; font-weight: 800; margin-top: 4px; }
+    .section { margin-top: 28px; }
+    .section h2 { font-size: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+    .warning { background: #fff7ed; border: 1px solid #f59e0b; border-radius: 12px; padding: 14px; margin-top: 18px; }
+    .sign { margin-top: 42px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
+    .line { border-top: 1px solid #111827; padding-top: 10px; font-size: 12px; color: #374151; }
+    @media print { button { display: none; } body { margin: 24px; } }
+  </style>
+</head>
+<body>
+  <button onclick="window.print()" style="float:right;padding:10px 16px;border-radius:8px;border:1px solid #c8a95b;background:#c8a95b;font-weight:800;">Print / Save as PDF</button>
+  <div class="header">
+    <div class="brand">BIN GROUP</div>
+    <div class="title">Owner Service Agreement</div>
+    <p>Institutional property management and facility maintenance contract record.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Contract Reference</div><div class="value">${escapeHtml(contract?.id || contract?.contractId || 'N/A')}</div></div>
+    <div class="card"><div class="label">Status</div><div class="value">${escapeHtml(contract?.status || 'N/A')}</div></div>
+    <div class="card"><div class="label">Property / Portfolio</div><div class="value">${escapeHtml(contract?.propertyName || contract?.companyProfile?.name || 'Portfolio')}</div></div>
+    <div class="card"><div class="label">Owner</div><div class="value">${escapeHtml(contract?.ownerEmail || contract?.companyProfile?.email || 'N/A')}</div></div>
+    <div class="card"><div class="label">Annual Value</div><div class="value">${escapeHtml(money(annual))}</div></div>
+    <div class="card"><div class="label">15% Mobilization</div><div class="value">${escapeHtml(money(mobilization))}</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Contract Scope</h2>
+    <p><strong>${escapeHtml(scope.title)}</strong></p>
+    <p>${escapeHtml(scope.desc)}</p>
+    <ul>${features}</ul>
+  </div>
+
+  <div class="section">
+    <h2>Governance Terms</h2>
+    <p>Dashboard access is controlled by verified payment status and active contract status. Owner signature alone does not unlock the dashboard.</p>
+    <p>Admin must verify payment before contract activation and full access.</p>
+    ${annual <= 0 || mobilization <= 0 ? '<div class="warning"><strong>Amount pending admin confirmation.</strong> This generated copy reflects the current record. Admin must confirm the contract amount before final dashboard unlock.</div>' : ''}
+  </div>
+
+  <div class="section">
+    <h2>Audit Trail</h2>
+    <p><strong>Created:</strong> ${escapeHtml(createdAt)}</p>
+    <p><strong>Signed:</strong> ${escapeHtml(signedAt)}</p>
+    <p><strong>Signature Status:</strong> ${escapeHtml(contract?.signatureStatus || (contract?.ownerSigned ? 'OWNER_SIGNED' : 'PENDING'))}</p>
+  </div>
+
+  <div class="sign">
+    <div class="line">Owner Signature / Electronic Acceptance</div>
+    <div class="line">BIN GROUP Admin Verification</div>
+  </div>
+</body>
+</html>`;
+};
+
+const downloadGeneratedContract = (contract: any) => {
+  const blob = new Blob([contractHtml(contract)], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeRef = String(contract?.id || contract?.contractId || 'contract').replace(/[^a-z0-9_-]/gi, '_');
+  a.href = url;
+  a.download = `BIN-GROUP-contract-${safeRef}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+const openOrDownloadContract = (contract: any) => {
+  if (!contract) return;
+  const url = storedContractUrl(contract);
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  downloadGeneratedContract(contract);
+};
 
 export default function OwnerContractsPage() {
   const { user, refreshRole } = useRole();
@@ -209,7 +356,7 @@ export default function OwnerContractsPage() {
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{t('nav.contracts') || 'Contracts'}</Typography>
         </Box>
-        <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }} onClick={() => contracts[0] && window.open(contractPdfUrl(contracts[0]), '_blank')}>
+        <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }} onClick={() => openOrDownloadContract(contracts[0])}>
           Download Master
         </Button>
       </Box>
@@ -260,13 +407,14 @@ export default function OwnerContractsPage() {
                 const needsSignature = isSignable(contract);
                 const contractScope = scopeCopy(normalizeScope(contract));
                 const color = STATUS_COLOR[contract.status] || '#10b981';
+                const annual = annualValueOf(contract);
                 return (
                   <TableRow key={contract.id} hover>
                     <TableCell><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 950 }}>{contract.propertyName || contract.companyProfile?.name || 'Portfolio Contract'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography></TableCell>
                     <TableCell><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contract.contractType?.replace('_', ' ') || contractScope.title} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }} /></TableCell>
                     <TableCell><Stack direction="row" spacing={1} alignItems="center"><Calendar size={12} color="rgba(255,255,255,0.3)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}>Active — Continuous</Typography></Stack></TableCell>
-                    <TableCell><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{money(contract.annualValue || contract.annualContractValue || contract.pricing?.annualContractValue || contract.amount)}</Typography></TableCell>
-                    <TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={1} flexWrap="wrap"><Chip label={needsSignature ? 'SIGNATURE REQUIRED' : (contract.status || 'ACTIVE')} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(color, 0.1), color }} />{needsSignature ? <Button disabled={signingId === contract.id} size="small" startIcon={<PenLine size={14} />} onClick={() => handleSignContract(contract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{signingId === contract.id ? 'Signing...' : 'Sign Contract'}</Button> : <Button size="small" startIcon={<ExternalLink size={14} />} onClick={() => window.open(contractPdfUrl(contract), '_blank')} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>PDF</Button>}</Stack></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{money(annual)}</Typography></TableCell>
+                    <TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={1} flexWrap="wrap"><Chip label={needsSignature ? 'SIGNATURE REQUIRED' : (contract.status || 'ACTIVE')} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(color, 0.1), color }} />{needsSignature ? <Button disabled={signingId === contract.id} size="small" startIcon={<PenLine size={14} />} onClick={() => handleSignContract(contract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{signingId === contract.id ? 'Signing...' : 'Sign Contract'}</Button> : <Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{storedContractUrl(contract) ? 'PDF' : 'Download'}</Button>}</Stack></TableCell>
                   </TableRow>
                 );
               })}
