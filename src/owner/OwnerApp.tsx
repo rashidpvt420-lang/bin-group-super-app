@@ -10,7 +10,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 
-import OwnerDashboardPage from './pages/OwnerDashboardPageV2';
+import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
 import OwnerContractsPage from './pages/OwnerContractsPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
