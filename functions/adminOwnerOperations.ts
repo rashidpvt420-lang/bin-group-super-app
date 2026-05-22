@@ -110,6 +110,29 @@ function appBaseUrl() { return process.env.APP_BASE_URL || process.env.PUBLIC_AP
 function mapUrl(p: any) { const g = gpsOf(p); return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g ? `${g.lat},${g.lng}` : `${addressOf(p)} ${emirateOf(p)}`)}`; }
 function dirUrl(p: any) { const g = gpsOf(p); return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(g ? `${g.lat},${g.lng}` : `${addressOf(p)} ${emirateOf(p)}`)}`; }
 
+function canonicalEmail(v: any) {
+  const email = s(v).toLowerCase();
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return email;
+  const normalizedDomain = domain === 'googlemail.com' ? 'gmail.com' : domain;
+  const normalizedLocal = normalizedDomain === 'gmail.com' ? local.split('+')[0].replace(/\./g, '') : local;
+  return `${normalizedLocal}@${normalizedDomain}`;
+}
+
+async function resolveOwnerRuntimeId(data: any, owner: any, intakeId: string) {
+  const fallback = id(data.ownerUid || data.userId || data.pendingOwnerId || data.ownerRegistrationId || owner.email || intakeId, `owner_${intakeId}`);
+  const email = s(owner.email).toLowerCase();
+  const canonical = canonicalEmail(email);
+  const exactCandidates = Array.from(new Set([email, canonical].filter(Boolean)));
+
+  for (const candidate of exactCandidates) {
+    const snap = await db.collection("users").where("email", "==", candidate).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+  }
+
+  return fallback;
+}
+
 async function intakeById(intakeId: string) {
   const ref = db.collection("intake_submissions").doc(intakeId);
   const snap = await ref.get();
@@ -220,7 +243,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   const plan = planOf(data);
   const addOns = addonsOf(data);
   const adminId = request.auth?.uid || "admin";
-  const ownerId = id(data.ownerUid || data.userId || data.pendingOwnerId || data.ownerRegistrationId || owner.email, `owner_${intakeId}`);
+  const ownerId = await resolveOwnerRuntimeId(data, owner, intakeId);
   const contractId = id(data.contractId || data.pendingPaymentSubmission?.contractId || `${intakeId}_contract`, `${intakeId}_contract`);
   const paymentId = id(data.payment?.paymentId || `${intakeId}_mobilization`, `${intakeId}_mobilization`);
   const properties = rawProps.map((p: any, i: number) => activeProperty(p, intakeId, ownerId, owner, i, contractId));
@@ -229,7 +252,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   const signUrl = `${appBaseUrl()}/owner/contracts?contractId=${encodeURIComponent(contractId)}`;
   const batch = db.batch();
   batch.set(ref, { status: "CONVERTED_TO_OWNER", adminReviewState: "APPROVED_PENDING_OWNER_SIGNATURE", activationState: "PENDING_OWNER_SIGNATURE", paymentStatus: "RECONCILED", paymentState: "PAYMENT_VERIFIED", paymentVerified: true, documentsVerified: true, locationVerified: true, ownerUid: ownerId, activeOwnerId: ownerId, activeContractId: contractId, activePropertyIds: propertyIds, contractDeliveryState: "SIGNATURE_REQUEST_EMAIL_QUEUED", approvedAt: ts(), approvedBy: adminId, updatedAt: ts() }, { merge: true });
-  const ownerRecord = { uid: ownerId, ownerId, role: "owner", status: "PENDING_OWNER_SIGNATURE", dashboardUnlocked: true, dashboardLocked: false, paymentVerified: true, documentsVerified: true, locationVerified: true, displayName: owner.name, fullName: owner.name, name: owner.name, email: owner.email, phone: owner.mobile, mobile: owner.mobile, activeContractId: contractId, activePropertyIds: propertyIds, latestIntakeId: intakeId, onboardingStatus: "APPROVED_AWAITING_OWNER_SIGNATURE", updatedAt: ts() };
+  const ownerRecord = { uid: ownerId, ownerId, role: "owner", status: "PENDING_OWNER_SIGNATURE", dashboardUnlocked: false, dashboardLocked: true, paymentVerified: true, documentsVerified: true, locationVerified: true, displayName: owner.name, fullName: owner.name, name: owner.name, email: owner.email, phone: owner.mobile, mobile: owner.mobile, activeContractId: contractId, activePropertyIds: propertyIds, latestIntakeId: intakeId, onboardingStatus: "APPROVED_AWAITING_OWNER_SIGNATURE", updatedAt: ts() };
   batch.set(db.collection("users").doc(ownerId), ownerRecord, { merge: true });
   batch.set(db.collection("owners").doc(ownerId), ownerRecord, { merge: true });
   properties.forEach((p: any) => {
@@ -240,7 +263,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   batch.set(db.collection("contracts").doc(contractId), { contractId, id: contractId, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, propertyId: primary.propertyId, propertyIds, propertyName: primary.propertyName || "Portfolio", properties, status: "PENDING_OWNER_SIGNATURE", contractStatus: "awaiting_owner_signature", activationStatus: "PENDING_OWNER_SIGNATURE", paymentVerified: true, paymentStatus: "RECONCILED", documentsVerified: true, locationVerified: true, approved: true, approvedAt: ts(), approvedBy: adminId, packageName: plan.name, planType: plan.type, selectedPlan: plan.raw || {}, selectedAddOns: addOns || [], annualValue: pricing.annual, annualContractValue: pricing.annual, depositAmount: pricing.mobilization, mobilizationAmount: pricing.mobilization, currency: pricing.currency, paymentSchedule: { mobilizationPercent: 15, mobilizationAmount: pricing.mobilization, remainingBalance: Math.max(pricing.annual - pricing.mobilization, 0), currency: pricing.currency }, signatureState: { ownerSigned: false, binGroupsApproved: true, binGroupsApprovedAt: new Date().toISOString(), pdfGenerated: false, emailed: true, signUrl }, emailDelivery: { signRequestQueued: true, signRequestQueuedAt: new Date().toISOString(), recipient: owner.email }, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { contractId, intakeId, ownerId, ownerEmail: owner.email, ownerName: owner.name, signUrl, status: "PENDING_OWNER_SIGNATURE", packageName: plan.name, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("payment_transactions").doc(paymentId), { paymentId, intakeId, ownerId, ownerEmail: owner.email, contractId, propertyId: primary.propertyId, amount: pricing.mobilization, currency: pricing.currency, method: pricing.method, status: "VERIFIED", verificationState: "ADMIN_VERIFIED", verified: true, verifiedAt: ts(), verifiedBy: adminId, unlocksDashboard: true, createdAt: ts(), updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("owner_dashboard_unlocks").doc(ownerId), { ownerId, intakeId, contractId, propertyIds, unlocked: true, unlockState: "PENDING_OWNER_SIGNATURE", unlockedAt: ts(), unlockedBy: adminId, updatedAt: ts() }, { merge: true });
+  batch.set(db.collection("owner_dashboard_unlocks").doc(ownerId), { ownerId, intakeId, contractId, propertyIds, unlocked: false, unlockState: "PENDING_OWNER_SIGNATURE", unlockedAt: ts(), unlockedBy: adminId, updatedAt: ts() }, { merge: true });
   batch.set(db.collection("notifications").doc(), { userId: ownerId, toRole: "owner", type: "CONTRACT_SIGNATURE_REQUIRED", title: "Contract ready for signature", body: "BIN GROUP verified your onboarding. Sign the contract to receive your final PDF.", url: `/owner/contracts?contractId=${contractId}`, read: false, createdAt: ts() });
   batch.set(db.collection("mail").doc(), { to: owner.email, message: { subject: `BIN GROUP ${plan.name} contract ready for signature`, html: `<p>Dear ${owner.name},</p><p>Your selected ${plan.name} contract is ready for signature.</p><p>Annual value: ${money(pricing.annual)}<br/>15% mobilization: ${money(pricing.mobilization)}</p><p><a href="${signUrl}">Open and sign contract</a></p>` }, metadata: { type: "owner_contract_signature_request", intakeId, ownerId, contractId, createdBy: adminId }, createdAt: ts() });
   batch.set(db.collection("audit_logs").doc(), { actorId: adminId, actorRole: "admin", action: "APPROVE_OWNER_SUBMISSION_OPERATIONAL_FLOW", targetType: "intake_submissions", targetId: intakeId, metadata: { ownerId, ownerEmail: owner.email, contractId, propertyIds, paymentId }, createdAt: ts() });
