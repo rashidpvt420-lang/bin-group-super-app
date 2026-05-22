@@ -20,7 +20,7 @@ import {
   alpha,
 } from '@mui/material';
 import { Award, Briefcase, Calendar, CheckCircle2, Download, FileText, MailCheck, PenLine, Shield, Zap } from 'lucide-react';
-import { collection, db, functions, httpsCallable, onSnapshot, query, type DocumentData, type QuerySnapshot, type Unsubscribe, where } from '../../lib/firebase';
+import { collection, db, doc, functions, httpsCallable, onSnapshot, query, type DocumentData, type QuerySnapshot, type Unsubscribe, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -715,6 +715,8 @@ export default function OwnerContractsPage() {
   const [signingId, setSigningId] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeState | null>(null);
 
+  const contractIdFromUrl = useMemo(() => new URLSearchParams(window.location.search).get('contractId'), []);
+
   useEffect(() => {
     if (!user?.email && !user?.uid) {
       setContracts([]);
@@ -726,9 +728,25 @@ export default function OwnerContractsPage() {
     const seen = new Map<string, any>();
     const email = String(user?.email || '').toLowerCase();
 
+    const sortContracts = (a: any, b: any) => {
+      const aSignable = isSignable(a);
+      const bSignable = isSignable(b);
+      if (aSignable && !bSignable) return -1;
+      if (!aSignable && bSignable) return 1;
+
+      const aPost = isPostSignature(a);
+      const bPost = isPostSignature(b);
+      if (aPost && !bPost) return -1;
+      if (!aPost && bPost) return 1;
+
+      const aTime = Number(a?.updatedAt?.seconds || a?.createdAt?.seconds || 0);
+      const bTime = Number(b?.updatedAt?.seconds || b?.createdAt?.seconds || 0);
+      return bTime - aTime;
+    };
+
     const apply = (snap: QuerySnapshot<DocumentData>) => {
       snap.docs.forEach((doc) => seen.set(doc.id, { id: doc.id, ...doc.data() }));
-      setContracts(Array.from(seen.values()).sort((a, b) => Number(b.updatedAt?.seconds || 0) - Number(a.updatedAt?.seconds || 0)));
+      setContracts(Array.from(seen.values()).sort(sortContracts));
       setLoading(false);
     };
 
@@ -747,15 +765,40 @@ export default function OwnerContractsPage() {
       unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerEmail', '==', email)), apply, fail));
       unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerEmail', '==', user?.email || email)), apply, fail));
     }
+
+    if (contractIdFromUrl) {
+      unsubs.push(
+        onSnapshot(
+          doc(db, 'contracts', contractIdFromUrl),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              seen.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+              setContracts(Array.from(seen.values()).sort(sortContracts));
+            }
+            setLoading(false);
+          },
+          (err) => {
+            console.error('Direct contract listener failed:', err);
+            setLoading(false);
+          }
+        )
+      );
+    }
+
     setSignatureName(user?.displayName || user?.email || '');
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
-  }, [user?.displayName, user?.email, user?.uid]);
+  }, [user?.displayName, user?.email, user?.uid, contractIdFromUrl]);
 
   const primaryContract = useMemo(() => contracts.find(isSignable) || contracts.find(isPostSignature) || contracts[0], [contracts]);
   const selectedScope = normalizeScope(primaryContract);
   const selectedScopeCopy = scopeCopy(selectedScope);
   const ScopeIcon = selectedScopeCopy.icon;
   const hasSignatureRequired = useMemo(() => contracts.some(isSignable), [contracts]);
+
+  const urlContractNotFound = useMemo(() => {
+    if (!contractIdFromUrl) return false;
+    return !contracts.some((c) => c.id === contractIdFromUrl);
+  }, [contractIdFromUrl, contracts]);
 
   const handleSignContract = async (contract: any) => {
     if (isPostSignature(contract)) {
@@ -812,14 +855,57 @@ export default function OwnerContractsPage() {
         </Button>
       </Box>
 
+      {urlContractNotFound && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          Contract link not found or not connected to this owner account. Contact BIN GROUP Admin.
+        </Alert>
+      )}
+
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }}>{notice.text}</Alert>}
 
-      {hasSignatureRequired && (
+      {hasSignatureRequired && primaryContract && (
         <Paper sx={{ p: 4, mb: 5, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, borderRadius: 5 }}>
-          <Stack spacing={2}>
+          <Stack spacing={3}>
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>Type your full legal name and sign. The backend verifies ownership and records the signature. Dashboard unlock still requires payment verification.</Typography>
-            <TextField label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>Contract Reference</Typography>
+                <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 900 }}>{primaryContract.id || primaryContract.contractId || 'N/A'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>Annual Value</Typography>
+                <Typography variant="body1" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{money(annualValueOf(primaryContract), primaryContract)}</Typography>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>15% Mobilization</Typography>
+                <Typography variant="body1" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{money(mobilizationOf(primaryContract), primaryContract)}</Typography>
+              </Grid>
+            </Grid>
+
+            <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
+            
+            <Box>
+              <Button 
+                variant="contained" 
+                disabled={signingId === primaryContract.id} 
+                onClick={() => handleSignContract(primaryContract)} 
+                sx={{ 
+                  bgcolor: binThemeTokens.gold, 
+                  color: '#000', 
+                  fontWeight: 950, 
+                  px: 4, 
+                  py: 1.5, 
+                  borderRadius: 3,
+                  '&:hover': {
+                    bgcolor: alpha(binThemeTokens.gold, 0.8)
+                  }
+                }}
+              >
+                {signingId === primaryContract.id ? 'Signing...' : 'Review & Sign Contract'}
+              </Button>
+            </Box>
           </Stack>
         </Paper>
       )}
