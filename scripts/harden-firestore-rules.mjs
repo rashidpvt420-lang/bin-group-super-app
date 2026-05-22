@@ -29,7 +29,13 @@ patchIfNeeded(
   `    function owns(data) {
       return isOwner(data.ownerId) || isOwner(data.ownerUid) || isOwner(data.userId) || isOwner(data.createdBy);
     }`,
-  ['return isOwner(data.ownerId) || isOwner(data.ownerUid) || isOwner(data.userId) || isOwner(data.createdBy);']
+  [
+    'function owns(data)',
+    'isOwner(data.ownerId)',
+    'isOwner(data.ownerUid)',
+    'isOwner(data.userId)',
+    'isOwner(data.createdBy)'
+  ]
 );
 
 patchIfNeeded(
