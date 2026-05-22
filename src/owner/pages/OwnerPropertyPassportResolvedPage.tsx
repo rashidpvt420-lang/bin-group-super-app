@@ -52,8 +52,8 @@ function passportFromProperty(property: any) {
   const name = firstText(property.propertyName, property.name, property.address, 'Property');
   return {
     ...property,
-    id: property.propertyPassportId || property.passportId || property.id,
-    propertyId: property.id,
+    id: property.propertyPassportId || property.passportId || property.propertyId || property.id,
+    propertyId: property.propertyId || property.id,
     propertyName: name,
     emirate: property.emirate || property.city || property.location || 'UAE',
     totalUnits: unitCount(property),
@@ -62,6 +62,20 @@ function passportFromProperty(property: any) {
     provisional: true,
     placeholder: isPlaceholderAsset(property),
   };
+}
+
+function contractPropertyRows(contract: any) {
+  const rows = Array.isArray(contract?.properties) ? contract.properties : [];
+  return rows.map((property: any, index: number) => passportFromProperty({
+    ...property,
+    propertyId: property?.propertyId || property?.id || `${contract.id || contract.contractId || 'contract'}-property-${index + 1}`,
+    sourceContractId: contract.id || contract.contractId,
+    activeContractId: contract.id || contract.contractId,
+    ownerId: contract.ownerId,
+    ownerUid: contract.ownerUid,
+    ownerEmail: contract.ownerEmail || contract.emailDelivery?.recipient,
+    packageName: contract.packageName || contract.planType,
+  }));
 }
 
 function sortPassportRows(a: any, b: any) {
@@ -98,13 +112,16 @@ export default function OwnerPropertyPassportResolvedPage() {
       setLoading(true);
       const passportMap = new Map<string, any>();
       const propertyMap = new Map<string, any>();
+      const contractMap = new Map<string, any>();
 
       const ownerIds = compact([user?.uid, (user as any)?.ownerId, (user as any)?.ownerUid, ...((Array.isArray((user as any)?.linkedOwnerIds) ? (user as any).linkedOwnerIds : []) as unknown[])]);
       for (const ownerId of ownerIds) {
-        for (const p of await safeQuery('propertyPassports', 'ownerId', ownerId)) passportMap.set(p.id, p);
-        for (const p of await safeQuery('propertyPassports', 'ownerUid', ownerId)) passportMap.set(p.id, p);
-        for (const p of await safeQuery('properties', 'ownerId', ownerId)) propertyMap.set(p.id, p);
-        for (const p of await safeQuery('properties', 'ownerUid', ownerId)) propertyMap.set(p.id, p);
+        for (const p of await safeQuery('propertyPassports', 'ownerId', ownerId)) passportMap.set(p.propertyId || p.id, p);
+        for (const p of await safeQuery('propertyPassports', 'ownerUid', ownerId)) passportMap.set(p.propertyId || p.id, p);
+        for (const p of await safeQuery('properties', 'ownerId', ownerId)) propertyMap.set(p.propertyId || p.id, p);
+        for (const p of await safeQuery('properties', 'ownerUid', ownerId)) propertyMap.set(p.propertyId || p.id, p);
+        for (const c of await safeQuery('contracts', 'ownerId', ownerId)) contractMap.set(c.id, c);
+        for (const c of await safeQuery('contracts', 'ownerUid', ownerId)) contractMap.set(c.id, c);
       }
 
       const emails = compact([
@@ -112,8 +129,14 @@ export default function OwnerPropertyPassportResolvedPage() {
         ...emailLookupCandidates((user as any)?.ownerEmail),
       ]);
       for (const email of emails) {
-        for (const p of await safeQuery('propertyPassports', 'ownerEmail', email)) passportMap.set(p.id, p);
-        for (const p of await safeQuery('properties', 'ownerEmail', email)) propertyMap.set(p.id, p);
+        for (const p of await safeQuery('propertyPassports', 'ownerEmail', email)) passportMap.set(p.propertyId || p.id, p);
+        for (const p of await safeQuery('properties', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
+        for (const c of await safeQuery('contracts', 'ownerEmail', email)) contractMap.set(c.id, c);
+        for (const c of await safeQuery('contracts', 'emailDelivery.recipient', email)) contractMap.set(c.id, c);
+      }
+
+      for (const contract of contractMap.values()) {
+        for (const p of contractPropertyRows(contract)) propertyMap.set(p.propertyId || p.id, p);
       }
 
       let rows = Array.from(passportMap.values()).map((row) => ({ ...row, placeholder: isPlaceholderAsset(row) }));
@@ -122,6 +145,9 @@ export default function OwnerPropertyPassportResolvedPage() {
         fallback = true;
         rows = Array.from(propertyMap.values()).map(passportFromProperty);
       }
+
+      const realRows = rows.filter((row) => !(isPlaceholderAsset(row) || row.placeholder === true));
+      if (realRows.length > 0) rows = realRows;
 
       rows.sort(sortPassportRows);
       if (!alive) return;
@@ -151,7 +177,7 @@ export default function OwnerPropertyPassportResolvedPage() {
 
       {usedFallback && (
         <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
-          Official property passport documents are not issued yet, so provisional passports are shown from linked active assets.
+          Official property passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records.
         </Alert>
       )}
 
