@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, CreditCard, FileText, Shield, Users, Wrench } from 'lucide-react';
+import { Building2, CreditCard, FileText, Shield, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, query, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -35,8 +35,9 @@ const canonicalEmail = (value: unknown) => {
 
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
 const emailVariants = (email: unknown) => compact([normalizeEmail(email), canonicalEmail(email)]);
-
 const getSeconds = (value: any) => Number(value?.seconds || value?._seconds || 0);
+
+const isPermissionDenied = (err: any) => String(err?.code || err?.message || '').toLowerCase().includes('permission');
 
 const isActiveProfile = (profile: any) => {
   if (!profile) return false;
@@ -44,7 +45,7 @@ const isActiveProfile = (profile: any) => {
   const activationStatus = String(profile.activationStatus || '').trim().toUpperCase();
   const signatureStatus = String(profile.contractSignatureStatus || profile.signatureStatus || '').trim().toUpperCase();
   return profile.dashboardUnlocked === true ||
-    profile.dashboardLocked === false && (profile.paymentVerified === true || profile.adminApproved === true) && !!(profile.activeContractId || profile.latestActivationContractId) ||
+    (profile.dashboardLocked === false && (profile.paymentVerified === true || profile.adminApproved === true) && !!(profile.activeContractId || profile.latestActivationContractId)) ||
     status === 'ACTIVE' ||
     activationStatus === 'ACTIVE' ||
     ACTIVE_SIGNATURE_STATUSES.has(signatureStatus);
@@ -53,49 +54,72 @@ const isActiveProfile = (profile: any) => {
 const isActiveContract = (contract: any) => {
   if (!contract) return false;
   const status = String(contract.status || '').trim().toUpperCase();
+  const contractStatus = String(contract.contractStatus || '').trim().toUpperCase();
   const activationStatus = String(contract.activationStatus || '').trim().toUpperCase();
   const signatureStatus = String(contract.signatureStatus || contract.signatureState?.status || '').trim().toUpperCase();
   return contract.dashboardUnlocked === true ||
-    contract.paymentVerified === true && (contract.ownerSigned === true || ACTIVE_CONTRACT_STATUSES.has(status) || ACTIVE_CONTRACT_STATUSES.has(activationStatus)) ||
+    (contract.paymentVerified === true && (contract.ownerSigned === true || ACTIVE_CONTRACT_STATUSES.has(status) || ACTIVE_CONTRACT_STATUSES.has(activationStatus))) ||
     ACTIVE_CONTRACT_STATUSES.has(status) ||
+    ACTIVE_CONTRACT_STATUSES.has(contractStatus) ||
     ACTIVE_CONTRACT_STATUSES.has(activationStatus) ||
     ACTIVE_SIGNATURE_STATUSES.has(signatureStatus);
 };
 
 const sortByRecent = (a: any, b: any) => getSeconds(b.updatedAt || b.createdAt) - getSeconds(a.updatedAt || a.createdAt);
 
+async function safeGetDocument(collectionName: string, id: string) {
+  if (!id) return null;
+  try {
+    const snap = await getDoc(doc(db, collectionName, id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  } catch (err) {
+    if (!isPermissionDenied(err)) console.warn(`[OwnerDashboardResolved] ${collectionName}/${id} read failed:`, err);
+    return null;
+  }
+}
+
 async function getCollectionDocs(collectionName: string, field: string, value: string) {
   if (!value) return [] as any[];
-  const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn(`[OwnerDashboardResolved] Skipped ${collectionName}.${field} == ${value}:`, err);
+    return [] as any[];
+  }
+}
+
+function contractPropertyRows(contract: any) {
+  const rows = Array.isArray(contract?.properties) ? contract.properties : [];
+  return rows.map((property: any, index: number) => ({
+    id: property?.propertyId || property?.id || `contract-property-${index + 1}`,
+    propertyId: property?.propertyId || property?.id || `contract-property-${index + 1}`,
+    ...property,
+  }));
 }
 
 async function resolveOwner(user: any): Promise<OwnerResolution> {
   const authUid = String(user?.uid || '').trim();
-  const authEmails = emailVariants(user?.email);
+  const authEmail = normalizeEmail(user?.email);
   const profiles: any[] = [];
 
   if (authUid) {
-    const [userSnap, ownerSnap] = await Promise.all([
-      getDoc(doc(db, 'users', authUid)),
-      getDoc(doc(db, 'owners', authUid)),
+    const [userProfile, ownerProfile] = await Promise.all([
+      safeGetDocument('users', authUid),
+      safeGetDocument('owners', authUid),
     ]);
-    if (userSnap.exists()) profiles.push({ id: userSnap.id, ...userSnap.data() });
-    if (ownerSnap.exists()) profiles.push({ id: ownerSnap.id, ...ownerSnap.data() });
-  }
-
-  for (const email of authEmails) {
-    profiles.push(...await getCollectionDocs('users', 'email', email));
-    profiles.push(...await getCollectionDocs('owners', 'email', email));
+    if (userProfile) profiles.push(userProfile);
+    if (ownerProfile) profiles.push(ownerProfile);
   }
 
   const profile = profiles.sort((a, b) => Number(isActiveProfile(b)) - Number(isActiveProfile(a)) || sortByRecent(a, b))[0] || null;
-  const emails = compact([
-    ...authEmails,
-    profile?.email,
-    profile?.ownerEmail,
-    ...(Array.isArray(profile?.linkedEmails) ? profile.linkedEmails : []),
-  ]).flatMap(emailVariants);
+
+  const trustedEmails = compact([
+    authEmail,
+    normalizeEmail(profile?.email),
+    normalizeEmail(profile?.ownerEmail),
+    ...(Array.isArray(profile?.linkedEmails) ? profile.linkedEmails.map(normalizeEmail) : []),
+  ]);
 
   const ownerIds = compact([
     authUid,
@@ -114,15 +138,18 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   ]);
 
   const contracts = new Map<string, any>();
+
   for (const contractId of contractIds) {
-    const snap = await getDoc(doc(db, 'contracts', contractId));
-    if (snap.exists()) contracts.set(snap.id, { id: snap.id, ...snap.data() });
+    const contract = await safeGetDocument('contracts', contractId);
+    if (contract) contracts.set(contract.id, contract);
   }
-  for (const ownerId of ownerIds) {
-    for (const c of await getCollectionDocs('contracts', 'ownerId', ownerId)) contracts.set(c.id, c);
-    for (const c of await getCollectionDocs('contracts', 'ownerUid', ownerId)) contracts.set(c.id, c);
+
+  if (authUid) {
+    for (const c of await getCollectionDocs('contracts', 'ownerId', authUid)) contracts.set(c.id, c);
+    for (const c of await getCollectionDocs('contracts', 'ownerUid', authUid)) contracts.set(c.id, c);
   }
-  for (const email of emails) {
+
+  for (const email of trustedEmails) {
     for (const c of await getCollectionDocs('contracts', 'ownerEmail', email)) contracts.set(c.id, c);
     for (const c of await getCollectionDocs('contracts', 'emailDelivery.recipient', email)) contracts.set(c.id, c);
   }
@@ -130,7 +157,11 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   const contractList = Array.from(contracts.values()).sort((a, b) => Number(isActiveContract(b)) - Number(isActiveContract(a)) || sortByRecent(a, b));
   const contract = contractList[0] || null;
   const finalOwnerIds = compact([...ownerIds, contract?.ownerId, contract?.ownerUid]);
-  const finalEmails = compact([...emails, contract?.ownerEmail, contract?.emailDelivery?.recipient]).flatMap(emailVariants);
+  const finalEmails = compact([
+    ...trustedEmails,
+    normalizeEmail(contract?.ownerEmail),
+    normalizeEmail(contract?.emailDelivery?.recipient),
+  ]).flatMap(emailVariants);
 
   if (isActiveProfile(profile) || isActiveContract(contract)) {
     return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
@@ -164,35 +195,47 @@ export default function OwnerDashboardResolvedPage() {
         if (resolved.state !== 'active') return;
 
         const propertyMap = new Map<string, any>();
-        for (const ownerId of resolved.ownerIds) {
-          for (const p of await getCollectionDocs('properties', 'ownerId', ownerId)) propertyMap.set(p.id, p);
-          for (const p of await getCollectionDocs('propertyPassports', 'ownerId', ownerId)) propertyMap.set(p.propertyId || p.id, p);
+        contractPropertyRows(resolved.contract).forEach((property: any) => propertyMap.set(property.propertyId || property.id, property));
+
+        const authUid = String(user?.uid || '').trim();
+        if (authUid) {
+          for (const p of await getCollectionDocs('properties', 'ownerId', authUid)) propertyMap.set(p.id, p);
+          for (const p of await getCollectionDocs('properties', 'ownerUid', authUid)) propertyMap.set(p.id, p);
+          for (const p of await getCollectionDocs('propertyPassports', 'ownerId', authUid)) propertyMap.set(p.propertyId || p.id, p);
+          for (const p of await getCollectionDocs('propertyPassports', 'ownerUid', authUid)) propertyMap.set(p.propertyId || p.id, p);
         }
-        for (const email of resolved.emails) {
+
+        const exactEmails = compact([
+          normalizeEmail(user?.email),
+          normalizeEmail(resolved.profile?.email),
+          normalizeEmail(resolved.profile?.ownerEmail),
+          normalizeEmail(resolved.contract?.ownerEmail),
+          normalizeEmail(resolved.contract?.emailDelivery?.recipient),
+        ]);
+        for (const email of exactEmails) {
           for (const p of await getCollectionDocs('properties', 'ownerEmail', email)) propertyMap.set(p.id, p);
           for (const p of await getCollectionDocs('propertyPassports', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
         }
+
         const linkedProperties = Array.from(propertyMap.values()).sort(sortByRecent);
         if (!alive) return;
         setProperties(linkedProperties);
 
-        let openTickets = 0;
-        for (const ownerId of resolved.ownerIds) {
-          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', ownerId)) {
-            if (ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())) openTickets += 1;
-          }
+        const ticketMap = new Map<string, any>();
+        if (authUid) {
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', authUid)) ticketMap.set(ticket.id, ticket);
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerUid', authUid)) ticketMap.set(ticket.id, ticket);
         }
-        for (const email of resolved.emails) {
-          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerEmail', email)) {
-            if (ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())) openTickets += 1;
-          }
+        for (const email of exactEmails) {
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerEmail', email)) ticketMap.set(ticket.id, ticket);
         }
+        const openTickets = Array.from(ticketMap.values()).filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
         if (alive) setTickets(openTickets);
       } catch (err: any) {
         console.error('[OwnerDashboardResolved] load failed:', err);
         if (alive) {
           setLoadError(err?.message || 'Dashboard identity resolution failed.');
-          setResolution((prev) => ({ ...prev, state: 'pending' }));
+          setResolution((prev) => ({ ...prev, state: prev.state === 'active' ? 'active' : 'pending' }));
         }
       }
     }
