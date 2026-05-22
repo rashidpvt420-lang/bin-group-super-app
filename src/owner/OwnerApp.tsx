@@ -20,7 +20,7 @@ import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage';
-import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportDetailPage';
+import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
 
