@@ -19,6 +19,36 @@ if (!admin.apps.length) {
 const runtimeDb = admin.firestore();
 
 const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase();
+const normalizeEmail = (value: unknown) => String(value || "").trim().toLowerCase();
+
+function canonicalEmail(value: unknown) {
+    const email = normalizeEmail(value);
+    const [local, domain] = email.split("@");
+    if (!local || !domain) return email;
+    const normalizedDomain = domain === "googlemail.com" ? "gmail.com" : domain;
+    const normalizedLocal = normalizedDomain === "gmail.com" ? local.split("+")[0].replace(/\./g, "") : local;
+    return `${normalizedLocal}@${normalizedDomain}`;
+}
+
+function emailCandidates(contractData: FirebaseFirestore.DocumentData) {
+    return [
+        contractData.ownerEmail,
+        contractData.recipientEmail,
+        contractData.email,
+        contractData.contactEmail,
+        contractData.emailDelivery?.recipient,
+        contractData.owner?.email,
+        contractData.ownerProfile?.email,
+        contractData.companyProfile?.email,
+        contractData.commercialSchedule?.ownerEmail,
+        contractData.ownerSelectedScopeSnapshot?.ownerEmail,
+        ...(Array.isArray(contractData.properties) ? contractData.properties.map((property: any) => property?.ownerEmail) : []),
+    ].map(normalizeEmail).filter(Boolean);
+}
+
+function resolveContractOwnerEmail(contractData: FirebaseFirestore.DocumentData) {
+    return emailCandidates(contractData)[0] || "";
+}
 
 async function assertAdmin(auth: any) {
     if (!auth) throw new HttpsError("unauthenticated", "Admin authentication required.");
@@ -42,10 +72,27 @@ function requirePaymentId(data: any) {
 }
 
 function callerOwnsContract(auth: any, contractData: FirebaseFirestore.DocumentData) {
-    const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || contractData.createdBy || "").trim();
-    const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
-    const authEmail = String(auth?.token?.email || "").trim().toLowerCase();
-    return contractOwnerUid === auth?.uid || (!!contractOwnerEmail && contractOwnerEmail === authEmail);
+    const authUid = String(auth?.uid || "").trim();
+    const authEmail = normalizeEmail(auth?.token?.email);
+    const authCanonicalEmail = canonicalEmail(authEmail);
+
+    const uidCandidates = [
+        contractData.ownerUid,
+        contractData.ownerId,
+        contractData.createdBy,
+        contractData.userId,
+        contractData.uid,
+        contractData.owner?.uid,
+        contractData.ownerProfile?.uid,
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+
+    if (authUid && uidCandidates.includes(authUid)) return true;
+
+    const contractEmails = emailCandidates(contractData);
+    if (authEmail && contractEmails.includes(authEmail)) return true;
+
+    const canonicalContractEmails = contractEmails.map(canonicalEmail).filter(Boolean);
+    return !!authCanonicalEmail && canonicalContractEmails.includes(authCanonicalEmail);
 }
 
 function firstPositiveNumber(...values: unknown[]) {
@@ -69,7 +116,9 @@ function contractAnnualValue(contractData: FirebaseFirestore.DocumentData) {
         contractData.pricing?.annualValue,
         contractData.quote?.annualContractValue,
         contractData.quote?.totalAnnual,
-        contractData.payment?.annualValue
+        contractData.payment?.annualValue,
+        contractData.paymentSchedule?.annualContractValue,
+        contractData.commercialSchedule?.annualContractValue
     );
 }
 
@@ -86,6 +135,8 @@ function contractMoneyValue(contractData: FirebaseFirestore.DocumentData) {
         contractData.payment?.amount,
         contractData.paymentAmount,
         contractData.amount,
+        contractData.paymentSchedule?.mobilizationAmount,
+        contractData.commercialSchedule?.mobilizationAmount,
         annualValue > 0 ? annualValue * 0.15 : 0
     );
 }
@@ -139,8 +190,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         throw new HttpsError("invalid-argument", "A positive payment amount is required unless the signed contract is pending admin amount confirmation.");
     }
 
-    const contractOwnerEmail = String(contractData.ownerEmail || "").trim().toLowerCase();
-    const authEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+    const contractOwnerEmail = resolveContractOwnerEmail(contractData);
+    const authEmail = normalizeEmail(request.auth.token?.email);
     const now = admin.firestore.FieldValue.serverTimestamp();
     const paymentRef = runtimeDb.collection("payment_transactions").doc();
     await paymentRef.set({
@@ -198,13 +249,16 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     const contractData = contractSnap.data() || {};
     if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
 
-    const status = String(contractData.status || "").trim().toUpperCase();
+    const status = String(contractData.status || contractData.activationStatus || contractData.signatureState?.status || "").trim().toUpperCase();
     const terminalStatuses = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"];
     if (terminalStatuses.includes(status) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED") {
         const now = admin.firestore.FieldValue.serverTimestamp();
         const previousStart = asDate(contractData.ownerSignature?.signedAt) || asDate(contractData.ownerSignedAt) || asDate(contractData.signedAt) || asDate(contractData.effectiveFrom) || new Date();
         const termFields = termFieldsFromStart(previousStart);
         await contractRef.set({
+            ownerUid: request.auth.uid,
+            ownerId: request.auth.uid,
+            ownerEmail: normalizeEmail(request.auth.token?.email) || resolveContractOwnerEmail(contractData) || null,
             ownerSigned: true,
             signatureStatus: "OWNER_SIGNED",
             ...termFields,
@@ -222,18 +276,30 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     const signedAtDate = new Date();
     const signedAt = admin.firestore.Timestamp.fromDate(signedAtDate);
     const termFields = termFieldsFromStart(signedAtDate);
+    const authEmail = normalizeEmail(request.auth.token?.email);
     const batch = runtimeDb.batch();
 
     batch.set(contractRef, {
+        ownerUid: request.auth.uid,
+        ownerId: request.auth.uid,
+        ownerEmail: authEmail || resolveContractOwnerEmail(contractData) || null,
         status: "READY_FOR_ACTIVATION",
+        activationStatus: "READY_FOR_ACTIVATION",
+        contractStatus: "owner_signed_ready_for_payment_verification",
         ownerSigned: true,
         ownerSignedAt: signedAt,
         signedAt,
         signatureStatus: "OWNER_SIGNED",
+        signatureState: {
+            ...(contractData.signatureState || {}),
+            ownerSigned: true,
+            ownerSignedAt: signedAtDate.toISOString(),
+            status: "OWNER_SIGNED",
+        },
         ...termFields,
         ownerSignature: {
             uid: request.auth.uid,
-            email: request.auth.token?.email || contractData.ownerEmail || null,
+            email: authEmail || resolveContractOwnerEmail(contractData) || null,
             name: signatureName || request.auth.token?.email || request.auth.uid,
             acceptedTerms: true,
             signedAt,
@@ -246,6 +312,7 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     }, { merge: true });
 
     batch.set(runtimeDb.collection("users").doc(request.auth.uid), {
+        email: authEmail || null,
         latestActivationContractId: contractId,
         activeContractId: contractId,
         contractSignatureStatus: "OWNER_SIGNED",
@@ -255,10 +322,12 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         activeContractValidTo: termFields.validTo,
         ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
         dashboardLocked: true,
+        dashboardUnlocked: false,
         updatedAt: now,
     }, { merge: true });
 
     batch.set(runtimeDb.collection("owners").doc(request.auth.uid), {
+        email: authEmail || null,
         latestActivationContractId: contractId,
         activeContractId: contractId,
         contractSignatureStatus: "OWNER_SIGNED",
@@ -268,6 +337,7 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         activeContractValidTo: termFields.validTo,
         ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
         dashboardLocked: true,
+        dashboardUnlocked: false,
         updatedAt: now,
     }, { merge: true });
 
@@ -277,7 +347,7 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         action: "OWNER_SIGN_CONTRACT",
         targetType: "contracts",
         targetId: contractId,
-        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION", contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary },
+        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION", contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary, authEmail, contractEmails: emailCandidates(contractData) },
         createdAt: now,
     });
 
@@ -313,7 +383,7 @@ export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     const contractData = contractSnap?.exists ? (contractSnap.data() || {}) : {};
 
     if (!ownerUid) {
-        ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+        ownerUid = String(contractData.ownerUid || contractData.ownerId || "").trim();
     }
 
     const intakeId = String(payment.intakeId || contractData.intakeId || "").trim();
@@ -457,7 +527,7 @@ export const rejectOwnerPaymentTransaction = onCall({ cors: true }, async (reque
         const contractSnap = await runtimeDb.collection("contracts").doc(contractId).get();
         if (contractSnap.exists) {
             const contractData = contractSnap.data() || {};
-            ownerUid = String(contractData.ownerId || contractData.ownerUid || "").trim();
+            ownerUid = String(contractData.ownerUid || contractData.ownerId || "").trim();
         }
     }
 
