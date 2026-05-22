@@ -20,6 +20,22 @@ function isAllowedPath(pathname: string) {
   return pathname.startsWith('/owner/property-passport/');
 }
 
+function ownerContractId(profile: any) {
+  return String(
+    profile?.pendingContractId ||
+    profile?.latestActivationContractId ||
+    profile?.activeContractId ||
+    profile?.contractId ||
+    profile?.latestContractId ||
+    ''
+  ).trim();
+}
+
+function contractRoute(profile: any) {
+  const contractId = ownerContractId(profile);
+  return contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts';
+}
+
 export default function OwnerActivationGuard({ children }: { children: React.ReactNode }) {
   const { user } = useRole();
   const { isRTL } = useLanguage();
@@ -65,7 +81,7 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
             <Button
               variant="outlined"
               startIcon={<FileText size={18} />}
-              onClick={() => navigate('/owner/contracts')}
+              onClick={() => navigate(contractRoute(profile))}
               sx={{ borderColor: alpha(binThemeTokens.gold, 0.45), color: binThemeTokens.gold, fontWeight: 950, borderRadius: 3, px: 3, py: 1.4 }}
             >
               Review Contracts
