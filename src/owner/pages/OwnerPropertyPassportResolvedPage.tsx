@@ -20,6 +20,23 @@ const emailLookupCandidates = (value: unknown) => {
   return Array.from(variants);
 };
 
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function unitCount(record: any) {
+  return Number(record?.totalUnits || record?.units || record?.numberOfUnits || record?.unitsCount || 0);
+}
+
+function isPlaceholderAsset(record: any) {
+  const name = firstText(record?.propertyName, record?.name, record?.address).toLowerCase();
+  return (!name || name === 'new asset' || name === 'property') && unitCount(record) === 0;
+}
+
 async function safeQuery(collectionName: string, field: string, value: string) {
   if (!value) return [] as any[];
   try {
@@ -32,17 +49,34 @@ async function safeQuery(collectionName: string, field: string, value: string) {
 }
 
 function passportFromProperty(property: any) {
+  const name = firstText(property.propertyName, property.name, property.address, 'Property');
   return {
     ...property,
     id: property.propertyPassportId || property.passportId || property.id,
     propertyId: property.id,
-    propertyName: property.propertyName || property.name || property.address || 'Property',
+    propertyName: name,
     emirate: property.emirate || property.city || property.location || 'UAE',
-    totalUnits: property.totalUnits || property.units || property.numberOfUnits || property.unitsCount || 0,
+    totalUnits: unitCount(property),
     floors: property.floors || property.numberOfFloors || 0,
     status: property.status || 'PROVISIONAL',
     provisional: true,
+    placeholder: isPlaceholderAsset(property),
   };
+}
+
+function sortPassportRows(a: any, b: any) {
+  const aPlaceholder = isPlaceholderAsset(a) || a.placeholder === true;
+  const bPlaceholder = isPlaceholderAsset(b) || b.placeholder === true;
+  if (aPlaceholder && !bPlaceholder) return 1;
+  if (!aPlaceholder && bPlaceholder) return -1;
+
+  const aUnits = unitCount(a);
+  const bUnits = unitCount(b);
+  if (aUnits !== bUnits) return bUnits - aUnits;
+
+  const aTime = Number(a?.updatedAt?.seconds || a?.createdAt?.seconds || 0);
+  const bTime = Number(b?.updatedAt?.seconds || b?.createdAt?.seconds || 0);
+  return bTime - aTime;
 }
 
 export default function OwnerPropertyPassportResolvedPage() {
@@ -82,14 +116,14 @@ export default function OwnerPropertyPassportResolvedPage() {
         for (const p of await safeQuery('properties', 'ownerEmail', email)) propertyMap.set(p.id, p);
       }
 
-      let rows = Array.from(passportMap.values());
+      let rows = Array.from(passportMap.values()).map((row) => ({ ...row, placeholder: isPlaceholderAsset(row) }));
       let fallback = false;
       if (rows.length === 0 && propertyMap.size > 0) {
         fallback = true;
         rows = Array.from(propertyMap.values()).map(passportFromProperty);
       }
 
-      rows.sort((a, b) => Number(b?.updatedAt?.seconds || b?.createdAt?.seconds || 0) - Number(a?.updatedAt?.seconds || a?.createdAt?.seconds || 0));
+      rows.sort(sortPassportRows);
       if (!alive) return;
       setPassports(rows);
       setUsedFallback(fallback);
@@ -130,7 +164,7 @@ export default function OwnerPropertyPassportResolvedPage() {
         <Grid container spacing={4}>
           {passports.map((p) => (
             <Grid item xs={12} md={6} key={p.id}>
-              <Paper sx={{ p: 0, overflow: 'hidden', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, transition: 'all 0.3s ease', '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
+              <Paper sx={{ p: 0, overflow: 'hidden', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, transition: 'all 0.3s ease', opacity: p.placeholder ? 0.76 : 1, '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
                 <Box sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Stack direction="row" spacing={2} alignItems="center">
                     <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold }}>
@@ -141,7 +175,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                       <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
                     </Box>
                   </Stack>
-                  <Chip label={p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE')} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? binThemeTokens.gold : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
+                  <Chip label={p.placeholder ? 'DRAFT' : (p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE'))} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? binThemeTokens.gold : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
                 </Box>
 
                 <Box sx={{ p: 4 }}>
@@ -152,7 +186,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>COMPOSITION</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{p.totalUnits || 0} Units · {p.floors || 0} Floors</Typography></Stack>
+                      <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{unitCount(p)} Units · {p.floors || 0} Floors</Typography></Stack>
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>ISSUANCE DATE</Typography>
@@ -160,7 +194,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                     </Grid>
                     <Grid item xs={6}>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>GOVERNANCE</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><ShieldCheck size={14} color="#10b981" /><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700 }}>{p.provisional ? 'READY' : 'VERIFIED'}</Typography></Stack>
+                      <Stack direction="row" spacing={1} alignItems="center"><ShieldCheck size={14} color="#10b981" /><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700 }}>{p.placeholder ? 'DRAFT' : (p.provisional ? 'READY' : 'VERIFIED')}</Typography></Stack>
                     </Grid>
                   </Grid>
 
