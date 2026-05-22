@@ -141,6 +141,40 @@ function contractMoneyValue(contractData: FirebaseFirestore.DocumentData) {
     );
 }
 
+function contractPaymentIsVerified(contractData: FirebaseFirestore.DocumentData) {
+    const paymentStatus = String(
+        contractData.paymentStatus ||
+        contractData.paymentSchedule?.paymentStatus ||
+        contractData.commercialSchedule?.paymentStatus ||
+        ''
+    ).trim().toUpperCase();
+
+    return contractData.paymentVerified === true ||
+        contractData.paymentSchedule?.paymentVerified === true ||
+        contractData.commercialSchedule?.paymentVerified === true ||
+        ['VERIFIED', 'RECONCILED', 'ADMIN_VERIFIED', 'PAID'].includes(paymentStatus);
+}
+
+function ownerLifecyclePatch(contractId: string, authEmail: string, termFields: any, now: any, paymentVerified: boolean) {
+    const active = paymentVerified === true;
+    return {
+        email: authEmail || null,
+        latestActivationContractId: contractId,
+        activeContractId: contractId,
+        contractSignatureStatus: active ? 'ACTIVE' : 'OWNER_SIGNED',
+        activationStatus: active ? 'ACTIVE' : 'READY_FOR_ACTIVATION',
+        status: active ? 'ACTIVE' : 'PENDING_PAYMENT_VERIFICATION',
+        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
+        activeContractValidFrom: termFields.effectiveFrom,
+        activeContractValidTo: termFields.validTo,
+        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
+        dashboardLocked: !active,
+        dashboardUnlocked: active,
+        ...(active ? { adminApproved: true, paymentVerified: true } : {}),
+        updatedAt: now,
+    };
+}
+
 export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "User authentication required.");
 
@@ -277,15 +311,21 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
     const signedAt = admin.firestore.Timestamp.fromDate(signedAtDate);
     const termFields = termFieldsFromStart(signedAtDate);
     const authEmail = normalizeEmail(request.auth.token?.email);
+    const paymentVerified = contractPaymentIsVerified(contractData);
+    const nextStatus = paymentVerified ? "ACTIVE" : "READY_FOR_ACTIVATION";
+    const nextContractStatus = paymentVerified ? "signed_active" : "owner_signed_ready_for_payment_verification";
     const batch = runtimeDb.batch();
 
     batch.set(contractRef, {
         ownerUid: request.auth.uid,
         ownerId: request.auth.uid,
         ownerEmail: authEmail || resolveContractOwnerEmail(contractData) || null,
-        status: "READY_FOR_ACTIVATION",
-        activationStatus: "READY_FOR_ACTIVATION",
-        contractStatus: "owner_signed_ready_for_payment_verification",
+        status: nextStatus,
+        activationStatus: nextStatus,
+        contractStatus: nextContractStatus,
+        paymentVerified,
+        dashboardLocked: !paymentVerified,
+        dashboardUnlocked: paymentVerified,
         ownerSigned: true,
         ownerSignedAt: signedAt,
         signedAt,
@@ -294,7 +334,7 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
             ...(contractData.signatureState || {}),
             ownerSigned: true,
             ownerSignedAt: signedAtDate.toISOString(),
-            status: "OWNER_SIGNED",
+            status: paymentVerified ? "ACTIVE" : "OWNER_SIGNED",
         },
         ...termFields,
         ownerSignature: {
@@ -311,35 +351,9 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         updatedAt: now,
     }, { merge: true });
 
-    batch.set(runtimeDb.collection("users").doc(request.auth.uid), {
-        email: authEmail || null,
-        latestActivationContractId: contractId,
-        activeContractId: contractId,
-        contractSignatureStatus: "OWNER_SIGNED",
-        activationStatus: "READY_FOR_ACTIVATION",
-        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
-        activeContractValidFrom: termFields.effectiveFrom,
-        activeContractValidTo: termFields.validTo,
-        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-        dashboardLocked: true,
-        dashboardUnlocked: false,
-        updatedAt: now,
-    }, { merge: true });
-
-    batch.set(runtimeDb.collection("owners").doc(request.auth.uid), {
-        email: authEmail || null,
-        latestActivationContractId: contractId,
-        activeContractId: contractId,
-        contractSignatureStatus: "OWNER_SIGNED",
-        activationStatus: "READY_FOR_ACTIVATION",
-        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
-        activeContractValidFrom: termFields.effectiveFrom,
-        activeContractValidTo: termFields.validTo,
-        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-        dashboardLocked: true,
-        dashboardUnlocked: false,
-        updatedAt: now,
-    }, { merge: true });
+    const ownerPatch = ownerLifecyclePatch(contractId, authEmail, termFields, now, paymentVerified);
+    batch.set(runtimeDb.collection("users").doc(request.auth.uid), ownerPatch, { merge: true });
+    batch.set(runtimeDb.collection("owners").doc(request.auth.uid), ownerPatch, { merge: true });
 
     batch.set(runtimeDb.collection("audit_logs").doc(), {
         actorId: request.auth.uid,
@@ -347,12 +361,12 @@ export const ownerSignContract = onCall({ cors: true }, async (request) => {
         action: "OWNER_SIGN_CONTRACT",
         targetType: "contracts",
         targetId: contractId,
-        metadata: { previousStatus: status, nextStatus: "READY_FOR_ACTIVATION", contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary, authEmail, contractEmails: emailCandidates(contractData) },
+        metadata: { previousStatus: status, nextStatus, contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary, authEmail, contractEmails: emailCandidates(contractData), paymentVerified },
         createdAt: now,
     });
 
     await batch.commit();
-    return { contractId, status: "READY_FOR_ACTIVATION", ownerSigned: true, contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary };
+    return { contractId, status: nextStatus, ownerSigned: true, paymentVerified, dashboardUnlocked: paymentVerified, contractTermMonths: OWNER_CONTRACT_TERM_MONTHS, termSummary: termFields.termSummary };
 });
 
 export const verifyOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
