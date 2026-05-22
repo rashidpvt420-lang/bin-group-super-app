@@ -110,6 +110,7 @@ export default function OwnerApp() {
                 <Route path="/" element={<OwnerDashboardPage />} />
                 <Route path="/dashboard" element={<OwnerDashboardPage />} />
                 <Route path="/activation" element={<OwnerActivationPage />} />
+                <Route path="/onboarding-status" element={<OwnerActivationPage />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
