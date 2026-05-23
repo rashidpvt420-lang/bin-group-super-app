@@ -108,9 +108,26 @@ export interface PropertyData {
         updatedAt?: string;
     };
     location?: {
-        lat: number;
-        lng: number;
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+        address?: string;
+        formattedAddress?: string;
+        emirate?: string;
+        googleMapsUrl?: string;
+        plusCode?: string;
+        accuracy?: "EXACT" | "APPROXIMATE" | "MISSING";
+        quality?: string;
+        updatedAt?: string;
+        updatedBy?: string;
     };
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+    googleMapsUrl?: string;
+    plusCode?: string;
     ownerEmail?: string;
     exposure?: string;
     strategy?: 'fm_only' | 'pm_only' | 'both' | 'sale' | 'rent' | 'fm';

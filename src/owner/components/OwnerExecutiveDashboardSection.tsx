@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
   alpha,
+  Button,
 } from '@mui/material';
 import {
   AlertTriangle,
@@ -22,10 +23,13 @@ import {
   Shield,
   Users,
   Wrench,
+  ExternalLink,
+  MapPin,
 } from 'lucide-react';
 import { collection, db, getDocs, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { getOwnerDatePolicy } from '../utils/ownerDatePolicy';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import {
   getAssetTypeLabel,
   getFirstAssetValue,
@@ -166,11 +170,12 @@ function renderMetric(label: string, value: React.ReactNode, caption?: React.Rea
   );
 }
 
-function AssetIntelligenceCard({ property }: { property: any }) {
-  const template = getOwnerAssetTemplate(property);
-  const assetType = getAssetTypeLabel(property);
-  const policy = getOwnerDatePolicy(assetType, property);
-  const name = property?.propertyName || property?.name || property?.address || 'Asset';
+function AssetIntelligenceCard({ property, user }: { property: any; user?: any }) {
+  const loc = resolvePropertyLocation(property);
+  const pUnits = property.units || property.numberOfUnits || property.unitsCount || 0;
+  const pFloors = property.floors || property.numberOfFloors || property.floorsCount || 0;
+  const pType = property.propertyType || property.type || 'Residential';
+  const ownerName = property.ownerName || user?.displayName || 'Sovereign Owner';
 
   return (
     <Card sx={{ ...cardSx, height: '100%' }}>
@@ -178,60 +183,74 @@ function AssetIntelligenceCard({ property }: { property: any }) {
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" sx={{ mb: 2, minWidth: 0 }}>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5, ...textSafeSx }}>
-              {template.title}
+              {pType}
             </Typography>
-            <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-              {name}
+            <Typography variant="h6" fontWeight="950" sx={{ color: '#fff', ...textSafeSx }}>
+              {property.propertyName || property.name || 'Property'}
             </Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', ...textSafeSx }}>
-              {assetType || 'Property'} · {property?.emirate || property?.city || 'UAE'}
+              Owner: {ownerName}
             </Typography>
           </Box>
-          <Chip
-            label={property?.passportStatus || property?.governanceStatus || 'DATA LIVE'}
-            size="small"
-            sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900, maxWidth: '100%' }}
+          <Chip 
+            label={loc.hasExactCoordinates ? "EXACT GPS READY" : (loc.locationQuality === "MISSING" ? "GPS REQUIRED" : "ADDRESS ONLY")}
+            size="small" 
+            sx={{ 
+              bgcolor: loc.hasExactCoordinates ? alpha('#10b981', 0.12) : (loc.locationQuality === "MISSING" ? alpha('#ef4444', 0.12) : alpha('#f59e0b', 0.12)), 
+              color: loc.hasExactCoordinates ? '#10b981' : (loc.locationQuality === "MISSING" ? '#fca5a5' : '#fde047'), 
+              fontWeight: 950,
+              fontSize: '0.65rem',
+              flexShrink: 0
+            }} 
           />
         </Stack>
 
-        <Grid container spacing={1.5}>
-          {template.fields.map((field) => (
-            <Grid item xs={12} sm={6} md={3} key={`${name}-${field.label}`} sx={{ minWidth: 0 }}>
-              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.025)', borderRadius: 2, minHeight: 72, minWidth: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900, ...textSafeSx }}>
-                  {field.label.toUpperCase()}
-                </Typography>
-                <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', mt: 0.4, ...textSafeSx }}>
-                  {getFirstAssetValue(property, field.keys)}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={6} sm={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>EMIRATE</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{loc.emirate}</Typography>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>COMPOSITION</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{pUnits} Units · {pFloors} Floors</Typography>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>GPS STATUS</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: loc.hasExactCoordinates ? '#10b981' : '#ef4444', ...textSafeSx }}>
+              {loc.hasExactCoordinates ? 'PIN READY' : 'PIN REQUIRED'}
+            </Typography>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>COORDINATES</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', fontFamily: 'monospace', ...textSafeSx }}>
+              {loc.hasExactCoordinates ? `${loc.latitude?.toFixed(4)}, ${loc.longitude?.toFixed(4)}` : 'N/A'}
+            </Typography>
+          </Grid>
         </Grid>
 
-        <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.07)' }} />
-        <Grid container spacing={1.5}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>LEASE EXPIRY</Typography>
-            <Typography variant="body2" fontWeight={900} sx={{ color: policy.showLeaseExpiry ? '#fff' : 'rgba(255,255,255,0.45)', ...textSafeSx }}>
-              {policy.showLeaseExpiry ? formatDate(property?.leaseExpiry || property?.leaseEndDate || property?.leaseValidTo) : 'Not applicable'}
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>PERMIT</Typography>
-            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{formatDate(property?.permitExpiry || property?.permitValidTo)}</Typography>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>INSPECTION</Typography>
-            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{formatDate(property?.inspectionExpiry || property?.nextInspectionDate)}</Typography>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>MAINTENANCE</Typography>
-            <Typography variant="body2" fontWeight={900} sx={{ color: '#10b981', ...textSafeSx }}>
-              {property?.maintenanceReadiness || property?.maintenanceStatus || 'Pending data'}
-            </Typography>
-          </Grid>
-        </Grid>
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>FULL ADDRESS</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', ...textSafeSx }}>{loc.address || 'Address pending'}</Typography>
+        </Stack>
+
+        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+          <Button 
+            href={loc.googleMapsUrl} 
+            target="_blank" 
+            rel="noreferrer" 
+            variant="outlined" 
+            size="small"
+            endIcon={<ExternalLink size={14} />} 
+            sx={{ 
+              color: binThemeTokens.gold, 
+              borderColor: alpha(binThemeTokens.gold, 0.3),
+              fontWeight: 950,
+              fontSize: '0.7rem'
+            }}
+          >
+            Open in Maps
+          </Button>
+        </Box>
       </CardContent>
     </Card>
   );
@@ -442,7 +461,7 @@ export default function OwnerExecutiveDashboardSection({
           ) : (
             visibleProperties.map((property) => (
               <Grid item xs={12} key={property.id || property.propertyId || property.name} sx={{ minWidth: 0 }}>
-                <AssetIntelligenceCard property={property} />
+                <AssetIntelligenceCard property={property} user={user} />
               </Grid>
             ))
           )}

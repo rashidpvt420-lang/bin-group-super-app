@@ -48,6 +48,32 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [locating, setLocating] = useState(false);
     const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
     const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
+    const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
+    const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
+
+    const handleGoogleMapsUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setGoogleMapsUrlField(val);
+        updateProperty(0, {
+            googleMapsUrl: val,
+            location: {
+                ...(activeProperty?.location || {}),
+                googleMapsUrl: val
+            } as any
+        });
+    };
+
+    const handlePlusCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setPlusCodeField(val);
+        updateProperty(0, {
+            plusCode: val,
+            location: {
+                ...(activeProperty?.location || {}),
+                plusCode: val
+            } as any
+        });
+    };
 
     const googleMapsUrl = buildGoogleMapsSearchUrl({
         lat: manualLat,
@@ -125,7 +151,25 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area: geo.area,
                 googlePlaceId: geo.placeId || 'MANUAL',
                 geo: geo as any,
-                location: { lat: geo.lat, lng: geo.lng }
+                location: {
+                    lat: geo.lat,
+                    lng: geo.lng,
+                    latitude: geo.lat,
+                    longitude: geo.lng,
+                    address: geo.address,
+                    emirate: geo.emirate,
+                    googleMapsUrl: googleMapsUrlField,
+                    plusCode: plusCodeField,
+                    quality: "EXACT_GPS",
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: "owner"
+                },
+                lat: geo.lat,
+                lng: geo.lng,
+                latitude: geo.lat,
+                longitude: geo.lng,
+                googleMapsUrl: googleMapsUrlField,
+                plusCode: plusCodeField
             });
 
             setManualLat(String(payload.lat));
@@ -384,10 +428,49 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField fullWidth label="Latitude" value={manualLat} onChange={(e) => setManualLat(e.target.value)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    <TextField 
+                                        fullWidth 
+                                        label="Latitude" 
+                                        value={manualLat} 
+                                        onChange={(e) => setManualLat(e.target.value)} 
+                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                        FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField fullWidth label="Longitude" value={manualLng} onChange={(e) => setManualLng(e.target.value)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    <TextField 
+                                        fullWidth 
+                                        label="Longitude" 
+                                        value={manualLng} 
+                                        onChange={(e) => setManualLng(e.target.value)} 
+                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                        FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    />
+                                </Grid>
+                            </Grid>
+
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField 
+                                        fullWidth 
+                                        label="Google Maps URL" 
+                                        placeholder="https://maps.google.com/?q=..."
+                                        value={googleMapsUrlField} 
+                                        onChange={handleGoogleMapsUrlChange} 
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField 
+                                        fullWidth 
+                                        label="Plus Code" 
+                                        placeholder="e.g. 785P+GH Dubai"
+                                        value={plusCodeField} 
+                                        onChange={handlePlusCodeChange} 
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    />
                                 </Grid>
                             </Grid>
 

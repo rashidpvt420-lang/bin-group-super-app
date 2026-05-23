@@ -19,6 +19,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyStatusUpdate, notifyCompletionRequest } from '../../services/notificationService';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, logAuditAction } from '../../shared-exports';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -303,6 +304,52 @@ export default function TechnicianJobDetailPage() {
                 {/* Right Column: Communications & History */}
                 <Grid item xs={12} lg={4}>
                     <Stack spacing={4}>
+                        <Paper sx={{ p: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 3, display: 'block' }}>LOCATION & NAVIGATION</Typography>
+                            {(() => {
+                                const resolved = resolvePropertyLocation(ticket);
+                                if (resolved.hasExactCoordinates) {
+                                    return (
+                                        <Stack spacing={2}>
+                                            <Button 
+                                                fullWidth 
+                                                variant="contained" 
+                                                startIcon={<Navigation size={18} />} 
+                                                onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} 
+                                                sx={{ py: 1.5, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3 }}
+                                            >
+                                                Navigate to Property
+                                            </Button>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', display: 'block', fontFamily: 'monospace' }}>
+                                                GPS: {resolved.latitude}, {resolved.longitude}
+                                            </Typography>
+                                        </Stack>
+                                    );
+                                } else {
+                                    return (
+                                        <Stack spacing={2}>
+                                            <Box sx={{ p: 2, bgcolor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 2 }}>
+                                                <Typography variant="body2" sx={{ color: '#f87171', fontWeight: 900, textAlign: 'center' }}>
+                                                    Exact GPS pin missing. Contact Admin before dispatch.
+                                                </Typography>
+                                            </Box>
+                                            {resolved.locationQuality !== "MISSING" && (
+                                                <Button 
+                                                    fullWidth 
+                                                    variant="outlined" 
+                                                    startIcon={<Navigation size={18} />} 
+                                                    onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} 
+                                                    sx={{ py: 1.5, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 950, borderRadius: 3 }}
+                                                >
+                                                    Navigate to Fallback Area
+                                                </Button>
+                                            )}
+                                        </Stack>
+                                    );
+                                }
+                            })()}
+                        </Paper>
+
                         <Paper sx={{ p: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 3, display: 'block' }}>COMMS CHANNELS</Typography>
                             <Stack spacing={2}>
