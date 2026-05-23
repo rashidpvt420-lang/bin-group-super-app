@@ -18,6 +18,7 @@ import { collection, query, orderBy, limit, where, onSnapshot, updateDoc, doc, s
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import { resolvePropertyLocation } from '../../../utils/propertyLocationResolver';
 
 interface Ticket {
   ticketId: string;
@@ -220,6 +221,23 @@ export default function TicketsManagementPage() {
                   <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{ticket.propertyName || 'N/A'}</Typography>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>UNIT {ticket.unitNumber || ticket.unit || 'N/A'}</Typography>
+                      {(() => {
+                          const resolved = resolvePropertyLocation(ticket);
+                          if (!resolved.hasExactCoordinates) {
+                              return (
+                                  <Box sx={{ mt: 0.5 }}>
+                                      <Tooltip title="Exact GPS pin missing. Technician dispatch cannot be guaranteed.">
+                                          <Chip 
+                                              label="GPS MISSING" 
+                                              size="small" 
+                                              sx={{ height: 16, fontSize: 8, bgcolor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 900, border: '1px solid rgba(239, 68, 68, 0.3)' }} 
+                                          />
+                                      </Tooltip>
+                                  </Box>
+                              );
+                          }
+                          return null;
+                      })()}
                   </TableCell>
                   <TableCell>
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>{String(ticket.category || '').toUpperCase() || 'GENERAL'}</Typography>
@@ -310,6 +328,17 @@ export default function TicketsManagementPage() {
           <DialogContent>
               {detailTicket && (
                   <Stack spacing={3} sx={{ mt: 1 }}>
+                      {(() => {
+                          const resolved = resolvePropertyLocation(detailTicket);
+                          if (!resolved.hasExactCoordinates) {
+                              return (
+                                  <Alert severity="error" sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                      Exact GPS pin missing. Technician dispatch cannot be guaranteed.
+                                  </Alert>
+                              );
+                          }
+                          return null;
+                      })()}
                       <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
                           <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950 }}>DESCRIPTION</Typography>
                           <Typography variant="body1" sx={{ color: '#FFF', mt: 0.5 }}>{detailTicket.description}</Typography>

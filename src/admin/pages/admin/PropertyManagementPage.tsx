@@ -28,6 +28,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
+import { resolvePropertyLocation } from '../../../utils/propertyLocationResolver';
 
 interface Property {
     id: string;
@@ -77,7 +78,9 @@ export default function PropertyManagementPage() {
         shops: '',
         sizeSqft: '',
         propertyAge: '',
-        titleDeedUrl: ''
+        titleDeedUrl: '',
+        googleMapsUrl: '',
+        plusCode: ''
     });
 
     const [generatedInviteLink, setGeneratedInviteLink] = useState('');
@@ -96,6 +99,10 @@ export default function PropertyManagementPage() {
 
     const handleAddProperty = async () => {
         try {
+            const latitudeVal = formData.lat ? parseFloat(formData.lat) : null;
+            const longitudeVal = formData.lng ? parseFloat(formData.lng) : null;
+            const hasExact = latitudeVal !== null && !isNaN(latitudeVal) && longitudeVal !== null && !isNaN(longitudeVal);
+
             const geo = buildGeoAnchor({
                 lat: formData.lat,
                 lng: formData.lng,
@@ -104,6 +111,31 @@ export default function PropertyManagementPage() {
                 city: formData.serviceZone,
                 area: formData.serviceZone
             });
+
+            let quality: 'EXACT_GPS' | 'PLUS_CODE' | 'MAP_URL' | 'ADDRESS_ONLY' | 'MISSING' = 'MISSING';
+            if (hasExact) {
+                quality = 'EXACT_GPS';
+            } else if (formData.plusCode) {
+                quality = 'PLUS_CODE';
+            } else if (formData.googleMapsUrl) {
+                quality = 'MAP_URL';
+            } else if (formData.address) {
+                quality = 'ADDRESS_ONLY';
+            }
+
+            const locationObj = {
+                latitude: hasExact ? latitudeVal : null,
+                longitude: hasExact ? longitudeVal : null,
+                lat: hasExact ? latitudeVal : null,
+                lng: hasExact ? longitudeVal : null,
+                address: formData.address,
+                emirate: formData.emirate,
+                googleMapsUrl: formData.googleMapsUrl,
+                plusCode: formData.plusCode,
+                quality,
+                updatedAt: new Date().toISOString(),
+                updatedBy: 'admin'
+            };
             
             // 1. Create Owner Invite
             let ownerInviteId = formData.ownerId;
@@ -131,8 +163,14 @@ export default function PropertyManagementPage() {
                 address: formData.address,
                 addressLine: formData.address,
                 geo,
-                location: { lat: geo.lat, lng: geo.lng },
+                location: locationObj,
                 coordinates: { lat: geo.lat, lng: geo.lng },
+                lat: geo.lat,
+                lng: geo.lng,
+                latitude: geo.lat,
+                longitude: geo.lng,
+                googleMapsUrl: formData.googleMapsUrl,
+                plusCode: formData.plusCode,
                 ownerId: ownerInviteId,
                 ownerInviteId,
                 emirate: formData.emirate,
@@ -196,12 +234,13 @@ export default function PropertyManagementPage() {
 
     const handleEditOpen = (prop: Property) => {
         setSelectedProperty(prop);
+        const resolved = resolvePropertyLocation(prop);
         setFormData({
             name: prop.name || '',
             propertyType: prop.propertyType || 'Villa',
             address: prop.address || '',
-            lat: (prop.geo?.lat ?? prop.coordinates?.lat)?.toString() || '',
-            lng: (prop.geo?.lng ?? prop.coordinates?.lng)?.toString() || '',
+            lat: resolved.latitude?.toString() || '',
+            lng: resolved.longitude?.toString() || '',
             ownerId: prop.ownerId || '',
             ownerName: '',
             ownerEmail: '',
@@ -214,7 +253,9 @@ export default function PropertyManagementPage() {
             shops: '',
             sizeSqft: '',
             propertyAge: '',
-            titleDeedUrl: ''
+            titleDeedUrl: '',
+            googleMapsUrl: prop.googleMapsUrl || prop.location?.googleMapsUrl || '',
+            plusCode: prop.plusCode || prop.location?.plusCode || ''
         });
         setOpenEdit(true);
     };
@@ -222,6 +263,10 @@ export default function PropertyManagementPage() {
     const handleUpdateProperty = async () => {
         if (!selectedProperty) return;
         try {
+            const latitudeVal = formData.lat ? parseFloat(formData.lat) : null;
+            const longitudeVal = formData.lng ? parseFloat(formData.lng) : null;
+            const hasExact = latitudeVal !== null && !isNaN(latitudeVal) && longitudeVal !== null && !isNaN(longitudeVal);
+
             const geo = buildGeoAnchor({
                 lat: formData.lat,
                 lng: formData.lng,
@@ -230,6 +275,32 @@ export default function PropertyManagementPage() {
                 city: formData.serviceZone,
                 area: formData.serviceZone
             });
+
+            let quality: 'EXACT_GPS' | 'PLUS_CODE' | 'MAP_URL' | 'ADDRESS_ONLY' | 'MISSING' = 'MISSING';
+            if (hasExact) {
+                quality = 'EXACT_GPS';
+            } else if (formData.plusCode) {
+                quality = 'PLUS_CODE';
+            } else if (formData.googleMapsUrl) {
+                quality = 'MAP_URL';
+            } else if (formData.address) {
+                quality = 'ADDRESS_ONLY';
+            }
+
+            const locationObj = {
+                latitude: hasExact ? latitudeVal : null,
+                longitude: hasExact ? longitudeVal : null,
+                lat: hasExact ? latitudeVal : null,
+                lng: hasExact ? longitudeVal : null,
+                address: formData.address,
+                emirate: formData.emirate,
+                googleMapsUrl: formData.googleMapsUrl,
+                plusCode: formData.plusCode,
+                quality,
+                updatedAt: new Date().toISOString(),
+                updatedBy: 'admin'
+            };
+
             await updateDoc(doc(db, 'properties', selectedProperty.id), {
                 companyId: 'BIN_GROUP',
                 name: formData.name,
@@ -238,8 +309,14 @@ export default function PropertyManagementPage() {
                 address: formData.address,
                 addressLine: formData.address,
                 geo,
-                location: { lat: geo.lat, lng: geo.lng },
+                location: locationObj,
                 coordinates: { lat: geo.lat, lng: geo.lng },
+                lat: geo.lat,
+                lng: geo.lng,
+                latitude: geo.lat,
+                longitude: geo.lng,
+                googleMapsUrl: formData.googleMapsUrl,
+                plusCode: formData.plusCode,
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
                 city: formData.serviceZone || formData.emirate,
@@ -286,7 +363,9 @@ export default function PropertyManagementPage() {
             shops: '',
             sizeSqft: '',
             propertyAge: '',
-            titleDeedUrl: ''
+            titleDeedUrl: '',
+            googleMapsUrl: '',
+            plusCode: ''
         });
     };
 
@@ -347,14 +426,30 @@ export default function PropertyManagementPage() {
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{prop.emirate || '—'}</Typography>
                                 </TableCell>
                                 <TableCell>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: binThemeTokens.gold }}>
-                                        <MapPin size={14} />
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                            {prop.geo ? `${prop.geo.lat.toFixed(4)}, ${prop.geo.lng.toFixed(4)}` : prop.coordinates ? `${prop.coordinates.lat.toFixed(4)}, ${prop.coordinates.lng.toFixed(4)}` : 'N/A'}
-                                        </Typography>
-                                        {prop.geo?.verified && <Chip label="VERIFIED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
-                                    </Box>
-                                </TableCell>
+                                     {(() => {
+                                         const resolved = resolvePropertyLocation(prop);
+                                         return (
+                                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: resolved.hasExactCoordinates ? binThemeTokens.gold : binThemeTokens.textSecondary }}>
+                                                     <MapPin size={14} />
+                                                     <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                                         {resolved.hasExactCoordinates ? `${resolved.latitude?.toFixed(4)}, ${resolved.longitude?.toFixed(4)}` : 'No GPS'}
+                                                     </Typography>
+                                                     {resolved.hasExactCoordinates ? (
+                                                         <Chip label="GPS READY" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />
+                                                     ) : (
+                                                         <Chip label="GPS REQUIRED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(239,68,68,0.12)', color: '#ef4444', fontWeight: 900 }} />
+                                                     )}
+                                                 </Box>
+                                                 {!resolved.hasExactCoordinates && (
+                                                     <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 700, fontSize: 10 }}>
+                                                         {resolved.locationQuality === 'PLUS_CODE' ? 'Has Plus Code' : resolved.locationQuality === 'MAP_URL' ? 'Has Maps URL' : 'Address level only'}
+                                                     </Typography>
+                                                 )}
+                                             </Box>
+                                         );
+                                     })()}
+                                 </TableCell>
                                 <TableCell align="right">
                                     <IconButton onClick={() => handleEditOpen(prop)} sx={{ color: binThemeTokens.gold }}>
                                         <EditIcon size={18} />
@@ -422,6 +517,7 @@ export default function PropertyManagementPage() {
                                 fullWidth 
                                 value={formData.lat}
                                 onChange={(e) => setFormData({...formData, lat: e.target.value})}
+                                helperText="Use exact building gate/service entrance pin, not general area."
                             />
                         </Grid>
                         <Grid item xs={6}>
@@ -430,6 +526,25 @@ export default function PropertyManagementPage() {
                                 fullWidth 
                                 value={formData.lng}
                                 onChange={(e) => setFormData({...formData, lng: e.target.value})}
+                                helperText="Use exact building gate/service entrance pin, not general area."
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Google Maps URL" 
+                                fullWidth 
+                                value={formData.googleMapsUrl}
+                                onChange={(e) => setFormData({...formData, googleMapsUrl: e.target.value})}
+                                helperText="Use exact building gate/service entrance pin, not general area."
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField 
+                                label="Plus Code" 
+                                fullWidth 
+                                value={formData.plusCode}
+                                onChange={(e) => setFormData({...formData, plusCode: e.target.value})}
+                                helperText="Use exact building gate/service entrance pin, not general area."
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
