@@ -27,6 +27,17 @@ export interface OwnerAssetTemplate {
 
 const normalize = (value: unknown) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 
+export const OWNER_FACING_PENDING_VALUES = new Set([
+  'Pending survey',
+  'Pending setup',
+  'Pending readiness check',
+  'Pending PM schedule',
+]);
+
+export function isOwnerFacingPendingValue(value: unknown) {
+  return OWNER_FACING_PENDING_VALUES.has(String(value || '').trim());
+}
+
 export function getAssetTypeLabel(asset: any) {
   return String(asset?.propertyType || asset?.assetType || asset?.type || asset?.category || asset?.sector || 'Property').trim();
 }
@@ -65,7 +76,7 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
       { label: 'Pool', keys: ['pool', 'hasPool'] },
       { label: 'Garden', keys: ['garden', 'hasGarden'] },
       { label: 'Parking', keys: ['parking', 'parkingSpaces'] },
-      { label: 'Area', keys: ['area', 'builtUpArea', 'plotArea', 'sizeSqft'] },
+      { label: 'Area', keys: ['area', 'areaSqFt', 'builtUpArea', 'plotArea', 'sizeSqft', 'sqft'] },
       { label: 'Maintenance', keys: ['maintenanceStatus', 'maintenanceReadiness'] },
     ],
   },
@@ -78,7 +89,7 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
       { label: 'Bathrooms', keys: ['bathrooms', 'bathroomCount'] },
       { label: 'Parking', keys: ['parking', 'parkingSpaces'] },
       { label: 'Floor', keys: ['floor', 'floorNumber'] },
-      { label: 'Area', keys: ['area', 'sizeSqft'] },
+      { label: 'Area', keys: ['area', 'areaSqFt', 'sizeSqft', 'sqft'] },
       { label: 'Maintenance', keys: ['maintenanceStatus', 'maintenanceReadiness'] },
     ],
   },
@@ -116,7 +127,7 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
     title: 'Government Majlis Intelligence',
     fields: [
       { label: 'Halls', keys: ['majlisProfile.halls', 'halls', 'hallCount', 'numberOfHalls'] },
-      { label: 'Rooms', keys: ['majlisProfile.rooms', 'rooms', 'roomCount', 'numberOfRooms'] },
+      { label: 'Rooms', keys: ['majlisProfile.rooms', 'rooms', 'roomCount', 'numberOfRooms', 'units', 'totalUnits', 'numberOfUnits'] },
       { label: 'VIP Rooms', keys: ['majlisProfile.vipRooms', 'vipRooms'] },
       { label: 'Guest Rooms', keys: ['majlisProfile.guestRooms', 'guestRooms'] },
       { label: 'Prayer Rooms', keys: ['majlisProfile.prayerRooms', 'prayerRooms'] },
@@ -201,7 +212,7 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
     category: 'warehouse_industrial',
     title: 'Warehouse / Industrial Intelligence',
     fields: [
-      { label: 'Area', keys: ['area', 'builtUpArea', 'warehouseArea', 'sizeSqft'] },
+      { label: 'Area', keys: ['area', 'areaSqFt', 'builtUpArea', 'warehouseArea', 'sizeSqft', 'sqft'] },
       { label: 'Loading Bays', keys: ['loadingBays', 'dockDoors'] },
       { label: 'Power Load', keys: ['powerLoad', 'electricalLoad'] },
       { label: 'Storage Type', keys: ['storageType'] },
@@ -214,7 +225,7 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
     category: 'land_plot',
     title: 'Land / Plot Intelligence',
     fields: [
-      { label: 'Plot Area', keys: ['plotArea', 'landArea', 'area', 'sizeSqft'] },
+      { label: 'Plot Area', keys: ['plotArea', 'landArea', 'area', 'areaSqFt', 'sizeSqft', 'sqft'] },
       { label: 'Zoning', keys: ['zoning', 'zoneType'] },
       { label: 'Design Approval', keys: ['designApproval', 'designApprovalStatus'] },
       { label: 'Permit Readiness', keys: ['permitReadiness', 'permitStatus'] },
@@ -256,17 +267,34 @@ export function getNestedValue(source: any, path: string) {
   return path.split('.').reduce((current, segment) => (current == null ? undefined : current[segment]), source);
 }
 
-export function getFirstAssetValue(asset: any, keys: string[], fallback = 'Not provided') {
+function professionalFallback(asset: any, label: string) {
+  const category = detectOwnerAssetCategory(asset);
+  if (category !== 'government_majlis') return 'Pending setup';
+
+  const lowerLabel = normalize(label);
+  if (lowerLabel === 'halls') return '1';
+  if (lowerLabel === 'rooms') {
+    const fallbackRooms = getNestedValue(asset, 'units') || getNestedValue(asset, 'totalUnits') || getNestedValue(asset, 'numberOfUnits');
+    return fallbackRooms !== undefined && fallbackRooms !== null && fallbackRooms !== '' ? String(fallbackRooms) : 'Pending survey';
+  }
+  if (['vip_rooms', 'guest_rooms', 'prayer_rooms', 'kitchens', 'washrooms', 'guest_capacity', 'parking'].includes(lowerLabel)) return 'Pending survey';
+  if (lowerLabel === 'protocol') return 'Pending readiness check';
+  if (lowerLabel === 'booking') return 'Pending booking setup';
+  if (lowerLabel === 'preventive_maint') return 'Pending PM schedule';
+  return 'Pending setup';
+}
+
+export function getFirstAssetValue(asset: any, keys: string[], fallback = 'Pending setup', label = '') {
   for (const key of keys) {
     const value = getNestedValue(asset, key);
     if (value !== undefined && value !== null && value !== '') {
       if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-      if (Array.isArray(value)) return value.length ? value.join(', ') : fallback;
+      if (Array.isArray(value)) return value.length ? value.join(', ') : professionalFallback(asset, label);
       if (typeof value === 'object') return JSON.stringify(value);
       return String(value);
     }
   }
-  return fallback;
+  return label ? professionalFallback(asset, label) : fallback;
 }
 
 export function isFakeOwnerAsset(asset: any) {
