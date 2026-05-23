@@ -297,12 +297,12 @@ export default function OwnerDashboardResolvedPage() {
   }
 
   const contract = resolution.contract || {};
-  const annual = Number(contract.annualContractValue || contract.annualValue || 0);
-  const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || 0);
+  const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
+  const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
 
   const KPI_CARDS = [
-    { label: 'Annual Contract Value', value: annual ? `AED ${annual.toLocaleString()}` : 'Active', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
-    { label: '15% Mobilization', value: mobilization ? `AED ${mobilization.toLocaleString()}` : 'Verified', icon: <Shield size={20} />, color: '#10b981' },
+    { label: 'Annual Contract Value', value: annual ? `AED ${annual.toLocaleString()}` : 'Pending', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: '15% Mobilization', value: mobilization ? `AED ${mobilization.toLocaleString()}` : 'Pending', icon: <Shield size={20} />, color: '#10b981' },
     { label: t('dash.kpi.portfolio') || 'Asset Portfolio', value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
     { label: t('dash.kpi.ops_load') || 'Open Maintenance Tasks', value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
   ];
@@ -352,9 +352,10 @@ export default function OwnerDashboardResolvedPage() {
       <OwnerExecutiveDashboardSection
         properties={properties}
         stats={executiveStats}
-        contractScope={contract.packageName || contract.planType || contract.serviceType || ''}
+        contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''}
         missingInfo={missingInfo}
         user={user}
+        contract={contract}
       />
 
       <Grid container spacing={4} sx={{ mt: 1 }}>
@@ -384,7 +385,7 @@ export default function OwnerDashboardResolvedPage() {
               <Typography variant="body2" sx={{ color: '#fff' }}><b>Status:</b> {contract.status || contract.activationStatus || 'ACTIVE'}</Typography>
               <Typography variant="body2" sx={{ color: '#fff' }}><b>Owner ID:</b> {contract.ownerId || resolution.ownerIds[0] || 'linked'}</Typography>
               <Typography variant="body2" sx={{ color: '#fff' }}><b>Email:</b> {contract.ownerEmail || resolution.emails[0] || 'linked'}</Typography>
-              <Typography variant="body2" sx={{ color: '#fff' }}><b>Package:</b> {contract.packageName || contract.planType || 'Active Service Agreement'}</Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}><b>Package:</b> {contract.packageName || contract.selectedPlan?.name || contract.planType || 'Active Service Agreement'}</Typography>
             </Stack>
           </Paper>
         </Grid>
