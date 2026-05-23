@@ -10,17 +10,17 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 
-import OwnerDashboardPage from './pages/OwnerDashboardPage';
+import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
-import OwnerContractsPage from './pages/OwnerContractsPage';
+import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
 import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
-import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportPage';
-import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportDetailPage';
+import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage';
+import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
 
@@ -110,6 +110,7 @@ export default function OwnerApp() {
                 <Route path="/" element={<OwnerDashboardPage />} />
                 <Route path="/dashboard" element={<OwnerDashboardPage />} />
                 <Route path="/activation" element={<OwnerActivationPage />} />
+                <Route path="/onboarding-status" element={<OwnerActivationPage />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />

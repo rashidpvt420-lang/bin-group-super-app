@@ -165,6 +165,19 @@ const isSignable = (contract: any) => {
 
 const storedContractUrl = (contract: any) => contract?.finalPdfUrl || contract?.pdfUrl || contract?.downloadUrl || contract?.contractUrl || contract?.signedPdfUrl || '';
 
+const emailLookupCandidates = (value: unknown) => {
+  const email = String(value || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) return [];
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return [email];
+  const normalizedDomain = domain === 'googlemail.com' ? 'gmail.com' : domain;
+  const variants = new Set<string>([email, `${local}@${normalizedDomain}`]);
+  if (normalizedDomain === 'gmail.com') {
+    variants.add(`${local.split('+')[0].replace(/\./g, '')}@${normalizedDomain}`);
+  }
+  return Array.from(variants).filter(Boolean);
+};
+
 const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -757,19 +770,34 @@ export default function OwnerContractsPage() {
     };
 
     const unsubs: Unsubscribe[] = [];
+    const profileContractIds = [
+      (user as any)?.pendingContractId,
+      (user as any)?.latestActivationContractId,
+      (user as any)?.activeContractId,
+      (user as any)?.contractId,
+      (user as any)?.latestContractId,
+    ].map((value) => String(value || '').trim()).filter(Boolean);
+
     if (user?.uid) {
       unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerUid', '==', user.uid)), apply, fail));
       unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerId', '==', user.uid)), apply, fail));
     }
     if (email) {
-      unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerEmail', '==', email)), apply, fail));
-      unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerEmail', '==', user?.email || email)), apply, fail));
+      emailLookupCandidates(user?.email || email).forEach((candidateEmail) => {
+        unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('ownerEmail', '==', candidateEmail)), apply, fail));
+        unsubs.push(onSnapshot(query(collection(db, 'contracts'), where('emailDelivery.recipient', '==', candidateEmail)), apply, fail));
+      });
     }
 
-    if (contractIdFromUrl) {
+    const directContractIds = Array.from(new Set([
+      contractIdFromUrl,
+      ...profileContractIds,
+    ].map((value) => String(value || '').trim()).filter(Boolean)));
+
+    directContractIds.forEach((directContractId) => {
       unsubs.push(
         onSnapshot(
-          doc(db, 'contracts', contractIdFromUrl),
+          doc(db, 'contracts', directContractId),
           (docSnap) => {
             if (docSnap.exists()) {
               seen.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
@@ -783,7 +811,7 @@ export default function OwnerContractsPage() {
           }
         )
       );
-    }
+    });
 
     setSignatureName(user?.displayName || user?.email || '');
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
