@@ -97,6 +97,28 @@ export interface Property {
     totalAssetsValue?: number;          // AED
     cumulativeRepairCostYTD?: number;   // AED year-to-date
 
+    location?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+        address?: string;
+        formattedAddress?: string;
+        emirate?: string;
+        googleMapsUrl?: string;
+        plusCode?: string;
+        accuracy?: "EXACT" | "APPROXIMATE" | "MISSING";
+        quality?: string;
+        updatedAt?: string;
+        updatedBy?: string;
+    };
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+    googleMapsUrl?: string;
+    plusCode?: string;
+
     createdAt: string;
 }
 

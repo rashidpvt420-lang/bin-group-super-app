@@ -5,6 +5,7 @@ import { FileText, Building2, MapPin, Layers, ShieldCheck, Calendar, ArrowRight,
 import { db, collection, query, where, getDocs } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
@@ -188,52 +189,81 @@ export default function OwnerPropertyPassportResolvedPage() {
         </Paper>
       ) : (
         <Grid container spacing={4}>
-          {passports.map((p) => (
-            <Grid item xs={12} md={6} key={p.id}>
-              <Paper sx={{ p: 0, overflow: 'hidden', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, transition: 'all 0.3s ease', opacity: p.placeholder ? 0.76 : 1, '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
-                <Box sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Stack direction="row" spacing={2} alignItems="center">
-                    <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold }}>
-                      <Building2 size={24} />
-                    </Box>
-                    <Box>
-                      <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', lineHeight: 1.2 }}>{p.propertyName || p.name || 'Property'}</Typography>
-                      <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
-                    </Box>
-                  </Stack>
-                  <Chip label={p.placeholder ? 'DRAFT' : (p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE'))} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? binThemeTokens.gold : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
-                </Box>
-
-                <Box sx={{ p: 4 }}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>LOCATION</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><MapPin size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{p.emirate || 'UAE'}</Typography></Stack>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>COMPOSITION</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{unitCount(p)} Units · {p.floors || 0} Floors</Typography></Stack>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>ISSUANCE DATE</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : 'Pending'}</Typography></Stack>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>GOVERNANCE</Typography>
-                      <Stack direction="row" spacing={1} alignItems="center"><ShieldCheck size={14} color="#10b981" /><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700 }}>{p.placeholder ? 'DRAFT' : (p.provisional ? 'READY' : 'VERIFIED')}</Typography></Stack>
-                    </Grid>
-                  </Grid>
-
-                  <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
-
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
-                    <Button fullWidth variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(`/owner/property-passport/${p.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>VIEW DETAILS</Button>
+          {passports.map((p) => {
+            const loc = resolvePropertyLocation(p);
+            return (
+              <Grid item xs={12} md={6} key={p.id}>
+                <Paper sx={{ p: 0, overflow: 'hidden', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, transition: 'all 0.3s ease', opacity: p.placeholder ? 0.76 : 1, '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
+                  <Box sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold }}>
+                        <Building2 size={24} />
+                      </Box>
+                      <Box>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', lineHeight: 1.2 }}>{p.propertyName || p.name || 'Property'}</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
+                      </Box>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip label={p.placeholder ? 'DRAFT' : (p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE'))} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? binThemeTokens.gold : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
+                      <Chip 
+                        label={loc.hasExactCoordinates ? "EXACT GPS READY" : (loc.locationQuality === "MISSING" ? "GPS REQUIRED" : "ADDRESS ONLY")}
+                        size="small"
+                        sx={{
+                          bgcolor: loc.hasExactCoordinates ? alpha('#10b981', 0.12) : (loc.locationQuality === "MISSING" ? alpha('#ef4444', 0.12) : alpha('#f59e0b', 0.12)),
+                          color: loc.hasExactCoordinates ? '#10b981' : (loc.locationQuality === "MISSING" ? '#fca5a5' : '#fde047'),
+                          fontWeight: 950,
+                          fontSize: '0.65rem'
+                        }}
+                      />
+                    </Stack>
                   </Box>
-                </Box>
-              </Paper>
-            </Grid>
-          ))}
+
+                  <Box sx={{ p: 4 }}>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>LOCATION & AREA</Typography>
+                        <Stack spacing={0.5}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <MapPin size={14} color={binThemeTokens.gold} />
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{loc.emirate}</Typography>
+                          </Stack>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', pl: 3, minWidth: 0, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                            {loc.address || 'Address pending'}
+                          </Typography>
+                        </Stack>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>GPS COORDINATES</Typography>
+                        <Typography variant="body2" sx={{ color: loc.hasExactCoordinates ? '#10b981' : '#fca5a5', fontWeight: 700, fontFamily: 'monospace' }}>
+                          {loc.hasExactCoordinates ? `${loc.latitude?.toFixed(4)}, ${loc.longitude?.toFixed(4)}` : 'MISSING PIN'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>COMPOSITION</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center"><Layers size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{unitCount(p)} Units · {p.floors || 0} Floors</Typography></Stack>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>ISSUANCE DATE</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : 'Pending'}</Typography></Stack>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800, display: 'block', mb: 0.5 }}>GOVERNANCE</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center"><ShieldCheck size={14} color="#10b981" /><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 700 }}>{p.placeholder ? 'DRAFT' : (p.provisional ? 'READY' : 'VERIFIED')}</Typography></Stack>
+                      </Grid>
+                    </Grid>
+
+                    <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
+                      <Button fullWidth variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(`/owner/property-passport/${p.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>VIEW DETAILS</Button>
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+            );
+          })}
         </Grid>
       )}
     </Box>

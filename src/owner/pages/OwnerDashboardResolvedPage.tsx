@@ -357,39 +357,6 @@ export default function OwnerDashboardResolvedPage() {
         user={user}
         contract={contract}
       />
-
-      <Grid container spacing={4} sx={{ mt: 1 }}>
-        <Grid item xs={12} lg={8}>
-          <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.42)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 6 }}>
-            <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', mb: 3, display: 'flex', gap: 1.5, alignItems: 'center' }}><Building2 size={20} color={binThemeTokens.gold} /> ACTIVE ASSETS</Typography>
-            {properties.length === 0 ? (
-              <Box sx={{ py: 7, textAlign: 'center', color: 'rgba(255,255,255,.35)', fontWeight: 900 }}>NO LINKED PROPERTIES FOUND YET</Box>
-            ) : (
-              <Grid container spacing={2}>
-                {properties.slice(0, 6).map((property) => (
-                  <Grid item xs={12} md={6} key={property.id || property.propertyId}>
-                    <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 4 }}>
-                      <Typography fontWeight={950} sx={{ color: '#fff' }}>{property.propertyName || property.name || property.address || 'Property'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)' }}>{property.emirate || property.city || 'UAE'} · {propertyUnits(property)} units</Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-            )}
-          </Paper>
-        </Grid>
-        <Grid item xs={12} lg={4}>
-          <Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, .035), border: `1px solid ${alpha(binThemeTokens.gold, .16)}`, borderRadius: 6 }}>
-            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, mb: 2 }}><FileText size={18} /> Contract Resolution</Typography>
-            <Stack spacing={1.2}>
-              <Typography variant="body2" sx={{ color: '#fff' }}><b>Status:</b> {contract.status || contract.activationStatus || 'ACTIVE'}</Typography>
-              <Typography variant="body2" sx={{ color: '#fff' }}><b>Owner ID:</b> {contract.ownerId || resolution.ownerIds[0] || 'linked'}</Typography>
-              <Typography variant="body2" sx={{ color: '#fff' }}><b>Email:</b> {contract.ownerEmail || resolution.emails[0] || 'linked'}</Typography>
-              <Typography variant="body2" sx={{ color: '#fff' }}><b>Package:</b> {contract.packageName || contract.selectedPlan?.name || contract.planType || 'Active Service Agreement'}</Typography>
-            </Stack>
-          </Paper>
-        </Grid>
-      </Grid>
     </Box>
   );
 }

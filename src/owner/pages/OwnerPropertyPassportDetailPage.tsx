@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Alert, Box, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, FileText, Layers, ShieldCheck, UsersRound, Wrench } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, query, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import UaePropertyMap from '../../components/maps/UaePropertyMap';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
+import { ExternalLink } from 'lucide-react';
 
 function PassportMetric({ label, value, children }: { label: string; value: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -192,18 +194,91 @@ export default function OwnerPropertyPassportDetailPage() {
           </Stack>
         </Paper>
 
-        <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Grid item xs={12} md={8}>
-            <UaePropertyMap title={passport.propertyName || 'Property Location'} address={passport.address || passport.zone} emirate={passport.emirate} lat={passport.lat || passport.latitude} lng={passport.lng || passport.longitude} />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Stack spacing={2}>
-              <PassportMetric label="Units" value={passport.totalUnits || passport.units || passport.numberOfUnits || passport.unitsCount || 0}><UsersRound size={20} /></PassportMetric>
-              <PassportMetric label="Floors" value={passport.floors || passport.numberOfFloors || 0}><Layers size={20} /></PassportMetric>
-              <PassportMetric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></PassportMetric>
-            </Stack>
-          </Grid>
-        </Grid>
+        {(() => {
+          const propertyLocation = resolvePropertyLocation(passport);
+          return (
+            <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+              <Grid item xs={12} md={8}>
+                <UaePropertyMap 
+                  title={passport.propertyName || 'Property Location'} 
+                  address={propertyLocation.address} 
+                  emirate={propertyLocation.emirate} 
+                  lat={propertyLocation.latitude} 
+                  lng={propertyLocation.longitude} 
+                  googleMapsUrl={propertyLocation.googleMapsUrl}
+                  locationQuality={propertyLocation.locationQuality}
+                  requireExactPin
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Stack spacing={2}>
+                  {/* Location Status Card */}
+                  <Paper 
+                    sx={{ 
+                      p: 2.5, 
+                      bgcolor: 'rgba(15,23,42,0.42)', 
+                      border: `1px solid ${propertyLocation.hasExactCoordinates ? alpha('#10b981', 0.22) : alpha('#ef4444', 0.22)}`, 
+                      borderRadius: 4,
+                      minWidth: 0,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere'
+                    }}
+                  >
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1.5, display: 'block', mb: 1.5 }}>
+                      Location Quality Details
+                    </Typography>
+                    <Stack spacing={1.5}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>Exact GPS Pin</Typography>
+                        <Chip 
+                          label={propertyLocation.hasExactCoordinates ? "READY" : "REQUIRED"} 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: propertyLocation.hasExactCoordinates ? alpha('#10b981', 0.12) : alpha('#ef4444', 0.12), 
+                            color: propertyLocation.hasExactCoordinates ? '#10b981' : '#ef4444', 
+                            fontWeight: 950,
+                            height: 20,
+                            fontSize: '0.65rem'
+                          }} 
+                        />
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>Location Quality</Typography>
+                        <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900 }}>{propertyLocation.locationQuality}</Typography>
+                      </Stack>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>Coordinates</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>
+                          {propertyLocation.hasExactCoordinates ? `${propertyLocation.latitude?.toFixed(5)}, ${propertyLocation.longitude?.toFixed(5)}` : 'N/A'}
+                        </Typography>
+                      </Stack>
+                      <Button 
+                        href={propertyLocation.googleMapsUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        size="small" 
+                        variant="outlined" 
+                        endIcon={<ExternalLink size={12} />} 
+                        sx={{ 
+                          color: binThemeTokens.gold, 
+                          borderColor: alpha(binThemeTokens.gold, 0.3),
+                          fontWeight: 950,
+                          mt: 1,
+                          fontSize: '0.7rem'
+                        }}
+                      >
+                        Open in Google Maps
+                      </Button>
+                    </Stack>
+                  </Paper>
+                  <PassportMetric label="Units" value={passport.totalUnits || passport.units || passport.numberOfUnits || passport.unitsCount || 0}><UsersRound size={20} /></PassportMetric>
+                  <PassportMetric label="Floors" value={passport.floors || passport.numberOfFloors || 0}><Layers size={20} /></PassportMetric>
+                  <PassportMetric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></PassportMetric>
+                </Stack>
+              </Grid>
+            </Grid>
+          );
+        })()}
 
         <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
           <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Building Systems</Typography>

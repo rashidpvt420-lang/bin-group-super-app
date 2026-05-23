@@ -14,28 +14,26 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildGoogleMapsSearchUrl } from '../../lib/maps';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 
 const ACTIVE_STATUSES = ['accepted', 'on_the_way', 'arrived', 'in_progress', 'waiting_parts', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS'];
 
 function getJobLatLng(job: any) {
-    const lat = job?.geo?.lat ?? job?.location?.lat ?? job?.coordinates?.lat ?? job?.lat;
-    const lng = job?.geo?.lng ?? job?.location?.lng ?? job?.coordinates?.lng ?? job?.lng;
-    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) return { lat: Number(lat), lng: Number(lng) };
+    const resolved = resolvePropertyLocation(job);
+    if (resolved.hasExactCoordinates) {
+        return { lat: resolved.latitude!, lng: resolved.longitude! };
+    }
     return null;
 }
 
 function getNavigationUrl(job: any) {
-    const coords = getJobLatLng(job);
-    return buildGoogleMapsSearchUrl({
-        lat: coords?.lat,
-        lng: coords?.lng,
-        address: job.address || job.locationText || job.location || job.propertyName,
-        emirate: job.emirate
-    });
+    const resolved = resolvePropertyLocation(job);
+    return resolved.googleMapsUrl;
 }
 
 function hasDispatchLocation(job: any) {
-    return Boolean(getJobLatLng(job) || job.address || job.locationText || job.location || job.propertyName);
+    const resolved = resolvePropertyLocation(job);
+    return resolved.locationQuality !== "MISSING";
 }
 
 export default function TechnicianMapPage() {
@@ -105,8 +103,9 @@ export default function TechnicianMapPage() {
             ) : (
                 <Grid container spacing={4}>
                     {jobs.map(job => {
-                        const coords = getJobLatLng(job);
-                        const dispatchReady = hasDispatchLocation(job);
+                        const resolved = resolvePropertyLocation(job);
+                        const coords = resolved.hasExactCoordinates ? { lat: resolved.latitude!, lng: resolved.longitude! } : null;
+                        const dispatchReady = resolved.locationQuality !== "MISSING";
                         return (
                             <Grid item xs={12} key={job.id}>
                                 <Paper sx={{ overflow: 'hidden', bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', transition: 'all 0.3s', '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
@@ -114,16 +113,18 @@ export default function TechnicianMapPage() {
                                         <Grid item xs={12} lg={5}>
                                             <Box sx={{ height: { xs: 260, lg: '100%' }, minHeight: 260, bgcolor: '#0f172a', borderRight: { lg: '1px solid rgba(255,255,255,0.06)' }, display: 'grid', placeItems: 'center', p: 3 }}>
                                                 <Stack spacing={2} alignItems="center" textAlign="center">
-                                                    {dispatchReady ? <Navigation size={50} color={binThemeTokens.gold} /> : <ShieldAlert size={50} color="#f97316" />}
+                                                    {resolved.hasExactCoordinates ? <Navigation size={50} color={binThemeTokens.gold} /> : <ShieldAlert size={50} color="#ef4444" />}
                                                     <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>
-                                                        {dispatchReady ? 'Navigation Ready' : 'Location Review Required'}
+                                                        {resolved.hasExactCoordinates ? 'Navigation Ready' : 'GPS Location Warning'}
                                                     </Typography>
                                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.52)', maxWidth: 340 }}>
-                                                        {coords ? `GPS coordinates saved: ${coords.lat}, ${coords.lng}` : dispatchReady ? 'No GPS coordinates found, but address navigation is available.' : 'This job has no saved coordinates or address. Ask Admin to verify the property passport before dispatch.'}
+                                                        {resolved.hasExactCoordinates 
+                                                            ? `GPS coordinates saved: ${resolved.latitude}, ${resolved.longitude}` 
+                                                            : `Exact GPS pin missing. Technician dispatch cannot be guaranteed.`}
                                                     </Typography>
                                                     {dispatchReady && (
                                                         <Button variant="contained" onClick={() => handleNavigate(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
-                                                            START GOOGLE NAVIGATION
+                                                            {resolved.hasExactCoordinates ? 'START GOOGLE NAVIGATION' : 'NAVIGATE TO FALLBACK AREA'}
                                                         </Button>
                                                     )}
                                                 </Stack>
@@ -135,28 +136,28 @@ export default function TechnicianMapPage() {
                                                     <Box sx={{ width: 80, height: 80, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold, flexShrink: 0 }}>
                                                         <LocateFixed size={40} />
                                                     </Box>
-
+ 
                                                     <Box sx={{ flex: 1 }}>
                                                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
                                                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>REF #{job.id.substring(0, 8)}</Typography>
                                                             <Chip size="small" label={String(job.status || 'MISSION').replace('_', ' ').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.65rem' }} />
-                                                            <Chip size="small" label={dispatchReady ? 'LOCATION READY' : 'NO LOCATION'} sx={{ bgcolor: dispatchReady ? alpha('#22c55e', 0.13) : alpha('#f97316', 0.13), color: dispatchReady ? '#86efac' : '#fdba74', fontWeight: 950, fontSize: '0.65rem' }} />
+                                                            <Chip size="small" label={resolved.hasExactCoordinates ? 'GPS READY' : 'GPS REQUIRED'} sx={{ bgcolor: resolved.hasExactCoordinates ? alpha('#22c55e', 0.13) : alpha('#ef4444', 0.13), color: resolved.hasExactCoordinates ? '#86efac' : '#f87171', fontWeight: 950, fontSize: '0.65rem' }} />
                                                         </Stack>
                                                         <Typography variant="h5" fontWeight="950" color="#FFF">{job.propertyName || 'Assigned Property'}</Typography>
                                                         <Typography variant="body1" color="textSecondary" sx={{ mt: 0.5, fontWeight: 600 }}>Unit {job.unitNumber || 'N/A'} · {job.category || 'Maintenance'}</Typography>
                                                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            <MapPin size={14} /> {job.address || job.locationText || job.location || 'No address saved'} · {job.emirate || 'UAE'}
+                                                            <MapPin size={14} /> {resolved.address || 'No address saved'} · {resolved.emirate}
                                                         </Typography>
-                                                        {coords && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.34)', mt: 1, display: 'block', fontFamily: 'monospace' }}>GPS: {coords.lat}, {coords.lng}</Typography>}
+                                                        {resolved.hasExactCoordinates && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.34)', mt: 1, display: 'block', fontFamily: 'monospace' }}>GPS: {resolved.latitude}, {resolved.longitude}</Typography>}
                                                     </Box>
                                                 </Stack>
-
+ 
                                                 <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.06)' }} />
-
+ 
                                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                                                     <Button fullWidth variant="outlined" onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 950, borderRadius: 4, px: 4 }} startIcon={<Info size={18} />}>DETAILS</Button>
                                                     <Button fullWidth variant="contained" disabled={!dispatchReady} onClick={() => handleNavigate(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4, px: 4, '&:hover': { bgcolor: '#eab308' } }}>NAVIGATE</Button>
-                                                    <Button fullWidth variant="outlined" disabled={!dispatchReady} onClick={() => window.open(getNavigationUrl(job), '_blank', 'noopener,noreferrer')} startIcon={<ExternalLink size={18} />} sx={{ borderColor: alpha(binThemeTokens.gold, 0.4), color: binThemeTokens.gold, fontWeight: 950, borderRadius: 4, px: 4 }}>OPEN MAP</Button>
+                                                    <Button fullWidth variant="outlined" disabled={!dispatchReady} onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} startIcon={<ExternalLink size={18} />} sx={{ borderColor: alpha(binThemeTokens.gold, 0.4), color: binThemeTokens.gold, fontWeight: 950, borderRadius: 4, px: 4 }}>OPEN MAP</Button>
                                                 </Stack>
                                             </Box>
                                         </Grid>
