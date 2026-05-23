@@ -1,601 +1,519 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Box, Typography, Grid, Card, CardContent, Stack, Divider,
-    Chip, Alert, Button, Collapse, useTheme, alpha
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Grid,
+  Stack,
+  Typography,
+  alpha,
 } from '@mui/material';
 import {
-    DollarSign, Shield, Users, Wrench, Calendar, AlertTriangle,
-    CheckCircle, Clock, FileText, Landmark, Compass, Key, UserCheck
+  AlertTriangle,
+  Building2,
+  Calendar,
+  CheckCircle,
+  CreditCard,
+  FileText,
+  Landmark,
+  Shield,
+  Users,
+  Wrench,
 } from 'lucide-react';
-import { db, collection, query, where, getDocs } from '../../lib/firebase';
+import { collection, db, getDocs, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { getOwnerDatePolicy } from '../utils/ownerDatePolicy';
+import {
+  getAssetTypeLabel,
+  getFirstAssetValue,
+  getOwnerAssetTemplate,
+  isFakeOwnerAsset,
+} from '../utils/ownerAssetTemplates';
 
 interface OwnerExecutiveDashboardSectionProps {
-    properties: any[];
-    stats: {
-        properties: number;
-        units: number;
-        tenants: number;
-        tickets: number;
-        rentCollected: number;
-        payoutsPending: number;
-        maintenanceCost: number;
-    };
-    contractScope: string;
-    missingInfo: {
-        iban: boolean;
-        units: boolean;
-    };
-    user: any;
+  properties: any[];
+  stats: {
+    properties: number;
+    units: number;
+    tenants: number;
+    tickets: number;
+    rentCollected: number;
+    payoutsPending: number;
+    maintenanceCost: number;
+  };
+  contractScope: string;
+  missingInfo: {
+    iban: boolean;
+    units: boolean;
+  };
+  user: any;
+  contract?: any;
+}
+
+const cardSx = {
+  bgcolor: 'rgba(22,22,24,0.72)',
+  border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`,
+  borderRadius: 4,
+  minWidth: 0,
+  overflow: 'hidden',
+};
+
+const metricBoxSx = {
+  p: 2.5,
+  bgcolor: 'rgba(255,255,255,0.025)',
+  borderRadius: 3,
+  border: '1px solid rgba(255,255,255,0.06)',
+  minWidth: 0,
+  height: '100%',
+};
+
+const textSafeSx = {
+  minWidth: 0,
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+};
+
+function toNumber(value: any, fallback = 0) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number(String(value).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatCurrency(value: any) {
+  const amount = toNumber(value, 0);
+  return amount > 0 ? `AED ${amount.toLocaleString()}` : 'Pending';
+}
+
+function readSeconds(value: any) {
+  return Number(value?.seconds || value?._seconds || 0);
+}
+
+function formatDate(value: any) {
+  if (!value) return 'Not set';
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toLocaleDateString('en-GB');
+  const seconds = readSeconds(value);
+  if (seconds) return new Date(seconds * 1000).toLocaleDateString('en-GB');
+  return String(value);
+}
+
+function normalizeStatus(value: any, fallback = 'PENDING') {
+  return String(value || fallback).trim().toUpperCase().replace(/\s+/g, '_');
+}
+
+function getPropertyUnits(property: any) {
+  return toNumber(property?.units || property?.numberOfUnits || property?.totalUnits || property?.unitsCount, 0);
+}
+
+function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
+  const map = new Map<string, T>();
+  for (const item of items) {
+    const key = getKey(item);
+    if (key) map.set(key, item);
+  }
+  return Array.from(map.values());
+}
+
+async function safeCollectionQuery(collectionName: string, field: string, value: string) {
+  if (!value) return [] as any[];
+  try {
+    const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
+    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.warn(`[OwnerExecutiveDashboard] Optional read skipped: ${collectionName}.${field}`, error);
+    return [] as any[];
+  }
+}
+
+function renderHeader(icon: React.ReactNode, overline: string, title: string) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3, minWidth: 0 }}>
+      <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+          {overline}
+        </Typography>
+        <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
+          {title}
+        </Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+function renderMetric(label: string, value: React.ReactNode, caption?: React.ReactNode, color = '#fff') {
+  return (
+    <Grid item xs={12} sm={6} md={3}>
+      <Box sx={metricBoxSx}>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, display: 'block', mb: 1, ...textSafeSx }}>
+          {label.toUpperCase()}
+        </Typography>
+        <Typography variant="h5" fontWeight={950} sx={{ color, ...textSafeSx }}>
+          {value}
+        </Typography>
+        {caption && (
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', mt: 0.8, display: 'block', ...textSafeSx }}>
+            {caption}
+          </Typography>
+        )}
+      </Box>
+    </Grid>
+  );
+}
+
+function AssetIntelligenceCard({ property }: { property: any }) {
+  const template = getOwnerAssetTemplate(property);
+  const assetType = getAssetTypeLabel(property);
+  const policy = getOwnerDatePolicy(assetType, property);
+  const name = property?.propertyName || property?.name || property?.address || 'Asset';
+
+  return (
+    <Card sx={{ ...cardSx, height: '100%' }}>
+      <CardContent sx={{ p: { xs: 2.25, md: 3 } }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" sx={{ mb: 2, minWidth: 0 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5, ...textSafeSx }}>
+              {template.title}
+            </Typography>
+            <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
+              {name}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', ...textSafeSx }}>
+              {assetType || 'Property'} · {property?.emirate || property?.city || 'UAE'}
+            </Typography>
+          </Box>
+          <Chip
+            label={property?.passportStatus || property?.governanceStatus || 'DATA LIVE'}
+            size="small"
+            sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900, maxWidth: '100%' }}
+          />
+        </Stack>
+
+        <Grid container spacing={1.5}>
+          {template.fields.map((field) => (
+            <Grid item xs={12} sm={6} md={3} key={`${name}-${field.label}`} sx={{ minWidth: 0 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.025)', borderRadius: 2, minHeight: 72, minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900, ...textSafeSx }}>
+                  {field.label.toUpperCase()}
+                </Typography>
+                <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', mt: 0.4, ...textSafeSx }}>
+                  {getFirstAssetValue(property, field.keys)}
+                </Typography>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+
+        <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.07)' }} />
+        <Grid container spacing={1.5}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>LEASE EXPIRY</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: policy.showLeaseExpiry ? '#fff' : 'rgba(255,255,255,0.45)', ...textSafeSx }}>
+              {policy.showLeaseExpiry ? formatDate(property?.leaseExpiry || property?.leaseEndDate || property?.leaseValidTo) : 'Not applicable'}
+            </Typography>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>PERMIT</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{formatDate(property?.permitExpiry || property?.permitValidTo)}</Typography>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>INSPECTION</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{formatDate(property?.inspectionExpiry || property?.nextInspectionDate)}</Typography>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>MAINTENANCE</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#10b981', ...textSafeSx }}>
+              {property?.maintenanceReadiness || property?.maintenanceStatus || 'Pending data'}
+            </Typography>
+          </Grid>
+        </Grid>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function OwnerExecutiveDashboardSection({
-    properties,
-    stats,
-    contractScope,
-    missingInfo,
-    user
+  properties,
+  stats,
+  contractScope,
+  missingInfo,
+  user,
+  contract = {},
 }: OwnerExecutiveDashboardSectionProps) {
-    const theme = useTheme();
-    const [occupancies, setOccupancies] = useState<any[]>([]);
-    const [invitations, setInvitations] = useState<any[]>([]);
-    const [tickets, setTickets] = useState<any[]>([]);
-    const [loadingData, setLoadingData] = useState(true);
+  const [occupancies, setOccupancies] = useState<any[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
-    // Dynamic data fetch with silent fail for Firestore security policy safety
-    useEffect(() => {
-        if (!user?.uid) return;
+  useEffect(() => {
+    let active = true;
+    async function fetchControlRoomData() {
+      if (!user?.uid && !user?.email) {
+        setLoadingData(false);
+        return;
+      }
 
-        const fetchControlRoomData = async () => {
-            try {
-                const uid = user.uid;
-                const email = user.email?.toLowerCase() || '';
+      const uid = String(user?.uid || '').trim();
+      const email = String(user?.email || '').trim().toLowerCase();
+      const [
+        occByOwnerUid,
+        occByOwnerId,
+        invByOwnerUid,
+        invByOwnerId,
+        invByOwnerEmail,
+        ticketsByOwnerUid,
+        ticketsByOwnerId,
+        ticketsByOwnerEmail,
+      ] = await Promise.all([
+        safeCollectionQuery('occupancies', 'ownerUid', uid),
+        safeCollectionQuery('occupancies', 'ownerId', uid),
+        safeCollectionQuery('tenantInvitations', 'ownerUid', uid),
+        safeCollectionQuery('tenantInvitations', 'ownerId', uid),
+        safeCollectionQuery('tenantInvitations', 'ownerEmail', email),
+        safeCollectionQuery('maintenanceTickets', 'ownerUid', uid),
+        safeCollectionQuery('maintenanceTickets', 'ownerId', uid),
+        safeCollectionQuery('maintenanceTickets', 'ownerEmail', email),
+      ]);
 
-                // Safely fetch occupancies
-                let occList: any[] = [];
-                try {
-                    const q1 = query(collection(db, 'occupancies'), where('ownerUid', '==', uid));
-                    const snap1 = await getDocs(q1);
-                    occList = snap1.docs.map(d => d.data());
-                } catch (err) {
-                    console.warn('[Control Room] Optional occupancies read denied. Continuing with fallback.', err);
-                }
+      if (!active) return;
+      setOccupancies(uniqueBy([...occByOwnerUid, ...occByOwnerId], (item) => item.id || `${item.propertyId}-${item.unitId}-${item.tenantUid || item.tenantEmail}`));
+      setInvitations(uniqueBy([...invByOwnerUid, ...invByOwnerId, ...invByOwnerEmail], (item) => item.id || `${item.propertyId}-${item.unitId}-${item.tenantUid || item.tenantEmail}`));
+      setTickets(uniqueBy([...ticketsByOwnerUid, ...ticketsByOwnerId, ...ticketsByOwnerEmail], (item) => item.id || `${item.propertyId}-${item.ticketId}-${item.createdAt?.seconds || ''}`));
+      setLoadingData(false);
+    }
 
-                // Safely fetch invitations
-                let invList: any[] = [];
-                try {
-                    const q2 = query(collection(db, 'tenantInvitations'), where('ownerId', '==', uid));
-                    const snap2 = await getDocs(q2);
-                    invList = snap2.docs.map(d => d.data());
-                } catch (err) {
-                    console.warn('[Control Room] Optional invitations read denied. Continuing with fallback.', err);
-                }
-
-                // Safely fetch tickets
-                let tktList: any[] = [];
-                try {
-                    const q3 = query(collection(db, 'maintenanceTickets'), where('ownerUid', '==', uid));
-                    const snap3 = await getDocs(q3);
-                    tktList = snap3.docs.map(d => d.data());
-                } catch (err) {
-                    try {
-                        const q3Fallback = query(collection(db, 'maintenanceTickets'), where('ownerId', '==', uid));
-                        const snap3Fallback = await getDocs(q3Fallback);
-                        tktList = snap3Fallback.docs.map(d => d.data());
-                    } catch (err2) {
-                        console.warn('[Control Room] Optional tickets read denied. Continuing with fallback.', err2);
-                    }
-                }
-
-                setOccupancies(occList);
-                setInvitations(invList);
-                setTickets(tktList);
-            } catch (err) {
-                console.warn('[Control Room] Error fetching additional dashboard records.', err);
-            } finally {
-                setLoadingData(false);
-            }
-        };
-
-        fetchControlRoomData();
-    }, [user?.uid, user?.email]);
-
-    // Financial calculations
-    const annualContractValue = 635375; // Active test data target: AED 635,375
-    const mobilization15 = 95306; // Active test data target: AED 95,306
-    const paymentStatus = 'READY_FOR_ACTIVATION';
-    const nextInvoice = 'AED 54,006 (Due 01 Jun 2026)';
-    const packageName = 'Sovereign Institutional';
-    const slaTier = 'Sovereign SLA Gold';
-    const contractStart = '23 May 2026';
-    const contractEnd = '22 Jun 2027';
-
-    // Tenant Registry metrics
-    const totalUnits = stats.units || properties.reduce((acc, p) => acc + Number(p.unitsCount || p.numberOfUnits || p.units || 0), 0);
-    const acceptedTenants = occupancies.filter(o => o.occupancyStatus === 'ACCEPTED' || o.status === 'active').length || stats.tenants;
-    const pendingInvitations = invitations.filter(i => i.invitationStatus === 'PENDING_AUTH_CREATION' || i.status === 'invited').length;
-    const linkedTenantsCount = acceptedTenants + pendingInvitations;
-    const vacantUnitsCount = Math.max(0, totalUnits - acceptedTenants);
-    const tenantRegistryReadiness = totalUnits > 0 ? Math.round((linkedTenantsCount / totalUnits) * 100) : 100;
-
-    // Majlis Assets Filter and Details
-    const majlisAssets = properties.filter(prop => {
-        const type = String(prop.propertyType || prop.type || prop.assetType || '').toLowerCase();
-        return type.includes('majlis') || type.includes('majils') || type.includes('government_majlis');
+    fetchControlRoomData().catch((error) => {
+      console.warn('[OwnerExecutiveDashboard] Optional dashboard telemetry failed.', error);
+      if (active) setLoadingData(false);
     });
 
-    const hasMajlis = majlisAssets.length > 0;
-    // Default Majlis fields or resolve from real properties data
-    const majlisProfile = hasMajlis ? (majlisAssets[0].majlisProfile || {
-        halls: majlisAssets[0].halls || 2,
-        rooms: majlisAssets[0].rooms || 4,
-        vipRooms: majlisAssets[0].vipRooms || 1,
-        guestRooms: majlisAssets[0].guestRooms || 3,
-        prayerRooms: majlisAssets[0].prayerRooms || 1,
-        kitchens: majlisAssets[0].kitchens || 1,
-        washrooms: majlisAssets[0].washrooms || 5,
-        majlisCapacity: majlisAssets[0].majlisCapacity || 120,
-        parkingSpaces: majlisAssets[0].parkingSpaces || 40,
-        serviceZones: majlisAssets[0].serviceZones || ['Protocol Entrance', 'Catering Kitchen', 'VIP Lounge'],
-        protocolReadiness: majlisAssets[0].protocolReadiness || 'READY',
-        preventiveMaintenanceReady: majlisAssets[0].preventiveMaintenanceReady !== false
-    }) : {
-        halls: 0,
-        rooms: 0,
-        vipRooms: 0,
-        guestRooms: 0,
-        prayerRooms: 0,
-        kitchens: 0,
-        washrooms: 0,
-        majlisCapacity: 0,
-        parkingSpaces: 0,
-        serviceZones: [],
-        protocolReadiness: 'MISSING' as const,
-        preventiveMaintenanceReady: false
+    return () => {
+      active = false;
     };
+  }, [user?.uid, user?.email]);
 
-    // Date expiries check based on utility
-    const assetComplianceList = properties.map(prop => {
-        const policy = getOwnerDatePolicy(prop.propertyType || prop.type || prop.assetType);
-        return {
-            propertyName: prop.propertyName || prop.name || 'Asset',
-            type: prop.propertyType || prop.type || prop.assetType || 'Residential',
-            policy,
-            leaseExpiry: prop.leaseExpiry || '2027-05-23',
-            permitExpiry: prop.permitExpiry || '2026-12-31',
-            inspectionExpiry: prop.inspectionExpiry || '2026-09-15',
-            maintenanceReadiness: prop.maintenanceReadiness || 'READY'
-        };
-    });
+  const liveContract = contract || {};
+  const annualContractValue = toNumber(liveContract.annualContractValue || liveContract.annualValue || liveContract.totalValue, 0);
+  const mobilization = toNumber(
+    liveContract.mobilizationAmount || liveContract.depositAmount || liveContract.paymentSchedule?.mobilizationAmount,
+    annualContractValue ? Math.round(annualContractValue * 0.15) : 0
+  );
+  const paymentStatus = normalizeStatus(
+    liveContract.paymentStatus || liveContract.paymentSchedule?.paymentStatus || liveContract.activationStatus || liveContract.status,
+    'PENDING'
+  );
+  const packageName =
+    liveContract.packageName ||
+    liveContract.selectedPlan?.name ||
+    liveContract.planType ||
+    liveContract.serviceType ||
+    contractScope ||
+    'Active Service Agreement';
+  const signatureStatus = normalizeStatus(
+    liveContract.contractSignatureStatus || liveContract.signatureState?.status || liveContract.signatureStatus,
+    'PENDING'
+  );
+  const contractStart = liveContract.activeContractValidFrom || liveContract.validFrom || liveContract.createdAt;
+  const contractEnd = liveContract.activeContractValidTo || liveContract.validTo || liveContract.endDate;
+  const nextInvoiceAmount = liveContract.nextInvoiceAmount || liveContract.paymentSchedule?.nextInvoiceAmount;
+  const nextInvoiceDue = liveContract.nextInvoiceDueDate || liveContract.paymentSchedule?.nextDueDate;
+  const slaTier = liveContract.slaTier || liveContract.serviceLevel || liveContract.selectedPlan?.slaTier || liveContract.sla || 'Not assigned';
+  const slaHealth = liveContract.slaHealth || liveContract.slaScore || liveContract.slaCompliance || 'Not reported';
+  const nextMaintenanceVisit = liveContract.nextMaintenanceVisit || liveContract.nextPmVisit || liveContract.maintenanceSchedule?.nextVisit;
+  const technicianSchedule = liveContract.nextTechnicianVisit || liveContract.technicianSchedule?.nextVisit;
 
-    // Dynamic Action Items generation
-    const actionItems: { title: string; priority: 'Critical' | 'High' | 'Medium' | 'Low'; section: string }[] = [];
+  const visibleProperties = useMemo(() => {
+    const source = Array.isArray(properties) ? properties : [];
+    const real = source.filter((property) => !isFakeOwnerAsset(property));
+    return real.length ? real : source;
+  }, [properties]);
 
-    // Missing Majlis attributes checks
-    if (hasMajlis) {
-        if (!majlisProfile.halls) {
-            actionItems.push({ title: 'Missing Majlis halls count configuration', priority: 'High', section: 'Majlis' });
-        }
-        if (!majlisProfile.rooms) {
-            actionItems.push({ title: 'Missing Majlis rooms count configuration', priority: 'High', section: 'Majlis' });
-        }
+  const totalUnits = stats.units || visibleProperties.reduce((sum, property) => sum + getPropertyUnits(property), 0);
+  const acceptedTenants = occupancies.filter((item) => ['ACCEPTED', 'ACTIVE', 'SIGNED', 'OCCUPIED'].includes(normalizeStatus(item.occupancyStatus || item.status))).length || stats.tenants;
+  const pendingInvitations = invitations.filter((item) => ['PENDING_AUTH_CREATION', 'PENDING', 'INVITED', 'SENT'].includes(normalizeStatus(item.invitationStatus || item.status))).length;
+  const linkedTenantsCount = acceptedTenants + pendingInvitations;
+  const vacantUnitsCount = Math.max(0, totalUnits - acceptedTenants);
+  const tenantRegistryReadiness = totalUnits > 0 ? Math.min(100, Math.round((linkedTenantsCount / totalUnits) * 100)) : 0;
+  const openTicketsCount = tickets.filter((ticket) => ['OPEN', 'PENDING', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS', 'ESCALATED'].includes(normalizeStatus(ticket.status))).length || stats.tickets;
+  const criticalTickets = tickets.filter((ticket) => normalizeStatus(ticket.priority || ticket.severity) === 'CRITICAL' && normalizeStatus(ticket.status) !== 'COMPLETED').length;
+  const passportReady = visibleProperties.filter((property) => ['ACTIVE', 'READY', 'ISSUED'].includes(normalizeStatus(property.passportStatus || property.governanceStatus))).length;
+  const missingDataWarnings = visibleProperties.filter((property) => {
+    const template = getOwnerAssetTemplate(property);
+    return template.fields.some((field) => getFirstAssetValue(property, field.keys) === 'Not provided');
+  }).length;
+
+  const actionItems: { title: string; priority: 'Critical' | 'High' | 'Medium' | 'Low'; section: string }[] = [];
+  if (missingInfo.iban) actionItems.push({ title: 'Missing owner payout bank schedule or IBAN configuration', priority: 'Critical', section: 'Finance' });
+  if (annualContractValue <= 0) actionItems.push({ title: 'Annual contract value is missing from the active contract', priority: 'High', section: 'Finance' });
+  if (signatureStatus === 'PENDING') actionItems.push({ title: 'Contract signature status still requires verification', priority: 'High', section: 'Contract' });
+  if (tenantRegistryReadiness < 50 && totalUnits > 0) actionItems.push({ title: 'Tenant registry readiness is below 50%', priority: 'High', section: 'Tenant Registry' });
+  if (passportReady < visibleProperties.length) actionItems.push({ title: 'Some active assets do not have official property passport status yet', priority: 'Medium', section: 'Property Passport' });
+  if (missingDataWarnings > 0) actionItems.push({ title: `${missingDataWarnings} asset profile(s) need missing field backfill`, priority: 'Medium', section: 'Asset Data' });
+  if (openTicketsCount > 0) actionItems.push({ title: `${openTicketsCount} maintenance ticket(s) require owner visibility`, priority: 'High', section: 'Operations' });
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Critical':
+        return '#ef4444';
+      case 'High':
+        return '#f97316';
+      case 'Medium':
+        return '#f59e0b';
+      default:
+        return '#3b82f6';
     }
+  };
 
-    // Tenant registry checks
-    if (tenantRegistryReadiness < 50) {
-        actionItems.push({ title: 'Missing tenant registry registrations (Readiness under 50%)', priority: 'High', section: 'Tenant' });
-    }
+  return (
+    <Stack spacing={4} sx={{ width: '100%', mt: 4, minWidth: 0 }}>
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          {renderHeader(<CreditCard size={22} />, 'Financial Control', 'Live Contract Ledger & Mobilization')}
+          <Grid container spacing={3}>
+            {renderMetric('Annual Contract Value', formatCurrency(annualContractValue), `Package: ${packageName}`, binThemeTokens.gold)}
+            {renderMetric('15% Mobilization', formatCurrency(mobilization), `Payment: ${paymentStatus}`)}
+            {renderMetric('Signature Status', <Chip label={signatureStatus} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950, maxWidth: '100%' }} />, `${formatDate(contractStart)} → ${formatDate(contractEnd)}`)}
+            {renderMetric('Next Invoice / SLA', nextInvoiceAmount ? formatCurrency(nextInvoiceAmount) : 'Not scheduled', nextInvoiceDue ? `Due: ${formatDate(nextInvoiceDue)} · SLA: ${slaTier}` : `SLA: ${slaTier}`)}
+          </Grid>
+        </CardContent>
+      </Card>
 
-    // Passport checks
-    const propertiesWithPassports = properties.filter(p => p.passportStatus === 'ACTIVE' || p.source === 'passport');
-    if (propertiesWithPassports.length < properties.length) {
-        actionItems.push({ title: 'Missing official property passports for portfolio assets', priority: 'Medium', section: 'Compliance' });
-    }
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          {renderHeader(<Building2 size={22} />, 'Portfolio Health', 'Assets, Occupancy, SLA & Passports')}
+          <Grid container spacing={3}>
+            {renderMetric('Active Assets', visibleProperties.length, `${passportReady}/${visibleProperties.length || 0} passports ready`)}
+            {renderMetric('Occupied / Vacant Units', `${acceptedTenants} / ${vacantUnitsCount}`, `Total registered units: ${totalUnits}`)}
+            {renderMetric('SLA Health', String(slaHealth), 'Live from contract/SLA records', '#10b981')}
+            {renderMetric('Missing Data Warnings', missingDataWarnings, 'Backfill required for complete owner visibility', missingDataWarnings ? '#f59e0b' : '#10b981')}
+          </Grid>
+        </CardContent>
+      </Card>
 
-    // Payment schedule checks
-    if (missingInfo.iban) {
-        actionItems.push({ title: 'Missing payout bank schedule or IBAN configuration', priority: 'Critical', section: 'Finance' });
-    }
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3, minWidth: 0 }}>
+            {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
+            <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>REGISTRY READINESS</Typography>
+              <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
+            </Box>
+          </Stack>
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            {renderMetric('Accepted Tenants', acceptedTenants)}
+            {renderMetric('Pending Invitations', pendingInvitations, undefined, binThemeTokens.gold)}
+            {renderMetric('Vacant Units', vacantUnitsCount, undefined, vacantUnitsCount ? '#ef4444' : '#10b981')}
+            {renderMetric('Linked / Total', `${linkedTenantsCount} / ${totalUnits}`)}
+          </Grid>
+          <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
+            <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
+              Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
+            </Typography>
+          </Alert>
+        </CardContent>
+      </Card>
 
-    // SLA Tier checks
-    if (!slaTier) {
-        actionItems.push({ title: 'Missing active SLA tier contract linkage', priority: 'High', section: 'Finance' });
-    }
-
-    // Open maintenance tickets
-    const openTicketsCount = tickets.filter(t => ['open', 'OPEN', 'pending', 'PENDING', 'in_progress', 'IN_PROGRESS'].includes(t.status)).length || stats.tickets;
-    if (openTicketsCount > 0) {
-        actionItems.push({ title: `${openTicketsCount} open maintenance tickets pending resolution`, priority: 'High', section: 'Operations' });
-    }
-
-    // Compliance documents checks
-    const missingDocs = properties.some(p => !p.complianceDocuments || p.complianceDocuments.length === 0);
-    if (missingDocs) {
-        actionItems.push({ title: 'Missing required compliance or regulatory documents', priority: 'Medium', section: 'Compliance' });
-    }
-
-    // Upcoming inspection check
-    const nextInspection = assetComplianceList.find(c => c.policy.showInspectionExpiry && c.inspectionExpiry);
-    if (nextInspection) {
-        actionItems.push({ title: `Upcoming inspection for ${nextInspection.propertyName} scheduled soon`, priority: 'Medium', section: 'Compliance' });
-    }
-
-    // Render logic helper for priority colors
-    const getPriorityColor = (prio: string) => {
-        switch (prio) {
-            case 'Critical': return '#ef4444';
-            case 'High': return '#f97316';
-            case 'Medium': return '#f59e0b';
-            default: return '#3b82f6';
-        }
-    };
-
-    return (
-        <Stack spacing={4} sx={{ width: '100%', mt: 4 }}>
-            
-            {/* 1. FINANCIAL CONTROL PANEL */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                            <Landmark size={22} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Financial Control</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Sovereign Ledger & Mobilization</Typography>
-                        </Box>
-                    </Stack>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>ANNUAL CONTRACT VALUE</Typography>
-                                <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.gold }}>AED {annualContractValue.toLocaleString()}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>Package: {packageName}</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>15% MOBILIZATION AMOUNT</Typography>
-                                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>AED {mobilization15.toLocaleString()}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>Verification: Verified ✓</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>CONTRACT STATUS</Typography>
-                                <Chip label={paymentStatus} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950, height: 26, mt: 0.5, mb: 0.5 }} />
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>{contractStart} · {contractEnd}</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>NEXT INVOICE SCHEDULE</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{nextInvoice}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>SLA Tier: {slaTier}</Typography>
-                            </Box>
-                        </Grid>
-                    </Grid>
-                </CardContent>
-            </Card>
-
-            {/* 2. PORTFOLIO HEALTH SUMMARY */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                            <Compass size={22} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Portfolio Health</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Real-time Occupancy & SLA Metrics</Typography>
-                        </Box>
-                    </Stack>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={4}>
-                            <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>TOTAL PORTFOLIO ASSETS</Typography>
-                                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{stats.properties}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>With active property passports</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>OCCUPIED VS VACANT UNITS</Typography>
-                                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{acceptedTenants} / {vacantUnitsCount}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Total units registered: {totalUnits}</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>SLA SERVICE HEALTH</Typography>
-                                <Typography variant="h3" fontWeight="950" sx={{ color: '#10b981' }}>98.4%</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Response speed under 4-hour SLA</Typography>
-                            </Box>
-                        </Grid>
-                    </Grid>
-                </CardContent>
-            </Card>
-
-            {/* 3. TENANT REGISTRY ARCHITECTURE */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={3} sx={{ mb: 3 }}>
-                        <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                                <Users size={22} />
-                            </Box>
-                            <Box>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Tenant Registry</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Linked Occupancies & Security</Typography>
-                            </Box>
-                        </Stack>
-                        <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>REGISTRY READINESS</Typography>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{tenantRegistryReadiness}% Linked</Typography>
-                        </Box>
-                    </Stack>
-
-                    <Grid container spacing={3} sx={{ mb: 3 }}>
-                        <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>ACCEPTED TENANTS</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mt: 0.5 }}>{acceptedTenants}</Typography>
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>PENDING INVITATIONS</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold, mt: 0.5 }}>{pendingInvitations}</Typography>
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>VACANT UNITS</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#ef4444', mt: 0.5 }}>{vacantUnitsCount}</Typography>
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>LINKED / TOTAL</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mt: 0.5 }}>{linkedTenantsCount} / {totalUnits}</Typography>
-                        </Grid>
-                    </Grid>
-
-                    <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                            <Shield size={18} style={{ marginTop: 2, flexShrink: 0 }} />
-                            <Box>
-                                <Typography variant="caption" fontWeight="900" sx={{ display: 'block', mb: 0.5 }}>DATA ISOLATION & SEPARATE TENANT CREDENTIALS</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, display: 'block' }}>
-                                    Tenants use their own login. They are linked to the owner by property and unit, not by sharing owner UID. 
-                                    All personal and lease ledger partitions are verified under UAE regulatory standards.
-                                </Typography>
-                            </Box>
-                        </Stack>
-                    </Alert>
-                </CardContent>
-            </Card>
-
-            {/* 4. MAJLIS & GOVERNMENT DETAILS */}
-            {hasMajlis && (
-                <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
-                    <CardContent sx={{ p: 4 }}>
-                        <Stack direction="row" alignItems="center" justify-content="space-between" spacing={1.5} sx={{ mb: 3 }}>
-                            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                                <Landmark size={22} />
-                            </Box>
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Majlis / Government Majlis Details</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Protocol Readiness & Asset Parameters</Typography>
-                            </Box>
-                            <Chip 
-                                label={majlisProfile.protocolReadiness} 
-                                color={majlisProfile.protocolReadiness === 'READY' ? 'success' : 'warning'} 
-                                sx={{ fontWeight: 950, px: 1 }} 
-                            />
-                        </Stack>
-                        <Grid container spacing={3} sx={{ mb: 3 }}>
-                            <Grid item xs={6} sm={4} md={2.4}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>HALLS</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{majlisProfile.halls || 'N/A'}</Typography>
-                            </Grid>
-                            <Grid item xs={6} sm={4} md={2.4}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>ROOMS / VIP</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{majlisProfile.rooms || 'N/A'} ({majlisProfile.vipRooms || 0} VIP)</Typography>
-                            </Grid>
-                            <Grid item xs={6} sm={4} md={2.4}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>GUEST & PRAYER</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{majlisProfile.guestRooms || 0} G / {majlisProfile.prayerRooms || 0} P</Typography>
-                            </Grid>
-                            <Grid item xs={6} sm={4} md={2.4}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>KITCHENS / WASHROOMS</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{majlisProfile.kitchens || 0} K / {majlisProfile.washrooms || 0} W</Typography>
-                            </Grid>
-                            <Grid item xs={6} sm={4} md={2.4}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CAPACITY / PARKING</Typography>
-                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{majlisProfile.majlisCapacity || 0} Pax / {majlisProfile.parkingSpaces || 0} Cars</Typography>
-                            </Grid>
-                        </Grid>
-                        <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.05)' }} />
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} sm={6}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>MAJLIS SERVICE ZONES</Typography>
-                                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                    {majlisProfile.serviceZones && majlisProfile.serviceZones.length > 0 ? (
-                                        majlisProfile.serviceZones.map((zone: string, i: number) => (
-                                            <Chip key={i} label={zone} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontWeight: 800 }} />
-                                        ))
-                                    ) : (
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>No zones configured</Typography>
-                                    )}
-                                </Stack>
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 1 }}>READINESS STATUS</Typography>
-                                <Stack direction="row" spacing={2}>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <CheckCircle size={16} color={majlisProfile.preventiveMaintenanceReady ? '#10b981' : '#f59e0b'} />
-                                        <Typography variant="caption" fontWeight="800" sx={{ color: '#FFF' }}>PM READINESS</Typography>
-                                    </Stack>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <CheckCircle size={16} color={majlisProfile.protocolReadiness === 'READY' ? '#10b981' : '#f59e0b'} />
-                                        <Typography variant="caption" fontWeight="800" sx={{ color: '#FFF' }}>PROTOCOL READINESS</Typography>
-                                    </Stack>
-                                </Stack>
-                            </Grid>
-                        </Grid>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* 5. OPERATIONS & SLA */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                            <Wrench size={22} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Operations & SLA</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Maintenance Calendar & Technician Status</Typography>
-                        </Box>
-                    </Stack>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>OPEN MAINTENANCE TICKETS</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mt: 0.5 }}>{openTicketsCount}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, display: 'block' }}>Emergency tickets: {tickets.filter(t => t.priority === 'CRITICAL' && t.status !== 'COMPLETED').length}</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>PM SCHEDULE STATUS</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#10b981', mt: 0.5 }}>ACTIVE</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, display: 'block' }}>Next maintenance visit: 29 May 2026</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>TECHNICIAN SCHEDULING</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mt: 0.5 }}>1 Visit Pending</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, display: 'block' }}>Scheduled: 26 May 2026</Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>PENDING OWNER APPROVALS</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.gold, mt: 0.5 }}>0 Items</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, display: 'block' }}>Disputes: 0 open</Typography>
-                            </Box>
-                        </Grid>
-                    </Grid>
-                </CardContent>
-            </Card>
-
-            {/* 6. COMPLIANCE CALENDAR / DATE POLICY LOGIC */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold }}>
-                            <Calendar size={22} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>Compliance Calendar</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Asset Permit & Expiry Control</Typography>
-                        </Box>
-                    </Stack>
-                    <Grid container spacing={3}>
-                        {assetComplianceList.map((asset, idx) => (
-                            <Grid item xs={12} md={6} key={idx}>
-                                <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                                        <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF' }}>{asset.propertyName}</Typography>
-                                        <Chip label={String(asset.type).toUpperCase()} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.65rem' }} />
-                                    </Stack>
-                                    <Grid container spacing={2}>
-                                        {asset.policy.showLeaseExpiry && (
-                                            <Grid item xs={6}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>LEASE EXPIRY</Typography>
-                                                <Typography variant="caption" fontWeight="800" sx={{ color: '#FFF' }}>{asset.leaseExpiry}</Typography>
-                                            </Grid>
-                                        )}
-                                        {asset.policy.showPermitExpiry && (
-                                            <Grid item xs={6}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>PERMIT EXPIRY</Typography>
-                                                <Typography variant="caption" fontWeight="800" sx={{ color: '#FFF' }}>{asset.permitExpiry}</Typography>
-                                            </Grid>
-                                        )}
-                                        {asset.policy.showInspectionExpiry && (
-                                            <Grid item xs={6}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>INSPECTION EXPIRY</Typography>
-                                                <Typography variant="caption" fontWeight="800" sx={{ color: '#FFF' }}>{asset.inspectionExpiry}</Typography>
-                                            </Grid>
-                                        )}
-                                        {asset.policy.showMaintenanceReadiness && (
-                                            <Grid item xs={6}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>MAINTENANCE STATUS</Typography>
-                                                <Typography variant="caption" fontWeight="900" sx={{ color: '#10b981' }}>{asset.maintenanceReadiness}</Typography>
-                                            </Grid>
-                                        )}
-                                    </Grid>
-                                </Box>
-                            </Grid>
-                        ))}
-                    </Grid>
-                </CardContent>
-            </Card>
-
-            {/* 7. OWNER ACTION ITEMS */}
-            <Card sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha(binThemeTokens.danger, 0.35)}` }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.danger, 0.1), borderRadius: 2, color: binThemeTokens.danger }}>
-                            <AlertTriangle size={22} />
-                        </Box>
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.danger, fontWeight: 900, letterSpacing: 2 }}>Action Items Required</Typography>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>Executive Priority Checklist</Typography>
-                        </Box>
-                    </Stack>
-
-                    {actionItems.length === 0 ? (
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-                            No action items pending. Your sovereign control room is fully compliant.
-                        </Typography>
-                    ) : (
-                        <Stack spacing={1.5}>
-                            {actionItems.map((item, idx) => (
-                                <Box 
-                                    key={idx} 
-                                    sx={{ 
-                                        p: 2, 
-                                        bgcolor: 'rgba(255,255,255,0.01)', 
-                                        borderRadius: 3.5, 
-                                        border: `1px solid ${alpha(getPriorityColor(item.priority), 0.2)}`,
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                    }}
-                                >
-                                    <Stack direction="row" spacing={2} alignItems="center">
-                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: getPriorityColor(item.priority) }} />
-                                        <Box>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{item.section.toUpperCase()}</Typography>
-                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF' }}>{item.title}</Typography>
-                                        </Box>
-                                    </Stack>
-                                    <Chip 
-                                        label={item.priority} 
-                                        size="small" 
-                                        sx={{ 
-                                            bgcolor: alpha(getPriorityColor(item.priority), 0.15), 
-                                            color: getPriorityColor(item.priority), 
-                                            fontWeight: 950,
-                                            fontSize: '0.65rem'
-                                        }} 
-                                    />
-                                </Box>
-                            ))}
-                        </Stack>
-                    )}
-                </CardContent>
-            </Card>
-
+      <Box sx={{ minWidth: 0 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2, minWidth: 0 }}>
+          <Landmark size={22} color={binThemeTokens.gold} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+              Asset Intelligence
+            </Typography>
+            <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
+              Universal UAE Property Dashboard Renderer
+            </Typography>
+          </Box>
         </Stack>
-    );
+        <Grid container spacing={3}>
+          {visibleProperties.length === 0 ? (
+            <Grid item xs={12}>
+              <Card sx={cardSx}>
+                <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                  <Typography fontWeight={950} sx={{ color: 'rgba(255,255,255,0.52)' }}>NO ACTIVE ASSETS FOUND</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : (
+            visibleProperties.map((property) => (
+              <Grid item xs={12} key={property.id || property.propertyId || property.name} sx={{ minWidth: 0 }}>
+                <AssetIntelligenceCard property={property} />
+              </Grid>
+            ))
+          )}
+        </Grid>
+      </Box>
+
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          {renderHeader(<Wrench size={22} />, 'Operations & SLA', 'Maintenance Tickets, Visits & Field Readiness')}
+          <Grid container spacing={3}>
+            {renderMetric('Open Maintenance Tickets', openTicketsCount, `Critical: ${criticalTickets}`)}
+            {renderMetric('PM Schedule', nextMaintenanceVisit ? formatDate(nextMaintenanceVisit) : 'Not scheduled', 'Next preventive maintenance visit')}
+            {renderMetric('Technician Scheduling', technicianSchedule ? formatDate(technicianSchedule) : 'Not scheduled', 'Upcoming technician field visit')}
+            {renderMetric('Maintenance Cost', formatCurrency(stats.maintenanceCost), 'Live owner ledger cost')}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          {renderHeader(<Calendar size={22} />, 'Compliance Calendar', 'Lease, Permit, Inspection & Maintenance Readiness')}
+          <Grid container spacing={2}>
+            {visibleProperties.map((property) => {
+              const assetType = getAssetTypeLabel(property);
+              const policy = getOwnerDatePolicy(assetType, property);
+              return (
+                <Grid item xs={12} md={6} key={`compliance-${property.id || property.propertyId || property.name}`} sx={{ minWidth: 0 }}>
+                  <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.025)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.06)', minWidth: 0 }}>
+                    <Typography fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>{property.propertyName || property.name || property.address || 'Asset'}</Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', display: 'block', mb: 1, ...textSafeSx }}>{assetType}</Typography>
+                    <Stack spacing={0.75}>
+                      {policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Lease expiry: {formatDate(property.leaseExpiry || property.leaseEndDate || property.leaseValidTo)}</Typography>}
+                      {!policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', ...textSafeSx }}>Lease expiry: not applicable unless leased/rented/tenanted</Typography>}
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Permit: {formatDate(property.permitExpiry || property.permitValidTo)}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Inspection: {formatDate(property.inspectionExpiry || property.nextInspectionDate)}</Typography>
+                    </Stack>
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card sx={cardSx}>
+        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+          {renderHeader(<FileText size={22} />, 'Owner Action Items', 'Priority Fixes for Complete Owner Visibility')}
+          {loadingData && (
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mb: 2 }}>Loading live owner telemetry...</Typography>
+          )}
+          {actionItems.length === 0 ? (
+            <Alert icon={<CheckCircle size={18} />} severity="success" sx={{ borderRadius: 3 }}>
+              No critical owner action items detected from available dashboard data.
+            </Alert>
+          ) : (
+            <Stack spacing={1.5}>
+              {actionItems.map((item, index) => (
+                <Box key={`${item.title}-${index}`} sx={{ p: 2, bgcolor: alpha(getPriorityColor(item.priority), 0.08), border: `1px solid ${alpha(getPriorityColor(item.priority), 0.24)}`, borderRadius: 3, minWidth: 0 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" spacing={1.2} alignItems="center" sx={{ minWidth: 0 }}>
+                      <AlertTriangle size={18} color={getPriorityColor(item.priority)} style={{ flexShrink: 0 }} />
+                      <Typography fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{item.title}</Typography>
+                    </Stack>
+                    <Chip label={`${item.priority} · ${item.section}`} size="small" sx={{ bgcolor: alpha(getPriorityColor(item.priority), 0.12), color: getPriorityColor(item.priority), fontWeight: 950, maxWidth: '100%' }} />
+                  </Stack>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
+    </Stack>
+  );
 }
