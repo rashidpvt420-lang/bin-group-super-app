@@ -1,32 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Alert,
-    Box, Typography, Grid, Paper, Stack, Button,
-    CircularProgress, alpha, Divider, IconButton,
-    Container
+    Box, Typography, Paper, CircularProgress, Button, alpha, Alert
 } from '@mui/material';
-import { 
-    Building2, FileText, DollarSign, Users, TrendingUp, 
-    CreditCard, Wrench, Shield, ChevronRight, ArrowUpRight,
-    CheckCircle2, Activity, Plus, Sparkles, Clock, Lock
+import {
+    Clock, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db, collection, query, where, getDocs, onSnapshot, doc, getDoc } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, doc, getDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-
-const ACTIVE_TICKET_STATUSES = [
-    'OPEN', 'open',
-    'PENDING_ASSIGNMENT', 'pending_assignment',
-    'ASSIGNED', 'assigned',
-    'ACCEPTED', 'accepted',
-    'EN_ROUTE', 'on_the_way',
-    'ARRIVED', 'arrived',
-    'IN_PROGRESS', 'in_progress',
-    'WAITING_PARTS', 'waiting_parts',
-    'ESCALATED', 'escalated'
-];
+import OwnerDashboardResolvedPage from './OwnerDashboardResolvedPage';
 
 export default function OwnerDashboardPage() {
     const { user } = useRole();
@@ -35,6 +19,7 @@ export default function OwnerDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
     const [dashboardState, setDashboardState] = useState<'locked' | 'pending' | 'active'>('locked');
+    
     const [stats, setStats] = useState({
         properties: 0,
         units: 0,
@@ -47,7 +32,6 @@ export default function OwnerDashboardPage() {
     const [properties, setProperties] = useState<any[]>([]);
     const [missingInfo, setMissingInfo] = useState<{ iban: boolean; units: boolean }>({ iban: false, units: false });
     const [contractScope, setContractScope] = useState<string>('');
-    const [growth] = useState({ value: '+12.5%', trend: 'up' });
 
     useEffect(() => {
         if (!user?.email && !user?.uid) {
@@ -55,170 +39,324 @@ export default function OwnerDashboardPage() {
             return;
         }
 
-        const checkDashboardState = async () => {
+        const resolveOwnerAndLoadData = async () => {
             try {
-                // Check owners collection first
-                const ownerRef = doc(db, 'owners', user.uid!);
-                const ownerSnap = await getDoc(ownerRef);
-                
-                if (ownerSnap.exists()) {
-                    const ownerData = ownerSnap.data();
-                    if (ownerData.dashboardUnlocked === true && ownerData.status === 'ACTIVE') {
-                        setDashboardState('active');
-                    } else {
-                        setDashboardState('pending');
-                        setLoading(false);
-                        return; // Stop loading data, just show pending panel
-                    }
-                } else {
-                    // Fallback: check users collection
-                    const userRef = doc(db, 'users', user.uid!);
-                    const userSnap = await getDoc(userRef);
-                    
-                    if (userSnap.exists()) {
-                        const userData = userSnap.data();
-                        if (userData.dashboardUnlocked === true && userData.status === 'ACTIVE') {
-                            setDashboardState('active');
-                        } else {
-                            setDashboardState('pending');
-                            setLoading(false);
-                            return;
-                        }
-                    } else {
-                        setDashboardState('locked');
-                        setLoading(false);
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.error('[OwnerDashboard] Error checking dashboard state:', err);
-                setDashboardState('locked');
-                setLoading(false);
-                return;
-            }
+                setLoading(true);
+                setLoadError('');
 
-            // If we get here, dashboard is active - load properties
-            const email = user.email?.toLowerCase() || '';
-            const propQ = email
-                ? query(collection(db, 'properties'), where('ownerEmail', '==', email))
-                : query(collection(db, 'properties'), where('ownerId', '==', user.uid));
-
-            const unsubscribe = onSnapshot(propQ, async (snap) => {
+                // 1. Resolve dashboard state first
+                let resolvedDashboardState: 'locked' | 'pending' | 'active' = 'locked';
                 try {
-                    setLoadError('');
-                    const props: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setProperties(props);
-
-                    let unitCount = 0;
-                    let tenantCount = 0;
-                    let rent = 0;
-                    let maint = 0;
-                    let unitsMissingDetails = false;
-
-                    const passportQ = email
-                        ? query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email))
-                        : query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid));
-                    const passportSnap = await getDocs(passportQ);
-                    passportSnap.docs.forEach(d => {
-                        const data = d.data();
-                        unitCount += Number(data.totalUnits || data.units || 0);
-                        tenantCount += Number(data.occupiedUnits || data.activeTenants || 0);
-                        rent += Number(data.rentCollectedTotal || 0);
-                        maint += Number(data.maintenanceCostTotal || 0);
-                        if (!Array.isArray(data.rentPerUnitTable) || data.rentPerUnitTable.length === 0) unitsMissingDetails = true;
-                    });
-
-                    const contractQ = email
-                        ? query(collection(db, 'contracts'), where('ownerEmail', '==', email))
-                        : query(collection(db, 'contracts'), where('ownerId', '==', user.uid));
-                    const contractSnap = await getDocs(contractQ);
-                    let scope = '';
-                    if (!contractSnap.empty) {
-                        const contract = contractSnap.docs[0].data();
-                        scope = String(contract.managementScope || contract.contractType || contract.planType || '').toUpperCase();
-                        setContractScope(scope);
-                    } else {
-                        setContractScope('');
-                    }
-
-                    const bankQ = email
-                        ? query(collection(db, 'ownerBankAccounts'), where('ownerEmail', '==', email))
-                        : query(collection(db, 'ownerBankAccounts'), where('ownerId', '==', user.uid));
-                    const bankSnap = await getDocs(bankQ);
-                    setMissingInfo({ iban: bankSnap.empty, units: unitsMissingDetails });
-
-                    let openTicketCount = 0;
-                    try {
-                        const ticketQ = email 
-                            ? query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email))
-                            : query(collection(db, 'maintenanceTickets'), where('ownerId', '==', user.uid));
-                        
-                        const ticketSnap = await getDocs(ticketQ);
-                        if (!ticketSnap.empty) {
-                            openTicketCount = ticketSnap.docs.filter(docSnap => 
-                                ACTIVE_TICKET_STATUSES.includes(String(docSnap.data().status || '').toUpperCase())
-                            ).length;
-                        } else if (props.length > 0) {
-                            for (const prop of props.slice(0, 5)) {
-                                const pTicketQ = query(collection(db, 'maintenanceTickets'), where('propertyId', '==', prop.id));
-                                const pTicketSnap = await getDocs(pTicketQ);
-                                openTicketCount += pTicketSnap.docs.filter(docSnap => 
-                                    ACTIVE_TICKET_STATUSES.includes(String(docSnap.data().status || '').toUpperCase())
-                                ).length;
-                            }
+                    const ownerRef = doc(db, 'owners', user.uid!);
+                    const ownerSnap = await getDoc(ownerRef);
+                    
+                    if (ownerSnap.exists()) {
+                        const ownerData = ownerSnap.data();
+                        if (ownerData.dashboardUnlocked === true && ownerData.status === 'ACTIVE') {
+                            resolvedDashboardState = 'active';
+                        } else {
+                            resolvedDashboardState = 'pending';
                         }
-                    } catch (ticketErr) {
-                        console.warn("Could not fetch tickets by owner, skipping count.");
+                    } else {
+                        const userRef = doc(db, 'users', user.uid!);
+                        const userSnap = await getDoc(userRef);
+                        
+                        if (userSnap.exists()) {
+                            const userData = userSnap.data();
+                            if (userData.dashboardUnlocked === true && userData.status === 'ACTIVE') {
+                                resolvedDashboardState = 'active';
+                            } else {
+                                resolvedDashboardState = 'pending';
+                            }
+                        } else {
+                            resolvedDashboardState = 'locked';
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail checking dashboard state document:', err);
+                    resolvedDashboardState = 'locked';
+                }
+
+                setDashboardState(resolvedDashboardState);
+
+                // If not active, stop loading further data
+                if (resolvedDashboardState !== 'active') {
+                    setLoading(false);
+                    return;
+                }
+
+                // 2. Resolve owner identity set (Emails and UIDs)
+                const resolvedEmails = new Set<string>();
+                const resolvedUids = new Set<string>();
+
+                resolvedUids.add(user.uid);
+                if (user.email) resolvedEmails.add(user.email.toLowerCase());
+
+                try {
+                    const ownerRef = doc(db, 'owners', user.uid);
+                    const ownerSnap = await getDoc(ownerRef);
+                    if (ownerSnap.exists()) {
+                        const data = ownerSnap.data();
+                        if (data.ownerEmail) resolvedEmails.add(data.ownerEmail.toLowerCase());
+                        if (data.email) resolvedEmails.add(data.email.toLowerCase());
+                        if (data.ownerUid) resolvedUids.add(data.ownerUid);
+                        if (data.ownerId) resolvedUids.add(data.ownerId);
+                        if (Array.isArray(data.linkedOwnerIds)) {
+                            data.linkedOwnerIds.forEach((id: string) => resolvedUids.add(id));
+                        }
                     }
 
-                    const fallbackUnits = props.reduce((acc, p) => acc + Number(p.unitsCount || p.numberOfUnits || p.units || 0), 0);
-                    setStats({
-                        properties: props.length,
-                        units: unitCount || fallbackUnits,
-                        tenants: tenantCount,
-                        tickets: openTicketCount,
-                        rentCollected: rent,
-                        payoutsPending: rent * 0.92,
-                        maintenanceCost: maint
-                    });
-                    setLoading(false);
-                } catch (error: any) {
-                    console.error('[OwnerDashboard] Portfolio load failed:', error);
-                    setLoadError(error?.message || 'Portfolio data could not be loaded.');
-                    setLoading(false);
+                    const userRef = doc(db, 'users', user.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const data = userSnap.data();
+                        if (data.ownerEmail) resolvedEmails.add(data.ownerEmail.toLowerCase());
+                        if (data.email) resolvedEmails.add(data.email.toLowerCase());
+                        if (data.ownerUid) resolvedUids.add(data.ownerUid);
+                        if (data.ownerId) resolvedUids.add(data.ownerId);
+                        if (Array.isArray(data.linkedOwnerIds)) {
+                            data.linkedOwnerIds.forEach((id: string) => resolvedUids.add(id));
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail during user/owner detail lookup:', err);
                 }
-            }, (error) => {
-                console.error('[OwnerDashboard] Property listener failed:', error);
-                setLoadError(error?.message || 'Property listener failed.');
-                setLoading(false);
-            });
 
-            return () => unsubscribe();
+                // 3. Resolve active contracts and settings
+                const contractsMap = new Map<string, any>();
+                try {
+                    for (const uid of Array.from(resolvedUids)) {
+                        const q1 = query(collection(db, 'contracts'), where('ownerUid', '==', uid));
+                        const s1 = await getDocs(q1);
+                        s1.docs.forEach(d => contractsMap.set(d.id, d.data()));
+
+                        const q2 = query(collection(db, 'contracts'), where('ownerId', '==', uid));
+                        const s2 = await getDocs(q2);
+                        s2.docs.forEach(d => contractsMap.set(d.id, d.data()));
+                    }
+
+                    for (const email of Array.from(resolvedEmails)) {
+                        const q3 = query(collection(db, 'contracts'), where('ownerEmail', '==', email));
+                        const s3 = await getDocs(q3);
+                        s3.docs.forEach(d => contractsMap.set(d.id, d.data()));
+
+                        const q4 = query(collection(db, 'contracts'), where('emailDelivery.recipient', '==', email));
+                        const s4 = await getDocs(q4);
+                        s4.docs.forEach(d => contractsMap.set(d.id, d.data()));
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail during contracts retrieval:', err);
+                }
+
+                let resolvedScope = '';
+                contractsMap.forEach((contract) => {
+                    const scope = String(contract.managementScope || contract.contractType || contract.planType || '').toUpperCase();
+                    if (scope) resolvedScope = scope;
+                    
+                    // Extract additional details from contract
+                    if (contract.ownerEmail) resolvedEmails.add(contract.ownerEmail.toLowerCase());
+                    if (contract.ownerUid) resolvedUids.add(contract.ownerUid);
+                    if (contract.ownerId) resolvedUids.add(contract.ownerId);
+                });
+                setContractScope(resolvedScope);
+
+                // 4. Load property records
+                const propertiesMap = new Map<string, any>();
+                try {
+                    for (const uid of Array.from(resolvedUids)) {
+                        const qp1 = query(collection(db, 'properties'), where('ownerId', '==', uid));
+                        const sp1 = await getDocs(qp1);
+                        sp1.docs.forEach(d => propertiesMap.set(d.id, { id: d.id, ...d.data(), source: 'property record' }));
+
+                        const qp2 = query(collection(db, 'properties'), where('ownerUid', '==', uid));
+                        const sp2 = await getDocs(qp2);
+                        sp2.docs.forEach(d => propertiesMap.set(d.id, { id: d.id, ...d.data(), source: 'property record' }));
+                    }
+
+                    for (const email of Array.from(resolvedEmails)) {
+                        const qp3 = query(collection(db, 'properties'), where('ownerEmail', '==', email));
+                        const sp3 = await getDocs(qp3);
+                        sp3.docs.forEach(d => propertiesMap.set(d.id, { id: d.id, ...d.data(), source: 'property record' }));
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail during properties retrieval:', err);
+                }
+
+                // 5. Load property passports
+                const passportsMap = new Map<string, any>();
+                try {
+                    for (const uid of Array.from(resolvedUids)) {
+                        const qpp1 = query(collection(db, 'propertyPassports'), where('ownerId', '==', uid));
+                        const spp1 = await getDocs(qpp1);
+                        spp1.docs.forEach(d => passportsMap.set(d.id, { id: d.id, ...d.data(), source: 'official passport' }));
+
+                        const qpp2 = query(collection(db, 'propertyPassports'), where('ownerUid', '==', uid));
+                        const spp2 = await getDocs(qpp2);
+                        spp2.docs.forEach(d => passportsMap.set(d.id, { id: d.id, ...d.data(), source: 'official passport' }));
+                    }
+
+                    for (const email of Array.from(resolvedEmails)) {
+                        const qpp3 = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
+                        const spp3 = await getDocs(qpp3);
+                        spp3.docs.forEach(d => passportsMap.set(d.id, { id: d.id, ...d.data(), source: 'official passport' }));
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail during property passports retrieval:', err);
+                }
+
+                // 6. Merge embedded contract properties
+                contractsMap.forEach((contract) => {
+                    const embeddedProps = contract.properties || contract.propertyList || contract.assets || [];
+                    if (Array.isArray(embeddedProps)) {
+                        embeddedProps.forEach((p: any, idx: number) => {
+                            const id = p.propertyId || p.id || `contract-asset-${idx}`;
+                            const name = p.propertyName || p.name || p.title || '';
+                            const existing = propertiesMap.get(id) || passportsMap.get(id) || {};
+                            
+                            propertiesMap.set(id, {
+                                id,
+                                propertyName: name,
+                                emirate: p.emirate || p.location || existing.emirate || 'UAE',
+                                propertyType: p.type || p.propertyType || existing.propertyType || 'Residential',
+                                units: Number(p.units || p.totalUnits || p.unitCount || existing.units || 0),
+                                floors: Number(p.floors || existing.floors || 0),
+                                rooms: Number(p.rooms || existing.rooms || 0),
+                                halls: Number(p.halls || existing.halls || 0),
+                                source: 'active contract',
+                                ...existing,
+                                ...p
+                            });
+                        });
+                    }
+                });
+
+                // Merge passports into main property records map
+                passportsMap.forEach((passport, id) => {
+                    const existing = propertiesMap.get(id) || {};
+                    propertiesMap.set(id, {
+                        id,
+                        propertyName: passport.propertyName || passport.name || existing.propertyName || 'Property',
+                        emirate: passport.emirate || passport.location || existing.emirate || 'UAE',
+                        propertyType: passport.propertyType || passport.type || existing.propertyType || 'Residential',
+                        units: Number(passport.units || passport.totalUnits || existing.units || 0),
+                        floors: Number(passport.floors || existing.floors || 0),
+                        rooms: Number(passport.rooms || existing.rooms || 0),
+                        halls: Number(passport.halls || existing.halls || 0),
+                        source: existing.source || 'official passport',
+                        passportStatus: passport.status || 'ACTIVE',
+                        ...existing,
+                        ...passport
+                    });
+                });
+
+                // 7. Calculate stats and verify IBAN/Missing info
+                let totalUnitCount = 0;
+                let activeTenantCount = 0;
+                let rentTotal = 0;
+                let maintTotal = 0;
+                let unitsMissingDetails = false;
+
+                // Query bank account status
+                let isIbanMissing = true;
+                try {
+                    for (const uid of Array.from(resolvedUids)) {
+                        const bankQ = query(collection(db, 'ownerBankAccounts'), where('ownerId', '==', uid));
+                        const bankSnap = await getDocs(bankQ);
+                        if (!bankSnap.empty) {
+                            isIbanMissing = false;
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[OwnerDashboard] Silent fail checking IBAN document:', err);
+                }
+
+                passportsMap.forEach((passport) => {
+                    totalUnitCount += Number(passport.totalUnits || passport.units || 0);
+                    activeTenantCount += Number(passport.occupiedUnits || passport.activeTenants || 0);
+                    rentTotal += Number(passport.rentCollectedTotal || 0);
+                    maintTotal += Number(passport.maintenanceCostTotal || 0);
+                    if (!Array.isArray(passport.rentPerUnitTable) || passport.rentPerUnitTable.length === 0) {
+                        unitsMissingDetails = true;
+                    }
+                });
+
+                setMissingInfo({ iban: isIbanMissing, units: unitsMissingDetails });
+
+                // Standardize list structure and filter placeholders if real assets exist
+                const mergedList = Array.from(propertiesMap.values()).map(p => {
+                    return {
+                        id: p.id,
+                        propertyName: p.propertyName || p.name || '',
+                        emirate: p.emirate || p.location || 'UAE',
+                        propertyType: p.propertyType || p.type || p.assetType || 'Residential',
+                        units: Number(p.units || p.totalUnits || p.unitsCount || p.numberOfUnits || 0),
+                        floors: Number(p.floors || p.floorNumber || 0),
+                        rooms: Number(p.rooms || 0),
+                        halls: Number(p.halls || 0),
+                        source: p.source || 'property record',
+                        passportStatus: p.passportStatus || p.status || 'ACTIVE',
+                        ...p
+                    };
+                });
+
+                const realAssetExists = mergedList.some(p => {
+                    const name = String(p.propertyName).trim().toLowerCase();
+                    return name !== '' && name !== 'new asset' && name !== 'property' &&
+                           (p.units > 0 || p.floors > 0 || p.rooms > 0 || p.halls > 0);
+                });
+
+                let finalPropertiesList = mergedList;
+                if (realAssetExists) {
+                    finalPropertiesList = mergedList.filter(p => {
+                        const name = String(p.propertyName).trim().toLowerCase();
+                        const isPlaceholder = (name === '' || name === 'new asset' || name === 'property') &&
+                                              p.units === 0 && p.floors === 0 && p.rooms === 0 && p.halls === 0;
+                        return !isPlaceholder;
+                    });
+                }
+
+                // Sort properties so Al Ain Falaj Hazza appears above New Asset / 0 units
+                finalPropertiesList.sort((a, b) => {
+                    const aName = String(a.propertyName).toLowerCase();
+                    const bName = String(b.propertyName).toLowerCase();
+                    
+                    if (aName.includes('al ain')) return -1;
+                    if (bName.includes('al ain')) return 1;
+                    return b.units - a.units;
+                });
+
+                setProperties(finalPropertiesList);
+
+                // Set fallback values for stats if not resolved from passport calculations
+                const fallbackUnits = finalPropertiesList.reduce((acc, p) => acc + Number(p.units || 0), 0);
+                setStats({
+                    properties: finalPropertiesList.length,
+                    units: totalUnitCount || fallbackUnits,
+                    tenants: activeTenantCount || 0,
+                    tickets: stats.tickets || 0,
+                    rentCollected: rentTotal || 0,
+                    payoutsPending: rentTotal * 0.92,
+                    maintenanceCost: maintTotal || 0
+                });
+
+                setLoading(false);
+            } catch (err: any) {
+                console.error('[OwnerDashboard] Failed to resolve control room details:', err);
+                setLoadError(err?.message || 'Portfolio Control Room data failed to resolve.');
+                setLoading(false);
+            }
         };
 
-        checkDashboardState();
+        resolveOwnerAndLoadData();
     }, [user?.email, user?.uid]);
-
-    const KPI_CARDS = [
-        { label: t('dash.kpi.total_revenue') || 'Total Revenue', value: `AED ${stats.rentCollected.toLocaleString()}`, icon: <DollarSign size={20} />, color: '#10b981', sub: t('dash.kpi.gross_rent') || 'Gross Rent' },
-        { label: t('dash.kpi.net_payout') || 'Net Payout', value: `AED ${stats.payoutsPending.toLocaleString()}`, icon: <CreditCard size={20} />, color: binThemeTokens.gold, sub: t('status.pending') || 'Pending Settlement' },
-        { label: t('dash.kpi.portfolio') || 'Asset Portfolio', value: stats.properties, icon: <Building2 size={20} />, color: '#3b82f6', sub: `${stats.units} ${t('field.units') || 'Units'}` },
-        { label: t('dash.kpi.ops_load') || 'Operational Load', value: stats.tickets, icon: <Wrench size={20} />, color: '#ef4444', sub: t('dash.kpi.open_tasks') || 'Open Maintenance Tasks' },
-    ];
-
-    const QUICK_LINKS = [
-        { label: t('nav.properties') || 'Property Registry', path: '/owner/properties', icon: <Building2 size={18} /> },
-        { label: t('nav.tenants') || 'Tenant Directory', path: '/owner/tenants', icon: <Users size={18} /> },
-        { label: t('nav.financials') || 'Financial Ledger', path: '/owner/financials', icon: <DollarSign size={18} /> },
-        { label: t('dash.intel.roi') || 'Yield Analytics', path: '/owner/roi', icon: <TrendingUp size={18} /> },
-        { label: t('nav.settings') || 'Payout Settings', path: '/owner/iban', icon: <Shield size={18} /> },
-        { label: t('nav.contracts') || 'Service History', path: '/owner/contracts', icon: <FileText size={18} /> },
-    ];
 
     if (loading) return (
         <Box sx={{ height: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 3 }}>{t('dash.syncing_portfolio') || 'Syncing Portfolio...'}</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 3 }}>
+                {t('dash.syncing_portfolio') || 'Syncing Sovereign Control Room...'}
+            </Typography>
         </Box>
     );
 
@@ -282,198 +420,23 @@ export default function OwnerDashboardPage() {
         );
     }
 
-    // Active dashboard state
-    const subtotal = stats.rentCollected;
-    const vatAmount = subtotal * 0.05;
-    const totalWithVat = subtotal + vatAmount;
-
     return (
-        <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box>
             {loadError && (
                 <Alert severity="error" sx={{ mb: 4, bgcolor: 'rgba(239,68,68,0.1)', color: '#fecaca', border: '1px solid rgba(239,68,68,0.22)', borderRadius: 4 }}>
                     {loadError}
                 </Alert>
             )}
 
-            {(contractScope === 'PM_ONLY' || contractScope === 'BOTH' || contractScope === 'HYBRID') && (missingInfo.iban || missingInfo.units) && (
-                <Alert severity="warning" sx={{ mb: 4, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 4 }}>
-                    <Stack spacing={1}>
-                        <Typography variant="subtitle2" fontWeight="950">{t('dash.action_required') || 'ACTION REQUIRED: PORTAL INCOMPLETE'}</Typography>
-                        <Typography variant="caption">{t('dash.missing_info_desc') || 'Your contract scope requires additional information to enable full management features:'}</Typography>
-                        <Stack direction="row" spacing={2} flexWrap="wrap">
-                            {missingInfo.iban && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/iban')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.setup_iban') || 'Setup IBAN'}</Button>}
-                            {missingInfo.units && <Button size="small" variant="outlined" color="warning" onClick={() => navigate('/owner/units')} sx={{ fontWeight: 900, borderRadius: 2 }}>{t('dash.add_units') || 'Add Units'}</Button>}
-                        </Stack>
-                    </Stack>
-                </Alert>
-            )}
-
-            <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
-                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('dash.terminal.owner') || 'SOVEREIGN OWNER TERMINAL'}</Typography>
-                    <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1, letterSpacing: -1 }}>
-                        {t('dash.hello') || 'Hello'}, {user?.displayName?.split(' ')[0] || 'Partner'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5 }}>{t('dash.monitoring_desc') || 'Real-time monitoring of your UAE asset portfolio.'}</Typography>
-                </Box>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2}>
-                    <Button 
-                        variant="contained" 
-                        startIcon={<Sparkles size={16} />} 
-                        onClick={() => navigate('/design-studio')}
-                        sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 900, px: 3, borderRadius: 3, '&:hover': { bgcolor: '#e2e2e2' } }}
-                    >
-                        {t('nav.ai_studio') || 'AI Studio'}
-                    </Button>
-                    <Button 
-                        variant="contained" 
-                        onClick={() => navigate('/owner/roi')} 
-                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}
-                    >
-                        {t('dash.portfolio_roi') || 'Portfolio ROI'}
-                    </Button>
-                </Stack>
-            </Box>
-
-            <Grid container spacing={3} sx={{ mb: 6 }}>
-                {KPI_CARDS.map((kpi, idx) => (
-                    <Grid item xs={12} sm={6} md={3} key={idx}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: `1px solid ${alpha(kpi.color, 0.2)}`, borderRadius: 6, position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease' }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
-                                <ArrowUpRight size={16} color="rgba(255,255,255,0.2)" />
-                            </Box>
-                            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 0.5, textAlign: isRTL ? 'right' : 'left' }}>{kpi.value}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', letterSpacing: 1, textAlign: isRTL ? 'right' : 'left' }}>{kpi.label.toUpperCase()}</Typography>
-                            <Typography variant="caption" sx={{ color: alpha(kpi.color, 0.8), fontWeight: 700, mt: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>{kpi.sub}</Typography>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
-
-            <Grid container spacing={4}>
-                <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 0, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden', mb: 4 }}>
-                        <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Building2 size={20} color={binThemeTokens.gold} /> {t('dash.active_assets') || 'ACTIVE ASSETS'}
-                            </Typography>
-                            <Stack direction="row" spacing={2}>
-                                <Button 
-                                    size="small" 
-                                    startIcon={<Plus size={16}/>}
-                                    sx={{ color: binThemeTokens.gold, fontWeight: 900 }} 
-                                    onClick={() => navigate('/onboarding')}
-                                >
-                                    {t('dash.add_property') || 'Add Property'}
-                                </Button>
-                                <Button 
-                                    size="small" 
-                                    sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} 
-                                    onClick={() => navigate('/owner/properties')}
-                                >
-                                    {t('common.view_all') || 'View All'}
-                                </Button>
-                            </Stack>
-                        </Box>
-                        <Box sx={{ p: 2 }}>
-                            {properties.length === 0 ? (
-                                <Box sx={{ py: 10, textAlign: 'center' }}>
-                                    <Building2 size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
-                                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{t('dash.no_properties') || 'NO PROPERTIES LINKED'}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1, display: 'block' }}>{t('dash.add_first_property') || 'Add your first property to get started'}</Typography>
-                                </Box>
-                            ) : (
-                                <Grid container spacing={2}>
-                                    {properties.slice(0, 4).map(prop => (
-                                        <Grid item xs={12} md={6} key={prop.id}>
-                                            <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
-                                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                                                    <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <Building2 size={24} color={binThemeTokens.gold} />
-                                                    </Box>
-                                                    <Box sx={{ flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
-                                                        <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF' }}>{prop.propertyName || prop.name || 'Property'}</Typography>
-                                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{prop.emirate || prop.location || 'UAE'} · {prop.units || 0} units</Typography>
-                                                    </Box>
-                                                    <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.2)' }}><ChevronRight size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>
-                                                </Stack>
-                                            </Paper>
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            )}
-                        </Box>
-                    </Paper>
-
-                    <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left' }}>
-                            <DollarSign size={20} color={binThemeTokens.gold} /> {t('dash.financial_overview') || 'FINANCIAL BREAKDOWN'}
-                        </Typography>
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} md={6}>
-                                <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)', textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 2 }}>{t('dash.revenue_summary') || 'REVENUE SUMMARY'}</Typography>
-                                    <Stack spacing={1.5}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Subtotal</Typography>
-                                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 950 }}>AED {subtotal.toLocaleString()}</Typography>
-                                        </Box>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>UAE VAT (5%)</Typography>
-                                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 950 }}>+ AED {vatAmount.toLocaleString()}</Typography>
-                                        </Box>
-                                        <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Total Including VAT</Typography>
-                                            <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>AED {totalWithVat.toLocaleString()}</Typography>
-                                        </Box>
-                                    </Stack>
-                                </Box>
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)', textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mb: 2 }}>{t('dash.deductions') || 'DEDUCTIONS & PAYOUT'}</Typography>
-                                    <Stack spacing={1.5}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Service Fee (8%)</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 950 }}>- AED {(subtotal * 0.08).toLocaleString()}</Typography></Box>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Maintenance Reserve</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 950 }}>- AED {(subtotal * 0.04).toLocaleString()}</Typography></Box>
-                                        <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Your Net Payout</Typography><Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>AED {stats.payoutsPending.toLocaleString()}</Typography></Box>
-                                    </Stack>
-                                </Box>
-                            </Grid>
-                        </Grid>
-                    </Paper>
-                </Grid>
-
-                <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, mb: 4 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{t('dash.quick_access') || 'QUICK ACCESS'}</Typography>
-                        <Grid container spacing={2}>
-                            {[...QUICK_LINKS, { label: 'Property Passport', path: '/owner/property-passport', icon: <FileText size={18} /> }, { label: 'Documents', path: '/owner/documents', icon: <FileText size={18} /> }].map((link, idx) => (
-                                <Grid item xs={6} key={idx}>
-                                    <Button fullWidth variant="outlined" onClick={() => navigate(link.path)} sx={{ flexDirection: 'column', gap: 1.5, py: 2.5, borderRadius: 4, borderColor: 'rgba(255,255,255,0.1)', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.02) } }}>
-                                        <Box sx={{ color: binThemeTokens.gold }}>{link.icon}</Box>
-                                        <Typography sx={{ fontSize: '0.65rem', fontWeight: 950 }}>{link.label.toUpperCase()}</Typography>
-                                    </Button>
-                                </Grid>
-                            ))}
-                        </Grid>
-                    </Paper>
-
-                    <Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 6, textAlign: isRTL ? 'right' : 'left' }}>
-                        <Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 1, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Shield size={16} /> {t('dash.sovereignty_title') || 'DATA SOVEREIGNTY'}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
-                            {t('dash.sovereignty_desc') || 'Your asset data is strictly partitioned and stored under UAE sovereign standards. BIN GROUP utilizes institutional encryption for all records.'}
-                        </Typography>
-                        <Button fullWidth size="small" sx={{ mt: 2, color: 'rgba(255,255,255,0.4)', fontWeight: 900, flexDirection: isRTL ? 'row-reverse' : 'row' }} startIcon={<CheckCircle2 size={14} />}>
-                            {t('dash.compliance_verified') || 'Compliance Verified'}
-                        </Button>
-                    </Paper>
-                </Grid>
-            </Grid>
+            <OwnerDashboardResolvedPage
+                user={user}
+                t={t}
+                isRTL={isRTL}
+                properties={properties}
+                stats={stats}
+                contractScope={contractScope}
+                missingInfo={missingInfo}
+            />
         </Box>
     );
 }
