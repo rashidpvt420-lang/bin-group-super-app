@@ -104,6 +104,7 @@ export interface Property {
         longitude?: number;
         address?: string;
         formattedAddress?: string;
+        emirate?: string;
         googleMapsUrl?: string;
         plusCode?: string;
         accuracy?: "EXACT" | "APPROXIMATE" | "MISSING";
