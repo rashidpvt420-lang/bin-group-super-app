@@ -6,6 +6,7 @@ import { collection, db, doc, getDoc, getDocs, query, where } from '../../lib/fi
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import OwnerExecutiveDashboardSection from '../components/OwnerExecutiveDashboardSection';
 
 const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'READY_FOR_ACTIVATION', 'SIGNED']);
 const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'OWNER_SIGNED', 'SIGNED']);
@@ -96,6 +97,18 @@ function contractPropertyRows(contract: any) {
     propertyId: property?.propertyId || property?.id || `contract-property-${index + 1}`,
     ...property,
   }));
+}
+
+function propertyUnits(property: any) {
+  return Number(property?.units || property?.numberOfUnits || property?.totalUnits || property?.unitsCount || 0);
+}
+
+function isPlaceholderProperty(property: any) {
+  const name = String(property?.propertyName || property?.name || property?.address || '').trim().toLowerCase();
+  const floors = Number(property?.floors || property?.numberOfFloors || 0);
+  const rooms = Number(property?.rooms || property?.roomCount || property?.numberOfRooms || property?.majlisRooms || 0);
+  const halls = Number(property?.halls || property?.hallCount || property?.numberOfHalls || property?.majlisHalls || 0);
+  return (!name || name === 'new asset' || name === 'property') && propertyUnits(property) === 0 && floors === 0 && rooms === 0 && halls === 0;
 }
 
 async function resolveOwner(user: any): Promise<OwnerResolution> {
@@ -217,7 +230,10 @@ export default function OwnerDashboardResolvedPage() {
           for (const p of await getCollectionDocs('propertyPassports', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
         }
 
-        const linkedProperties = Array.from(propertyMap.values()).sort(sortByRecent);
+        let linkedProperties = Array.from(propertyMap.values());
+        const realProperties = linkedProperties.filter((property) => !isPlaceholderProperty(property));
+        if (realProperties.length > 0) linkedProperties = realProperties;
+        linkedProperties.sort((a, b) => (propertyUnits(b) - propertyUnits(a)) || sortByRecent(a, b));
         if (!alive) return;
         setProperties(linkedProperties);
 
@@ -244,7 +260,7 @@ export default function OwnerDashboardResolvedPage() {
   }, [user?.uid, user?.email]);
 
   const stats = useMemo(() => {
-    const units = properties.reduce((sum, p) => sum + Number(p.units || p.numberOfUnits || p.totalUnits || 0), 0);
+    const units = properties.reduce((sum, p) => sum + propertyUnits(p), 0);
     const rent = properties.reduce((sum, p) => sum + Number(p.rentCollectedTotal || 0), 0);
     const maintenance = properties.reduce((sum, p) => sum + Number(p.maintenanceCostTotal || 0), 0);
     return { units, rent, maintenance, net: rent * 0.92 };
@@ -291,6 +307,21 @@ export default function OwnerDashboardResolvedPage() {
     { label: t('dash.kpi.ops_load') || 'Open Maintenance Tasks', value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
   ];
 
+  const executiveStats = {
+    properties: properties.length,
+    units: stats.units,
+    tenants: 0,
+    tickets,
+    rentCollected: stats.rent,
+    payoutsPending: 0,
+    maintenanceCost: stats.maintenance,
+  };
+
+  const missingInfo = {
+    iban: false,
+    units: stats.units === 0,
+  };
+
   return (
     <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
       {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
@@ -318,7 +349,15 @@ export default function OwnerDashboardResolvedPage() {
         ))}
       </Grid>
 
-      <Grid container spacing={4}>
+      <OwnerExecutiveDashboardSection
+        properties={properties}
+        stats={executiveStats}
+        contractScope={contract.packageName || contract.planType || contract.serviceType || ''}
+        missingInfo={missingInfo}
+        user={user}
+      />
+
+      <Grid container spacing={4} sx={{ mt: 1 }}>
         <Grid item xs={12} lg={8}>
           <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.42)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 6 }}>
             <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', mb: 3, display: 'flex', gap: 1.5, alignItems: 'center' }}><Building2 size={20} color={binThemeTokens.gold} /> ACTIVE ASSETS</Typography>
@@ -330,7 +369,7 @@ export default function OwnerDashboardResolvedPage() {
                   <Grid item xs={12} md={6} key={property.id || property.propertyId}>
                     <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 4 }}>
                       <Typography fontWeight={950} sx={{ color: '#fff' }}>{property.propertyName || property.name || property.address || 'Property'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)' }}>{property.emirate || property.city || 'UAE'} · {property.units || property.numberOfUnits || property.totalUnits || 0} units</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)' }}>{property.emirate || property.city || 'UAE'} · {propertyUnits(property)} units</Typography>
                     </Paper>
                   </Grid>
                 ))}
