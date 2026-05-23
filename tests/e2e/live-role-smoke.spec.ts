@@ -100,6 +100,63 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
       const bodyText = await page.locator('body').innerText({ timeout: 15_000 });
       expect(bodyText).not.toMatch(/permission-denied|unauthenticated|access denied|not authorized/i);
       expect(consoleErrors.join('\n')).not.toMatch(/permission-denied|Missing or insufficient permissions|FirebaseError/i);
+
+      // Owner-specific control room validations
+      if (role === 'owner') {
+        // 1. Confirm dashboard active loads and shows core control room sections
+        await expect(page.locator('text=Financial Control')).toBeVisible({ timeout: 10_000 });
+        await expect(page.locator('text=Portfolio Health')).toBeVisible();
+        await expect(page.locator('text=Tenant Registry')).toBeVisible();
+        await expect(page.locator('text=Action Items Required')).toBeVisible();
+
+        // 2. Validate tenant registry text contains the separate UID warning note
+        expect(bodyText).toContain('Tenants use their own login. They are linked to the owner by property and unit, not by sharing owner UID.');
+
+        // 3. If real assets exist, zero-unit placeholders should be hidden, and sorting should put Al Ain Falaj Hazza first
+        const hasAlAin = bodyText.includes('Al Ain Falaj Hazza');
+        const hasNewAsset = bodyText.includes('New Asset');
+        if (hasAlAin) {
+          // Real asset exists, so zero-unit "New Asset" placeholders should be hidden
+          expect(hasNewAsset).toBeFalsy();
+          
+          // Verify Al Ain appears before any placeholder text
+          const alAinIndex = bodyText.indexOf('Al Ain Falaj Hazza');
+          const newAssetIndex = bodyText.indexOf('New Asset');
+          if (newAssetIndex !== -1) {
+            expect(alAinIndex).toBeLessThan(newAssetIndex);
+          }
+        }
+
+        // 4. Validate that Majlis, Hotel, School, Hospital assets hide lease expiry
+        // (verified by checking that "LEASE EXPIRY" is not displayed next to those specific asset details in the calendar)
+        const hasMajlisText = bodyText.toLowerCase().includes('majlis') || bodyText.toLowerCase().includes('hotel') || bodyText.toLowerCase().includes('school');
+        if (hasMajlisText) {
+          // If Majlis or institutional types are rendered, ensure lease expiry date warning is not shown for them
+          const leaseExpiryLabel = page.locator('text=LEASE EXPIRY');
+          const leaseCount = await leaseExpiryLabel.count();
+          for (let i = 0; i < leaseCount; i++) {
+            const parentText = await leaseExpiryLabel.nth(i).evaluate(el => el.parentElement?.textContent || '');
+            expect(parentText.toLowerCase()).not.toMatch(/majlis|majils|hotel|school|hospital|clinic|healthcare/);
+          }
+        }
+
+        // 5. Verify contracts page remains clean
+        await page.goto('/owner/contracts', { waitUntil: 'domcontentloaded' });
+        await expectNoRuntimeCrash(page);
+        const contractsBody = await page.locator('body').innerText();
+        expect(contractsBody).not.toMatch(/permission-denied|access denied|firebaseerror/i);
+
+        // 6. Verify property passport details open successfully if a passport link is available
+        await page.goto('/owner/dashboard', { waitUntil: 'domcontentloaded' });
+        const passportButton = page.locator('a[href*="property-passport/"], button:has-text("PROPERTY PASSPORT")').first();
+        if (await passportButton.count() > 0) {
+          await passportButton.click();
+          await page.waitForLoadState('domcontentloaded');
+          await expectNoRuntimeCrash(page);
+          const passportDetailBody = await page.locator('body').innerText();
+          expect(passportDetailBody).not.toMatch(/permission-denied|access denied|firebaseerror/i);
+        }
+      }
     });
   }
 });
