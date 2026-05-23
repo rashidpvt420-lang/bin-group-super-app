@@ -64,7 +64,14 @@ export function resolvePropertyLocation(record: any): ResolvedPropertyLocation {
     if (latitude === null) latitude = getVal(record.map?.lat);
     if (longitude === null) longitude = getVal(record.map?.lng);
 
-    // 8. propertyLocation.lat / lng
+    // 8. gps.lat / gps.lng
+    if (latitude === null) latitude = getVal(record.gps?.latitude);
+    if (longitude === null) longitude = getVal(record.gps?.longitude);
+
+    if (latitude === null) latitude = getVal(record.gps?.lat);
+    if (longitude === null) longitude = getVal(record.gps?.lng);
+
+    // 9. propertyLocation.lat / lng
     if (latitude === null) latitude = getVal(record.propertyLocation?.latitude);
     if (longitude === null) longitude = getVal(record.propertyLocation?.longitude);
 

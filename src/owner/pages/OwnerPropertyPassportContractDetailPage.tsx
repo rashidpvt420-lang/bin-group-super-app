@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import UaePropertyMap from '../../components/maps/UaePropertyMap';
+import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 
 const clean = (value: unknown) => String(value || '').trim();
 const email = (value: unknown) => clean(value).toLowerCase();
@@ -157,10 +158,57 @@ export default function OwnerPropertyPassportContractDetailPage() {
             <Stack direction="row" spacing={1}><Chip icon={<ShieldCheck size={14} />} label={passport.status || 'PROVISIONAL'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} /><Chip label={`ID ${String(passport.id || '').slice(0, 8).toUpperCase()}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} /></Stack>
           </Stack>
         </Paper>
-        <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Grid item xs={12} md={8}><UaePropertyMap title={passport.propertyName} address={passport.address || passport.zone} emirate={passport.emirate} lat={passport.lat || passport.latitude} lng={passport.lng || passport.longitude} /></Grid>
-          <Grid item xs={12} md={4}><Stack spacing={2}><Metric label="Units" value={passport.totalUnits || 0}><UsersRound size={20} /></Metric><Metric label="Floors" value={passport.floors || 0}><Layers size={20} /></Metric><Metric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></Metric></Stack></Grid>
-        </Grid>
+        {(() => {
+          const propertyLocation = resolvePropertyLocation(passport);
+          
+          console.info("[BIN_LOCATION_DEBUG]", {
+            propertyId: passport.id,
+            sourceCollection: passport.provisional ? 'properties' : 'propertyPassports',
+            rawLocation: {
+              geo: passport.geo,
+              gps: passport.gps,
+              location: passport.location,
+              coordinates: passport.coordinates,
+              latitude: passport.latitude,
+              longitude: passport.longitude,
+              lat: passport.lat,
+              lng: passport.lng,
+              map: passport.map,
+              geoPoint: passport.geoPoint,
+              propertyLocation: passport.propertyLocation,
+            },
+            resolvedLocation: propertyLocation
+          });
+
+          return (
+            <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+              <Grid item xs={12} md={8}>
+                <UaePropertyMap 
+                  title={passport.propertyName} 
+                  address={propertyLocation.address || passport.address || passport.zone} 
+                  emirate={propertyLocation.emirate || passport.emirate} 
+                  lat={propertyLocation.latitude} 
+                  lng={propertyLocation.longitude} 
+                  googleMapsUrl={propertyLocation.googleMapsUrl}
+                  locationQuality={propertyLocation.locationQuality}
+                  requireExactPin
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Stack spacing={2}>
+                  {propertyLocation.hasExactCoordinates && (
+                    <Alert severity="success" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', border: `1px solid ${alpha('#10b981', 0.22)}`, py: 0.5 }}>
+                      <Typography variant="caption" fontWeight="950">EXACT GPS PIN</Typography>
+                    </Alert>
+                  )}
+                  <Metric label="Units" value={passport.totalUnits || 0}><UsersRound size={20} /></Metric>
+                  <Metric label="Floors" value={passport.floors || 0}><Layers size={20} /></Metric>
+                  <Metric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></Metric>
+                </Stack>
+              </Grid>
+            </Grid>
+          );
+        })()}
         <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Building Systems</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.42)' }}>Systems will appear here when the official passport is issued.</Typography></Paper>
       </Stack>
     </Box>
