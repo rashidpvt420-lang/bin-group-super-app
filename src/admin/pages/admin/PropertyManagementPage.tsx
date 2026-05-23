@@ -52,6 +52,26 @@ interface Property {
     status: string;
     unitsCount?: number;
     floorsCount?: number;
+    location?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+        address?: string;
+        formattedAddress?: string;
+        googleMapsUrl?: string;
+        plusCode?: string;
+        accuracy?: "EXACT" | "APPROXIMATE" | "MISSING";
+        quality?: string;
+        updatedAt?: string;
+        updatedBy?: string;
+    };
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+    googleMapsUrl?: string;
+    plusCode?: string;
 }
 
 export default function PropertyManagementPage() {
