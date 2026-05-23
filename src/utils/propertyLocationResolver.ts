@@ -21,60 +21,61 @@ export function resolvePropertyLocation(record: any): ResolvedPropertyLocation {
   let longitude: number | null = null;
 
   if (record) {
-    // 1. Direct fields
-    if (latitude === null) latitude = getVal(record.latitude);
-    if (latitude === null) latitude = getVal(record.lat);
+    // 1. location.latitude / location.longitude
+    if (latitude === null && record.location?.latitude !== undefined) latitude = getVal(record.location?.latitude);
+    if (longitude === null && record.location?.longitude !== undefined) longitude = getVal(record.location?.longitude);
 
+    if (latitude === null && record.location?.lat !== undefined) latitude = getVal(record.location?.lat);
+    if (longitude === null && record.location?.lng !== undefined) longitude = getVal(record.location?.lng);
+
+    // 2. latitude / longitude
+    if (latitude === null) latitude = getVal(record.latitude);
     if (longitude === null) longitude = getVal(record.longitude);
+
+    // 3. lat / lng
+    if (latitude === null) latitude = getVal(record.lat);
     if (longitude === null) longitude = getVal(record.lng);
 
-    // 2. record.location?.lat/lng/latitude/longitude
-    if (latitude === null) latitude = getVal(record.location?.latitude);
-    if (latitude === null) latitude = getVal(record.location?.lat);
-
-    if (longitude === null) longitude = getVal(record.location?.longitude);
-    if (longitude === null) longitude = getVal(record.location?.lng);
-
-    // 3. record.coordinates?.lat/lng
+    // 4. coordinates.latitude / coordinates.longitude
     if (latitude === null) latitude = getVal(record.coordinates?.latitude);
-    if (latitude === null) latitude = getVal(record.coordinates?.lat);
-
     if (longitude === null) longitude = getVal(record.coordinates?.longitude);
+
+    if (latitude === null) latitude = getVal(record.coordinates?.lat);
     if (longitude === null) longitude = getVal(record.coordinates?.lng);
 
-    // 4. record.geo?.lat/lng
+    // 5. geo.lat / geo.lng
     if (latitude === null) latitude = getVal(record.geo?.latitude);
-    if (latitude === null) latitude = getVal(record.geo?.lat);
-
     if (longitude === null) longitude = getVal(record.geo?.longitude);
+
+    if (latitude === null) latitude = getVal(record.geo?.lat);
     if (longitude === null) longitude = getVal(record.geo?.lng);
 
-    // 5. record.geoPoint?.latitude/longitude
+    // 6. geoPoint.latitude / geoPoint.longitude
     if (latitude === null) latitude = getVal(record.geoPoint?.latitude);
-    if (latitude === null) latitude = getVal(record.geoPoint?.lat);
-
     if (longitude === null) longitude = getVal(record.geoPoint?.longitude);
+
+    if (latitude === null) latitude = getVal(record.geoPoint?.lat);
     if (longitude === null) longitude = getVal(record.geoPoint?.lng);
 
-    // 6. record.map?.lat/lng
+    // 7. map.lat / map.lng
     if (latitude === null) latitude = getVal(record.map?.latitude);
-    if (latitude === null) latitude = getVal(record.map?.lat);
-
     if (longitude === null) longitude = getVal(record.map?.longitude);
+
+    if (latitude === null) latitude = getVal(record.map?.lat);
     if (longitude === null) longitude = getVal(record.map?.lng);
 
-    // 7. record.propertyLocation?.lat/lng
+    // 8. propertyLocation.lat / lng
     if (latitude === null) latitude = getVal(record.propertyLocation?.latitude);
-    if (latitude === null) latitude = getVal(record.propertyLocation?.lat);
-
     if (longitude === null) longitude = getVal(record.propertyLocation?.longitude);
+
+    if (latitude === null) latitude = getVal(record.propertyLocation?.lat);
     if (longitude === null) longitude = getVal(record.propertyLocation?.lng);
   }
 
   const hasExactCoordinates = latitude !== null && longitude !== null;
 
   // Resolve address & emirate
-  const address = record?.address || record?.addressLine || record?.locationText || record?.location?.address || record?.geo?.address || record?.location || '';
+  const address = record?.address || record?.addressLine || record?.locationText || record?.location?.address || record?.geo?.address || (typeof record?.location === 'string' ? record.location : '') || '';
   const emirate = record?.emirate || record?.location?.emirate || record?.geo?.emirate || record?.city || 'UAE';
 
   // Support for urls and plusCode

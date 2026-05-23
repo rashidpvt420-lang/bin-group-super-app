@@ -61,17 +61,20 @@ export default function UaePropertyMap({
 
   // 2. Resolve embed query
   let query = '';
+  let embedUrl = '';
+  
   if (hasCoords) {
-    query = `${latitude},${longitude}`;
-  } else if (plusCode) {
-    query = plusCode;
+    embedUrl = `https://www.google.com/maps?q=${latitude},${longitude}&z=18&output=embed`;
   } else {
-    query = [address, emirate, 'United Arab Emirates'].filter(Boolean).join(', ');
+    if (plusCode) {
+      query = plusCode;
+    } else {
+      query = [address, emirate, 'United Arab Emirates'].filter(Boolean).join(', ');
+    }
+    if (apiKey && query) {
+      embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+    }
   }
-
-  const embedUrl = apiKey && query
-    ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`
-    : '';
 
   const handleUpdateClick = () => {
     if (onUpdateGps) {
