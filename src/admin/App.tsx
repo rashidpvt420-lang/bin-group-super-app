@@ -13,7 +13,7 @@ import { prefixer } from 'stylis';
 // ─── LIVE PRODUCTION IMPORTS ──────────────────────────────────────────
 import rtlPlugin from 'stylis-plugin-rtl';
 import { signOut } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageProvider } from '../context/LanguageContext';
@@ -59,6 +59,7 @@ import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import AdminDutyCommandPage from './pages/technicians/AdminDutyCommandPage';
+import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -147,6 +148,8 @@ function AppContent() {
                     <Route path="/hr" element={<ProtectedRoute adminOnly><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
+                    <Route path="/admin/ai-studio/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    <Route path="/ai-studio/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                 </Route>
             )}
 
@@ -318,4 +321,3 @@ function AdminThemeProviderWrapper() {
         </CacheProvider>
     );
 }
-
