@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, CreditCard, FileText, Shield, Wrench } from 'lucide-react';
+import { Building2, CreditCard, Shield, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -10,6 +10,7 @@ import OwnerExecutiveDashboardSection from '../components/OwnerExecutiveDashboar
 import OwnerRoiFinancialSection from '../components/OwnerRoiFinancialSection';
 import OwnerAuthorizedReportersSection from '../components/OwnerAuthorizedReportersSection';
 import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCenter';
+import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
 import { resolveOwnerFinancials } from '../utils/ownerFinancialResolver';
 import { resolveOwnerComplaint } from '../utils/ownerComplaintResolver';
 import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
@@ -43,8 +44,8 @@ const canonicalEmail = (value: unknown) => {
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
 const emailVariants = (email: unknown) => compact([normalizeEmail(email), canonicalEmail(email)]);
 const getSeconds = (value: any) => Number(value?.seconds || value?._seconds || 0);
-
 const isPermissionDenied = (err: any) => String(err?.code || err?.message || '').toLowerCase().includes('permission');
+const makeInviteCode = () => `BIN-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Date.now().toString().slice(-5)}`;
 
 const isActiveProfile = (profile: any) => {
   if (!profile) return false;
@@ -132,30 +133,9 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   }
 
   const profile = profiles.sort((a, b) => Number(isActiveProfile(b)) - Number(isActiveProfile(a)) || sortByRecent(a, b))[0] || null;
-
-  const trustedEmails = compact([
-    authEmail,
-    normalizeEmail(profile?.email),
-    normalizeEmail(profile?.ownerEmail),
-    ...(Array.isArray(profile?.linkedEmails) ? profile.linkedEmails.map(normalizeEmail) : []),
-  ]);
-
-  const ownerIds = compact([
-    authUid,
-    profile?.uid,
-    profile?.ownerId,
-    profile?.activeOwnerId,
-    ...(Array.isArray(profile?.linkedOwnerIds) ? profile.linkedOwnerIds : []),
-  ]);
-
-  const contractIds = compact([
-    profile?.activeContractId,
-    profile?.latestActivationContractId,
-    profile?.pendingContractId,
-    profile?.contractId,
-    profile?.latestContractId,
-  ]);
-
+  const trustedEmails = compact([authEmail, normalizeEmail(profile?.email), normalizeEmail(profile?.ownerEmail), ...(Array.isArray(profile?.linkedEmails) ? profile.linkedEmails.map(normalizeEmail) : [])]);
+  const ownerIds = compact([authUid, profile?.uid, profile?.ownerId, profile?.activeOwnerId, ...(Array.isArray(profile?.linkedOwnerIds) ? profile.linkedOwnerIds : [])]);
+  const contractIds = compact([profile?.activeContractId, profile?.latestActivationContractId, profile?.pendingContractId, profile?.contractId, profile?.latestContractId]);
   const contracts = new Map<string, any>();
 
   for (const contractId of contractIds) {
@@ -176,15 +156,9 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   const contractList = Array.from(contracts.values()).sort((a, b) => Number(isActiveContract(b)) - Number(isActiveContract(a)) || sortByRecent(a, b));
   const contract = contractList[0] || null;
   const finalOwnerIds = compact([...ownerIds, contract?.ownerId, contract?.ownerUid]);
-  const finalEmails = compact([
-    ...trustedEmails,
-    normalizeEmail(contract?.ownerEmail),
-    normalizeEmail(contract?.emailDelivery?.recipient),
-  ]).flatMap(emailVariants);
+  const finalEmails = compact([...trustedEmails, normalizeEmail(contract?.ownerEmail), normalizeEmail(contract?.emailDelivery?.recipient)]).flatMap(emailVariants);
 
-  if (isActiveProfile(profile) || isActiveContract(contract)) {
-    return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
-  }
+  if (isActiveProfile(profile) || isActiveContract(contract)) return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
   if (profile || contract) return { state: 'pending', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'Identity found, but activation flags are not complete.' };
   return { state: 'locked', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'No owner profile or contract found for this login.' };
 }
@@ -197,12 +171,11 @@ export default function OwnerDashboardResolvedPage() {
   const [properties, setProperties] = useState<any[]>([]);
   const [tickets, setTickets] = useState(0);
   const [loadError, setLoadError] = useState('');
-
-  // New state variables for Command Center
   const [financials, setFinancials] = useState<any>(null);
   const [complaints, setComplaints] = useState<any[]>([]);
   const [reporters, setReporters] = useState<any[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(true);
+  const [tenantCount, setTenantCount] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -230,13 +203,7 @@ export default function OwnerDashboardResolvedPage() {
           for (const p of await getCollectionDocs('propertyPassports', 'ownerUid', authUid)) propertyMap.set(p.propertyId || p.id, p);
         }
 
-        const exactEmails = compact([
-          normalizeEmail(user?.email),
-          normalizeEmail(resolved.profile?.email),
-          normalizeEmail(resolved.profile?.ownerEmail),
-          normalizeEmail(resolved.contract?.ownerEmail),
-          normalizeEmail(resolved.contract?.emailDelivery?.recipient),
-        ]);
+        const exactEmails = compact([normalizeEmail(user?.email), normalizeEmail(resolved.profile?.email), normalizeEmail(resolved.profile?.ownerEmail), normalizeEmail(resolved.contract?.ownerEmail), normalizeEmail(resolved.contract?.emailDelivery?.recipient)]);
         for (const email of exactEmails) {
           for (const p of await getCollectionDocs('properties', 'ownerEmail', email)) propertyMap.set(p.id, p);
           for (const p of await getCollectionDocs('propertyPassports', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
@@ -250,45 +217,43 @@ export default function OwnerDashboardResolvedPage() {
         setProperties(linkedProperties);
 
         const ticketMap = new Map<string, any>();
-        if (authUid) {
-          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', authUid)) ticketMap.set(ticket.id, ticket);
-          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerUid', authUid)) ticketMap.set(ticket.id, ticket);
-        }
-        for (const email of exactEmails) {
-          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerEmail', email)) ticketMap.set(ticket.id, ticket);
-        }
-        
-        const openTickets = Array.from(ticketMap.values()).filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
-        if (alive) setTickets(openTickets);
-
-        // Fetch command center data
         const invoiceMap = new Map<string, any>();
         const paymentMap = new Map<string, any>();
         const reporterMap = new Map<string, any>();
-        
+        const occupancyMap = new Map<string, any>();
+
         if (authUid) {
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', authUid)) ticketMap.set(ticket.id, ticket);
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerUid', authUid)) ticketMap.set(ticket.id, ticket);
           for (const inv of await getCollectionDocs('invoices', 'ownerUid', authUid)) invoiceMap.set(inv.id, inv);
           for (const pay of await getCollectionDocs('payment_transactions', 'ownerId', authUid)) paymentMap.set(pay.id, pay);
           for (const rep of await getCollectionDocs('propertyReporters', 'ownerId', authUid)) reporterMap.set(rep.id, rep);
+          for (const rep of await getCollectionDocs('propertyReporters', 'ownerUid', authUid)) reporterMap.set(rep.id, rep);
+          for (const occ of await getCollectionDocs('occupancies', 'ownerId', authUid)) occupancyMap.set(occ.id, occ);
+          for (const occ of await getCollectionDocs('occupancies', 'ownerUid', authUid)) occupancyMap.set(occ.id, occ);
         }
+
+        for (const email of exactEmails) {
+          for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerEmail', email)) ticketMap.set(ticket.id, ticket);
+        }
+
         if (resolved.contract?.id) {
           for (const inv of await getCollectionDocs('invoices', 'contractId', resolved.contract.id)) invoiceMap.set(inv.id, inv);
           for (const pay of await getCollectionDocs('payment_transactions', 'contractId', resolved.contract.id)) paymentMap.set(pay.id, pay);
         }
-        
+
         const allTickets = Array.from(ticketMap.values());
+        const openTickets = allTickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
         const resolvedComplaints = allTickets.map(resolveOwnerComplaint);
-        
-        const allInvoices = Array.from(invoiceMap.values());
-        const allPayments = Array.from(paymentMap.values());
-        
-        const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, allInvoices, allPayments, allTickets);
+        const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), Array.from(paymentMap.values()), allTickets);
         const resolvedReporters = Array.from(reporterMap.values()).map(resolvePropertyReporter);
-        
+
         if (alive) {
+          setTickets(openTickets);
           setFinancials(finData);
           setComplaints(resolvedComplaints);
           setReporters(resolvedReporters);
+          setTenantCount(Array.from(occupancyMap.values()).filter((occ) => ['ACCEPTED', 'ACTIVE', 'SIGNED', 'OCCUPIED'].includes(String(occ.occupancyStatus || occ.status || '').toUpperCase())).length);
           setLoadingExtras(false);
         }
       } catch (err: any) {
@@ -304,20 +269,22 @@ export default function OwnerDashboardResolvedPage() {
     return () => { alive = false; };
   }, [user?.uid, user?.email]);
 
-
   const stats = useMemo(() => {
     const units = properties.reduce((sum, p) => sum + propertyUnits(p), 0);
     const rent = properties.reduce((sum, p) => sum + Number(p.rentCollectedTotal || 0), 0);
     const maintenance = properties.reduce((sum, p) => sum + Number(p.maintenanceCostTotal || 0), 0);
-    return { units, rent, maintenance, net: rent * 0.92 };
+    return { units, rent, maintenance };
   }, [properties]);
 
   const handleAddReporter = async (reporterData: any) => {
     const ownerId = String(user?.uid || resolution.contract?.ownerId || resolution.contract?.ownerUid || '').trim();
     if (!ownerId) throw new Error('Owner UID is required before adding an authorized reporter.');
-
     const property = properties.find((p) => String(p.id || p.propertyId) === String(reporterData.propertyId));
     const reporterId = `reporter_${ownerId}_${Date.now()}`;
+    const permissionScope = String(reporterData.permissionScope || 'COMPLAINTS_ONLY').toUpperCase();
+    const accessType = String(reporterData.accessType || 'MAJLIS_RESIDENT').toUpperCase();
+    const canActOnOwnerBehalf = permissionScope === 'OWNER_DELEGATE' || accessType === 'OWNER_DELEGATE';
+    const canViewPropertyComplaints = canActOnOwnerBehalf || permissionScope === 'VIEW_AND_COMPLAIN';
     const payload = {
       reporterId,
       ownerId,
@@ -329,10 +296,21 @@ export default function OwnerDashboardResolvedPage() {
       reporterEmail: normalizeEmail(reporterData.reporterEmail),
       reporterPhone: String(reporterData.reporterPhone || '').trim(),
       roleLabel: String(reporterData.roleLabel || 'Other'),
+      accessType,
+      permissionScope,
+      occupiedArea: String(reporterData.occupiedArea || '').trim(),
+      unitId: String(reporterData.unitId || '').trim(),
+      notes: String(reporterData.notes || '').trim(),
+      inviteCode: makeInviteCode(),
+      portalRoute: canActOnOwnerBehalf ? '/owner/dashboard' : '/tenant/request',
+      loginHint: 'Reporter must use their own Firebase Auth UID. Never share the owner UID or owner password.',
       accessStatus: 'INVITED',
       canCreateComplaints: true,
       canViewOwnComplaints: true,
-      canViewPropertyComplaints: false,
+      canViewPropertyComplaints,
+      canActOnOwnerBehalf,
+      canViewOwnerFinancials: false,
+      canApproveWork: canActOnOwnerBehalf,
       invitedByOwnerUid: ownerId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -346,6 +324,11 @@ export default function OwnerDashboardResolvedPage() {
     await updateDoc(doc(db, 'propertyReporters', reporterId), {
       accessStatus: 'SUSPENDED',
       canCreateComplaints: false,
+      canViewOwnComplaints: false,
+      canViewPropertyComplaints: false,
+      canActOnOwnerBehalf: false,
+      canViewOwnerFinancials: false,
+      canApproveWork: false,
       updatedAt: serverTimestamp(),
     });
     setReporters((current) => current.map((reporter) => reporter.id === reporterId ? { ...reporter, accessStatus: 'SUSPENDED', canCreateComplaints: false } : reporter));
@@ -361,20 +344,12 @@ export default function OwnerDashboardResolvedPage() {
       <Box sx={{ minHeight: '70vh', display: 'grid', placeItems: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
         <Paper sx={{ p: { xs: 3, md: 6 }, maxWidth: 720, bgcolor: 'rgba(22,22,24,.82)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 6, textAlign: 'center' }}>
           <Shield size={58} color={binThemeTokens.gold} style={{ margin: '0 auto 20px' }} />
-          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>
-            {resolution.state === 'locked' ? 'Owner profile not linked yet' : 'Activation still requires final sync'}
-          </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>
-            {resolution.reason || 'Your profile was found, but the active contract/payment flags are not complete yet.'}
-          </Typography>
+          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? 'Owner profile not linked yet' : 'Activation still requires final sync'}</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || 'Your profile was found, but the active contract/payment flags are not complete yet.'}</Typography>
           {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-              Review Contracts
-            </Button>
-            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
-              Refresh Identity
-            </Button>
+            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Review Contracts</Button>
+            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Refresh Identity</Button>
           </Stack>
         </Paper>
       </Box>
@@ -384,6 +359,9 @@ export default function OwnerDashboardResolvedPage() {
   const contract = resolution.contract || {};
   const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
   const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
+  const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: stats.rent, payoutsPending: 0, maintenanceCost: stats.maintenance };
+  const missingInfo = { iban: false, units: stats.units === 0 };
+  const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
     { label: 'Annual Contract Value', value: annual ? `AED ${annual.toLocaleString()}` : 'Pending', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
@@ -392,25 +370,6 @@ export default function OwnerDashboardResolvedPage() {
     { label: t('dash.kpi.ops_load') || 'Open Maintenance Tasks', value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
   ];
 
-  const executiveStats = {
-    properties: properties.length,
-    units: stats.units,
-    tenants: 0,
-    tickets,
-    rentCollected: stats.rent,
-    payoutsPending: 0,
-    maintenanceCost: stats.maintenance,
-  };
-
-  const missingInfo = {
-    iban: false,
-    units: stats.units === 0,
-  };
-
-  const scrollToObject = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <Box sx={{ pb: { xs: 12, md: 6 }, pr: { xs: 9, md: 0 }, direction: isRTL ? 'rtl' : 'ltr' }}>
       {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
@@ -418,12 +377,13 @@ export default function OwnerDashboardResolvedPage() {
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN OWNER TERMINAL</Typography>
           <Typography variant="h3" fontWeight={950} sx={{ color: '#fff', mt: 1 }}>Dashboard Active</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>Identity, contract signature, and payment verification are resolved through linked UID/email/contract records.</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Contracts</Button>
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Property Passport</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>Complaints</Button>
+          <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Add Person</Button>
         </Stack>
       </Box>
 
@@ -439,30 +399,19 @@ export default function OwnerDashboardResolvedPage() {
         ))}
       </Grid>
 
-      <OwnerExecutiveDashboardSection
-        properties={properties}
-        stats={executiveStats}
-        contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''}
-        missingInfo={missingInfo}
-        user={user}
-        contract={contract}
-      />
+      <OwnerContractIntelligenceSection contract={contract} properties={properties} tenantCount={tenantCount} reporterCount={reporters.filter((r) => r.accessStatus !== 'SUSPENDED').length} />
+
+      <Box sx={{ mt: 5 }}>
+        <OwnerExecutiveDashboardSection properties={properties} stats={executiveStats} contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''} missingInfo={missingInfo} user={user} contract={contract} />
+      </Box>
       
-      <Box sx={{ mt: 5 }}>
-        {financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}
+      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}</Box>
+
+      <Box sx={{ mt: 5 }} id="authorized-property-reporters">
+        <OwnerAuthorizedReportersSection properties={properties} reporters={reporters} onAddReporter={handleAddReporter} onRemoveReporter={handleRemoveReporter} loading={loadingExtras} />
       </Box>
 
-      <Box sx={{ mt: 5 }}>
-        <OwnerAuthorizedReportersSection
-          properties={properties}
-          reporters={reporters}
-          onAddReporter={handleAddReporter}
-          onRemoveReporter={handleRemoveReporter}
-          loading={loadingExtras}
-        />
-      </Box>
-
-      <Box sx={{ mt: 5 }}>
+      <Box sx={{ mt: 5 }} id="complaints-command-center">
         <OwnerComplaintCommandCenter complaints={complaints} properties={properties} />
       </Box>
     </Box>
