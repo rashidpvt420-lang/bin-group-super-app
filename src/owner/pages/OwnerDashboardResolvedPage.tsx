@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, CreditCard, FileText, Shield, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, db, doc, getDoc, getDocs, query, where } from '../../lib/firebase';
+import { collection, db, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -313,14 +313,42 @@ export default function OwnerDashboardResolvedPage() {
   }, [properties]);
 
   const handleAddReporter = async (reporterData: any) => {
-    // Stub implementation to demonstrate reporter creation
-    console.log('Adding reporter:', reporterData);
-    alert('Authorized Reporter added securely.');
+    const ownerId = String(user?.uid || resolution.contract?.ownerId || resolution.contract?.ownerUid || '').trim();
+    if (!ownerId) throw new Error('Owner UID is required before adding an authorized reporter.');
+
+    const property = properties.find((p) => String(p.id || p.propertyId) === String(reporterData.propertyId));
+    const reporterId = `reporter_${ownerId}_${Date.now()}`;
+    const payload = {
+      reporterId,
+      ownerId,
+      ownerUid: ownerId,
+      propertyId: String(reporterData.propertyId || ''),
+      propertyName: String(property?.propertyName || property?.name || reporterData.propertyName || 'Property'),
+      reporterUid: null,
+      reporterName: String(reporterData.reporterName || '').trim(),
+      reporterEmail: normalizeEmail(reporterData.reporterEmail),
+      reporterPhone: String(reporterData.reporterPhone || '').trim(),
+      roleLabel: String(reporterData.roleLabel || 'Other'),
+      accessStatus: 'INVITED',
+      canCreateComplaints: true,
+      canViewOwnComplaints: true,
+      canViewPropertyComplaints: false,
+      invitedByOwnerUid: ownerId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, 'propertyReporters', reporterId), payload);
+    setReporters((current) => [resolvePropertyReporter({ id: reporterId, ...payload, createdAt: new Date(), updatedAt: new Date() }), ...current]);
   };
 
   const handleRemoveReporter = async (reporterId: string) => {
-    console.log('Removing reporter:', reporterId);
-    alert('Reporter access revoked.');
+    await updateDoc(doc(db, 'propertyReporters', reporterId), {
+      accessStatus: 'SUSPENDED',
+      canCreateComplaints: false,
+      updatedAt: serverTimestamp(),
+    });
+    setReporters((current) => current.map((reporter) => reporter.id === reporterId ? { ...reporter, accessStatus: 'SUSPENDED', canCreateComplaints: false } : reporter));
   };
 
   if (resolution.state === 'loading') {
