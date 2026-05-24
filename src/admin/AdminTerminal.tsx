@@ -42,6 +42,7 @@ import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
+import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import BuildingRegistryPage from './pages/properties/BuildingRegistryPage';
@@ -153,6 +154,8 @@ function AdminContent() {
                 <Route path="vault" element={<IntakeVaultPage />} />
                 <Route path="audit-shield" element={<AuditShieldPage />} />
                 <Route path="design-studio" element={<DesignStudioAdminPage />} />
+                <Route path="ai-studio" element={<DesignStudioAdminPage />} />
+                <Route path="bingpt-engineer" element={<BinGptEngineerPage />} />
                 <Route path="orphans" element={<OrphanWarRoomPage />} />
                 <Route path="manual-approvals" element={<AdminContractActivationApproval />} />
                 <Route path="control-center" element={<ProductionControlCenter />} />
