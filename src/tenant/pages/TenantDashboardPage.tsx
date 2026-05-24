@@ -15,7 +15,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
-  Building2,
   CheckCircle2,
   FileText,
   Home,
@@ -24,7 +23,6 @@ import {
   Paintbrush,
   Sparkles,
   Truck,
-  User,
   Wrench,
   CreditCard,
   ShieldCheck,
@@ -66,7 +64,7 @@ export default function TenantDashboardPage() {
             const propSnap = await getDoc(doc(db, 'properties', uData.propertyId));
             if (propSnap.exists() && !cancelled) setPropertyData({ id: propSnap.id, ...propSnap.data() });
           }
-          
+
           const contractSnap = await getDocs(query(collection(db, 'contracts'), where('tenantId', '==', user.uid), orderBy('createdAt', 'desc'), limit(1)));
           if (!contractSnap.empty && !cancelled) {
             setContractData({ id: contractSnap.docs[0].id, ...contractSnap.docs[0].data() });
@@ -115,6 +113,7 @@ export default function TenantDashboardPage() {
     );
   }
 
+  const addons = [
     { label: t('service.deep_cleaning') || 'Deep Cleaning', icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning' },
     { label: t('service.moving') || 'Moving & Packing', icon: <Truck size={20} />, route: '/tenant/request?category=moving' },
     { label: t('nav.maintenance') || 'Maintenance', icon: <Wrench size={20} />, route: '/tenant/request' },
@@ -279,4 +278,3 @@ export default function TenantDashboardPage() {
     </Box>
   );
 }
-
