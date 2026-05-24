@@ -24,9 +24,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Camera,
-  CheckCircle2,
   Home,
-  Image as ImageIcon,
   Info,
   RefreshCcw,
   Ruler,
@@ -51,12 +49,11 @@ import {
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useNavigate } from 'react-router-dom';
-import { DESIGN_ZONES, ADDON_SERVICES, calculateDesignStudioQuote } from '../utils/DesignStudioPricingEngine';
+import { DESIGN_ZONES, calculateDesignStudioQuote } from '../utils/DesignStudioPricingEngine';
 import type { DesignScope } from '../utils/DesignStudioPricingEngine';
 import { NotificationEvents } from '../lib/notificationService';
 import { logAuditAction } from '../utils/auditLogger';
 
-const TENANT_ALLOWED_DESIGN_ADDONS: string[] = [];
 const OWNER_SIDE_ROLES = ['owner', 'admin', 'ceo', 'super_admin', 'manager'];
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -87,7 +84,6 @@ export default function DesignStudioPage() {
   const navigate = useNavigate();
   const tenantMode = String(role || '').toLowerCase() === 'tenant';
   const ownerSide = isOwnerSideRole(role);
-  const visibleAddonServices = tenantMode ? ADDON_SERVICES.filter((addon) => TENANT_ALLOWED_DESIGN_ADDONS.includes(addon.id)) : ADDON_SERVICES;
 
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,7 +179,7 @@ export default function DesignStudioPage() {
     if (!tenantMode) return;
     setScope((prev) => ({
       ...prev,
-      addons: prev.addons.filter((id) => TENANT_ALLOWED_DESIGN_ADDONS.includes(id)),
+      addons: [],
       hasMEP: false,
       hasStructural: false,
       isNightWork: false,
@@ -286,14 +282,6 @@ export default function DesignStudioPage() {
 
   const removeImage = (url: string) => setReferenceImages((prev) => prev.filter((item) => item !== url));
 
-  const handleAddonToggle = (id: string) => {
-    if (tenantMode && !TENANT_ALLOWED_DESIGN_ADDONS.includes(id)) return;
-    setScope((prev) => ({
-      ...prev,
-      addons: prev.addons.includes(id) ? prev.addons.filter((addonId) => addonId !== id) : [...prev.addons, id],
-    }));
-  };
-
   const handleInitializeStudio = async () => {
     if (!selectedPropertyId) {
       setSnackbar({ open: true, message: 'Select a property before initializing the studio.', severity: 'error' });
@@ -302,7 +290,7 @@ export default function DesignStudioPage() {
 
     setSubmitting(true);
     try {
-      const safeScope = tenantMode ? { ...scope, addons: [], hasMEP: false, hasStructural: false, isNightWork: false } : scope;
+      const safeScope = { ...scope, addons: [], hasMEP: tenantMode ? false : scope.hasMEP, hasStructural: tenantMode ? false : scope.hasStructural, isNightWork: tenantMode ? false : scope.isNightWork };
       const quote = calculateDesignStudioQuote(safeScope);
 
       const requestData = {
@@ -329,6 +317,7 @@ export default function DesignStudioPage() {
           staffInstructions: ownerSide ? staffInstructions : '',
           tenantMode,
           imageCount: referenceImages.length,
+          addonsRemovedFromOwnerFlow: true,
         },
         designStyle,
         quote,
@@ -350,7 +339,7 @@ export default function DesignStudioPage() {
         action: 'DESIGN_REQUEST_SUBMITTED',
         targetType: 'design_requests',
         targetId: docRef.id,
-        metadata: { propertyId: selectedPropertyId, zoneType: scope.zoneType, style: designStyle, imageCount: referenceImages.length, tenantMode },
+        metadata: { propertyId: selectedPropertyId, zoneType: scope.zoneType, style: designStyle, imageCount: referenceImages.length, tenantMode, addonsDisabled: true },
       });
 
       const currentPath = window.location.pathname;
@@ -406,7 +395,7 @@ export default function DesignStudioPage() {
       )}
 
       <Grid container spacing={{ xs: 3, md: 6 }}>
-        <Grid item xs={12} lg={4}>
+        <Grid item xs={12} lg={5}>
           <Stack spacing={4}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', minWidth: 0 }}>
               <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2, overflowWrap: 'anywhere' }}>
@@ -496,7 +485,7 @@ export default function DesignStudioPage() {
           </Stack>
         </Grid>
 
-        <Grid item xs={12} lg={5}>
+        <Grid item xs={12} lg={4}>
           <Stack spacing={4} sx={{ height: '100%' }}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -529,32 +518,6 @@ export default function DesignStudioPage() {
                 </Alert>
               )}
             </Paper>
-
-            {!tenantMode && (
-              <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', flexGrow: 1, minWidth: 0 }}>
-                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <ImageIcon color={binThemeTokens.gold} /> 4. SELECT ADD-ON SERVICES
-                </Typography>
-                <Grid container spacing={1.25}>
-                  {visibleAddonServices.map((addon) => {
-                    const selected = scope.addons.includes(addon.id);
-                    return (
-                      <Grid item xs={12} key={addon.id}>
-                        <Paper onClick={() => handleAddonToggle(addon.id)} sx={{ p: { xs: 1.75, md: 2 }, cursor: 'pointer', bgcolor: selected ? alpha(binThemeTokens.gold, 0.12) : 'rgba(255,255,255,0.02)', border: `1px solid ${selected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 3, transition: 'all 0.2s ease', minWidth: 0 }}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} sx={{ minWidth: 0 }}>
-                            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-                              {selected ? <CheckCircle2 size={19} color={binThemeTokens.gold} /> : <Checkbox checked={false} sx={{ p: 0, color: 'rgba(255,255,255,0.5)' }} />}
-                              <Typography variant="body2" fontWeight={selected ? 900 : 500} sx={{ color: '#fff', minWidth: 0, overflowWrap: 'anywhere' }}>{addon.label}</Typography>
-                            </Stack>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>+AED {addon.price.toLocaleString()}</Typography>
-                          </Stack>
-                        </Paper>
-                      </Grid>
-                    );
-                  })}
-                </Grid>
-              </Paper>
-            )}
           </Stack>
         </Grid>
 
