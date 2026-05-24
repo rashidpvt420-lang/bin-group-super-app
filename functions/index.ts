@@ -2548,3 +2548,47 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
     return { success: true };
 });
 
+// ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
+
+export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId}/messages/{messageId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const message = snap.data();
+    const ticketId = event.params.ticketId;
+    const senderId = message.senderId;
+    
+    // Look up the ticket
+    const ticketSnap = await db.collection("maintenanceTickets").doc(ticketId).get();
+    if (!ticketSnap.exists) return;
+    const ticket = ticketSnap.data() || {};
+
+    const tenantId = ticket.tenantId || ticket.reporterId;
+    const techId = ticket.assignedTechnicianId;
+
+    if (!tenantId && !techId) return;
+
+    let targetUserId = "";
+    let senderName = message.senderName || "User";
+
+    if (senderId === tenantId) {
+        // Sender is tenant, notify technician
+        targetUserId = techId;
+    } else if (senderId === techId) {
+        // Sender is technician, notify tenant
+        targetUserId = tenantId;
+    } else {
+        // Could be an admin or someone else, decide if we notify anyone. For now, try to notify both if they didn't send it?
+        // Wait, usually the message has a `senderRole` or similar. Let's just default to returning if not tenant or tech.
+        return;
+    }
+
+    if (!targetUserId) return;
+
+    const textSnippet = message.text ? (message.text.length > 50 ? message.text.substring(0, 50) + "..." : message.text) : (message.imageUrl ? "Sent an image" : "Sent a message");
+
+    await dispatchOmniNotification(targetUserId, `New Message from ${senderName}`, textSnippet, {
+        extraData: { ticketId, type: "chat_message" },
+        url: `/ticket/${ticketId}`
+    });
+});

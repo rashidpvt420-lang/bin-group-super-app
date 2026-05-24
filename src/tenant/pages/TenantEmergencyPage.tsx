@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, MapPin } from 'lucide-react';
 import { db, collection, addDoc, serverTimestamp, query, where, getDocs } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function TenantEmergencyPage() {
     const { user } = useRole();
+    const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
     const [submitting, setSubmitting] = useState(false);
     const [unitData, setUnitData] = useState<any>(null);
@@ -67,11 +69,11 @@ export default function TenantEmergencyPage() {
     };
 
     return (
-        <Box sx={{ textAlign: 'center', py: 10 }}>
+        <Box sx={{ textAlign: 'center', py: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <AlertTriangle size={80} color="#ef4444" style={{ margin: '0 auto', marginBottom: '24px' }} className="animate-pulse" />
-            <Typography variant="h3" fontWeight="950" color="#ef4444" sx={{ mb: 2 }}>EMERGENCY SOS</Typography>
+            <Typography variant="h3" fontWeight="950" color="#ef4444" sx={{ mb: 2 }}>{t('dash.tenant.emergencySos') || 'EMERGENCY SOS'}</Typography>
             <Typography variant="h6" color="textSecondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto' }}>
-                Trigger this only for immediate life-safety or severe property damage incidents (e.g., major flood, complete blackout, fire).
+                {t('dash.tenant.emergencyDesc') || 'Trigger this only for immediate life-safety or severe property damage incidents (e.g., major flood, complete blackout, fire).'}
             </Typography>
 
             <Button 
@@ -87,7 +89,7 @@ export default function TenantEmergencyPage() {
                     '&:hover': { bgcolor: '#dc2626' }
                 }}
             >
-                {submitting ? <CircularProgress size={28} color="inherit" /> : 'TRIGGER SOS DISPATCH'}
+                {submitting ? <CircularProgress size={28} color="inherit" /> : (t('dash.tenant.triggerSos') || 'TRIGGER SOS DISPATCH')}
             </Button>
         </Box>
     );

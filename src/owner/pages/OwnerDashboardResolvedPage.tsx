@@ -380,6 +380,9 @@ export default function OwnerDashboardResolvedPage() {
           <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          {contract.contractUrl && (
+            <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Download Agreement</Button>
+          )}
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Contracts</Button>
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Property Passport</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>Complaints</Button>
