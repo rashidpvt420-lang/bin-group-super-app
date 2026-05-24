@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@mui/material';
-import { useLanguage } from '../../context/LanguageContext';
+import { useLanguage } from '@bin/shared';
 import LanguageIcon from '@mui/icons-material/Language';
 
 export const LanguageSwitcher: React.FC = () => {
@@ -28,7 +28,7 @@ export const LanguageSwitcher: React.FC = () => {
                 }
             }}
         >
-            {lang === 'en' ? 'العربية' : 'English'}
+            {lang === 'en' ? 'AR' : 'English'}
         </Button>
     );
 };

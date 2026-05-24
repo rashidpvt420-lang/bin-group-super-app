@@ -4,7 +4,7 @@ import {
     Box, Container, AppBar, Toolbar, Typography, IconButton, 
     Breadcrumbs, Link as MuiLink, alpha, Stack, Avatar 
 } from '@mui/material';
-import { ArrowLeft, Home, Globe, User, Bell, Settings } from 'lucide-react';
+import { ArrowLeft, Home, Globe, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -26,7 +26,9 @@ import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { toggleLanguage, isRTL, language, t } = useLanguage();
+    const { setLang, isRTL, lang, t, tx } = useLanguage();
+    const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
+    const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
 
@@ -39,7 +41,6 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             display: 'flex',
             flexDirection: 'column'
         }}>
-            {/* Sovereign Portal Header */}
             <AppBar 
                 position="sticky" 
                 elevation={0}
@@ -50,8 +51,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     zIndex: 1200
                 }}
             >
-                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         {location.pathname !== '/tenant' && location.pathname !== '/tenant/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary }}>
                                 <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
@@ -60,21 +61,21 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}>
                             <Home size={22} />
                         </IconButton>
-                        <Box sx={{ ml: 1 }}>
+                        <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
-                                {t('sector.tenants.eyebrow') || 'TENANT PORTAL'}
+                                {label('portal.tenant.title', 'TENANT PORTAL', 'بوابة المستأجر')}
                             </Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                SOVEREIGN RESIDENCY NODE
+                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE', 'عقدة السكن السيادية')}
                             </Typography>
                         </Box>
                     </Box>
 
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
                         <IconButton onClick={toggleLanguage} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3, px: 2 }}>
                             <Globe size={18} color={binThemeTokens.gold} />
-                            <Typography variant="caption" sx={{ ml: 1, mr: isRTL ? 1 : 0, fontWeight: 950, color: binThemeTokens.gold }}>
-                                {language === 'en' ? 'AR' : 'EN'}
+                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950, color: binThemeTokens.gold }}>
+                                {lang === 'en' ? 'AR' : 'EN'}
                             </Typography>
                         </IconButton>
                         <NotificationBell />
@@ -94,26 +95,14 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                             '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' }
                         }}
                     >
-                        <MuiLink 
-                            component="button" 
-                            onClick={() => navigate('/tenant')} 
-                            sx={{ color: binThemeTokens.gold, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}
-                        >
+                        <MuiLink component="button" onClick={() => navigate('/tenant')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                             {t('nav.dashboard')}
                         </MuiLink>
                         {pathnames.slice(1).map((value, index) => {
                             const isLast = index === pathnames.slice(1).length - 1;
                             return (
-                                <Typography 
-                                    key={index} 
-                                    sx={{ 
-                                        color: isLast ? '#FFF' : 'rgba(255,255,255,0.4)', 
-                                        fontWeight: 900, 
-                                        fontSize: '0.75rem', 
-                                        textTransform: 'uppercase' 
-                                    }}
-                                >
-                                    {value.replace('-', ' ')}
+                                <Typography key={index} sx={{ color: isLast ? '#FFF' : 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                    {label(`nav.${value.replace('-', '_')}`, value.replace('-', ' '), value.replace('-', ' '))}
                                 </Typography>
                             );
                         })}
@@ -124,21 +113,13 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 </Box>
             </Container>
 
-            {/* Support Footer */}
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
                     © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS
                 </Typography>
             </Box>
 
-            <style>
-                {`
-                    @keyframes fadeIn {
-                        from { opacity: 0; transform: translateY(10px); }
-                        to { opacity: 1; transform: translateY(0); }
-                    }
-                `}
-            </style>
+            <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
     );
 };
