@@ -180,8 +180,8 @@ export default function TenantDashboardPage() {
                     </Box>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                    <Button fullWidth variant="contained" sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>
-                        VIEW LEDGER
+                    <Button fullWidth variant="contained" onClick={() => navigate('/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>
+                        VIEW LEDGER / DOCUMENTS
                     </Button>
                 </Grid>
                 </Grid>

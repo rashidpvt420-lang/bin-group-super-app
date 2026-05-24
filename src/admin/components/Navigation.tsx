@@ -1,13 +1,12 @@
 import { alpha } from '@mui/material/styles';
 import { NavLink } from 'react-router-dom';
 import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import SecurityIcon from '@mui/icons-material/Security';
 import FileTextIcon from '@mui/icons-material/Description';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { Sparkles, Users, Zap, Shield, Activity, DollarSign, LayoutDashboard, Cpu, Building2, FileSignature } from 'lucide-react';
+import { Users, Zap, Shield, Activity, DollarSign, LayoutDashboard, Cpu, Building2, FileSignature, Bot } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import { auth } from '@/lib/firebase';
@@ -23,6 +22,9 @@ const Navigation = () => {
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
+        { text: 'BIN-GPT Engineer™', icon: <Bot size={20} />, path: '/admin/bingpt-engineer', color: binThemeTokens.gold },
+        { text: 'Admin AI Studio', icon: <Bot size={20} />, path: '/admin/ai-studio', color: binThemeTokens.gold },
+        { text: 'Design Studio', icon: <Zap size={20} />, path: '/admin/design-studio', color: binThemeTokens.gold },
         { text: 'Smart Building Monitor', icon: <Cpu size={20} />, path: '/admin/smart-building', color: binThemeTokens.gold },
         { text: 'Sovereign Control', icon: <Shield size={20} />, path: '/admin/sovereign-control', color: binThemeTokens.gold },
         { text: tx('fin.title', 'Financials'), icon: <DollarSign size={20} />, path: '/admin/financials', color: binThemeTokens.gold },
