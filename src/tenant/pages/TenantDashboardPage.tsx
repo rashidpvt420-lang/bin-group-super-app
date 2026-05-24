@@ -109,7 +109,7 @@ export default function TenantDashboardPage() {
     { label: t('service.deep_cleaning') || 'Deep Cleaning', icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning' },
     { label: t('service.moving') || 'Moving & Packing', icon: <Truck size={20} />, route: '/tenant/request?category=moving' },
     { label: t('nav.maintenance') || 'Maintenance', icon: <Wrench size={20} />, route: '/tenant/request' },
-    { label: t('nav.ai_studio') || 'AI Design Studio', icon: <Paintbrush size={20} />, route: '/design-studio' },
+    { label: t('nav.ai_studio') || 'AI Design Studio', icon: <Paintbrush size={20} />, route: '/tenant/design-studio' },
   ];
 
   return (
@@ -138,7 +138,7 @@ export default function TenantDashboardPage() {
             </Button>
           </Grid>
           <Grid item xs={12} md={4}>
-            <Button fullWidth variant="outlined" onClick={() => navigate('/design-studio')} startIcon={<Paintbrush size={24} />} sx={{ height: 96, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>
+            <Button fullWidth variant="outlined" onClick={() => navigate('/tenant/design-studio')} startIcon={<Paintbrush size={24} />} sx={{ height: 96, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>
               {t('nav.ai_studio') || 'AI Design Studio'}
             </Button>
           </Grid>
