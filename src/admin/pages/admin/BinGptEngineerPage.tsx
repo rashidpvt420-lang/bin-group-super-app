@@ -13,6 +13,14 @@ import {
   TextField,
   Typography,
   alpha,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   AlertTriangle,
@@ -25,8 +33,12 @@ import {
   RotateCcw,
   ScrollText,
   ShieldCheck,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  GitCommit,
 } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp } from '@/lib/firebase';
+import { addDoc, collection, db, serverTimestamp, onSnapshot, query, orderBy, limit } from '@/lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -88,8 +100,62 @@ export default function BinGptEngineerPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const [historyDocs, setHistoryDocs] = React.useState<any[]>([]);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
   const role = String(user?.role || '').toLowerCase();
   const hasAdminAccess = Boolean(user?.claims?.admin === true || user?.isAdmin === true || ENGINEER_ADMIN_ROLES.has(role));
+
+  React.useEffect(() => {
+    if (!hasAdminAccess) return;
+    const q = query(collection(db, 'binGptEngineerCommands'), orderBy('createdAt', 'desc'), limit(20));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHistoryDocs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [hasAdminAccess]);
+
+  const handleRollback = async (docId: string, sha: string, prLink: string) => {
+    if (!window.confirm(`Issue rollback command for deployment?\\nTarget: ${docId}`)) return;
+    setSubmitting(true);
+    try {
+      await addDoc(collection(db, 'binGptEngineerCommands'), {
+        command: `ROLLBACK: Revert deployment for command ${docId}.\\nTarget SHA: ${sha || 'previous stable'}.\\nPR Reference: ${prLink || 'N/A'}.`,
+        status: 'PENDING_IMPLEMENTATION_PLAN',
+        executionMode: 'GITHUB_BRANCH_PR_ONLY',
+        deploymentPolicy: 'MAIN_AFTER_GITHUB_ACTIONS_PASS',
+        firestoreMutationPolicy: 'APPROVED_MIGRATION_ONLY',
+        rollbackRequired: false,
+        workflowSteps,
+        guardrails,
+        commandHistory: [{ status: 'PENDING_IMPLEMENTATION_PLAN', at: new Date().toISOString() }],
+        buildStatus: 'NOT_STARTED',
+        prLink: null,
+        deploymentStatus: 'NOT_STARTED',
+        errorLogs: [],
+        createdBy: user?.uid || null,
+        createdByEmail: user?.email || null,
+        createdByRole: role || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        auditTrail: [
+          {
+            action: 'ROLLBACK_COMMAND_ISSUED',
+            actorUid: user?.uid || null,
+            actorEmail: user?.email || null,
+            actorRole: role || null,
+            targetCommand: docId,
+            at: new Date().toISOString(),
+          },
+        ],
+      });
+      alert('Rollback command added to the queue.');
+    } catch (err: any) {
+      alert('Failed to issue rollback: ' + err?.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const submitCommand = async () => {
     setResult(null);
@@ -285,6 +351,107 @@ export default function BinGptEngineerPage() {
                 </Grid>
               ))}
             </Grid>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ bgcolor: 'rgba(15,23,42,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 4 }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+              <History size={22} color={binThemeTokens.gold} />
+              <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>AI Action History & Deployments</Typography>
+            </Stack>
+            <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
+            
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell />
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DATE</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>COMMAND</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>STATUS</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>BUILD</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DEPLOY</TableCell>
+                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>ACTIONS</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {historyDocs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'rgba(255,255,255,0.5)' }}>No engineering commands found.</TableCell>
+                    </TableRow>
+                  )}
+                  {historyDocs.map((docItem) => {
+                    const isExpanded = expandedId === docItem.id;
+                    const dateStr = docItem.createdAt?.toDate ? docItem.createdAt.toDate().toLocaleString() : 'Just now';
+                    const isDeployed = docItem.deploymentStatus === 'SUCCESS';
+                    return (
+                      <React.Fragment key={docItem.id}>
+                        <TableRow sx={{ '& td': { borderBottom: isExpanded ? 'none' : '1px solid rgba(255,255,255,0.05)' } }}>
+                          <TableCell sx={{ width: 40 }}>
+                            <IconButton size="small" onClick={() => setExpandedId(isExpanded ? null : docItem.id)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </IconButton>
+                          </TableCell>
+                          <TableCell sx={{ color: '#fff', fontSize: '0.8rem' }}>{dateStr}</TableCell>
+                          <TableCell sx={{ color: '#fff', maxWidth: 200 }}>
+                            <Typography noWrap variant="body2">{docItem.command}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={docItem.status} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 900 }} />
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={docItem.buildStatus} sx={{ bgcolor: docItem.buildStatus === 'SUCCESS' ? alpha('#10b981', 0.1) : docItem.buildStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: docItem.buildStatus === 'SUCCESS' ? '#10b981' : docItem.buildStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={docItem.deploymentStatus} sx={{ bgcolor: isDeployed ? alpha('#10b981', 0.1) : docItem.deploymentStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: isDeployed ? '#10b981' : docItem.deploymentStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
+                          </TableCell>
+                          <TableCell align="right">
+                            {docItem.prLink && (
+                              <Button size="small" variant="text" href={docItem.prLink} target="_blank" endIcon={<ExternalLink size={14} />} sx={{ color: '#3b82f6', minWidth: 0, mr: 1 }}>PR</Button>
+                            )}
+                            {isDeployed && (
+                              <Button size="small" variant="outlined" color="error" onClick={() => handleRollback(docItem.id, docItem.rollbackSha || '', docItem.prLink)} startIcon={<RotateCcw size={14} />} sx={{ borderRadius: 2 }}>ROLLBACK</Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
+                            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                              <Box sx={{ margin: 2, p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>Command Detail</Typography>
+                                <Typography variant="body2" sx={{ color: '#fff', whiteSpace: 'pre-wrap', mb: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}>{docItem.command}</Typography>
+                                
+                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>Audit Trail</Typography>
+                                <Stack spacing={1}>
+                                  {docItem.auditTrail?.map((audit: any, idx: number) => (
+                                    <Stack direction="row" spacing={1} key={idx} alignItems="center">
+                                      <GitCommit size={14} color="rgba(255,255,255,0.3)" />
+                                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                                        <strong style={{ color: '#fff' }}>{audit.at ? new Date(audit.at).toLocaleTimeString() : 'N/A'}:</strong> {audit.action} by {audit.actorEmail}
+                                      </Typography>
+                                    </Stack>
+                                  ))}
+                                </Stack>
+                                
+                                {docItem.errorLogs && docItem.errorLogs.length > 0 && (
+                                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#ef4444', 0.1), borderRadius: 2, border: `1px solid ${alpha('#ef4444', 0.2)}` }}>
+                                    <Typography variant="subtitle2" sx={{ color: '#ef4444', fontWeight: 900, mb: 1 }}>Error Logs</Typography>
+                                    {docItem.errorLogs.map((err: string, i: number) => (
+                                      <Typography key={i} variant="caption" sx={{ color: '#fca5a5', display: 'block', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{err}</Typography>
+                                    ))}
+                                  </Box>
+                                )}
+                              </Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      </React.Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       </Stack>
