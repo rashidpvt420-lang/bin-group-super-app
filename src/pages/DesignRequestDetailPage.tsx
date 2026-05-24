@@ -77,12 +77,17 @@ export default function DesignRequestDetailPage() {
         if (!id || !request || !user?.uid) return;
         setProcessing(true);
         try {
-            const status = action === 'APPROVE' ? 'OWNER_APPROVED_TENANT_TO_PAY' : action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED_OWNER_TO_PAY';
+            const status = action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING';
+            const approvalStatus = action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED';
+            const quoteStatus = action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING';
             const payerRole = action === 'TAKEOVER' ? 'owner' : request.role === 'tenant' ? 'tenant' : 'owner';
             const payerId = payerRole === 'owner' ? user.uid : request.userId;
 
             await updateDoc(doc(db, 'design_requests', id), {
                 status,
+                approvalStatus,
+                quoteStatus,
+                workflowStage: status,
                 payerRole,
                 payerId,
                 ownerId: user.uid,
@@ -151,6 +156,7 @@ export default function DesignRequestDetailPage() {
 
             await updateDoc(doc(db, 'design_requests', id), {
                 status: 'PAYMENT_PENDING',
+                workflowStage: 'PAYMENT_PENDING',
                 paymentId: paymentRef.id,
                 paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
                 executionStatus: 'AWAITING_PAYMENT_VERIFICATION',
@@ -214,8 +220,8 @@ export default function DesignRequestDetailPage() {
     const isAdmin = ['admin', 'ceo'].includes(String(role || '').toLowerCase());
     const isTenantRequest = request.role === 'tenant';
     const isPayer = request.payerId ? request.payerId === user?.uid : request.userId === user?.uid || request.ownerId === user?.uid;
-    const canApprove = isOwner && request.status === 'PENDING_OWNER_NOC';
-    const canCreatePayment = isPayer && !terminalStatuses.includes(request.status) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'AI_CONCEPT_READY'].includes(request.status);
+    const canApprove = isOwner && (request.status === 'AWAITING_OWNER_APPROVAL' || request.approvalStatus === 'PENDING_OWNER_APPROVAL');
+    const canCreatePayment = isPayer && !terminalStatuses.includes(request.status) && request.status === 'DEPOSIT_PENDING';
     const canAdminHandoff = isAdmin && ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID'].includes(request.status);
     const referenceImages: string[] = Array.isArray(scope.referenceImages) ? scope.referenceImages : [];
     const executionScope = request.executionScope || buildExecutionScope(request);
@@ -245,7 +251,7 @@ export default function DesignRequestDetailPage() {
                             )}
                             <Box sx={{ position: 'absolute', bottom: 20, left: 20, right: 20, p: 2, bgcolor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', borderRadius: 2 }}>
                                 <Typography variant="body2" sx={{ color: '#FFF', fontStyle: 'italic' }}>
-                                    "{quote.conceptDesignResult || `Concept generated for ${text(scope.zoneType, 'requested zone')}.`}"
+                                    "{request.conceptPrompt || request.quote?.conceptDesignResult || `Concept generated for ${text(scope.zoneType, 'requested zone')}.`}"
                                 </Typography>
                             </Box>
                         </Box>

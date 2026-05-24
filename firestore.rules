@@ -333,6 +333,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /design_quotes/{quoteId} {
+      allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data) || tenantOwns(resource.data);
+      allow create: if signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data));
+      allow update: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /design_concepts/{conceptId} {
+      allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data) || tenantOwns(resource.data);
+      allow create: if signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data));
+      allow update: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /design_approvals/{approvalId} {
+      allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data) || tenantOwns(resource.data);
+      allow create: if signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data));
+      allow update: if isAdmin() || owns(resource.data) || tenantOwns(resource.data);
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }
