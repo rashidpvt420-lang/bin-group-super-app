@@ -37,10 +37,17 @@ service firebase.storage {
       return hasRole('owner') || hasRole('OWNER');
     }
 
+    function isAllowedImageContentType() {
+      return request.resource != null && (
+        request.resource.contentType.matches('image/.*') ||
+        request.resource.contentType in ['application/octet-stream', 'binary/octet-stream']
+      );
+    }
+
     function isImageUpload(maxSizeMb) {
       return request.resource != null &&
              request.resource.size < maxSizeMb * 1024 * 1024 &&
-             request.resource.contentType.matches('image/.*');
+             isAllowedImageContentType();
     }
 
     function isDocumentUpload(maxSizeMb) {
@@ -66,7 +73,8 @@ service firebase.storage {
     // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow write: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+      allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+      allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
     // Proofs: before/after photos for tickets
