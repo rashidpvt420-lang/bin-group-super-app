@@ -25,9 +25,15 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
-  const intakeId = cleanText(data.intakeId, "intakeId", 120);
-  const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
+  const intakeId = String(data.intakeId || "").trim();
+  const onboardingSessionId = String(data.onboardingSessionId || "").trim();
+  const ticketId = String(data.ticketId || "").trim();
+  const designRequestId = String(data.designRequestId || "").trim();
   const amount = Number(data.amount);
+  
+  if (!intakeId && !ticketId && !designRequestId) {
+    throw new HttpsError("invalid-argument", "Payment must be associated with an intake, ticket, or design request.");
+  }
   
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpsError("invalid-argument", "Valid payment amount is required.");
@@ -36,9 +42,14 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   if (!key || key === "mock_key") {
     console.warn("Stripe key is missing or mock; returning mock session URL.");
+    let mockUrl = `https://bin-group-57c60.web.app/payment-success?session_id=mock&ownerUid=${encodeURIComponent(ownerUid)}`;
+    if (intakeId) mockUrl += `&intakeId=${encodeURIComponent(intakeId)}`;
+    if (ticketId) mockUrl += `&ticketId=${encodeURIComponent(ticketId)}`;
+    if (designRequestId) mockUrl += `&designRequestId=${encodeURIComponent(designRequestId)}`;
+    
     return {
       id: "mock_session_id_" + Date.now(),
-      url: `http://localhost:5173/payment-success?intakeId=${encodeURIComponent(intakeId)}&ownerUid=${encodeURIComponent(ownerUid)}`
+      url: mockUrl
     };
   }
 
@@ -52,8 +63,8 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
           price_data: {
             currency: "aed",
             product_data: {
-              name: "BIN GROUP Property Onboarding Contract Payment",
-              description: `Intake ID: ${intakeId}`,
+              name: intakeId ? "BIN GROUP Property Onboarding Contract Payment" : (ticketId ? "BIN GROUP Maintenance Service Payment" : "BIN GROUP AI Design Studio Payment"),
+              description: intakeId ? `Intake ID: ${intakeId}` : (ticketId ? `Ticket ID: ${ticketId}` : `Design ID: ${designRequestId}`),
             },
             unit_amount: Math.round(amount * 100),
           },
@@ -61,13 +72,15 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
         },
       ],
       mode: "payment",
-      success_url: `https://bin-group-57c60.web.app/payment-success?session_id={CHECKOUT_SESSION_ID}&intakeId=${encodeURIComponent(intakeId)}&ownerUid=${encodeURIComponent(ownerUid)}`,
-      cancel_url: `https://bin-group-57c60.web.app/onboarding?intakeId=${encodeURIComponent(intakeId)}&payment_failed=true`,
+      success_url: `https://bin-group-57c60.web.app/payment-success?session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}`,
+      cancel_url: `https://bin-group-57c60.web.app/payment-failed?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: ownerEmail,
       metadata: {
         ownerUid,
-        intakeId,
-        onboardingSessionId,
+        ...(intakeId && { intakeId }),
+        ...(onboardingSessionId && { onboardingSessionId }),
+        ...(ticketId && { ticketId }),
+        ...(designRequestId && { designRequestId }),
       },
     });
 
@@ -107,13 +120,14 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
     const metadata = session.metadata || {};
     const ownerUid = metadata.ownerUid;
     const intakeId = metadata.intakeId;
+    const ticketId = metadata.ticketId;
+    const designRequestId = metadata.designRequestId;
     const onboardingSessionId = metadata.onboardingSessionId;
     const amount = session.amount_total ? session.amount_total / 100 : 0;
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
 
     if (ownerUid && intakeId) {
-      const timestamp = admin.firestore.FieldValue.serverTimestamp();
-      const batch = db.batch();
-
       const paymentRef = db.collection("payment_transactions").doc(intakeId);
       batch.set(paymentRef, {
         ownerUid,
@@ -176,6 +190,83 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
 
       await batch.commit();
       console.log(`Successfully processed Stripe payment for owner ${ownerUid}, intake ${intakeId}`);
+    } else if (ownerUid && designRequestId) {
+      const designRef = db.collection("design_requests").doc(designRequestId);
+      batch.set(designRef, {
+        paymentStatus: "PAID",
+        approvalStatus: "READY_FOR_EXECUTION",
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const paymentRef = db.collection("payment_transactions").doc();
+      batch.set(paymentRef, {
+        ownerUid,
+        ownerId: ownerUid,
+        designRequestId,
+        paymentMethod: "STRIPE",
+        amount,
+        currency: "AED",
+        status: "PAID",
+        verificationState: "AUTO_VERIFIED",
+        stripeSessionId: session.id,
+        stripePaymentIntentId: String(session.payment_intent || ""),
+        submittedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
+
+      const auditRef = db.collection("audit_logs").doc();
+      batch.set(auditRef, {
+        action: "STRIPE_DESIGN_PAYMENT_VERIFIED",
+        ownerUid,
+        ownerId: ownerUid,
+        designRequestId,
+        paymentMethod: "STRIPE",
+        stripeSessionId: session.id,
+        timestamp,
+        createdAt: timestamp
+      });
+
+      await batch.commit();
+      console.log(`Successfully processed Stripe payment for design request ${designRequestId}`);
+    } else if (ownerUid && ticketId) {
+      const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+      batch.set(ticketRef, {
+        paymentStatus: "PAID",
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const paymentRef = db.collection("payment_transactions").doc();
+      batch.set(paymentRef, {
+        ownerUid,
+        ownerId: ownerUid,
+        ticketId,
+        paymentMethod: "STRIPE",
+        amount,
+        currency: "AED",
+        status: "PAID",
+        verificationState: "AUTO_VERIFIED",
+        stripeSessionId: session.id,
+        stripePaymentIntentId: String(session.payment_intent || ""),
+        submittedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
+
+      const auditRef = db.collection("audit_logs").doc();
+      batch.set(auditRef, {
+        action: "STRIPE_TICKET_PAYMENT_VERIFIED",
+        ownerUid,
+        ownerId: ownerUid,
+        ticketId,
+        paymentMethod: "STRIPE",
+        stripeSessionId: session.id,
+        timestamp,
+        createdAt: timestamp
+      });
+
+      await batch.commit();
+      console.log(`Successfully processed Stripe payment for ticket ${ticketId}`);
     }
   }
 
