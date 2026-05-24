@@ -20,6 +20,8 @@ import TenantDocumentsPage from './pages/TenantDocumentsPage';
 import TenantUnitPage from './pages/TenantUnitPage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
+import TenantGatePassPage from './pages/TenantGatePassPage';
+import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -158,6 +160,8 @@ export default function TenantApp() {
                 <Route path="/documents" element={<TenantDocumentsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
+                <Route path="/gate-pass" element={<TenantGatePassPage />} />
+                <Route path="/amenities" element={<TenantAmenitiesPage />} />
             </Routes>
         </TenantLayout>
     );

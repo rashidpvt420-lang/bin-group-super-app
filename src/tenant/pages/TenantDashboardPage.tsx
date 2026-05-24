@@ -26,6 +26,10 @@ import {
   Truck,
   User,
   Wrench,
+  CreditCard,
+  ShieldCheck,
+  Dumbbell,
+  Calendar,
 } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -39,6 +43,7 @@ export default function TenantDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [propertyData, setPropertyData] = useState<any>(null);
   const [unitData, setUnitData] = useState<any>(null);
+  const [contractData, setContractData] = useState<any>(null);
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
 
@@ -60,6 +65,11 @@ export default function TenantDashboardPage() {
           if (uData.propertyId) {
             const propSnap = await getDoc(doc(db, 'properties', uData.propertyId));
             if (propSnap.exists() && !cancelled) setPropertyData({ id: propSnap.id, ...propSnap.data() });
+          }
+          
+          const contractSnap = await getDocs(query(collection(db, 'contracts'), where('tenantId', '==', user.uid), orderBy('createdAt', 'desc'), limit(1)));
+          if (!contractSnap.empty && !cancelled) {
+            setContractData({ id: contractSnap.docs[0].id, ...contractSnap.docs[0].data() });
           }
         }
       } catch (err) {
@@ -105,11 +115,12 @@ export default function TenantDashboardPage() {
     );
   }
 
-  const addons = [
     { label: t('service.deep_cleaning') || 'Deep Cleaning', icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning' },
     { label: t('service.moving') || 'Moving & Packing', icon: <Truck size={20} />, route: '/tenant/request?category=moving' },
     { label: t('nav.maintenance') || 'Maintenance', icon: <Wrench size={20} />, route: '/tenant/request' },
     { label: t('nav.ai_studio') || 'AI Design Studio', icon: <Paintbrush size={20} />, route: '/tenant/design-studio' },
+    { label: 'Gate Pass', icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass' },
+    { label: 'Amenities', icon: <Dumbbell size={20} />, route: '/tenant/amenities' },
   ];
 
   return (
@@ -146,6 +157,37 @@ export default function TenantDashboardPage() {
 
         <Grid container spacing={4}>
           <Grid item xs={12} lg={8}>
+            <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {t('dash.lease_financials') || 'Lease & Financials'}</Typography>
+                <Chip label={contractData?.status === 'ACTIVE' ? 'ACTIVE LEASE' : (contractData?.status || 'NO ACTIVE LEASE').replace(/_/g, ' ')} sx={{ bgcolor: contractData?.status === 'ACTIVE' ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', color: contractData?.status === 'ACTIVE' ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950 }} />
+                </Stack>
+                <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                    <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>CONTRACT TERM</Typography>
+                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>
+                        {contractData?.startDate ? new Date(contractData.startDate.seconds * 1000).toLocaleDateString() : 'Pending'} - {contractData?.endDate ? new Date(contractData.endDate.seconds * 1000).toLocaleDateString() : 'Pending'}
+                    </Typography>
+                    </Box>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>UPCOMING PAYMENT</Typography>
+                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>
+                        {contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : '—'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#10b981', display: 'flex', gap: 0.7, alignItems: 'center', mt: 1, fontWeight: 900 }}><Calendar size={13} /> {contractData?.nextPaymentDate ? new Date(contractData.nextPaymentDate.seconds * 1000).toLocaleDateString() : 'No Pending Invoices'}</Typography>
+                    </Box>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                    <Button fullWidth variant="contained" sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>
+                        VIEW LEDGER
+                    </Button>
+                </Grid>
+                </Grid>
+            </Paper>
+
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                 <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><Home size={20} /> {t('dash.residency_details') || 'Residency Details'}</Typography>
