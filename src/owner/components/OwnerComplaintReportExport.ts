@@ -6,6 +6,25 @@ function formatCsvCell(value: string | number | null | undefined): string {
   return `"${str}"`; // Enclose in double quotes to handle commas
 }
 
+function downloadCsv(csvContent: string, filename: string): void {
+  const blob = new Blob([csvContent], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.setAttribute('download', filename);
+  link.style.display = 'none';
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
 export function exportComplaintsToCsv(complaints: OwnerComplaint[], filename = 'maintenance-complaints-report.csv') {
   const headers = [
     'Ticket ID',
@@ -42,18 +61,5 @@ export function exportComplaintsToCsv(complaints: OwnerComplaint[], filename = '
     ].join(','))
   ].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  
-  if (navigator.msSaveBlob as any) {
-    // IE 10+
-    (navigator as any).msSaveBlob(blob, filename);
-  } else {
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+  downloadCsv(csvContent, filename);
 }
