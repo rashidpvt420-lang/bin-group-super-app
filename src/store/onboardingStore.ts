@@ -177,6 +177,8 @@ export interface OnboardingState {
         phone: string;
         password?: string;
     };
+    isContractSigned: boolean;
+    signatureName: string;
     kycUrls: {
         emiratesId?: string;
         passport?: string;
@@ -211,6 +213,7 @@ export interface OnboardingState {
     updateCompanyProfile: (data: Partial<OnboardingState['companyProfile']>) => void;
     updateSignupData: (data: Partial<OnboardingState['signupData']>) => void;
     updateKycUrls: (data: Partial<OnboardingState['kycUrls']>) => void;
+    setContractSignature: (isSigned: boolean, name: string) => void;
     setSelectedPlan: (plan: any) => void;
     toggleAddOn: (id: string) => void;
     setContractId: (id: string) => void;
@@ -410,6 +413,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             paymentMethod: null,
             companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
             signupData: { name: '', email: '', phone: '' },
+            isContractSigned: false,
+            signatureName: '',
             kycUrls: {},
             ownerAccount: null,
             proofDocuments: {
@@ -469,6 +474,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             updateKycUrls: (data) => set((state) => ({
                 kycUrls: { ...state.kycUrls, ...data }
             })),
+
+            setContractSignature: (isSigned, name) => set({ isContractSigned: isSigned, signatureName: name }),
 
             setSelectedPlan: (selectedPlan) => set({ selectedPlan }),
             toggleAddOn: (id) => {
@@ -533,6 +540,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                 intakeId: null, onboardingSessionId: createOnboardingSessionId(),
                 paymentVerified: false, paymentRequested: false, accountCreated: false,
                 valuationResult: null, paymentManifest: null, paymentMethod: null,
+                isContractSigned: false, signatureName: '',
                 companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
                 signupData: { name: '', email: '', phone: '' }, kycUrls: {},
                 ownerAccount: null,

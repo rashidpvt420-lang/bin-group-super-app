@@ -33,6 +33,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         selectedAddOns,
         properties,
         portfolioSummary,
+        isContractSigned,
+        signatureName,
         reset
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
@@ -58,7 +60,10 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         if (!paymentMethod) {
             setError('Payment method not selected. Please go back and select a payment option.');
         }
-    }, [ownerAccount, paymentMethod]);
+        if (!isContractSigned) {
+            setError('Contract not signed. Please go back and sign the service agreement.');
+        }
+    }, [ownerAccount, paymentMethod, isContractSigned]);
 
     // ─── CHECK STRIPE CALLBACK ─────────────────────────────────────
     useEffect(() => {
@@ -214,6 +219,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     selectedPlan: selectedPlan?.name || 'Standard',
                     selectedAddOns: selectedAddOns || []
                 },
+                signatureName,
                 documentUrls: urls
             });
 

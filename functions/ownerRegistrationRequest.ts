@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { generateContractPDF } from "./pdfEngine";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -269,9 +270,31 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const companyProfile = cleanPlainValue(data.companyProfile || {});
   const serviceDetails = cleanPlainValue(data.serviceDetails || {});
   const documentUrls = cleanPlainValue(data.documentUrls || {});
+  const signatureName = cleanText(data.signatureName, "signatureName", 120);
 
   if (!Number.isFinite(amount) || amount < 0) {
     throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  }
+
+  // Generate the locked Contract PDF
+  let contractUrl = "";
+  try {
+    contractUrl = await generateContractPDF({
+      contractId: intakeId,
+      ownerId: ownerUid,
+      ownerName: signatureName || companyProfile.contactPerson || ownerEmail,
+      companyName: companyProfile.name || "Private Owner",
+      ownerEmail,
+      propertyName: serviceDetails.properties > 1 ? "Portfolio" : "Property",
+      propertyType: serviceDetails.selectedPlan,
+      units: serviceDetails.totalUnits,
+      planName: serviceDetails.selectedPlan,
+      annualValue: amount,
+      mobilizationAmount: amount
+    });
+  } catch (pdfError) {
+    console.error("Failed to generate PDF contract:", pdfError);
+    // Don't completely fail the onboarding if PDF generation fails, just leave it blank for manual regeneration
   }
 
   const timestamp = serverTimestamp();
@@ -292,7 +315,22 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     companyProfile,
     serviceDetails,
     documentUrls,
+    contractUrl,
+    signatureName,
     submittedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }, { merge: true });
+
+  const contractRef = db.collection("contracts").doc(intakeId);
+  batch.set(contractRef, {
+    contractId: intakeId,
+    ownerUid,
+    ownerId: ownerUid,
+    ownerEmail,
+    signatureName,
+    contractUrl,
+    status: "PENDING_PAYMENT_ACTIVATION",
     createdAt: timestamp,
     updatedAt: timestamp
   }, { merge: true });
@@ -307,6 +345,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     ownerId: ownerUid,
     ownerEmail,
     proofDocuments: documentUrls,
+    contractUrl,
     updatedAt: timestamp
   }, { merge: true });
 
