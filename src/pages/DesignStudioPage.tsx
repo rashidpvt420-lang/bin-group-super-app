@@ -206,9 +206,11 @@ export default function DesignStudioPage() {
             
             const requestData = {
                 userId: user?.uid,
+                userName: user?.displayName || user?.email || 'Unknown User',
                 role: role,
                 propertyId: selectedPropertyId,
                 propertyName: property?.name || property?.propertyName || 'Selected Property',
+                propertyLocation: property?.location?.formattedAddress || property?.location?.emirate || property?.emirate || property?.address || 'Location Pending',
                 ownerId: property?.ownerId || 'SYSTEM',
                 scope: {
                     ...safeScope,
