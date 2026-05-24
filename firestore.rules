@@ -382,7 +382,6 @@ service cloud.firestore {
       allow read, create: if isAdmin();
       allow update, delete: if isAdmin();
     }
-
     match /{document=**} {
       allow read, write: if isAdmin();
     }
