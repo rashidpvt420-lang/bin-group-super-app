@@ -55,10 +55,12 @@ export default function DesignRequestDetailPage() {
     const { user, role } = useRole();
     const { t } = useLanguage();
     const navigate = useNavigate();
-    
     const [request, setRequest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    
+    const currentPath = window.location.pathname;
+    const basePrefix = currentPath.includes('/design-studio') ? currentPath.split('/design-studio')[0] : '';
 
     useEffect(() => {
         if (!id) return;
@@ -118,7 +120,7 @@ export default function DesignRequestDetailPage() {
             const payerRole = request.payerRole || (request.role === 'tenant' ? 'tenant' : 'owner');
             const payerId = request.payerId || user.uid;
             const executionScope = buildExecutionScope(request);
-            const amount = Number(request.quote?.finalTotal || 0);
+            const amount = Number(request.quote?.finalTotal || 0) * 0.15;
 
             const paymentRef = await addDoc(collection(db, 'payment_transactions'), {
                 type: 'DESIGN_STUDIO_EXECUTION',
@@ -220,7 +222,7 @@ export default function DesignRequestDetailPage() {
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
-            <Button startIcon={<ArrowLeft />} onClick={() => navigate('/design-studio')} sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, fontWeight: 900 }}>
+            <Button startIcon={<ArrowLeft />} onClick={() => navigate(`${basePrefix}/design-studio`)} sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, fontWeight: 900 }}>
                 BACK TO STUDIO
             </Button>
 
@@ -310,6 +312,9 @@ export default function DesignRequestDetailPage() {
                                 <Box>
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION QUOTE</Typography>
                                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal || 0)}</Typography>
+                                    <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900, display: 'block', mt: 0.5 }}>
+                                        * 15% Upfront Deposit Required: {formatAED(Number(quote.finalTotal || 0) * 0.15)}
+                                    </Typography>
                                 </Box>
                                 <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} />
                             </Box>
@@ -345,7 +350,7 @@ export default function DesignRequestDetailPage() {
 
                             {canCreatePayment && (
                                 <Button variant="contained" fullWidth size="large" onClick={handleCreatePaymentRequest} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                                    CREATE PAYMENT REQUEST
+                                    PAY 15% DEPOSIT ({formatAED(Number(quote.finalTotal || 0) * 0.15)})
                                 </Button>
                             )}
 

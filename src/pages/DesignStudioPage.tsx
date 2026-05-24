@@ -206,9 +206,11 @@ export default function DesignStudioPage() {
             
             const requestData = {
                 userId: user?.uid,
+                userName: user?.displayName || user?.email || 'Unknown User',
                 role: role,
                 propertyId: selectedPropertyId,
                 propertyName: property?.name || property?.propertyName || 'Selected Property',
+                propertyLocation: property?.location?.formattedAddress || property?.location?.emirate || property?.emirate || property?.address || 'Location Pending',
                 ownerId: property?.ownerId || 'SYSTEM',
                 scope: {
                     ...safeScope,
@@ -257,7 +259,9 @@ export default function DesignStudioPage() {
                 }
             });
 
-            navigate(`/design-studio/request/${docRef.id}`);
+            const currentPath = window.location.pathname;
+            const basePrefix = currentPath.includes('/design-studio') ? currentPath.split('/design-studio')[0] : '';
+            navigate(`${basePrefix}/design-studio/request/${docRef.id}`);
         } catch (err) {
             console.error("Design Studio Fault:", err);
             setSnackbar({ open: true, message: "Sovereign AI Engine timeout. Please check your data connectivity or retry.", severity: 'error' });

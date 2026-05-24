@@ -16,12 +16,18 @@ import AdminPageFrame from '../../components/AdminPageFrame';
 
 interface DesignRequest {
     id: string;
+    userName?: string;
     ownerName?: string;
+    role?: string;
     propertyName?: string;
-    roomType: string;
-    theme: string;
+    propertyLocation?: string;
+    roomType?: string;
+    theme?: string;
     budget?: number;
-    status: 'draft' | 'submitted' | 'quoted' | 'approved' | 'rejected';
+    scope?: any;
+    designStyle?: string;
+    quote?: any;
+    status: 'draft' | 'submitted' | 'quoted' | 'approved' | 'rejected' | string;
     createdAt: any;
     originalImage?: string;
 }
@@ -84,15 +90,21 @@ export default function DesignStudioAdminPage() {
                         {requests.map((req) => (
                             <TableRow key={req.id} hover>
                                 <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{req.ownerName || 'UNSPECIFIED OWNER'}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>{req.id.slice(0, 8).toUpperCase()}</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{req.userName || req.ownerName || 'UNSPECIFIED USER'}</Typography>
+                                    <Stack direction="row" spacing={1} sx={{ mt: 0.5, alignItems: 'center' }}>
+                                        <Chip label={String(req.role || 'UNKNOWN').toUpperCase()} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }} />
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>{req.id.slice(0, 8).toUpperCase()}</Typography>
+                                    </Stack>
                                 </TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{req.propertyName || 'GENERAL ASSET'}</TableCell>
                                 <TableCell>
-                                    <Chip label={String(req.roomType || 'UNKNOWN').toUpperCase()} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.6rem' }} />
+                                    <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.85rem' }}>{req.propertyName || 'GENERAL ASSET'}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{req.propertyLocation || 'Location Pending'}</Typography>
+                                </TableCell>
+                                <TableCell>
+                                    <Chip label={String(req.scope?.zoneType || req.roomType || 'UNKNOWN').toUpperCase()} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.6rem' }} />
                                 </TableCell>
                                 <TableCell sx={{ fontWeight: 950, color: '#FFF' }}>
-                                    {req.budget ? `AED ${req.budget.toLocaleString()}` : 'FLEXIBLE'}
+                                    {req.quote?.finalTotal ? `AED ${req.quote.finalTotal.toLocaleString()}` : req.budget ? `AED ${req.budget.toLocaleString()}` : 'FLEXIBLE'}
                                 </TableCell>
                                 <TableCell>
                                     <Chip 
@@ -137,8 +149,8 @@ export default function DesignStudioAdminPage() {
                             <Grid item xs={12} md={6}>
                                 <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>REFERENCE CAPTURE</Typography>
                                 <Box sx={{ width: '100%', height: 300, borderRadius: 3, overflow: 'hidden', bgcolor: '#000', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    {selectedRequest.originalImage ? (
-                                        <img src={selectedRequest.originalImage} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    {selectedRequest.scope?.referenceImages?.[0] || selectedRequest.originalImage ? (
+                                        <img src={selectedRequest.scope?.referenceImages?.[0] || selectedRequest.originalImage} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     ) : (
                                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                                             <Typography variant="caption" color="rgba(255,255,255,0.2)">NO VISUAL EVIDENCE PROVIDED</Typography>
@@ -150,23 +162,25 @@ export default function DesignStudioAdminPage() {
                                 <Stack spacing={3}>
                                     <Box>
                                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block' }}>CLIENT IDENTITY</Typography>
-                                        <Typography variant="h5" fontWeight="950" color="#FFF">{selectedRequest.ownerName}</Typography>
+                                        <Typography variant="h5" fontWeight="950" color="#FFF">{selectedRequest.userName || selectedRequest.ownerName || 'Unspecified'}</Typography>
+                                        <Typography variant="caption" color="rgba(255,255,255,0.4)">ROLE: {String(selectedRequest.role || 'UNKNOWN').toUpperCase()}</Typography>
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>ASSET TARGET</Typography>
                                         <Typography variant="body1" fontWeight="800" color="#FFF">{selectedRequest.propertyName}</Typography>
+                                        <Typography variant="caption" color="rgba(255,255,255,0.5)">{selectedRequest.propertyLocation || 'Location Pending'}</Typography>
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>SPECIFICATIONS</Typography>
                                         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                                            <Chip label={selectedRequest.roomType} size="small" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 800 }} />
-                                            <Chip label={selectedRequest.theme} size="small" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.2), fontWeight: 800 }} />
+                                            <Chip label={selectedRequest.scope?.zoneType || selectedRequest.roomType || 'UNKNOWN'} size="small" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 800 }} />
+                                            <Chip label={selectedRequest.designStyle || selectedRequest.theme || 'UNKNOWN'} size="small" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.2), fontWeight: 800 }} />
                                         </Stack>
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>FINANCIAL PARAMETERS</Typography>
                                         <Typography variant="h6" fontWeight="950" color="#10b981">
-                                            {selectedRequest.budget ? `AED ${selectedRequest.budget.toLocaleString()}` : 'FLEXIBLE BUDGET'}
+                                            {selectedRequest.quote?.finalTotal ? `AED ${selectedRequest.quote.finalTotal.toLocaleString()}` : selectedRequest.budget ? `AED ${selectedRequest.budget.toLocaleString()}` : 'FLEXIBLE BUDGET'}
                                         </Typography>
                                     </Box>
                                 </Stack>

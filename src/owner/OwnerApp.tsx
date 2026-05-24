@@ -23,6 +23,8 @@ import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage
 import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
+import DesignStudioPage from '../pages/DesignStudioPage';
+import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -57,7 +59,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
                             Property Passport
                         </Button>
-                        <Button onClick={() => navigate('/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
+                        <Button onClick={() => navigate('/owner/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
                             AI Studio
                         </Button>
                         <IconButton onClick={toggleLanguage} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3, px: 2 }}>
@@ -122,6 +124,8 @@ export default function OwnerApp() {
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
+                <Route path="/design-studio" element={<DesignStudioPage />} />
+                <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
             </Routes>
         </OwnerLayout>
     );
