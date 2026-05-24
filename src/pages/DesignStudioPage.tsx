@@ -53,6 +53,13 @@ import { DESIGN_ZONES, calculateDesignStudioQuote } from '../utils/DesignStudioP
 import type { DesignScope } from '../utils/DesignStudioPricingEngine';
 import { NotificationEvents } from '../lib/notificationService';
 import { logAuditAction } from '../utils/auditLogger';
+import {
+  DESIGN_SPACE_TYPES,
+  DESIGN_OBJECTIVES,
+  DESIGN_STYLES,
+  buildDesignConcepts,
+  getDepositAmount
+} from '../utils/aiDesignStudioWorkflow';
 
 const OWNER_SIDE_ROLES = ['owner', 'admin', 'ceo', 'super_admin', 'manager'];
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
@@ -115,6 +122,7 @@ export default function DesignStudioPage() {
 
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
   const [designStyle, setDesignStyle] = useState('Modern');
+  const [designObjective, setDesignObjective] = useState('refresh');
   const [unitNumber, setUnitNumber] = useState('');
   const [floorLevel, setFloorLevel] = useState('');
   const [existingCondition, setExistingCondition] = useState('');
@@ -123,6 +131,13 @@ export default function DesignStudioPage() {
   const [staffInstructions, setStaffInstructions] = useState('');
 
   const selectedProperty = useMemo(() => properties.find((p) => p.id === selectedPropertyId), [properties, selectedPropertyId]);
+
+  const liveQuote = useMemo(() => {
+    const safeScope = { ...scope, addons: [], hasMEP: tenantMode ? false : scope.hasMEP, hasStructural: tenantMode ? false : scope.hasStructural, isNightWork: tenantMode ? false : scope.isNightWork };
+    return calculateDesignStudioQuote(safeScope);
+  }, [scope, tenantMode]);
+
+  const liveMobilization = getDepositAmount(liveQuote.finalTotal, 15);
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -287,21 +302,52 @@ export default function DesignStudioPage() {
       setSnackbar({ open: true, message: 'Select a property before initializing the studio.', severity: 'error' });
       return;
     }
+    if (referenceImages.length === 0) {
+      setSnackbar({ open: true, message: 'Upload at least one room, hall, garden, majlis, or area photo first.', severity: 'error' });
+      return;
+    }
 
     setSubmitting(true);
     try {
       const safeScope = { ...scope, addons: [], hasMEP: tenantMode ? false : scope.hasMEP, hasStructural: tenantMode ? false : scope.hasStructural, isNightWork: tenantMode ? false : scope.isNightWork };
       const quote = calculateDesignStudioQuote(safeScope);
+      const mobilizationAmount = getDepositAmount(quote.finalTotal, 15);
+
+      const isTenant = tenantMode;
+      const status = isTenant ? "AWAITING_OWNER_APPROVAL" : "DEPOSIT_PENDING";
+      const approvalRequired = isTenant;
+      const approvalStatus = isTenant ? "PENDING_OWNER_APPROVAL" : "NOT_REQUIRED";
+      const quoteStatus = isTenant ? "AWAITING_OWNER_APPROVAL" : "DEPOSIT_PENDING";
+      const paymentStatus = "NOT_STARTED";
+      const adminHandoffStatus = isTenant ? "WAITING_OWNER_APPROVAL" : "PAYMENT_QUEUE";
+      const engineerHandoffStatus = "WAITING_PAYMENT";
+      
+      const ownerIdStr = selectedProperty?.ownerId || selectedProperty?.ownerUid || (isTenant ? selectedProperty?.ownerId : user?.uid) || 'SYSTEM';
+
+      const concepts = buildDesignConcepts({
+        zoneType: scope.zoneType,
+        designStyle,
+        designObjective,
+        uploadedImageUrl: referenceImages[0],
+        notes: scopeDescription
+      });
 
       const requestData = {
         userId: user?.uid,
+        createdByUid: user?.uid,
+        createdByRole: role || 'user',
         userName: user?.displayName || user?.email || 'Unknown User',
         role,
         propertyId: selectedPropertyId,
         propertyName: selectedProperty?.name || selectedProperty?.propertyName || 'Selected Property',
         propertyLocation: selectedProperty?.location?.formattedAddress || selectedProperty?.location?.emirate || selectedProperty?.emirate || selectedProperty?.address || 'Location Pending',
-        ownerId: selectedProperty?.ownerId || selectedProperty?.ownerUid || (tenantMode ? selectedProperty?.ownerId : user?.uid) || 'SYSTEM',
-        ownerEmail: selectedProperty?.ownerEmail || (!tenantMode ? user?.email : selectedProperty?.ownerEmail) || null,
+        ownerId: ownerIdStr,
+        ownerUid: ownerIdStr,
+        ownerEmail: selectedProperty?.ownerEmail || (!isTenant ? user?.email : selectedProperty?.ownerEmail) || null,
+        tenantUid: isTenant ? user?.uid : null,
+        tenantEmail: isTenant ? user?.email : null,
+        tenantName: isTenant ? user?.displayName : null,
+        unitId: unitNumber || null,
         scope: {
           ...safeScope,
           scopeDescription,
@@ -312,6 +358,10 @@ export default function DesignStudioPage() {
           existingCondition,
           requiredWork,
         },
+        concepts,
+        selectedConceptId: null,
+        selectedConcept: null,
+        conceptPrompt: concepts[0].prompt,
         metadata: {
           adminNotes: ownerSide ? adminNotes : '',
           staffInstructions: ownerSide ? staffInstructions : '',
@@ -320,17 +370,71 @@ export default function DesignStudioPage() {
           addonsRemovedFromOwnerFlow: true,
         },
         designStyle,
+        designObjective,
         quote,
-        status: tenantMode ? 'PENDING_OWNER_NOC' : 'AI_CONCEPT_READY',
+        quoteStatus,
+        approvalRequired,
+        approvalStatus,
+        paymentStatus,
+        mobilizationPercent: 15,
+        mobilizationAmount,
+        status,
+        workflowStage: status,
+        executionStatus: "PENDING",
+        adminHandoffStatus,
+        engineerHandoffStatus,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        source: 'AI_DESIGN_STUDIO_V2_PHOTO',
+        source: 'AI_DESIGN_STUDIO_END_TO_END_V1',
       };
 
       const docRef = await addDoc(collection(db, 'design_requests'), requestData);
 
-      if (tenantMode && selectedProperty?.ownerId) {
-        await NotificationEvents.OWNER.DESIGN_STUDIO_NOC(selectedProperty.ownerId, user?.displayName || 'Your Tenant', scope.zoneType);
+      await addDoc(collection(db, 'design_quotes'), {
+        requestId: docRef.id,
+        propertyId: selectedPropertyId,
+        ownerId: ownerIdStr,
+        ownerUid: ownerIdStr,
+        tenantUid: isTenant ? user?.uid : null,
+        tenantEmail: isTenant ? user?.email : null,
+        totalAmount: quote.finalTotal,
+        mobilizationPercent: 15,
+        mobilizationAmount,
+        quoteStatus,
+        paymentStatus,
+        scopeSummary: scopeDescription,
+        selectedConceptId: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'design_concepts'), {
+        requestId: docRef.id,
+        propertyId: selectedPropertyId,
+        ownerId: ownerIdStr,
+        tenantUid: isTenant ? user?.uid : null,
+        concepts,
+        selectedConceptId: null,
+        prompt: concepts[0].prompt,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      if (isTenant) {
+        await addDoc(collection(db, 'design_approvals'), {
+          requestId: docRef.id,
+          ownerId: ownerIdStr,
+          ownerUid: ownerIdStr,
+          tenantUid: user?.uid,
+          tenantEmail: user?.email,
+          decision: "pending",
+          status: "PENDING_OWNER_APPROVAL",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        if (selectedProperty?.ownerId) {
+          await NotificationEvents.OWNER.DESIGN_STUDIO_NOC(selectedProperty.ownerId, user?.displayName || 'Your Tenant', scope.zoneType);
+        }
       }
 
       await logAuditAction({
@@ -462,15 +566,15 @@ export default function DesignStudioPage() {
               )}
 
               <TextField select fullWidth label="Redesign Zone" value={scope.zoneType} onChange={(e) => setScope({ ...scope, zoneType: e.target.value })} sx={{ mb: 3 }}>
-                {DESIGN_ZONES.map((zone) => <MenuItem key={zone} value={zone}>{zone.toUpperCase()}</MenuItem>)}
+                {DESIGN_SPACE_TYPES.map((zone) => <MenuItem key={zone} value={zone}>{zone.toUpperCase()}</MenuItem>)}
+              </TextField>
+
+              <TextField select fullWidth label="Redesign Objective" value={designObjective} onChange={(e) => setDesignObjective(e.target.value)} sx={{ mb: 3 }}>
+                {DESIGN_OBJECTIVES.map((obj) => <MenuItem key={obj} value={obj}>{obj.toUpperCase()}</MenuItem>)}
               </TextField>
 
               <TextField select fullWidth label="Design Style" value={designStyle} onChange={(e) => setDesignStyle(e.target.value)} sx={{ mb: 3 }}>
-                <MenuItem value="Modern">MODERN</MenuItem>
-                <MenuItem value="Luxury">LUXURY</MenuItem>
-                <MenuItem value="Minimalist">MINIMALIST</MenuItem>
-                <MenuItem value="Traditional Majlis">TRADITIONAL MAJLIS</MenuItem>
-                <MenuItem value="Industrial">INDUSTRIAL</MenuItem>
+                {DESIGN_STYLES.map((style) => <MenuItem key={style} value={style}>{style.toUpperCase()}</MenuItem>)}
               </TextField>
 
               <Grid container spacing={2}>
@@ -526,11 +630,20 @@ export default function DesignStudioPage() {
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, textAlign: 'center' }}>
               <Sparkles size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 24px' }} />
               <Typography variant="h5" fontWeight="950" sx={{ mb: 2 }}>GENERATE CONCEPT</Typography>
+              
+              <Box sx={{ my: 3, p: 2, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900 }}>ESTIMATED QUOTE</Typography>
+                <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, my: 1 }}>AED {liveQuote.finalTotal.toLocaleString()}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>15% Mobilization: AED {liveMobilization.toLocaleString()}</Typography>
+              </Box>
+
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
-                Our Sovereign AI will synthesize your requirements and generate a free conceptual layout and scope-locked execution quote.
+                {tenantMode 
+                  ? "Tenant submission goes to owner approval first. Payment opens only after owner approval." 
+                  : "Owner submission goes directly to 15% mobilization payment request."}
               </Typography>
               <Button variant="contained" fullWidth size="large" onClick={handleInitializeStudio} disabled={submitting || !selectedPropertyId} endIcon={submitting ? <CircularProgress size={20} /> : <ArrowRight />} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                INITIALIZE STUDIO
+                {tenantMode ? "SUBMIT FOR OWNER APPROVAL" : "CREATE QUOTE + PAYMENT STEP"}
               </Button>
             </Paper>
 
