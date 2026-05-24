@@ -385,6 +385,13 @@ const translations: Record<Language, Record<string, string>> = {
     "onboarding.error.session_mismatch": "The active login does not match this owner onboarding session.",
     "onboarding.error.acc_required": "Account creation is required before payment submission.",
     "onboarding.payment_method_required": "Select a payment method before submission.",
+    "owner.roiFinancialControl": "Financial Control & ROI",
+    "owner.addRentIncome": "Add Rent Income",
+    "owner.authorizedReporters": "Authorized Property Reporters",
+    "owner.addReporter": "Add Reporter",
+    "owner.tenantReporterUidNote": "Each tenant or authorized reporter uses a separate Firebase Auth UID. They are linked to this owner through ownerId + propertyId + unitId/reporterId + userUid + email.",
+    "owner.noReportersYet": "No authorized reporters have been added yet.",
+    "owner.complaintCommandCenter": "Operations Command Center",
   },
 
   ar: {
@@ -747,9 +754,16 @@ const translations: Record<Language, Record<string, string>> = {
     "onboarding.admin_lock_desc": "سيبقى عقدك ولوحة تحكمك مقفلين حتى يتحقق مسؤول BIN GROUP من الدفع والمستندات.",
     "onboarding.submit_btn": "إرسال للتحقق الإداري",
     "onboarding.error.session_expired": "جلسة تسجيل الدخول الآمنة غير نشطة. يرجى تسجيل الدخول من البوابة، ثم العودة لإكمال تقديم الدفع.",
-    "onboarding.error.session_mismatch": "تسجيل الدخول النشط لا يطابق جلسة تسجيل المالك هذه.",
-    "onboarding.error.acc_required": "إنشاء الحساب مطلوب قبل تقديم الدفع.",
-    "onboarding.payment_method_required": "حدد طريقة الدفع قبل التقديم.",
+    "onboarding.error.session_mismatch": "تسجيل الدخول النشط لا يتطابق مع جلسة تسجيل المالك هذه.",
+    "onboarding.error.acc_required": "إنشاء الحساب مطلوب قبل إرسال الدفع.",
+    "onboarding.payment_method_required": "حدد طريقة الدفع قبل الإرسال.",
+    "owner.roiFinancialControl": "التحكم المالي وعائد الاستثمار",
+    "owner.addRentIncome": "إضافة دخل الإيجار",
+    "owner.authorizedReporters": "المبلغون المعتمدون للعقار",
+    "owner.addReporter": "إضافة مبلغ",
+    "owner.tenantReporterUidNote": "يستخدم كل مستأجر أو مبلغ معتمد معرف Firebase Auth منفصل. يتم ربطهم بهذا المالك من خلال ownerId + propertyId + unitId/reporterId + userUid + email.",
+    "owner.noReportersYet": "لم تتم إضافة مبلغين معتمدين بعد.",
+    "owner.complaintCommandCenter": "مركز قيادة العمليات",
   },
 };
 

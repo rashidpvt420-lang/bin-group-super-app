@@ -360,7 +360,11 @@ export default function OwnerExecutiveDashboardSection({
   const tenantRegistryReadiness = totalUnits > 0 ? Math.min(100, Math.round((linkedTenantsCount / totalUnits) * 100)) : 0;
   const openTicketsCount = tickets.filter((ticket) => ['OPEN', 'PENDING', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS', 'ESCALATED'].includes(normalizeStatus(ticket.status))).length || stats.tickets;
   const criticalTickets = tickets.filter((ticket) => normalizeStatus(ticket.priority || ticket.severity) === 'CRITICAL' && normalizeStatus(ticket.status) !== 'COMPLETED').length;
-  const passportReady = visibleProperties.filter((property) => ['ACTIVE', 'READY', 'ISSUED'].includes(normalizeStatus(property.passportStatus || property.governanceStatus))).length;
+  const passportReady = visibleProperties.filter((property) => ['ACTIVE', 'READY', 'ISSUED'].includes(normalizeStatus(property.passportStatus || property.governanceStatus || property.status))).length;
+
+  // Detect non-tenant properties (Majlis, Hospital, etc.)
+  const NON_TENANT_TYPES = ['Government Majlis', 'Private Majlis', 'Hospital', 'Clinic', 'School', 'Stadium', 'Sports Complex', 'Event Venue'];
+  const nonTenantPropertiesCount = visibleProperties.filter(p => NON_TENANT_TYPES.includes(p.propertyType || p.type || p.assetGrade || '')).length;
   const missingDataWarnings = visibleProperties.filter((property) => {
     const template = getOwnerAssetTemplate(property);
     return template.fields.some((field) => getFirstAssetValue(property, field.keys) === 'Not provided');
@@ -426,9 +430,18 @@ export default function OwnerExecutiveDashboardSection({
           <Grid container spacing={3} sx={{ mb: 3 }}>
             {renderMetric('Accepted Tenants', acceptedTenants)}
             {renderMetric('Pending Invitations', pendingInvitations, undefined, binThemeTokens.gold)}
-            {renderMetric('Vacant Units', vacantUnitsCount, undefined, vacantUnitsCount ? '#ef4444' : '#10b981')}
+            {renderMetric('Vacant Units', vacantUnitsCount, undefined, vacantUnitsCount ? (nonTenantPropertiesCount > 0 ? '#3b82f6' : '#ef4444') : '#10b981')}
             {renderMetric('Linked / Total', `${linkedTenantsCount} / ${totalUnits}`)}
           </Grid>
+          
+          {nonTenantPropertiesCount > 0 && (
+            <Alert severity="info" sx={{ mb: 3, bgcolor: alpha('#3b82f6', 0.05), border: `1px solid ${alpha('#3b82f6', 0.2)}`, borderRadius: 3 }}>
+              <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx, color: '#93c5fd' }}>
+                Your portfolio contains {nonTenantPropertiesCount} non-tenant asset(s) (e.g. Majlis, Hospital). Vacancy is normal. Please configure their access via the Authorized Reporters section.
+              </Typography>
+            </Alert>
+          )}
+
           <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
             <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
               Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
