@@ -3,7 +3,7 @@ import { Box, Card, CardContent, Typography, alpha, Stack, Button, Chip, TextFie
 import { Users, Shield, UserPlus, X, AlertCircle } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
-import { PropertyReporter } from '../utils/ownerReporterResolver';
+import type { PropertyReporter } from '../utils/ownerReporterResolver';
 
 interface OwnerAuthorizedReportersSectionProps {
   properties: any[];

@@ -1,4 +1,4 @@
-import { OwnerComplaint } from '../utils/ownerComplaintResolver';
+import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
 
 function formatCsvCell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '""';

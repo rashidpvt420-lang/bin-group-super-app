@@ -3,7 +3,7 @@ import { Box, Card, CardContent, Grid, Stack, Typography, alpha, Chip, Button } 
 import { TrendingUp, Landmark, FileText, AlertCircle, Wrench, Shield, CheckCircle2 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
-import { OwnerFinancialState } from '../utils/ownerFinancialResolver';
+import type { OwnerFinancialState } from '../utils/ownerFinancialResolver';
 
 interface OwnerRoiFinancialSectionProps {
   financials: OwnerFinancialState;

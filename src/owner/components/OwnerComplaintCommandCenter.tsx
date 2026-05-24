@@ -3,7 +3,7 @@ import { Box, Card, CardContent, Typography, alpha, Stack, Button, Chip, Select,
 import { Wrench, Download, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
-import { OwnerComplaint } from '../utils/ownerComplaintResolver';
+import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
 import { exportComplaintsToCsv } from './OwnerComplaintReportExport';
 
 interface OwnerComplaintCommandCenterProps {
