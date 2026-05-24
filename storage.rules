@@ -72,7 +72,7 @@ service firebase.storage {
     // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
     // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
       allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(10);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
