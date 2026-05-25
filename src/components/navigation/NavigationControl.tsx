@@ -62,6 +62,8 @@ export const NavigationControl: React.FC = () => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 
+  // Never render on admin routes — admin shell has its own sidebar navigation
+  if (location.pathname.startsWith('/admin')) return null;
   if (['/', '/login', '/gateway'].includes(location.pathname) || location.pathname.startsWith('/onboarding')) return null;
 
   const buttonSx = {
