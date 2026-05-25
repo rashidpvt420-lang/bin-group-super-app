@@ -2628,3 +2628,34 @@ export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId
         url: `/ticket/${ticketId}`
     });
 });
+
+export const onBinGptEngineerCommandCreated = onDocumentCreated(
+    "binGptEngineerCommands/{commandId}",
+    async (event) => {
+        const snap = event.data;
+        if (!snap) return;
+
+        const data = snap.data() || {};
+        const ref = snap.ref;
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        await ref.update({
+            status: "PLAN_CREATED",
+            runnerStatus: "WAITING_FOR_SECURE_BACKEND_RUNNER",
+            buildStatus: data.buildStatus || "NOT_STARTED",
+            deploymentStatus: data.deploymentStatus || "NOT_STARTED",
+            updatedAt: now,
+            commandHistory: admin.firestore.FieldValue.arrayUnion({
+                status: "PLAN_CREATED",
+                at: new Date().toISOString(),
+                note: "Command received by backend trigger. Secure GitHub runner integration required."
+            }),
+            auditTrail: admin.firestore.FieldValue.arrayUnion({
+                action: "BACKEND_COMMAND_RECEIVED",
+                at: new Date().toISOString(),
+                commandId: event.params.commandId,
+                executionMode: data.executionMode || "GITHUB_BRANCH_PR_ONLY"
+            })
+        });
+    }
+);

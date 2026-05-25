@@ -1,6 +1,6 @@
 import { alpha } from '@mui/material/styles';
 import { NavLink } from 'react-router-dom';
-import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
+import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography, useMediaQuery } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -17,6 +17,9 @@ import { useAuth } from '../context/AuthContext';
 const Navigation = () => {
     const { tx, isRTL } = useLanguage();
     const { user } = useAuth();
+    
+    const compact = useMediaQuery('(max-width:1100px)');
+    const drawerWidth = compact ? 88 : 280;
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
 
@@ -49,32 +52,37 @@ const Navigation = () => {
             variant="permanent"
             anchor={isRTL ? 'right' : 'left'}
             sx={{
-                width: 280,
+                width: drawerWidth,
                 flexShrink: 0,
                 '& .MuiDrawer-paper': { 
-                    width: 280, 
+                    width: drawerWidth, 
                     boxSizing: 'border-box',
                     bgcolor: '#020617',
                     borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
                     borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
+                    overflowX: 'hidden',
                 },
             }}
         >
-            <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.gold, letterSpacing: 2 }}>
-                    BIN GROUP
+            <Box sx={{ p: compact ? 2 : 4, textAlign: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.gold, letterSpacing: compact ? 0 : 2 }}>
+                    {compact ? 'BG' : 'BIN GROUP'}
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', letterSpacing: 4, fontWeight: 900 }}>
-                    SOVEREIGN ADMIN
-                </Typography>
+                {!compact && (
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', letterSpacing: 4, fontWeight: 900 }}>
+                        SOVEREIGN ADMIN
+                    </Typography>
+                )}
             </Box>
             
             <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
             
-            <List sx={{ px: 2, pt: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
-                    COMMAND CORE
-                </Typography>
+            <List sx={{ px: compact ? 1 : 2, pt: 2 }}>
+                {!compact && (
+                    <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                        COMMAND CORE
+                    </Typography>
+                )}
                 {primaryMenu.map((item) => (
                     <ListItem 
                         key={item.text} 
@@ -82,19 +90,23 @@ const Navigation = () => {
                         to={item.path} 
                         sx={{ 
                             borderRadius: 2, mb: 0.5,
+                            justifyContent: compact ? 'center' : 'flex-start',
+                            px: compact ? 1.5 : 2,
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: 40 }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />
+                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
+                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />}
                     </ListItem>
                 ))}
             </List>
 
-            <List sx={{ px: 2, mt: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
-                    OPERATIONS
-                </Typography>
+            <List sx={{ px: compact ? 1 : 2, mt: 2 }}>
+                {!compact && (
+                    <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                        OPERATIONS
+                    </Typography>
+                )}
                 {managementMenu.filter(i => !i.hidden).map((item) => (
                     <ListItem 
                         key={item.text} 
@@ -102,17 +114,19 @@ const Navigation = () => {
                         to={item.path}
                         sx={{ 
                             borderRadius: 2, mb: 0.5,
+                            justifyContent: compact ? 'center' : 'flex-start',
+                            px: compact ? 1.5 : 2,
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: 40 }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />
+                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
+                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />}
                     </ListItem>
                 ))}
             </List>
 
-            <Box sx={{ mt: 'auto', p: 2 }}>
-                <CeoContactButtons compact />
+            <Box sx={{ mt: 'auto', p: compact ? 1 : 2 }}>
+                {!compact && <CeoContactButtons compact />}
                 <ListItem
                     button
                     onClick={() => { 
@@ -123,10 +137,10 @@ const Navigation = () => {
                         if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
                         signOut(auth).then(() => window.location.href = '/'); 
                     }}
-                    sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#ef4444', 0.1), '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
+                    sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#ef4444', 0.1), '&:hover': { bgcolor: alpha('#ef4444', 0.2) }, justifyContent: compact ? 'center' : 'flex-start', px: compact ? 1.5 : 2 }}
                 >
-                    <ListItemIcon sx={{ color: '#ef4444', minWidth: 40 }}><LogoutIcon /></ListItemIcon>
-                    <ListItemText primary="SECURE LOGOUT" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.75rem', color: '#ef4444' }} />
+                    <ListItemIcon sx={{ color: '#ef4444', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}><LogoutIcon /></ListItemIcon>
+                    {!compact && <ListItemText primary="SECURE LOGOUT" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.75rem', color: '#ef4444' }} />}
                 </ListItem>
             </Box>
         </Drawer>
