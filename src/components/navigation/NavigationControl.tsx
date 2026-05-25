@@ -62,7 +62,11 @@ export const NavigationControl: React.FC = () => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 
-  if (['/', '/login', '/gateway'].includes(location.pathname) || location.pathname.startsWith('/onboarding')) return null;
+  if (
+    ['/', '/login', '/gateway'].includes(location.pathname) ||
+    location.pathname.startsWith('/onboarding') ||
+    location.pathname.startsWith('/admin')
+  ) return null;
 
   const buttonSx = {
     bgcolor: alpha('#020617', 0.92),
