@@ -517,6 +517,12 @@ export const useOnboardingStore = create<OnboardingState>()(
                     quoteResults[p.id] = calculatePropertyAnnualValue(p, selectedAddOns);
                 });
 
+                let estimatedACV = Object.values(quoteResults).reduce((acc, q) => acc + q.annualTotal, 0);
+                if (estimatedACV === 0) {
+                    const totalRent = props.reduce((acc, p) => acc + (p.annualRent || 0), 0);
+                    estimatedACV = Math.round(totalRent * 0.95);
+                }
+
                 const summary: PortfolioSummary = {
                     totalProperties: props.length,
                     totalUnits: props.reduce((acc, p) => acc + (p.units || 0), 0),
@@ -524,7 +530,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                     totalPersonal: props.filter(p => p.useType === 'Personal').length,
                     totalMajlis: props.filter(p => p.majlis).length,
                     totalSqFt: props.reduce((acc, p) => acc + (p.sqft || 0), 0),
-                    estimatedACV: Object.values(quoteResults).reduce((acc, q) => acc + q.annualTotal, 0),
+                    estimatedACV,
                     recommendedTier: 'Premium',
                     isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
                     isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign'),
