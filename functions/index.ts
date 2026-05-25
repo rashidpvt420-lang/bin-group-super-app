@@ -2781,3 +2781,58 @@ export const onTicketTechnicianAssignmentChanged = onDocumentUpdated("maintenanc
         });
     }
 });
+
+// ─── BIN-GPT ENGINEER COMMAND TRIGGER ────────────────────────────────────────
+// Restores the function Firebase expects in europe-west3.
+// This trigger ONLY records the command and prepares it for a secure
+// backend/GitHub Actions runner. It does NOT execute any GitHub code directly.
+
+export const onBinGptEngineerCommandCreated = onDocumentCreated(
+    "binGptEngineerCommands/{commandId}",
+    async (event) => {
+        const commandId = event.params.commandId;
+        const data = event.data?.data();
+        if (!data) return;
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const isoNow = new Date().toISOString();
+
+        const historyEntry = {
+            status: "PLAN_CREATED",
+            at: isoNow,
+            note: "Command received by backend trigger. Queued for secure runner."
+        };
+
+        const auditEntry = {
+            action: "BACKEND_TRIGGER_ACCEPTED",
+            actorUid: "SYSTEM",
+            actorEmail: "system@bin-groups.com",
+            actorRole: "system",
+            at: isoNow,
+            note: "onBinGptEngineerCommandCreated fired. Command queued for GitHub Actions runner."
+        };
+
+        try {
+            await db.collection("binGptEngineerCommands").doc(commandId).update({
+                status: "PLAN_CREATED",
+                runnerState: "WAITING_FOR_SECURE_BACKEND_RUNNER",
+                buildStatus: data.buildStatus || "NOT_STARTED",
+                deploymentStatus: data.deploymentStatus || "NOT_STARTED",
+                commandHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+                auditTrail: admin.firestore.FieldValue.arrayUnion(auditEntry),
+                updatedAt: now
+            });
+
+            console.info("onBinGptEngineerCommandCreated: command accepted", {
+                commandId,
+                createdBy: data.createdBy || "unknown",
+                status: "PLAN_CREATED"
+            });
+        } catch (err) {
+            console.error("onBinGptEngineerCommandCreated: failed to update command document", {
+                commandId,
+                err
+            });
+        }
+    }
+);
