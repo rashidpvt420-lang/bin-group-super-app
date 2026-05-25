@@ -353,6 +353,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /leases/{leaseId} {
+      allow read: if isAdmin() || hasPermission('canManageTenants') || ownerCanRead(resource.data) || (signedIn() && (resource.data.tenantId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
+      allow write: if isAdmin() || hasPermission('canManageTenants');
+    }
+
+    match /tenant_ledger/{ledgerId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && (resource.data.tenantId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
     match /occupancies/{occupancyId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.tenantUid == request.auth.uid || resource.data.tenantId == request.auth.uid));
       allow write: if isAdmin() || (signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid));
