@@ -102,25 +102,48 @@ export default function TenantRequestPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !unitData) {
-            alert("No property assigned. Cannot create request.");
+            alert('No property assigned. Cannot create request.');
+            return;
+        }
+
+        // Derive jobLocation from property data
+        const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
+        const jobLocation = locationSource ? {
+            lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
+            lng: Number(locationSource.lng ?? locationSource.longitude ?? 0),
+            latitude: Number(locationSource.lat ?? locationSource.latitude ?? 0),
+            longitude: Number(locationSource.lng ?? locationSource.longitude ?? 0),
+            address: propertyData?.address || propertyData?.locationAddress || '',
+            source: 'property',
+        } : null;
+
+        // Block submission if no location — technician cannot navigate
+        if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
+            alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
+            return;
+        }
+
+        if (!unitData.propertyId) {
+            alert('Property ID is missing. Cannot create request.');
             return;
         }
 
         setSubmitting(true);
         try {
             setUploadingPhotos(true);
-            // Upload photos to Firebase Storage and get URLs
             const photoUrls = await uploadPhotosToStorage();
             setUploadingPhotos(false);
 
             const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
+                requesterRole: 'tenant',
                 tenantId: user.uid,
                 tenantUid: user.uid,
                 tenantName: user.displayName || 'Resident',
                 tenantPhone: user.phoneNumber || '',
                 propertyId: unitData.propertyId || '',
-                propertyName: propertyData?.name || propertyData?.propertyName || 'BIN TEST TOWER',
+                propertyName: propertyData?.name || propertyData?.propertyName || '',
                 ownerId: propertyData?.ownerId || '',
+                ownerUid: propertyData?.ownerUid || propertyData?.ownerId || '',
                 ownerEmail: propertyData?.ownerEmail || '',
                 unitId: unitData.id,
                 unitNumber: unitData.unitNumber || '',
@@ -130,14 +153,17 @@ export default function TenantRequestPage() {
                 description,
                 specificLocation,
                 photos: photoUrls,
+                jobLocation,
                 photoEvidenceRequired: true,
                 source: 'TENANT_PORTAL',
                 status: 'OPEN',
+                dispatchStatus: 'PENDING_ASSIGNMENT',
+                trackingStatus: 'WAITING_FOR_TECHNICIAN',
                 technicianId: null,
                 assignedTechnicianId: null,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                slaMinutes: priority === 'emergency' ? 60 : priority === 'urgent' ? 240 : 1440
+                slaMinutes: priority === 'emergency' ? 60 : priority === 'urgent' ? 240 : 1440,
             });
 
             if (priority === 'emergency') {
@@ -152,8 +178,8 @@ export default function TenantRequestPage() {
             }
             navigate('/tenant/tickets');
         } catch (err) {
-            console.error("Submit failed", err);
-            alert("Failed to submit request: " + (err instanceof Error ? err.message : String(err)));
+            console.error('Submit failed', err);
+            alert('Failed to submit request: ' + (err instanceof Error ? err.message : String(err)));
         } finally {
             setSubmitting(false);
             setUploadingPhotos(false);
