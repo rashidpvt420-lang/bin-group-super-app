@@ -363,6 +363,40 @@ service cloud.firestore {
       allow write: if isAdmin() || (signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid));
     }
 
+    match /propertyReporters/{reporterId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) ||
+        (signedIn() && (
+          resource.data.reporterUid == request.auth.uid ||
+          resource.data.reporterEmail == request.auth.token.email
+        ));
+
+      allow create: if isAdmin() || (
+        signedIn() &&
+        (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid) &&
+        request.resource.data.propertyId is string &&
+        request.resource.data.reporterName is string &&
+        request.resource.data.reporterEmail is string &&
+        request.resource.data.reporterPhone is string &&
+        request.resource.data.accessStatus in ['INVITED','ACTIVE'] &&
+        request.resource.data.permissionScope in ['COMPLAINTS_ONLY','VIEW_AND_COMPLAIN','OWNER_DELEGATE'] &&
+        request.resource.data.canViewOwnerFinancials == false
+      );
+
+      allow update: if isAdmin() || (
+        signedIn() &&
+        (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid) &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.ownerUid == resource.data.ownerUid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'accessStatus','canCreateComplaints','canViewOwnComplaints','canViewPropertyComplaints',
+          'canActOnOwnerBehalf','canViewOwnerFinancials','canApproveWork','updatedAt'
+        ]) &&
+        request.resource.data.canViewOwnerFinancials == false
+      );
+
+      allow delete: if isAdmin();
+    }
+
     match /hrProfiles/{profileId} {
       allow read: if isAdmin() || hasPermission('canManageStaff') || isOwner(profileId);
       allow write: if isAdmin() || hasPermission('canManageStaff');
