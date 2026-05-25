@@ -58,6 +58,15 @@ function cleanPlainValue(value: any): any {
   return value;
 }
 
+function cleanMoney(value: unknown, label: string, required = false) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    if (required) throw new HttpsError("invalid-argument", `${label} must be a valid positive amount.`);
+    return 0;
+  }
+  return Math.round(amount);
+}
+
 function extractPendingPaymentPackage(data: any) {
   const paymentSubmission = data?.paymentSubmission;
   if (!paymentSubmission || typeof paymentSubmission !== "object" || Array.isArray(paymentSubmission)) return null;
@@ -266,14 +275,17 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const intakeId = cleanText(data.intakeId, "intakeId", 120);
   const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
   const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
-  const amount = Number(data.amount);
+  const amount = cleanMoney(data.amount, "Payment amount", true);
+  const activationDeposit = cleanMoney(data.activationDeposit || data.amount, "Activation deposit", true);
+  const annualContractValue = cleanMoney(data.annualContractValue || amount, "Annual contract value");
   const companyProfile = cleanPlainValue(data.companyProfile || {});
   const serviceDetails = cleanPlainValue(data.serviceDetails || {});
   const documentUrls = cleanPlainValue(data.documentUrls || {});
+  const paymentManifest = cleanPlainValue(data.paymentManifest || {});
   const signatureName = cleanText(data.signatureName, "signatureName", 120);
 
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  if (amount <= 0 || activationDeposit <= 0) {
+    throw new HttpsError("invalid-argument", "A positive payment amount is required.");
   }
 
   // Generate the locked Contract PDF
@@ -289,8 +301,8 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       propertyType: serviceDetails.selectedPlan,
       units: serviceDetails.totalUnits,
       planName: serviceDetails.selectedPlan,
-      annualValue: amount,
-      mobilizationAmount: amount
+      annualValue: annualContractValue || amount,
+      mobilizationAmount: activationDeposit
     });
   } catch (pdfError) {
     console.error("Failed to generate PDF contract:", pdfError);
@@ -309,12 +321,15 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     onboardingSessionId,
     paymentMethod,
     amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     currency: "AED",
     status: "PENDING",
     verificationState: "ADMIN_VERIFICATION_REQUIRED",
     companyProfile,
     serviceDetails,
     documentUrls,
+    paymentManifest,
     contractUrl,
     signatureName,
     submittedAt: timestamp,
@@ -330,6 +345,8 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     ownerEmail,
     signatureName,
     contractUrl,
+    annualContractValue: annualContractValue || amount,
+    activationDeposit,
     status: "PENDING_PAYMENT_ACTIVATION",
     createdAt: timestamp,
     updatedAt: timestamp
@@ -340,11 +357,15 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentSubmitted: true,
     paymentSubmittedAt: timestamp,
     paymentMethod,
+    paymentAmount: amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     status: "payment_pending_approval",
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
     proofDocuments: documentUrls,
+    paymentManifest,
     contractUrl,
     updatedAt: timestamp
   }, { merge: true });
@@ -360,6 +381,9 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     intakeId,
     sessionId: onboardingSessionId,
     paymentMethod,
+    paymentAmount: amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     timestamp,
     createdAt: timestamp,
     documentCount: Object.keys(documentUrls).length
