@@ -282,6 +282,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const serviceDetails = cleanPlainValue(data.serviceDetails || {});
   const documentUrls = cleanPlainValue(data.documentUrls || {});
   const paymentManifest = cleanPlainValue(data.paymentManifest || {});
+  const properties = cleanPlainValue(data.properties || []);
   const signatureName = cleanText(data.signatureName, "signatureName", 120);
 
   if (amount <= 0 || activationDeposit <= 0) {
@@ -367,6 +368,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     proofDocuments: documentUrls,
     paymentManifest,
     contractUrl,
+    properties,
     updatedAt: timestamp
   }, { merge: true });
 
