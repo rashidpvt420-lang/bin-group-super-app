@@ -17,8 +17,8 @@ export interface PropertyData {
     zone: 'A' | 'B' | 'C';
     propertyType: string;
     subType: string;
-    useType: 'Rental' | 'Personal' | 'Mixed' | 'Government';
-    ownerType: 'Private' | 'Government';
+    useType: 'Rental' | 'Personal' | 'Mixed' | 'Government' | string;
+    ownerType: 'Private' | 'Government' | string;
     floors: number;
     units: number;
     bedrooms: number;
@@ -44,10 +44,14 @@ export interface PropertyData {
     gen: boolean;
     hvac: boolean;
     districtCooling: boolean;
-    // Institutional / Majlis Specific
+    // Institutional / Majlis / Mosque Specific
     majlis: boolean;
-    majlisType: 'government' | 'none';
+    majlisType: 'government' | 'none' | string;
     majlisSubtype?: string;
+    mosqueProfile?: Record<string, any>;
+    assetClass?: string;
+    riskProfile?: string;
+    serviceModel?: string;
     majlisGarden?: boolean;
     authorityName?: string;
     departmentName?: string;
@@ -264,9 +268,21 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
     emergency_priority: { label: 'Emergency Priority SOS', base: 1200 }
 };
 
+const isMosqueAsset = (property: PropertyData): boolean => {
+    const label = `${property.propertyType || ''} ${property.subType || ''} ${property.assetClass || ''} ${property.serviceModel || ''}`.toLowerCase();
+    return label.includes('mosque') || label.includes('masjid') || label.includes('religious_facility') || label.includes('mosque_fm');
+};
+
 const resolveMandatoryAddOns = (property: PropertyData): string[] => {
     const ids = new Set<string>();
     ids.add('fire_safety');
+    if (isMosqueAsset(property)) {
+        ids.add('water_tank');
+        ids.add('hvac_pm');
+        ids.add('cleaning');
+        ids.add('sira_renewal');
+        ids.add('emergency_priority');
+    }
     if (property.tank) ids.add('water_tank');
     if ((property.floors || 0) > 2 || (property.lifts || 0) > 0) ids.add('elevator_amc');
     if (property.sira) ids.add('sira_renewal');
@@ -291,9 +307,13 @@ const calculateAddOnAnnualValue = (property: PropertyData, selectedAddOns: strin
 };
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+    const mosqueProfile = property.mosqueProfile || {};
+    const isMosque = isMosqueAsset(property);
+
     // Map internal types to Pricing Matrix types
     let assetClassId = 'apt-std';
-    if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
+    if (isMosque) assetClassId = 'mosque_fm';
+    else if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
     else if (property.propertyType === 'Building') assetClassId = 'com-twr';
     else if (property.propertyType === 'Commercial') assetClassId = 'off-sml';
     else if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) assetClassId = 'government_majlis';
@@ -319,21 +339,21 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         contractType: 
             property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY' : 
             (property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
-        sqft: property.sqft,
-        units: property.units,
+        sqft: isMosque ? (Number(mosqueProfile.grossFloorAreaSqft) || property.sqft) : property.sqft,
+        units: isMosque ? (Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units) : property.units,
         annualRent: property.annualRent,
-        propertyAge: property.age,
+        propertyAge: isMosque ? (Number(mosqueProfile.propertyAgeYears) || property.age) : property.age,
         floors: property.floors,
         lifts: property.lifts,
         hasPool: property.pool,
-        hasCentralHVAC: property.hvac,
+        hasCentralHVAC: isMosque ? true : property.hvac,
         hasDistrictCooling: property.districtCooling,
         hasCivilDefenseSystem: property.fireAlarm || property.firePump,
-        hasSiraCctv: property.sira,
+        hasSiraCctv: isMosque ? Boolean(property.sira || mosqueProfile.cctvInstalled || Number(mosqueProfile.cctvCameraCount) > 0) : property.sira,
         hasGenerator: property.gen,
         hasBmu: property.bmu,
         addOns: selectedAddOns,
-        slaTier: property.slaTier || 'standard',
+        slaTier: property.slaTier || (isMosque ? 'premium' : 'standard'),
         paymentPlan: property.paymentPlan || 'annual'
     });
 
@@ -533,7 +553,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                     estimatedACV,
                     recommendedTier: 'Premium',
                     isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
-                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign'),
+                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign' || isMosqueAsset(p)),
                     quoteResults
                 };
                 if (summary.totalUnits > 100 || summary.isSovereignPortfolio) summary.recommendedTier = 'Sovereign Institutional';
