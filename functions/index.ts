@@ -2628,3 +2628,156 @@ export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId
         url: `/ticket/${ticketId}`
     });
 });
+
+export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return;
+    
+    const role = String(after.role || "").toLowerCase();
+    if (role !== "technician") return;
+
+    const beforeStatus = before?.dutyStatus || "OFF";
+    const afterStatus = after.dutyStatus || "OFF";
+    if (beforeStatus === afterStatus) return;
+
+    const uid = event.params.uid;
+    const now = new Date();
+    
+    // YYYYMMDD dateKey in Gulf Standard Time (GST, UTC+4)
+    const gstOffset = 4 * 60 * 60 * 1000;
+    const gstDate = new Date(now.getTime() + gstOffset);
+    const yyyy = gstDate.getUTCFullYear();
+    const mm = String(gstDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(gstDate.getUTCDate()).padStart(2, '0');
+    const dateKey = `${yyyy}${mm}${dd}`;
+    
+    const docId = `${uid}_${dateKey}`;
+    const attendanceRef = db.collection("attendance").doc(docId);
+
+    if (beforeStatus === "OFF" && afterStatus === "WORKING") {
+        await attendanceRef.set({
+            uid,
+            technicianId: uid,
+            email: after.email || "",
+            displayName: after.displayName || after.fullName || "Technician",
+            dateKey,
+            clockIn: admin.firestore.Timestamp.fromDate(now),
+            status: "working",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } 
+    else if (beforeStatus === "WORKING" && afterStatus === "BREAK") {
+        await attendanceRef.update({
+            breaks: admin.firestore.FieldValue.arrayUnion({ start: now }),
+            status: "break",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+    else if (beforeStatus === "BREAK" && afterStatus === "WORKING") {
+        const snap = await attendanceRef.get();
+        if (snap.exists) {
+            const data = snap.data() || {};
+            const breaks = Array.isArray(data.breaks) ? [...data.breaks] : [];
+            if (breaks.length > 0) {
+                const last = breaks[breaks.length - 1];
+                if (last && !last.end) {
+                    last.end = now;
+                }
+            }
+            await attendanceRef.update({
+                breaks,
+                status: "working",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            await attendanceRef.update({
+                status: "working",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+    else if ((beforeStatus === "WORKING" || beforeStatus === "BREAK") && afterStatus === "OFF") {
+        const snap = await attendanceRef.get();
+        if (snap.exists) {
+            const data = snap.data() || {};
+            const breaks = Array.isArray(data.breaks) ? [...data.breaks] : [];
+            if (beforeStatus === "BREAK" && breaks.length > 0) {
+                const last = breaks[breaks.length - 1];
+                if (last && !last.end) {
+                    last.end = now;
+                }
+            }
+
+            const clockInTs = data.clockIn;
+            let clockInDate = now;
+            if (clockInTs instanceof admin.firestore.Timestamp) {
+                clockInDate = clockInTs.toDate();
+            } else if (clockInTs) {
+                clockInDate = new Date(clockInTs);
+            }
+
+            const totalMinutes = Math.max(0, Math.round((now.getTime() - clockInDate.getTime()) / 60000));
+            
+            let scheduledMinutes = 480; // 8 hours default
+            const workingHoursStr = after.workingHours || "";
+            if (workingHoursStr) {
+                const match = workingHoursStr.match(/(\d+)\s*(AM|PM)\s*-\s*(\d+)\s*(AM|PM)/i);
+                if (match) {
+                    let startHour = parseInt(match[1], 10);
+                    const startAmpm = match[2].toUpperCase();
+                    let endHour = parseInt(match[3], 10);
+                    const endAmpm = match[4].toUpperCase();
+                    if (startAmpm === 'PM' && startHour < 12) startHour += 12;
+                    if (startAmpm === 'AM' && startHour === 12) startHour = 0;
+                    if (endAmpm === 'PM' && endHour < 12) endHour += 12;
+                    if (endAmpm === 'AM' && endHour === 12) endHour = 0;
+                    let diffHours = endHour - startHour;
+                    if (diffHours < 0) diffHours += 24;
+                    scheduledMinutes = diffHours * 60;
+                }
+            }
+
+            const overtimeMinutes = totalMinutes > scheduledMinutes ? (totalMinutes - scheduledMinutes) : 0;
+
+            await attendanceRef.update({
+                breaks,
+                clockOut: admin.firestore.Timestamp.fromDate(now),
+                totalMinutes,
+                overtimeMinutes,
+                status: "completed",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+});
+
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return;
+
+    const ticketId = event.params.id;
+    const beforeTechId = before?.assignedTechnicianId;
+    const afterTechId = after.assignedTechnicianId;
+
+    if (beforeTechId !== afterTechId && afterTechId) {
+        const ref8 = ticketId.substring(0, 8).toUpperCase();
+        const category = after.category || after.issueType || "Maintenance";
+        const propertyName = after.propertyName || "Property";
+        
+        await dispatchOmniNotification(afterTechId, "New Job Assigned", `Job Assigned: #${ref8} at ${propertyName} (${category}).`, {
+            url: `/technician/job/${ticketId}`
+        });
+
+        await logAudit({
+            actorId: after.updatedBy || "SYSTEM",
+            actorRole: after.updatedByRole || "system",
+            action: "MANUAL_TECHNICIAN_ASSIGNMENT_NOTIFY",
+            targetType: "maintenanceTickets",
+            targetId: ticketId,
+            metadata: { technicianId: afterTechId }
+        });
+    }
+});
