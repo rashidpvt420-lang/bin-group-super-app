@@ -67,7 +67,12 @@ const ASSET_CLASS_ALIASES: Record<string, string> = {
   mid_scale_hotel: 'mid_scale_hotel',
   government_majlis: 'government_majlis',
   private_majlis: 'private_majlis',
-  majlis: 'government_majlis'
+  majlis: 'government_majlis',
+  mosque: 'mosque_fm',
+  masjid: 'mosque_fm',
+  mosque_fm: 'mosque_fm',
+  religious_facility: 'mosque_fm',
+  'mosque / masjid': 'mosque_fm'
 };
 
 function normalizeAssetClassId(assetClassId?: string): string {
@@ -76,8 +81,71 @@ function normalizeAssetClassId(assetClassId?: string): string {
   return ASSET_CLASS_ALIASES[raw] || ASSET_CLASS_ALIASES[raw.toLowerCase()] || raw;
 }
 
+function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
+  const pricingExplanation: string[] = [];
+  const riskFlags: string[] = [];
+  const sqft = Math.max(input.sqft || 0, 1000);
+  const age = input.propertyAge || 0;
+  const worshipperProxy = Math.max(input.units || 1, 1);
+
+  const mepRate = input.contractType === 'FM_ONLY' ? 20 : input.contractType === 'BOTH' ? 38 : 30;
+  const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.18 : age <= 15 ? 1.35 : 1.55;
+  const capacityMultiplier = worshipperProxy <= 300 ? 1 : worshipperProxy <= 1000 ? 1.15 : worshipperProxy <= 3000 ? 1.35 : 1.6;
+
+  const baseQuote = sqft * mepRate * ageCoefficient;
+  const softServices = sqft * 8 * capacityMultiplier;
+  const wuduCleaning = Math.max(input.units || 1, 1) * 5 * 35 * 365;
+  const ramadanSurge = 15500 + (input.hasCentralHVAC ? 2500 : 0);
+  const compliancePremium = Math.max(baseQuote * 0.04, 2500);
+  const complexityPremium = (baseQuote + softServices) * 0.1;
+  const addOnTotal = (input.addOns?.length || 0) * 1500;
+
+  let slaMultiplier = 1.0;
+  if (input.slaTier === 'premium') slaMultiplier = 1.15;
+  else if (input.slaTier === 'elite') slaMultiplier = 1.3;
+
+  let paymentSurcharge = 0;
+  if (input.paymentPlan === 'quarterly') paymentSurcharge = 0.03;
+  else if (input.paymentPlan === 'monthly') paymentSurcharge = 0.06;
+
+  const subtotal = (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal) * slaMultiplier;
+  const annualTotal = subtotal * (1 + paymentSurcharge);
+
+  pricingExplanation.push(`${mepRate} AED/sqft mosque MEP rate applied to ${sqft} sqft.`);
+  pricingExplanation.push(`${ageCoefficient}x mosque age/risk coefficient applied.`);
+  pricingExplanation.push('Five daily Wudu cleaning cycles included.');
+  pricingExplanation.push('Ramadan surge cleaning and HVAC readiness included.');
+  pricingExplanation.push('Prayer-time-safe scheduling and monthly compliance reporting included.');
+
+  if (age > 10) riskFlags.push('Aging mosque MEP risk premium required');
+  if (!input.hasSiraCctv) riskFlags.push('Mosque security/compliance review required');
+  if (input.slaTier === 'elite') riskFlags.push('Elite mosque response model selected');
+
+  return {
+    baseQuote,
+    zoneAdjustedQuote: baseQuote,
+    emirateAdjustedQuote: baseQuote,
+    complexityPremium,
+    compliancePremium,
+    addOnTotal,
+    discount: 0,
+    annualTotal,
+    quarterlyPayment: annualTotal / 4,
+    monthlyPayment: annualTotal / 12,
+    mobilizationFee: annualTotal * 0.15,
+    recommendedTier: input.slaTier,
+    pricingExplanation,
+    riskFlags
+  };
+}
+
 export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   const normalizedAssetClassId = normalizeAssetClassId(input.assetClassId);
+
+  if (normalizedAssetClassId === 'mosque_fm') {
+    return calculateMosqueQuote(input);
+  }
+
   let assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === normalizedAssetClassId);
 
   const pricingExplanation: string[] = [];
