@@ -18,6 +18,9 @@ const STAFF_ROLES = [
     { value: 'finance_staff', label: 'Finance Staff' },
     { value: 'dispatcher', label: 'Dispatcher' },
     { value: 'admin_assistant', label: 'Admin Assistant' },
+    { value: 'account_manager', label: 'Account Manager' },
+    { value: 'operations_manager', label: 'Operations Manager' },
+    { value: 'finance_admin', label: 'Finance Admin' },
 ];
 
 const DEPARTMENTS = ['Operations', 'HR', 'Finance', 'Administration', 'Technical'];
@@ -59,6 +62,17 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         workingHours: '9 AM - 4 PM',
         emirate: 'Dubai',
         joiningDate: new Date().toISOString().split('T')[0],
+        offDay: 'Sunday',
+        leaveBalance: '30',
+        visaExpiry: '',
+        emiratesIdExpiry: '',
+        passportExpiry: '',
+        medicalExpiry: '',
+        drivingLicenseExpiry: '',
+        basicSalary: '',
+        allowances: '',
+        supervisorName: '',
+        shiftName: 'Day Shift'
     });
 
     const [permissions, setPermissions] = useState<Record<string, boolean>>(INITIAL_PERMISSIONS);
@@ -83,10 +97,9 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
 
         try {
             // 1. Write to 'users' collection
-            // Note: In a real scenario, we might use a Cloud Function to create the Auth user
-            // but here we are initializing the database records.
             const userRef = await addDoc(collection(db, 'users'), {
                 displayName: formData.fullName,
+                fullName: formData.fullName,
                 email: formData.email.toLowerCase().trim(),
                 phone: formData.phone,
                 role: formData.role,
@@ -96,6 +109,19 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 isStaff: true,
                 onboardingComplete: true,
                 permissions: permissions,
+                offDay: formData.offDay,
+                leaveBalance: parseFloat(formData.leaveBalance) || 0,
+                visaExpiry: formData.visaExpiry,
+                emiratesIdExpiry: formData.emiratesIdExpiry,
+                passportExpiry: formData.passportExpiry,
+                medicalExpiry: formData.medicalExpiry,
+                drivingLicenseExpiry: formData.drivingLicenseExpiry,
+                basicSalary: parseFloat(formData.basicSalary) || 0,
+                allowances: parseFloat(formData.allowances) || 0,
+                salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
+                supervisorName: formData.supervisorName,
+                shiftName: formData.shiftName,
+                workingHours: formData.workingHours,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 createdBy: currentUser?.uid
@@ -129,14 +155,54 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 phone: formData.phone,
                 role: formData.role,
                 department: formData.department,
-                salary: parseFloat(formData.salary) || 0,
+                basicSalary: parseFloat(formData.basicSalary) || 0,
+                allowances: parseFloat(formData.allowances) || 0,
+                salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
                 workingHours: formData.workingHours,
                 emirate: formData.emirate,
                 joiningDate: formData.joiningDate,
+                offDay: formData.offDay,
+                leaveBalance: parseFloat(formData.leaveBalance) || 0,
+                visaExpiry: formData.visaExpiry,
+                emiratesIdExpiry: formData.emiratesIdExpiry,
+                passportExpiry: formData.passportExpiry,
+                medicalExpiry: formData.medicalExpiry,
+                drivingLicenseExpiry: formData.drivingLicenseExpiry,
+                supervisorName: formData.supervisorName,
+                shiftName: formData.shiftName,
                 status: 'ACTIVE',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
+
+            // 4B. Write to 'technicians' collection if technician
+            if (formData.role === 'technician') {
+                await setDoc(doc(db, 'technicians', staffUid), {
+                    uid: staffUid,
+                    fullName: formData.fullName,
+                    displayName: formData.fullName,
+                    email: formData.email.toLowerCase().trim(),
+                    phone: formData.phone,
+                    role: formData.role,
+                    trade: formData.department === 'Technical' ? 'General Maintenance' : formData.department,
+                    specialization: formData.department === 'Technical' ? 'General Maintenance' : formData.department,
+                    emirate: formData.emirate,
+                    shiftName: formData.shiftName,
+                    offDay: formData.offDay,
+                    supervisorName: formData.supervisorName,
+                    visaExpiry: formData.visaExpiry,
+                    emiratesIdExpiry: formData.emiratesIdExpiry,
+                    passportExpiry: formData.passportExpiry,
+                    medicalExpiry: formData.medicalExpiry,
+                    drivingLicenseExpiry: formData.drivingLicenseExpiry,
+                    basicSalary: parseFloat(formData.basicSalary) || 0,
+                    salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
+                    leaveBalance: parseFloat(formData.leaveBalance) || 0,
+                    status: 'ACTIVE',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
+            }
 
             // 5. Write to 'auditLogs'
             await addDoc(collection(db, 'auditLogs'), {
@@ -163,6 +229,17 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                     workingHours: '9 AM - 4 PM',
                     emirate: 'Dubai',
                     joiningDate: new Date().toISOString().split('T')[0],
+                    offDay: 'Sunday',
+                    leaveBalance: '30',
+                    visaExpiry: '',
+                    emiratesIdExpiry: '',
+                    passportExpiry: '',
+                    medicalExpiry: '',
+                    drivingLicenseExpiry: '',
+                    basicSalary: '',
+                    allowances: '',
+                    supervisorName: '',
+                    shiftName: 'Day Shift'
                 });
                 setPermissions(INITIAL_PERMISSIONS);
             }, 2000);
@@ -247,6 +324,72 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                         <TextField
                             fullWidth label="Joining Date" name="joiningDate" type="date" value={formData.joiningDate} onChange={handleInputChange}
                             variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Off Day" name="offDay" value={formData.offDay} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Leave Balance (Days)" name="leaveBalance" type="number" value={formData.leaveBalance} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Visa Expiry" name="visaExpiry" type="date" value={formData.visaExpiry} onChange={handleInputChange}
+                            variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Emirates ID Expiry" name="emiratesIdExpiry" type="date" value={formData.emiratesIdExpiry} onChange={handleInputChange}
+                            variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Passport Expiry" name="passportExpiry" type="date" value={formData.passportExpiry} onChange={handleInputChange}
+                            variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Medical Expiry" name="medicalExpiry" type="date" value={formData.medicalExpiry} onChange={handleInputChange}
+                            variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Driving License Expiry" name="drivingLicenseExpiry" type="date" value={formData.drivingLicenseExpiry} onChange={handleInputChange}
+                            variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Basic Salary (AED)" name="basicSalary" type="number" value={formData.basicSalary} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Allowances (AED)" name="allowances" type="number" value={formData.allowances} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Supervisor Name" name="supervisorName" value={formData.supervisorName} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth label="Shift Name" name="shiftName" value={formData.shiftName} onChange={handleInputChange}
+                            variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
                         />
                     </Grid>
 

@@ -10,7 +10,7 @@ import {
     DollarSign, 
     FileText, UserPlus, ChevronRight, Search as SearchIcon
 } from 'lucide-react';
-import { db, collection, query, onSnapshot, where } from '@/lib/firebase';
+import { db, collection, query, onSnapshot, where, doc, updateDoc, serverTimestamp } from '@/lib/firebase';
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
@@ -32,15 +32,42 @@ export default function HRManagementPage() {
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
+    const [requests, setRequests] = useState<any[]>([]);
+
+    const handleReviewRequest = async (requestId: string, approve: boolean, note: string) => {
+        try {
+            const docRef = doc(db, 'staffRequests', requestId);
+            await updateDoc(docRef, {
+                status: approve ? 'approved' : 'rejected',
+                reviewedBy: user?.displayName || user?.email || 'HR Manager',
+                reviewedAt: serverTimestamp(),
+                reviewNote: note
+            });
+            alert(`Request ${approve ? 'approved' : 'rejected'} successfully.`);
+        } catch (err: any) {
+            console.error("Failed to review request:", err);
+            alert("Error reviewing request: " + err.message);
+        }
+    };
 
     useEffect(() => {
         // Load staff / technician records
-        const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'hr_staff', 'hr_manager']));
+        const q = query(collection(db, 'users'), where('role', 'in', [
+            'technician', 'hr_staff', 'hr_manager', 'finance_staff', 'account_manager', 'finance_admin'
+        ]));
         const unsub = onSnapshot(q, (snap) => {
             setStaff(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
         });
-        return () => unsub();
+
+        const unsubReq = onSnapshot(collection(db, 'staffRequests'), (snap) => {
+            setRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        return () => {
+            unsub();
+            unsubReq();
+        };
     }, []);
 
     const getStatusColor = (status: string) => {
@@ -117,6 +144,7 @@ export default function HRManagementPage() {
                     <Tab label="ATTENDANCE & LEAVE" disabled={!isHRStaff} />
                     <Tab label="PAYROLL HUB" disabled={!isHRManager} />
                     <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
+                    <Tab label="STAFF REQUESTS" />
                 </Tabs>
 
                 {payrollError && (
@@ -293,6 +321,110 @@ export default function HRManagementPage() {
                             </Grid>
                         </Grid>
                     </Box>
+                )}
+
+                {tab === 4 && (
+                    <Paper sx={{ p: 3, mt: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Typography variant="h6" fontWeight="950" sx={{ mb: 3 }} color="#FFF">STAFF REQUESTS QUEUE</Typography>
+                        <TableContainer>
+                            <Table size="small">
+                                <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+                                    <TableRow>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STAFF MEMBER</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ROLE</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>REQUEST TYPE</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>DATES / HOURS</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>REASON</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>CREATED DATE</TableCell>
+                                        <TableCell align="right" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ACTIONS</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {requests.filter(req => {
+                                        const isPayslip = req.requestType === 'payslip';
+                                        const isFinanceRole = ['finance_staff', 'account_manager', 'finance_admin'].includes(user?.role || '');
+                                        if (isPayslip) {
+                                            return isHRStaff || isFinanceRole;
+                                        }
+                                        return isHRStaff;
+                                    }).map((req) => {
+                                        const isPayslip = req.requestType === 'payslip';
+                                        const isFinanceRole = ['finance_staff', 'account_manager', 'finance_admin'].includes(user?.role || '');
+                                        const canReview = isHRManager || (isPayslip && isFinanceRole);
+                                        const createdDate = req.createdAt?.toDate ? req.createdAt.toDate().toLocaleDateString() : 'N/A';
+
+                                        return (
+                                            <TableRow key={req.id} hover>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight="900" color="#FFF">{req.displayName}</Typography>
+                                                    <Typography variant="caption" color="textSecondary">{req.email}</Typography>
+                                                </TableCell>
+                                                <TableCell sx={{ color: '#FFF', textTransform: 'uppercase', fontSize: '0.75rem' }}>{req.role}</TableCell>
+                                                <TableCell sx={{ color: binThemeTokens.gold, textTransform: 'uppercase', fontWeight: 900, fontSize: '0.75rem' }}>
+                                                    {String(req.requestType).replace('_', ' ')}
+                                                </TableCell>
+                                                <TableCell sx={{ color: '#FFF', fontSize: '0.75rem' }}>
+                                                    {req.startDate} to {req.endDate}
+                                                    {req.hours > 0 && <Box component="span" sx={{ color: binThemeTokens.gold, ml: 1 }}>({req.hours} hrs)</Box>}
+                                                </TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.7)', maxWidth: 200, fontSize: '0.75rem' }}>{req.reason}</TableCell>
+                                                <TableCell>
+                                                    <Chip 
+                                                        label={String(req.status).replace('_', ' ').toUpperCase()} 
+                                                        size="small" 
+                                                        sx={{ 
+                                                            fontWeight: 900,
+                                                            bgcolor: req.status === 'approved' ? 'rgba(16,185,129,0.1)' : req.status === 'rejected' ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)',
+                                                            color: req.status === 'approved' ? '#10b981' : req.status === 'rejected' ? '#ef4444' : '#eab308',
+                                                            fontSize: '0.65rem'
+                                                        }} 
+                                                    />
+                                                </TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{createdDate}</TableCell>
+                                                <TableCell align="right">
+                                                    {req.status === 'pending_hr_review' && canReview ? (
+                                                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                                            <Button 
+                                                                size="small" 
+                                                                variant="contained" 
+                                                                color="success" 
+                                                                sx={{ fontSize: '0.65rem', fontWeight: 900 }}
+                                                                onClick={() => {
+                                                                    const note = prompt("Enter approval note:");
+                                                                    if (note !== null) handleReviewRequest(req.id, true, note);
+                                                                }}
+                                                            >
+                                                                APPROVE
+                                                            </Button>
+                                                            <Button 
+                                                                size="small" 
+                                                                variant="outlined" 
+                                                                color="error" 
+                                                                sx={{ fontSize: '0.65rem', fontWeight: 900 }}
+                                                                onClick={() => {
+                                                                    const note = prompt("Enter rejection note:");
+                                                                    if (note !== null) handleReviewRequest(req.id, false, note);
+                                                                }}
+                                                            >
+                                                                REJECT
+                                                            </Button>
+                                                        </Stack>
+                                                    ) : req.reviewNote ? (
+                                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontStyle: 'italic' }}>
+                                                            Note: {req.reviewNote}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography variant="caption" color="textSecondary">Reviewed</Typography>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Paper>
                 )}
             </Container>
         </Box>
