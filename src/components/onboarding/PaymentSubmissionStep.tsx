@@ -260,6 +260,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     selectedPlan: selectedPlan?.name || selectedPlan?.packageName || 'Standard',
                     selectedAddOns: selectedAddOns || []
                 },
+                properties,
                 signatureName,
                 documentUrls: urls
             });
