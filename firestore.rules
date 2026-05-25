@@ -47,6 +47,16 @@ service cloud.firestore {
       return isOwner(data.ownerId) || isOwner(data.ownerUid) || isOwner(data.authUid) || isOwner(data.userId) || isOwner(data.createdBy) || isOwner(data.createdByUid);
     }
 
+    function getOwnerId(data) {
+      return data.ownerId != null ? data.ownerId : (data.ownerUid != null ? data.ownerUid : null);
+    }
+
+    function isOwnerSuspended(ownerId) {
+      return ownerId != null &&
+        exists(/databases/$(database)/documents/users/$(ownerId)) &&
+        get(/databases/$(database)/documents/users/$(ownerId)).data.status == 'suspended';
+    }
+
     function emailOwns(data) {
       return authEmailMatches(data.email) ||
         authEmailMatches(data.ownerEmail) ||
@@ -230,8 +240,10 @@ service cloud.firestore {
     match /maintenanceTickets/{ticketId} {
       // CREATE: admin, dispatcher, tenant filing their own request, OR owner filing against their own property
       allow create: if isAdmin() || hasPermission('canDispatchJobs') ||
-        (signedIn() && tenantOwns(request.resource.data)) ||
-        (signedIn() && owns(request.resource.data));
+        (signedIn() && !isOwnerSuspended(getOwnerId(request.resource.data)) && (
+          tenantOwns(request.resource.data) ||
+          owns(request.resource.data)
+        ));
 
       // READ: admin, dispatcher, owner of the property, tenant linked to ticket, assigned technician
       allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) || hasPermission('canDispatchJobs') ||
@@ -240,38 +252,39 @@ service cloud.firestore {
 
       // UPDATE rules — each rule is limited to its own safe field set
       allow update: if isAdmin() || hasPermission('canDispatchJobs') ||
+        (!isOwnerSuspended(getOwnerId(resource.data)) && (
+          // Tenant can approve/reject/rate their own completed ticket
+          (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'
+          ])) ||
 
-        // Tenant can approve/reject/rate their own completed ticket
-        (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'
-        ])) ||
+          // Owner can approve cost/status on their own ticket
+          (owns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status','approvedAt','estimatedCostApproved','updatedAt'
+          ])) ||
 
-        // Owner can approve cost/status on their own ticket
-        (owns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status','approvedAt','estimatedCostApproved','updatedAt'
-        ])) ||
+          // Assigned technician: job notes, photos, completion fields, AND live GPS location
+          (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status','techNotes','technicianNotes','materialsUsed','actualCost',
+            'completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes',
+            'tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt',
+            'waitingPartsAt','escalatedAt','completedPendingApprovalAt',
+            'beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos',
+            'technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus'
+          ])) ||
 
-        // Assigned technician: job notes, photos, completion fields, AND live GPS location
-        (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status','techNotes','technicianNotes','materialsUsed','actualCost',
-          'completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes',
-          'tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt',
-          'waitingPartsAt','escalatedAt','completedPendingApprovalAt',
-          'beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos',
-          'technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus'
-        ])) ||
-
-        // Any authenticated technician can self-assign an unassigned open ticket
-        // and write their identity snapshot into the ticket on accept
-        (signedIn() && userDoc().role == 'technician' &&
-          (!('assignedTechnicianId' in resource.data) || resource.data.assignedTechnicianId == null || resource.data.assignedTechnicianId == '') &&
-          resource.data.status in ['OPEN','open','PENDING_ASSIGNMENT','pending_assignment'] &&
-          request.resource.data.assignedTechnicianId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status','assignedTechnicianId','technicianId','acceptedAt','updatedAt',
-            'assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar',
-            'technicianSpecialty','dispatchStatus','trackingStatus'
-          ]));
+          // Any authenticated technician can self-assign an unassigned open ticket
+          // and write their identity snapshot into the ticket on accept
+          (signedIn() && userDoc().role == 'technician' &&
+            (!('assignedTechnicianId' in resource.data) || resource.data.assignedTechnicianId == null || resource.data.assignedTechnicianId == '') &&
+            resource.data.status in ['OPEN','open','PENDING_ASSIGNMENT','pending_assignment'] &&
+            request.resource.data.assignedTechnicianId == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status','assignedTechnicianId','technicianId','acceptedAt','updatedAt',
+              'assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar',
+              'technicianSpecialty','dispatchStatus','trackingStatus'
+            ]))
+        ));
 
       allow delete: if isAdmin();
 
