@@ -1,3 +1,5 @@
+import { detectContractMode } from './ownerServiceMode';
+
 export interface OwnerFinancialState {
   hasRentData: boolean;
   annualContractValue: number;
@@ -16,6 +18,9 @@ export interface OwnerFinancialState {
   complaintCostImpact: number;
   propertiesWithRent: number;
   totalProperties: number;
+  expectedAnnualRent: number;
+  ownerNetIncome: number;
+  contractMode: string;
 }
 
 export function resolveOwnerFinancials(
@@ -25,6 +30,7 @@ export function resolveOwnerFinancials(
   payments: any[],
   maintenanceTickets: any[]
 ): OwnerFinancialState {
+  const contractMode = detectContractMode(contract);
   const annualContractValue = Number(contract?.annualValue || contract?.contractValue || contract?.totalValue || contract?.annualContractValue || 0);
   const mobilizationAmount = Number(contract?.mobilizationAmount || contract?.depositAmount || (annualContractValue * 0.15));
   const paymentStatus = String(contract?.paymentStatus || 'PENDING').toUpperCase();
@@ -41,7 +47,7 @@ export function resolveOwnerFinancials(
   }
   
   if (totalPaid === 0 && paymentStatus === 'PAID') {
-      totalPaid = mobilizationAmount; // Fallback if no specific payment records but contract is PAID
+    totalPaid = mobilizationAmount; // Fallback if no specific payment records but contract is PAID
   }
 
   let totalMaintenanceCost = 0;
@@ -68,28 +74,30 @@ export function resolveOwnerFinancials(
       
       const date = ticket.resolvedAt || ticket.updatedAt || ticket.createdAt;
       if (date && (date.seconds || date._seconds)) {
-          const d = new Date((date.seconds || date._seconds) * 1000);
-          const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          monthlyCosts[monthKey] = (monthlyCosts[monthKey] || 0) + cost;
+        const d = new Date((date.seconds || date._seconds) * 1000);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthlyCosts[monthKey] = (monthlyCosts[monthKey] || 0) + cost;
       }
     }
   }
 
   let hasRentData = false;
-  let totalAnnualRent = 0;
+  let expectedAnnualRent = 0;
   let propertiesWithRent = 0;
 
   for (const property of properties) {
     const rent = Number(property.rent || property.annualRent || property.expectedRent || 0);
     if (rent > 0) {
       hasRentData = true;
-      totalAnnualRent += rent;
+      expectedAnnualRent += rent;
       propertiesWithRent++;
     }
   }
 
-  const estimatedOwnerRoi = hasRentData ? (totalAnnualRent - annualContractValue - totalMaintenanceCost) : 0;
+  // ROI / Net Income calculations depend on contract mode
+  const estimatedOwnerRoi = hasRentData ? (expectedAnnualRent - annualContractValue - totalMaintenanceCost) : 0;
   const netPropertyPosition = estimatedOwnerRoi + totalSlaCredits - totalPenalties;
+  const ownerNetIncome = estimatedOwnerRoi;
   
   const upcomingInvoice = invoices.find(i => String(i.status).toUpperCase() === 'PENDING' || String(i.status).toUpperCase() === 'UPCOMING');
   const upcomingInvoiceAmount = upcomingInvoice ? Number(upcomingInvoice.amount || upcomingInvoice.total || 0) : null;
@@ -111,6 +119,9 @@ export function resolveOwnerFinancials(
     monthlyCosts,
     complaintCostImpact,
     propertiesWithRent,
-    totalProperties: properties.length
+    totalProperties: properties.length,
+    expectedAnnualRent,
+    ownerNetIncome,
+    contractMode
   };
 }

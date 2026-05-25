@@ -40,6 +40,7 @@ function formatCurrency(amount: number) {
 
 export default function OwnerRoiFinancialSection({ financials, onAddRentDetails }: OwnerRoiFinancialSectionProps) {
   const { t, isRTL } = useLanguage();
+  const pmEnabled = financials.contractMode === 'PROPERTY_MANAGEMENT_ONLY' || financials.contractMode === 'HYBRID';
 
   const renderMetric = (label: string, value: React.ReactNode, icon?: React.ReactNode, color = '#fff') => (
     <Grid item xs={12} sm={6} md={3}>
@@ -74,7 +75,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
           </Box>
         </Stack>
 
-        {!financials.hasRentData && (
+        {!financials.hasRentData && pmEnabled && (
           <Box sx={{ p: 3, mb: 3, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.2)}`, borderRadius: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
             <Stack direction="row" spacing={1.5} alignItems="center">
               <AlertCircle color="#f59e0b" />
@@ -90,8 +91,18 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
         )}
 
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          {renderMetric('Net Property Position', formatCurrency(financials.netPropertyPosition), <Landmark size={16} />, financials.netPropertyPosition >= 0 ? '#10b981' : '#ef4444')}
-          {renderMetric('Estimated ROI', financials.hasRentData ? formatCurrency(financials.estimatedOwnerRoi) : 'Pending Rent Data', <TrendingUp size={16} />, financials.hasRentData ? (financials.estimatedOwnerRoi >= 0 ? '#10b981' : '#ef4444') : '#fff')}
+          {renderMetric(
+            pmEnabled ? 'Net Property Position' : 'Net FM Cost Position',
+            pmEnabled ? financials.netPropertyPosition : (financials.totalSlaCredits - financials.totalPenalties - financials.annualContractValue - financials.totalMaintenanceCost),
+            <Landmark size={16} />,
+            (pmEnabled ? financials.netPropertyPosition : (financials.totalSlaCredits - financials.totalPenalties - financials.annualContractValue - financials.totalMaintenanceCost)) >= 0 ? '#10b981' : '#ef4444'
+          )}
+          {renderMetric(
+            'Estimated ROI',
+            pmEnabled ? (financials.hasRentData ? formatCurrency(financials.estimatedOwnerRoi) : 'Pending Rent Data') : 'N/A',
+            <TrendingUp size={16} />,
+            pmEnabled && financials.hasRentData ? (financials.estimatedOwnerRoi >= 0 ? '#10b981' : '#ef4444') : '#fff'
+          )}
           {renderMetric('Maintenance Cost', formatCurrency(financials.totalMaintenanceCost), <Wrench size={16} />, financials.totalMaintenanceCost > 0 ? '#ef4444' : '#fff')}
           {renderMetric('SLA Credits / Penalties', `${formatCurrency(financials.totalSlaCredits)} / ${formatCurrency(financials.totalPenalties)}`, <Shield size={16} />, binThemeTokens.gold)}
         </Grid>
