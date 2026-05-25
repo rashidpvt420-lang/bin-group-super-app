@@ -6,7 +6,7 @@ import {
 import { 
     User, Phone, Mail, Briefcase, Building, ShieldCheck, 
     Camera, Settings, Lock, Share2, Award, 
-    Zap, Calendar, MapPin
+    Zap, Calendar, MapPin, AlertTriangle
 } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -23,6 +23,7 @@ export default function BrokerProfilePage() {
 
     const [phone, setPhone] = useState('');
     const [companyName, setCompanyName] = useState('');
+    const [reraLicense, setReraLicense] = useState('');
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -35,6 +36,7 @@ export default function BrokerProfilePage() {
                     setBrokerData(data);
                     setPhone(data.phoneNumber || data.phone || '');
                     setCompanyName(data.companyName || '');
+                    setReraLicense(data.reraLicense || '');
                 }
             } catch (err) {
                 console.error("Profile fetch failed:", err);
@@ -49,11 +51,20 @@ export default function BrokerProfilePage() {
         if (!user?.uid) return;
         setUpdating(true);
         try {
+            const isVerified = reraLicense.trim().length > 0;
             await updateDoc(doc(db, 'users', user.uid), {
                 phoneNumber: phone,
-                companyName: companyName
+                companyName: companyName,
+                reraLicense: reraLicense,
+                reraVerified: isVerified
             });
-            setBrokerData((prev: any) => ({ ...prev, phoneNumber: phone, companyName }));
+            setBrokerData((prev: any) => ({ 
+                ...prev, 
+                phoneNumber: phone, 
+                companyName, 
+                reraLicense,
+                reraVerified: isVerified 
+            }));
         } catch (err) {
             console.error("Update failed", err);
         } finally {
@@ -139,15 +150,31 @@ export default function BrokerProfilePage() {
                         </Box>
                     </Paper>
 
-                    <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#10b981', 0.03), border: '1px solid rgba(16, 185, 129, 0.1)' }}>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <ShieldCheck size={24} color="#10b981" />
-                            <Box>
-                                <Typography variant="body1" fontWeight="950" color="#FFF">VERIFIED AGENT</Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Your credentials have been audited by BIN Group Compliance.</Typography>
-                            </Box>
-                        </Stack>
-                    </Paper>
+                    {brokerData?.reraVerified ? (
+                        <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#10b981', 0.03), border: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <ShieldCheck size={24} color="#10b981" />
+                                <Box>
+                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA VERIFIED AGENT</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                        License #{brokerData.reraLicense || 'N/A'} is fully active and verified.
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Paper>
+                    ) : (
+                        <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#ef4444', 0.03), border: '1px solid rgba(239, 68, 68, 0.1)' }}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <AlertTriangle size={24} color="#ef4444" />
+                                <Box>
+                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA VERIFICATION PENDING</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                        Please provide a valid RERA License Number to activate your broker profile.
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Paper>
+                    )}
                 </Grid>
 
                 {/* ─── CREDENTIALS FORM ─────────────────────────────────────────── */}
@@ -187,6 +214,15 @@ export default function BrokerProfilePage() {
                                     fullWidth label="Associated Brokerage Firm" 
                                     value={companyName} onChange={e => setCompanyName(e.target.value)} 
                                     variant="filled"
+                                    sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: '#FFF' } }} 
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <TextField 
+                                    fullWidth label="RERA License Number" 
+                                    value={reraLicense} onChange={e => setReraLicense(e.target.value)} 
+                                    variant="filled"
+                                    placeholder="e.g. 12345/2026"
                                     sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: '#FFF' } }} 
                                 />
                             </Grid>

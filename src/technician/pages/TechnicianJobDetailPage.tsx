@@ -17,11 +17,11 @@ import {
     Navigation, Clock, MessageSquare, Camera,
     Check, AlertTriangle, Play, Pause,
     ChevronLeft, Phone, MapPin, Wrench,
-    Image as ImageIcon, ShieldCheck, Wifi, WifiOff
+    Image as ImageIcon, ShieldCheck, Wifi, WifiOff, X
 } from 'lucide-react';
 import {
     db, doc, getDoc, updateDoc, serverTimestamp,
-    collection, addDoc, onSnapshot
+    collection, addDoc, onSnapshot, storage, ref, uploadBytes, getDownloadURL
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -44,6 +44,10 @@ export default function TechnicianJobDetailPage() {
     const [isTracking, setIsTracking] = useState(false);
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [snackMsg, setSnackMsg] = useState<string | null>(null);
+    const [photos, setPhotos] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<string[]>([]);
+    const [uploadingPhotos, setUploadingPhotos] = useState(false);
+    const [visibilityWarning, setVisibilityWarning] = useState(false);
 
     // ── Real-time ticket listener ──────────────────────────────────────────────
     useEffect(() => {
@@ -73,6 +77,58 @@ export default function TechnicianJobDetailPage() {
             }
         };
     }, [isTracking, user]);
+
+    // ── Tab visibility listener for background GPS warnings ───────────────────
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden && isTracking) {
+                console.warn("[TechJobDetail] Tab hidden while tracking is active.");
+            } else if (!document.hidden && isTracking) {
+                setVisibilityWarning(true);
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [isTracking]);
+
+    // ── Photo helpers ────────────────────────────────────────────────────────
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const filesArray = Array.from(e.target.files);
+            const updatedPhotos = [...photos, ...filesArray].slice(0, 5);
+            setPhotos(updatedPhotos);
+            
+            // Clean up existing previews to prevent memory leaks
+            previews.forEach(url => URL.revokeObjectURL(url));
+            const newPreviews = updatedPhotos.map(file => URL.createObjectURL(file));
+            setPreviews(newPreviews);
+        }
+    };
+
+    const removePhoto = (index: number) => {
+        // Clean up revoked object URL
+        if (previews[index]) {
+            URL.revokeObjectURL(previews[index]);
+        }
+        setPhotos(prev => prev.filter((_, i) => i !== index));
+        setPreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const uploadPhotosToStorage = async (): Promise<string[]> => {
+        if (photos.length === 0) return [];
+        const photoUrls: string[] = [];
+        const timestamp = Date.now();
+        for (let i = 0; i < photos.length; i++) {
+            const file = photos[i];
+            const fileName = `${timestamp}_${file.name}`;
+            const storagePath = `maintenanceTickets/${id}/proofPhotos/${fileName}`;
+            const fileRef = ref(storage, storagePath);
+            await uploadBytes(fileRef, file);
+            const downloadUrl = await getDownloadURL(fileRef);
+            photoUrls.push(downloadUrl);
+        }
+        return photoUrls;
+    };
 
     // ── SLA Timer ─────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -183,6 +239,10 @@ export default function TechnicianJobDetailPage() {
 
             // ── COMPLETED: stop GPS + request tenant approval ─────────────────
             if (newStatus === 'completed') {
+                setUploadingPhotos(true);
+                const photoUrls = await uploadPhotosToStorage();
+                setUploadingPhotos(false);
+
                 updatePayload.technicianNotes = notes;
                 updatePayload.materialsUsed = materials
                     .split(',')
@@ -191,6 +251,8 @@ export default function TechnicianJobDetailPage() {
                 updatePayload.completedAt = serverTimestamp();
                 updatePayload.tenantApprovalRequired = true;
                 updatePayload.trackingStatus = 'COMPLETED';
+                updatePayload.evidencePhotos = photoUrls;
+                updatePayload.proofPhotos = photoUrls;
                 if (isTracking) {
                     stopLiveTracking(user.uid);
                     setIsTracking(false);
@@ -309,6 +371,13 @@ export default function TechnicianJobDetailPage() {
             {gpsError && (
                 <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>
                     {gpsError}
+                </Alert>
+            )}
+
+            {/* Visibility Warning Alert */}
+            {visibilityWarning && (
+                <Alert severity="warning" onClose={() => setVisibilityWarning(false)} sx={{ mb: 2, borderRadius: 3 }}>
+                    Background GPS tracking may have been suspended. Please keep the app active and screen unlocked when en route.
                 </Alert>
             )}
 
@@ -508,14 +577,71 @@ export default function TechnicianJobDetailPage() {
                                         value={materials} onChange={(e) => setMaterials(e.target.value)}
                                         sx={{ bgcolor: 'rgba(255,255,255,0.02)', '& .MuiFilledInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}
                                     />
+                                    
+                                    <Box>
+                                        <Typography variant="subtitle2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 1, fontWeight: 900 }}>
+                                            EVIDENCE / PROOF OF WORK PHOTOS (Max 5)
+                                        </Typography>
+                                        <Button
+                                            variant="outlined"
+                                            component="label"
+                                            startIcon={uploadingPhotos ? <CircularProgress size={18} color="inherit" /> : <Camera />}
+                                            disabled={uploadingPhotos || actionLoading || photos.length >= 5}
+                                            sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#FFF', '&:hover': { borderColor: binThemeTokens.gold } }}
+                                        >
+                                            {uploadingPhotos ? 'Uploading...' : 'Add Photo'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                hidden
+                                                onChange={handlePhotoChange}
+                                            />
+                                        </Button>
+                                        
+                                        {previews.length > 0 && (
+                                            <Grid container spacing={2} sx={{ mt: 2 }}>
+                                                {previews.map((preview, index) => (
+                                                    <Grid item xs={4} sm={2.4} key={index} sx={{ position: 'relative' }}>
+                                                        <Box
+                                                            component="img"
+                                                            src={preview}
+                                                            sx={{
+                                                                width: '100%',
+                                                                height: 80,
+                                                                borderRadius: 2,
+                                                                objectFit: 'cover',
+                                                                border: '1px solid rgba(255,255,255,0.1)'
+                                                            }}
+                                                        />
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => removePhoto(index)}
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 4,
+                                                                right: 4,
+                                                                bgcolor: 'rgba(0,0,0,0.6)',
+                                                                color: '#FFF',
+                                                                '&:hover': { bgcolor: 'rgba(255,0,0,0.8)' }
+                                                            }}
+                                                        >
+                                                            <X size={12} />
+                                                        </IconButton>
+                                                    </Grid>
+                                                ))}
+                                            </Grid>
+                                        )}
+                                    </Box>
+
                                     <Button
                                         variant="contained" size="large" fullWidth
                                         onClick={() => handleStatusUpdate('completed')}
-                                        disabled={actionLoading || !notes.trim()}
-                                        startIcon={<Check />}
+                                        disabled={actionLoading || !notes.trim() || uploadingPhotos}
+                                        startIcon={uploadingPhotos ? <CircularProgress size={22} color="inherit" /> : <Check />}
                                         sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, py: 2, borderRadius: 4, '&:hover': { bgcolor: '#059669' } }}
                                     >
-                                        COMPLETE MISSION & NOTIFY RESIDENT
+                                        {uploadingPhotos ? 'UPLOADING EVIDENCE...' : 'COMPLETE MISSION & NOTIFY RESIDENT'}
                                     </Button>
                                 </Stack>
                             </Box>
