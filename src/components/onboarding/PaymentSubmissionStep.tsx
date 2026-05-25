@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Button, Stack, Alert, CircularProgress, Paper, Grid, Container, Dialog, DialogTitle, DialogContent, DialogActions, TextField
 } from '@mui/material';
-import { CheckCircle, AlertCircle, Upload, FileText, Download } from 'lucide-react';
+import { CheckCircle, Upload, FileText } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -20,6 +20,22 @@ const readable = (value: string | undefined, fallback: string) => {
     return value;
 };
 
+const resolveMoney = (...values: unknown[]): number => {
+    for (const value of values) {
+        const n = typeof value === 'number' ? value : Number(value);
+        if (Number.isFinite(n) && n > 0) return Math.round(n);
+    }
+    return 0;
+};
+
+const formatMoney = (value: number) => value.toLocaleString('en-AE');
+
+const isAuthStorageFailure = (error: any) => {
+    const code = String(error?.code || '').toLowerCase();
+    const message = String(error?.message || error || '').toLowerCase();
+    return code.includes('storage/unauthenticated') || code.includes('unauthenticated') || message.includes('storage/unauthenticated') || message.includes('user is not authenticated');
+};
+
 export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepProps) {
     const {
         companyProfile,
@@ -29,13 +45,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         onboardingSessionId,
         setIntakeId,
         paymentMethod,
+        paymentManifest,
         selectedPlan,
         selectedAddOns,
         properties,
         portfolioSummary,
         isContractSigned,
-        signatureName,
-        reset
+        signatureName
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
@@ -52,6 +68,20 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     const [reauthLoading, setReauthLoading] = useState(false);
     const ownerEmail = ownerAccount?.email || companyProfile.email || '';
 
+    const annualContractValue = resolveMoney(
+        portfolioSummary?.estimatedACV,
+        paymentManifest?.annualContractValue,
+        selectedPlan?.annualPrice,
+        selectedPlan?.price,
+        selectedPlan?.total
+    );
+    const activationDeposit = resolveMoney(
+        paymentManifest?.activationDeposit,
+        paymentManifest?.amount,
+        annualContractValue > 0 ? Math.round(annualContractValue * 0.15) : 0
+    );
+    const amountDue = activationDeposit || annualContractValue;
+
     // ─── VALIDATION ───────────────────────────────────────────────
     useEffect(() => {
         if (!ownerAccount?.uid) {
@@ -62,6 +92,9 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
         if (!isContractSigned) {
             setError('Contract not signed. Please go back and sign the service agreement.');
+        }
+        if (paymentMethod && isContractSigned && ownerAccount?.uid) {
+            setError(null);
         }
     }, [ownerAccount, paymentMethod, isContractSigned]);
 
@@ -103,15 +136,16 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 if (!file) {
                     throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
                 }
-                
+
+                await activeUser.getIdToken(true);
+
                 // ✅ Storage path must use the live Firebase Auth UID because storage.rules requires request.auth.uid == userId
                 const safeSessionId = onboardingSessionId || intakeId || activeUser.uid;
                 const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
                 const storagePath = `onboarding-proof/${activeUser.uid}/${safeSessionId}/${key}/${Date.now()}_${safeFileName}`;
                 const fileRef = ref(storage, storagePath);
-                
-                // Upload with progress tracking
-                const snapshot = await uploadBytes(fileRef, file, {
+
+                await uploadBytes(fileRef, file, {
                     customMetadata: {
                         uploadedBy: activeUser.email || ownerAccount?.email || companyProfile.email || '',
                         ownerUid: activeUser.uid,
@@ -121,15 +155,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     }
                 });
 
-                // Get download URL
                 const downloadUrl = await getDownloadURL(fileRef);
                 urls[key] = downloadUrl;
-                
+
                 setUploadProgress(prev => ({ ...prev, [key]: 100 }));
                 console.log(`✅ [UPLOAD] ${label} uploaded: ${downloadUrl}`);
             } catch (uploadErr: any) {
                 console.error(`❌ [UPLOAD] ${label} failed:`, uploadErr);
-                throw new Error(`Failed to upload ${label}: ${uploadErr.message}`);
+                throw new Error(`Failed to upload ${label}: ${uploadErr.message || uploadErr.code || String(uploadErr)}`);
             }
         }
 
@@ -169,7 +202,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
 
         try {
-            await currentUser.getIdToken(true); // ensure fresh token for callable
+            await currentUser.getIdToken(true); // ensure fresh token for storage and callable
             const urls = await uploadProofDocuments(currentUser);
             setUploadedUrls(urls);
 
@@ -180,6 +213,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
 
             if (!effectiveIntakeId) throw new Error('Intake ID missing');
             if (!paymentMethod) throw new Error('Payment method not selected');
+            if (amountDue <= 0) throw new Error('Payment amount is missing. Go back and recalculate the quote.');
 
             if (paymentMethod === 'STRIPE') {
                 const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
@@ -188,7 +222,9 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     ownerEmail: effectiveOwnerEmail,
                     intakeId: effectiveIntakeId,
                     onboardingSessionId,
-                    amount: portfolioSummary.estimatedACV
+                    annualContractValue,
+                    activationDeposit: amountDue,
+                    amount: amountDue
                 });
                 const sessionData = sessionRes.data as { url?: string };
                 if (sessionData?.url) {
@@ -207,16 +243,21 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 intakeId: effectiveIntakeId,
                 onboardingSessionId,
                 paymentMethod,
-                amount: portfolioSummary.estimatedACV,
+                amount: amountDue,
+                activationDeposit: amountDue,
+                annualContractValue,
+                paymentManifest: paymentManifest || null,
                 companyProfile: {
                     name: companyProfile.name,
                     licenseNumber: companyProfile.licenseNumber,
-                    email: companyProfile.email
+                    contactPerson: companyProfile.contactPerson,
+                    email: companyProfile.email,
+                    phone: companyProfile.phone
                 },
                 serviceDetails: {
                     properties: properties.length,
                     totalUnits: portfolioSummary.totalUnits,
-                    selectedPlan: selectedPlan?.name || 'Standard',
+                    selectedPlan: selectedPlan?.name || selectedPlan?.packageName || 'Standard',
                     selectedAddOns: selectedAddOns || []
                 },
                 signatureName,
@@ -240,7 +281,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             console.log('[PAYMENT] Waiting for auth hydration...');
             const currentUser = await waitForCurrentUser();
             if (!currentUser) {
-                // Instead of throwing immediately, show inline reauth prompt so owner can re-enter password without losing form state
                 setReauthRequired(true);
                 setError('Your secure login session is not active. Enter the owner password below to reconnect and submit without losing this onboarding form.');
                 setLoading(false);
@@ -252,7 +292,12 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             await submitWithUser(currentUser);
         } catch (err: any) {
             console.error('[PAYMENT] Submission failed:', err);
-            setError(`Payment submission failed: ${err?.message || String(err)}`);
+            if (isAuthStorageFailure(err)) {
+                setReauthRequired(true);
+                setError('Your secure login session expired before the documents could upload. Re-enter the owner password below and press Sign in & Submit. Your uploaded files are still staged on this device.');
+            } else {
+                setError(`Payment submission failed: ${err?.message || String(err)}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -271,6 +316,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         setError(null);
         try {
             const credential = await signInWithEmailAndPassword(auth, ownerEmail.toLowerCase(), reauthPassword);
+            await credential.user.getIdToken(true);
             await submitWithUser(credential.user);
         } catch (err: any) {
             console.error('[PAYMENT] Inline reauth failed:', err?.code || err?.message || err);
@@ -387,19 +433,19 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     <Grid container spacing={2}>
                         <Grid item xs={6}>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Amount Due</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {portfolioSummary.estimatedACV?.toLocaleString()}</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {formatMoney(amountDue)}</Typography>
                         </Grid>
                         <Grid item xs={6}>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Payment Method</Typography>
                             <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{paymentMethod || 'Not Selected'}</Typography>
                         </Grid>
                         <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Properties</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{properties.length}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Annual Contract Value</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {formatMoney(annualContractValue)}</Typography>
                         </Grid>
                         <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Total Units</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{portfolioSummary.totalUnits}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Properties / Units</Typography>
+                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{properties.length} / {portfolioSummary.totalUnits}</Typography>
                         </Grid>
                     </Grid>
                 </Box>
@@ -463,7 +509,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     <Button
                         variant="contained"
                         onClick={() => setConfirmDialog(true)}
-                        disabled={loading || !ownerAccount?.uid || !paymentMethod}
+                        disabled={loading || !ownerAccount?.uid || !paymentMethod || amountDue <= 0}
                         fullWidth
                         sx={{
                             bgcolor: binThemeTokens.gold,
@@ -495,7 +541,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         </Typography>
                         <Box sx={{ p: 2, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, display: 'block', mb: 1 }}>SUBMISSION DETAILS:</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Amount: AED {portfolioSummary.estimatedACV?.toLocaleString()}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Amount Due: AED {formatMoney(amountDue)}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Annual Value: AED {formatMoney(annualContractValue)}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Method: {paymentMethod}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Intake ID: {intakeId || ownerAccount?.uid || onboardingSessionId}</Typography>
                         </Box>
