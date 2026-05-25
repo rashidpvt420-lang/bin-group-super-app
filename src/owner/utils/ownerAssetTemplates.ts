@@ -4,6 +4,7 @@ export type OwnerAssetCategory =
   | 'residential_building'
   | 'tower'
   | 'government_majlis'
+  | 'mosque'
   | 'hotel'
   | 'school'
   | 'hospital'
@@ -47,6 +48,7 @@ export function detectOwnerAssetCategory(asset: any): OwnerAssetCategory {
   const name = normalize(asset?.propertyName || asset?.name || asset?.address);
   const combined = `${type}_${name}`;
 
+  if (combined.includes('mosque') || combined.includes('masjid') || combined.includes('religious_facility')) return 'mosque';
   if (combined.includes('mixed')) return 'mixed_use';
   if (combined.includes('government_majlis') || combined.includes('majlis') || combined.includes('majils')) return 'government_majlis';
   if (combined.includes('hotel') || combined.includes('resort')) return 'hotel';
@@ -138,6 +140,26 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
       { label: 'Protocol', keys: ['majlisProfile.protocolReadiness', 'protocolReadiness'] },
       { label: 'Booking', keys: ['majlisProfile.bookingReadiness', 'bookingReadiness'] },
       { label: 'Preventive Maint.', keys: ['majlisProfile.preventiveMaintenanceReady', 'preventiveMaintenanceReady', 'maintenanceReadiness'] },
+    ],
+  },
+  mosque: {
+    category: 'mosque',
+    title: 'Mosque / Masjid Intelligence',
+    fields: [
+      { label: 'Authority', keys: ['mosqueProfile.regulatoryAuthority', 'regulatoryAuthority'] },
+      { label: 'Service Scope', keys: ['mosqueProfile.serviceScope', 'serviceScope'] },
+      { label: 'Worshipper Capacity', keys: ['mosqueProfile.maxWorshipperCapacity', 'capacity', 'rooms'] },
+      { label: 'Ramadan Peak', keys: ['mosqueProfile.ramadanPeakCapacity', 'ramadanPeakCapacity'] },
+      { label: 'Wudu Areas', keys: ['mosqueProfile.wuduAreasCount', 'wuduAreasCount', 'units'] },
+      { label: 'Prayer-Time Rule', keys: ['mosqueProfile.complianceRules.noMaintenanceDuringPrayerTimes'] },
+      { label: 'Daily Wudu Cycles', keys: ['mosqueProfile.complianceRules.wuduCleaningAfterEveryPrayer'] },
+      { label: 'Carpet Area', keys: ['mosqueProfile.carpetAreaSqm', 'carpetAreaSqm'] },
+      { label: 'Marble Area', keys: ['mosqueProfile.marbleAreaSqm', 'marbleAreaSqm'] },
+      { label: 'Chandeliers', keys: ['mosqueProfile.chandeliersCount', 'chandeliersCount'] },
+      { label: 'HVAC Units', keys: ['mosqueProfile.hvacUnitsCount', 'hvacUnitsCount', 'hvacCount'] },
+      { label: 'PA System', keys: ['mosqueProfile.paSystemInstalled', 'paSystemInstalled'] },
+      { label: 'Ramadan Readiness', keys: ['mosqueProfile.complianceRules.ramadanSurgePlanRequired'] },
+      { label: 'Contract Structure', keys: ['mosqueProfile.preferredContractStructure', 'preferredContractStructure'] },
     ],
   },
   hotel: {
@@ -269,6 +291,14 @@ export function getNestedValue(source: any, path: string) {
 
 function professionalFallback(asset: any, label: string) {
   const category = detectOwnerAssetCategory(asset);
+  if (category === 'mosque') {
+    const lowerLabel = normalize(label);
+    if (['authority', 'service_scope', 'contract_structure'].includes(lowerLabel)) return 'Pending compliance setup';
+    if (['worshipper_capacity', 'ramadan_peak', 'wudu_areas', 'carpet_area', 'marble_area', 'chandeliers', 'hvac_units'].includes(lowerLabel)) return 'Pending mosque survey';
+    if (['prayer_time_rule', 'daily_wudu_cycles', 'ramadan_readiness'].includes(lowerLabel)) return 'Required';
+    return 'Pending mosque profile';
+  }
+
   if (category !== 'government_majlis') return 'Pending setup';
 
   const lowerLabel = normalize(label);
