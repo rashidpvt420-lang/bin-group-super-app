@@ -118,7 +118,9 @@ export default function TechnicianJobDetailPage() {
                         techPhone = techData.phone || techData.mobile || '';
                         techSpecialty = techData.specialty || techData.trade || techSpecialty;
                     }
-                } catch (_) {}
+                } catch (profileError) {
+                    console.warn('[TechJobDetail] Technician profile lookup failed:', profileError);
+                }
 
                 updatePayload.assignedTechnicianId = user.uid;
                 updatePayload.technicianUid = user.uid;
