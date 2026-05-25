@@ -25,6 +25,9 @@ import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
+import OwnerComplaintPage from './pages/OwnerComplaintPage';
+import OwnerTicketsPage from './pages/OwnerTicketsPage';
+import OwnerTicketDetailPage from './pages/OwnerTicketDetailPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -128,6 +131,10 @@ export default function OwnerApp() {
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
+                {/* Complaint & Ticket tracking routes */}
+                <Route path="/complaint" element={<OwnerComplaintPage />} />
+                <Route path="/tickets" element={<OwnerTicketsPage />} />
+                <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
             </Routes>
         </OwnerLayout>
     );
