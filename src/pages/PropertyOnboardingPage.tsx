@@ -23,6 +23,7 @@ import ProofUploadStep from '../components/onboarding/ProofUploadStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
 import ContractSignatureStep from '../components/onboarding/ContractSignatureStep';
+import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
 import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
 const readable = (value: string | undefined, fallback: string) => {
@@ -48,7 +49,8 @@ const PropertyOnboardingPage = () => {
         readable(t('onboarding.verification'), 'Account'),
         readable(t('onboarding.review'), 'Review'),
         readable(t('onboarding.contract'), 'Contract'),
-        readable(t('onboarding.payment'), 'Payment'),
+        readable(t('onboarding.payment_options'), 'Payment Options'),
+        readable(t('onboarding.payment_submission'), 'Submit Payment'),
     ];
 
     const safeStep = clampStep(step, onboardingSteps.length);
@@ -68,7 +70,8 @@ const PropertyOnboardingPage = () => {
             case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
             case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
             case 9: return <ContractSignatureStep onNext={nextStep} onBack={prevStep} />;
-            case 10: return <PaymentSubmissionStep onBack={prevStep} />;
+            case 10: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
+            case 11: return <PaymentSubmissionStep onBack={prevStep} />;
             default: return <CompanyProfileStep onNext={nextStep} />;
         }
     };
