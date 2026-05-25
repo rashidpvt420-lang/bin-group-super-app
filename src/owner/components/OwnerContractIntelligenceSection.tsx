@@ -106,6 +106,15 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
                     <Chip label={asset.occupancyModel.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
                     <Chip label={`Deed: ${asset.titleDeedStatus}`} size="small" sx={{ bgcolor: alpha(asset.titleDeedStatus === 'MISSING' ? '#ef4444' : '#10b981', 0.12), color: asset.titleDeedStatus === 'MISSING' ? '#fca5a5' : '#10b981', fontWeight: 900 }} />
                     <Chip label={`Recommend: ${asset.contractRecommendation.replace(/_/g, ' ')}`} size="small" sx={{ bgcolor: alpha(modeColor(asset.contractRecommendation), 0.12), color: modeColor(asset.contractRecommendation), fontWeight: 900 }} />
+                    <Chip 
+                      label={asset.contractRecommendation === mode ? "Optimal Contract Scope" : "Upgrade Scope Recommended"} 
+                      size="small" 
+                      sx={{ 
+                        bgcolor: alpha(asset.contractRecommendation === mode ? '#10b981' : '#f59e0b', 0.12), 
+                        color: asset.contractRecommendation === mode ? '#10b981' : '#f59e0b', 
+                        fontWeight: 900 
+                      }} 
+                    />
                   </Stack>
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }}>

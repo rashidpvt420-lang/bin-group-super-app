@@ -11,9 +11,12 @@ import OwnerRoiFinancialSection from '../components/OwnerRoiFinancialSection';
 import OwnerAuthorizedReportersSection from '../components/OwnerAuthorizedReportersSection';
 import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCenter';
 import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
+import OwnerContractModeMatrix from '../components/OwnerContractModeMatrix';
 import { resolveOwnerFinancials } from '../utils/ownerFinancialResolver';
 import { resolveOwnerComplaint } from '../utils/ownerComplaintResolver';
 import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
+import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
+import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 
 const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'READY_FOR_ACTIVATION', 'SIGNED']);
 const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'OWNER_SIGNED', 'SIGNED']);
@@ -176,6 +179,7 @@ export default function OwnerDashboardResolvedPage() {
   const [reporters, setReporters] = useState<any[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(true);
   const [tenantCount, setTenantCount] = useState(0);
+  const [ledgerSummary, setLedgerSummary] = useState<any>(null);
 
   useEffect(() => {
     let alive = true;
@@ -221,6 +225,9 @@ export default function OwnerDashboardResolvedPage() {
         const paymentMap = new Map<string, any>();
         const reporterMap = new Map<string, any>();
         const occupancyMap = new Map<string, any>();
+        const leaseMap = new Map<string, any>();
+        const ledgerMap = new Map<string, any>();
+        const invitationMap = new Map<string, any>();
 
         if (authUid) {
           for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', authUid)) ticketMap.set(ticket.id, ticket);
@@ -231,10 +238,19 @@ export default function OwnerDashboardResolvedPage() {
           for (const rep of await getCollectionDocs('propertyReporters', 'ownerUid', authUid)) reporterMap.set(rep.id, rep);
           for (const occ of await getCollectionDocs('occupancies', 'ownerId', authUid)) occupancyMap.set(occ.id, occ);
           for (const occ of await getCollectionDocs('occupancies', 'ownerUid', authUid)) occupancyMap.set(occ.id, occ);
+          for (const l of await getCollectionDocs('leases', 'ownerId', authUid)) leaseMap.set(l.id, l);
+          for (const l of await getCollectionDocs('leases', 'ownerUid', authUid)) leaseMap.set(l.id, l);
+          for (const led of await getCollectionDocs('tenant_ledger', 'ownerId', authUid)) ledgerMap.set(led.id, led);
+          for (const led of await getCollectionDocs('tenant_ledger', 'ownerUid', authUid)) ledgerMap.set(led.id, led);
+          for (const inv of await getCollectionDocs('tenantInvitations', 'ownerId', authUid)) invitationMap.set(inv.id, inv);
+          for (const inv of await getCollectionDocs('tenantInvitations', 'ownerUid', authUid)) invitationMap.set(inv.id, inv);
         }
 
         for (const email of exactEmails) {
           for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerEmail', email)) ticketMap.set(ticket.id, ticket);
+          for (const l of await getCollectionDocs('leases', 'ownerEmail', email)) leaseMap.set(l.id, l);
+          for (const led of await getCollectionDocs('tenant_ledger', 'ownerEmail', email)) ledgerMap.set(led.id, led);
+          for (const inv of await getCollectionDocs('tenantInvitations', 'ownerEmail', email)) invitationMap.set(inv.id, inv);
         }
 
         if (resolved.contract?.id) {
@@ -247,13 +263,22 @@ export default function OwnerDashboardResolvedPage() {
         const resolvedComplaints = allTickets.map(resolveOwnerComplaint);
         const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), Array.from(paymentMap.values()), allTickets);
         const resolvedReporters = Array.from(reporterMap.values()).map(resolvePropertyReporter);
+        const resolvedLedger = resolveTenantLedger(
+          linkedProperties,
+          Array.from(occupancyMap.values()),
+          Array.from(invitationMap.values()),
+          Array.from(leaseMap.values()),
+          Array.from(ledgerMap.values()),
+          Array.from(paymentMap.values())
+        );
 
         if (alive) {
           setTickets(openTickets);
           setFinancials(finData);
           setComplaints(resolvedComplaints);
           setReporters(resolvedReporters);
-          setTenantCount(Array.from(occupancyMap.values()).filter((occ) => ['ACCEPTED', 'ACTIVE', 'SIGNED', 'OCCUPIED'].includes(String(occ.occupancyStatus || occ.status || '').toUpperCase())).length);
+          setLedgerSummary(resolvedLedger);
+          setTenantCount(resolvedLedger.activeTenants);
           setLoadingExtras(false);
         }
       } catch (err: any) {
@@ -405,6 +430,10 @@ export default function OwnerDashboardResolvedPage() {
       <OwnerContractIntelligenceSection contract={contract} properties={properties} tenantCount={tenantCount} reporterCount={reporters.filter((r) => r.accessStatus !== 'SUSPENDED').length} />
 
       <Box sx={{ mt: 5 }}>
+        <OwnerContractModeMatrix user={user} contract={contract} properties={properties} />
+      </Box>
+
+      <Box sx={{ mt: 5 }}>
         <OwnerExecutiveDashboardSection properties={properties} stats={executiveStats} contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''} missingInfo={missingInfo} user={user} contract={contract} />
       </Box>
       
@@ -414,9 +443,11 @@ export default function OwnerDashboardResolvedPage() {
         <OwnerAuthorizedReportersSection properties={properties} reporters={reporters} onAddReporter={handleAddReporter} onRemoveReporter={handleRemoveReporter} loading={loadingExtras} />
       </Box>
 
-      <Box sx={{ mt: 5 }} id="complaints-command-center">
-        <OwnerComplaintCommandCenter complaints={complaints} properties={properties} />
-      </Box>
+      {canSeeMaintenance(detectContractMode(contract)) && (
+        <Box sx={{ mt: 5 }} id="complaints-command-center">
+          <OwnerComplaintCommandCenter complaints={complaints} properties={properties} />
+        </Box>
+      )}
     </Box>
   );
 }
