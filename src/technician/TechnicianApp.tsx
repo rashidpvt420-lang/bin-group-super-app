@@ -14,6 +14,7 @@ import TechnicianChatPage from './pages/TechnicianChatPage';
 import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
+import TechnicianHRPage from './pages/TechnicianHRPage';
 
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -71,7 +72,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         </IconButton>
                         
                         <NotificationBell />
-
+ 
                         <Avatar 
                             onClick={() => navigate('/technician/profile')}
                             sx={{ 
@@ -136,6 +137,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
+                <Route path="/hr" element={<TechnicianHRPage />} />
             </Routes>
         </TechnicianLayout>
     );

@@ -327,6 +327,23 @@ export default function TechnicianDashboardPage() {
                         <DetailRow label="Roster status" value={textOrPending(latestStaffRow.status, latestStaffRow.dutyStatus)} />
                         <DetailRow label="Monthly completions" value={stats.completedMonth} />
                         <DetailRow label="Leave balance" value={textOrPending(profile.leaveBalance, profile.annualLeaveBalance)} />
+                        <Button 
+                            fullWidth 
+                            variant="outlined" 
+                            onClick={() => navigate('/technician/hr')}
+                            sx={{ 
+                                mt: 2, 
+                                borderColor: binThemeTokens.gold, 
+                                color: binThemeTokens.gold, 
+                                fontWeight: 950,
+                                '&:hover': {
+                                    bgcolor: alpha(binThemeTokens.gold, 0.05),
+                                    borderColor: binThemeTokens.gold
+                                }
+                            }}
+                        >
+                            HR & REQUESTS
+                        </Button>
                     </Paper>
                 </Grid>
 
