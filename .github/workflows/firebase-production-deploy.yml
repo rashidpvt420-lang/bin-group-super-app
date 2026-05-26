@@ -76,4 +76,4 @@ jobs:
         run: npm run build --workspace functions
 
       - name: Deploy Firebase Hosting, Functions, Firestore rules/indexes, and Storage rules
-        run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive
+        run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
