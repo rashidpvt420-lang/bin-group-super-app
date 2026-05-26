@@ -51,19 +51,26 @@ export default function BrokerProfilePage() {
         if (!user?.uid) return;
         setUpdating(true);
         try {
-            const isVerified = reraLicense.trim().length > 0;
+            const isLicenseChanged = reraLicense.trim() !== (brokerData?.reraLicense || '').trim();
+            const newStatus = isLicenseChanged 
+                ? (reraLicense.trim().length > 0 ? 'PENDING' : 'NOT_SUBMITTED')
+                : (brokerData?.reraStatus || 'NOT_SUBMITTED');
+            const newVerified = isLicenseChanged ? false : (brokerData?.reraVerified || false);
+
             await updateDoc(doc(db, 'users', user.uid), {
                 phoneNumber: phone,
                 companyName: companyName,
                 reraLicense: reraLicense,
-                reraVerified: isVerified
+                reraVerified: newVerified,
+                reraStatus: newStatus
             });
             setBrokerData((prev: any) => ({ 
                 ...prev, 
                 phoneNumber: phone, 
                 companyName, 
                 reraLicense,
-                reraVerified: isVerified 
+                reraVerified: newVerified,
+                reraStatus: newStatus
             }));
         } catch (err) {
             console.error("Update failed", err);
@@ -162,14 +169,38 @@ export default function BrokerProfilePage() {
                                 </Box>
                             </Stack>
                         </Paper>
+                    ) : brokerData?.reraStatus === 'PENDING' ? (
+                        <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#f59e0b', 0.03), border: '1px solid rgba(245, 158, 11, 0.1)' }}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <AlertTriangle size={24} color="#f59e0b" />
+                                <Box>
+                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA VERIFICATION PENDING</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                        License #{brokerData.reraLicense} is under review. You will receive a verified badge once authorized.
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Paper>
+                    ) : brokerData?.reraStatus === 'REJECTED' ? (
+                        <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#ef4444', 0.03), border: '1px solid rgba(239, 68, 68, 0.1)' }}>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                                <AlertTriangle size={24} color="#ef4444" />
+                                <Box>
+                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA LICENSE REJECTED</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                        Your RERA license number could not be verified. Please review and update your credentials.
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Paper>
                     ) : (
                         <Paper sx={{ mt: 4, p: 4, borderRadius: 8, bgcolor: alpha('#ef4444', 0.03), border: '1px solid rgba(239, 68, 68, 0.1)' }}>
                             <Stack direction="row" spacing={2} alignItems="center">
                                 <AlertTriangle size={24} color="#ef4444" />
                                 <Box>
-                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA VERIFICATION PENDING</Typography>
+                                    <Typography variant="body1" fontWeight="950" color="#FFF">RERA LICENSE REQUIRED</Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-                                        Please provide a valid RERA License Number to activate your broker profile.
+                                        Please provide a valid RERA License Number to verify your broker profile.
                                     </Typography>
                                 </Box>
                             </Stack>
