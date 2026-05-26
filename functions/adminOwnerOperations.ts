@@ -181,7 +181,19 @@ function activeProperty(raw: any, intakeId: string, ownerId: string, owner: any,
     verified: true,
     approved: true,
     source: "ADMIN_APPROVED_OWNER_ONBOARDING",
-    activatedAtIso: new Date().toISOString()
+    activatedAtIso: new Date().toISOString(),
+    // Preserve custom institutional, mosque and Majlis profiles
+    mosqueProfile: clean(raw?.mosqueProfile || null),
+    majlis: Boolean(raw?.majlis),
+    majlisType: s(raw?.majlisType),
+    majlisSubtype: s(raw?.majlisSubtype),
+    riskProfile: s(raw?.riskProfile),
+    serviceModel: s(raw?.serviceModel),
+    missions: clean(raw?.missions || null),
+    tank: Boolean(raw?.tank),
+    hvac: Boolean(raw?.hvac),
+    sira: Boolean(raw?.sira),
+    fireAlarm: Boolean(raw?.fireAlarm)
   });
 }
 
