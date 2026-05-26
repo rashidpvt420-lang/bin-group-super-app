@@ -18,6 +18,27 @@ function textValue(value: any, fallback = '---') {
     return text || fallback;
 }
 
+function asDate(value: any): Date | null {
+    if (!value) return null;
+    if (typeof value?.toDate === "function") return value.toDate();
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    if (typeof value === "string" || typeof value === "number") {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    if (typeof value === "object" && Number.isFinite(Number(value.seconds))) {
+        const parsed = new Date(Number(value.seconds) * 1000);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+}
+
+function addMonthsPreservingTime(date: Date, months: number): Date {
+    const copy = new Date(date.getTime());
+    copy.setMonth(copy.getMonth() + months);
+    return copy;
+}
+
 function normalizeContractMode(data: any) {
     const raw = String(data.contractMode || data.contractType || data.planName || data.strategy || '').toLowerCase();
     if (raw.includes('property') && !raw.includes('maintenance')) return 'PROPERTY_MANAGEMENT_ONLY';
@@ -36,6 +57,101 @@ function contractModeLabel(mode: string) {
             return 'Maintenance + Property Management / الصيانة وإدارة العقار معاً';
         default:
             return 'Maintenance Only / الصيانة فقط';
+    }
+}
+
+function getScopeDetails(mode: string) {
+    if (mode === 'PROPERTY_MANAGEMENT_ONLY') {
+        return {
+            titleEn: 'Property Management Only',
+            titleAr: 'إدارة العقار فقط',
+            coveredEn: [
+                'Tenant coordination and owner reporting',
+                'Rent/payment follow-up workflow',
+                'Lease and document coordination support',
+                'Owner dashboard governance records'
+            ],
+            coveredAr: [
+                'التنسيق مع المستأجرين وتقارير المالك',
+                'متابعة الإيجار وسير عمل الدفعات',
+                'عقود الإيجار ودعم تنسيق المستندات',
+                'سجلات حوكمة لوحة تحكم المالك'
+            ],
+            notCoveredEn: [
+                'Facility repairs and maintenance labour',
+                'Materials, spare parts, and replacement assets',
+                'Capital works or authority fees',
+                'Emergency technical callouts unless separately approved'
+            ],
+            notCoveredAr: [
+                'إصلاحات المرافق وأجور عمالة الصيانة',
+                'المواد، قطع الغيار، واستبدال الأصول',
+                'الأعمال الرأسمالية أو رسوم الجهات الحكومية',
+                'بلاغات الطوارئ الفنية ما لم تتم الموافقة عليها بشكل منفصل'
+            ]
+        };
+    } else if (mode === 'MAINTENANCE_AND_PROPERTY_MANAGEMENT') {
+        return {
+            titleEn: 'Property Management + Facility Maintenance',
+            titleAr: 'إدارة العقارات وصيانة المرافق معاً',
+            coveredEn: [
+                'Property management coordination',
+                'Facility maintenance ticket handling',
+                'Preventive maintenance planning',
+                'Technician/contractor dispatch governance',
+                'Owner dashboard and property passport records'
+            ],
+            coveredAr: [
+                'تنسيق إدارة العقار',
+                'معالجة بلاغات صيانة المرافق',
+                'تخطيط الصيانة الوقائية',
+                'حوكمة توجيه الفنيين/المقاولين',
+                'سجلات لوحة تحكم المالك وجواز سفر العقار'
+            ],
+            notCoveredEn: [
+                'Major capital works without separate quotation',
+                'Authority fines, permits, or government fees',
+                'Major material replacement not included in the package',
+                'Owner-requested upgrades outside approved scope'
+            ],
+            notCoveredAr: [
+                'الأعمال الرأسمالية الكبرى بدون عرض سعر منفصل',
+                'غرامات الجهات أو التصاريح أو الرسوم الحكومية',
+                'استبدال المواد الكبرى غير المشمولة في الباقة',
+                'الترقيات المطلوبة من المالك خارج النطاق المعتمد'
+            ]
+        };
+    } else {
+        return {
+            titleEn: 'Maintenance Contract Only',
+            titleAr: 'عقد الصيانة فقط',
+            coveredEn: [
+                'Corrective maintenance request handling',
+                'Preventive maintenance scheduling',
+                'Emergency triage according to SLA',
+                'Before/after evidence where applicable',
+                'Admin-supervised technician coordination'
+            ],
+            coveredAr: [
+                'معالجة طلبات الصيانة التصحيحية',
+                'جدولة الصيانة الوقائية',
+                'فرز حالات الطوارئ وفقاً لاتفاقية مستوى الخدمة',
+                'توثيق ما قبل وما بعد العمل عند الاقتضاء',
+                'تنسيق الفنيين تحت إشراف الإدارة'
+            ],
+            notCoveredEn: [
+                'Property management, rent collection, or tenant leasing',
+                'Major capital works without separate quotation',
+                'Authority fines, permits, or government fees',
+                'Materials and spare parts unless included in package'
+            ],
+            notCoveredAr: [
+                'إدارة العقارات، تحصيل الإيجار، أو تأجير المستأجرين',
+                'الأعمال الرأسمالية الكبرى بدون عرض سعر منفصل',
+                'غرامات الجهات أو التصاريح أو الرسوم الحكومية',
+                'المواد وقطع الغيار ما لم تكن مشمولة في الباقة'
+            ]
+        };
     }
 }
 
@@ -100,7 +216,7 @@ export async function generateContractPDF(data: any) {
         const doc = new PDFDocument({
             margin: 50,
             size: 'A4',
-            info: { Title: 'BIN GROUP Owner Service Agreement', Author: 'BIN GROUP Super App' }
+            info: { Title: '13-Month Owner Service Agreement', Author: 'BIN GROUP Super App' }
         });
         const chunks: Buffer[] = [];
 
@@ -130,8 +246,8 @@ export async function generateContractPDF(data: any) {
         });
 
         doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
-        doc.fillColor(INK).fontSize(10).text('OWNER SERVICE AGREEMENT', { align: 'center' });
-        doc.fillColor(MUTED).fontSize(9).text('اتفاقية خدمات المالك', { align: 'center' });
+        doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT', { align: 'center' });
+        doc.fillColor(MUTED).fontSize(9).text('اتفاقية خدمات المالك لمدة 13 شهراً', { align: 'center' });
         doc.moveDown(0.6);
         doc.fillColor(MUTED).fontSize(7).text(`Version: ${AGREEMENT_VERSION} | Contract ID: ${contractId} | Hash: ${documentHash.slice(0, 20)}...`, { align: 'center' });
         doc.moveDown(0.9);
@@ -145,6 +261,14 @@ export async function generateContractPDF(data: any) {
         row(doc, 'Company / الشركة', textValue(data.companyName || data.entityName || 'Private Owner'));
         row(doc, 'Service Provider / مقدم الخدمة', 'BIN GROUP L.L.C - S.P.C');
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
+
+        const start = asDate(data.effectiveFrom || data.validFrom || data.startedAt || data.ownerSignature?.signedAt || data.ownerSignedAt || data.signedAt);
+        if (start) {
+            const end = addMonthsPreservingTime(start, 13);
+            row(doc, 'Contract Term / مدة العقد', `13 Months: ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / مستمر لمدة 13 شهراً`);
+        } else {
+            row(doc, 'Contract Term / مدة العقد', 'Continuous until expiry/termination / مستمر حتى انتهاء العقد أو فسخه');
+        }
 
         section(doc, '2. Property and Submitted Details', 'بيانات العقار والمستندات المقدمة');
         row(doc, 'Property Name / اسم العقار', textValue(data.propertyName || data.propertyTitle || data.address));
@@ -166,17 +290,29 @@ export async function generateContractPDF(data: any) {
         row(doc, 'VAT / ضريبة القيمة المضافة', textValue(data.vatTreatment || 'VAT applies where legally required'));
 
         section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');
+        const details = getScopeDetails(contractMode);
+        if (contractMode === 'MAINTENANCE_ONLY') {
+            para(doc,
+                'Maintenance Only: BIN GROUP is responsible only for agreed maintenance services, complaint handling, technician dispatch, service evidence, and maintenance reporting. Rent collection, lease management, tenancy disputes, eviction support, broker management, and tenant financial ledgers are excluded unless separately contracted.',
+                'الصيانة فقط: تكون مسؤولية مجموعة بن محصورة في خدمات الصيانة المتفق عليها، وإدارة البلاغات، وتوجيه الفنيين، وتوثيق الخدمة، وتقارير الصيانة. ولا تشمل تحصيل الإيجار أو إدارة عقود الإيجار أو نزاعات المستأجرين أو الإخلاء أو إدارة الوسطاء أو دفاتر حسابات المستأجرين إلا باتفاق منفصل.'
+            );
+        } else if (contractMode === 'PROPERTY_MANAGEMENT_ONLY') {
+            para(doc,
+                'Property Management Only: BIN GROUP is responsible only for agreed property administration, occupancy visibility, tenant records, document coordination, owner reporting, and rent/ledger visibility where included. Physical repairs, replacement parts, emergency maintenance, technician dispatch, and contractor costs are excluded unless separately approved and paid.',
+                'إدارة العقار فقط: تكون مسؤولية مجموعة بن محصورة في الإدارة العقارية المتفق عليها، ومتابعة الإشغال، وسجلات المستأجرين، وتنسيق المستندات، وتقارير المالك، وعرض الإيجارات والدفعات عند شمولها. ولا تشمل الإصلاحات الفعلية أو قطع الغيار أو الصيانة الطارئة أو توجيه الفنيين أو تكاليف المقاولين إلا بعد الموافقة والسداد بشكل منفصل.'
+            );
+        } else {
+            para(doc,
+                'Maintenance + Property Management: BIN GROUP may provide both operational maintenance and property management according to the approved package, service schedule, SLA tier, exclusions, and payment plan.',
+                'الصيانة وإدارة العقار معاً: يجوز لمجموعة بن تقديم خدمات الصيانة التشغيلية وإدارة العقار وفقاً للباقة المعتمدة وجدول الخدمات ومستوى الخدمة والاستثناءات وخطة السداد.'
+            );
+        }
+
+        const startForWindow = start || new Date();
+        const firstMonthEnds = addMonthsPreservingTime(startForWindow, 1);
         para(doc,
-            'If Maintenance Only is selected, BIN GROUP is responsible only for agreed maintenance services, complaint handling, technician dispatch, service evidence, and maintenance reporting. Rent collection, lease management, tenancy disputes, eviction support, broker management, and tenant financial ledgers are excluded unless separately contracted.',
-            'إذا تم اختيار الصيانة فقط، تكون مسؤولية مجموعة بن محصورة في خدمات الصيانة المتفق عليها، وإدارة البلاغات، وتوجيه الفنيين، وتوثيق الخدمة، وتقارير الصيانة. ولا تشمل تحصيل الإيجار أو إدارة عقود الإيجار أو نزاعات المستأجرين أو الإخلاء أو إدارة الوسطاء أو دفاتر حسابات المستأجرين إلا باتفاق منفصل.'
-        );
-        para(doc,
-            'If Property Management Only is selected, BIN GROUP is responsible only for agreed property administration, occupancy visibility, tenant records, document coordination, owner reporting, and rent/ledger visibility where included. Physical repairs, replacement parts, emergency maintenance, technician dispatch, and contractor costs are excluded unless separately approved and paid.',
-            'إذا تم اختيار إدارة العقار فقط، تكون مسؤولية مجموعة بن محصورة في الإدارة العقارية المتفق عليها، ومتابعة الإشغال، وسجلات المستأجرين، وتنسيق المستندات، وتقارير المالك، وعرض الإيجارات والدفعات عند شمولها. ولا تشمل الإصلاحات الفعلية أو قطع الغيار أو الصيانة الطارئة أو توجيه الفنيين أو تكاليف المقاولين إلا بعد الموافقة والسداد بشكل منفصل.'
-        );
-        para(doc,
-            'If Maintenance + Property Management is selected, BIN GROUP may provide both operational maintenance and property management according to the approved package, service schedule, SLA tier, exclusions, and payment plan.',
-            'إذا تم اختيار الصيانة وإدارة العقار معاً، يجوز لمجموعة بن تقديم خدمات الصيانة التشغيلية وإدارة العقار وفقاً للباقة المعتمدة وجدول الخدمات ومستوى الخدمة والاستثناءات وخطة السداد.'
+            `Cancellation / Upgrade Window: During the first month from the digital signature timestamp (until ${firstMonthEnds.toLocaleDateString('en-AE')}), the Owner may request cancellation or upgrade. Cancellation or upgrade requires BIN GROUP admin review of onboarding, payment, inspection, and consumed services.`,
+            `فترة الإلغاء أو الترقية: خلال الشهر الأول من تاريخ التوقيع الرقمي (حتى ${firstMonthEnds.toLocaleDateString('en-AE')})، يجوز للمالك تقديم طلب إلغاء العقد أو ترقية الباقة. ويتطلب إلغاء العقد أو الترقية مراجعة إدارية من مجموعة بن لبيانات البدء، والدفعات، والفحوصات، والخدمات المستهلكة.`
         );
 
         section(doc, '5. Institutional and Non-Tenant Property Logic', 'منطق العقارات المؤسسية وغير القائمة على المستأجرين');
@@ -185,11 +321,22 @@ export async function generateContractPDF(data: any) {
             'بالنسبة للمجالس والمباني الحكومية والمستشفيات والمدارس والجامعات والمراكز التجارية والفنادق وسكن الموظفين والمرافق المجتمعية وما يماثلها، يجوز للنظام استخدام مبلغين معتمدين بدلاً من عقود المستأجرين. ويجوز للمبلغين تقديم البلاغات والحوادث والصور والملاحظات وطلبات الخدمة، ولا يكتسبون حقوق إيجار أو ملكية أو عمل أو دفع أو وكالة من خلال المنصة.'
         );
 
-        section(doc, '6. Scope of Work', 'نطاق العمل');
+        section(doc, '6. Scope of Work (Covered Services)', 'نطاق العمل (الخدمات المشمولة)');
         para(doc,
-            'BIN GROUP shall provide only the services expressly listed in the selected package, approved quotation, digital contract summary, service schedule, or written addendum. Additional works, emergency works, specialist works, authority approvals, third-party contractor works, materials, replacement parts, legal work, government fees, inspections, design, fit-out, civil works, MEP upgrades, or out-of-scope requests require prior written approval and additional payment.',
-            'تقدم مجموعة بن فقط الخدمات المذكورة صراحةً في الباقة المختارة أو عرض السعر المعتمد أو ملخص العقد الرقمي أو جدول الخدمات أو الملحق الخطي. وتتطلب الأعمال الإضافية أو الطارئة أو المتخصصة أو موافقات الجهات أو أعمال المقاولين الخارجيين أو المواد أو قطع الغيار أو الأعمال القانونية أو الرسوم الحكومية أو الفحوصات أو التصميم أو التشطيب أو الأعمال المدنية أو ترقيات الأعمال الكهروميكانيكية أو أي طلب خارج النطاق موافقة خطية مسبقة وسداداً إضافياً.'
+            `Covered Services under ${details.titleEn}:\n` + details.coveredEn.map(item => `• ${item}`).join('\n'),
+            `الخدمات المشمولة بموجب ${details.titleAr}:\n` + details.coveredAr.map(item => `• ${item}`).join('\n')
         );
+
+        const selectedAddOns = data.selectedAddOns || [];
+        if (selectedAddOns.length) {
+            const addOnsList = selectedAddOns.map((item: any) => typeof item === 'string' ? item : (item?.name || item?.title || '')).filter(Boolean);
+            if (addOnsList.length) {
+                para(doc,
+                    'Selected Add-ons:\n' + addOnsList.map((item: string) => `• ${item}`).join('\n'),
+                    'الإضافات المختارة:\n' + addOnsList.map((item: string) => `• ${item}`).join('\n')
+                );
+            }
+        }
 
         section(doc, '7. Owner Obligations', 'التزامات المالك');
         para(doc,
@@ -209,10 +356,10 @@ export async function generateContractPDF(data: any) {
             'يلتزم المالك بسداد جميع الرسوم المتفق عليها وفقاً لعرض السعر المقبول وخطة السداد. ويجوز لمجموعة بن تعليق الخدمات أو لوحات التحكم أو دعوات المستأجرين أو توجيه الفنيين أو الموافقات أو إصدار المستندات أو تفعيل العقد إذا كانت الدفعات متأخرة أو معكوسة أو محل نزاع دون أساس صحيح أو مستردة أو غير مكتملة.'
         );
 
-        section(doc, '10. Exclusions', 'الاستثناءات');
+        section(doc, '10. Exclusions (Not Covered)', 'الاستثناءات (البنود غير المشمولة)');
         para(doc,
-            'Unless expressly included in writing, BIN GROUP is not responsible for hidden defects, pre-existing defects, structural defects, design defects, defective materials, illegal modifications, authority violations, tenant disputes, rent disputes, eviction, bounced cheques, legal notices, court filings, loss of rent, business interruption, loss of profit, indirect loss, consequential loss, reputational damage, force majeure, misuse, negligence, unauthorized repairs, or acts of third parties.',
-            'ما لم يتم النص صراحةً كتابةً، لا تكون مجموعة بن مسؤولة عن العيوب المخفية أو السابقة أو الإنشائية أو التصميمية أو المواد المعيبة أو التعديلات غير القانونية أو مخالفات الجهات أو نزاعات المستأجرين أو نزاعات الإيجار أو الإخلاء أو الشيكات المرتجعة أو الإشعارات القانونية أو قضايا المحاكم أو فقدان الإيجار أو توقف الأعمال أو خسارة الأرباح أو الخسائر غير المباشرة أو التبعية أو ضرر السمعة أو القوة القاهرة أو سوء الاستخدام أو الإهمال أو الإصلاحات غير المصرح بها أو تصرفات الأطراف الثالثة.'
+            `Excluded Items under ${details.titleEn}:\n` + details.notCoveredEn.map(item => `• ${item}`).join('\n'),
+            `البنود غير المشمولة بموجب ${details.titleAr}:\n` + details.notCoveredAr.map(item => `• ${item}`).join('\n')
         );
 
         section(doc, '11. Limitation of Liability and Indemnity', 'حدود المسؤولية والتعويض');
@@ -251,6 +398,20 @@ export async function generateContractPDF(data: any) {
         doc.strokeColor('#9CA3AF').moveTo(350, y + 45).lineTo(535, y + 45).stroke();
         doc.fillColor(INK).fontSize(8).text(`OWNER: ${textValue(data.signatureName || data.ownerName || data.fullName)}`, 55, y + 55, { width: 190 });
         doc.text('BIN GROUP AUTHORIZED SIGNATORY', 350, y + 55, { width: 190 });
+
+        const signedAtStr = data.ownerSignedAt || data.signedAt || data.acceptedAt || data.ownerSignature?.signedAt;
+        if (signedAtStr) {
+            const formattedDate = new Date(signedAtStr).toLocaleString('en-AE');
+            doc.fillColor(MUTED).fontSize(7).text(`Signed electronically at: ${formattedDate}`, 55, y + 68, { width: 190 });
+        }
+
+        const binGroupStamp = data.binGroupStamp;
+        if (binGroupStamp?.stamped) {
+            doc.fillColor(GOLD).fontSize(7).text(String(binGroupStamp.label || 'BIN GROUP ADMIN APPROVED / DIGITAL STAMP'), 350, y + 25, { width: 190, align: 'center' });
+            const stampDate = binGroupStamp.stampedAtIso || (binGroupStamp.stampedAt ? new Date(binGroupStamp.stampedAt).toISOString() : new Date().toISOString());
+            doc.fillColor(MUTED).fontSize(6).text(`Approved By: ${binGroupStamp.stampedBy} at ${stampDate}`, 350, y + 35, { width: 190, align: 'center' });
+        }
+
         doc.fillColor(MUTED).fontSize(7).text(`Digitally generated and stored by BIN GROUP Super App. Hash: ${documentHash}`, 55, y + 85, { width: 480, align: 'center' });
 
         doc.end();
