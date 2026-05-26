@@ -27,6 +27,9 @@ interface Broker {
     iban?: string;
     emiratesId?: string;
     kycDocumentUrl?: string;
+    reraLicense?: string;
+    reraVerified?: boolean;
+    reraStatus?: string;
     createdAt?: any;
 }
 
@@ -96,6 +99,37 @@ export default function BrokerManagementPage() {
     const handleView = (broker: Broker) => {
         setSelectedBroker(broker);
         setIsViewOpen(true);
+    };
+
+    const handleVerifyRera = async (id: string) => {
+        try {
+            await updateDoc(doc(db, 'users', id), {
+                reraVerified: true,
+                reraStatus: 'APPROVED',
+                updatedAt: new Date().toISOString()
+            });
+            if (selectedBroker && selectedBroker.id === id) {
+                setSelectedBroker(prev => prev ? { ...prev, reraVerified: true, reraStatus: 'APPROVED' } : null);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleRejectRera = async (id: string) => {
+        if (!window.confirm("Reject RERA License for this broker?")) return;
+        try {
+            await updateDoc(doc(db, 'users', id), {
+                reraVerified: false,
+                reraStatus: 'REJECTED',
+                updatedAt: new Date().toISOString()
+            });
+            if (selectedBroker && selectedBroker.id === id) {
+                setSelectedBroker(prev => prev ? { ...prev, reraVerified: false, reraStatus: 'REJECTED' } : null);
+            }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     return (
@@ -235,6 +269,30 @@ export default function BrokerManagementPage() {
                                     </Box>
                                 </Stack>
                             </Grid>
+                            <Grid item xs={12}>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>RERA COMPLIANCE</Typography>
+                                <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
+                                    <Grid container spacing={3}>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>RERA LICENSE NUMBER</Typography>
+                                            <Typography sx={{ fontWeight: 800, color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' }}>{selectedBroker.reraLicense || 'NOT PROVIDED'}</Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>VERIFICATION STATUS</Typography>
+                                            <Chip 
+                                                label={selectedBroker.reraVerified ? 'VERIFIED' : selectedBroker.reraStatus || 'NOT_SUBMITTED'} 
+                                                size="small" 
+                                                sx={{ 
+                                                    mt: 0.5,
+                                                    bgcolor: selectedBroker.reraVerified ? alpha('#10b981', 0.1) : selectedBroker.reraStatus === 'REJECTED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)',
+                                                    color: selectedBroker.reraVerified ? '#10b981' : selectedBroker.reraStatus === 'REJECTED' ? '#ef4444' : '#f59e0b',
+                                                    fontWeight: 950
+                                                }} 
+                                            />
+                                        </Grid>
+                                    </Grid>
+                                </Paper>
+                            </Grid>
                             {selectedBroker.kycDocumentUrl && (
                                 <Grid item xs={12}>
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>VERIFICATION EVIDENCE</Typography>
@@ -254,12 +312,31 @@ export default function BrokerManagementPage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => setIsViewOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CLOSE</Button>
+                    {selectedBroker && selectedBroker.reraLicense && !selectedBroker.reraVerified && (
+                        <>
+                            <Button 
+                                variant="outlined" 
+                                color="error" 
+                                onClick={() => handleRejectRera(selectedBroker.id)} 
+                                sx={{ fontWeight: 950, borderRadius: 2 }}
+                            >
+                                REJECT RERA
+                            </Button>
+                            <Button 
+                                variant="contained" 
+                                color="success" 
+                                onClick={() => handleVerifyRera(selectedBroker.id)} 
+                                sx={{ fontWeight: 950, borderRadius: 2 }}
+                            >
+                                VERIFY RERA
+                            </Button>
+                        </>
+                    )}
                     {selectedBroker?.status !== 'APPROVED' && (
                         <Button 
                             variant="contained" 
-                            color="success" 
+                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#b4954e' }, fontWeight: 950, borderRadius: 2 }}
                             onClick={() => { handleApprove(selectedBroker!.id); setIsViewOpen(false); }} 
-                            sx={{ fontWeight: 950, borderRadius: 2 }}
                         >
                             AUTHORIZE PARTNER
                         </Button>
