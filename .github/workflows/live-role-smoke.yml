@@ -12,10 +12,9 @@ permissions:
   contents: read
 
 env:
-  # Use the confirmed Firebase Hosting production URL by default.
-  # GitHub Actions repository variable E2E_BASE_URL can still override this later
-  # after the custom domain is fully connected and verified.
-  E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://bin-group-57c60.web.app' }}
+  # Force smoke tests to run against the confirmed Firebase Hosting production URL.
+  # Do not use the custom domain here until DNS/Firebase custom-domain verification is complete.
+  E2E_BASE_URL: https://bin-group-57c60.web.app
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -46,6 +45,9 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Show smoke test target
+        run: echo "Running live smoke tests against ${E2E_BASE_URL}"
 
       - name: Run live smoke tests
         run: npm run test:e2e
