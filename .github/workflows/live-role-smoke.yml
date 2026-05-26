@@ -12,7 +12,10 @@ permissions:
   contents: read
 
 env:
-  E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://bin-groups.com' }}
+  # Use the confirmed Firebase Hosting production URL by default.
+  # GitHub Actions repository variable E2E_BASE_URL can still override this later
+  # after the custom domain is fully connected and verified.
+  E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://bin-group-57c60.web.app' }}
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
