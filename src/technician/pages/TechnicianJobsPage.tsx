@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Clock, MapPin, Navigation, ArrowRight, CheckCircle, Zap, User
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, getDocs } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, runTransaction } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
@@ -89,18 +89,29 @@ export default function TechnicianJobsPage() {
         if (!user?.uid) return;
         setAccepting(jobId);
         try {
-            await updateDoc(doc(db, 'maintenanceTickets', jobId), {
-                assignedTechnicianId:    user.uid,
-                technicianId:            user.uid,
-                assignedTechnicianName:  user.displayName || techProfile?.name || 'Technician',
-                assignedTechnicianPhone: user.phoneNumber || techProfile?.phone || '',
-                assignedTechnicianAvatar: user.photoURL || techProfile?.photoURL || '',
-                technicianSpecialty:     techProfile?.specialty || techProfile?.trade || '',
-                status:          'accepted',
-                dispatchStatus:  'ASSIGNED',
-                trackingStatus:  'TECHNICIAN_ASSIGNED',
-                acceptedAt:      serverTimestamp(),
-                updatedAt:       serverTimestamp(),
+            await runTransaction(db, async (transaction) => {
+                const ticketRef = doc(db, 'maintenanceTickets', jobId);
+                const ticketSnap = await transaction.get(ticketRef);
+                if (!ticketSnap.exists()) {
+                    throw new Error("Job document does not exist.");
+                }
+                const ticketData = ticketSnap.data();
+                if (ticketData.assignedTechnicianId || ticketData.technicianId) {
+                    throw new Error("This job has already been accepted by another technician.");
+                }
+                transaction.update(ticketRef, {
+                    assignedTechnicianId:    user.uid,
+                    technicianId:            user.uid,
+                    assignedTechnicianName:  user.displayName || techProfile?.name || 'Technician',
+                    assignedTechnicianPhone: user.phoneNumber || techProfile?.phone || '',
+                    assignedTechnicianAvatar: user.photoURL || techProfile?.photoURL || '',
+                    technicianSpecialty:     techProfile?.specialty || techProfile?.trade || '',
+                    status:          'accepted',
+                    dispatchStatus:  'ASSIGNED',
+                    trackingStatus:  'TECHNICIAN_ASSIGNED',
+                    acceptedAt:      serverTimestamp(),
+                    updatedAt:       serverTimestamp(),
+                });
             });
             navigate(`/technician/job/${jobId}`);
         } catch (err) {
