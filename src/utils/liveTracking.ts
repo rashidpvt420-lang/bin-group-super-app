@@ -275,20 +275,23 @@ export const startLiveTracking = (
 
             try {
                 await Promise.all([
-                    // Write to ticket
                     updateDoc(doc(db, 'maintenanceTickets', ticketId), {
                         technicianLocation: payload,
                         technicianLocationUpdatedAt: serverTimestamp(),
                         trackingStatus: 'LIVE_TRACKING',
+                        dispatchStatus: 'EN_ROUTE',
+                        updatedAt: serverTimestamp(),
                     }),
-                    // Write to technician profile
                     updateDoc(doc(db, 'technicians', technicianUid), {
                         currentLocation: payload,
                         lastLocation: payload,
                         locationUpdatedAt: serverTimestamp(),
                         activeTicketId: ticketId,
                         isOnDuty: true,
+                        onDuty: true,
                         isTracking: true,
+                        lastSeenAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
                     }),
                 ]);
             } catch (err) {
@@ -320,24 +323,46 @@ export const startLiveTracking = (
 };
 
 /**
- * Stops GPS tracking and clears isTracking flag on the technician profile.
+ * Stops GPS tracking and clears live tracking flags.
  * SAFETY: Always call this on ARRIVED, COMPLETED, or CANCELLED.
+ * Backward-compatible: existing callers may pass only technicianUid.
  */
-export const stopLiveTracking = async (technicianUid?: string): Promise<void> => {
+export const stopLiveTracking = async (
+    technicianUid?: string,
+    ticketId?: string,
+    finalStatus: TrackingStatus = 'ARRIVED'
+): Promise<void> => {
+    const activeTicketId = ticketId || _state.activeTicketId;
+
     if (_state.watchId !== null) {
         navigator.geolocation.clearWatch(_state.watchId);
         _state.watchId = null;
     }
     _state.activeTicketId = null;
+    _state.lastPushTime = 0;
+
+    const writes: Promise<any>[] = [];
 
     if (technicianUid) {
-        try {
-            await updateDoc(doc(db, 'technicians', technicianUid), {
-                isTracking: false,
-                activeTicketId: null,
-            });
-        } catch (err) {
-            console.error('[Tracking] Failed to clear technician tracking status:', err);
-        }
+        writes.push(updateDoc(doc(db, 'technicians', technicianUid), {
+            isTracking: false,
+            activeTicketId: null,
+            lastSeenAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }));
+    }
+
+    if (activeTicketId) {
+        writes.push(updateDoc(doc(db, 'maintenanceTickets', activeTicketId), {
+            trackingStatus: finalStatus,
+            technicianLocationUpdatedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }));
+    }
+
+    try {
+        await Promise.all(writes);
+    } catch (err) {
+        console.error('[Tracking] Failed to stop live tracking cleanly:', err);
     }
 };
