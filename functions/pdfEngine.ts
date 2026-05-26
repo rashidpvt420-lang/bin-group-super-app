@@ -1,6 +1,66 @@
 import PDFDocument from 'pdfkit';
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
+import https from 'https';
+// @ts-ignore
+import arabicReshaper from 'arabic-persian-reshaper';
+
+const reshap = (arabicReshaper as any)?.ArabicReshaper || arabicReshaper;
+
+let cachedCairoFont: Buffer | null = null;
+
+async function getCairoFont(): Promise<Buffer> {
+    if (cachedCairoFont) return cachedCairoFont;
+    
+    const fontUrl = 'https://fonts.gstatic.com/s/cairo/v20/SLXQ1O5tq8QA3r565Uq13w.ttf';
+    
+    return new Promise<Buffer>((resolve, reject) => {
+        https.get(fontUrl, (res) => {
+            if (res.statusCode !== 200) {
+                reject(new Error(`Failed to download font: status ${res.statusCode}`));
+                return;
+            }
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                cachedCairoFont = Buffer.concat(chunks);
+                resolve(cachedCairoFont);
+            });
+            res.on('error', reject);
+        }).on('error', reject);
+    });
+}
+
+function isArabic(text: string): boolean {
+    const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    return arabicRegex.test(text);
+}
+
+function shapeArabicText(text: string): string {
+    if (!text || !isArabic(text)) return text;
+    try {
+        const shaped = typeof reshap?.reshape === 'function' ? reshap.reshape(text) : text;
+        return shaped.split('').reverse().join('');
+    } catch (e) {
+        console.error("Shaping failed:", e);
+        return text;
+    }
+}
+
+function shapeBilingualText(text: string): string {
+    if (!text) return text;
+    const str = String(text);
+    if (str.includes(' / ')) {
+        const parts = str.split(' / ');
+        return parts.map(part => isArabic(part) ? shapeArabicText(part) : part).join(' / ');
+    }
+    if (str.includes(' : ')) {
+        const parts = str.split(' : ');
+        return parts.map(part => isArabic(part) ? shapeArabicText(part) : part).join(' : ');
+    }
+    return isArabic(str) ? shapeArabicText(str) : str;
+}
+
 
 const GOLD = '#C6A75E';
 const INK = '#111827';
@@ -159,7 +219,7 @@ function section(doc: PDFKit.PDFDocument, titleEn: string, titleAr: string) {
     if (doc.y > 690) doc.addPage();
     doc.moveDown(0.9);
     doc.fillColor(GOLD).fontSize(12).text(titleEn.toUpperCase(), { continued: false });
-    doc.fillColor(MUTED).fontSize(9).text(titleAr, { align: 'right' });
+    doc.fillColor(MUTED).fontSize(9).text(shapeArabicText(titleAr), { align: 'right' });
     doc.moveDown(0.35);
     doc.strokeColor(BORDER).lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
     doc.moveDown(0.45);
@@ -169,15 +229,15 @@ function para(doc: PDFKit.PDFDocument, en: string, ar: string) {
     if (doc.y > 705) doc.addPage();
     doc.fillColor(INK).fontSize(8.7).text(en, { align: 'justify', lineGap: 2 });
     doc.moveDown(0.25);
-    doc.fillColor(MUTED).fontSize(8.3).text(ar, { align: 'right', lineGap: 2 });
+    doc.fillColor(MUTED).fontSize(8.3).text(shapeArabicText(ar), { align: 'right', lineGap: 2 });
     doc.moveDown(0.5);
 }
 
 function row(doc: PDFKit.PDFDocument, label: string, value: string) {
     if (doc.y > 720) doc.addPage();
     const y = doc.y;
-    doc.fillColor(MUTED).fontSize(8).text(label, 55, y, { width: 165 });
-    doc.fillColor(INK).fontSize(9.5).text(value, 220, y, { width: 315 });
+    doc.fillColor(MUTED).fontSize(8).text(shapeBilingualText(label), 55, y, { width: 165 });
+    doc.fillColor(INK).fontSize(9.5).text(shapeBilingualText(value), 220, y, { width: 315 });
     doc.moveDown(0.65);
 }
 
@@ -204,6 +264,13 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
  * the same protective English/Arabic agreement stored in the document vault.
  */
 export async function generateContractPDF(data: any) {
+    let fontBuffer: Buffer | null = null;
+    try {
+        fontBuffer = await getCairoFont();
+    } catch (err) {
+        console.error("Cairo font load failed:", err);
+    }
+
     return new Promise<string>((resolve, reject) => {
         const contractMode = normalizeContractMode(data);
         const contractId = textValue(data.contractId || data.id || `contract-${Date.now()}`);
@@ -218,6 +285,16 @@ export async function generateContractPDF(data: any) {
             size: 'A4',
             info: { Title: '13-Month Owner Service Agreement', Author: 'BIN GROUP Super App' }
         });
+
+        if (fontBuffer) {
+            try {
+                doc.registerFont('Cairo', fontBuffer);
+                doc.font('Cairo');
+            } catch (err) {
+                console.error("Font registration failed:", err);
+            }
+        }
+
         const chunks: Buffer[] = [];
 
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -247,7 +324,7 @@ export async function generateContractPDF(data: any) {
 
         doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
         doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT', { align: 'center' });
-        doc.fillColor(MUTED).fontSize(9).text('اتفاقية خدمات المالك لمدة 13 شهراً', { align: 'center' });
+        doc.fillColor(MUTED).fontSize(9).text(shapeArabicText('اتفاقية خدمات المالك لمدة 13 شهراً'), { align: 'center' });
         doc.moveDown(0.6);
         doc.fillColor(MUTED).fontSize(7).text(`Version: ${AGREEMENT_VERSION} | Contract ID: ${contractId} | Hash: ${documentHash.slice(0, 20)}...`, { align: 'center' });
         doc.moveDown(0.9);
@@ -419,8 +496,23 @@ export async function generateContractPDF(data: any) {
 }
 
 export async function generatePayslipPDF(data: any) {
+    let fontBuffer: Buffer | null = null;
+    try {
+        fontBuffer = await getCairoFont();
+    } catch (err) {
+        console.error("Cairo font load failed for payslip:", err);
+    }
+
     return new Promise<string>((resolve, reject) => {
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        if (fontBuffer) {
+            try {
+                doc.registerFont('Cairo', fontBuffer);
+                doc.font('Cairo');
+            } catch (err) {
+                console.error("Font registration failed for payslip:", err);
+            }
+        }
         const chunks: Buffer[] = [];
 
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
