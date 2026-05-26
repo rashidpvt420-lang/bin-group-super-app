@@ -514,9 +514,12 @@ export const useOnboardingStore = create<OnboardingState>()(
             setPaymentManifest: (paymentManifest) => set({ paymentManifest }),
             setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
             setOwnerAccount: (ownerAccount) => set({ ownerAccount, accountCreated: !!ownerAccount }),
-            updatePropertyData: (data) => set((state) => ({
-                propertyData: { ...state.propertyData, ...data }
-            })),
+            updatePropertyData: (data) => {
+                set((state) => ({
+                    propertyData: { ...state.propertyData, ...data }
+                }));
+                get().calculateSummary();
+            },
             setProofDocument: (key, file) => set((state) => ({
                 proofDocuments: {
                     ...state.proofDocuments,
@@ -529,7 +532,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             })),
 
             calculateSummary: () => {
-                const props = get().properties;
+                const props = get().properties.length > 0 ? get().properties : [get().propertyData];
                 const selectedAddOns = get().selectedAddOns || [];
                 const quoteResults: Record<string, QuoteOutput> = {};
                 
@@ -544,7 +547,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                 }
 
                 const summary: PortfolioSummary = {
-                    totalProperties: props.length,
+                    totalProperties: get().properties.length > 0 ? props.length : 1,
                     totalUnits: props.reduce((acc, p) => acc + (p.units || 0), 0),
                     totalRentable: props.filter(p => p.useType === 'Rental' || p.useType === 'Mixed').length,
                     totalPersonal: props.filter(p => p.useType === 'Personal').length,
