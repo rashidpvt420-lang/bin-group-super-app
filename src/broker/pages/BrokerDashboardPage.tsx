@@ -49,11 +49,11 @@ export default function BrokerDashboardPage() {
                     if (status === 'approved') rAppr++;
                 });
 
-                const comQ = query(collection(db, 'commissions'), where('brokerId', '==', user.uid));
+                const comQ = query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid));
                 const comSnap = await getDocs(comQ);
                 let cPend = 0, cPaid = 0;
                 comSnap.docs.forEach(d => {
-                    const status = d.data().status;
+                    const status = String(d.data().status || '').toLowerCase();
                     const amount = d.data().amount || 0;
                     if (status === 'pending') cPend += amount;
                     if (status === 'paid') cPaid += amount;

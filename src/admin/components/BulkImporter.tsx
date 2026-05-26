@@ -61,7 +61,7 @@ const BulkImporter: React.FC = () => {
             const rows = parseCSV(text);
             setLogs(prev => [...prev, t('admin.found_records', { count: rows.length })]);
 
-            const BATCH_SIZE = 500;
+            const BATCH_SIZE = 50;
             let processed = 0;
 
             for (let i = 0; i < rows.length; i += BATCH_SIZE) {
