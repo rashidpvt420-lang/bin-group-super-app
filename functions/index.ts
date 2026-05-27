@@ -783,11 +783,11 @@ export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}"
 
     // ── Requester IDs (ticket may be from tenant OR owner) ────────────────
     const tenantId: string = after.tenantId || after.tenantUid || "";
-    const ownerId: string  = after.ownerId  || after.ownerUid  || "";
-    const techId: string   = after.assignedTechnicianId || "";
+    const ownerId: string = after.ownerId || after.ownerUid || "";
+    const techId: string = after.assignedTechnicianId || "";
     const techName: string = after.assignedTechnicianName || "Your Technician";
-    const prop: string     = after.propertyName || "the property";
-    const ref8: string     = ticketId.substring(0, 8).toUpperCase();
+    const prop: string = after.propertyName || "the property";
+    const ref8: string = ticketId.substring(0, 8).toUpperCase();
 
     // Helper: notify both requester parties (tenant + owner) but not the technician
     const notifyRequester = async (title: string, body: string) => {
@@ -884,7 +884,7 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 
         const techQuery = await db.collection("users").where("role", "in", ["technician", "specialist"]).get();
         const requiredSkill = String(ticketData.complaintCategory || ticketData.category || ticketData.trade || "").toLowerCase();
-        
+
         const candidates = techQuery.docs
             .map((d) => ({ id: d.id, data: d.data() }))
             .filter((tech) => {
@@ -1021,7 +1021,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) return;
         const userData = userDoc.data();
-        
+
         // 1. Push notification (FCM)
         const fcmTokens: string[] = userData?.fcmTokens || [];
         if (fcmTokens.length > 0) {
@@ -1049,7 +1049,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
         if (userData?.phone || userData?.mobile) {
             const phone = userData.phone || userData.mobile;
             await sendTwilioSMS(phone, `[${title}] ${body}`);
-            
+
             // 4. WhatsApp Notification fallback
             const templateName = options.whatsappTemplate || "bin_group_alert";
             await sendWhatsAppTemplate(phone, templateName, "en", body);
@@ -1139,23 +1139,23 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
  */
 export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
-    
+
     const uid = request.auth.uid;
     const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
-    
+
     // Enterprise Admin Check
-    const isAdmin = request.auth.token.admin === true || 
-                    request.auth.token.role === "admin" || 
-                    userData?.role === "admin" || 
-                    userData?.isAdmin === true;
-                    
+    const isAdmin = request.auth.token.admin === true ||
+        request.auth.token.role === "admin" ||
+        userData?.role === "admin" ||
+        userData?.isAdmin === true;
+
     if (!isAdmin) throw new HttpsError('permission-denied', 'Unauthorized execution node.');
 
     try {
         const { requestId, scope, designStyle, imageBase64, mimeType } = request.data;
         const apiKey = geminiApiKey.value();
-        
+
         const fullPrompt = `You are the Sovereign AI Architect for BIN GROUP LLC. 
             Redesign this ${scope?.zoneType || 'space'} using a ${designStyle} interior design style. 
             Maintain the original room structure, windows, and doors, but upgrade all materials, furniture, and lighting to ultra-premium institutional quality.
@@ -1184,16 +1184,16 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-        
+
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             throw new Error(errData?.error?.message || `Gemini Error: ${response.statusText}`);
         }
-        
+
         const result = await response.json();
         const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text;
         const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData?.data;
-        
+
         const aiResponse = textPart ? JSON.parse(textPart) : {};
 
         // Sovereign Audit Log
@@ -1233,7 +1233,7 @@ export const onApprovalStagnant = onSchedule("every 24 hours", async () => {
         .get();
     for (const doc of pending.docs) {
         const data = doc.data();
-        if (data.ownerId) await dispatchOmniNotification(data.ownerId, "REMINDER: Quote Approval Required", `Mission #${doc.id.substring(0,8)} is awaiting authorization.`);
+        if (data.ownerId) await dispatchOmniNotification(data.ownerId, "REMINDER: Quote Approval Required", `Mission #${doc.id.substring(0, 8)} is awaiting authorization.`);
     }
 });
 
@@ -1255,7 +1255,7 @@ export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
         const projectId = admin.app().options.projectId || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'UNKNOWN_PROJECT';
         const bucket = `gs://${projectId}.appspot.com/backups/live/${new Date().toISOString()}`;
         await client.exportDocuments({ name: client.databasePath(projectId, '(default)'), outputUriPrefix: bucket, collectionIds: [] });
-    } catch (err) {}
+    } catch (err) { }
 });
 
 // ─── SUMMARY SYNC ──────────────────────────────────────────────────────────
@@ -1333,12 +1333,12 @@ export const validateTenantInvitation = onCall({ cors: true }, async (request) =
         .get();
 
     if (inviteSnap.empty) throw new HttpsError("not-found", "Invalid or expired invitation.");
-    
+
     const invite = inviteSnap.docs[0].data();
     if (invite.status === 'accepted' || invite.status === 'cancelled') {
         throw new HttpsError("failed-precondition", "This invitation is no longer active.");
     }
-    
+
     // Safety check for expiresAt
     if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) {
         throw new HttpsError("failed-precondition", "This invitation has expired.");
@@ -1488,7 +1488,7 @@ export const resendTenantInvitation = onCall({ cors: true }, async (request) => 
     const inviteRef = db.collection("tenant_invitations").doc(invitationId);
     const inviteDoc = await inviteRef.get();
     if (!inviteDoc.exists) throw new HttpsError("not-found", "Invitation not found.");
-    
+
     const invite = inviteDoc.data()!;
     if (invite.status === 'accepted') throw new HttpsError("failed-precondition", "Invitation already accepted.");
 
@@ -1559,7 +1559,7 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         .get();
 
     if (inviteSnap.empty) throw new HttpsError("not-found", "Invalid or expired invitation.");
-    
+
     const inviteDoc = inviteSnap.docs[0];
     const invite = inviteDoc.data();
 
@@ -1615,7 +1615,7 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         for (const d of leases.docs) {
             batch.update(d.ref, { tenantId: authUid });
         }
-        
+
         const ledgers = await db.collection("tenant_ledger").where("tenantId", "==", stubId).get();
         for (const d of ledgers.docs) {
             batch.update(d.ref, { tenantId: authUid });
@@ -1695,7 +1695,7 @@ export const onMailStatusUpdated = onDocumentUpdated("mail/{docId}", async (even
     const { state, error } = after.delivery;
 
     const emailStatus = state === 'SUCCESS' ? 'sent' : (state === 'ERROR' ? 'failed' : 'queued');
-    
+
     await db.collection("tenant_invitations").doc(invitationId).update({
         emailStatus,
         deliveryError: error || null,
@@ -1876,7 +1876,7 @@ export const recalculatePropertyPassport = onCall({ cors: true }, async (request
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
     const { propertyId } = request.data;
     if (!propertyId) throw new HttpsError("invalid-argument", "Property ID required.");
-    
+
     await aggregatePassportData(propertyId);
     return { success: true };
 });
@@ -1896,7 +1896,7 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
 
     const data = request.data || {};
     const dryRun = data.dryRun !== false; // Default to true if not explicitly false
-    
+
     const log: string[] = [];
     const orphanTicketIds: string[] = [];
     const invalidStatusTicketIds: string[] = [];
@@ -1905,8 +1905,8 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
     let docsSkipped = 0;
 
     const allowedStatuses = [
-        'OPEN', 'assigned', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 
-        'COMPLETED', 'cancelled', 'deferred', 'pending_approval', 
+        'OPEN', 'assigned', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS',
+        'COMPLETED', 'cancelled', 'deferred', 'pending_approval',
         'on_hold', 'rejected', 'pending_assignment'
     ];
 
@@ -1961,7 +1961,7 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
                     });
                     batchCount++;
                     docsUpdated++;
-                    
+
                     if (batchCount >= 450) { // Safety margin for 500 limit
                         await batch.commit();
                         batchCount = 0;
@@ -2041,9 +2041,9 @@ async function createNotification(recipientId: string, data: {
         });
 
         // 2. Dispatch Push Notification (FCM)
-        await sendSovereignPush(recipientId, data.title, data.message, { 
-            ticketId: data.ticketId, 
-            type: data.type 
+        await sendSovereignPush(recipientId, data.title, data.message, {
+            ticketId: data.ticketId,
+            type: data.type
         });
 
     } catch (err) {
@@ -2078,7 +2078,7 @@ async function sendSovereignPush(userId: string, title: string, body: string, da
  */
 export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    
+
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
 
@@ -2121,7 +2121,7 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
  */
 export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    
+
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
 
@@ -2449,17 +2449,17 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
  */
 export const processPayment = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
-    
+
     const { invoiceId, paymentMethod, amount } = request.data;
     if (!invoiceId || !amount) throw new HttpsError("invalid-argument", "Transaction payload incomplete.");
 
     const uid = request.auth.uid;
     const invoiceRef = db.collection("invoices").doc(invoiceId);
-    
+
     return await db.runTransaction(async (transaction) => {
         const invoiceSnap = await transaction.get(invoiceRef);
         if (!invoiceSnap.exists) throw new HttpsError("not-found", "Invoice node not found.");
-        
+
         const invoiceData = invoiceSnap.data()!;
         if (invoiceData.status === "PAID") throw new HttpsError("failed-precondition", "Transaction already settled.");
 
@@ -2468,12 +2468,12 @@ export const processPayment = onCall({ cors: true }, async (request) => {
 
         // 1. Log Atomic Transaction
         transaction.set(db.collection("transactions").doc(txId), {
-            txId, uid, invoiceId, amount, 
+            txId, uid, invoiceId, amount,
             currency: "AED",
             status: "SUCCESS",
             method: paymentMethod || "SOVEREIGN_WALLET",
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            metadata: { 
+            metadata: {
                 ip: request.rawRequest.ip || "unknown",
                 userAgent: request.rawRequest.headers["user-agent"] || "unknown"
             }
@@ -2504,11 +2504,11 @@ export const processPayment = onCall({ cors: true }, async (request) => {
             status: "CURRENT"
         }, { merge: true });
 
-        return { 
-            status: "SUCCESS", 
-            transactionId: txId, 
+        return {
+            status: "SUCCESS",
+            transactionId: txId,
             receiptId,
-            message: "Sovereign settlement complete." 
+            message: "Sovereign settlement complete."
         };
     });
 });
@@ -2526,7 +2526,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
 
     const payload = assertPlainObject(request.data || {}, "Unit update payload");
     const unitId = safeString(payload.unitId);
-    
+
     if (!unitId) throw new HttpsError("invalid-argument", "Unit ID is required.");
 
     const occupancyStatus = safeString(payload.occupancyStatus);
@@ -2594,7 +2594,7 @@ export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId
     const message = snap.data();
     const ticketId = event.params.ticketId;
     const senderId = message.senderId;
-    
+
     // Look up the ticket
     const ticketSnap = await db.collection("maintenanceTickets").doc(ticketId).get();
     if (!ticketSnap.exists) return;
@@ -2817,6 +2817,7 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
             await db.collection("binGptEngineerCommands").doc(commandId).update({
                 status: "PLAN_CREATED",
                 runnerState: "WAITING_FOR_SECURE_BACKEND_RUNNER",
+                runnerStatus: "WAITING_FOR_SECURE_BACKEND_RUNNER",
                 buildStatus: data.buildStatus || "NOT_STARTED",
                 deploymentStatus: data.deploymentStatus || "NOT_STARTED",
                 commandHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),

@@ -214,6 +214,7 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const publicRoute = isPublicRoute(location.pathname);
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   if (roleLoading && !publicRoute) return <LoadingScreen />;
 
@@ -291,11 +292,11 @@ function AppContent() {
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {!location.pathname.startsWith('/onboarding') && (
+      {!location.pathname.startsWith('/onboarding') && !isAdminRoute && (
         <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
       )}
       <IOSPwaGuardian />
-      <NavigationControl />
+      {!isAdminRoute && <NavigationControl />}
     </RoleRedirector>
   );
 }
