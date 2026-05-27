@@ -11,14 +11,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
     "lint": "eslint src --ext .ts,.tsx",
     "preview": "vite preview",
     "deploy": "firebase deploy --project bin-group-57c60",
     "test": "node --test test/security-rules.test.js",
     "test:rules": "node --test test/security-rules.test.js",
     "test:stability": "node scripts/production-stability-guard.mjs",
-    "test:e2e": "npm run build && playwright install --with-deps chromium && playwright test",
-    "test:e2e:public": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\""
+    "test:e2e": "playwright install --with-deps chromium && playwright test",
+    "test:e2e:public": "playwright install --with-deps chromium && E2E_BASE_URL=${E2E_BASE_URL:-https://bin-group-57c60.web.app} playwright test --grep \"production public smoke\" --project=chromium-desktop",
+    "test:e2e:local": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\" --project=chromium-desktop"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
