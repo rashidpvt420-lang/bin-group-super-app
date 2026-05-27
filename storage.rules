@@ -208,6 +208,18 @@ service firebase.storage {
       allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
+    // Ticket evidence photos:
+    match /evidence/{ticketId}/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+    }
+
+    // Temporary KYC/Title deed uploads during anonymous onboarding:
+    match /temp_kyc/{fileName} {
+      allow read: if isAdmin();
+      allow write: if isDocumentUpload(15);
+    }
+
     // Default lockdown for unmanaged paths
     match /{allPaths=**} {
       allow read, write: if isAdmin();

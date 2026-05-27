@@ -60,7 +60,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 textAlign: isRTL ? 'right' : 'left'
                             }}
                         >
-                            <Wrench size={20} /> {label('portal.technician.title', 'FIELD SOVEREIGN', 'الميدان السيادي')}
+                            <Wrench size={20} /> {label('portal.technician.title', 'FIELD SOVEREIGN · UAE 🇦🇪', 'الميدان السيادي · الإمارات 🇦🇪')}
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -120,6 +120,12 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     {children}
                 </Box>
             </Container>
+
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto' }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+                    © 2026 BIN GROUP SOVEREIGN · FIELD NODE · MADE IN UAE 🇦🇪
+                </Typography>
+            </Box>
         </Box>
     );
 };
