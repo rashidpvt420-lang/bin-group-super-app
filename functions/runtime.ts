@@ -11,6 +11,7 @@ export * from "./ownerRegistrationRequest";
 export * from "./stripePayment";
 export * from "./adminOwnerOperations";
 export * from "./mailDelivery";
+export * from "./notificationDelivery";
 
 if (!admin.apps.length) {
     admin.initializeApp();

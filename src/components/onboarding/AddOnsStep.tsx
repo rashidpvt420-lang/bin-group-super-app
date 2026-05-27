@@ -80,7 +80,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             reason: 'Villa/Majlis specialty care.'
         },
         { 
-            id: 'façade_access', 
+            id: 'facade_access', 
             icon: ArrowUpRight, 
             name: 'BMU / Façade Access Mission', 
             desc: 'Annual safety certification for rigging/BMU crane systems.', 
@@ -180,7 +180,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             reason: 'Essential for properties with outdoor and garden spaces.'
         },
         {
-            id: 'fit_out_quote',
+            id: 'fit_out_quotation',
             icon: Wrench,
             name: 'Fit-out Quotation',
             desc: 'Initial assessment and quotation for property fit-out or renovation.',
@@ -190,7 +190,7 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             reason: 'Optional service for newly acquired or aging assets.'
         },
         {
-            id: 'move_in_out',
+            id: 'move_in_out_inspection',
             icon: Check,
             name: 'Move-in / Move-out Inspection',
             desc: 'Detailed snagging and condition report before/after tenancy or event.',
@@ -218,16 +218,6 @@ const AddOnsStep: React.FC<{ onNext: () => void, onBack: () => void }> = ({ onNe
             mandatory: false,
             showIf: (activeProperty?.units || 0) >= 20 || activeProperty?.propertyType === 'Hotel',
             reason: 'Recommended for towers, hotels and premium mixed-use properties.'
-        },
-        {
-            id: 'pest_control',
-            icon: ShieldAlert,
-            name: 'Pest Control',
-            desc: 'Scheduled pest prevention and emergency treatment.',
-            price: 1500,
-            mandatory: false,
-            showIf: true,
-            reason: 'Recommended baseline protection for all occupied assets.'
         },
         {
             id: 'generator',

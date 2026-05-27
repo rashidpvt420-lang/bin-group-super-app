@@ -55,7 +55,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                                 {label('portal.owner.title', 'OWNER PORTAL', 'بوابة المالك')}
                             </Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                {label('portal.owner.subtitle', 'SOVEREIGN ASSET TERMINAL', 'محطة الأصول السيادية')}
+                                {label('portal.owner.subtitle', 'SOVEREIGN ASSET TERMINAL · UAE 🇦🇪', 'محطة الأصول السيادية · الإمارات 🇦🇪')}
                             </Typography>
                         </Box>
                     </Box>
@@ -101,7 +101,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
-                    © 2026 BIN GROUP SOVEREIGN · INSTITUTIONAL ASSET LEDGER
+                    © 2026 BIN GROUP SOVEREIGN · INSTITUTIONAL ASSET LEDGER · MADE IN UAE 🇦🇪
                 </Typography>
             </Box>
 

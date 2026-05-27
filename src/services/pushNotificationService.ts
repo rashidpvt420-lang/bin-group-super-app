@@ -6,7 +6,12 @@ const readEnv = (key: string): string => {
   return metaEnv?.[key] || '';
 };
 
-const getVapidKey = () => readEnv('VITE_FIREBASE_VAPID_KEY') || readEnv('REACT_APP_FIREBASE_VAPID_KEY') || '';
+const DEFAULT_WEB_PUSH_VAPID_KEY = 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ';
+
+const getVapidKey = () =>
+  readEnv('VITE_FIREBASE_VAPID_KEY') ||
+  readEnv('REACT_APP_FIREBASE_VAPID_KEY') ||
+  DEFAULT_WEB_PUSH_VAPID_KEY;
 
 export async function registerPushNotifications(userId: string, role?: string | null) {
   if (typeof window === 'undefined') return { enabled: false, reason: 'window_unavailable' };
