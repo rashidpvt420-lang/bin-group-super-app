@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button, IconButton, Tooltip, Stack, alpha } from '@mui/material';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, LayoutDashboard, LogIn, LogOut, Paintbrush } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, LayoutDashboard, LogIn, LogOut, Paintbrush, Languages } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { useRole } from '../../context/RoleContext';
@@ -8,11 +8,24 @@ import { useLanguage } from '../../context/LanguageContext';
 import { auth } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
+const ADMIN_DASHBOARD_ROLES = new Set([
+  'admin',
+  'ceo',
+  'super_admin',
+  'hr_manager',
+  'hr_staff',
+  'finance_staff',
+  'account_manager',
+  'finance_admin',
+  'dispatcher',
+  'operations_manager',
+]);
+
 export const NavigationControl: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, user } = useRole();
-  const { isRTL, t } = useLanguage();
+  const { isRTL, t, lang, setLang } = useLanguage();
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
@@ -29,13 +42,15 @@ export const NavigationControl: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [location.pathname]);
 
+  const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
+
   const getDashboardRoute = () => {
     const r = (role || '').toLowerCase();
-    if (r === 'admin') return '/admin/dashboard';
+    if (ADMIN_DASHBOARD_ROLES.has(r)) return '/admin/dashboard';
     if (r === 'tenant') return '/tenant/dashboard';
     if (r === 'technician') return '/technician/dashboard';
     if (r === 'broker') return '/broker/dashboard';
-    if (r === 'owner' || r === 'ceo') return '/owner/dashboard';
+    if (r === 'owner') return '/owner/dashboard';
     return '/';
   };
 
@@ -85,10 +100,17 @@ export const NavigationControl: React.FC = () => {
         {showScrollTop && <Tooltip title={t('nav.scroll_top') || 'Scroll to top'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={scrollToTop} sx={buttonSx}><ArrowUp size={20} /></IconButton></Tooltip>}
         <Tooltip title={t('nav.back') || 'Back'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleBack} sx={buttonSx}>{isRTL ? <ArrowRight size={20} /> : <ArrowLeft size={20} />}</IconButton></Tooltip>
         <Tooltip title={t('nav.dashboard') || 'Dashboard'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getDashboardRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><LayoutDashboard size={20} /></IconButton></Tooltip>
-        <Tooltip title="AI Studio" placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getAIStudioRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><Paintbrush size={20} /></IconButton></Tooltip>
-        {user ? <Tooltip title="Logout" placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleSignOut} sx={{ ...buttonSx, color: '#ef4444' }}><LogOut size={20} /></IconButton></Tooltip> : <Tooltip title="Login" placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate('/login')} sx={{ ...buttonSx, color: binThemeTokens.gold }}><LogIn size={20} /></IconButton></Tooltip>}
+        <Tooltip title={t('nav.ai_studio') || 'AI Studio'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getAIStudioRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><Paintbrush size={20} /></IconButton></Tooltip>
+        <Tooltip title={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} placement={isRTL ? 'right' : 'left'}>
+          <IconButton onClick={toggleLanguage} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important`, gap: 0.6 }}>
+            <Languages size={19} />
+            <Box component="span" sx={{ fontSize: '0.62rem', fontWeight: 950, lineHeight: 1 }}>{lang === 'en' ? 'AR' : 'EN'}</Box>
+          </IconButton>
+        </Tooltip>
+        {user ? <Tooltip title={t('nav.logout') || 'Logout'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleSignOut} sx={{ ...buttonSx, color: '#ef4444' }}><LogOut size={20} /></IconButton></Tooltip> : <Tooltip title={t('nav.login') || 'Login'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate('/login')} sx={{ ...buttonSx, color: binThemeTokens.gold }}><LogIn size={20} /></IconButton></Tooltip>}
         {showScrollBottom && <Tooltip title={t('nav.scroll_bottom') || 'Scroll to bottom'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={scrollToBottom} sx={buttonSx}><ArrowDown size={20} /></IconButton></Tooltip>}
         <Button size="small" onClick={() => navigate('/company')} sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.62rem', fontWeight: 950, color: binThemeTokens.gold }}>Profile</Button>
+        <Button size="small" disabled sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.58rem', fontWeight: 950, color: `${binThemeTokens.gold} !important`, opacity: '1 !important' }}>Made in UAE 🇦🇪</Button>
       </Stack>
     </Box>
   );
