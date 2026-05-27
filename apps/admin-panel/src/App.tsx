@@ -202,7 +202,7 @@ function Layout() {
                 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                            {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND</Box>
+                            {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND · UAE 🇦🇪</Box>
                         </Typography>
                     </Box>
 
@@ -257,7 +257,7 @@ function Layout() {
                     
                     <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
                         <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | 
+                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | MADE IN UAE 🇦🇪 | 
                             <Typography 
                                 component="a" 
                                 href="https://bin-groups.com/privacy-policy" 

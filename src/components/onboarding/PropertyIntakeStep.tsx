@@ -14,6 +14,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatNumber, formatAED } from '../../utils/formatters';
 import Papa from 'papaparse';
+import { useGoogleMaps } from '../../lib/maps';
 
 const VisuallyHiddenInput = styled('input')({
     clip: 'rect(0 0 0 0)',
@@ -33,6 +34,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         portfolioSummary, bulkAddProperties, intakeId, setIntakeId, companyProfile
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
+    const { isLoaded } = useGoogleMaps();
     const [editingIndex, setEditingIndex] = useState<number | null>(0);
     const [tabValue, setTabValue] = useState(0); 
     const autocompleteRef = useRef<HTMLInputElement>(null);
@@ -40,6 +42,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        if (!isLoaded) return;
         let autocomplete: any = null;
 
         const initAutocomplete = async () => {
@@ -97,7 +100,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                 (window as any).google.maps.event.clearInstanceListeners(googleAutocompleteRef.current);
             }
         };
-    }, [tabValue, editingIndex]);
+    }, [tabValue, editingIndex, isLoaded]);
 
     const safeProperties = Array.isArray(properties) ? properties : [];
 

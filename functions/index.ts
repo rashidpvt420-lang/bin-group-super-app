@@ -1,13 +1,14 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
-import { setGlobalOptions } from "firebase-functions";
+import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
 import { extractTitleDeedData } from "./ocrEngine";
 import { generateContractPDF, generatePayslipPDF } from "./pdfEngine";
+export { deliverNotificationPush } from "./notificationDelivery";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3" });
@@ -780,34 +781,60 @@ export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}"
         after: after.status
     });
 
-    if (after.status === 'ESTIMATED' && after.estimatedCost && Number(after.estimatedCost) <= 1000) {
+    // ── Requester IDs (ticket may be from tenant OR owner) ────────────────
+    const tenantId: string = after.tenantId || after.tenantUid || "";
+    const ownerId: string  = after.ownerId  || after.ownerUid  || "";
+    const techId: string   = after.assignedTechnicianId || "";
+    const techName: string = after.assignedTechnicianName || "Your Technician";
+    const prop: string     = after.propertyName || "the property";
+    const ref8: string     = ticketId.substring(0, 8).toUpperCase();
+
+    // Helper: notify both requester parties (tenant + owner) but not the technician
+    const notifyRequester = async (title: string, body: string) => {
+        const tasks: Promise<any>[] = [];
+        if (tenantId && tenantId !== techId) tasks.push(dispatchOmniNotification(tenantId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/tenant/ticket/${ticketId}` }));
+        if (ownerId && ownerId !== techId && ownerId !== tenantId) tasks.push(dispatchOmniNotification(ownerId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/owner/ticket/${ticketId}` }));
+        await Promise.allSettled(tasks);
+    };
+
+    // ── Status-based notifications ────────────────────────────────────────
+    const statusNorm = (after.status || "").toLowerCase();
+
+    if (["accepted", "assigned", "technician_assigned"].includes(statusNorm)) {
+        await notifyRequester("Technician Assigned ✓", `${techName} has accepted ticket #${ref8} and will be on the way soon.`);
+        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}` });
+    }
+    else if (["on_the_way", "en_route"].includes(statusNorm)) {
+        await notifyRequester("Technician On The Way 🚗", `${techName} is heading to ${prop} now. Track live in your app.`);
+    }
+    else if (["arrived"].includes(statusNorm)) {
+        await notifyRequester("Technician Arrived 📍", `${techName} has arrived at ${prop} and is starting the job.`);
+    }
+    else if (["in_progress", "work_started"].includes(statusNorm)) {
+        await notifyRequester("Work In Progress 🔧", `${techName} has started work on ticket #${ref8}.`);
+    }
+    else if (["completed", "completed_pending_approval", "completed_pending_tenant_approval"].includes(statusNorm)) {
+        await notifyRequester("Work Completed ✅", `${techName} has completed ticket #${ref8}. Please confirm the resolution.`);
+    }
+    else if (["cancelled", "escalated"].includes(statusNorm)) {
+        await notifyRequester("Ticket Update", `Ticket #${ref8} status changed to: ${after.status?.replace(/_/g, " ")}.`);
+    }
+
+    // ── Legacy: auto-quote logic ──────────────────────────────────────────
+    if (after.status === "ESTIMATED" && after.estimatedCost && Number(after.estimatedCost) <= 1000) {
         await event.data?.after.ref.update({
-            status: 'APPROVED',
-            approvalType: 'AUTO_REPAIR_THRESHOLD',
+            status: "APPROVED",
+            approvalType: "AUTO_REPAIR_THRESHOLD",
             approvedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
-
-        if (after.ownerId) {
-            await dispatchOmniNotification(after.ownerId, "AUTO-REPAIR ACTIVE", `A minor repair (AED ${after.estimatedCost}) at ${after.propertyName} has been auto-approved.`);
-        }
-
-        await logAudit({
-            actorId: "SYSTEM_RULES",
-            actorRole: "system",
-            action: "AUTO_APPROVAL",
-            targetType: "maintenanceTickets",
-            targetId: ticketId,
-            metadata: { cost: after.estimatedCost, threshold: 1000 }
-        });
-    } else if (after.status === 'ESTIMATED' && after.ownerId) {
-        await dispatchOmniNotification(after.ownerId, "NEW QUOTE GENERATED", `A technical estimate for #${ticketId.substring(0,8)} is ready.`);
-    }
-
-    if (after.status === 'COMPLETED' && after.ownerId) {
-        await dispatchOmniNotification(after.ownerId, "MISSION COMPLETED", `Task #${ticketId.substring(0,8)} has been finalized.`);
+        if (ownerId) await dispatchOmniNotification(ownerId, "AUTO-REPAIR ACTIVE", `A minor repair (AED ${after.estimatedCost}) at ${prop} has been auto-approved.`);
+        await logAudit({ actorId: "SYSTEM_RULES", actorRole: "system", action: "AUTO_APPROVAL", targetType: "maintenanceTickets", targetId: ticketId, metadata: { cost: after.estimatedCost, threshold: 1000 } });
+    } else if (after.status === "ESTIMATED" && ownerId) {
+        await dispatchOmniNotification(ownerId, "NEW QUOTE GENERATED", `A technical estimate for #${ref8} is ready.`);
     }
 });
+
 
 export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
     const snap = event.data;
@@ -815,8 +842,10 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
     const ticketData = snap.data();
 
     try {
-        const tenantDoc = await db.collection("users").doc(ticketData.tenantId).get();
-        const tenantData = tenantDoc.data();
+        // Works for both tenant-filed AND owner-filed tickets
+        const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";
+        const requesterDoc = requesterId ? await db.collection("users").doc(requesterId).get() : null;
+        const requesterData = requesterDoc?.data();
 
         let propertyData: any = null;
         if (ticketData.propertyId) {
@@ -827,9 +856,9 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
         const propertyGeo = normalizeGeo(propertyData || ticketData);
         const contextUpdate = {
             companyId: ticketData.companyId || propertyData?.companyId || "BIN_GROUP",
-            tenantPhone: tenantData?.phone || tenantData?.phoneNumber || "N/A",
+            tenantPhone: requesterData?.phone || requesterData?.phoneNumber || ticketData.tenantPhone || "N/A",
             ownerId: propertyData?.ownerId || ticketData.ownerId || null,
-            emirate: propertyGeo?.emirate || propertyData?.emirate || ticketData.emirate || tenantData?.emirate || "",
+            emirate: propertyGeo?.emirate || propertyData?.emirate || ticketData.emirate || requesterData?.emirate || "",
             city: propertyGeo?.city || propertyData?.city || ticketData.city || "",
             area: propertyGeo?.area || propertyData?.area || ticketData.area || propertyData?.serviceZone || "",
             geo: propertyGeo,
@@ -854,7 +883,7 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
         }
 
         const techQuery = await db.collection("users").where("role", "in", ["technician", "specialist"]).get();
-        const requiredSkill = String(ticketData.complaintCategory || ticketData.trade || "").toLowerCase();
+        const requiredSkill = String(ticketData.complaintCategory || ticketData.category || ticketData.trade || "").toLowerCase();
         
         const candidates = techQuery.docs
             .map((d) => ({ id: d.id, data: d.data() }))
@@ -878,13 +907,20 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
             const bestTech = candidates[0];
             await snap.ref.update({
                 assignedTechnicianId: bestTech.id,
-                assignedTechnicianName: bestTech.data.displayName || "Specialist",
-                status: "assigned",
+                technicianId: bestTech.id,
+                assignedTechnicianName: bestTech.data.displayName || bestTech.data.name || "Specialist",
+                assignedTechnicianPhone: bestTech.data.phone || bestTech.data.phoneNumber || "",
+                assignedTechnicianAvatar: bestTech.data.photoURL || "",
+                technicianSpecialty: bestTech.data.specialty || bestTech.data.trade || "",
+                status: "accepted",
+                dispatchStatus: "ASSIGNED",
+                trackingStatus: "TECHNICIAN_ASSIGNED",
+                acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
-                url: `/tech`,
+            await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
+                url: `/technician/job/${event.params.ticketId}`,
                 extraData: { ticketId: event.params.ticketId, openRoute: true }
             });
 
@@ -901,6 +937,7 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
         console.error("AutoRoute Failure:", err);
     }
 });
+
 
 // ─── OMNI-CHANNEL NOTIFICATION ENGINE ───────────────────────────────────────
 
@@ -2476,73 +2513,6 @@ export const processPayment = onCall({ cors: true }, async (request) => {
     });
 });
 
-/**
- * [V16] AI DISPATCH & AUTO-ROUTING V2
- * Geospatial technician assignment for maintenance tickets.
- */
-export const autoRouteTicketV2 = onDocumentCreated("maintenanceTickets/{id}", async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const ticketData = snap.data();
-    if (ticketData.technicianId || ticketData.status !== "OPEN") return;
-
-    const propertyId = ticketData.propertyId;
-    if (!propertyId) return;
-
-    // 1. Get Property Location
-    const propDoc = await db.collection("properties").doc(propertyId).get();
-    const propGeo = propDoc.data()?.geo;
-    if (!propGeo) return;
-
-    // 2. Find Available Technicians in Zone
-    const techQuery = await db.collection("users")
-        .where("role", "==", "technician")
-        .where("onDuty", "==", true)
-        .where("dutyStatus", "==", "ON_DUTY")
-        .get();
-
-    let bestTechId = null;
-    let minDistance = 50; // 50km radius max
-
-    techQuery.forEach(doc => {
-        const techData = doc.data();
-        if (techData.lastLocation) {
-            const d = distanceKm(propGeo, techData.lastLocation);
-            if (d < minDistance) {
-                minDistance = d;
-                bestTechId = doc.id;
-            }
-        }
-    });
-
-    if (bestTechId) {
-        await snap.ref.update({
-            technicianId: bestTechId,
-            status: "assigned",
-            technicianStatus: "PENDING_ACCEPTANCE",
-            assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-            autoRouted: true,
-            routingDistance: minDistance
-        });
-
-        await createNotification(bestTechId, {
-            title: "New Mission Assigned",
-            message: `Emergency dispatch for ${propDoc.data()?.propertyName || "Asset"}. Distance: ${minDistance.toFixed(1)}km.`,
-            type: "TICKET_UPDATE",
-            ticketId: event.params.id,
-            source: "AI_DISPATCH"
-        });
-
-        await logAudit({
-            actorId: "AI_DISPATCH",
-            actorRole: "system",
-            action: "AUTO_ROUTE_TICKET",
-            targetType: "maintenanceTickets",
-            targetId: event.params.id,
-            metadata: { technicianId: bestTechId, distance: minDistance }
-        });
-    }
-});
 
 /**
  * [PHASE 5] ADMIN UNIT OPERATIONS CONTROL
@@ -2615,3 +2585,255 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
     return { success: true };
 });
 
+// ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
+
+export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId}/messages/{messageId}", async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const message = snap.data();
+    const ticketId = event.params.ticketId;
+    const senderId = message.senderId;
+    
+    // Look up the ticket
+    const ticketSnap = await db.collection("maintenanceTickets").doc(ticketId).get();
+    if (!ticketSnap.exists) return;
+    const ticket = ticketSnap.data() || {};
+
+    const tenantId = ticket.tenantId || ticket.reporterId;
+    const techId = ticket.assignedTechnicianId;
+
+    if (!tenantId && !techId) return;
+
+    let targetUserId = "";
+    let senderName = message.senderName || "User";
+
+    if (senderId === tenantId) {
+        // Sender is tenant, notify technician
+        targetUserId = techId;
+    } else if (senderId === techId) {
+        // Sender is technician, notify tenant
+        targetUserId = tenantId;
+    } else {
+        // Could be an admin or someone else, decide if we notify anyone. For now, try to notify both if they didn't send it?
+        // Wait, usually the message has a `senderRole` or similar. Let's just default to returning if not tenant or tech.
+        return;
+    }
+
+    if (!targetUserId) return;
+
+    const textSnippet = message.text ? (message.text.length > 50 ? message.text.substring(0, 50) + "..." : message.text) : (message.imageUrl ? "Sent an image" : "Sent a message");
+
+    await dispatchOmniNotification(targetUserId, `New Message from ${senderName}`, textSnippet, {
+        extraData: { ticketId, type: "chat_message" },
+        url: `/ticket/${ticketId}`
+    });
+});
+
+export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return;
+    
+    const role = String(after.role || "").toLowerCase();
+    if (role !== "technician") return;
+
+    const beforeStatus = before?.dutyStatus || "OFF";
+    const afterStatus = after.dutyStatus || "OFF";
+    if (beforeStatus === afterStatus) return;
+
+    const uid = event.params.uid;
+    const now = new Date();
+    
+    // YYYYMMDD dateKey in Gulf Standard Time (GST, UTC+4)
+    const gstOffset = 4 * 60 * 60 * 1000;
+    const gstDate = new Date(now.getTime() + gstOffset);
+    const yyyy = gstDate.getUTCFullYear();
+    const mm = String(gstDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(gstDate.getUTCDate()).padStart(2, '0');
+    const dateKey = `${yyyy}${mm}${dd}`;
+    
+    const docId = `${uid}_${dateKey}`;
+    const attendanceRef = db.collection("attendance").doc(docId);
+
+    if (beforeStatus === "OFF" && afterStatus === "WORKING") {
+        await attendanceRef.set({
+            uid,
+            technicianId: uid,
+            email: after.email || "",
+            displayName: after.displayName || after.fullName || "Technician",
+            dateKey,
+            clockIn: admin.firestore.Timestamp.fromDate(now),
+            status: "working",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } 
+    else if (beforeStatus === "WORKING" && afterStatus === "BREAK") {
+        await attendanceRef.update({
+            breaks: admin.firestore.FieldValue.arrayUnion({ start: now }),
+            status: "break",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+    else if (beforeStatus === "BREAK" && afterStatus === "WORKING") {
+        const snap = await attendanceRef.get();
+        if (snap.exists) {
+            const data = snap.data() || {};
+            const breaks = Array.isArray(data.breaks) ? [...data.breaks] : [];
+            if (breaks.length > 0) {
+                const last = breaks[breaks.length - 1];
+                if (last && !last.end) {
+                    last.end = now;
+                }
+            }
+            await attendanceRef.update({
+                breaks,
+                status: "working",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            await attendanceRef.update({
+                status: "working",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+    else if ((beforeStatus === "WORKING" || beforeStatus === "BREAK") && afterStatus === "OFF") {
+        const snap = await attendanceRef.get();
+        if (snap.exists) {
+            const data = snap.data() || {};
+            const breaks = Array.isArray(data.breaks) ? [...data.breaks] : [];
+            if (beforeStatus === "BREAK" && breaks.length > 0) {
+                const last = breaks[breaks.length - 1];
+                if (last && !last.end) {
+                    last.end = now;
+                }
+            }
+
+            const clockInTs = data.clockIn;
+            let clockInDate = now;
+            if (clockInTs instanceof admin.firestore.Timestamp) {
+                clockInDate = clockInTs.toDate();
+            } else if (clockInTs) {
+                clockInDate = new Date(clockInTs);
+            }
+
+            const totalMinutes = Math.max(0, Math.round((now.getTime() - clockInDate.getTime()) / 60000));
+            
+            let scheduledMinutes = 480; // 8 hours default
+            const workingHoursStr = after.workingHours || "";
+            if (workingHoursStr) {
+                const match = workingHoursStr.match(/(\d+)\s*(AM|PM)\s*-\s*(\d+)\s*(AM|PM)/i);
+                if (match) {
+                    let startHour = parseInt(match[1], 10);
+                    const startAmpm = match[2].toUpperCase();
+                    let endHour = parseInt(match[3], 10);
+                    const endAmpm = match[4].toUpperCase();
+                    if (startAmpm === 'PM' && startHour < 12) startHour += 12;
+                    if (startAmpm === 'AM' && startHour === 12) startHour = 0;
+                    if (endAmpm === 'PM' && endHour < 12) endHour += 12;
+                    if (endAmpm === 'AM' && endHour === 12) endHour = 0;
+                    let diffHours = endHour - startHour;
+                    if (diffHours < 0) diffHours += 24;
+                    scheduledMinutes = diffHours * 60;
+                }
+            }
+
+            const overtimeMinutes = totalMinutes > scheduledMinutes ? (totalMinutes - scheduledMinutes) : 0;
+
+            await attendanceRef.update({
+                breaks,
+                clockOut: admin.firestore.Timestamp.fromDate(now),
+                totalMinutes,
+                overtimeMinutes,
+                status: "completed",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+});
+
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after) return;
+
+    const ticketId = event.params.id;
+    const beforeTechId = before?.assignedTechnicianId;
+    const afterTechId = after.assignedTechnicianId;
+
+    if (beforeTechId !== afterTechId && afterTechId) {
+        const ref8 = ticketId.substring(0, 8).toUpperCase();
+        const category = after.category || after.issueType || "Maintenance";
+        const propertyName = after.propertyName || "Property";
+        
+        await dispatchOmniNotification(afterTechId, "New Job Assigned", `Job Assigned: #${ref8} at ${propertyName} (${category}).`, {
+            url: `/technician/job/${ticketId}`
+        });
+
+        await logAudit({
+            actorId: after.updatedBy || "SYSTEM",
+            actorRole: after.updatedByRole || "system",
+            action: "MANUAL_TECHNICIAN_ASSIGNMENT_NOTIFY",
+            targetType: "maintenanceTickets",
+            targetId: ticketId,
+            metadata: { technicianId: afterTechId }
+        });
+    }
+});
+
+// ─── BIN-GPT ENGINEER COMMAND TRIGGER ────────────────────────────────────────
+// Restores the function Firebase expects in europe-west3.
+// This trigger ONLY records the command and prepares it for a secure
+// backend/GitHub Actions runner. It does NOT execute any GitHub code directly.
+
+export const onBinGptEngineerCommandCreated = onDocumentCreated(
+    "binGptEngineerCommands/{commandId}",
+    async (event) => {
+        const commandId = event.params.commandId;
+        const data = event.data?.data();
+        if (!data) return;
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const isoNow = new Date().toISOString();
+
+        const historyEntry = {
+            status: "PLAN_CREATED",
+            at: isoNow,
+            note: "Command received by backend trigger. Queued for secure runner."
+        };
+
+        const auditEntry = {
+            action: "BACKEND_TRIGGER_ACCEPTED",
+            actorUid: "SYSTEM",
+            actorEmail: "system@bin-groups.com",
+            actorRole: "system",
+            at: isoNow,
+            note: "onBinGptEngineerCommandCreated fired. Command queued for GitHub Actions runner."
+        };
+
+        try {
+            await db.collection("binGptEngineerCommands").doc(commandId).update({
+                status: "PLAN_CREATED",
+                runnerState: "WAITING_FOR_SECURE_BACKEND_RUNNER",
+                buildStatus: data.buildStatus || "NOT_STARTED",
+                deploymentStatus: data.deploymentStatus || "NOT_STARTED",
+                commandHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+                auditTrail: admin.firestore.FieldValue.arrayUnion(auditEntry),
+                updatedAt: now
+            });
+
+            console.info("onBinGptEngineerCommandCreated: command accepted", {
+                commandId,
+                createdBy: data.createdBy || "unknown",
+                status: "PLAN_CREATED"
+            });
+        } catch (err) {
+            console.error("onBinGptEngineerCommandCreated: failed to update command document", {
+                commandId,
+                err
+            });
+        }
+    }
+);

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
-import { AuthProvider, useAuth, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import { useAuth } from '@bin/shared';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../../lib/firebase';
 import RegisterStaffDialog from '../../components/RegisterStaffDialog';

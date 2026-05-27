@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Avatar } from '@mui/material';
 import { ArrowLeft, Globe, Wrench, ChevronRight } from 'lucide-react';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -14,12 +14,15 @@ import TechnicianChatPage from './pages/TechnicianChatPage';
 import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
+import TechnicianHRPage from './pages/TechnicianHRPage';
 
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useRole();
-    const { toggleLanguage, isRTL, language, t } = useLanguage();
+    const { setLang, isRTL, lang, t, tx } = useLanguage();
+    const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
+    const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
 
@@ -35,7 +38,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 }} 
                 elevation={0}
             >
-                <Toolbar sx={{ justifyContent: 'space-between', px: 0 }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         {location.pathname !== '/technician' && location.pathname !== '/technician/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: '#FFF' }}>
@@ -52,22 +55,24 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 1.5,
-                                fontSize: { xs: '0.9rem', md: '1.25rem' }
+                                fontSize: { xs: '0.9rem', md: '1.25rem' },
+                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                textAlign: isRTL ? 'right' : 'left'
                             }}
                         >
-                            <Wrench size={20} /> {t('dash.terminal.technician') || 'FIELD SOVEREIGN'}
+                            <Wrench size={20} /> {label('portal.technician.title', 'FIELD SOVEREIGN · UAE 🇦🇪', 'الميدان السيادي · الإمارات 🇦🇪')}
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, px: 2 }}>
                             <Globe size={18} />
                             <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 900 }}>
-                                {language === 'en' ? 'العربية' : 'ENGLISH'}
+                                {lang === 'en' ? 'AR' : 'EN'}
                             </Typography>
                         </IconButton>
                         
                         <NotificationBell />
-
+ 
                         <Avatar 
                             onClick={() => navigate('/technician/profile')}
                             sx={{ 
@@ -93,29 +98,19 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: 'rgba(255,255,255,0.2)' }} />}
                         sx={{ mb: 4, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}
                     >
-                        <MuiLink 
-                            component="button" 
-                            variant="caption" 
-                            onClick={() => navigate('/technician')} 
-                            sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textDecoration: 'none', '&:hover': { color: binThemeTokens.gold } }}
-                        >
+                        <MuiLink component="button" variant="caption" onClick={() => navigate('/technician')} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textDecoration: 'none', '&:hover': { color: binThemeTokens.gold } }}>
                             {t('nav.dashboard') || 'DASHBOARD'}
                         </MuiLink>
                         {pathnames.slice(1).map((value, index) => {
                             const routeTo = `/${pathnames.slice(0, index + 2).join('/')}`;
                             const isLast = index === pathnames.slice(1).length - 1;
-                            const label = t(`nav.${value.toLowerCase()}`) || value.toUpperCase();
+                            const fallback = value.replace('-', ' ').toUpperCase();
+                            const labelText = label(`nav.${value.toLowerCase().replace('-', '_')}`, fallback, fallback);
                             return isLast ? (
-                                <Typography key={routeTo} sx={{ color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.75rem' }}>{label}</Typography>
+                                <Typography key={routeTo} sx={{ color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.75rem' }}>{labelText}</Typography>
                             ) : (
-                                <MuiLink 
-                                    key={routeTo} 
-                                    component="button" 
-                                    variant="caption" 
-                                    onClick={() => navigate(routeTo)} 
-                                    sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textDecoration: 'none', '&:hover': { color: binThemeTokens.gold } }}
-                                >
-                                    {label}
+                                <MuiLink key={routeTo} component="button" variant="caption" onClick={() => navigate(routeTo)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textDecoration: 'none', '&:hover': { color: binThemeTokens.gold } }}>
+                                    {labelText}
                                 </MuiLink>
                             );
                         })}
@@ -125,6 +120,12 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     {children}
                 </Box>
             </Container>
+
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto' }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+                    © 2026 BIN GROUP SOVEREIGN · FIELD NODE · MADE IN UAE 🇦🇪
+                </Typography>
+            </Box>
         </Box>
     );
 };
@@ -142,6 +143,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
+                <Route path="/hr" element={<TechnicianHRPage />} />
             </Routes>
         </TechnicianLayout>
     );

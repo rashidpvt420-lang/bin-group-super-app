@@ -29,6 +29,7 @@ import {
   Home as HomeIcon,
   AccountBalance as TreasuryIcon,
   History as AuditIcon,
+  SmartToy as BotIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -69,6 +70,7 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
     { label: t('nav.sos_feed'), icon: <Badge badgeContent={sosCount} color="error"><WarningIcon /></Badge>, path: '/sos' },
     { label: t('nav.audit'), icon: <AuditIcon />, path: '/audit' },
     { label: t('nav.reports'), icon: <BarChartIcon />, path: '/reports' },
+    { label: t('nav.ai_studio') || 'AI Studio', icon: <BotIcon />, path: '/admin/ai-studio/bin-gpt-engineer' },
     { label: t('nav.settings'), icon: <SettingsIcon />, path: '/settings' },
   ];
 

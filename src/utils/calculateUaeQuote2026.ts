@@ -25,6 +25,11 @@ export interface QuoteInput {
   addOns?: string[];
   slaTier: 'standard' | 'premium' | 'elite';
   paymentPlan: 'annual' | 'quarterly' | 'monthly';
+  // Additional scaling parameters
+  hasWaterTank?: boolean;
+  hvacCount?: number;
+  offices?: number;
+  shops?: number;
 }
 
 export interface QuoteOutput {
@@ -42,6 +47,85 @@ export interface QuoteOutput {
   recommendedTier: string;
   pricingExplanation: string[];
   riskFlags: string[];
+}
+
+export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }> = {
+  fire_safety: { label: 'Fire Safety System Maintenance', base: 2500, perFloor: 150 },
+  water_tank: { label: 'Water Tank Cleaning', base: 1200 },
+  elevator_amc: { label: 'Elevator Maintenance', base: 3200, perUnit: 650 },
+  pool_care: { label: 'Swimming Pool Maintenance', base: 6000 },
+  facade_access: { label: 'Facade/BMU Access', base: 4500, perFloor: 75 },
+  'façade_access': { label: 'Facade/BMU Access', base: 4500, perFloor: 75 },
+  dist_cooling: { label: 'District Cooling Optimization', base: 3500 },
+  sira_renewal: { label: 'CCTV/SIRA Maintenance', base: 1800, perUnit: 35 },
+  grease_trap: { label: 'Grease Trap Service', base: 900 },
+  pca_audit: { label: 'PCA Asset Audit', base: 5000 },
+  majlis_deep_care: { label: 'Majlis Deep Care', base: 8400 },
+  majlis_landscaping: { label: 'Landscaping', base: 6000 },
+  majlis_exterior_wash: { label: 'Exterior Wash', base: 2800 },
+  majlis_standby: { label: 'Event Standby', base: 2500 },
+  security: { label: 'Security', base: 12000, perUnit: 450 },
+  cleaning: { label: 'Cleaning', base: 9000, perUnit: 300 },
+  manpower: { label: 'Manpower', base: 15000, perUnit: 250 },
+  concierge: { label: 'Concierge', base: 18000, perUnit: 350 },
+  landscaping: { label: 'Landscaping', base: 4000 },
+  pest_control: { label: 'Pest Control', base: 1500, perUnit: 50 },
+  generator: { label: 'Generator Maintenance', base: 3500 },
+  cctv: { label: 'CCTV', base: 1800, perUnit: 35 },
+  office_units: { label: 'Office Units Support', base: 2500, perUnit: 225 },
+  retail_shops: { label: 'Retail Shops Support', base: 3000, perUnit: 275 },
+  parking_management: { label: 'Parking Management', base: 6000, perUnit: 35 },
+  waste_management: { label: 'Waste Management', base: 3500, perUnit: 75 },
+  mep_support: { label: 'MEP Support', base: 8500, perFloor: 300 },
+  hvac_pm: { label: 'HVAC Preventive Maintenance', base: 4500, perUnit: 120 },
+  move_in_out_inspection: { label: 'Move-in/Move-out Inspection', base: 800 },
+  fit_out_quotation: { label: 'Fit-out Quotation', base: 0 },
+  emergency_priority: { label: 'Emergency Priority SOS', base: 1200 }
+};
+
+export function resolveMandatoryAddOns(input: QuoteInput): string[] {
+  const ids = new Set<string>();
+  ids.add('fire_safety');
+  
+  const isMosque = input.assetClassId === 'mosque_fm' || input.assetClassId === 'mosque';
+  if (isMosque) {
+    ids.add('water_tank');
+    ids.add('hvac_pm');
+    ids.add('cleaning');
+    ids.add('sira_renewal');
+    ids.add('emergency_priority');
+  }
+  if (input.hasWaterTank) ids.add('water_tank');
+  if ((input.floors || 0) > 2 || (input.lifts || 0) > 0) ids.add('elevator_amc');
+  if (input.hasSiraCctv) ids.add('sira_renewal');
+  if (input.hasBmu) ids.add('facade_access');
+  if (input.propertyAge > 15) ids.add('pca_audit');
+  if (input.hasPool) ids.add('pool_care');
+  if (input.hasCentralHVAC || (input.hvacCount || 0) > 0) ids.add('hvac_pm');
+  
+  return Array.from(ids);
+}
+
+export function calculateAddOnAnnualValue(
+  addOns: string[] | undefined,
+  property: { units?: number; floors?: number; offices?: number; shops?: number }
+): number {
+  if (!addOns || addOns.length === 0) return 0;
+  const ids = new Set(addOns);
+  let total = 0;
+  ids.forEach((id) => {
+    const canonicalId = id === 'façade_access' ? 'facade_access' : id;
+    const item = ADD_ON_PRICING[canonicalId];
+    if (!item) return;
+    total += item.base;
+    if (item.perUnit) {
+      total += item.perUnit * Math.max(property.units || 0, property.offices || 0, property.shops || 0, 1);
+    }
+    if (item.perFloor) {
+      total += item.perFloor * Math.max(property.floors || 0, 1);
+    }
+  });
+  return Math.round(total);
 }
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
@@ -67,7 +151,12 @@ const ASSET_CLASS_ALIASES: Record<string, string> = {
   mid_scale_hotel: 'mid_scale_hotel',
   government_majlis: 'government_majlis',
   private_majlis: 'private_majlis',
-  majlis: 'government_majlis'
+  majlis: 'government_majlis',
+  mosque: 'mosque_fm',
+  masjid: 'mosque_fm',
+  mosque_fm: 'mosque_fm',
+  religious_facility: 'mosque_fm',
+  'mosque / masjid': 'mosque_fm'
 };
 
 function normalizeAssetClassId(assetClassId?: string): string {
@@ -76,8 +165,73 @@ function normalizeAssetClassId(assetClassId?: string): string {
   return ASSET_CLASS_ALIASES[raw] || ASSET_CLASS_ALIASES[raw.toLowerCase()] || raw;
 }
 
+function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
+  const pricingExplanation: string[] = [];
+  const riskFlags: string[] = [];
+  const sqft = Math.max(input.sqft || 0, 1000);
+  const age = input.propertyAge || 0;
+  const worshipperProxy = Math.max(input.units || 1, 1);
+
+  const mepRate = input.contractType === 'FM_ONLY' ? 20 : input.contractType === 'BOTH' ? 38 : 30;
+  const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.18 : age <= 15 ? 1.35 : 1.55;
+  const capacityMultiplier = worshipperProxy <= 300 ? 1 : worshipperProxy <= 1000 ? 1.15 : worshipperProxy <= 3000 ? 1.35 : 1.6;
+
+  const baseQuote = sqft * mepRate * ageCoefficient;
+  const softServices = sqft * 8 * capacityMultiplier;
+  const wuduCleaning = Math.max(input.units || 1, 1) * 5 * 35 * 365;
+  const ramadanSurge = 15500 + (input.hasCentralHVAC ? 2500 : 0);
+  const compliancePremium = Math.max(baseQuote * 0.04, 2500);
+  const complexityPremium = (baseQuote + softServices) * 0.1;
+
+  const mergedAddOns = Array.from(new Set([...(input.addOns || []), ...resolveMandatoryAddOns(input)]));
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, input);
+
+  let slaMultiplier = 1.0;
+  if (input.slaTier === 'premium') slaMultiplier = 1.15;
+  else if (input.slaTier === 'elite') slaMultiplier = 1.3;
+
+  let paymentSurcharge = 0;
+  if (input.paymentPlan === 'quarterly') paymentSurcharge = 0.03;
+  else if (input.paymentPlan === 'monthly') paymentSurcharge = 0.06;
+
+  const subtotal = (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal) * slaMultiplier;
+  const annualTotal = subtotal * (1 + paymentSurcharge);
+
+  pricingExplanation.push(`${mepRate} AED/sqft mosque MEP rate applied to ${sqft} sqft.`);
+  pricingExplanation.push(`${ageCoefficient}x mosque age/risk coefficient applied.`);
+  pricingExplanation.push('Five daily Wudu cleaning cycles included.');
+  pricingExplanation.push('Ramadan surge cleaning and HVAC readiness included.');
+  pricingExplanation.push('Prayer-time-safe scheduling and monthly compliance reporting included.');
+
+  if (age > 10) riskFlags.push('Aging mosque MEP risk premium required');
+  if (!input.hasSiraCctv) riskFlags.push('Mosque security/compliance review required');
+  if (input.slaTier === 'elite') riskFlags.push('Elite mosque response model selected');
+
+  return {
+    baseQuote,
+    zoneAdjustedQuote: baseQuote,
+    emirateAdjustedQuote: baseQuote,
+    complexityPremium,
+    compliancePremium,
+    addOnTotal,
+    discount: 0,
+    annualTotal,
+    quarterlyPayment: annualTotal / 4,
+    monthlyPayment: annualTotal / 12,
+    mobilizationFee: annualTotal * 0.15,
+    recommendedTier: input.slaTier,
+    pricingExplanation,
+    riskFlags
+  };
+}
+
 export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   const normalizedAssetClassId = normalizeAssetClassId(input.assetClassId);
+
+  if (normalizedAssetClassId === 'mosque_fm') {
+    return calculateMosqueQuote(input);
+  }
+
   let assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === normalizedAssetClassId);
 
   const pricingExplanation: string[] = [];
@@ -178,7 +332,8 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   }
 
   // 7. Add-ons
-  const addOnTotal = (input.addOns?.length || 0) * 1500; // Simplified for now, can be asset specific
+  const mergedAddOns = Array.from(new Set([...(input.addOns || []), ...resolveMandatoryAddOns(input)]));
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, input);
 
   // 8. Calculations
   const subtotal = (emirateAdjustedQuote * ageMultiplier * slaMultiplier) + complexityPremium + addOnTotal;

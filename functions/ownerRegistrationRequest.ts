@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { generateContractPDF } from "./pdfEngine";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -55,6 +56,15 @@ function cleanPlainValue(value: any): any {
     return output;
   }
   return value;
+}
+
+function cleanMoney(value: unknown, label: string, required = false) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    if (required) throw new HttpsError("invalid-argument", `${label} must be a valid positive amount.`);
+    return 0;
+  }
+  return Math.round(amount);
 }
 
 function extractPendingPaymentPackage(data: any) {
@@ -265,13 +275,39 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const intakeId = cleanText(data.intakeId, "intakeId", 120);
   const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
   const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
-  const amount = Number(data.amount);
+  const amount = cleanMoney(data.amount, "Payment amount", true);
+  const activationDeposit = cleanMoney(data.activationDeposit || data.amount, "Activation deposit", true);
+  const annualContractValue = cleanMoney(data.annualContractValue || amount, "Annual contract value");
   const companyProfile = cleanPlainValue(data.companyProfile || {});
   const serviceDetails = cleanPlainValue(data.serviceDetails || {});
   const documentUrls = cleanPlainValue(data.documentUrls || {});
+  const paymentManifest = cleanPlainValue(data.paymentManifest || {});
+  const properties = cleanPlainValue(data.properties || []);
+  const signatureName = cleanText(data.signatureName, "signatureName", 120);
 
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  if (amount <= 0 || activationDeposit <= 0) {
+    throw new HttpsError("invalid-argument", "A positive payment amount is required.");
+  }
+
+  // Generate the locked Contract PDF
+  let contractUrl = "";
+  try {
+    contractUrl = await generateContractPDF({
+      contractId: intakeId,
+      ownerId: ownerUid,
+      ownerName: signatureName || companyProfile.contactPerson || ownerEmail,
+      companyName: companyProfile.name || "Private Owner",
+      ownerEmail,
+      propertyName: serviceDetails.properties > 1 ? "Portfolio" : "Property",
+      propertyType: serviceDetails.selectedPlan,
+      units: serviceDetails.totalUnits,
+      planName: serviceDetails.selectedPlan,
+      annualValue: annualContractValue || amount,
+      mobilizationAmount: activationDeposit
+    });
+  } catch (pdfError) {
+    console.error("Failed to generate PDF contract:", pdfError);
+    // Don't completely fail the onboarding if PDF generation fails, just leave it blank for manual regeneration
   }
 
   const timestamp = serverTimestamp();
@@ -286,13 +322,33 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     onboardingSessionId,
     paymentMethod,
     amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     currency: "AED",
     status: "PENDING",
     verificationState: "ADMIN_VERIFICATION_REQUIRED",
     companyProfile,
     serviceDetails,
     documentUrls,
+    paymentManifest,
+    contractUrl,
+    signatureName,
     submittedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }, { merge: true });
+
+  const contractRef = db.collection("contracts").doc(intakeId);
+  batch.set(contractRef, {
+    contractId: intakeId,
+    ownerUid,
+    ownerId: ownerUid,
+    ownerEmail,
+    signatureName,
+    contractUrl,
+    annualContractValue: annualContractValue || amount,
+    activationDeposit,
+    status: "PENDING_PAYMENT_ACTIVATION",
     createdAt: timestamp,
     updatedAt: timestamp
   }, { merge: true });
@@ -302,11 +358,17 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentSubmitted: true,
     paymentSubmittedAt: timestamp,
     paymentMethod,
+    paymentAmount: amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     status: "payment_pending_approval",
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
     proofDocuments: documentUrls,
+    paymentManifest,
+    contractUrl,
+    properties,
     updatedAt: timestamp
   }, { merge: true });
 
@@ -321,6 +383,9 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     intakeId,
     sessionId: onboardingSessionId,
     paymentMethod,
+    paymentAmount: amount,
+    activationDeposit,
+    annualContractValue: annualContractValue || amount,
     timestamp,
     createdAt: timestamp,
     documentCount: Object.keys(documentUrls).length
