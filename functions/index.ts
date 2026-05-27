@@ -2644,6 +2644,7 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
             runnerStatus: "WAITING_FOR_SECURE_BACKEND_RUNNER",
             buildStatus: data.buildStatus || "NOT_STARTED",
             deploymentStatus: data.deploymentStatus || "NOT_STARTED",
+            createdAt: data.createdAt || now,
             updatedAt: now,
             commandHistory: admin.firestore.FieldValue.arrayUnion({
                 status: "PLAN_CREATED",
