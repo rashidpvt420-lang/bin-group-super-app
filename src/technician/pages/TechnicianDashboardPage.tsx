@@ -232,7 +232,7 @@ export default function TechnicianDashboardPage() {
             const certs = uniqueRows([
                 ...(await readRows('technician_certifications', 'technicianId', user.uid, 8)),
                 ...(await readRows('certifications', 'technicianId', user.uid, 8)),
-                ...((technicianProfile?.certifications || userProfile?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
+                ...(((technicianProfile as any)?.certifications || (userProfile as any)?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
             ]);
 
             setProfileSources({

@@ -28,6 +28,7 @@ export default function TenantRequestPage() {
     const [unitData, setUnitData] = useState<any>(null);
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
+    const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
 
     useEffect(() => {
         const fetchResidence = async () => {
@@ -45,7 +46,18 @@ export default function TenantRequestPage() {
                     if (uData.propertyId) {
                         const propSnap = await getDoc(doc(db, "properties", uData.propertyId));
                         if (propSnap.exists()) {
-                            setPropertyData({ id: propSnap.id, ...propSnap.data() });
+                            const pData: any = { id: propSnap.id, ...propSnap.data() };
+                            setPropertyData(pData);
+                            
+                            if (pData.ownerId) {
+                                const ownerSnap = await getDoc(doc(db, "users", pData.ownerId));
+                                if (ownerSnap.exists()) {
+                                    const ownerStatus = String(ownerSnap.data()?.status || '').toLowerCase();
+                                    if (ownerStatus === 'suspended') {
+                                        setIsOwnerSuspended(true);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -199,13 +211,28 @@ export default function TenantRequestPage() {
             </Stack>
 
             <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, backdropFilter: 'blur(10px)' }}>
+                {isOwnerSuspended && (
+                    <Box sx={{ p: 3, mb: 4, bgcolor: alpha('#ef4444', 0.1), border: '1px solid #ef4444', borderRadius: 4 }}>
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <AlertCircle color="#ef4444" size={24} />
+                            <Box>
+                                <Typography variant="body1" fontWeight="950" color="#ef4444">
+                                    {t('dash.tenant.dispatchSuspended') || 'MAINTENANCE DISPATCH SUSPENDED'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
+                                    {t('dash.tenant.dispatchSuspendedDesc') || 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.'}
+                                </Typography>
+                            </Box>
+                        </Stack>
+                    </Box>
+                )}
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={4}>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
                                     <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{t('dash.tenant.category') || 'Category'}</InputLabel>
-                                    <Select value={category} label={t('dash.tenant.category') || 'Category'} onChange={(e) => setCategory(e.target.value)} required sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Select value={category} label={t('dash.tenant.category') || 'Category'} onChange={(e) => setCategory(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
                                         <MenuItem value="AC">{t('dash.tenant.catAc') || 'AC / Cooling'}</MenuItem>
                                         <MenuItem value="electrical">{t('dash.tenant.catElec') || 'Electrical / Power'}</MenuItem>
                                         <MenuItem value="plumbing">{t('dash.tenant.catPlumb') || 'Plumbing / Water'}</MenuItem>
@@ -221,7 +248,7 @@ export default function TenantRequestPage() {
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
                                     <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{t('dash.tenant.priority') || 'Priority'}</InputLabel>
-                                    <Select value={priority} label={t('dash.tenant.priority') || 'Priority'} onChange={(e) => setPriority(e.target.value)} required sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Select value={priority} label={t('dash.tenant.priority') || 'Priority'} onChange={(e) => setPriority(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
                                         <MenuItem value="normal">{t('dash.tenant.prioNormal') || 'Normal (Standard 24h)'}</MenuItem>
                                         <MenuItem value="urgent">{t('dash.tenant.prioUrgent') || 'Urgent (Priority 4h)'}</MenuItem>
                                         <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{t('dash.tenant.prioEmerg') || 'EMERGENCY (Safety/SOS 1h)'}</MenuItem>
@@ -236,6 +263,7 @@ export default function TenantRequestPage() {
                             value={specificLocation} 
                             onChange={(e) => setSpecificLocation(e.target.value)} 
                             placeholder={t('dash.tenant.specificLocationHint') || "Helps our technician find the issue faster"}
+                            disabled={isOwnerSuspended}
                             sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
                         />
 
@@ -246,6 +274,7 @@ export default function TenantRequestPage() {
                             onChange={(e) => setDescription(e.target.value)} 
                             required 
                             placeholder={t('dash.tenant.issueDescHint') || "Please describe the issue in detail..."}
+                            disabled={isOwnerSuspended}
                             sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
                         />
 
@@ -279,6 +308,7 @@ export default function TenantRequestPage() {
                                     <Grid item xs={4} md={3}>
                                         <Button
                                             component="label"
+                                            disabled={isOwnerSuspended}
                                             sx={{ 
                                                 width: '100%', 
                                                 pt: '100%', 
@@ -318,7 +348,7 @@ export default function TenantRequestPage() {
                             type="submit" 
                             variant="contained" 
                             size="large" 
-                            disabled={submitting || uploadingPhotos} 
+                            disabled={submitting || uploadingPhotos || isOwnerSuspended} 
                             sx={{ 
                                 bgcolor: binThemeTokens.gold, 
                                 color: '#000', 
