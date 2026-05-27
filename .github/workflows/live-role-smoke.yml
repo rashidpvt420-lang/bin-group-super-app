@@ -49,8 +49,14 @@ jobs:
       - name: Show smoke test target
         run: echo "Running live smoke tests against ${E2E_BASE_URL}"
 
-      - name: Run live smoke tests
-        # Exclude emulator-only tests (mosque-onboarding etc.) that require the local Firebase emulator
+      - name: Run public smoke tests
+        if: github.event_name != 'workflow_dispatch'
+        # Run only public smoke tests on push/schedule to avoid false failures from missing E2E secrets
+        run: npx playwright test --grep "production public smoke"
+
+      - name: Run full role smoke tests
+        if: github.event_name == 'workflow_dispatch'
+        # Run all non-emulator tests, including authenticated role login smoke tests
         run: npx playwright test --grep-invert "@emulator-only"
 
       - name: Upload Playwright report
