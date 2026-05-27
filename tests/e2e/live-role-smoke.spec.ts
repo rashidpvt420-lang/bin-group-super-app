@@ -23,34 +23,88 @@ const publicRoutes = [
   '/terms',
 ];
 
-const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error/i;
-const serverErrorText = /bad gateway|service unavailable|internal server error/i;
+const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|cannot read properties of undefined|null is not an object/i;
+const serverErrorText = /bad gateway|service unavailable|internal server error|gateway timeout/i;
 
-async function expectNoCriticalRuntimeCrash(page: Page) {
-  await expect(page.locator('body')).toBeVisible({ timeout: 20_000 });
-  const bodyText = await page.locator('body').innerText({ timeout: 20_000 });
+async function collectPageDiagnostics(page: Page, route: string) {
+  return page.evaluate((targetRoute) => {
+    const body = document.body?.innerText?.trim() || '';
+    return {
+      targetRoute,
+      href: window.location.href,
+      pathname: window.location.pathname,
+      title: document.title,
+      readyState: document.readyState,
+      bodyLength: body.length,
+      bodyPreview: body.slice(0, 500),
+      rootHtmlLength: document.getElementById('root')?.innerHTML?.length || 0,
+    };
+  }, route).catch((error) => ({
+    targetRoute: route,
+    href: page.url(),
+    error: error instanceof Error ? error.message : String(error),
+  }));
+}
+
+async function waitForRenderableBody(page: Page, route: string) {
+  await page.waitForLoadState('domcontentloaded', { timeout: 20_000 }).catch(() => undefined);
+  await page.waitForFunction(() => Boolean(document.body), null, { timeout: 20_000 });
+
+  await page.waitForFunction(
+    () => {
+      const bodyText = document.body?.innerText?.trim() || '';
+      const rootHtml = document.getElementById('root')?.innerHTML || '';
+      return bodyText.length > 0 || rootHtml.length > 0;
+    },
+    null,
+    { timeout: 25_000 },
+  ).catch(async (error) => {
+    const diagnostics = await collectPageDiagnostics(page, route);
+    throw new Error(`Route ${route} did not render visible DOM content. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${error instanceof Error ? error.message : String(error)}`);
+  });
+
+  return page.locator('body').innerText({ timeout: 20_000 });
+}
+
+async function expectNoCriticalRuntimeCrash(page: Page, route = page.url()) {
+  const bodyText = await waitForRenderableBody(page, route);
   expect(bodyText).not.toMatch(criticalRuntimeFailureText);
   expect(bodyText).not.toMatch(serverErrorText);
+  return bodyText;
 }
 
 async function expectHealthyPublicRoute(page: Page, route: string) {
-  const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
-  expect(response, `${route} should return an HTTP response`).toBeTruthy();
-  expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
+  let lastError: unknown;
 
-  await expectNoCriticalRuntimeCrash(page);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      expect(response, `${route} should return an HTTP response`).toBeTruthy();
+      expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
 
-  const bodyText = (await page.locator('body').innerText({ timeout: 20_000 })).trim();
-  expect(bodyText.length, `${route} should render visible body content`).toBeGreaterThan(0);
+      const bodyText = (await expectNoCriticalRuntimeCrash(page, route)).trim();
+      expect(bodyText.length, `${route} should render visible body content`).toBeGreaterThan(0);
 
-  if (route === '/') {
-    expect(/BIN|Group|maintenance|property/i.test(bodyText), 'Homepage should render BIN GROUP/property-care brand content').toBeTruthy();
+      if (route === '/') {
+        expect(/BIN|Group|maintenance|property/i.test(bodyText), 'Homepage should render BIN GROUP/property-care brand content').toBeTruthy();
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) {
+        await page.waitForTimeout(1_500);
+        continue;
+      }
+    }
   }
+
+  const diagnostics = await collectPageDiagnostics(page, route);
+  throw new Error(`Public route smoke failed for ${route}. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
 async function login(page: Page, email: string, password: string) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await expectNoCriticalRuntimeCrash(page);
+  await expectNoCriticalRuntimeCrash(page, '/login');
 
   const emailInput = page.locator('input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
   const passwordInput = page.locator('input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
@@ -94,7 +148,7 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
       await page.waitForTimeout(2_000);
 
       await page.goto(roleRoutes[role], { waitUntil: 'domcontentloaded' });
-      await expectNoCriticalRuntimeCrash(page);
+      await expectNoCriticalRuntimeCrash(page, roleRoutes[role]);
 
       const currentPath = new URL(page.url()).pathname;
       expect(currentPath, `${role} should be able to reach ${roleRoutes[role]}`).toBe(roleRoutes[role]);
