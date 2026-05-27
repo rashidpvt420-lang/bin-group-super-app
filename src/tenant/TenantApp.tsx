@@ -66,7 +66,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                                 {label('portal.tenant.title', 'TENANT PORTAL', 'بوابة المستأجر')}
                             </Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE', 'عقدة السكن السيادية')}
+                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE · UAE 🇦🇪', 'عقدة السكن السيادية · الإمارات 🇦🇪')}
                             </Typography>
                         </Box>
                     </Box>
@@ -115,7 +115,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
-                    © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS
+                    © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS · MADE IN UAE 🇦🇪
                 </Typography>
             </Box>
 

@@ -97,6 +97,12 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         {children}
       </Container>
 
+      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto', mb: { xs: 8, lg: 0 } }}>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+            © 2026 BIN GROUP SOVEREIGN · BROKER TERMINAL · MADE IN UAE 🇦🇪
+        </Typography>
+      </Box>
+
       <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'rgba(2,6,23,0.94)', borderTop: '1px solid rgba(255,255,255,0.08)', zIndex: 1300, justifyContent: 'space-around', py: 1 }}>
         {menuItems.map((item) => {
           const active = location.pathname.startsWith(item.path);

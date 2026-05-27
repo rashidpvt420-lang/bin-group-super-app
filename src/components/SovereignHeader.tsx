@@ -47,6 +47,9 @@ const BinGroupHeader: React.FC = () => {
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
                         BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
                     </Typography>
+                    <Box sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.2, borderRadius: 1, bgcolor: alpha(binThemeTokens.gold, 0.15), border: `1px solid ${binThemeTokens.gold}`, color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 950, ml: 1 }}>
+                        MADE IN UAE 🇦🇪
+                    </Box>
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
