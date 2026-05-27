@@ -46,7 +46,7 @@ export default function TenantRequestPage() {
                     if (uData.propertyId) {
                         const propSnap = await getDoc(doc(db, "properties", uData.propertyId));
                         if (propSnap.exists()) {
-                            const pData = { id: propSnap.id, ...propSnap.data() };
+                            const pData: any = { id: propSnap.id, ...propSnap.data() };
                             setPropertyData(pData);
                             
                             if (pData.ownerId) {

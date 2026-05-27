@@ -82,7 +82,9 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
     const password = process.env[`E2E_${role.toUpperCase()}_PASSWORD`];
 
     test(`${role} can login and reach dashboard`, async ({ page }) => {
-      test.skip(!email || !password, `Missing E2E_${role.toUpperCase()}_EMAIL/PASSWORD secrets.`);
+      if (!email || !password) {
+        throw new Error(`Missing E2E_${role.toUpperCase()}_EMAIL/PASSWORD secrets. Mandatory role credentials must be defined for public launch smoke tests.`);
+      }
 
       const consoleErrors: string[] = [];
       page.on('console', (msg) => {

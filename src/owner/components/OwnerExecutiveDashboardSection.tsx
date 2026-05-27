@@ -234,7 +234,37 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', ...textSafeSx }}>{loc.address || 'Address pending'}</Typography>
         </Stack>
 
-        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+        {(() => {
+          const template = getOwnerAssetTemplate(property);
+          if (!template || !template.fields || template.fields.length === 0) return null;
+          return (
+            <Box sx={{ mt: 2.5 }}>
+              <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 1.5, letterSpacing: 1 }}>
+                {template.title.toUpperCase()}
+              </Typography>
+              <Grid container spacing={1.5}>
+                {template.fields.map((field) => {
+                  const val = getFirstAssetValue(property, field.keys, 'Pending setup', field.label);
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={field.label}>
+                      <Box sx={{ p: 1.25, bgcolor: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 2 }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900, display: 'block', mb: 0.5 }}>
+                          {field.label.toUpperCase()}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>
+                          {val}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Box>
+          );
+        })()}
+
+        <Box sx={{ display: 'flex', gap: 2, mt: 2.5 }}>
           <Button 
             href={loc.googleMapsUrl} 
             target="_blank" 
