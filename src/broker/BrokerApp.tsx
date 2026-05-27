@@ -11,15 +11,15 @@ import {
   Paper,
   Stack,
   Toolbar,
-  Tooltip,
   Typography,
   alpha,
 } from '@mui/material';
-import { ArrowLeft, Bell, Briefcase, Building, FileUp, Globe, Home, Paintbrush, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Briefcase, Building, FileUp, Globe, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { auth } from '../lib/firebase';
+import { NotificationBell } from '../components/NotificationBell';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -57,7 +57,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             </Box>
             <Box>
               <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>BIN BROKER</Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900 }}>PARTNER PORTAL</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900 }}>PARTNER PORTAL · MADE IN UAE 🇦🇪</Typography>
             </Box>
           </Stack>
 
@@ -69,9 +69,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
               <Globe size={18} />
               <Typography variant="caption" sx={{ ml: 1, fontWeight: 950 }}>{language === 'en' ? 'AR' : 'EN'}</Typography>
             </IconButton>
-            <Tooltip title="Notifications">
-              <IconButton sx={{ color: 'rgba(255,255,255,0.6)' }}><Bell size={19} /></IconButton>
-            </Tooltip>
+            <NotificationBell />
             <Box onClick={() => navigate('/broker/profile')} sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1 }}>
               <Avatar sx={{ width: 36, height: 36, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
                 {user?.displayName?.charAt(0) || 'B'}
