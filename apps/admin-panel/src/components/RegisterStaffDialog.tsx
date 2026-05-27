@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
     Dialog, DialogTitle, DialogContent, DialogActions, 
     Button, TextField, MenuItem, Grid, Box, Typography,
-    CircularProgress, Alert, IconButton, alpha, Stack
+    CircularProgress, Alert, IconButton, alpha
 } from '@mui/material';
 import { X, UserPlus, Shield, Smartphone, Mail, Briefcase } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';

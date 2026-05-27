@@ -18,7 +18,8 @@
     "test:rules": "node --test test/security-rules.test.js",
     "test:stability": "node scripts/production-stability-guard.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:public": "playwright test --grep \"production public smoke\""
+    "test:e2e:public": "playwright test --grep \"production public smoke\"",
+    "test:e2e:emulator": "playwright test --grep \"@emulator-only\""
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
