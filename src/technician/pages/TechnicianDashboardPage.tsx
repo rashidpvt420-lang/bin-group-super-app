@@ -95,7 +95,7 @@ const readRows = async (collectionName: string, field: string, value?: string | 
     }
 };
 
-const readDocByUid = async (collectionName: string, uid?: string | null) => {
+const readDocByUid = async (collectionName: string, uid?: string | null): Promise<any | null> => {
     if (!uid) return null;
     try {
         const snap = await getDoc(doc(db, collectionName, uid));
