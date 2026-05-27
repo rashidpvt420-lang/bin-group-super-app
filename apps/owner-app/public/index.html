@@ -121,6 +121,7 @@
                         <a href="/technicians">Technicians</a>
                         <a href="/brokers">Brokers</a>
                         <a href="/security">Security</a>
+                        <a href="#" id="static-lang-toggle" onclick="var l = localStorage.getItem('bin_language') === 'ar' ? 'en' : 'ar'; localStorage.setItem('bin_language', l); window.location.reload(); return false;" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">العربية</a>
                         <a href="/login" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Login</a>
                         <a href="/onboarding" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Get Started</a>
                     </div>
@@ -227,6 +228,21 @@
 
     <script>
       (function() {
+        var lang = localStorage.getItem('bin_language') || 'en';
+        document.documentElement.lang = lang;
+        if (lang === 'ar') {
+          document.documentElement.dir = 'rtl';
+          document.body.style.direction = 'rtl';
+        } else {
+          document.documentElement.dir = 'ltr';
+          document.body.style.direction = 'ltr';
+        }
+        
+        var langToggle = document.getElementById('static-lang-toggle');
+        if (langToggle) {
+          langToggle.innerText = lang === 'ar' ? 'English' : 'العربية';
+        }
+
         var path = window.location.pathname;
         var contents = document.querySelectorAll('.route-content');
         contents.forEach(function(c) { c.style.display = 'none'; });

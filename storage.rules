@@ -2,45 +2,143 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-  
+
     function isAuth() {
       return request.auth != null;
     }
 
+    function userRecordExists() {
+      return isAuth() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function userRecord() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasAnyRole(roles) {
+      return isAuth() && (
+        request.auth.token.role in roles ||
+        request.auth.token.userRole in roles ||
+        request.auth.token.primaryRole in roles ||
+        (userRecordExists() && userRecord().role in roles)
+      );
+    }
+
     function hasRole(role) {
-      return isAuth() && request.auth.token.role == role;
+      return hasAnyRole([role]);
     }
 
     function isAdmin() {
       return isAuth() && (
-        request.auth.token.admin == true || 
+        request.auth.token.admin == true ||
         request.auth.token.isAdmin == true ||
         request.auth.token.ceo == true ||
         request.auth.token.manager == true ||
-        request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER']
+        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER']) ||
+        (userRecordExists() && (userRecord().isAdmin == true || userRecord().admin == true))
       );
     }
 
     function isAuditor() {
-      return hasRole('AUDITOR') || hasRole('auditor') || hasRole('compliance_officer');
+      return hasAnyRole(['AUDITOR', 'auditor', 'compliance_officer']);
     }
 
     function isTenantRole() {
-      return hasRole('tenant') || hasRole('TENANT');
+      return hasAnyRole(['tenant', 'TENANT']);
     }
 
     function isTechnicianRole() {
-      return hasRole('technician') || hasRole('TECHNICIAN');
+      return hasAnyRole(['technician', 'TECHNICIAN']);
     }
 
     function isOwnerRole() {
-      return hasRole('owner') || hasRole('OWNER');
+      return hasAnyRole(['owner', 'OWNER']);
+    }
+
+    function ticketExists(ticketId) {
+      return firestore.exists(/databases/(default)/documents/maintenanceTickets/$(ticketId));
+    }
+
+    function ticket(ticketId) {
+      return firestore.get(/databases/(default)/documents/maintenanceTickets/$(ticketId)).data;
+    }
+
+    function canReadTicketEvidence(ticketId) {
+      return isAuth() && ticketExists(ticketId) && (
+        isAdmin() ||
+        isAuditor() ||
+        ticket(ticketId).ownerId == request.auth.uid ||
+        ticket(ticketId).ownerUid == request.auth.uid ||
+        ticket(ticketId).tenantId == request.auth.uid ||
+        ticket(ticketId).tenantUid == request.auth.uid ||
+        ticket(ticketId).assignedTechnicianId == request.auth.uid ||
+        ticket(ticketId).technicianId == request.auth.uid
+      );
+    }
+
+    function canWriteTicketEvidence(ticketId) {
+      return isAuth() && ticketExists(ticketId) && (
+        isAdmin() ||
+        ticket(ticketId).assignedTechnicianId == request.auth.uid ||
+        ticket(ticketId).technicianId == request.auth.uid
+      );
+    }
+
+    function contractExists(contractId) {
+      return firestore.exists(/databases/(default)/documents/contracts/$(contractId));
+    }
+
+    function contract(contractId) {
+      return firestore.get(/databases/(default)/documents/contracts/$(contractId)).data;
+    }
+
+    function canReadContractFile(contractId) {
+      return isAuth() && contractExists(contractId) && (
+        isAdmin() ||
+        isAuditor() ||
+        contract(contractId).ownerId == request.auth.uid ||
+        contract(contractId).ownerUid == request.auth.uid ||
+        contract(contractId).createdBy == request.auth.uid ||
+        contract(contractId).userId == request.auth.uid ||
+        contract(contractId).recipientEmail == request.auth.token.email ||
+        contract(contractId).ownerEmail == request.auth.token.email ||
+        contract(contractId).email == request.auth.token.email
+      );
+    }
+
+    function invoiceExists(invoiceId) {
+      return firestore.exists(/databases/(default)/documents/invoices/$(invoiceId));
+    }
+
+    function invoice(invoiceId) {
+      return firestore.get(/databases/(default)/documents/invoices/$(invoiceId)).data;
+    }
+
+    function canReadInvoiceFile(invoiceId) {
+      return isAuth() && invoiceExists(invoiceId) && (
+        isAdmin() ||
+        isAuditor() ||
+        invoice(invoiceId).ownerId == request.auth.uid ||
+        invoice(invoiceId).ownerUid == request.auth.uid ||
+        invoice(invoiceId).payerId == request.auth.uid ||
+        invoice(invoiceId).userId == request.auth.uid ||
+        invoice(invoiceId).recipientEmail == request.auth.token.email ||
+        invoice(invoiceId).ownerEmail == request.auth.token.email ||
+        invoice(invoiceId).email == request.auth.token.email
+      );
+    }
+
+    function isAllowedImageContentType() {
+      return request.resource != null && (
+        request.resource.contentType.matches('image/.*') ||
+        request.resource.contentType in ['application/octet-stream', 'binary/octet-stream']
+      );
     }
 
     function isImageUpload(maxSizeMb) {
       return request.resource != null &&
              request.resource.size < maxSizeMb * 1024 * 1024 &&
-             request.resource.contentType.matches('image/.*');
+             isAllowedImageContentType();
     }
 
     function isDocumentUpload(maxSizeMb) {
@@ -52,27 +150,28 @@ service firebase.storage {
     // Tenant issue photos uploaded by TenantRequestPage.tsx:
     // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
     match /maintenanceTickets/{tenantId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isTechnicianRole());
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor() || isTechnicianRole());
       allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
     }
 
     // Technician/admin job completion evidence for maintenance tickets.
     match /maintenanceTickets/{ticketId}/proofs/{fileName} {
-      allow read: if isAuth() && (isTechnicianRole() || isAdmin() || isAuditor());
-      allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
     // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
     // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow write: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+      allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
     // Proofs: before/after photos for tickets
     match /proofs/{ticketId}/{allPaths=**} {
-      allow read: if isAuth() && (isTechnicianRole() || isAdmin() || isAuditor());
-      allow write: if isAuth() && (isTechnicianRole() || isAdmin()) && isImageUpload(10);
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
     // Owner Documents: title deeds, passports, etc.
@@ -89,13 +188,13 @@ service firebase.storage {
 
     // Contracts: Institutional agreements
     match /contracts/{contractId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if canReadContractFile(contractId);
       allow write: if isAdmin() && isDocumentUpload(25);
     }
 
     // Invoices: Financial records
     match /invoices/{invoiceId}/{allPaths=**} {
-      allow read: if isAuth() && (isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if canReadInvoiceFile(invoiceId);
       allow write: if isAdmin() && isDocumentUpload(15);
     }
 
@@ -107,6 +206,18 @@ service firebase.storage {
     match /onboarding-proof/{userId}/{intakeId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
+    }
+
+    // Ticket evidence photos:
+    match /evidence/{ticketId}/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+    }
+
+    // Temporary KYC/Title deed uploads during anonymous onboarding:
+    match /temp_kyc/{fileName} {
+      allow read: if isAdmin();
+      allow write: if isDocumentUpload(15);
     }
 
     // Default lockdown for unmanaged paths

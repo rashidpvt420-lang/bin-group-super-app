@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
 
 // Production Imports
-import { 
-    db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, 
-    isSupported, getMessaging, getToken, app, 
+import {
+    db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp,
     onAuthStateChanged, arrayUnion
-} from "../lib/firebase";        
+} from "../lib/firebase";
 import type { User } from "../lib/firebase";
+import { registerPushNotifications } from "../services/pushNotificationService";
 import LegalModal from "../components/LegalModal";
 
 declare global {
@@ -41,7 +41,7 @@ export interface SovereignUser extends User {
     permissions?: Record<string, boolean>;
 }
 
-export type SovereignPermission = 
+export type SovereignPermission =
     | 'canViewPayments'
     | 'canVerifyPayments'
     | 'canManageTenants'
@@ -91,8 +91,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const loadingRef = useRef(loading);
 
     const enableNotifications = async (): Promise<boolean> => {
-        console.warn("🛡️ [AUTH] Push notifications temporarily disabled during caching repair.");
-        return false;
+        const activeUser = auth.currentUser;
+        if (!activeUser?.uid) return false;
+        try {
+            const result = await registerPushNotifications(activeUser.uid, role);
+            return result.enabled === true;
+        } catch (err) {
+            console.warn("🛡️ [AUTH] Push notification registration failed.", err);
+            return false;
+        }
     };
 
     const syncProfile = async (currentUser: User) => {
@@ -100,16 +107,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         try {
             // 1. Force Token Refresh to pick up new Custom Claims
             console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (Force Refresh)...");
-            
+
             // Timeout to prevent infinite hang on local/network failure
             const tokenPromise = currentUser.getIdTokenResult(true);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), 5000));
-            
+
             const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
                 console.warn("🛡️ [AUTH] Token refresh failed or timed out. Proceeding with existing claims.", err);
                 return currentUser.getIdTokenResult(false); // Fallback to cached
             });
-            
+
             const claims = tokenResult.claims;
             console.log("🔍 [AUTH_DIAG] Custom Claims Detected:", claims);
 
@@ -136,7 +143,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             if (snap && snap.exists()) {
                 const data = snap.data();
                 console.log("🔍 [AUTH_DIAG] Firestore Data Found:", data);
-                
+
                 // [Role System Repair] Check for emergency admin grants
                 let finalRole = data.role;
                 let finalIsAdmin = data.isAdmin || data.role === 'admin';
@@ -145,12 +152,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
                     const grantRef = doc(db, "pending_admin_grants", grantEmailKey);
                     const grantSnap = await getDoc(grantRef);
-                    
+
                     if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login') {
                         console.log("🛠️ [REPAIR] Emergency Admin Grant Detected for:", currentUser.email);
                         finalRole = 'admin';
                         finalIsAdmin = true;
-                        
+
                         // Apply to permanent profile
                         await updateDoc(userDocRef, {
                             role: 'admin',
@@ -158,7 +165,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                             updatedAt: serverTimestamp(),
                             repairLogs: arrayUnion({ action: 'ADMIN_GRANT_APPLIED', timestamp: new Date().toISOString() })
                         });
-                        
+
                         // Mark grant as consumed
                         await updateDoc(grantRef, {
                             status: 'consumed',
@@ -216,7 +223,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     };
                     await setDoc(userDocRef, newProfile);
                 }
-                
+
                 setRole(String(claims.role || 'tenant'));
                 setIsAdmin(!!claims.admin);
                 setStatus('active');
@@ -294,9 +301,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <RoleContext.Provider value={{ 
-            role, status, isAdmin, loading, error, user, propertyId, legalAccepted, 
-            enableNotifications, refreshRole, hasPermission 
+        <RoleContext.Provider value={{
+            role, status, isAdmin, loading, error, user, propertyId, legalAccepted,
+            enableNotifications, refreshRole, hasPermission
         }}>
             {user && !legalAccepted && !loading && !error && (
                 <LegalModal userId={user.uid} onAccepted={() => setLegalAccepted(true)} />

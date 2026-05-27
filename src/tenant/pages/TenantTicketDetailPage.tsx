@@ -2,19 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Button, Divider, TextField, Grid, alpha, Avatar,
-    IconButton, ImageList, ImageListItem, ImageListItemBar
+    IconButton, ImageList, ImageListItem
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
     MessageSquare, Check, X, ChevronLeft, Calendar, 
-    User, Phone, Clock, Camera, AlertCircle,
-    CheckCircle2, Info
+    Phone, AlertCircle, CheckCircle2, Info
 } from 'lucide-react';
-import { db, doc, getDoc, updateDoc, serverTimestamp, addDoc, collection } from '../../lib/firebase';
+import { db, doc, onSnapshot, updateDoc, serverTimestamp, addDoc, collection } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
-import TechnicianArrivalCard from '../components/TechnicianArrivalCard';
+import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
 
 export default function TenantTicketDetailPage() {
     const { id } = useParams();
@@ -26,20 +25,25 @@ export default function TenantTicketDetailPage() {
     const [rejectReason, setRejectReason] = useState('');
     const [showRejectInput, setShowRejectInput] = useState(false);
 
+    // Real-time listener so technicianLocation updates reflect instantly
     useEffect(() => {
-        const fetchTicket = async () => {
-            if (!id || !user?.uid) return;
-            const docRef = doc(db, 'maintenanceTickets', id);
-            const snap = await getDoc(docRef);
-            if (snap.exists() && (snap.data().tenantId === user.uid || snap.data().tenantUid === user.uid)) {
-                setTicket({ id: snap.id, ...snap.data() });
-            } else {
-                alert("Ticket not found or unauthorized");
-                navigate('/tenant/tickets');
+        if (!id || !user?.uid) return;
+        const unsub = onSnapshot(doc(db, 'maintenanceTickets', id), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.tenantId === user.uid || data.tenantUid === user.uid) {
+                    setTicket({ id: snap.id, ...data });
+                } else {
+                    alert('Ticket not found or unauthorized');
+                    navigate('/tenant/tickets');
+                }
             }
             setLoading(false);
-        };
-        fetchTicket();
+        }, (err) => {
+            console.error('[TenantTicketDetail] Listener error:', err);
+            setLoading(false);
+        });
+        return () => unsub();
     }, [id, user]);
 
     const handleApprove = async () => {
@@ -249,56 +253,25 @@ export default function TenantTicketDetailPage() {
                 </Grid>
 
                 <Grid item xs={12} lg={4}>
-                    <Box sx={{ mb: 4 }}>
-                        <TechnicianArrivalCard ticket={ticket} />
+                    <Box sx={{ mb: 3 }}>
+                        <LiveTechnicianTrackingCard
+                            ticket={ticket}
+                            onChatClick={() => navigate(`/tenant/chat/${ticket.id}`)}
+                            onCallClick={() => {
+                                const phone = ticket.assignedTechnicianPhone || ticket.tenantPhone;
+                                if (phone) window.open(`tel:${phone}`);
+                            }}
+                            showTimeline={true}
+                        />
                     </Box>
 
-                    <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>ASSIGNED EXPERT</Typography>
-                        
-                        {ticket.assignedTechnicianId ? (
-                            <Stack spacing={3}>
-                                <Stack direction="row" spacing={2} alignItems="center">
-                                    <Avatar src={ticket.assignedTechnicianAvatar} sx={{ width: 64, height: 64, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '1.5rem' }}>
-                                        {ticket.assignedTechnicianName?.charAt(0) || 'T'}
-                                    </Avatar>
-                                    <Box>
-                                        <Typography variant="h6" fontWeight="950" color="#FFF">{ticket.assignedTechnicianName}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Lead Technician</Typography>
-                                    </Box>
-                                </Stack>
-                                
-                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-                                
-                                <Stack spacing={2}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'rgba(255,255,255,0.6)' }}>
-                                        <Phone size={16} />
-                                        <Typography variant="body2" fontWeight="700">+971 ••• ••••</Typography>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'rgba(255,255,255,0.6)' }}>
-                                        <Clock size={16} />
-                                        <Typography variant="body2" fontWeight="700">ETA: {ticket.eta || 'Calculating...'}</Typography>
-                                    </Box>
-                                </Stack>
-
-                                <Button fullWidth variant="contained" startIcon={<MessageSquare />} onClick={() => navigate(`/tenant/chat/${ticket.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>
-                                    DIRECT CHAT
-                                </Button>
-                            </Stack>
-                        ) : (
-                            <Box sx={{ textAlign: 'center', py: 4 }}>
-                                <CircularProgress size={24} sx={{ color: binThemeTokens.gold, mb: 2 }} />
-                                <Typography variant="body2" color="rgba(255,255,255,0.4)" fontWeight="700">DISPATCHING EXPERT...</Typography>
-                            </Box>
-                        )}
-                    </Paper>
-
-                    <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 6 }}>
+                    <Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 5 }}>
                         <Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Info size={16} /> NEED ASSISTANCE?
                         </Typography>
-                        <Typography variant="caption" color="rgba(255,255,255,0.4)" sx={{ fontWeight: 700, display: 'block' }}>
-                            If you have questions about the technician's arrival or the scope of work, please use the Direct Chat or call our concierge.
+                        <Typography variant="caption" color="rgba(255,255,255,0.4)" sx={{ fontWeight: 700, display: 'block', minWidth: 0, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                            Use the chat or call button above to reach your technician directly.
+                            For escalations, contact BIN GROUP concierge.
                         </Typography>
                     </Paper>
                 </Grid>
