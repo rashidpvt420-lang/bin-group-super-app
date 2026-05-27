@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateUaeQuote2026, QuoteOutput } from '@bin/shared';
+import { calculateUaeQuote2026, QuoteOutput, ADD_ON_PRICING } from '@bin/shared';
 
 const createOnboardingSessionId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -209,63 +209,6 @@ export interface OnboardingState {
     reset: () => void;
 }
 
-export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }> = {
-    fire_safety: { label: 'Fire Safety System Maintenance', base: 2500, perFloor: 150 },
-    water_tank: { label: 'Water Tank Cleaning', base: 1200 },
-    elevator_amc: { label: 'Elevator Maintenance', base: 3200, perUnit: 650 },
-    pool_care: { label: 'Swimming Pool Maintenance', base: 6000 },
-    facade_access: { label: 'Facade/BMU Access', base: 4500, perFloor: 75 },
-    'façade_access': { label: 'Facade/BMU Access', base: 4500, perFloor: 75 },
-    dist_cooling: { label: 'District Cooling Optimization', base: 3500 },
-    sira_renewal: { label: 'CCTV/SIRA Maintenance', base: 1800, perUnit: 35 },
-    grease_trap: { label: 'Grease Trap Service', base: 900 },
-    pca_audit: { label: 'PCA Asset Audit', base: 5000 },
-    majlis_deep_care: { label: 'Majlis Deep Care', base: 8400 },
-    majlis_landscaping: { label: 'Landscaping', base: 6000 },
-    majlis_exterior_wash: { label: 'Exterior Wash', base: 2800 },
-    majlis_standby: { label: 'Event Standby', base: 2500 },
-    security: { label: 'Security', base: 12000, perUnit: 450 },
-    cleaning: { label: 'Cleaning', base: 9000, perUnit: 300 },
-    manpower: { label: 'Manpower', base: 15000, perUnit: 250 },
-    concierge: { label: 'Concierge', base: 18000, perUnit: 350 },
-    landscaping: { label: 'Landscaping', base: 6000 },
-    pest_control: { label: 'Pest Control', base: 1500, perUnit: 50 },
-    generator: { label: 'Generator Maintenance', base: 3500 },
-    cctv: { label: 'CCTV', base: 1800, perUnit: 35 },
-    office_units: { label: 'Office Units Support', base: 2500, perUnit: 225 },
-    retail_shops: { label: 'Retail Shops Support', base: 3000, perUnit: 275 },
-    parking_management: { label: 'Parking Management', base: 6000, perUnit: 35 },
-    waste_management: { label: 'Waste Management', base: 3500, perUnit: 75 },
-    mep_support: { label: 'MEP Support', base: 8500, perFloor: 300 },
-    hvac_pm: { label: 'HVAC Preventive Maintenance', base: 4500, perUnit: 120 }
-};
-
-const resolveMandatoryAddOns = (property: PropertyData): string[] => {
-    const ids = new Set<string>();
-    ids.add('fire_safety');
-    if (property.tank) ids.add('water_tank');
-    if ((property.floors || 0) > 2 || (property.lifts || 0) > 0) ids.add('elevator_amc');
-    if (property.sira) ids.add('sira_renewal');
-    if (property.bmu) ids.add('facade_access');
-    if ((property.age || 0) > 15) ids.add('pca_audit');
-    if (property.pool) ids.add('pool_care');
-    if (property.hvac || (property.hvacCount || 0) > 0) ids.add('hvac_pm');
-    return Array.from(ids);
-};
-
-const calculateAddOnAnnualValue = (property: PropertyData, selectedAddOns: string[]): number => {
-    const ids = new Set([...selectedAddOns, ...resolveMandatoryAddOns(property)]);
-    let total = 0;
-    ids.forEach((id) => {
-        const item = ADD_ON_PRICING[id];
-        if (!item) return;
-        total += item.base;
-        if (item.perUnit) total += item.perUnit * Math.max(property.units || 0, property.offices || 0, property.shops || 0, 1);
-        if (item.perFloor) total += item.perFloor * Math.max(property.floors || 0, 1);
-    });
-    return Math.round(total);
-};
-
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
     // Map internal types to Pricing Matrix types
     let assetClassId = 'standard_apartment';
@@ -308,7 +251,11 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         hasBmu: property.bmu,
         addOns: selectedAddOns,
         slaTier: property.slaTier || 'standard',
-        paymentPlan: property.paymentPlan || 'annual'
+        paymentPlan: property.paymentPlan || 'annual',
+        hasWaterTank: property.tank,
+        hvacCount: property.hvacCount,
+        offices: property.offices,
+        shops: property.shops
     });
 
     return quote;

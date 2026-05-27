@@ -50,7 +50,8 @@ jobs:
         run: echo "Running live smoke tests against ${E2E_BASE_URL}"
 
       - name: Run live smoke tests
-        run: npm run test:e2e
+        # Exclude emulator-only tests (mosque-onboarding etc.) that require the local Firebase emulator
+        run: npx playwright test --grep-invert "@emulator-only"
 
       - name: Upload Playwright report
         if: always()
