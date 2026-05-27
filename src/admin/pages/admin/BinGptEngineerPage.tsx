@@ -94,6 +94,27 @@ function StatusPill({ label, tone = 'pending' }: { label: string; tone?: 'succes
   );
 }
 
+function compactStatus(value?: string) {
+  const raw = String(value || 'NOT_STARTED').trim().toUpperCase();
+  const labels: Record<string, string> = {
+    PENDING_IMPLEMENTATION_PLAN: 'PLAN',
+    PLAN_CREATED: 'PLAN READY',
+    QUEUED: 'QUEUED',
+    QUEUED_FOR_GITHUB_RUNNER: 'QUEUED',
+    WAITING_FOR_SECURE_BACKEND_RUNNER: 'WAITING',
+    WAITING_FOR_PR: 'WAITING PR',
+    WAITING_FOR_BUILD: 'BUILDING',
+    READY_FOR_DEPLOY: 'READY',
+    NOT_STARTED: 'NOT STARTED',
+    IN_PROGRESS: 'RUNNING',
+    SUCCESS: 'SUCCESS',
+    FAILED: 'FAILED',
+    CANCELLED: 'CANCELLED',
+    DEPLOYED: 'DEPLOYED'
+  };
+  return labels[raw] || raw.replaceAll('_', ' ');
+}
+
 export default function BinGptEngineerPage() {
   const { user } = useAuth();
   const [command, setCommand] = React.useState(defaultCommand);
@@ -362,17 +383,17 @@ export default function BinGptEngineerPage() {
             </Stack>
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
             
-            <TableContainer>
-              <Table size="small">
+            <TableContainer sx={{ overflowX: 'auto', pb: 1 }}>
+              <Table size="small" sx={{ minWidth: 980, tableLayout: 'fixed' }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell />
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DATE</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>COMMAND</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>STATUS</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>BUILD</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DEPLOY</TableCell>
-                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>ACTIONS</TableCell>
+                    <TableCell style={{ width: 50 }} />
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 160 }}>DATE</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 280 }}>COMMAND</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>STATUS</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>BUILD</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>DEPLOY</TableCell>
+                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 130 }}>ACTIONS</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -388,23 +409,23 @@ export default function BinGptEngineerPage() {
                     return (
                       <React.Fragment key={docItem.id}>
                         <TableRow sx={{ '& td': { borderBottom: isExpanded ? 'none' : '1px solid rgba(255,255,255,0.05)' } }}>
-                          <TableCell sx={{ width: 40 }}>
+                          <TableCell sx={{ width: 50 }}>
                             <IconButton size="small" onClick={() => setExpandedId(isExpanded ? null : docItem.id)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
                               {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                             </IconButton>
                           </TableCell>
                           <TableCell sx={{ color: '#fff', fontSize: '0.8rem' }}>{dateStr}</TableCell>
-                          <TableCell sx={{ color: '#fff', maxWidth: 200 }}>
-                            <Typography noWrap variant="body2">{docItem.command}</Typography>
+                          <TableCell sx={{ color: '#fff', maxWidth: 280, overflow: 'hidden' }}>
+                            <Typography noWrap variant="body2" title={docItem.command}>{docItem.command}</Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={docItem.status} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 900 }} />
+                            <Chip size="small" label={compactStatus(docItem.status)} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 900 }} />
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={docItem.buildStatus} sx={{ bgcolor: docItem.buildStatus === 'SUCCESS' ? alpha('#10b981', 0.1) : docItem.buildStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: docItem.buildStatus === 'SUCCESS' ? '#10b981' : docItem.buildStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
+                            <Chip size="small" label={compactStatus(docItem.buildStatus)} sx={{ bgcolor: docItem.buildStatus === 'SUCCESS' ? alpha('#10b981', 0.1) : docItem.buildStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: docItem.buildStatus === 'SUCCESS' ? '#10b981' : docItem.buildStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={docItem.deploymentStatus} sx={{ bgcolor: isDeployed ? alpha('#10b981', 0.1) : docItem.deploymentStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: isDeployed ? '#10b981' : docItem.deploymentStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
+                            <Chip size="small" label={compactStatus(docItem.deploymentStatus)} sx={{ bgcolor: isDeployed ? alpha('#10b981', 0.1) : docItem.deploymentStatus === 'FAILED' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)', color: isDeployed ? '#10b981' : docItem.deploymentStatus === 'FAILED' ? '#ef4444' : '#fff', fontSize: '0.65rem', fontWeight: 900 }} />
                           </TableCell>
                           <TableCell align="right">
                             {docItem.prLink && (
