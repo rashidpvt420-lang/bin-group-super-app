@@ -181,7 +181,19 @@ function activeProperty(raw: any, intakeId: string, ownerId: string, owner: any,
     verified: true,
     approved: true,
     source: "ADMIN_APPROVED_OWNER_ONBOARDING",
-    activatedAtIso: new Date().toISOString()
+    activatedAtIso: new Date().toISOString(),
+    // Preserve custom institutional, mosque and Majlis profiles
+    mosqueProfile: clean(raw?.mosqueProfile || null),
+    majlis: Boolean(raw?.majlis),
+    majlisType: s(raw?.majlisType),
+    majlisSubtype: s(raw?.majlisSubtype),
+    riskProfile: s(raw?.riskProfile),
+    serviceModel: s(raw?.serviceModel),
+    missions: clean(raw?.missions || null),
+    tank: Boolean(raw?.tank),
+    hvac: Boolean(raw?.hvac),
+    sira: Boolean(raw?.sira),
+    fireAlarm: Boolean(raw?.fireAlarm)
   });
 }
 
@@ -260,7 +272,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
     batch.set(db.collection("propertyPassports").doc(p.propertyId), { passportId: p.propertyId, propertyId: p.propertyId, ownerId, ownerName: owner.name, ownerEmail: owner.email, contractId, intakeId, address: p.addressLine, emirate: p.emirate, gps: p.geo ? { lat: p.geo.lat, lng: p.geo.lng, geohash: p.geo.geohash } : null, mapUrl: mapUrl(p), directionsUrl: dirUrl(p), dispatchReady: p.dispatchReady, status: "ACTIVE", tenantLocationInheritance: "TENANT_INHERITS_PROPERTY_LOCATION", paymentVerified: true, documentsVerified: true, locationVerified: true, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
     batch.set(db.collection("tenant_location_policies").doc(p.propertyId), { propertyId: p.propertyId, ownerId, defaultLocation: p.geo ? { lat: p.geo.lat, lng: p.geo.lng, address: p.addressLine, emirate: p.emirate } : null, inheritanceMode: "TENANT_INHERITS_PROPERTY_LOCATION_UNLESS_UNIT_GPS_OVERRIDDEN", dispatchToTenantUsesPropertyGeo: true, updatedAt: ts() }, { merge: true });
   });
-  batch.set(db.collection("contracts").doc(contractId), { contractId, id: contractId, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, propertyId: primary.propertyId, propertyIds, propertyName: primary.propertyName || "Portfolio", properties, status: "PENDING_OWNER_SIGNATURE", contractStatus: "awaiting_owner_signature", activationStatus: "PENDING_OWNER_SIGNATURE", paymentVerified: true, paymentStatus: "RECONCILED", documentsVerified: true, locationVerified: true, approved: true, approvedAt: ts(), approvedBy: adminId, packageName: plan.name, planType: plan.type, selectedPlan: plan.raw || {}, selectedAddOns: addOns || [], annualValue: pricing.annual, annualContractValue: pricing.annual, depositAmount: pricing.mobilization, mobilizationAmount: pricing.mobilization, currency: pricing.currency, paymentSchedule: { mobilizationPercent: 15, mobilizationAmount: pricing.mobilization, remainingBalance: Math.max(pricing.annual - pricing.mobilization, 0), currency: pricing.currency }, signatureState: { ownerSigned: false, binGroupsApproved: true, binGroupsApprovedAt: new Date().toISOString(), pdfGenerated: false, emailed: true, signUrl }, emailDelivery: { signRequestQueued: true, signRequestQueuedAt: new Date().toISOString(), recipient: owner.email }, createdAt: ts(), updatedAt: ts() }, { merge: true });
+  batch.set(db.collection("contracts").doc(contractId), { contractId, id: contractId, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, propertyId: primary.propertyId, propertyIds, propertyName: primary.propertyName || "Portfolio", properties, status: "PENDING_OWNER_SIGNATURE", contractStatus: "awaiting_owner_signature", activationStatus: "PENDING_OWNER_SIGNATURE", paymentVerified: true, paymentStatus: "RECONCILED", documentsVerified: true, locationVerified: true, approved: true, approvedAt: ts(), approvedBy: adminId, packageName: plan.name, planType: plan.type, selectedPlan: plan.raw || {}, selectedAddOns: addOns || [], annualValue: pricing.annual, annualContractValue: pricing.annual, depositAmount: pricing.mobilization, mobilizationAmount: pricing.mobilization, currency: pricing.currency, paymentSchedule: { mobilizationPercent: 15, mobilizationAmount: pricing.mobilization, remainingBalance: Math.max(pricing.annual - pricing.mobilization, 0), currency: pricing.currency }, signatureState: { ownerSigned: false, binGroupsApproved: true, binGroupsApprovedAt: new Date().toISOString(), pdfGenerated: false, emailed: true, signUrl }, binGroupStamp: { stamped: true, stampedAt: ts(), stampedAtIso: new Date().toISOString(), stampedBy: adminId || "admin", label: "BIN GROUP ADMIN APPROVED / DIGITAL STAMP" }, emailDelivery: { signRequestQueued: true, signRequestQueuedAt: new Date().toISOString(), recipient: owner.email }, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { contractId, intakeId, ownerId, ownerEmail: owner.email, ownerName: owner.name, signUrl, status: "PENDING_OWNER_SIGNATURE", packageName: plan.name, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("payment_transactions").doc(paymentId), { paymentId, intakeId, ownerId, ownerEmail: owner.email, contractId, propertyId: primary.propertyId, amount: pricing.mobilization, currency: pricing.currency, method: pricing.method, status: "VERIFIED", verificationState: "ADMIN_VERIFIED", verified: true, verifiedAt: ts(), verifiedBy: adminId, unlocksDashboard: true, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("owner_dashboard_unlocks").doc(ownerId), { ownerId, intakeId, contractId, propertyIds, unlocked: false, unlockState: "PENDING_OWNER_SIGNATURE", unlockedAt: ts(), unlockedBy: adminId, updatedAt: ts() }, { merge: true });

@@ -14,6 +14,7 @@ import TechnicianChatPage from './pages/TechnicianChatPage';
 import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
+import TechnicianHRPage from './pages/TechnicianHRPage';
 
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -59,7 +60,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 textAlign: isRTL ? 'right' : 'left'
                             }}
                         >
-                            <Wrench size={20} /> {label('portal.technician.title', 'FIELD SOVEREIGN', 'الميدان السيادي')}
+                            <Wrench size={20} /> {label('portal.technician.title', 'FIELD SOVEREIGN · UAE 🇦🇪', 'الميدان السيادي · الإمارات 🇦🇪')}
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -71,7 +72,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         </IconButton>
                         
                         <NotificationBell />
-
+ 
                         <Avatar 
                             onClick={() => navigate('/technician/profile')}
                             sx={{ 
@@ -119,6 +120,12 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     {children}
                 </Box>
             </Container>
+
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto' }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+                    © 2026 BIN GROUP SOVEREIGN · FIELD NODE · MADE IN UAE 🇦🇪
+                </Typography>
+            </Box>
         </Box>
     );
 };
@@ -136,6 +143,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
+                <Route path="/hr" element={<TechnicianHRPage />} />
             </Routes>
         </TechnicianLayout>
     );

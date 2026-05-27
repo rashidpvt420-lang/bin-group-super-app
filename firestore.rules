@@ -54,7 +54,7 @@ service cloud.firestore {
     function isOwnerSuspended(ownerId) {
       return ownerId != null &&
         exists(/databases/$(database)/documents/users/$(ownerId)) &&
-        get(/databases/$(database)/documents/users/$(ownerId)).data.status == 'suspended';
+        get(/databases/$(database)/documents/users/$(ownerId)).data.status in ['suspended', 'SUSPENDED'];
     }
 
     function emailOwns(data) {
@@ -353,6 +353,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /leases/{leaseId} {
+      allow read: if isAdmin() || hasPermission('canManageTenants') || ownerCanRead(resource.data) || (signedIn() && (resource.data.tenantId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
+      allow write: if isAdmin() || hasPermission('canManageTenants');
+    }
+
+    match /tenant_ledger/{ledgerId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && (resource.data.tenantId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
     match /occupancies/{occupancyId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.tenantUid == request.auth.uid || resource.data.tenantId == request.auth.uid));
       allow write: if isAdmin() || (signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid));
@@ -473,6 +483,27 @@ service cloud.firestore {
       allow read, create: if isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    match /gatePasses/{passId} {
+      allow read, write: if isAdmin() || (signedIn() && (resource.data.tenantUid == request.auth.uid || resource.data.tenantId == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.tenantUid == request.auth.uid || request.resource.data.tenantId == request.auth.uid);
+    }
+
+    match /amenityBookings/{bookingId} {
+      allow read, write: if isAdmin() || (signedIn() && (resource.data.tenantUid == request.auth.uid || resource.data.tenantId == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.tenantUid == request.auth.uid || request.resource.data.tenantId == request.auth.uid);
+    }
+
+    match /broker_commissions/{commissionId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
+    match /commissions/{commissionId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid));
+      allow write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }

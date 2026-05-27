@@ -36,6 +36,7 @@ import {
   getOwnerAssetTemplate,
   isFakeOwnerAsset,
 } from '../utils/ownerAssetTemplates';
+import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
 
 interface OwnerExecutiveDashboardSectionProps {
   properties: any[];
@@ -233,7 +234,37 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', ...textSafeSx }}>{loc.address || 'Address pending'}</Typography>
         </Stack>
 
-        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+        {(() => {
+          const template = getOwnerAssetTemplate(property);
+          if (!template || !template.fields || template.fields.length === 0) return null;
+          return (
+            <Box sx={{ mt: 2.5 }}>
+              <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 1.5, letterSpacing: 1 }}>
+                {template.title.toUpperCase()}
+              </Typography>
+              <Grid container spacing={1.5}>
+                {template.fields.map((field) => {
+                  const val = getFirstAssetValue(property, field.keys, 'Pending setup', field.label);
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={field.label}>
+                      <Box sx={{ p: 1.25, bgcolor: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 2 }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900, display: 'block', mb: 0.5 }}>
+                          {field.label.toUpperCase()}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>
+                          {val}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Box>
+          );
+        })()}
+
+        <Box sx={{ display: 'flex', gap: 2, mt: 2.5 }}>
           <Button 
             href={loc.googleMapsUrl} 
             target="_blank" 
@@ -317,6 +348,9 @@ export default function OwnerExecutiveDashboardSection({
   }, [user?.uid, user?.email]);
 
   const liveContract = contract || {};
+  const contractMode = detectContractMode(liveContract);
+  const maintenanceEnabled = canSeeMaintenance(contractMode);
+  const pmEnabled = canSeePropertyManagement(contractMode);
   const annualContractValue = toNumber(liveContract.annualContractValue || liveContract.annualValue || liveContract.totalValue, 0);
   const mobilization = toNumber(
     liveContract.mobilizationAmount || liveContract.depositAmount || liveContract.paymentSchedule?.mobilizationAmount,
@@ -411,44 +445,55 @@ export default function OwnerExecutiveDashboardSection({
           {renderHeader(<Building2 size={22} />, 'Portfolio Health', 'Assets, Occupancy, SLA & Passports')}
           <Grid container spacing={3}>
             {renderMetric('Active Assets', visibleProperties.length, `${passportReady}/${visibleProperties.length || 0} passports ready`)}
-            {renderMetric('Occupied / Vacant Units', `${acceptedTenants} / ${vacantUnitsCount}`, `Total registered units: ${totalUnits}`)}
-            {renderMetric('SLA Health', String(slaHealth), 'Live from contract/SLA records', '#10b981')}
+            {renderMetric(
+              'Occupied / Vacant Units',
+              pmEnabled ? `${acceptedTenants} / ${vacantUnitsCount}` : 'N/A',
+              pmEnabled ? `Total registered units: ${totalUnits}` : 'Requires Property Management'
+            )}
+            {renderMetric(
+              'SLA Health',
+              maintenanceEnabled ? String(slaHealth) : 'N/A',
+              maintenanceEnabled ? 'Live from contract/SLA records' : 'Requires Maintenance Scope',
+              maintenanceEnabled ? '#10b981' : '#94a3b8'
+            )}
             {renderMetric('Missing Data Warnings', missingDataWarnings, 'Backfill required for complete owner visibility', missingDataWarnings ? '#f59e0b' : '#10b981')}
           </Grid>
         </CardContent>
       </Card>
 
-      <Card sx={cardSx}>
-        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3, minWidth: 0 }}>
-            {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
-            <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>REGISTRY READINESS</Typography>
-              <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
-            </Box>
-          </Stack>
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            {renderMetric('Accepted Tenants', acceptedTenants)}
-            {renderMetric('Pending Invitations', pendingInvitations, undefined, binThemeTokens.gold)}
-            {renderMetric('Vacant Units', vacantUnitsCount, undefined, vacantUnitsCount ? (nonTenantPropertiesCount > 0 ? '#3b82f6' : '#ef4444') : '#10b981')}
-            {renderMetric('Linked / Total', `${linkedTenantsCount} / ${totalUnits}`)}
-          </Grid>
-          
-          {nonTenantPropertiesCount > 0 && (
-            <Alert severity="info" sx={{ mb: 3, bgcolor: alpha('#3b82f6', 0.05), border: `1px solid ${alpha('#3b82f6', 0.2)}`, borderRadius: 3 }}>
-              <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx, color: '#93c5fd' }}>
-                Your portfolio contains {nonTenantPropertiesCount} non-tenant asset(s) (e.g. Majlis, Hospital). Vacancy is normal. Please configure their access via the Authorized Reporters section.
+      {pmEnabled && (
+        <Card sx={cardSx}>
+          <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3, minWidth: 0 }}>
+              {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
+              <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>REGISTRY READINESS</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
+              </Box>
+            </Stack>
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              {renderMetric('Accepted Tenants', acceptedTenants)}
+              {renderMetric('Pending Invitations', pendingInvitations, undefined, binThemeTokens.gold)}
+              {renderMetric('Vacant Units', vacantUnitsCount, undefined, vacantUnitsCount ? (nonTenantPropertiesCount > 0 ? '#3b82f6' : '#ef4444') : '#10b981')}
+              {renderMetric('Linked / Total', `${linkedTenantsCount} / ${totalUnits}`)}
+            </Grid>
+            
+            {nonTenantPropertiesCount > 0 && (
+              <Alert severity="info" sx={{ mb: 3, bgcolor: alpha('#3b82f6', 0.05), border: `1px solid ${alpha('#3b82f6', 0.2)}`, borderRadius: 3 }}>
+                <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx, color: '#93c5fd' }}>
+                  Your portfolio contains {nonTenantPropertiesCount} non-tenant asset(s) (e.g. Majlis, Hospital). Vacancy is normal. Please configure their access via the Authorized Reporters section.
+                </Typography>
+              </Alert>
+            )}
+
+            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
+              <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
+                Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
               </Typography>
             </Alert>
-          )}
-
-          <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
-            <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
-              Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
-            </Typography>
-          </Alert>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Box sx={{ minWidth: 0 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2, minWidth: 0 }}>
@@ -481,17 +526,19 @@ export default function OwnerExecutiveDashboardSection({
         </Grid>
       </Box>
 
-      <Card sx={cardSx}>
-        <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
-          {renderHeader(<Wrench size={22} />, 'Operations & SLA', 'Maintenance Tickets, Visits & Field Readiness')}
-          <Grid container spacing={3}>
-            {renderMetric('Open Maintenance Tickets', openTicketsCount, `Critical: ${criticalTickets}`)}
-            {renderMetric('PM Schedule', nextMaintenanceVisit ? formatDate(nextMaintenanceVisit) : 'Not scheduled', 'Next preventive maintenance visit')}
-            {renderMetric('Technician Scheduling', technicianSchedule ? formatDate(technicianSchedule) : 'Not scheduled', 'Upcoming technician field visit')}
-            {renderMetric('Maintenance Cost', formatCurrency(stats.maintenanceCost), 'Live owner ledger cost')}
-          </Grid>
-        </CardContent>
-      </Card>
+      {maintenanceEnabled && (
+        <Card sx={cardSx}>
+          <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
+            {renderHeader(<Wrench size={22} />, 'Operations & SLA', 'Maintenance Tickets, Visits & Field Readiness')}
+            <Grid container spacing={3}>
+              {renderMetric('Open Maintenance Tickets', openTicketsCount, `Critical: ${criticalTickets}`)}
+              {renderMetric('PM Schedule', nextMaintenanceVisit ? formatDate(nextMaintenanceVisit) : 'Not scheduled', 'Next preventive maintenance visit')}
+              {renderMetric('Technician Scheduling', technicianSchedule ? formatDate(technicianSchedule) : 'Not scheduled', 'Upcoming technician field visit')}
+              {renderMetric('Maintenance Cost', formatCurrency(stats.maintenanceCost), 'Live owner ledger cost')}
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       <Card sx={cardSx}>
         <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>

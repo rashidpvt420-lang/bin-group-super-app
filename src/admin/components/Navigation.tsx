@@ -1,3 +1,4 @@
+import React from 'react';
 import { alpha } from '@mui/material/styles';
 import { NavLink } from 'react-router-dom';
 import { Drawer, List, ListItem, ListItemIcon, ListItemText, Divider, Box, Typography, useMediaQuery } from '@mui/material';
@@ -17,11 +18,11 @@ import { useAuth } from '../context/AuthContext';
 const Navigation = () => {
     const { tx, isRTL } = useLanguage();
     const { user } = useAuth();
-    
+
     const compact = useMediaQuery('(max-width:1100px)');
     const drawerWidth = compact ? 88 : 280;
     
-    const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
+    const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff' || user?.role === 'finance_staff' || user?.role === 'account_manager' || user?.role === 'finance_admin' || user?.role === 'dispatcher' || user?.role === 'operations_manager';
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
@@ -54,6 +55,7 @@ const Navigation = () => {
             sx={{
                 width: drawerWidth,
                 flexShrink: 0,
+                transition: 'width 0.22s',
                 '& .MuiDrawer-paper': { 
                     width: drawerWidth, 
                     boxSizing: 'border-box',
@@ -61,6 +63,7 @@ const Navigation = () => {
                     borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
                     borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
                     overflowX: 'hidden',
+                    transition: 'width 0.22s',
                 },
             }}
         >
@@ -92,8 +95,9 @@ const Navigation = () => {
                             borderRadius: 2, mb: 0.5,
                             justifyContent: compact ? 'center' : 'flex-start',
                             px: compact ? 1.5 : 2,
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
+                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold }, '& .MuiListItemIcon-root': { color: binThemeTokens.gold } }
                         }}
+                        title={compact ? item.text : undefined}
                     >
                         <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
                         {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />}
@@ -116,8 +120,9 @@ const Navigation = () => {
                             borderRadius: 2, mb: 0.5,
                             justifyContent: compact ? 'center' : 'flex-start',
                             px: compact ? 1.5 : 2,
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
+                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold }, '& .MuiListItemIcon-root': { color: binThemeTokens.gold } }
                         }}
+                        title={compact ? item.text : undefined}
                     >
                         <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
                         {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem' }} />}
@@ -138,6 +143,7 @@ const Navigation = () => {
                         signOut(auth).then(() => window.location.href = '/'); 
                     }}
                     sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#ef4444', 0.1), '&:hover': { bgcolor: alpha('#ef4444', 0.2) }, justifyContent: compact ? 'center' : 'flex-start', px: compact ? 1.5 : 2 }}
+                    title={compact ? 'Secure Logout' : undefined}
                 >
                     <ListItemIcon sx={{ color: '#ef4444', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}><LogoutIcon /></ListItemIcon>
                     {!compact && <ListItemText primary="SECURE LOGOUT" primaryTypographyProps={{ fontWeight: 900, fontSize: '0.75rem', color: '#ef4444' }} />}

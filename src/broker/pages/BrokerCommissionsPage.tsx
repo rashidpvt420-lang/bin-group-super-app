@@ -26,7 +26,7 @@ export default function BrokerCommissionsPage() {
             if (!user?.uid) return;
             try {
                 const q = query(
-                    collection(db, 'commissions'), 
+                    collection(db, 'broker_commissions'), 
                     where('brokerId', '==', user.uid), 
                     orderBy('createdAt', 'desc')
                 );
@@ -42,7 +42,8 @@ export default function BrokerCommissionsPage() {
     }, [user]);
 
     const getStatusColor = (status: string) => {
-        switch (status) {
+        const s = String(status || '').toLowerCase();
+        switch (s) {
             case 'paid': return '#10b981';
             case 'approved': return '#3b82f6';
             case 'rejected': return '#ef4444';
@@ -52,9 +53,9 @@ export default function BrokerCommissionsPage() {
     };
 
     const stats = {
-        pending: commissions.filter(c => c.status === 'pending').reduce((acc, curr) => acc + (curr.amount || 0), 0),
-        approved: commissions.filter(c => c.status === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0),
-        totalPaid: commissions.filter(c => c.status === 'paid').reduce((acc, curr) => acc + (curr.amount || 0), 0)
+        pending: commissions.filter(c => String(c.status || '').toLowerCase() === 'pending').reduce((acc, curr) => acc + (curr.amount || 0), 0),
+        approved: commissions.filter(c => String(c.status || '').toLowerCase() === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0),
+        totalPaid: commissions.filter(c => String(c.status || '').toLowerCase() === 'paid').reduce((acc, curr) => acc + (curr.amount || 0), 0)
     };
 
     return (
@@ -131,8 +132,8 @@ export default function BrokerCommissionsPage() {
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}</Typography>
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{c.linkedLeadName || c.linkedReferralName || 'Direct Mission'}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.linkedProperty || 'Portfolio Wide'}</Typography>
+                                        <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{c.linkedLeadName || c.linkedReferralName || c.brokerName || 'Direct Mission'}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.linkedProperty || c.propertyName || 'Portfolio Wide'}</Typography>
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 950 }}>AED {c.amount?.toLocaleString()}</Typography>
@@ -140,13 +141,13 @@ export default function BrokerCommissionsPage() {
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                         <Chip 
-                                            label={c.status.toUpperCase()} 
+                                            label={String(c.status || '').toUpperCase()} 
                                             size="small"
                                             sx={{ bgcolor: alpha(getStatusColor(c.status), 0.1), color: getStatusColor(c.status), fontWeight: 950, fontSize: '0.65rem' }} 
                                         />
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        {c.status === 'paid' ? (
+                                        {String(c.status || '').toLowerCase() === 'paid' ? (
                                             <Box>
                                                 <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>SETTLED</Typography>
                                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : 'N/A'}</Typography>

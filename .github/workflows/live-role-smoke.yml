@@ -12,7 +12,9 @@ permissions:
   contents: read
 
 env:
-  E2E_BASE_URL: ${{ vars.E2E_BASE_URL || 'https://bin-groups.com' }}
+  # Force smoke tests to run against the confirmed Firebase Hosting production URL.
+  # Do not use the custom domain here until DNS/Firebase custom-domain verification is complete.
+  E2E_BASE_URL: https://bin-group-57c60.web.app
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -44,8 +46,18 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run live smoke tests
-        run: npm run test:e2e
+      - name: Show smoke test target
+        run: echo "Running live smoke tests against ${E2E_BASE_URL}"
+
+      - name: Run public smoke tests
+        if: github.event_name != 'workflow_dispatch'
+        # Run only public smoke tests on push/schedule to avoid false failures from missing E2E secrets
+        run: npx playwright test --grep "production public smoke"
+
+      - name: Run full role smoke tests
+        if: github.event_name == 'workflow_dispatch'
+        # Run all non-emulator tests, including authenticated role login smoke tests
+        run: npx playwright test --grep-invert "@emulator-only"
 
       - name: Upload Playwright report
         if: always()

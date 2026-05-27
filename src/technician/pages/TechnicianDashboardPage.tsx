@@ -1,32 +1,76 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Box, Typography, Paper, Grid, Stack, Button,
-    CircularProgress, alpha, Avatar, Chip, Divider, LinearProgress
+    Avatar,
+    Box,
+    Button,
+    Chip,
+    CircularProgress,
+    Divider,
+    Grid,
+    LinearProgress,
+    Paper,
+    Stack,
+    Typography,
+    alpha,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-    Power, Coffee, Clock, Activity, Zap, CheckCircle2,
-    ArrowRight, MapPin, Target, User, Phone, Mail, Wrench,
-    ShieldCheck, CalendarDays, FileText, Briefcase, Award,
-    Navigation, AlertTriangle, Car, Hammer, BadgeCheck
+    Activity,
+    AlertTriangle,
+    ArrowRight,
+    Award,
+    BadgeCheck,
+    Briefcase,
+    CalendarDays,
+    Car,
+    CheckCircle2,
+    Clock,
+    Coffee,
+    FileText,
+    Hammer,
+    Mail,
+    MapPin,
+    Navigation,
+    Phone,
+    Power,
+    Target,
+    User,
+    Zap,
 } from 'lucide-react';
 import {
-    db, doc, updateDoc, collection, query, where, onSnapshot, limit,
-    orderBy, serverTimestamp, runTransaction, getDoc, getDocs
+    collection,
+    db,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    runTransaction,
+    serverTimestamp,
+    updateDoc,
+    where,
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
-import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, onSnapshotSplitIn, logAuditAction } from '../../shared-exports';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, logAuditAction, onSnapshotSplitIn } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
-import { textOrPending, formatUiDate, normalizeEmail, uniqueRows } from '../utils/technicianDashboardFields';
+import { formatUiDate, normalizeEmail, textOrPending, uniqueRows } from '../utils/technicianDashboardFields';
+import {
+    formatDispatchReadiness,
+    formatDocumentStatus,
+    formatMissingTechnicianField,
+    normalizeTechnicianProfile,
+} from '../utils/normalizeTechnicianProfile';
 
 const statusTone = (status: string) => {
     const value = String(status || '').toLowerCase();
-    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready')) return '#10b981';
+    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready') || value.includes('available')) return '#10b981';
     if (value.includes('pending') || value.includes('break') || value.includes('review')) return binThemeTokens.gold;
-    if (value.includes('off') || value.includes('expired') || value.includes('blocked')) return '#ef4444';
+    if (value.includes('off') || value.includes('expired') || value.includes('blocked') || value.includes('missing')) return '#ef4444';
     return '#94a3b8';
 };
 
@@ -51,6 +95,17 @@ const readRows = async (collectionName: string, field: string, value?: string | 
     }
 };
 
+const readDocByUid = async (collectionName: string, uid?: string | null): Promise<any | null> => {
+    if (!uid) return null;
+    try {
+        const snap = await getDoc(doc(db, collectionName, uid));
+        return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    } catch (error) {
+        console.warn(`[TechnicianDashboard] ${collectionName}/${uid} unavailable:`, error);
+        return null;
+    }
+};
+
 function MetricCard({ icon, label, value, tone = binThemeTokens.gold, helper }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string; helper?: string }) {
     return (
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, height: '100%', bgcolor: alpha(tone, 0.06), border: `1px solid ${alpha(tone, 0.22)}`, borderRadius: 5, minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -64,12 +119,14 @@ function MetricCard({ icon, label, value, tone = binThemeTokens.gold, helper }: 
     );
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
     return (
-        <Stack direction="row" justifyContent="space-between" gap={2} sx={{ py: 1, minWidth: 0 }}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900, textTransform: 'uppercase' }}>{label}</Typography>
-            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800, textAlign: 'right', minWidth: 0, overflowWrap: 'anywhere' }}>{value || 'Pending sync'}</Typography>
-        </Stack>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(92px, auto)', gap: 2, alignItems: 'start', py: 1, minWidth: 0 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900, textTransform: 'uppercase', overflowWrap: 'anywhere' }}>{label}</Typography>
+            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 850, textAlign: 'right', minWidth: 0, maxWidth: { xs: 170, sm: 260, md: 320 }, overflowWrap: 'anywhere', lineHeight: 1.35, display: 'flex', gap: 0.6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                {icon}{value || 'Pending sync'}
+            </Typography>
+        </Box>
     );
 }
 
@@ -81,23 +138,12 @@ export default function TechnicianDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
     const [updating, setUpdating] = useState(false);
-    const [staffProfile, setStaffProfile] = useState<any>(null);
-    const [techProfile, setTechProfile] = useState<any>(null);
-    const [staffRows, setStaffRows] = useState<any[]>([]);
+    const [profileSources, setProfileSources] = useState<any>({});
     const [certRows, setCertRows] = useState<any[]>([]);
     const [recentCompleted, setRecentCompleted] = useState<any[]>([]);
-    const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
+    const [profileReadWarnings, setProfileReadWarnings] = useState<string[]>([]);
 
-    const [stats, setStats] = useState({
-        assigned: 0,
-        emergency: 0,
-        inProgress: 0,
-        completedToday: 0,
-        completedMonth: 0,
-        slaRisk: 0,
-        quality: 0,
-    });
-
+    const [stats, setStats] = useState({ assigned: 0, emergency: 0, inProgress: 0, completedToday: 0, completedMonth: 0, slaRisk: 0, quality: 0 });
     const [missionPool, setMissionPool] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
 
@@ -159,74 +205,76 @@ export default function TechnicianDashboardPage() {
         const loadStaffData = async () => {
             if (!user?.uid) return;
             const warnings: string[] = [];
-            const email = normalizeEmail(user.email);
-            let userProfile: any = null;
-            let technicianProfile: any = null;
+            const emailValue = normalizeEmail(user.email);
 
-            try {
-                const snap = await getDoc(doc(db, 'users', user.uid));
-                userProfile = snap.exists() ? { id: snap.id, ...snap.data() } : null;
-                if (!userProfile) warnings.push('Main user profile is not fully synced.');
-            } catch (error) {
-                warnings.push('Main user profile could not be read.');
-            }
+            const userProfile = await readDocByUid('users', user.uid);
+            if (!userProfile) warnings.push('Main user profile could not be read.');
 
-            try {
-                const snap = await getDoc(doc(db, 'technicians', user.uid));
-                technicianProfile = snap.exists() ? { id: snap.id, ...snap.data() } : null;
-            } catch (error) {
-                console.warn('[TechnicianDashboard] technician profile by UID unavailable:', error);
-            }
+            const technicianByUid = await readDocByUid('technicians', user.uid);
+            const technicianByEmail = !technicianByUid && emailValue ? await readRows('technicians', 'email', emailValue, 1) : [];
+            const technicianProfile = technicianByUid || technicianByEmail[0] || null;
 
-            const byEmail = !technicianProfile && email ? await readRows('technicians', 'email', email, 1) : [];
-            technicianProfile = technicianProfile || byEmail[0] || null;
-            if (!technicianProfile) warnings.push('Technician operations profile is not fully synced.');
-
-            const rosterRows = uniqueRows([
+            const staffRosterRows = uniqueRows([
                 ...(await readRows('staff_roster', 'uid', user.uid, 4)),
-                ...(await readRows('staff_roster', 'email', email, 4)),
+                ...(await readRows('staff_roster', 'email', emailValue, 4)),
+            ]);
+
+            const hrStaffRows = uniqueRows([
                 ...(await readRows('hr_staff', 'uid', user.uid, 4)),
-                ...(await readRows('hr_staff', 'email', email, 4)),
+                ...(await readRows('hr_staff', 'email', emailValue, 4)),
+            ]);
+
+            const attendanceRows = uniqueRows([
                 ...(await readRows('attendance', 'uid', user.uid, 6)),
                 ...(await readRows('attendance', 'technicianId', user.uid, 6)),
-                ...(await readRows('technician_dispatch_jobs', 'technicianId', user.uid, 6)),
             ]);
 
             const certs = uniqueRows([
                 ...(await readRows('technician_certifications', 'technicianId', user.uid, 8)),
                 ...(await readRows('certifications', 'technicianId', user.uid, 8)),
-                ...((technicianProfile?.certifications || userProfile?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
+                ...(((technicianProfile as any)?.certifications || (userProfile as any)?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
             ]);
 
-            setStaffProfile(userProfile);
-            setTechProfile(technicianProfile);
-            setStaffRows(rosterRows);
+            setProfileSources({
+                technician: technicianProfile,
+                staffRoster: staffRosterRows[0] || null,
+                hrStaff: hrStaffRows[0] || null,
+                user: userProfile,
+                attendance: attendanceRows[0] || null,
+            });
             setCertRows(certs);
-            setSyncWarnings(warnings);
+            setProfileReadWarnings(warnings);
         };
 
         loadStaffData();
     }, [user]);
 
-    const profile = useMemo(() => ({ ...(staffProfile || {}), ...(techProfile || {}) }), [staffProfile, techProfile]);
-    const latestStaffRow = staffRows[0] || {};
-    const technicianName = textOrPending(profile.displayName, profile.fullName, profile.name, user?.displayName, 'Technician');
-    const employeeId = textOrPending(profile.employeeCode, profile.employeeId, profile.staffId, profile.badgeNumber, user?.uid);
-    const trade = textOrPending(profile.trade, profile.specialization, profile.skill, profile.department, 'General Maintenance');
-    const phone = textOrPending(profile.phoneNumber, profile.phone, profile.mobile);
+    const profile = useMemo(() => normalizeTechnicianProfile({ ...profileSources, certifications: certRows }), [profileSources, certRows]);
+    const raw = profile.raw || {};
+    const technicianName = textOrPending(profile.fullName, user?.displayName, 'Technician');
+    const employeeId = textOrPending(raw.employeeCode, raw.employeeId, raw.staffId, raw.badgeNumber, user?.uid);
+    const trade = textOrPending(profile.primaryTrade, 'General Maintenance');
+    const phone = textOrPending(profile.phone, raw.phoneNumber, raw.phone, raw.mobile);
     const email = textOrPending(profile.email, user?.email);
-    const supervisor = textOrPending(profile.supervisorName, profile.managerName, profile.reportingManager);
-    const shift = textOrPending(profile.shiftName, profile.shift, profile.workSchedule, latestStaffRow.shift);
-    const baseLocation = textOrPending(profile.baseLocation, profile.zone, profile.area, profile.emirate, 'UAE field operations');
-    const contractType = textOrPending(profile.contractType, profile.employmentType, profile.staffType);
-    const joiningDate = formatUiDate(profile.joiningDate || profile.joinedAt || profile.createdAt);
-    const visaExpiry = formatUiDate(profile.visaExpiry || profile.visaExpiryDate || profile.residencyExpiry);
-    const idExpiry = formatUiDate(profile.emiratesIdExpiry || profile.eidExpiry || profile.idExpiry);
-    const medicalExpiry = formatUiDate(profile.medicalExpiry || profile.healthCardExpiry);
-    const passportExpiry = formatUiDate(profile.passportExpiry || profile.passportExpiryDate);
-    const qualityDisplay = stats.quality ? `${stats.quality}/5` : textOrPending(profile.qualityScore, profile.rating, 'Pending');
-    const slaDisplay = textOrPending(profile.slaCompliance, profile.slaScore, stats.slaRisk > 0 ? 'At risk' : 'Healthy');
+    const supervisor = textOrPending(raw.supervisorName, raw.managerName, raw.reportingManager);
+    const shift = textOrPending(raw.shiftName, raw.shift, raw.workSchedule);
+    const baseLocation = textOrPending(raw.baseLocation, raw.zone, raw.area, raw.emirate, 'UAE field operations');
+    const contractType = textOrPending(raw.contractType, raw.employmentType, raw.staffType);
+    const joiningDate = formatUiDate(raw.joiningDate || raw.joinedAt || raw.createdAt);
+    const visaExpiry = formatUiDate(raw.visaExpiry || raw.visaExpiryDate || raw.residencyExpiry);
+    const idExpiry = formatUiDate(raw.emiratesIdExpiry || raw.eidExpiry || raw.idExpiry);
+    const medicalExpiry = formatUiDate(profile.medicalCardExpiry || raw.medicalExpiry || raw.healthCardExpiry);
+    const passportExpiry = formatUiDate(raw.passportExpiry || raw.passportExpiryDate);
+    const qualityDisplay = stats.quality ? `${stats.quality}/5` : textOrPending(raw.qualityScore, raw.rating, 'Pending');
+    const slaDisplay = textOrPending(raw.slaCompliance, raw.slaScore, stats.slaRisk > 0 ? 'At risk' : 'Healthy');
+    const syncWarnings = [...profileReadWarnings, ...profile.missingFields.map(formatMissingTechnicianField)];
     const openActionItems = [visaExpiry, idExpiry, medicalExpiry, passportExpiry].filter((value) => value === 'Pending sync').length + syncWarnings.length;
+    const isOnDuty = dutyStatus === 'WORKING' || profile.dutyStatus === 'available';
+
+    const vehicleLabel = profile.vehicleAssigned ? profile.vehicleNumber || 'Assigned' : 'Pending sync';
+    const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Pending sync';
+    const ppeLabel = profile.ppeIssued ? 'Issued' : 'Pending sync';
+    const certificationLabel = formatDocumentStatus(profile.certificationsStatus);
 
     const handleDutyToggle = async (newStatus: string) => {
         if (!user?.uid) return;
@@ -264,10 +312,8 @@ export default function TechnicianDashboardPage() {
         </Box>
     );
 
-    const isOnDuty = dutyStatus === 'WORKING';
-
     return (
-        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: 9, md: 0 }, pb: { xs: 12, md: 6 }, minWidth: 0 }}>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: 10, md: 0 }, pb: { xs: 16, md: 6 }, minWidth: 0 }}>
             <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
@@ -289,6 +335,7 @@ export default function TechnicianDashboardPage() {
                     </Stack>
                     <Stack direction="row" spacing={1.2} flexWrap="wrap" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} useFlexGap>
                         <Chip label={String(dutyStatus).replace('_', ' ')} sx={{ bgcolor: alpha(statusTone(dutyStatus), 0.14), color: statusTone(dutyStatus), fontWeight: 950 }} />
+                        <Chip label={`Sync: ${profile.syncStatus}`} sx={{ bgcolor: alpha(statusTone(profile.syncStatus), 0.14), color: statusTone(profile.syncStatus), fontWeight: 950 }} />
                         <Chip label={`SLA: ${slaDisplay}`} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950 }} />
                         <Chip label={`Quality: ${qualityDisplay}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} />
                     </Stack>
@@ -309,8 +356,8 @@ export default function TechnicianDashboardPage() {
                         <Grid container spacing={1.5}>
                             <Grid item xs={12} sm={6}><DetailRow label="Full name" value={technicianName} /></Grid>
                             <Grid item xs={12} sm={6}><DetailRow label="Employee ID" value={employeeId} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Email" value={<><Mail size={13} /> {email}</>} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Phone" value={<><Phone size={13} /> {phone}</>} /></Grid>
+                            <Grid item xs={12} sm={6}><DetailRow label="Email" value={email} icon={<Mail size={13} />} /></Grid>
+                            <Grid item xs={12} sm={6}><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /></Grid>
                             <Grid item xs={12} sm={6}><DetailRow label="Trade" value={trade} /></Grid>
                             <Grid item xs={12} sm={6}><DetailRow label="Supervisor" value={supervisor} /></Grid>
                             <Grid item xs={12} sm={6}><DetailRow label="Shift" value={shift} /></Grid>
@@ -322,11 +369,12 @@ export default function TechnicianDashboardPage() {
                 <Grid item xs={12} lg={4}>
                     <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}><Briefcase color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Duty & Attendance</Typography></Stack>
-                        <DetailRow label="Duty status" value={dutyStatus} />
-                        <DetailRow label="Last check-in" value={formatTime(latestStaffRow.checkIn || latestStaffRow.clockIn || latestStaffRow.startedAt)} />
-                        <DetailRow label="Roster status" value={textOrPending(latestStaffRow.status, latestStaffRow.dutyStatus)} />
+                        <DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} />
+                        <DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} />
+                        <DetailRow label="Roster status" value={textOrPending(raw.rosterStatus, raw.attendanceStatus, raw.status)} />
                         <DetailRow label="Monthly completions" value={stats.completedMonth} />
-                        <DetailRow label="Leave balance" value={textOrPending(profile.leaveBalance, profile.annualLeaveBalance)} />
+                        <DetailRow label="Leave balance" value={textOrPending(raw.leaveBalance, raw.annualLeaveBalance)} />
+                        <Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.05), borderColor: binThemeTokens.gold } }}>HR & REQUESTS</Button>
                     </Paper>
                 </Grid>
 
@@ -336,7 +384,7 @@ export default function TechnicianDashboardPage() {
                         <DetailRow label="Contract type" value={contractType} />
                         <DetailRow label="Joining date" value={joiningDate} />
                         <DetailRow label="Open action items" value={openActionItems} />
-                        <DetailRow label="Profile sync" value={syncWarnings.length ? 'Needs review' : 'Ready'} />
+                        <DetailRow label="Profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs review'} />
                     </Paper>
                 </Grid>
             </Grid>
@@ -377,11 +425,11 @@ export default function TechnicianDashboardPage() {
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><FileText size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Compliance Documents</Typography></Stack><DetailRow label="Visa expiry" value={visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry} /><DetailRow label="Medical card" value={medicalExpiry} /><DetailRow label="PPE issued" value={textOrPending(profile.ppeIssued, profile.ppeStatus)} /><DetailRow label="Driving license" value={textOrPending(profile.drivingLicenseStatus, formatUiDate(profile.drivingLicenseExpiry))} /></Paper></Grid>
-                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><Hammer size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Skills, Tools & Assets</Typography></Stack><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={textOrPending(profile.skillLevel, profile.grade, profile.rank)} /><DetailRow label="Vehicle" value={<><Car size={13} /> {textOrPending(profile.vehicleNumber, profile.assignedVehicle)}</>} /><DetailRow label="Tool kit" value={textOrPending(profile.toolKitStatus, profile.toolsIssued)} /><DetailRow label="Certifications" value={certRows.length || 'Pending certification sync'} /><DetailRow label="Dispatch readiness" value={textOrPending(profile.gpsStatus, profile.dispatchStatus, 'Ready for dispatch')} /></Paper></Grid>
+                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><FileText size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Compliance Documents</Typography></Stack><DetailRow label="Visa expiry" value={visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></Paper></Grid>
+                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><Hammer size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Skills, Tools & Assets</Typography></Stack><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={profile.skillLevel} /><DetailRow label="Vehicle" value={vehicleLabel} icon={<Car size={13} />} /><DetailRow label="Tool kit" value={toolKitLabel} /><DetailRow label="Certifications" value={certificationLabel} /><DetailRow label="Dispatch readiness" value={formatDispatchReadiness(profile.dispatchReadiness)} /></Paper></Grid>
             </Grid>
 
-            {syncWarnings.length > 0 && <Paper sx={{ p: 3, mb: 4, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.24)}`, borderRadius: 4 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#f59e0b" /><Typography variant="subtitle1" fontWeight="950" color="#FFF">Sync Warnings</Typography></Stack>{syncWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#facc15' }}>• {warning}</Typography>)}</Paper>}
+            {profile.syncStatus !== 'synced' && <Paper sx={{ p: 3, mb: 4, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.24)}`, borderRadius: 4 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#f59e0b" /><Typography variant="subtitle1" fontWeight="950" color="#FFF">Sync Warnings</Typography></Stack>{syncWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#facc15', overflowWrap: 'anywhere' }}>• {warning}</Typography>)}</Paper>}
 
             {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 3 }}><Navigation size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><Paper sx={{ p: 4, bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.08) : 'rgba(22, 22, 24, 0.7)', border: `1px solid ${job.priority === 'emergency' ? alpha('#ef4444', 0.3) : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, minWidth: 0, '&:hover': { transform: 'translateY(-2px)', borderColor: job.priority === 'emergency' ? alpha('#ef4444', 0.5) : binThemeTokens.gold } }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color="#ef4444" />}</Stack><Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mb: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}>CLAIM MISSION</Button></Paper></Grid>)}</Grid></Box>}
         </Box>
