@@ -17,8 +17,8 @@
     "test": "node --test test/security-rules.test.js",
     "test:rules": "node --test test/security-rules.test.js",
     "test:stability": "node scripts/production-stability-guard.mjs",
-    "test:e2e": "playwright install chromium && playwright test",
-    "test:e2e:public": "playwright install chromium && playwright test --grep \"production public smoke\""
+    "test:e2e": "npm run build && playwright install --with-deps chromium && playwright test",
+    "test:e2e:public": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\""
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
