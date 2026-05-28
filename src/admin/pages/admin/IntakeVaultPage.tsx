@@ -151,14 +151,18 @@ const readPayment = (raw: IntakeSubmission) => {
     Math.round(annualValue * 0.15)
   );
 
-  const submittedStatus = raw.paymentSubmitted ? 'PENDING' : 'NOT_SUBMITTED';
+  const submittedStatus = raw.paymentSubmitted || mobilization > 0 ? 'PENDING' : 'NOT_SUBMITTED';
+  const storedStatus = String(raw.paymentStatus || payment.status || '').toUpperCase();
+  const effectiveStatus = storedStatus === 'NOT_SUBMITTED' && (raw.paymentSubmitted || mobilization > 0)
+    ? 'PENDING'
+    : (storedStatus || submittedStatus);
 
   return {
     ...payment,
     method: String(payment.method || raw.paymentMethod || raw.payment?.method || 'MANUAL').toUpperCase(),
     amount: Number.isFinite(mobilization) ? mobilization : 0,
     annualValue: Number.isFinite(annualValue) ? annualValue : 0,
-    status: String(raw.paymentStatus || payment.status || submittedStatus).toUpperCase(),
+    status: effectiveStatus,
   };
 };
 
@@ -343,6 +347,45 @@ export const IntakeVaultPage: React.FC = () => {
     } catch (error) {
       console.error('Contact owner failed:', error);
       setNotice({ severity: 'error', text: 'Could not contact owner. Check callable deployment and Admin role.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSendPaymentRequest = async (intake: IntakeSubmission) => {
+    const normalized = normalizeIntake(intake);
+    const payment = readPayment(normalized);
+    const amount = money(payment.amount);
+    const method = payment.method || 'OFFLINE PAYMENT';
+
+    const message = clarificationNote.trim() || [
+      `Dear ${normalized.ownerName || 'Owner'},`,
+      ``,
+      `Your BIN GROUP owner onboarding has been received.`,
+      `Please complete the 15% mobilization deposit payment for admin verification.`,
+      ``,
+      `Required 15% Mobilization Amount: ${amount}`,
+      `Selected Payment Method: ${method}`,
+      `Intake Reference: ${normalized.id}`,
+      ``,
+      `After payment, please reply with the cheque/bank transfer/payment proof so BIN GROUP Admin can verify and unlock the next contract activation step.`,
+      ``,
+      `BIN GROUP - Made in UAE 🇦🇪`
+    ].join('\n');
+
+    setBusy(true);
+    setNotice(null);
+    try {
+      await adminSendOwnerOnboardingMessage({
+        intakeId: normalized.id,
+        subject: `BIN GROUP 15% Mobilization Payment Request - ${amount}`,
+        message,
+      });
+      setClarificationNote('');
+      setNotice({ severity: 'success', text: `15% payment request sent to owner for ${amount}.` });
+    } catch (error) {
+      console.error('15% payment request failed:', error);
+      setNotice({ severity: 'error', text: 'Could not send 15% payment request. Check callable deployment and Admin role.' });
     } finally {
       setBusy(false);
     }
@@ -551,8 +594,8 @@ export const IntakeVaultPage: React.FC = () => {
                   <Button startIcon={<MessageCircle />} variant="outlined" disabled={busy} onClick={() => handleContactOwner(selected)} sx={{ borderColor: '#38bdf8', color: '#38bdf8', fontWeight: 900 }}>
                     CONTACT OWNER
                   </Button>
-                  <Button startIcon={<Mail />} variant="outlined" disabled={busy} onClick={() => handleContactOwner(selected)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
-                    EMAIL PAYMENT / DOC REQUEST
+                  <Button startIcon={<Mail />} variant="outlined" disabled={busy} onClick={() => handleSendPaymentRequest(selected)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
+                    SEND 15% PAYMENT REQUEST
                   </Button>
                 </Stack>
               </Paper>
