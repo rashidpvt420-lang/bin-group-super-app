@@ -36,6 +36,19 @@ const isAuthStorageFailure = (error: any) => {
     return code.includes('storage/unauthenticated') || code.includes('unauthenticated') || message.includes('storage/unauthenticated') || message.includes('user is not authenticated');
 };
 
+
+const fileToBase64Payload = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const output = String(reader.result || "");
+            resolve(output.includes(",") ? output.split(",").pop() || "" : output);
+        };
+        reader.onerror = () => reject(reader.error || new Error("Unable to read file for fallback upload."));
+        reader.readAsDataURL(file);
+    });
+};
+
 export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepProps) {
     const {
         companyProfile,
@@ -162,6 +175,36 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 console.log(`✅ [UPLOAD] ${label} uploaded: ${downloadUrl}`);
             } catch (uploadErr: any) {
                 console.error(`❌ [UPLOAD] ${label} failed:`, uploadErr);
+
+                if (isAuthStorageFailure(uploadErr)) {
+                    console.warn(`[UPLOAD] Browser Storage auth failed for ${label}. Trying callable backend fallback...`);
+                    try {
+                        const encodedDocument = await fileToBase64Payload(file);
+                        const uploadFallback = httpsCallable(functions, 'uploadOwnerOnboardingProofDocument');
+                        const fallbackRes = await uploadFallback({
+                            ownerUid: activeUser.uid,
+                            ownerEmail: activeUser.email || ownerAccount?.email || companyProfile.email || '',
+                            intakeId: onboardingSessionId || intakeId || activeUser.uid,
+                            onboardingSessionId: onboardingSessionId || intakeId || activeUser.uid,
+                            docType: key,
+                            filename: safeFileName,
+                            contentType: file.type || 'application/octet-stream',
+                            encodedDocument
+                        });
+
+                        const fallbackData = fallbackRes.data as { downloadUrl?: string };
+                        if (!fallbackData?.downloadUrl) throw new Error('Callable fallback did not return a download URL.');
+
+                        urls[key] = fallbackData.downloadUrl;
+                        setUploadProgress(prev => ({ ...prev, [key]: 100 }));
+                        console.log(`✅ [UPLOAD] ${label} uploaded through callable fallback: ${fallbackData.downloadUrl}`);
+                        continue;
+                    } catch (fallbackErr: any) {
+                        console.error(`❌ [UPLOAD] ${label} fallback failed:`, fallbackErr);
+                        throw new Error(`Failed to upload ${label}: ${fallbackErr.message || fallbackErr.code || String(fallbackErr)}`);
+                    }
+                }
+
                 throw new Error(`Failed to upload ${label}: ${uploadErr.message || uploadErr.code || String(uploadErr)}`);
             }
         }

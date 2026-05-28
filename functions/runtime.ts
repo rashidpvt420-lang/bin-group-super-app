@@ -7,6 +7,7 @@ export * from "./index";
 export * from "./contractActivation";
 export * from "./ownerOnboarding";
 export * from "./ownerRegistrationRequest";
+export * from "./onboardingProofUpload";
 export * from "./stripePayment";
 export * from "./adminOwnerOperations";
 export * from "./mailDelivery";
