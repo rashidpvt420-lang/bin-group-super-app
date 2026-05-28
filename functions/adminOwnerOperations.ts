@@ -293,8 +293,57 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   batch.set(db.collection("contract_signing_requests").doc(contractId), { contractId, intakeId, ownerId, ownerEmail: owner.email, ownerName: owner.name, signUrl, status: "PENDING_OWNER_SIGNATURE", packageName: plan.name, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("payment_transactions").doc(paymentId), { paymentId, intakeId, ownerId, ownerEmail: owner.email, contractId, propertyId: primary.propertyId, amount: pricing.mobilization, currency: pricing.currency, method: pricing.method, status: "VERIFIED", verificationState: "ADMIN_VERIFIED", verified: true, verifiedAt: ts(), verifiedBy: adminId, unlocksDashboard: true, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("owner_dashboard_unlocks").doc(ownerId), { ownerId, intakeId, contractId, propertyIds, unlocked: false, unlockState: "PENDING_OWNER_SIGNATURE", unlockedAt: ts(), unlockedBy: adminId, updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("notifications").doc(), { userId: ownerId, toRole: "owner", type: "CONTRACT_SIGNATURE_REQUIRED", title: "Contract ready for signature", body: "BIN GROUP verified your onboarding. Sign the contract to receive your final PDF.", url: `/owner/contracts?contractId=${contractId}`, read: false, createdAt: ts() });
-  batch.set(db.collection("mail").doc(), { to: owner.email, message: { subject: `BIN GROUP ${plan.name} contract ready for signature`, html: `<p>Dear ${owner.name},</p><p>Your selected ${plan.name} contract is ready for signature.</p><p>Annual value: ${money(pricing.annual)}<br/>15% mobilization: ${money(pricing.mobilization)}</p><p><a href="${signUrl}">Open and sign contract</a></p>` }, metadata: { type: "owner_contract_signature_request", intakeId, ownerId, contractId, createdBy: adminId }, createdAt: ts() });
+  const ownerDashboardUrl = `${appBaseUrl()}/owner/dashboard`;
+  const ownerActivationUrl = `${appBaseUrl()}/owner/activation`;
+  batch.set(db.collection("notifications").doc(), {
+    userId: ownerId,
+    toRole: "owner",
+    type: "OWNER_ONBOARDING_APPROVED",
+    title: "BIN GROUP approved your owner onboarding",
+    body: "Your payment, documents and property location were verified. Please sign your contract to activate your owner dashboard.",
+    url: `/owner/contracts?contractId=${contractId}`,
+    read: false,
+    createdAt: ts()
+  });
+  batch.set(db.collection("mail").doc(), {
+    to: owner.email,
+    message: {
+      from: "BIN GROUP <ceo@bin-groups.com>",
+      replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+      subject: `BIN GROUP Owner Approval - Contract Signature Required`,
+      html: `<p>Dear ${owner.name},</p>
+<p><b>Congratulations. Your BIN GROUP owner onboarding has been approved.</b></p>
+<p>Admin has verified your 15% mobilization payment, uploaded documents, and property location.</p>
+<table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+<tr><td><b>Owner Email</b></td><td>${owner.email}</td></tr>
+<tr><td><b>Plan</b></td><td>${plan.name}</td></tr>
+<tr><td><b>Annual Contract Value</b></td><td>${money(pricing.annual)}</td></tr>
+<tr><td><b>15% Mobilization</b></td><td>${money(pricing.mobilization)}</td></tr>
+<tr><td><b>Contract Reference</b></td><td>${contractId}</td></tr>
+<tr><td><b>Intake Reference</b></td><td>${intakeId}</td></tr>
+</table>
+<p><b>Next step:</b> Please open and sign your contract.</p>
+<p><a href="${signUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open and Sign Contract</a></p>
+<p><b>Owner Dashboard Access</b></p>
+<p>You can log in using your owner email: <b>${owner.email}</b></p>
+<p>Owner Dashboard: <a href="${ownerDashboardUrl}">${ownerDashboardUrl}</a></p>
+<p>Activation Status Page: <a href="${ownerActivationUrl}">${ownerActivationUrl}</a></p>
+<p>Your dashboard remains in secure activation mode until the contract is signed. After signature, BIN GROUP will activate the owner dashboard, property passport, documents, tickets, tenants and contract records.</p>
+<p>For support, reply to this email or contact <b>support@bin-groups.com</b>.</p>
+<p>BIN GROUP - Made in UAE 🇦🇪</p>`
+    },
+    metadata: {
+      type: "owner_approval_dashboard_access",
+      intakeId,
+      ownerId,
+      contractId,
+      signUrl,
+      ownerDashboardUrl,
+      ownerActivationUrl,
+      createdBy: adminId
+    },
+    createdAt: ts()
+  });
   batch.set(db.collection("audit_logs").doc(), { actorId: adminId, actorRole: "admin", action: "APPROVE_OWNER_SUBMISSION_OPERATIONAL_FLOW", targetType: "intake_submissions", targetId: intakeId, metadata: { ownerId, ownerEmail: owner.email, contractId, propertyIds, paymentId }, createdAt: ts() });
   try { await batch.commit(); }
   catch (e: any) { console.error("OWNER_PROVISIONING_COMMIT_FAILED", { intakeId, ownerId, contractId, propertyIds, message: e?.message, stack: e?.stack }); throw new HttpsError("internal", `Owner provisioning failed: ${e?.message || "Firestore commit failed"}`); }
@@ -342,7 +391,24 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
     batch.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
     batch.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
   }
-  batch.set(db.collection("mail").doc(), { to: ownerEmail, message: { subject: "BIN GROUP signed contract PDF", html: `<p>Dear ${signatureName},</p><p>Your signed BIN GROUP contract PDF is ready.</p><p><a href="${pdfUrl}">Download signed contract PDF</a></p>` }, metadata: { type: "owner_signed_contract_pdf", contractId, ownerId, pdfUrl }, createdAt: ts() });
+  const dashboardUrl = `${appBaseUrl()}/owner/dashboard`;
+  batch.set(db.collection("mail").doc(), {
+    to: ownerEmail,
+    message: {
+      from: "BIN GROUP <ceo@bin-groups.com>",
+      replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+      subject: "BIN GROUP Owner Dashboard Activated + Signed Contract PDF",
+      html: `<p>Dear ${signatureName},</p>
+<p><b>Your BIN GROUP contract has been signed and your owner dashboard is now active.</b></p>
+<p><a href="${pdfUrl}">Download signed contract PDF</a></p>
+<p><a href="${dashboardUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Dashboard</a></p>
+<p>You can now access your property passport, contracts, documents, tickets, tenants and financial records.</p>
+<p>Support: support@bin-groups.com</p>
+<p>BIN GROUP - Made in UAE 🇦🇪</p>`
+    },
+    metadata: { type: "owner_signed_contract_pdf_dashboard_activated", contractId, ownerId, pdfUrl, dashboardUrl },
+    createdAt: ts()
+  });
   batch.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
   await batch.commit();
   return { status: "SIGNED_PDF_EMAILED", contractId, pdfUrl };
