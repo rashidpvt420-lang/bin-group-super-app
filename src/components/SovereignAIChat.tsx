@@ -116,7 +116,11 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
 
     const handleResize = () => setFabPosition((current) => {
       const next = clampFabPosition(current);
-      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage can be unavailable in private or restricted browser sessions. */
+      }
       return next;
     });
 
@@ -183,11 +187,19 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     if (!drag.dragging || drag.pointerId !== event.pointerId) return;
 
     dragRef.current = { ...drag, dragging: false };
-    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* Pointer capture can already be released by the browser on cancel/up edge cases. */
+    }
 
     setFabPosition((current) => {
       const next = clampFabPosition(current);
-      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage can be unavailable in private or restricted browser sessions. */
+      }
       return next;
     });
 
