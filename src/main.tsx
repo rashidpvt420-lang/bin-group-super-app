@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import SovereignErrorBoundary from './components/SovereignErrorBoundary';
 import { setupSovereignAlertInterceptor } from './components/SovereignAlertHandler';
+import './admin-mobile-hardening.css';
 
 setupSovereignAlertInterceptor();
 
