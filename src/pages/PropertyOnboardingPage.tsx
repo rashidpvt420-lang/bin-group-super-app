@@ -31,7 +31,28 @@ const readable = (value: string | undefined, fallback: string) => {
   return value;
 };
 
+const INTERNAL_STEP_COUNT = 11;
+const VISIBLE_STAGE_COUNT = 6;
+
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
+
+const visibleStageForInternalStep = (internalStep: number) => {
+  if (internalStep <= 3) return 1; // Company + Asset + Location
+  if (internalStep <= 4) return 2; // Systems + Add-ons
+  if (internalStep <= 5) return 3; // Service Plan / Quote
+  if (internalStep <= 7) return 4; // Account + Documents
+  if (internalStep <= 9) return 5; // Review + Contract
+  return 6; // Payment Options + Submission
+};
+
+const visibleStageProgress = (internalStep: number) => {
+  if (internalStep <= 3) return `${internalStep}/3`;
+  if (internalStep === 4) return '1/1';
+  if (internalStep === 5) return '1/1';
+  if (internalStep <= 7) return `${internalStep - 5}/2`;
+  if (internalStep <= 9) return `${internalStep - 7}/2`;
+  return `${internalStep - 9}/2`;
+};
 
 const PropertyOnboardingPage = () => {
     const { step, setStep, nextStep, prevStep } = useOnboardingStore();
@@ -39,7 +60,16 @@ const PropertyOnboardingPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-    const onboardingSteps = [
+    const visibleStages = [
+        readable(t('onboarding.stage_owner_property'), 'Owner & Property'),
+        readable(t('onboarding.stage_systems'), 'Property Systems'),
+        readable(t('onboarding.stage_plan_price'), 'Plan & Price'),
+        readable(t('onboarding.stage_documents_account'), 'Documents & Account'),
+        readable(t('onboarding.stage_contract'), 'Review & Contract'),
+        readable(t('onboarding.stage_payment'), 'Payment & Submission'),
+    ];
+
+    const internalStepLabels = [
         readable(t('onboarding.company'), 'Company'),
         readable(t('onboarding.asset'), 'Asset'),
         readable(t('onboarding.location'), 'Location'),
@@ -50,10 +80,15 @@ const PropertyOnboardingPage = () => {
         readable(t('onboarding.review'), 'Review'),
         readable(t('onboarding.contract'), 'Contract'),
         readable(t('onboarding.payment_options'), 'Payment Options'),
-        readable(t('onboarding.payment_submission'), 'Submit Payment'),
+        readable(t('onboarding.payment_submission'), 'Payment Submission'),
     ];
 
-    const safeStep = clampStep(step, onboardingSteps.length);
+    const safeStep = clampStep(step, INTERNAL_STEP_COUNT);
+    const visibleStage = visibleStageForInternalStep(safeStep);
+    const activeVisibleStageIndex = clampStep(visibleStage, VISIBLE_STAGE_COUNT) - 1;
+    const currentInternalLabel = internalStepLabels[Math.max(0, safeStep - 1)];
+    const currentVisibleLabel = visibleStages[activeVisibleStageIndex];
+    const currentStageProgress = visibleStageProgress(safeStep);
 
     React.useEffect(() => {
         if (step !== safeStep) setStep(safeStep);
@@ -94,11 +129,18 @@ const PropertyOnboardingPage = () => {
             <CssBaseline />
 
             <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 1, md: 2 }, px: { xs: 1.5, sm: 3 } }}>
-                <Typography variant="caption" sx={{ display: { xs: 'block', sm: 'none' }, color: binThemeTokens.gold, fontWeight: 950, textAlign: 'center', mb: 1 }}>
-                    {isRTL ? `الخطوة ${safeStep} من ${onboardingSteps.length}: ${onboardingSteps[Math.max(0, safeStep - 1)]}` : `Step ${safeStep} of ${onboardingSteps.length}: ${onboardingSteps[Math.max(0, safeStep - 1)]}`}
+                <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, textAlign: 'center', mb: 0.75 }}>
+                    {isRTL
+                        ? `المرحلة ${visibleStage} من ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`
+                        : `Stage ${visibleStage} of ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`}
+                </Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontWeight: 800, textAlign: 'center', mb: { xs: 1, md: 2 } }}>
+                    {isRTL
+                        ? `الجزء ${currentStageProgress}: ${currentInternalLabel}`
+                        : `Part ${currentStageProgress}: ${currentInternalLabel}`}
                 </Typography>
                 <Stepper
-                    activeStep={safeStep - 1}
+                    activeStep={activeVisibleStageIndex}
                     alternativeLabel={!isMobile}
                     sx={{
                         mb: { xs: 1.5, md: 4 },
@@ -107,10 +149,10 @@ const PropertyOnboardingPage = () => {
                         overflowY: 'hidden',
                         WebkitOverflowScrolling: 'touch',
                         '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' },
-                        '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr', minWidth: isMobile ? 36 : 'auto' },
+                        '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr', minWidth: isMobile ? 48 : 'auto' },
                     }}
                 >
-                    {onboardingSteps.map((label) => (
+                    {visibleStages.map((label) => (
                         <Step key={label}>
                             <StepLabel
                                 StepIconProps={{
