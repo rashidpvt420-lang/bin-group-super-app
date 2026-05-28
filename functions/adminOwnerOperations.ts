@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
+import { termFieldsFromStart } from "./ownerContractTerm";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -297,11 +298,34 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   const ownerEmail = s(contract.ownerEmail || request.auth.token?.email).toLowerCase();
   const requesterEmail = s(request.auth.token?.email).toLowerCase();
   if (ownerId && ownerId !== request.auth.uid && ownerEmail !== requesterEmail) throw new HttpsError("permission-denied", "This contract belongs to another owner.");
-  const pdfUrl = await generateContractPDF({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: new Date().toISOString() });
+  const signedAtDate = new Date();
+  const termFields = termFieldsFromStart(signedAtDate);
+  const pdfUrl = await generateContractPDF({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
   const batch = db.batch();
-  batch.set(ref, { status: "ACTIVE", contractStatus: "signed_active", activationStatus: "ACTIVE", signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: new Date().toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), updatedAt: ts() }, { merge: true });
+  batch.set(ref, { status: "ACTIVE", contractStatus: "signed_active", activationStatus: "ACTIVE", signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
-  if (ownerId) { batch.set(db.collection("owners").doc(ownerId), { status: "ACTIVE", activeContractId: contractId, signedPdfUrl: pdfUrl, updatedAt: ts() }, { merge: true }); batch.set(db.collection("users").doc(ownerId), { status: "ACTIVE", activeContractId: contractId, signedPdfUrl: pdfUrl, updatedAt: ts() }, { merge: true }); }
+  if (ownerId) {
+    const ownerPatch = {
+      email: ownerEmail || null,
+      latestActivationContractId: contractId,
+      activeContractId: contractId,
+      contractSignatureStatus: 'ACTIVE',
+      activationStatus: 'ACTIVE',
+      status: 'ACTIVE',
+      activeContractTermMonths: termFields.contractTermMonths,
+      activeContractValidFrom: termFields.effectiveFrom,
+      activeContractValidTo: termFields.validTo,
+      ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
+      dashboardLocked: false,
+      dashboardUnlocked: true,
+      adminApproved: true,
+      paymentVerified: true,
+      signedPdfUrl: pdfUrl,
+      updatedAt: ts()
+    };
+    batch.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
+    batch.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
+  }
   batch.set(db.collection("mail").doc(), { to: ownerEmail, message: { subject: "BIN GROUP signed contract PDF", html: `<p>Dear ${signatureName},</p><p>Your signed BIN GROUP contract PDF is ready.</p><p><a href="${pdfUrl}">Download signed contract PDF</a></p>` }, metadata: { type: "owner_signed_contract_pdf", contractId, ownerId, pdfUrl }, createdAt: ts() });
   batch.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
   await batch.commit();

@@ -80,9 +80,10 @@ const addMonths = (date: Date, months: number) => {
 };
 
 const termDates = (contract: any) => {
-  const start = asDate(contract?.effectiveFrom, contract?.validFrom, contract?.startedAt, contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt, contract?.createdAt) || new Date();
+  const start = asDate(contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt, contract?.effectiveFrom, contract?.validFrom, contract?.startedAt, contract?.createdAt) || new Date();
   const end = asDate(contract?.effectiveTo, contract?.validTo, contract?.expiresAt, contract?.endDate, contract?.expiryDate) || addMonths(start, Number(contract?.contractTermMonths || CONTRACT_TERM_MONTHS));
-  return { start, end };
+  const firstMonthEnd = asDate(contract?.firstMonthWindowEndsAt, contract?.ownerCanRequestPlanChangeUntil, contract?.ownerSignature?.firstMonthWindowEndsAt) || addMonths(start, 1);
+  return { start, end, firstMonthEnd };
 };
 
 const termSummaryText = (contract: any) => {
