@@ -118,7 +118,8 @@ function isPlaceholderProperty(property: any) {
   const floors = Number(property?.floors || property?.numberOfFloors || 0);
   const rooms = Number(property?.rooms || property?.roomCount || property?.numberOfRooms || property?.majlisRooms || 0);
   const halls = Number(property?.halls || property?.hallCount || property?.numberOfHalls || property?.majlisHalls || 0);
-  return (!name || name === 'new asset' || name === 'property') && propertyUnits(property) === 0 && floors === 0 && rooms === 0 && halls === 0;
+  const isDefaultName = !name || name === 'new asset' || name === 'property' || name.includes('draft') || name.includes('placeholder');
+  return isDefaultName && propertyUnits(property) === 0 && floors === 0 && rooms === 0 && halls === 0;
 }
 
 async function resolveOwner(user: any): Promise<OwnerResolution> {

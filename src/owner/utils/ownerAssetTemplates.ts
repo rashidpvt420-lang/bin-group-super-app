@@ -137,9 +137,9 @@ const templates: Record<OwnerAssetCategory, OwnerAssetTemplate> = {
       { label: 'Washrooms', keys: ['majlisProfile.washrooms', 'washrooms'] },
       { label: 'Guest Capacity', keys: ['majlisProfile.majlisCapacity', 'guestCapacity', 'capacity', 'majlisCapacity'] },
       { label: 'Parking', keys: ['majlisProfile.parkingSpaces', 'parkingSpaces', 'parking'] },
-      { label: 'Protocol', keys: ['majlisProfile.protocolReadiness', 'protocolReadiness'] },
+      { label: 'Guest-Readiness Zones', keys: ['majlisProfile.guestReadinessZones', 'guestReadinessZones', 'guestReadiness', 'protocolReadiness'] },
       { label: 'Booking', keys: ['majlisProfile.bookingReadiness', 'bookingReadiness'] },
-      { label: 'Preventive Maint.', keys: ['majlisProfile.preventiveMaintenanceReady', 'preventiveMaintenanceReady', 'maintenanceReadiness'] },
+      { label: 'Preventive Maint. Schedule', keys: ['majlisProfile.preventiveMaintenanceReady', 'preventiveMaintenanceReady', 'preventiveMaintenanceSchedule', 'maintenanceReadiness'] },
     ],
   },
   mosque: {
@@ -308,9 +308,9 @@ function professionalFallback(asset: any, label: string) {
     return fallbackRooms !== undefined && fallbackRooms !== null && fallbackRooms !== '' ? String(fallbackRooms) : 'Pending survey';
   }
   if (['vip_rooms', 'guest_rooms', 'prayer_rooms', 'kitchens', 'washrooms', 'guest_capacity', 'parking'].includes(lowerLabel)) return 'Pending survey';
-  if (lowerLabel === 'protocol') return 'Pending readiness check';
-  if (lowerLabel === 'booking') return 'Pending booking setup';
-  if (lowerLabel === 'preventive_maint') return 'Pending PM schedule';
+  if (lowerLabel.includes('protocol') || lowerLabel.includes('guest_readiness')) return 'Pending readiness check';
+  if (lowerLabel.includes('booking')) return 'Pending booking setup';
+  if (lowerLabel.includes('preventive')) return 'Pending PM schedule';
   return 'Pending setup';
 }
 
@@ -333,5 +333,6 @@ export function isFakeOwnerAsset(asset: any) {
   const floors = Number(asset?.floors || asset?.numberOfFloors || 0);
   const rooms = Number(asset?.rooms || asset?.roomCount || asset?.numberOfRooms || asset?.majlisRooms || asset?.majlisProfile?.rooms || 0);
   const halls = Number(asset?.halls || asset?.hallCount || asset?.numberOfHalls || asset?.majlisHalls || asset?.majlisProfile?.halls || 0);
-  return (!name || name === 'new asset' || name === 'property') && units === 0 && floors === 0 && rooms === 0 && halls === 0;
+  const isDefaultName = !name || name === 'new asset' || name === 'property' || name.includes('draft') || name.includes('placeholder');
+  return isDefaultName && units === 0 && floors === 0 && rooms === 0 && halls === 0;
 }

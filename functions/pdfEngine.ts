@@ -246,6 +246,13 @@ function safeArray(value: any): string {
     return textValue(value);
 }
 
+function asArray(value: any): string[] {
+    if (Array.isArray(value)) return value.filter(Boolean).map(v => typeof v === 'string' ? v : String((v as any)?.name || (v as any)?.title || (v as any)?.label || ''));
+    if (value && typeof value === 'object') return Object.values(value).filter(Boolean).map(v => typeof v === 'string' ? v : String((v as any)?.name || (v as any)?.title || (v as any)?.label || ''));
+    if (typeof value === 'string' && value.trim()) return value.split(',').map((item) => item.trim()).filter(Boolean);
+    return [];
+}
+
 async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>) {
     const storage = getStorage();
     const bucket = storage.bucket();
@@ -339,13 +346,17 @@ export async function generateContractPDF(data: any) {
         row(doc, 'Service Provider / مقدم الخدمة', 'BIN GROUP L.L.C - S.P.C');
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
 
-        const start = asDate(data.effectiveFrom || data.validFrom || data.startedAt || data.ownerSignature?.signedAt || data.ownerSignedAt || data.signedAt);
-        if (start) {
-            const end = addMonthsPreservingTime(start, 13);
-            row(doc, 'Contract Term / مدة العقد', `13 Months: ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / مستمر لمدة 13 شهراً`);
-        } else {
-            row(doc, 'Contract Term / مدة العقد', 'Continuous until expiry/termination / مستمر حتى انتهاء العقد أو فسخه');
-        }
+        const start = asDate(
+            data.ownerSignature?.signedAt || 
+            data.ownerSignedAt || 
+            data.signedAt || 
+            data.effectiveFrom || 
+            data.validFrom || 
+            data.startedAt || 
+            data.createdAt
+        ) || new Date();
+        const end = addMonthsPreservingTime(start, 13);
+        row(doc, 'Contract Term / مدة العقد', `13 Months: ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / مستمر لمدة 13 شهراً`);
 
         section(doc, '2. Property and Submitted Details', 'بيانات العقار والمستندات المقدمة');
         row(doc, 'Property Name / اسم العقار', textValue(data.propertyName || data.propertyTitle || data.address));
@@ -398,21 +409,22 @@ export async function generateContractPDF(data: any) {
             'بالنسبة للمجالس والمباني الحكومية والمستشفيات والمدارس والجامعات والمراكز التجارية والفنادق وسكن الموظفين والمرافق المجتمعية وما يماثلها، يجوز للنظام استخدام مبلغين معتمدين بدلاً من عقود المستأجرين. ويجوز للمبلغين تقديم البلاغات والحوادث والصور والملاحظات وطلبات الخدمة، ولا يكتسبون حقوق إيجار أو ملكية أو عمل أو دفع أو وكالة من خلال المنصة.'
         );
 
+        const customInclusions = asArray(data.inclusions || data.commercialSchedule?.coveredItems || data.scopeItems || data.serviceDetails?.inclusions);
+        const inclusionsEn = customInclusions.length ? customInclusions : details.coveredEn;
+        const inclusionsAr = customInclusions.length ? customInclusions.map(item => `بند مخصص: ${item}`) : details.coveredAr;
+
         section(doc, '6. Scope of Work (Covered Services)', 'نطاق العمل (الخدمات المشمولة)');
         para(doc,
-            `Covered Services under ${details.titleEn}:\n` + details.coveredEn.map(item => `• ${item}`).join('\n'),
-            `الخدمات المشمولة بموجب ${details.titleAr}:\n` + details.coveredAr.map(item => `• ${item}`).join('\n')
+            `Covered Services under ${details.titleEn}:\n` + inclusionsEn.map(item => `• ${item}`).join('\n'),
+            `الخدمات المشمولة بموجب ${details.titleAr}:\n` + inclusionsAr.map(item => `• ${item}`).join('\n')
         );
 
-        const selectedAddOns = data.selectedAddOns || [];
+        const selectedAddOns = asArray(data.selectedAddOns || data.commercialSchedule?.selectedAddOns || data.paymentSchedule?.selectedAddOns || data.serviceDetails?.selectedAddOns || data.addOns || data.addons);
         if (selectedAddOns.length) {
-            const addOnsList = selectedAddOns.map((item: any) => typeof item === 'string' ? item : (item?.name || item?.title || '')).filter(Boolean);
-            if (addOnsList.length) {
-                para(doc,
-                    'Selected Add-ons:\n' + addOnsList.map((item: string) => `• ${item}`).join('\n'),
-                    'الإضافات المختارة:\n' + addOnsList.map((item: string) => `• ${item}`).join('\n')
-                );
-            }
+            para(doc,
+                'Selected Add-ons:\n' + selectedAddOns.map((item: string) => `• ${item}`).join('\n'),
+                'الإضافات المختارة:\n' + selectedAddOns.map((item: string) => `• ${item}`).join('\n')
+            );
         }
 
         section(doc, '7. Owner Obligations', 'التزامات المالك');
@@ -433,10 +445,17 @@ export async function generateContractPDF(data: any) {
             'يلتزم المالك بسداد جميع الرسوم المتفق عليها وفقاً لعرض السعر المقبول وخطة السداد. ويجوز لمجموعة بن تعليق الخدمات أو لوحات التحكم أو دعوات المستأجرين أو توجيه الفنيين أو الموافقات أو إصدار المستندات أو تفعيل العقد إذا كانت الدفعات متأخرة أو معكوسة أو محل نزاع دون أساس صحيح أو مستردة أو غير مكتملة.'
         );
 
+        const customExclusions = asArray(data.exclusions || data.commercialSchedule?.notCoveredItems || data.serviceDetails?.exclusions);
+        const exclusionsEn = customExclusions.length ? customExclusions : details.notCoveredEn;
+        const exclusionsAr = customExclusions.length ? customExclusions.map(item => `استثناء مخصص: ${item}`) : details.notCoveredAr;
+
+        const legalExclusionEn = data.commercialSchedule?.legalExclusionClause?.en || data.legalExclusionClause?.en || "Anything not expressly listed in the covered items is excluded and requires a separate written quotation and BIN GROUP admin approval before execution.";
+        const legalExclusionAr = data.commercialSchedule?.legalExclusionClause?.ar || data.legalExclusionClause?.ar || "أي بند غير مذكور صراحة ضمن البنود المشمولة يعتبر مستثنى ويتطلب عرض سعر كتابي منفصل وموافقة إدارية من BIN GROUP قبل التنفيذ.";
+
         section(doc, '10. Exclusions (Not Covered)', 'الاستثناءات (البنود غير المشمولة)');
         para(doc,
-            `Excluded Items under ${details.titleEn}:\n` + details.notCoveredEn.map(item => `• ${item}`).join('\n'),
-            `البنود غير المشمولة بموجب ${details.titleAr}:\n` + details.notCoveredAr.map(item => `• ${item}`).join('\n')
+            `Excluded Items under ${details.titleEn}:\n` + exclusionsEn.map(item => `• ${item}`).join('\n') + `\n\nGeneral Exclusion Clause: ${legalExclusionEn}`,
+            `البنود غير المشمولة بموجب ${details.titleAr}:\n` + exclusionsAr.map(item => `• ${item}`).join('\n') + `\n\nبند الاستثناء العام: ${legalExclusionAr}`
         );
 
         section(doc, '11. Limitation of Liability and Indemnity', 'حدود المسؤولية والتعويض');

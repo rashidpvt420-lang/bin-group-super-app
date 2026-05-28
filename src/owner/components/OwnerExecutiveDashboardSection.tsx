@@ -387,11 +387,16 @@ export default function OwnerExecutiveDashboardSection({
   }, [properties]);
 
   const totalUnits = stats.units || visibleProperties.reduce((sum, property) => sum + getPropertyUnits(property), 0);
+  const totalRentalUnits = visibleProperties.reduce((sum, property) => {
+    const assetType = getAssetTypeLabel(property);
+    const policy = getOwnerDatePolicy(assetType, property);
+    return policy.showLeaseExpiry ? sum + getPropertyUnits(property) : sum;
+  }, 0);
   const acceptedTenants = occupancies.filter((item) => ['ACCEPTED', 'ACTIVE', 'SIGNED', 'OCCUPIED'].includes(normalizeStatus(item.occupancyStatus || item.status))).length || stats.tenants;
   const pendingInvitations = invitations.filter((item) => ['PENDING_AUTH_CREATION', 'PENDING', 'INVITED', 'SENT'].includes(normalizeStatus(item.invitationStatus || item.status))).length;
   const linkedTenantsCount = acceptedTenants + pendingInvitations;
   const vacantUnitsCount = Math.max(0, totalUnits - acceptedTenants);
-  const tenantRegistryReadiness = totalUnits > 0 ? Math.min(100, Math.round((linkedTenantsCount / totalUnits) * 100)) : 0;
+  const tenantRegistryReadiness = totalRentalUnits > 0 ? Math.min(100, Math.round((linkedTenantsCount / totalRentalUnits) * 100)) : 0;
   const openTicketsCount = tickets.filter((ticket) => ['OPEN', 'PENDING', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS', 'ESCALATED'].includes(normalizeStatus(ticket.status))).length || stats.tickets;
   const criticalTickets = tickets.filter((ticket) => normalizeStatus(ticket.priority || ticket.severity) === 'CRITICAL' && normalizeStatus(ticket.status) !== 'COMPLETED').length;
   const passportReady = visibleProperties.filter((property) => ['ACTIVE', 'READY', 'ISSUED'].includes(normalizeStatus(property.passportStatus || property.governanceStatus || property.status))).length;
@@ -408,7 +413,7 @@ export default function OwnerExecutiveDashboardSection({
   if (missingInfo.iban) actionItems.push({ title: 'Missing owner payout bank schedule or IBAN configuration', priority: 'Critical', section: 'Finance' });
   if (annualContractValue <= 0) actionItems.push({ title: 'Annual contract value is missing from the active contract', priority: 'High', section: 'Finance' });
   if (signatureStatus === 'PENDING') actionItems.push({ title: 'Contract signature status still requires verification', priority: 'High', section: 'Contract' });
-  if (tenantRegistryReadiness < 50 && totalUnits > 0) actionItems.push({ title: 'Tenant registry readiness is below 50%', priority: 'High', section: 'Tenant Registry' });
+  if (tenantRegistryReadiness < 50 && totalRentalUnits > 0) actionItems.push({ title: 'Tenant registry readiness is below 50%', priority: 'High', section: 'Tenant Registry' });
   if (passportReady < visibleProperties.length) actionItems.push({ title: 'Some active assets do not have official property passport status yet', priority: 'Medium', section: 'Property Passport' });
   if (missingDataWarnings > 0) actionItems.push({ title: `${missingDataWarnings} asset profile(s) need missing field backfill`, priority: 'Medium', section: 'Asset Data' });
   if (openTicketsCount > 0) actionItems.push({ title: `${openTicketsCount} maintenance ticket(s) require owner visibility`, priority: 'High', section: 'Operations' });
@@ -554,7 +559,6 @@ export default function OwnerExecutiveDashboardSection({
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', display: 'block', mb: 1, ...textSafeSx }}>{assetType}</Typography>
                     <Stack spacing={0.75}>
                       {policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Lease expiry: {formatDate(property.leaseExpiry || property.leaseEndDate || property.leaseValidTo)}</Typography>}
-                      {!policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', ...textSafeSx }}>Lease expiry: not applicable unless leased/rented/tenanted</Typography>}
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Permit: {formatDate(property.permitExpiry || property.permitValidTo)}</Typography>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Inspection: {formatDate(property.inspectionExpiry || property.nextInspectionDate)}</Typography>
                     </Stack>
