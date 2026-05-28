@@ -36,15 +36,14 @@ const isAuthStorageFailure = (error: any) => {
     return code.includes('storage/unauthenticated') || code.includes('unauthenticated') || message.includes('storage/unauthenticated') || message.includes('user is not authenticated');
 };
 
-
 const fileToBase64Payload = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-            const output = String(reader.result || "");
-            resolve(output.includes(",") ? output.split(",").pop() || "" : output);
+            const output = String(reader.result || '');
+            resolve(output.includes(',') ? output.split(',').pop() || '' : output);
         };
-        reader.onerror = () => reject(reader.error || new Error("Unable to read file for fallback upload."));
+        reader.onerror = () => reject(reader.error || new Error('Unable to read file for fallback upload.'));
         reader.readAsDataURL(file);
     });
 };
@@ -75,7 +74,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     const [uploadedUrls, setUploadedUrls] = useState<{ [key: string]: string }>({});
     const [confirmDialog, setConfirmDialog] = useState(false);
 
-    // Inline reauth state
     const [reauthRequired, setReauthRequired] = useState(false);
     const [reauthPassword, setReauthPassword] = useState('');
     const [reauthLoading, setReauthLoading] = useState(false);
@@ -95,7 +93,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     );
     const amountDue = activationDeposit || annualContractValue;
 
-    // ─── VALIDATION ───────────────────────────────────────────────
     useEffect(() => {
         if (!ownerAccount?.uid) {
             setError('Account not created. Please go back and complete Step 7.');
@@ -111,7 +108,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
     }, [ownerAccount, paymentMethod, isContractSigned]);
 
-    // ─── CHECK STRIPE CALLBACK ─────────────────────────────────────
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('payment_success') === 'true' || params.get('session_id')) {
@@ -122,7 +118,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
     }, []);
 
-    // ─── DOCUMENT UPLOAD TO STORAGE ───────────────────────────────
     const uploadProofDocuments = async (activeUser: FirebaseUser): Promise<{ [key: string]: string }> => {
         if (!activeUser?.uid) throw new Error('Authenticated owner UID missing');
 
@@ -142,29 +137,31 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 continue;
             }
 
+            let stagedFile: File | null = null;
+            let safeFileName = `${key}.bin`;
+            const safeSessionId = onboardingSessionId || intakeId || activeUser.uid;
+
             try {
                 setUploadProgress(prev => ({ ...prev, [key]: 0 }));
 
-                const file = await getStagedFile(key);
-                if (!file) {
+                stagedFile = await getStagedFile(key);
+                if (!stagedFile) {
                     throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
                 }
 
                 await activeUser.getIdToken(true);
 
-                // ✅ Storage path must use the live Firebase Auth UID because storage.rules requires request.auth.uid == userId
-                const safeSessionId = onboardingSessionId || intakeId || activeUser.uid;
-                const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                safeFileName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
                 const storagePath = `onboarding-proof/${activeUser.uid}/${safeSessionId}/${key}/${Date.now()}_${safeFileName}`;
                 const fileRef = ref(storage, storagePath);
 
-                await uploadBytes(fileRef, file, {
+                await uploadBytes(fileRef, stagedFile, {
                     customMetadata: {
                         uploadedBy: activeUser.email || ownerAccount?.email || companyProfile.email || '',
                         ownerUid: activeUser.uid,
                         uploadedAt: new Date().toISOString(),
                         docType: key,
-                        sessionId: onboardingSessionId || intakeId || activeUser.uid
+                        sessionId: safeSessionId
                     }
                 });
 
@@ -179,16 +176,24 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 if (isAuthStorageFailure(uploadErr)) {
                     console.warn(`[UPLOAD] Browser Storage auth failed for ${label}. Trying callable backend fallback...`);
                     try {
-                        const encodedDocument = await fileToBase64Payload(file);
+                        if (!stagedFile) {
+                            stagedFile = await getStagedFile(key);
+                        }
+                        if (!stagedFile) {
+                            throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
+                        }
+
+                        safeFileName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                        const encodedDocument = await fileToBase64Payload(stagedFile);
                         const uploadFallback = httpsCallable(functions, 'uploadOwnerOnboardingProofDocument');
                         const fallbackRes = await uploadFallback({
                             ownerUid: activeUser.uid,
                             ownerEmail: activeUser.email || ownerAccount?.email || companyProfile.email || '',
-                            intakeId: onboardingSessionId || intakeId || activeUser.uid,
-                            onboardingSessionId: onboardingSessionId || intakeId || activeUser.uid,
+                            intakeId: safeSessionId,
+                            onboardingSessionId: safeSessionId,
                             docType: key,
                             filename: safeFileName,
-                            contentType: file.type || 'application/octet-stream',
+                            contentType: stagedFile.type || 'application/octet-stream',
                             encodedDocument
                         });
 
@@ -245,7 +250,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
 
         try {
-            await currentUser.getIdToken(true); // ensure fresh token for storage and callable
+            await currentUser.getIdToken(true);
             const urls = await uploadProofDocuments(currentUser);
             setUploadedUrls(urls);
 
@@ -316,7 +321,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
     };
 
-    // ─── SUBMIT PAYMENT ───────────────────────────────────────────
     const submitPayment = async () => {
         setError(null);
         setLoading(true);
@@ -370,7 +374,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         }
     };
 
-    // ─── RENDER: SUCCESS STATE ────────────────────────────────────
     if (success) {
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -421,7 +424,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         );
     }
 
-    // ─── RENDER: MAIN FORM ────────────────────────────────────────
     return (
         <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
             <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 4 } }}>
@@ -469,7 +471,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     </Paper>
                 )}
 
-                {/* Payment Summary */}
                 <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
                     <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>
                         {readable(t('onboarding.payment_summary'), 'Payment Summary')}
@@ -494,7 +495,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     </Grid>
                 </Box>
 
-                {/* Document Upload Status */}
                 <Box sx={{ mb: 4 }}>
                     <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
                         {readable(t('onboarding.documents_to_upload'), 'Documents to Upload')}
@@ -539,7 +539,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     </Stack>
                 </Box>
 
-                {/* Action Buttons */}
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 3 }}>
                     <Button
                         variant="outlined"
@@ -575,7 +574,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 </Stack>
             </Paper>
 
-            {/* Confirmation Dialog */}
             <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
                 <DialogTitle sx={{ color: '#FFF', bgcolor: '#000', fontWeight: 950 }}>Confirm Submission</DialogTitle>
                 <DialogContent sx={{ bgcolor: '#000', color: '#FFF' }}>
