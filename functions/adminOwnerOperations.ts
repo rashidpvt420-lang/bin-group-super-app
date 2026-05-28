@@ -281,7 +281,36 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   const signUrl = `${appBaseUrl()}/owner/contracts?contractId=${encodeURIComponent(contractId)}`;
   const batch = db.batch();
   batch.set(ref, { status: "CONVERTED_TO_OWNER", adminReviewState: "APPROVED_PENDING_OWNER_SIGNATURE", activationState: "PENDING_OWNER_SIGNATURE", paymentStatus: "RECONCILED", paymentState: "PAYMENT_VERIFIED", paymentVerified: true, documentsVerified: true, locationVerified: true, ownerUid: ownerId, activeOwnerId: ownerId, activeContractId: contractId, activePropertyIds: propertyIds, contractDeliveryState: "SIGNATURE_REQUEST_EMAIL_QUEUED", approvedAt: ts(), approvedBy: adminId, updatedAt: ts() }, { merge: true });
-  const ownerRecord = { uid: ownerId, ownerId, role: "owner", status: "PENDING_OWNER_SIGNATURE", dashboardUnlocked: false, dashboardLocked: true, paymentVerified: true, documentsVerified: true, locationVerified: true, displayName: owner.name, fullName: owner.name, name: owner.name, email: owner.email, phone: owner.mobile, mobile: owner.mobile, activeContractId: contractId, activePropertyIds: propertyIds, latestIntakeId: intakeId, onboardingStatus: "APPROVED_AWAITING_OWNER_SIGNATURE", updatedAt: ts() };
+  const ownerRecord = {
+    uid: ownerId,
+    ownerId,
+    role: "owner",
+    status: "PENDING_OWNER_SIGNATURE",
+    dashboardUnlocked: false,
+    dashboardLocked: true,
+    paymentVerified: true,
+    documentsVerified: true,
+    locationVerified: true,
+    adminApproved: true,
+    displayName: owner.name,
+    fullName: owner.name,
+    name: owner.name,
+    email: owner.email,
+    phone: owner.mobile,
+    mobile: owner.mobile,
+    activeContractId: contractId,
+    activePropertyIds: propertyIds,
+    latestIntakeId: intakeId,
+    latestPropertyName: primary.propertyName || primary.addressLine || "Property",
+    latestContractValue: pricing.annual,
+    latestMobilizationAmount: pricing.mobilization,
+    totalBuildings: propertyIds.length,
+    totalUnits: properties.reduce((sum: number, p: any) => sum + Number(p.units || p.numberOfUnits || 0), 0),
+    onboardingStatus: "APPROVED_AWAITING_OWNER_SIGNATURE",
+    approvedAt: ts(),
+    createdAt: data.createdAt || ts(),
+    updatedAt: ts()
+  };
   batch.set(db.collection("users").doc(ownerId), ownerRecord, { merge: true });
   batch.set(db.collection("owners").doc(ownerId), ownerRecord, { merge: true });
   properties.forEach((p: any) => {
