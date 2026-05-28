@@ -4,7 +4,7 @@ import { useLanguage } from '@bin/shared';
 import LanguageIcon from '@mui/icons-material/Language';
 
 export const LanguageSwitcher: React.FC = () => {
-    const { lang, setLang } = useLanguage();
+    const { lang, setLang, isRTL } = useLanguage();
 
     const toggleLanguage = () => {
         setLang(lang === 'en' ? 'ar' : 'en');
@@ -22,13 +22,18 @@ export const LanguageSwitcher: React.FC = () => {
                 px: 2,
                 textTransform: 'none',
                 minWidth: '120px',
+                direction: isRTL ? 'rtl' : 'ltr',
+                '& .MuiButton-startIcon': {
+                    marginRight: isRTL ? 0 : 8,
+                    marginLeft: isRTL ? 8 : 0
+                },
                 '&:hover': {
                     bgcolor: 'rgba(198,167,94,0.1)',
                     borderColor: '#DAA520'
                 }
             }}
         >
-            {lang === 'en' ? 'AR' : 'English'}
+            {lang === 'en' ? 'AR' : 'EN'}
         </Button>
     );
 };
