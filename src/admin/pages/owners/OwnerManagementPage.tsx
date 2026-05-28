@@ -10,7 +10,7 @@ import {
     Building2, Layout, Wallet, History
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, doc, updateDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -40,16 +40,24 @@ export default function OwnerManagementPage() {
 
   useEffect(() => {
     const q = query(
-        collection(db, 'users'), 
-        where('role', 'in', ['owner', 'OWNER']),
-        orderBy('createdAt', 'desc')
+        collection(db, 'users'),
+        where('role', 'in', ['owner', 'OWNER'])
     );
-    
+
+    const getMillis = (value: any) => {
+      if (!value) return 0;
+      if (typeof value.toMillis === 'function') return value.toMillis();
+      if (typeof value.toDate === 'function') return value.toDate().getTime();
+      const parsed = new Date(value).getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOwners = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Owner[];
+      fetchedOwners.sort((a: any, b: any) => getMillis(b.updatedAt || b.createdAt || b.approvedAt) - getMillis(a.updatedAt || a.createdAt || a.approvedAt));
       setOwners(fetchedOwners);
       setLoading(false);
     }, (error) => {
@@ -154,8 +162,8 @@ export default function OwnerManagementPage() {
                         {owner.displayName?.charAt(0) || 'O'}
                     </Avatar>
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{owner.displayName}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{owner.email}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#FFF' }}>{owner.displayName || (owner as any).fullName || (owner as any).name || 'Owner'}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{owner.email}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', fontWeight: 800 }}>{(owner as any).activeContractId ? 'CONTRACT READY' : 'OWNER RECORD'}</Typography>
                     </Box>
                   </Stack>
                 </TableCell>

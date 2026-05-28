@@ -41,6 +41,7 @@ const Navigation = () => {
 
     const managementMenu = [
         { text: tx('nav.owners', 'Owner Registry'), icon: <PeopleIcon />, path: '/admin/owners' },
+        { text: 'Property Passport Registry', icon: <Building2 size={20} />, path: '/admin/properties/passport', color: binThemeTokens.gold },
         { text: tx('nav.tenants', 'Tenant Registry'), icon: <PeopleIcon />, path: '/admin/tenants' },
         { text: tx('nav.technicians', 'Technician Corps'), icon: <Users size={20} />, path: '/admin/technicians' },
         { text: "Duty Command Center", icon: <Activity size={20} />, path: '/admin/duty-command', color: binThemeTokens.gold },

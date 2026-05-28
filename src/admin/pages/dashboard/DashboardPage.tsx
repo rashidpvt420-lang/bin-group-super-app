@@ -170,8 +170,8 @@ export default function DashboardPage() {
         { label: 'Pending Owner Verification', value: pendingOwners.length, icon: <Shield size={18} />, color: binThemeTokens.gold, path: '/admin/vault' },
         { label: 'Payment Verifications', value: pendingPaymentCount, icon: <CreditCard size={18} />, color: '#10b981', path: '/admin/vault' },
         { label: 'Document Reviews', value: pendingDocumentCount, icon: <FileText size={18} />, color: '#3b82f6', path: '/admin/vault' },
-        { label: 'Active Properties', value: activeProperties, icon: <Building2 size={18} />, color: '#8b5cf6', path: '/admin/properties' },
-        { label: 'Contracts', value: activeContracts, icon: <ClipboardList size={18} />, color: '#10b981', path: '/admin/contracts' },
+        { label: 'Active Properties', value: activeProperties, icon: <Building2 size={18} />, color: '#8b5cf6', path: '/admin/properties/passport' },
+        { label: 'Contracts', value: activeContracts, icon: <ClipboardList size={18} />, color: '#10b981', path: '/admin/document-vault' },
         { label: 'Open Missions', value: openTickets, icon: <Wrench size={18} />, color: '#f59e0b', path: '/admin/tickets' },
         { label: 'Tenants', value: activeTenants, icon: <Users size={18} />, color: '#10b981', path: '/admin/tenants' },
         { label: 'Admin Status', value: 'ONLINE', icon: <CheckCircle2 size={18} />, color: '#10b981' }
@@ -183,12 +183,12 @@ export default function DashboardPage() {
         { label: 'Add Tenant', icon: <UserPlus size={18} />, path: '/admin/tenants', color: '#10b981' },
         { label: 'Bulk Import', icon: <Upload size={18} />, path: '/admin/bulk-import', color: '#8b5cf6' },
         { label: 'Add Tech', icon: <Wrench size={18} />, path: '/admin/technicians', color: '#f97316' },
-        { label: 'Create Contract', icon: <FileText size={18} />, path: '/admin/contracts', color: binThemeTokens.gold },
+        { label: 'Create Contract', icon: <FileText size={18} />, path: '/admin/document-vault', color: binThemeTokens.gold },
         { label: 'Verify Payment', icon: <CreditCard size={18} />, path: '/admin/vault', color: '#10b981' },
         { label: 'Owner Verification', icon: <Shield size={18} />, path: '/admin/vault', color: binThemeTokens.gold },
-        { label: 'Property Passport', icon: <ClipboardList size={18} />, path: '/admin/property-passports', color: '#3b82f6' },
+        { label: 'Property Passport', icon: <ClipboardList size={18} />, path: '/admin/properties/passport', color: '#3b82f6' },
         { label: 'Pricing Matrix', icon: <Zap size={18} />, path: '/admin/pricing', color: '#f59e0b' },
-        { label: 'Owner Registry', icon: <Users size={18} />, path: '/admin/vault', color: '#8b5cf6' },
+        { label: 'Owner Registry', icon: <Users size={18} />, path: '/admin/owners', color: '#8b5cf6' },
         { label: 'Permissions', icon: <Lock size={18} />, path: '/admin/permissions', color: '#ef4444' }
     ];
 
