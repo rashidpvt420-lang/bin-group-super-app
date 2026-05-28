@@ -50,6 +50,8 @@ const BulkImporter: React.FC = () => {
     const startImport = async () => {
         if (!file) return;
         setUploading(true);
+        setError(null);
+        setProgress(0);
         setLogs([t('admin.reading_file')]);
 
         try {
@@ -57,7 +59,8 @@ const BulkImporter: React.FC = () => {
             const rows = parseCSV(text);
             setLogs(prev => [...prev, t('admin.found_records', { count: rows.length })]);
 
-            const BATCH_SIZE = 500;
+            // Each CSV row can create up to 4 Firestore writes. Keep chunks well below Firestore's 500-write batch limit.
+            const BATCH_SIZE = 50;
             let processed = 0;
 
             for (let i = 0; i < rows.length; i += BATCH_SIZE) {
