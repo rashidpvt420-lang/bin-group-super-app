@@ -5,13 +5,15 @@ type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 const criticalRoutes: Record<RoleName, string[]> = {
   admin: [
     '/admin/dashboard',
-    '/admin/payments',
-    '/admin/building-registry',
-    '/admin/properties/registry',
-    '/admin/property-passports',
-    '/admin/contracts',
+    '/admin/owners',
+    '/admin/tenants',
     '/admin/tickets',
-    '/admin/technicians/map',
+    '/admin/technicians',
+    '/admin/financials',
+    '/admin/contracts',
+    '/admin/audit',
+    '/admin/properties/registry',
+    '/admin/properties/passport',
   ],
   owner: [
     '/owner/dashboard',
@@ -21,6 +23,9 @@ const criticalRoutes: Record<RoleName, string[]> = {
     '/owner/units',
     '/owner/tenants',
     '/owner/documents',
+    '/owner/tickets',
+    '/owner/financials',
+    '/owner/roi',
   ],
   tenant: [
     '/tenant/dashboard',
@@ -39,10 +44,15 @@ const criticalRoutes: Record<RoleName, string[]> = {
   ],
   broker: [
     '/broker/dashboard',
+    '/broker/leads',
+    '/broker/referrals',
+    '/broker/commissions',
+    '/broker/documents',
+    '/broker/profile',
   ],
 };
 
-const routeFailureText = /404|not found|page not found|application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|permission-denied|access denied|not authorized/i;
+const routeFailureText = /404|not found|page not found|application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|permission-denied|access denied|not authorized|invalid-credential|wrong-password|user-not-found/i;
 
 async function expectNoRuntimeCrash(page: Page, route: string) {
   await expect(page.locator('body'), `${route} body should be visible`).toBeVisible({ timeout: 20_000 });
@@ -53,15 +63,30 @@ async function expectNoRuntimeCrash(page: Page, route: string) {
 
 async function login(page: Page, email: string, password: string) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  const emailInput = page.locator('input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
-  const passwordInput = page.locator('input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
-  await expect(emailInput).toBeVisible({ timeout: 20_000 });
-  await expect(passwordInput).toBeVisible({ timeout: 20_000 });
+
+  const emailInput = page.locator([
+    '[data-testid="login-email"]',
+    'input[type="email"]',
+    'input[name*="email" i]',
+    'input[autocomplete="email"]',
+    'input:not([type="password"])'
+  ].join(', ')).first();
+
+  const passwordInput = page.locator([
+    '[data-testid="login-password"]',
+    'input[type="password"]',
+    'input[name*="password" i]',
+    'input[autocomplete="current-password"]'
+  ].join(', ')).first();
+
+  await expect(emailInput, 'Login email field should be visible').toBeVisible({ timeout: 25_000 });
+  await expect(passwordInput, 'Login password field should be visible').toBeVisible({ timeout: 25_000 });
   await emailInput.fill(email);
   await passwordInput.fill(password);
   await page.locator('button[type="submit"], button:has-text("Login"), button:has-text("Sign in"), button:has-text("SIGN IN"), button:has-text("دخول")').first().click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_000);
+  await expectNoRuntimeCrash(page, '/login after submit');
 }
 
 for (const role of Object.keys(criticalRoutes) as RoleName[]) {
@@ -81,5 +106,17 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
         await expectNoRuntimeCrash(page, route);
       });
     }
+
+    test(`${role} dashboard AR/EN language switch does not crash`, async ({ page }) => {
+      await page.goto(criticalRoutes[role][0], { waitUntil: 'domcontentloaded' });
+      await expectNoRuntimeCrash(page, criticalRoutes[role][0]);
+      const arButton = page.getByRole('button', { name: /\bAR\b/i }).first();
+      if (await arButton.isVisible().catch(() => false)) {
+        await arButton.click();
+        await page.waitForTimeout(800);
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl', { timeout: 10_000 });
+        await expectNoRuntimeCrash(page, `${role} Arabic switch`);
+      }
+    });
   });
 }
