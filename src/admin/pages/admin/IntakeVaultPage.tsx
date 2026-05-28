@@ -368,7 +368,7 @@ export const IntakeVaultPage: React.FC = () => {
       `Selected Payment Method: ${method}`,
       `Intake Reference: ${normalized.id}`,
       ``,
-      `After payment, please reply with the cheque/bank transfer/payment proof so BIN GROUP Admin can verify and unlock the next contract activation step.`,
+      `After payment, reply directly to this email with the cheque/bank transfer/payment proof. Admin receives replies at ceo@bin-groups.com. Do not send payment proof to support@bin-groups.com until that mailbox is activated.`,
       ``,
       `BIN GROUP - Made in UAE 🇦🇪`
     ].join('\n');

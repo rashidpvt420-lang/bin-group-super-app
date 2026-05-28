@@ -210,7 +210,23 @@ export const adminSendOwnerOnboardingMessage = onCall({ cors: true }, async (req
   const batch = db.batch();
   batch.set(db.collection("messages").doc(), { intakeId, ownerId, ownerEmail: owner.email, ownerMobile: owner.mobile, fromRole: "admin", toRole: "owner", subject, body, status: "SENT", channel: "APP_AND_EMAIL", createdBy: request.auth?.uid || "admin", createdAt: ts() });
   batch.set(db.collection("notifications").doc(), { userId: ownerId, toRole: "owner", type: "ADMIN_MESSAGE", title: subject, body, read: false, createdAt: ts() });
-  if (owner.email) batch.set(db.collection("mail").doc(), { to: owner.email, message: { subject, html: `<p>Dear ${owner.name},</p><p>${body}</p>` }, metadata: { type: "admin_owner_message", intakeId, ownerId }, createdAt: ts() });
+  if (owner.email) batch.set(db.collection("mail").doc(), {
+    to: owner.email,
+    message: {
+      from: "BIN GROUP <ceo@bin-groups.com>",
+      replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+      subject,
+      html: `<p>Dear ${owner.name},</p>
+<p>${body.replace(/\n/g, "<br/>")}</p>
+<hr/>
+<p><b>How to respond:</b></p>
+<p>Reply directly to this email. Your reply must go to <b>ceo@bin-groups.com</b>.</p>
+<p>Please do not send replies to support@bin-groups.com until that mailbox is activated.</p>
+<p>BIN GROUP - Made in UAE 🇦🇪</p>`
+    },
+    metadata: { type: "admin_owner_message", intakeId, ownerId, replyInbox: "ceo@bin-groups.com" },
+    createdAt: ts()
+  });
   batch.set(db.collection("audit_logs").doc(), { actorId: request.auth?.uid || "admin", actorRole: "admin", action: "ADMIN_CONTACT_OWNER", targetType: "intake_submissions", targetId: intakeId, createdAt: ts() });
   await batch.commit();
   return { status: "QUEUED", ownerId, ownerEmail: owner.email };

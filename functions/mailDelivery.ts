@@ -66,7 +66,8 @@ async function deliverMail(mailId: string, data: any) {
   const subject = asText(message.subject || data?.subject, "BIN GROUP notification");
   const html = asText(message.html || data?.html || message.text || data?.text);
   const text = asText(message.text || data?.text || stripHtml(html));
-  const from = asText(message.from || data?.from || process.env.MAIL_FROM || process.env.SMTP_FROM, "BIN GROUP <c60@bin-groups.com>");
+  const from = asText(message.from || data?.from || process.env.MAIL_FROM || process.env.SMTP_FROM, "BIN GROUP <ceo@bin-groups.com>");
+  const replyTo = asText(message.replyTo || message.reply_to || data?.replyTo || data?.reply_to || process.env.MAIL_REPLY_TO || process.env.SMTP_REPLY_TO, "BIN GROUP Admin <ceo@bin-groups.com>");
 
   if (!to?.length) {
     await ref.set({ delivery: { state: "ERROR", error: "Missing recipient email", attemptedAt: admin.firestore.FieldValue.serverTimestamp(), provider: "cloud_function_smtp" } }, { merge: true });
@@ -79,7 +80,7 @@ async function deliverMail(mailId: string, data: any) {
   await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
 
   try {
-    const info = await createTransporter().sendMail({ from, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
+    const info = await createTransporter().sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
     await ref.set({
       delivery: {
         state: "SUCCESS",
@@ -87,6 +88,8 @@ async function deliverMail(mailId: string, data: any) {
         messageId: info.messageId || "",
         accepted: info.accepted || [],
         rejected: info.rejected || [],
+        from,
+        replyTo,
         deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
