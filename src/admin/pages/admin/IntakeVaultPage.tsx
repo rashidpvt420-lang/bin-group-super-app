@@ -134,14 +134,31 @@ const readPayment = (raw: IntakeSubmission) => {
   const payment = raw.payment || pending.payment || {};
   const pricing = raw.pricing || pending.pricing || {};
   const summary = raw.portfolioSummary || pending.portfolioSummary || {};
-  const annualValue = Number(pricing.annualContractValue || summary.estimatedACV || payment.annualValue || 0);
-  const mobilization = Number(payment.amount || pricing.mobilizationAmount || Math.round(annualValue * 0.15));
+
+  const annualValue = Number(
+    raw.annualContractValue ||
+    pricing.annualContractValue ||
+    summary.estimatedACV ||
+    payment.annualValue ||
+    0
+  );
+
+  const mobilization = Number(
+    raw.paymentAmount ||
+    raw.activationDeposit ||
+    payment.amount ||
+    pricing.mobilizationAmount ||
+    Math.round(annualValue * 0.15)
+  );
+
+  const submittedStatus = raw.paymentSubmitted ? 'PENDING' : 'NOT_SUBMITTED';
+
   return {
     ...payment,
-    method: String(payment.method || raw.payment?.method || 'MANUAL').toUpperCase(),
+    method: String(payment.method || raw.paymentMethod || raw.payment?.method || 'MANUAL').toUpperCase(),
     amount: Number.isFinite(mobilization) ? mobilization : 0,
     annualValue: Number.isFinite(annualValue) ? annualValue : 0,
-    status: String(raw.paymentStatus || payment.status || 'PENDING').toUpperCase(),
+    status: String(raw.paymentStatus || payment.status || submittedStatus).toUpperCase(),
   };
 };
 
@@ -178,7 +195,7 @@ const normalizeIntake = (raw: IntakeSubmission): IntakeSubmission => {
     paymentVerified: Boolean(raw.paymentVerified || raw.paymentStatus === 'VERIFIED' || raw.paymentStatus === 'RECONCILED' || payment.status === 'VERIFIED'),
     documentsVerified: Boolean(raw.documentsVerified),
     locationVerified: Boolean(raw.locationVerified),
-    adminReviewState: raw.adminReviewState || pending.adminReviewState || 'AWAITING_VERIFICATION',
+    adminReviewState: raw.paymentSubmitted && ['PENDING_OWNER_DETAILS', '', undefined].includes(raw.adminReviewState as any) ? 'AWAITING_VERIFICATION' : (raw.adminReviewState || pending.adminReviewState || 'AWAITING_VERIFICATION'),
   };
 };
 
