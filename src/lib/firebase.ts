@@ -14,6 +14,8 @@ import {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
   type Auth,
   type User,
 } from 'firebase/auth';
@@ -115,6 +117,13 @@ if (typeof window !== 'undefined' && appCheckExplicitlyEnabled) {
 export const appCheck = appCheckInstance;
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
+
+if (typeof window !== 'undefined') {
+  void setPersistence(auth, browserLocalPersistence).catch((error) => {
+    console.warn('[Firebase] Auth persistence setup failed. Continuing with SDK default persistence:', error);
+  });
+}
+
 export const storage: FirebaseStorage = getStorage(app);
 export const FUNCTIONS_REGION = 'europe-west3';
 export const functions: Functions = getFunctions(app, FUNCTIONS_REGION);
@@ -154,6 +163,8 @@ export {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
   // Firestore
   collection,
   collectionGroup,
