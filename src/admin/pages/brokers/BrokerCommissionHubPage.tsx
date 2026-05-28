@@ -8,6 +8,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 export default function BrokerCommissionHubPage() {
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [busyId, setBusyId] = useState<string | null>(null);
     const [stats, setStats] = useState({
         pending: 0,
         approved: 0,
@@ -24,9 +25,10 @@ export default function BrokerCommissionHubPage() {
 
                 let p = 0; let a = 0; let paid = 0;
                 data.forEach((c: any) => {
-                    if (c.status === 'PENDING') p += c.amount;
-                    else if (c.status === 'APPROVED') a += c.amount;
-                    else if (c.status === 'PAID') paid += c.amount;
+                    const amount = Number(c.amount || 0);
+                    if (c.status === 'PENDING') p += amount;
+                    else if (c.status === 'APPROVED') a += amount;
+                    else if (c.status === 'PAID') paid += amount;
                 });
                 setStats({ pending: p, approved: a, paid: paid });
             } catch (err) {
@@ -38,16 +40,57 @@ export default function BrokerCommissionHubPage() {
         fetchCommissions();
     }, []);
 
+    const recalcStats = (data: any[]) => {
+        let p = 0; let a = 0; let paid = 0;
+        data.forEach((c: any) => {
+            const amount = Number(c.amount || 0);
+            if (c.status === 'PENDING') p += amount;
+            else if (c.status === 'APPROVED') a += amount;
+            else if (c.status === 'PAID') paid += amount;
+        });
+        setStats({ pending: p, approved: a, paid });
+    };
+
     const handleApprove = async (id: string) => {
+        setBusyId(id);
         try {
             await updateDoc(doc(db, 'broker_commissions', id), {
                 status: 'APPROVED',
                 approvedAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
-            setCommissions(prev => prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c));
+            setCommissions(prev => {
+                const next = prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c);
+                recalcStats(next);
+                return next;
+            });
         } catch (e) {
             console.warn('[COMMISSION_HUB] Failed to approve commission.', e);
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+
+    const handleMarkPaid = async (id: string) => {
+        setBusyId(id);
+        try {
+            const paidDate = new Date().toISOString();
+            await updateDoc(doc(db, 'broker_commissions', id), {
+                status: 'PAID',
+                paidDate,
+                paidAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            setCommissions(prev => {
+                const next = prev.map(c => c.id === id ? { ...c, status: 'PAID', paidDate } : c);
+                recalcStats(next);
+                return next;
+            });
+        } catch (e) {
+            console.warn('[COMMISSION_HUB] Failed to mark commission as paid.', e);
+        } finally {
+            setBusyId(null);
         }
     };
 
@@ -117,14 +160,17 @@ export default function BrokerCommissionHubPage() {
                                         />
                                     </TableCell>
                                     <TableCell sx={{ fontWeight: 900, color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="right">
-                                        {c.amount.toLocaleString()}
+                                        {Number(c.amount || 0).toLocaleString()}
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="center">
                                         {c.status === 'PENDING' && (
-                                            <Button size="small" onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>APPROVE</Button>
+                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>APPROVE</Button>
                                         )}
                                         {c.status === 'APPROVED' && (
-                                            <Button size="small" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>MARK PAID</Button>
+                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleMarkPaid(c.id)} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>MARK PAID</Button>
+                                        )}
+                                        {c.status === 'PAID' && (
+                                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>PAID</Typography>
                                         )}
                                     </TableCell>
                                 </TableRow>
