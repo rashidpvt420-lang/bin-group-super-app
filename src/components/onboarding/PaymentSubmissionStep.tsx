@@ -384,10 +384,10 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         </Box>
                     </Box>
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                        {readable(t('onboarding.payment_success_title'), 'Payment Submitted')}
+                        'Payment Submitted Successfully'
                     </Typography>
                     <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>
-                        {readable(t('onboarding.payment_success_desc'), 'Your payment and documents have been submitted successfully.')}
+                        'Your payment proof and documents were uploaded successfully. BIN GROUP will review and activate your owner dashboard after admin verification.'
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
                         Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId || ownerAccount?.uid || onboardingSessionId}</Box>
