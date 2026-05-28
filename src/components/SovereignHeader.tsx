@@ -10,14 +10,16 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { auth, db, collection, query, where, onSnapshot } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const BinGroupHeader: React.FC = () => {
     const { lang, setLang, t } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
     const { user, role } = useRole();
     const navigate = useNavigate();
+    const location = useLocation();
     const [unreadCount, setUnreadCount] = useState(0);
+    const isCompanyRoute = location.pathname === '/' || location.pathname === '/company';
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -32,6 +34,13 @@ const BinGroupHeader: React.FC = () => {
         navigate(`/login?intendedRole=${encodeURIComponent(roleId)}`);
     };
 
+    const goDashboard = () => {
+        const r = (role || '').toLowerCase();
+        if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
+        else if (r === 'owner') navigate('/owner/dashboard');
+        else navigate(`/${r}/dashboard`);
+    };
+
     return (
         <AppBar position="sticky" sx={{
             bgcolor: mode === 'dark' ? 'rgba(11,11,12,0.85)' : 'rgba(255,255,255,0.85)',
@@ -42,7 +51,7 @@ const BinGroupHeader: React.FC = () => {
             zIndex: 1500
         }}>
             <Toolbar sx={{ justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/')}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/company')}>
                     <Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1 }} onError={(e: any) => e.target.style.display = 'none'} />
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
                         BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
@@ -54,23 +63,24 @@ const BinGroupHeader: React.FC = () => {
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
                     <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 1 }}>
-                        {!user ? (
-                            ['owner', 'tenant', 'technician', 'broker'].map((item) => (
-                                <Button key={item} onClick={() => openRoleLogin(item)} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'capitalize', fontSize: '0.85rem' }}>
-                                    {t(`gateway.role.${item}`)}
+                        {!user || isCompanyRoute ? (
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Button onClick={() => navigate('/company')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                    Company Profile
                                 </Button>
-                            ))
+                                <Button onClick={() => navigate('/onboarding')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                    Start Onboarding
+                                </Button>
+                                <Button onClick={() => navigate('/ai-design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                    AI Studio
+                                </Button>
+                            </Stack>
                         ) : (
                             <Stack direction="row" spacing={1} alignItems="center">
-                                <Button onClick={() => {
-                                    const r = (role || '').toLowerCase();
-                                    if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
-                                    else if (r === 'owner') navigate('/owner/dashboard');
-                                    else navigate(`/${r}/dashboard`);
-                                }} sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                <Button onClick={goDashboard} sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.dashboard')}
                                 </Button>
-                                <Button onClick={() => navigate('/admin/identity')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                <Button onClick={() => navigate('/company')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.company_profile')}
                                 </Button>
                                 <Button onClick={() => navigate('/design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
@@ -84,13 +94,13 @@ const BinGroupHeader: React.FC = () => {
                         {lang === 'en' ? 'AR' : 'EN'}
                     </Button>
 
-                    {role && (
+                    {role && !isCompanyRoute && (
                         <Box sx={{ px: 1.5, py: 0.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.75rem', fontWeight: 900, display: { xs: 'none', md: 'block' } }}>
                             {role.toUpperCase()}
                         </Box>
                     )}
 
-                    {user && (
+                    {user && !isCompanyRoute && (
                         <IconButton onClick={() => navigate('/notifications')} sx={{ color: binThemeTokens.gold }}>
                             <Badge badgeContent={unreadCount} color="error" sx={{ '& .MuiBadge-badge': { fontWeight: 900, fontSize: '0.65rem' } }}>
                                 <NotificationsIcon />
@@ -113,8 +123,8 @@ const BinGroupHeader: React.FC = () => {
                         {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
                     </IconButton>
 
-                    {user && (
-                        <Button variant="contained" size="small" onClick={() => signOut(auth).finally(() => { window.location.href = '/'; })} startIcon={<LogoutIcon />} sx={{ bgcolor: '#ef4444', '&:hover': { bgcolor: '#dc2626' }, color: '#fff', fontWeight: 900, fontSize: '0.75rem', display: { xs: 'none', sm: 'flex' } }}>
+                    {user && !isCompanyRoute && (
+                        <Button variant="contained" size="small" onClick={() => signOut(auth).finally(() => { window.location.href = '/company'; })} startIcon={<LogoutIcon />} sx={{ bgcolor: '#ef4444', '&:hover': { bgcolor: '#dc2626' }, color: '#fff', fontWeight: 900, fontSize: '0.75rem', display: { xs: 'none', sm: 'flex' } }}>
                             {t('nav.logout')}
                         </Button>
                     )}
