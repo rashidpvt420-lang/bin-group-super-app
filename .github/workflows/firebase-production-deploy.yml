@@ -47,9 +47,6 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Harden Firestore rules for production deploy
-        run: node scripts/harden-firestore-rules.mjs
-
       - name: Production stability guard
         run: npm run test:stability
 
@@ -70,11 +67,22 @@ jobs:
       - name: Build main public app
         run: npm run build
 
-      - name: Build admin panel
+      - name: Deploy primary Firebase Hosting on main pushes
+        if: github.event_name == 'push'
+        run: npx firebase deploy --only hosting:bin-group-57c60 --project "${GCP_PROJECT_ID}" --non-interactive --force
+
+      - name: Harden Firestore rules for full manual deploy
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/harden-firestore-rules.mjs
+
+      - name: Build admin panel for full manual deploy
+        if: github.event_name == 'workflow_dispatch'
         run: npm run build --workspace=home-os-admin-panel
 
-      - name: Build Firebase Functions
+      - name: Build Firebase Functions for full manual deploy
+        if: github.event_name == 'workflow_dispatch'
         run: npm run build --workspace=functions
 
-      - name: Deploy Firebase Hosting, Functions, Firestore rules/indexes, and Storage rules
+      - name: Deploy full Firebase stack manually only
+        if: github.event_name == 'workflow_dispatch'
         run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
