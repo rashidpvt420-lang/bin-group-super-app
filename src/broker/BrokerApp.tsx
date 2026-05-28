@@ -15,7 +15,7 @@ import {
   alpha,
 } from '@mui/material';
 import { ArrowLeft, Briefcase, Building, FileUp, Globe, Home, Paintbrush, Users, Wallet } from 'lucide-react';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { auth } from '../lib/firebase';
@@ -32,9 +32,10 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useRole();
-  const { toggleLanguage, isRTL, language, tx } = useLanguage();
+  const { setLang, isRTL, lang, tx } = useLanguage();
 
-  const label = (key: string, en: string, ar: string) => language === 'ar' ? ar : tx(key, en);
+  const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
+  const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
 
   const handleLogout = () => {
     auth.signOut();
@@ -73,7 +74,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             </IconButton>
             <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 3, px: 1.5 }}>
               <Globe size={18} />
-              <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950 }}>{language === 'en' ? 'AR' : 'EN'}</Typography>
+              <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950 }}>{lang === 'en' ? 'AR' : 'EN'}</Typography>
             </IconButton>
             <NotificationBell />
             <Box onClick={() => navigate('/broker/profile')} sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1 }}>
