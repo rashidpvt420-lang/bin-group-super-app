@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="BIN_BUILD_ID" content="2026-05-08-STABILITY-003" />
-    <!-- CACHE BUST MARKER 2026-05-08-STABILITY-003 -->
+    <meta name="BIN_BUILD_ID" content="2026-05-08-STABILITY-004" />
+    <!-- CACHE BUST MARKER 2026-05-08-STABILITY-004 -->
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>BIN GROUP | UAE Property Operations OS</title>
@@ -24,6 +24,24 @@
     <meta property="og:url" content="https://bin-groups.com" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      html, body, #root { min-height: 100%; }
+      * { box-sizing: border-box; }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image: url('/logo.png');
+        background-repeat: no-repeat;
+        background-position: center center;
+        background-size: min(42vw, 520px);
+        opacity: 0.045;
+        filter: grayscale(1) sepia(1) saturate(1.6);
+      }
+      #root { position: relative; z-index: 1; }
+    </style>
   </head>
   <body style="background: #000; margin: 0; padding: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; font-family: system-ui, -apple-system, sans-serif;">
     <script>
@@ -42,8 +60,6 @@
       <p style="color: rgba(198,167,94,0.4); margin-top: 15px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Establishing Production Connection...</p>
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
-        html, body, #root { min-height: 100%; }
-        * { box-sizing: border-box; }
       </style>
     </div>
 
