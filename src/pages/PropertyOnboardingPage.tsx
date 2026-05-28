@@ -37,12 +37,12 @@ const VISIBLE_STAGE_COUNT = 6;
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
 
 const visibleStageForInternalStep = (internalStep: number) => {
-  if (internalStep <= 3) return 1; // Company + Asset + Location
-  if (internalStep <= 4) return 2; // Systems + Add-ons
-  if (internalStep <= 5) return 3; // Service Plan / Quote
-  if (internalStep <= 7) return 4; // Account + Documents
-  if (internalStep <= 9) return 5; // Review + Contract
-  return 6; // Payment Options + Submission
+  if (internalStep <= 3) return 1;
+  if (internalStep <= 4) return 2;
+  if (internalStep <= 5) return 3;
+  if (internalStep <= 7) return 4;
+  if (internalStep <= 9) return 5;
+  return 6;
 };
 
 const visibleStageProgress = (internalStep: number) => {
@@ -61,19 +61,19 @@ const PropertyOnboardingPage = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     const visibleStages = [
-        readable(t('onboarding.stage_owner_property'), 'Owner & Property'),
-        readable(t('onboarding.stage_systems'), 'Property Systems'),
-        readable(t('onboarding.stage_plan_price'), 'Plan & Price'),
-        readable(t('onboarding.stage_documents_account'), 'Documents & Account'),
-        readable(t('onboarding.stage_contract'), 'Review & Contract'),
-        readable(t('onboarding.stage_payment'), 'Payment & Submission'),
+        'Owner Property',
+        'Systems',
+        'Plan Price',
+        'Documents Account',
+        'Contract',
+        'Payment',
     ];
 
     const internalStepLabels = [
         readable(t('onboarding.company'), 'Company'),
         readable(t('onboarding.asset'), 'Asset'),
         readable(t('onboarding.location'), 'Location'),
-        readable(t('onboarding.systems'), 'Systems + Add-ons'),
+        readable(t('onboarding.systems'), 'Systems Add-ons'),
         readable(t('onboarding.service_plan'), 'Service Plan'),
         readable(t('onboarding.documents'), 'Documents'),
         readable(t('onboarding.verification'), 'Account'),
@@ -130,14 +130,10 @@ const PropertyOnboardingPage = () => {
 
             <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 1, md: 2 }, px: { xs: 1.5, sm: 3 } }}>
                 <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, textAlign: 'center', mb: 0.75 }}>
-                    {isRTL
-                        ? `المرحلة ${visibleStage} من ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`
-                        : `Stage ${visibleStage} of ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`}
+                    {`Stage ${visibleStage} of ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`}
                 </Typography>
                 <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontWeight: 800, textAlign: 'center', mb: { xs: 1, md: 2 } }}>
-                    {isRTL
-                        ? `الجزء ${currentStageProgress}: ${currentInternalLabel}`
-                        : `Part ${currentStageProgress}: ${currentInternalLabel}`}
+                    {`Part ${currentStageProgress}: ${currentInternalLabel}`}
                 </Typography>
                 <Stepper
                     activeStep={activeVisibleStageIndex}
