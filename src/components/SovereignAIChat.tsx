@@ -4,7 +4,7 @@ import {
   Drawer, SwipeableDrawer, useMediaQuery, useTheme, Button,
   Stack, Avatar, Chip, alpha, CircularProgress, Fab
 } from '@mui/material';
-import { Send, X, MessageSquare, ShieldCheck, Sparkles, ChevronRight, User, Bot, LayoutDashboard } from 'lucide-react';
+import { Send, X, ShieldCheck, Sparkles, User, Bot, Grip } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
 
@@ -19,6 +19,28 @@ interface Message {
   text: string;
   timestamp: Date;
 }
+
+const CHAT_POSITION_KEY = 'bin_sovereign_ai_chat_position_v1';
+const FAB_SIZE = 56;
+const EDGE_PADDING = 14;
+
+type FabPosition = { x: number; y: number };
+
+const getDefaultFabPosition = (): FabPosition => {
+  if (typeof window === 'undefined') return { x: 30, y: 30 };
+  return {
+    x: Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - 30),
+    y: Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - 30),
+  };
+};
+
+const clampFabPosition = (position: FabPosition): FabPosition => {
+  if (typeof window === 'undefined') return position;
+  return {
+    x: Math.min(Math.max(EDGE_PADDING, position.x), Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - EDGE_PADDING)),
+    y: Math.min(Math.max(EDGE_PADDING, position.y), Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - EDGE_PADDING)),
+  };
+};
 
 const roleData = {
   owner: {
@@ -76,11 +98,31 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fabPosition, setFabPosition] = useState<FabPosition>(getDefaultFabPosition);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ dragging: false, moved: false, pointerId: -1, offsetX: 0, offsetY: 0, startX: 0, startY: 0 });
 
   const activeRole = roleData[role] || roleData.unknown;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_POSITION_KEY);
+      if (saved) setFabPosition(clampFabPosition(JSON.parse(saved)));
+    } catch {
+      setFabPosition(getDefaultFabPosition());
+    }
+
+    const handleResize = () => setFabPosition((current) => {
+      const next = clampFabPosition(current);
+      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Persist session chat history
   useEffect(() => {
@@ -111,6 +153,46 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleFabPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    dragRef.current = {
+      dragging: true,
+      moved: false,
+      pointerId: event.pointerId,
+      offsetX: event.clientX - fabPosition.x,
+      offsetY: event.clientY - fabPosition.y,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleFabPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag.dragging || drag.pointerId !== event.pointerId) return;
+
+    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
+      drag.moved = true;
+    }
+
+    setFabPosition(clampFabPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY }));
+  };
+
+  const finishFabDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag.dragging || drag.pointerId !== event.pointerId) return;
+
+    dragRef.current = { ...drag, dragging: false };
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+
+    setFabPosition((current) => {
+      const next = clampFabPosition(current);
+      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    if (!drag.moved) setOpen(true);
+  };
 
   const generateSummary = (): string => {
     if (!pageContext) return "I cannot see any operational data on this page. Please navigate to a specific dashboard or module.";
@@ -314,20 +396,37 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   return (
     <>
       <Fab
-        onClick={() => setOpen(true)}
+        aria-label="Move or open Sovereign AI chat"
+        onPointerDown={handleFabPointerDown}
+        onPointerMove={handleFabPointerMove}
+        onPointerUp={finishFabDrag}
+        onPointerCancel={finishFabDrag}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
         sx={{
           position: 'fixed',
-          bottom: 30,
-          right: 30,
+          left: fabPosition.x,
+          top: fabPosition.y,
+          width: FAB_SIZE,
+          height: FAB_SIZE,
           bgcolor: binThemeTokens.gold,
           color: '#000',
           boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`,
-          '&:hover': { bgcolor: binThemeTokens.goldLight, transform: 'scale(1.05)' },
-          zIndex: 2000,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          '&:hover': { bgcolor: binThemeTokens.goldLight, transform: dragRef.current.dragging ? 'none' : 'scale(1.05)' },
+          zIndex: 2500,
+          touchAction: 'none',
+          cursor: dragRef.current.dragging ? 'grabbing' : 'grab',
+          transition: dragRef.current.dragging ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease'
         }}
       >
-        <Sparkles size={24} />
+        <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}>
+          <Sparkles size={22} />
+          <Grip size={11} />
+        </Stack>
       </Fab>
 
       {isMobile ? (
