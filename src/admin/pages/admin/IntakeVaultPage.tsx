@@ -182,6 +182,32 @@ const normalizeIntake = (raw: IntakeSubmission): IntakeSubmission => {
   };
 };
 
+const HIDDEN_INTAKE_STATUSES = new Set([
+  'CONVERTED_TO_OWNER',
+  'APPROVED',
+  'ACTIVE',
+  'REJECTED',
+  'ARCHIVED',
+  'CANCELLED'
+]);
+
+const HIDDEN_ADMIN_STATES = new Set([
+  'ARCHIVED_BY_ADMIN_CLEANUP',
+  'REJECTED_NEEDS_CLARIFICATION'
+]);
+
+const isVisibleOwnerVerification = (intake: IntakeSubmission) => {
+  const status = String(intake.status || '').trim().toUpperCase();
+  const adminState = String(intake.adminReviewState || '').trim().toUpperCase();
+
+  if (HIDDEN_INTAKE_STATUSES.has(status)) return false;
+  if (HIDDEN_ADMIN_STATES.has(adminState)) return false;
+  if (adminState.includes('ARCHIVED')) return false;
+
+  return true;
+};
+
+
 const extractLatLng = (property: any) => {
   const lat = asNumber(property?.geo?.lat ?? property?.geo?.latitude ?? property?.location?.lat ?? property?.location?.latitude ?? property?.coordinates?.lat ?? property?.coordinates?.latitude ?? property?.lat ?? property?.latitude);
   const lng = asNumber(property?.geo?.lng ?? property?.geo?.longitude ?? property?.location?.lng ?? property?.location?.longitude ?? property?.coordinates?.lng ?? property?.coordinates?.longitude ?? property?.lng ?? property?.longitude);
@@ -230,6 +256,7 @@ export const IntakeVaultPage: React.FC = () => {
     const unsubscribe = onSnapshot(collection(db, 'intake_submissions'), (snapshot) => {
       const docs = snapshot.docs
         .map((entry) => normalizeIntake({ id: entry.id, ...entry.data() } as IntakeSubmission))
+        .filter(isVisibleOwnerVerification)
         .sort((a, b) => getMillis(b.createdAt || b.updatedAt) - getMillis(a.createdAt || a.updatedAt));
       setSubmissions(docs);
       setLoading(false);
