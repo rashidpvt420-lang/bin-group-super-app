@@ -25,7 +25,6 @@ export interface QuoteInput {
   addOns?: string[];
   slaTier: 'standard' | 'premium' | 'elite';
   paymentPlan: 'annual' | 'quarterly' | 'monthly';
-  // Additional scaling parameters
   hasWaterTank?: boolean;
   hvacCount?: number;
   offices?: number;
@@ -50,35 +49,36 @@ export interface QuoteOutput {
 }
 
 export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }> = {
-  fire_safety: { label: 'Fire Safety AMC / Civil Defense Compliance', base: 7500, perFloor: 250 },
+  fire_safety: { label: 'Fire Safety AMC', base: 8000 },
   water_tank: { label: 'Water Tank Sterilization', base: 2200 },
-  elevator_amc: { label: 'Elevator / Lift AMC', base: 6000, perUnit: 1500 },
+  elevator_amc: { label: 'Elevator / Lift AMC', base: 7500 },
+  hvac_pm: { label: 'HVAC Preventive Maintenance', base: 6680 },
+  cleaning: { label: 'Cleaning Team / Deep Cleaning', base: 18450 },
+  security: { label: 'Security Services / CCTV', base: 36600 },
+  pest_control: { label: 'Pest Control', base: 2475 },
+  landscaping: { label: 'Landscaping & Irrigation', base: 12000 },
+  move_in_out_inspection: { label: 'Move-in / Move-out Inspection', base: 1200 },
+  mep_support: { label: 'MEP Support', base: 13500 },
+  waste_management: { label: 'Waste Management', base: 6600 },
+
   pool_care: { label: 'Swimming Pool Maintenance', base: 9600 },
-  facade_access: { label: 'Facade / BMU Access', base: 18000, perFloor: 250 },
-  'façade_access': { label: 'Facade / BMU Access', base: 18000, perFloor: 250 },
+  facade_access: { label: 'Facade / BMU Access', base: 18000 },
+  'façade_access': { label: 'Facade / BMU Access', base: 18000 },
   dist_cooling: { label: 'District Cooling Optimization', base: 12000 },
-  sira_renewal: { label: 'CCTV / SIRA / ADMCC Maintenance', base: 8500, perUnit: 75 },
+  sira_renewal: { label: 'CCTV / SIRA / ADMCC Maintenance', base: 8500 },
   grease_trap: { label: 'Grease Trap Service', base: 4800 },
   pca_audit: { label: 'PCA Asset Audit', base: 6500 },
   majlis_deep_care: { label: 'Majlis Deep Care', base: 12000 },
   majlis_landscaping: { label: 'Majlis Landscaping', base: 12000 },
   majlis_exterior_wash: { label: 'Majlis Exterior Wash', base: 4500 },
   majlis_standby: { label: 'Majlis Event Standby', base: 4500 },
-  security: { label: 'Security Services / CCTV Coordination', base: 36000, perUnit: 600 },
-  cleaning: { label: 'Cleaning Team / Deep Cleaning', base: 18000, perUnit: 450 },
-  manpower: { label: 'Manpower Support', base: 30000, perUnit: 500 },
-  concierge: { label: 'Concierge Desk', base: 42000, perUnit: 700 },
-  landscaping: { label: 'Landscaping & Irrigation', base: 12000 },
-  pest_control: { label: 'Pest Control', base: 2400, perUnit: 75 },
+  manpower: { label: 'Manpower Support', base: 30000 },
+  concierge: { label: 'Concierge Desk', base: 42000 },
   generator: { label: 'Generator Maintenance', base: 7500 },
-  cctv: { label: 'CCTV / Surveillance AMC', base: 8500, perUnit: 75 },
-  office_units: { label: 'Office Unit Support', base: 6500, perUnit: 300 },
-  retail_shops: { label: 'Retail Shops Support', base: 8500, perUnit: 350 },
-  parking_management: { label: 'Parking Management', base: 9000, perUnit: 50 },
-  waste_management: { label: 'Waste Management', base: 6500, perUnit: 100 },
-  mep_support: { label: 'MEP Support', base: 12500, perFloor: 500 },
-  hvac_pm: { label: 'HVAC Preventive Maintenance', base: 6500, perUnit: 180 },
-  move_in_out_inspection: { label: 'Move-in / Move-out Inspection', base: 1200 },
+  cctv: { label: 'CCTV / Surveillance AMC', base: 8500 },
+  office_units: { label: 'Office Unit Support', base: 6500 },
+  retail_shops: { label: 'Retail Shops Support', base: 8500 },
+  parking_management: { label: 'Parking Management', base: 9000 },
   fit_out_quotation: { label: 'Fit-out Quotation', base: 0 },
   emergency_priority: { label: 'Emergency Priority SOS', base: 2500 },
   technician_standby: { label: 'Technician Standby / Event Support', base: 7500 },
@@ -86,14 +86,14 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
   event_support: { label: 'Event Support', base: 7500 },
   cleaning_team: { label: 'Cleaning Team', base: 18000 },
   deep_cleaning: { label: 'Deep Cleaning', base: 4500 },
-  cctv_security: { label: 'CCTV / Security Systems', base: 8500, perUnit: 75 },
+  cctv_security: { label: 'CCTV / Security Systems', base: 8500 },
   inspection_move: { label: 'Move-in / Move-out Inspection', base: 1200 }
 };
 
 export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   const ids = new Set<string>();
   ids.add('fire_safety');
-  
+
   const isMosque = input.assetClassId === 'mosque_fm' || input.assetClassId === 'mosque';
   if (isMosque) {
     ids.add('water_tank');
@@ -109,7 +109,7 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if (input.propertyAge > 15) ids.add('pca_audit');
   if (input.hasPool) ids.add('pool_care');
   if (input.hasCentralHVAC || (input.hvacCount || 0) > 0) ids.add('hvac_pm');
-  
+
   return Array.from(ids);
 }
 
@@ -252,7 +252,6 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
     pricingExplanation.push(`Asset class '${input.assetClassId}' normalized to '${normalizedAssetClassId}'.`);
   }
 
-  // 1. Base Quote Calculation
   let baseRate = 0;
   if (input.contractType === 'FM_ONLY') baseRate = assetClass.maintenanceRange.min;
   else if (input.contractType === 'PM_ONLY') {
@@ -261,7 +260,6 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
   }
   else baseRate = assetClass.combinedRange.min;
 
-  // Apply Units/Sqft/Beds scaling if applicable
   let baseQuote = baseRate;
   if (assetClass.pricingUnit === 'sqft' && input.sqft) {
       baseQuote = baseRate * input.sqft;
@@ -274,20 +272,17 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
       pricingExplanation.push(`Base rate of ${baseRate} AED/bed applied to ${input.beds} beds.`);
   }
 
-  // Ensure Minimum Contract Value
   if (baseQuote < assetClass.minimumAnnualContract) {
       baseQuote = assetClass.minimumAnnualContract;
       pricingExplanation.push(`Minimum annual contract threshold of ${assetClass.minimumAnnualContract} AED applied.`);
   }
 
-  // 2. Zone Adjustment
   const zoneMultiplier = (UAE_PRICING_MATRIX_2026.zones as any)[input.zone].multiplier;
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
   if (zoneMultiplier !== 1) {
       pricingExplanation.push(`Strategic location premium applied for Zone ${input.zone} positioning.`);
   }
 
-  // 3. Emirate Adjustment
   const emirateEntry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find(e => e.label.toLowerCase().includes(input.emirate.toLowerCase()));
   const emirateMultiplier = emirateEntry ? parseFloat(emirateEntry.value) : 1.0;
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
@@ -295,7 +290,6 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
       pricingExplanation.push(`Regional operational cost adjustment for ${input.emirate} (${emirateMultiplier}x) applied.`);
   }
 
-  // 4. Age Factor
   let ageMultiplier = 1.0;
   if (input.propertyAge > 20) ageMultiplier = 1.25;
   else if (input.propertyAge > 10) ageMultiplier = 1.15;
@@ -305,7 +299,6 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
       pricingExplanation.push(`Structural maintenance adjustment applied for ${input.propertyAge}-year asset age.`);
   }
 
-  // 5. Complexity & Compliance Premiums
   let complexityPremiumPercent = 0;
   if ((input.floors || 0) >= 40) complexityPremiumPercent += 15;
   else if ((input.floors || 0) >= 15) complexityPremiumPercent += 8;
@@ -321,7 +314,7 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
 
   if (['hosp', 'data-ctr'].includes(normalizedAssetClassId)) {
       complexityPremiumPercent += 20;
-      riskFlags.push("Critical Systems Coverage Required");
+      riskFlags.push('Critical Systems Coverage Required');
   }
 
   const complexityPremium = emirateAdjustedQuote * (complexityPremiumPercent / 100);
@@ -329,23 +322,19 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
       pricingExplanation.push(`Institutional technical complexity and compliance premium included.`);
   }
 
-  // 6. SLA Tier
   let slaMultiplier = 1.0;
   if (input.slaTier === 'premium') slaMultiplier = 1.15;
   else if (input.slaTier === 'elite') slaMultiplier = 1.30;
-  
+
   if (slaMultiplier > 1) {
       pricingExplanation.push(`${input.slaTier.toUpperCase()} Performance Service Level Agreement applied.`);
   }
 
-  // 7. Add-ons
   const mergedAddOns = Array.from(new Set([...(input.addOns || []), ...resolveMandatoryAddOns(input)]));
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, input);
 
-  // 8. Calculations
   const subtotal = (emirateAdjustedQuote * ageMultiplier * slaMultiplier) + complexityPremium + addOnTotal;
 
-  // 9. Payment Plan Surcharge
   let paymentSurcharge = 0;
   if (input.paymentPlan === 'quarterly') paymentSurcharge = 0.03;
   else if (input.paymentPlan === 'monthly') paymentSurcharge = 0.06;
@@ -360,7 +349,7 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
     zoneAdjustedQuote,
     emirateAdjustedQuote,
     complexityPremium,
-    compliancePremium: 0, // Integrated in complexity for now
+    compliancePremium: 0,
     addOnTotal,
     discount: 0,
     annualTotal,
