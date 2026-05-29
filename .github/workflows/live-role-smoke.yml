@@ -73,6 +73,44 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npm run test:e2e:business
 
+      - name: Create launch proof manifest
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p launch-proof
+          {
+            echo "BIN GROUP launch proof manifest"
+            echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "ref=${GITHUB_REF}"
+            echo "sha=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_number=${GITHUB_RUN_NUMBER}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "event=${GITHUB_EVENT_NAME}"
+            echo "actor=${GITHUB_ACTOR}"
+            echo "base_url=${E2E_BASE_URL}"
+            echo "admin_secret_configured=$([[ -n \"${E2E_ADMIN_EMAIL}\" && -n \"${E2E_ADMIN_PASSWORD}\" ]] && echo true || echo false)"
+            echo "owner_secret_configured=$([[ -n \"${E2E_OWNER_EMAIL}\" && -n \"${E2E_OWNER_PASSWORD}\" ]] && echo true || echo false)"
+            echo "tenant_secret_configured=$([[ -n \"${E2E_TENANT_EMAIL}\" && -n \"${E2E_TENANT_PASSWORD}\" ]] && echo true || echo false)"
+            echo "technician_secret_configured=$([[ -n \"${E2E_TECHNICIAN_EMAIL}\" && -n \"${E2E_TECHNICIAN_PASSWORD}\" ]] && echo true || echo false)"
+            echo "broker_secret_configured=$([[ -n \"${E2E_BROKER_EMAIL}\" && -n \"${E2E_BROKER_PASSWORD}\" ]] && echo true || echo false)"
+            echo
+            echo "artifact_file_sha256="
+          } > launch-proof/manifest.txt
+          if [ -d test-results ]; then find test-results -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
+          if [ -d playwright-report ]; then find playwright-report -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
+          sha256sum launch-proof/manifest.txt > launch-proof/manifest.sha256
+          cat launch-proof/manifest.txt
+          cat launch-proof/manifest.sha256
+
+      - name: Upload launch proof manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-proof-manifest
+          path: launch-proof
+          if-no-files-found: error
 
       - name: Upload Playwright report
         if: always()
