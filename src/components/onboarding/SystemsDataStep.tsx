@@ -11,6 +11,8 @@ const aed = (value: number) => `AED ${value.toLocaleString()}`;
 
 const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm'];
 const ELEVATOR_ADDON_ID = 'elevator_amc';
+const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
+const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
 
 const isMajlisAsset = (property: any) => {
   const text = [
@@ -116,6 +118,21 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   ]);
   const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.localStorage.getItem(LEGACY_OPTIONAL_PRUNE_KEY) === 'done') return;
+
+    let changed = false;
+    LEGACY_OPTIONAL_ADDON_IDS.forEach((id) => {
+      if (storedSelectedIds.includes(id)) {
+        toggleAddOn(id);
+        changed = true;
+      }
+    });
+
+    window.localStorage.setItem(LEGACY_OPTIONAL_PRUNE_KEY, 'done');
+    if (changed) calculateSummary();
+  }, []);
 
   useEffect(() => {
     let changed = false;
