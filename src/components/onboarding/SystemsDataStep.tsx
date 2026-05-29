@@ -99,7 +99,7 @@ const addOns: AddOnItem[] = [
   { id: 'landscaping', name: 'Landscaping & Irrigation', price: 12000, desc: 'Garden maintenance, pruning and irrigation system checks.', reason: 'Essential for outdoor and garden spaces.' },
   { id: 'move_in_out_inspection', name: 'Move-in / Move-out Inspection', price: 1200, desc: 'Snagging and condition report before/after tenancy or event.', reason: 'Protects asset condition and lifecycle.' },
   { id: 'mep_support', name: 'MEP Support', price: 13500, desc: 'Integrated mechanical, electrical and plumbing preventive support.', reason: 'Core operational resilience layer.' },
-  { id: 'waste_management', name: 'Waste Management', defaultSelected: true, price: 6600, desc: 'Waste room checks and disposal schedule coordination.', reason: 'Protects hygiene and compliance.' },
+  { id: 'waste_management', name: 'Waste Management', required: true, defaultSelected: true, price: 6600, desc: 'Waste room checks and disposal schedule coordination.', reason: 'Protects hygiene and compliance.' },
 ];
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
@@ -135,8 +135,6 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     });
 
     if (!changed) calculateSummary();
-    // Keep selectedAddOns synchronized with property-type dependent add-ons.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requiredStackIds.join('|'), hiddenAddOnIds.join('|')]);
 
   const setSystem = (key: string, checked: boolean) => {
