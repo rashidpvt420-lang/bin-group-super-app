@@ -34,6 +34,7 @@ const primaryMenu = [
     { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
     { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
     { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
+    { text: 'BIN-GPT Engineer', icon: <Sparkles size={20} />, path: '/admin/bin-gpt-engineer', color: '#10b981' },
 ];
 
     const managementMenu = [

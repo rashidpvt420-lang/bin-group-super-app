@@ -22,7 +22,7 @@ import AssetProfileStep from '../components/onboarding/AssetProfileStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
-import AddOnsStep from '../components/onboarding/AddOnsStep';
+
 import ProofUploadStep from '../components/onboarding/ProofUploadStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
@@ -41,7 +41,7 @@ const PropertyOnboardingPage = () => {
         t('onboarding.location'),
         t('onboarding.systems'),
         t('onboarding.service_plan'),
-        t('onboarding.addons'),
+
         t('onboarding.documents'),
         t('onboarding.verification'),
         t('onboarding.review'),
@@ -56,12 +56,11 @@ const PropertyOnboardingPage = () => {
             case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
             case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
             case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <AddOnsStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
-            case 8: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
-            case 9: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
-            case 10: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
-            case 11: return <PaymentSubmissionStep onBack={prevStep} />;
+            case 6: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
+            case 9: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
+            case 10: return <PaymentSubmissionStep onBack={prevStep} />;
             default: return <CompanyProfileStep onNext={nextStep} />;
         }
     };

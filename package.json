@@ -23,12 +23,15 @@
     "test:e2e:public": "playwright install --with-deps chromium && E2E_BASE_URL=${E2E_BASE_URL:-https://bin-group-57c60.web.app} playwright test --grep \"production public smoke\" --project=chromium-desktop",
     "test:e2e:local": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\" --project=chromium-desktop",
     "test:e2e:launch-audit": "npm run test:e2e:env && playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
-    "test:e2e:launch-audit:live": "E2E_BASE_URL=https://bin-group-57c60.web.app npm run test:e2e:launch-audit"
+    "test:e2e:launch-audit:live": "E2E_BASE_URL=https://bin-group-57c60.web.app npm run test:e2e:launch-audit",
+    "test:e2e:business": "playwright install --with-deps chromium && playwright test tests/e2e/business-owner.spec.ts tests/e2e/business-tenant.spec.ts tests/e2e/business-technician.spec.ts tests/e2e/business-admin.spec.ts tests/e2e/business-broker.spec.ts tests/e2e/business-global.spec.ts --project=chromium-desktop",
+    "seed:e2e": "node scripts/seed-e2e-accounts.js"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
+    "@firebase/auth": "^1.7.9",
     "@google/generative-ai": "^0.24.1",
     "@mui/icons-material": "^5.14.0",
     "@mui/material": "^5.15.0",

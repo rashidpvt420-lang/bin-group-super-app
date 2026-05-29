@@ -69,6 +69,11 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npx playwright test tests/e2e/live-role-smoke.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop
 
+      - name: Run deep business workflow tests
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:e2e:business
+
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

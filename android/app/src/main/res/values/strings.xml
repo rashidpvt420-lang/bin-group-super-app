@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BIN Group Super App</string>
+    <string name="title_activity_main">BIN Group Super App</string>
+    <string name="package_name">com.bingroup.app</string>
+    <string name="custom_url_scheme">com.bingroup.app</string>
+</resources>

@@ -2,12 +2,16 @@ import React, { createContext, useContext, useEffect, useState, useRef, type Rea
 import { 
     db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, 
     isSupported, getMessaging, getToken, app, 
-    onAuthStateChanged, arrayUnion
+    onAuthStateChanged, arrayUnion, onSnapshot
 } from "../lib/firebase";        
-import { signOut, getIdTokenResult, type User } from "firebase/auth";
+import type { User } from "../lib/firebase";
+import { signOut } from "../lib/firebase";
 import { LegalModal } from "../components/LegalModal";
 
 export interface SovereignUser extends User {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
     designStudioBeta?: boolean;
     role?: string;
     status?: string;
@@ -83,12 +87,12 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
     const syncProfile = async (currentUser: User) => {
         console.log("🔍 [SHARED-AUTH] syncProfile started for:", currentUser.uid);
         try {
-            const tokenPromise = getIdTokenResult(currentUser, true);
+            const tokenPromise = currentUser.getIdTokenResult(true);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 10000));
             
             const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
                 console.warn("🛡️ [SHARED-AUTH] Token refresh failed or timed out. Using cached claims.", err);
-                return getIdTokenResult(currentUser, false);
+                return currentUser.getIdTokenResult(false);
             });
             
             const claims = tokenResult.claims || {};
@@ -126,7 +130,9 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
                         await updateDoc(userDocRef, { role: 'admin', isAdmin: true, updatedAt: serverTimestamp() });
                         await updateDoc(grantSnap.ref, { status: 'consumed', consumedAt: serverTimestamp(), consumedByUid: currentUser.uid });
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.warn("Admin grant check failed", e);
+                }
 
                 const resolvedRole = String(claims.role || finalRole || 'tenant').toLowerCase();
                 const resolvedIsAdmin = !!(claims.admin || finalIsAdmin || ADMIN_ROLES.has(resolvedRole));
@@ -235,10 +241,31 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
     };
 
     useEffect(() => {
+        let userUnsub: any = null;
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser: User | null) => {
             if (currentUser) {
                 await syncProfile(currentUser);
+
+                // Subscribe to real-time user document changes (like onDuty, dutyStatus, permissions)
+                userUnsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setUser(prev => {
+                            if (!prev) return prev;
+                            return { ...prev, ...data } as any;
+                        });
+                        if (data.status) setStatus(data.status);
+                        if (data.permissions) setPermissions(data.permissions);
+                        if (data.propertyId || data.unitId) setPropertyId(data.propertyId || data.unitId);
+                        if (data.legalAcceptedAt) setLegalAccepted(true);
+                    }
+                });
             } else {
+                if (userUnsub) {
+                    userUnsub();
+                    userUnsub = null;
+                }
                 setUser(null);
                 setRole(null);
                 setStatus(null);
@@ -259,6 +286,7 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
 
         return () => {
             unsubscribe();
+            if (userUnsub) userUnsub();
             clearTimeout(timeout);
         };
     }, []);
