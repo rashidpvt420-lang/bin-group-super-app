@@ -19,10 +19,11 @@
     "test:rules": "node --test test/security-rules.test.js",
     "test:stability": "node scripts/production-stability-guard.mjs",
     "test:e2e": "playwright install --with-deps chromium && playwright test",
+    "test:e2e:env": "node scripts/verify-e2e-env.mjs",
     "test:e2e:public": "playwright install --with-deps chromium && E2E_BASE_URL=${E2E_BASE_URL:-https://bin-group-57c60.web.app} playwright test --grep \"production public smoke\" --project=chromium-desktop",
     "test:e2e:local": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\" --project=chromium-desktop",
-    "test:e2e:launch-audit": "playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
-    "test:e2e:launch-audit:live": "playwright install --with-deps chromium && E2E_BASE_URL=https://bin-group-57c60.web.app playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop"
+    "test:e2e:launch-audit": "npm run test:e2e:env && playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
+    "test:e2e:launch-audit:live": "E2E_BASE_URL=https://bin-group-57c60.web.app npm run test:e2e:launch-audit"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
