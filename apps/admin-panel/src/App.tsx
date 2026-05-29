@@ -54,6 +54,7 @@ import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
+import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -146,6 +147,7 @@ function AppContent() {
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
                     <Route path="/admin/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                 </Route>
             )}
 

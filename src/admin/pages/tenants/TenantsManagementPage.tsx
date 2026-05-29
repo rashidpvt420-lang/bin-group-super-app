@@ -32,6 +32,7 @@ export default function TenantsManagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   
   const [properties, setProperties] = useState<any[]>([]);
@@ -153,7 +154,7 @@ export default function TenantsManagementPage() {
       breadcrumbs={[{ label: 'Tenants' }]}
       actions={
         <Stack direction="row" spacing={2}>
-            <Button variant="outlined" startIcon={<UploadCloud size={18} />} onClick={() => {}} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}>BULK IMPORT</Button>
+            <Button variant="outlined" startIcon={<UploadCloud size={18} />} onClick={() => setOpenBulk(true)} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}>BULK IMPORT</Button>
             <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setOpenAdd(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>ADD TENANT</Button>
         </Stack>
       }
@@ -327,6 +328,12 @@ export default function TenantsManagementPage() {
             onClose={() => setOpenAdd(false)} 
             properties={properties}
             units={units}
+            onSuccess={(msg) => setSuccess(msg)}
+       />
+
+       <BulkTenantImportDialog
+            open={openBulk}
+            onClose={() => setOpenBulk(false)}
             onSuccess={(msg) => setSuccess(msg)}
        />
     </AdminPageFrame>

@@ -63,7 +63,7 @@ import {
 
 const OWNER_SIDE_ROLES = ['owner', 'admin', 'ceo', 'super_admin', 'manager'];
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 50 * 1024 * 1024;
 
 const isOwnerSideRole = (role?: string | null) => OWNER_SIDE_ROLES.includes(String(role || '').toLowerCase());
 const normalizeEmail = (email?: string | null) => String(email || '').trim().toLowerCase();
@@ -215,7 +215,7 @@ export default function DesignStudioPage() {
 
     const invalidFile = files.find((file) => !isSupportedImage(file) || file.size > MAX_IMAGE_SIZE_BYTES);
     if (invalidFile) {
-      setUploadError('Upload JPG, PNG, WEBP, HEIC, or HEIF images only. Maximum size is 10 MB per image.');
+      setUploadError('Upload JPG, PNG, WEBP, HEIC, or HEIF images only. Maximum size is 50 MB per image.');
       return;
     }
 
@@ -288,7 +288,7 @@ export default function DesignStudioPage() {
       setUploadError(
         blocked
           ? 'Image upload is blocked by storage permission for this account. Refresh, sign in again, and retry. If it repeats, BIN GROUP Admin must deploy the updated storage rules.'
-          : 'Image upload failed because the browser or network stopped the upload. Retry once, or choose JPG/PNG under 10 MB.',
+          : 'Image upload failed because the browser or network stopped the upload. Retry once, or choose JPG/PNG under 50 MB.',
       );
     } finally {
       setUploading(false);
@@ -530,7 +530,7 @@ export default function DesignStudioPage() {
                   )}
                 </Stack>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 1 }}>
-                  Accepted: JPG, PNG, WEBP, HEIC/HEIF images. Max 10 MB per image.
+                  Accepted: JPG, PNG, WEBP, HEIC/HEIF images. Max 50 MB per image.
                 </Typography>
                 {uploading && (
                   <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>

@@ -183,6 +183,8 @@ const LoginPage: React.FC = () => {
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
                                     autoFocus
+                                    type="email"
+                                    name="email"
                                     InputProps={{
                                         startAdornment: (<InputAdornment position="start"><Mail size={20} color={binThemeTokens.gold} /></InputAdornment>),
                                         sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }

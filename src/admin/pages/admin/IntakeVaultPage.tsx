@@ -74,6 +74,11 @@ interface IntakeSubmission {
   adminReviewState?: string;
   activationState?: string;
   activeContractId?: string;
+  annualContractValue?: number;
+  paymentAmount?: number;
+  activationDeposit?: number;
+  paymentSubmitted?: boolean;
+  paymentMethod?: string;
 }
 
 const callable = <T = any, R = any>(name: string) => httpsCallable<T, R>(functions, name);
