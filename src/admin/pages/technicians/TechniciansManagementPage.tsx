@@ -21,8 +21,10 @@ import {
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
 import AdminCrudActions from '../../components/AdminCrudActions';
 import AddTechnicianDialog from '../../components/technicians/AddTechnicianDialog';
+import { filterLaunchRecords, comingSoon } from '../../utils/launchDataHygiene';
 
 export default function TechniciansManagementPage() {
   const { t } = useLanguage();
@@ -37,7 +39,7 @@ export default function TechniciansManagementPage() {
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'technician'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTechs(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
+      setTechs(filterLaunchRecords(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }))));
       setLoading(false);
     }, (err) => {
         console.error("Tech Sync Error:", err);
@@ -60,7 +62,7 @@ export default function TechniciansManagementPage() {
   return (
     <AdminPageFrame
       title="Technician Corps"
-      subtitle="Fleet management and specialized field force deployment terminal"
+      subtitle="Production technician registry. Test/demo/archived records are hidden."
       loading={loading}
       breadcrumbs={[{ label: 'Technicians' }]}
       actions={
@@ -74,6 +76,8 @@ export default function TechniciansManagementPage() {
         </Button>
       }
     >
+      <LaunchStatusBanner title="Technician Corps is launch-filtered" message="Only production technicians are shown. View/assign shortcuts are guarded until their detail workflows are connected." />
+
       <Paper sx={{ p: 2, mb: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
         <Stack direction="row" spacing={2} alignItems="center">
             <Search size={20} color="rgba(255,255,255,0.3)" />
@@ -88,8 +92,8 @@ export default function TechniciansManagementPage() {
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <Table>
+      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 920 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>TECHNICIAN / UID</TableCell>
@@ -150,10 +154,10 @@ export default function TechniciansManagementPage() {
                     <AdminCrudActions 
                         id={tech.uid}
                         actions={[
-                            { type: 'view', onClick: (id) => {} },
+                            { type: 'view', onClick: () => comingSoon('Technician profile detail is not connected yet.') },
                             { type: 'edit', onClick: (id) => handleEdit(tech) },
-                            { type: 'assign', label: 'ASSIGN JOB', onClick: (id) => {} },
-                            { type: 'delete', onClick: (id) => deleteDoc(doc(db, 'users', id)), requiresConfirm: true }
+                            { type: 'assign', label: 'ASSIGN JOB', onClick: () => comingSoon('Assign job from this registry is coming soon. Use Tickets > Assign for live dispatch.') },
+                            { type: 'delete', onClick: () => comingSoon('Technician removal is blocked for launch safety. Suspend the account from Firebase/Admin approval flow instead.'), requiresConfirm: true }
                         ]}
                     />
                 </TableCell>

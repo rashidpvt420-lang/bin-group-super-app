@@ -15,6 +15,8 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import AdminCrudActions from '../../components/AdminCrudActions';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
+import { filterLaunchRecords, comingSoon } from '../../utils/launchDataHygiene';
 
 interface SystemSetting {
     id: string;
@@ -33,7 +35,7 @@ export default function SovereignControlPage() {
     useEffect(() => {
         const q = query(collection(db, 'systemSettings'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            setSettings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemSetting)));
+            setSettings(filterLaunchRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SystemSetting))));
             setLoading(false);
         });
         return () => unsubscribe();
@@ -42,7 +44,7 @@ export default function SovereignControlPage() {
     const handleUpdate = async (id: string, value: any) => {
         setSaving(id);
         try {
-            await updateDoc(doc(db, 'systemSettings', id), { value });
+            comingSoon('System settings are read-only for launch. Enable approval workflow and audit logging before allowing edits.');
         } catch (err) {
             console.error(err);
         } finally {
@@ -89,7 +91,7 @@ export default function SovereignControlPage() {
                     <AdminCrudActions 
                         id={setting.id}
                         actions={[
-                            { type: 'delete', onClick: (id) => deleteDoc(doc(db, 'systemSettings', id)), requiresConfirm: true }
+                            { type: 'delete', onClick: () => comingSoon('Policy removal is blocked for launch safety.'), requiresConfirm: true }
                         ]}
                     />
                 </Stack>
@@ -100,15 +102,17 @@ export default function SovereignControlPage() {
     return (
         <AdminPageFrame
             title="Sovereign Control"
-            subtitle="Global system parameters, security policies, and feature matrix"
+            subtitle="Read-only launch view for system parameters, security policies and feature flags"
             loading={loading}
             breadcrumbs={[{ label: 'System Control' }]}
             actions={
-                <Button variant="contained" startIcon={<Plus size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => comingSoon('Add Parameter is locked until approval workflow is connected.')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                     ADD PARAMETER
                 </Button>
             }
         >
+            <LaunchStatusBanner title="Sovereign Control is read-only" message="No unsafe production mutations are allowed from this page until approvals, rollback and Audit Shield logging are live." />
+
             <Grid container spacing={4}>
                 {/* SYSTEM HEALTH CARDS */}
                 <Grid item xs={12} md={4}>
@@ -132,8 +136,8 @@ export default function SovereignControlPage() {
                         <Stack direction="row" spacing={2} sx={{ my: 2 }}>
                             <Clock size={32} color="#10b981" />
                             <Box>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">98.4% COMPLIANCE</Typography>
-                                <Typography variant="caption" color="textSecondary">Response delta: 12.4 minutes</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">PENDING LIVE DATA</Typography>
+                                <Typography variant="caption" color="textSecondary">Connect live ticket timestamps first</Typography>
                             </Box>
                         </Stack>
                         <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -147,8 +151,8 @@ export default function SovereignControlPage() {
                         <Stack direction="row" spacing={2} sx={{ my: 2 }}>
                             <Zap size={32} color="#6366f1" />
                             <Box>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">V2.4.0 STABLE</Typography>
-                                <Typography variant="caption" color="textSecondary">Last deploy: 2 hours ago</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">SETUP PROTECTED</Typography>
+                                <Typography variant="caption" color="textSecondary">Manual deployment verified by admin</Typography>
                             </Box>
                         </Stack>
                         <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.05)' }} />

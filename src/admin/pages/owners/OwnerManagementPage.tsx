@@ -14,7 +14,9 @@ import { collection, onSnapshot, query, where, doc, updateDoc, addDoc, serverTim
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
 import { useNavigate } from 'react-router-dom';
+import { filterLaunchRecords, isOperationalRecord } from '../../utils/launchDataHygiene';
 
 interface Owner {
   id: string;
@@ -58,7 +60,7 @@ export default function OwnerManagementPage() {
         ...doc.data()
       })) as Owner[];
       fetchedOwners.sort((a: any, b: any) => getMillis(b.updatedAt || b.createdAt || b.approvedAt) - getMillis(a.updatedAt || a.createdAt || a.approvedAt));
-      setOwners(fetchedOwners);
+      setOwners(filterLaunchRecords(fetchedOwners).filter((owner) => isOperationalRecord(owner)));
       setLoading(false);
     }, (error) => {
       console.error('Failed to fetch owners:', error);
@@ -128,7 +130,7 @@ export default function OwnerManagementPage() {
   return (
     <AdminPageFrame
       title={t('admin.owner_management') || 'OWNER REGISTRY'}
-      subtitle="Strategic management of institutional and private asset owners"
+      subtitle="Production owner registry. Test/demo/archived records are hidden."
       loading={loading}
       breadcrumbs={[{ label: 'Owners' }]}
       actions={
@@ -142,8 +144,10 @@ export default function OwnerManagementPage() {
         </Button>
       }
     >
-      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <Table>
+      <LaunchStatusBanner title="Owner Registry is launch-filtered" message="Archived E2E/demo owners are hidden. Add Owner generates an invite only; production contract activation must still pass onboarding approval." />
+
+      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 920 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>OWNER IDENTITY</TableCell>
@@ -221,6 +225,11 @@ export default function OwnerManagementPage() {
                 </TableCell>
               </TableRow>
             ))}
+          {owners.length === 0 && !loading && (
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>No production owners yet. Approve owner onboarding or generate a new invite.</TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>

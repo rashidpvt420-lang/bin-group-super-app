@@ -43,6 +43,8 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
+import { filterLaunchRecords, isOperationalRecord } from '../../utils/launchDataHygiene';
 
 const binThemeTokens = {
   gold: '#DAA520',
@@ -200,6 +202,7 @@ export default function PropertyPassportPage() {
     const ids = new Set([...Object.keys(properties), ...Object.keys(passports)]);
     return Array.from(ids)
       .map((id) => normalizePassport(id, passports[id], properties[id]))
+      .filter((row) => isOperationalRecord(row))
       .sort((a, b) => getMillis(b.updatedAt) - getMillis(a.updatedAt));
   }, [passports, properties]);
 
@@ -228,7 +231,7 @@ export default function PropertyPassportPage() {
   }
 
   return (
-    <Box sx={{ p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 950, color: '#fff', mb: 1, letterSpacing: -1 }}>
@@ -238,8 +241,8 @@ export default function PropertyPassportPage() {
             Live owner-to-property registry with contracts, units, tenants, GPS and financial health.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
-          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, px: 2, border: '1px solid rgba(255,255,255,0.1)', width: 320 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, px: 2, border: '1px solid rgba(255,255,255,0.1)', width: { xs: '100%', sm: 320 } }}>
             <SearchIcon size={18} color="rgba(255,255,255,0.3)" />
             <InputBase
               placeholder="Search property, owner, contract..."
@@ -253,6 +256,11 @@ export default function PropertyPassportPage() {
           </Button>
         </Stack>
       </Box>
+
+      <LaunchStatusBanner
+        title="Property Passport is launch-filtered"
+        message="Only production records are shown. Test, demo and archived records are hidden after cleanup."
+      />
 
       {error && <Alert severity="warning" sx={{ mb: 3 }}>{error}</Alert>}
 
@@ -278,8 +286,8 @@ export default function PropertyPassportPage() {
         ))}
       </Grid>
 
-      <TableContainer component={Paper} sx={{ bgcolor: 'transparent', boxShadow: 'none' }}>
-        <Table sx={{ borderCollapse: 'separate', borderSpacing: '0 12px' }}>
+      <TableContainer component={Paper} sx={{ bgcolor: 'transparent', boxShadow: 'none', overflowX: 'auto' }}>
+        <Table sx={{ borderCollapse: 'separate', borderSpacing: '0 12px', minWidth: 980 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={headerCell}>Property / Owner</TableCell>
@@ -350,7 +358,7 @@ export default function PropertyPassportPage() {
             {!filteredPassports.length && (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.35)', fontWeight: 900, border: 'none' }}>
-                  No matching property passports. Check Owner Registry or create a property from Admin Dashboard.
+                  No production property passports yet. Approve an owner onboarding record to create a real property passport.
                 </TableCell>
               </TableRow>
             )}

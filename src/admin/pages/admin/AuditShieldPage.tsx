@@ -13,6 +13,8 @@ import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestor
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
+import { filterLaunchRecords, comingSoon } from '../../utils/launchDataHygiene';
 
 export default function AuditShieldPage() {
     const { t } = useLanguage();
@@ -39,10 +41,10 @@ export default function AuditShieldPage() {
                     timestamp: data.createdAt?.toDate?.()?.toLocaleString() || data.timestamp?.toDate?.()?.toLocaleString() || new Date().toLocaleString()
                 };
             });
-            setLogs(auditLogs);
+            setLogs(filterLaunchRecords(auditLogs));
             setStats({
-                total: auditLogs.length,
-                verified: auditLogs.filter((l: any) => l.forensicHash).length,
+                total: filterLaunchRecords(auditLogs).length,
+                verified: filterLaunchRecords(auditLogs).filter((l: any) => l.forensicHash).length,
                 anomalies: 0
             });
             setLoading(false);
@@ -77,13 +79,15 @@ export default function AuditShieldPage() {
     return (
         <AdminPageFrame
             title="Institutional Audit"
-            subtitle="Immutable forensic ledger and systemic activity verification node"
+            subtitle="Launch-filtered forensic ledger. Test/demo audit rows are hidden."
             loading={loading}
             isEmpty={logs.length === 0}
             emptyMessage="FORENSIC LEDGER EMPTY - INITIALIZING AUDIT SYNC"
             breadcrumbs={[{ label: 'Audit Shield' }]}
         >
             <Stack spacing={4}>
+                <LaunchStatusBanner title="Audit Shield is launch-filtered" message="Only production audit logs are displayed. Re-hash and export are guarded until hashing and evidence-bundle services are connected." />
+
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={4}>
                         <StatCard label="Evidence Blocks" value={stats.total} icon={Terminal} color={binThemeTokens.gold} />
@@ -103,14 +107,14 @@ export default function AuditShieldPage() {
                             <Typography variant="body2" fontWeight="950" color="#FFF">SOVEREIGN FORENSIC PROTOCOL ACTIVE</Typography>
                         </Stack>
                         <Stack direction="row" spacing={2}>
-                            <Button variant="outlined" startIcon={<RefreshCw size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>RE-HASH LEDGER</Button>
-                            <Button variant="contained" startIcon={<Download size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>EXPORT BUNDLE</Button>
+                            <Button variant="outlined" startIcon={<RefreshCw size={16} />} onClick={() => comingSoon('Re-hash ledger requires connected hash-verification backend.')} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>RE-HASH LEDGER</Button>
+                            <Button variant="contained" startIcon={<Download size={16} />} onClick={() => comingSoon('Evidence bundle export requires storage packaging and signing backend.')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>EXPORT BUNDLE</Button>
                         </Stack>
                     </Stack>
                 </Paper>
 
-                <TableContainer component={Paper} sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                    <Table>
+                <TableContainer component={Paper} sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
+                    <Table sx={{ minWidth: 1000 }}>
                         <TableHead>
                             <TableRow>
                                 <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>BLOCK ID</TableCell>
