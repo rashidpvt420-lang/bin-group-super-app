@@ -78,7 +78,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     ];
 
     const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
-    const quote = portfolioSummary.quoteResults?.[property?.id];
+    const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
     const selectedStrategy = property.strategy || 'fm_only';
 
     return (

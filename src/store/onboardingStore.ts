@@ -44,6 +44,15 @@ export interface PropertyData {
     gen: boolean;
     hvac: boolean;
     districtCooling: boolean;
+    electrical: boolean;
+    plumbing: boolean;
+    drainage: boolean;
+    pumps: boolean;
+    emergencyLighting: boolean;
+    accessControl: boolean;
+    bms: boolean;
+    iotSensors: boolean;
+    gym: boolean;
     // Institutional / Majlis / Mosque Specific
     majlis: boolean;
     majlisType: 'government' | 'none' | string;
@@ -328,6 +337,15 @@ const defaultProperty: PropertyData = {
     gen: false,
     hvac: false,
     districtCooling: false,
+    electrical: false,
+    plumbing: false,
+    drainage: false,
+    pumps: false,
+    emergencyLighting: false,
+    accessControl: false,
+    bms: false,
+    iotSensors: false,
+    gym: false,
     majlis: false,
     majlisType: 'none',
     missions: [],
@@ -414,8 +432,11 @@ export const useOnboardingStore = create<OnboardingState>()(
             updateProperty: (index, data) => {
                 set((state) => {
                     const newProperties = [...state.properties];
-                    newProperties[index] = { ...newProperties[index], ...data };
-                    return { properties: newProperties };
+                    if (newProperties[index]) {
+                        newProperties[index] = { ...newProperties[index], ...data };
+                    }
+                    const newPropertyData = index === 0 ? { ...state.propertyData, ...data } : state.propertyData;
+                    return { properties: newProperties, propertyData: newPropertyData };
                 });
                 get().calculateSummary();
             },

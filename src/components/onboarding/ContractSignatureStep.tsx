@@ -48,7 +48,8 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         portfolioSummary,
         isContractSigned,
         signatureName,
-        setContractSignature
+        setContractSignature,
+        calculateSummary
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
@@ -56,9 +57,13 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
     const [accepted, setAccepted] = useState(isContractSigned);
 
     const primaryProperty = properties[0];
-    const quote = portfolioSummary.quoteResults?.[primaryProperty?.id];
+    const quote = portfolioSummary.quoteResults?.[primaryProperty?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
     const ownerName = ownerAccount?.fullName || companyProfile.contactPerson || 'Owner';
     const agreementVersion = 'BIN-GROUP-OWNER-AGREEMENT-v1.0';
+
+    useEffect(() => {
+        calculateSummary();
+    }, [calculateSummary, properties]);
 
     useEffect(() => {
         setContractSignature(accepted, typedName);

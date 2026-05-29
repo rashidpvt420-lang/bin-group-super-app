@@ -62,7 +62,7 @@ const PropertyOnboardingPage = () => {
 
     const visibleStages = [
         'Owner Property',
-        'Systems',
+        'Systems + Add-ons',
         'Plan Price',
         'Documents Account',
         'Contract',
@@ -73,7 +73,7 @@ const PropertyOnboardingPage = () => {
         readable(t('onboarding.company'), 'Company'),
         readable(t('onboarding.asset'), 'Asset'),
         readable(t('onboarding.location'), 'Location'),
-        readable(t('onboarding.systems'), 'Systems Add-ons'),
+        readable(t('onboarding.systems'), 'Systems + Add-ons'),
         readable(t('onboarding.service_plan'), 'Service Plan'),
         readable(t('onboarding.documents'), 'Documents'),
         readable(t('onboarding.verification'), 'Account'),
