@@ -18,7 +18,9 @@ import { collection, query, orderBy, limit, where, onSnapshot, updateDoc, doc, s
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import LaunchStatusBanner from '../../components/LaunchStatusBanner';
 import { resolvePropertyLocation } from '../../../utils/propertyLocationResolver';
+import { filterLaunchRecords } from '../../utils/launchDataHygiene';
 
 interface Ticket {
   ticketId: string;
@@ -62,7 +64,7 @@ export default function TicketsManagementPage() {
   useEffect(() => {
     const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snap) => {
-        setTickets(snap.docs.map(d => ({ ticketId: d.id, ...d.data() } as Ticket)));
+        setTickets(filterLaunchRecords(snap.docs.map(d => ({ ticketId: d.id, ...d.data() } as Ticket))));
         setLoading(false);
     });
     return () => unsubscribe();
@@ -147,10 +149,12 @@ export default function TicketsManagementPage() {
   return (
     <AdminPageFrame
       title={t('tech.tickets_mgt') || 'MAINTENANCE COMMAND'}
-      subtitle="Strategic oversight of field operations and incident resolution"
+      subtitle="Production maintenance tickets only. Test/demo rows are hidden."
       loading={loading}
       breadcrumbs={[{ label: 'Tickets' }]}
     >
+      <LaunchStatusBanner title="Tickets are launch-filtered" message="Only production maintenance tickets are shown. Assignment remains active; completed tickets cannot be reassigned." />
+
       <Paper sx={{ p: 3, mb: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
@@ -195,8 +199,8 @@ export default function TicketsManagementPage() {
         </Grid>
       </Paper>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <Table>
+      <TableContainer component={Paper} sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 980 }}>
           <TableHead>
             <TableRow>
               <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>TICKET</TableCell>
@@ -273,6 +277,11 @@ export default function TicketsManagementPage() {
                 </TableRow>
               );
             })}
+          {filteredTickets.length === 0 && !loading && (
+              <TableRow>
+                <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>No production maintenance tickets yet.</TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
