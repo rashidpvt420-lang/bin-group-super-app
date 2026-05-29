@@ -90,11 +90,16 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
   inspection_move: { label: 'Move-in / Move-out Inspection', base: 1200 }
 };
 
+const MAJLIS_ASSET_IDS = new Set(['government_majlis', 'private_majlis', 'majlis']);
+
 export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   const ids = new Set<string>();
   ids.add('fire_safety');
 
-  const isMosque = input.assetClassId === 'mosque_fm' || input.assetClassId === 'mosque';
+  const normalizedAsset = normalizeAssetClassId(input.assetClassId);
+  const isMosque = normalizedAsset === 'mosque_fm';
+  const isMajlis = MAJLIS_ASSET_IDS.has(normalizedAsset);
+
   if (isMosque) {
     ids.add('water_tank');
     ids.add('hvac_pm');
@@ -103,7 +108,7 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
     ids.add('emergency_priority');
   }
   if (input.hasWaterTank) ids.add('water_tank');
-  if ((input.floors || 0) > 2 || (input.lifts || 0) > 0) ids.add('elevator_amc');
+  if (!isMajlis && ((input.floors || 0) > 1 || (input.lifts || 0) > 0)) ids.add('elevator_amc');
   if (input.hasSiraCctv) ids.add('sira_renewal');
   if (input.hasBmu) ids.add('facade_access');
   if (input.propertyAge > 15) ids.add('pca_audit');
