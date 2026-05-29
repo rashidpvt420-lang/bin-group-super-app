@@ -9,7 +9,7 @@ type AddOnItem = { id: string; name: string; desc: string; price: number; reason
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 
-const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm', 'waste_management'];
+const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm'];
 const ELEVATOR_ADDON_ID = 'elevator_amc';
 
 const isMajlisAsset = (property: any) => {
@@ -99,7 +99,7 @@ const addOns: AddOnItem[] = [
   { id: 'landscaping', name: 'Landscaping & Irrigation', price: 12000, desc: 'Garden maintenance, pruning and irrigation system checks.', reason: 'Essential for outdoor and garden spaces.' },
   { id: 'move_in_out_inspection', name: 'Move-in / Move-out Inspection', price: 1200, desc: 'Snagging and condition report before/after tenancy or event.', reason: 'Protects asset condition and lifecycle.' },
   { id: 'mep_support', name: 'MEP Support', price: 13500, desc: 'Integrated mechanical, electrical and plumbing preventive support.', reason: 'Core operational resilience layer.' },
-  { id: 'waste_management', name: 'Waste Management', required: true, defaultSelected: true, price: 6600, desc: 'Waste room checks and disposal schedule coordination.', reason: 'Protects hygiene and compliance.' },
+  { id: 'waste_management', name: 'Waste Management', price: 6600, desc: 'Waste room checks and disposal schedule coordination.', reason: 'Optional hygiene and disposal coordination layer.' },
 ];
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
