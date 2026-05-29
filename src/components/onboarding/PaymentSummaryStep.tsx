@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -55,13 +55,20 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
         paymentMethod,
         setPaymentMethod,
         paymentManifest,
-        setPaymentManifest
+        setPaymentManifest,
+        calculateSummary
     } = useOnboardingStore();
+
+    useEffect(() => {
+        calculateSummary();
+    }, [calculateSummary, properties]);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
+    const quote = portfolioSummary?.quoteResults?.[properties?.[0]?.id] || Object.values(portfolioSummary?.quoteResults || {})[0];
     const annualTotal = resolveMoney(
+        quote?.annualTotal,
         valuationResult?.portfolioIntelligence?.finalAnnualPrice,
         portfolioSummary?.estimatedACV,
         selectedPlan?.annualPrice,
