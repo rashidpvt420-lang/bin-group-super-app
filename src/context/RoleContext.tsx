@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
 
-// Production Imports
 import {
     db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp,
     onAuthStateChanged, arrayUnion
@@ -69,7 +68,27 @@ interface RoleContextType {
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
-const AUTH_BOOT_TIMEOUT_MS = 8000; // Increased for live sync robustness
+const AUTH_BOOT_TIMEOUT_MS = 8000;
+
+const ADMIN_ROLES = new Set([
+    'admin',
+    'super_admin',
+    'ceo',
+    'manager',
+    'operations_admin',
+    'finance_admin',
+    'hr_admin',
+    'support_admin',
+    'hr_manager',
+    'hr_staff',
+    'finance_staff',
+    'account_manager',
+    'dispatcher',
+    'operations_manager'
+]);
+
+const normalizeRole = (value: unknown): string => String(value || '').trim().toLowerCase();
+const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
 
 const markGlobalAuthReady = () => {
     window.__BIN_GROUPS_BOOT__ = {
@@ -97,56 +116,53 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             const result = await registerPushNotifications(activeUser.uid, role);
             return result.enabled === true;
         } catch (err) {
-            console.warn("🛡️ [AUTH] Push notification registration failed.", err);
+            console.warn("[AUTH] Push notification registration failed.", err);
             return false;
         }
     };
 
     const syncProfile = async (currentUser: User) => {
-        console.log("🔍 [AUTH_DIAG] syncProfile started for:", currentUser.uid);
+        console.log("[AUTH_DIAG] syncProfile started for:", currentUser.uid);
         try {
-            // 1. Force Token Refresh to pick up new Custom Claims
-            console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (Force Refresh)...");
-
-            // Timeout to prevent infinite hang on local/network failure
             const tokenPromise = currentUser.getIdTokenResult(true);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), 5000));
 
             const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
-                console.warn("🛡️ [AUTH] Token refresh failed or timed out. Proceeding with existing claims.", err);
-                return currentUser.getIdTokenResult(false); // Fallback to cached
+                console.warn("[AUTH] Token refresh failed or timed out. Proceeding with cached claims.", err);
+                return currentUser.getIdTokenResult(false);
             });
 
-            const claims = tokenResult.claims;
-            console.log("🔍 [AUTH_DIAG] Custom Claims Detected:", claims);
-
+            const claims = tokenResult.claims || {};
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
 
             try {
-                console.log("🔍 [AUTH_DIAG] Fetching Firestore profile...");
                 snap = await getDoc(userDocRef);
             } catch (err: any) {
-                console.error("📜 [ROLE-SYNC] Firestore read permission/error:", err);
-                // If claim exists, we can still proceed
+                console.error("[ROLE-SYNC] Firestore read permission/error:", err);
                 if (claims.role) {
-                    setRole(String(claims.role));
-                    setIsAdmin(!!claims.admin);
+                    const claimRole = normalizeRole(claims.role);
+                    const claimIsAdmin = Boolean(claims.admin || claims.isAdmin || roleIsAdmin(claimRole));
+                    setRole(claimRole);
+                    setIsAdmin(claimIsAdmin);
+                    setStatus('active');
+                    setUser({ ...currentUser, role: claimRole, isAdmin: claimIsAdmin, status: 'active' } as SovereignUser);
+                    setError(null);
                     setLoading(false);
                     return;
                 }
-                setRole('tenant'); // Default fallback
+                setRole('tenant');
+                setIsAdmin(false);
+                setStatus('active');
                 setLoading(false);
                 return;
             }
 
             if (snap && snap.exists()) {
                 const data = snap.data();
-                console.log("🔍 [AUTH_DIAG] Firestore Data Found:", data);
 
-                // [Role System Repair] Check for emergency admin grants
-                let finalRole = data.role;
-                let finalIsAdmin = data.isAdmin || data.role === 'admin';
+                let finalRole = normalizeRole(data.role || claims.role || 'tenant');
+                let finalIsAdmin = Boolean(data.isAdmin || data.admin || roleIsAdmin(finalRole));
 
                 try {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
@@ -154,11 +170,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     const grantSnap = await getDoc(grantRef);
 
                     if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login') {
-                        console.log("🛠️ [REPAIR] Emergency Admin Grant Detected for:", currentUser.email);
                         finalRole = 'admin';
                         finalIsAdmin = true;
 
-                        // Apply to permanent profile
                         await updateDoc(userDocRef, {
                             role: 'admin',
                             isAdmin: true,
@@ -166,34 +180,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                             repairLogs: arrayUnion({ action: 'ADMIN_GRANT_APPLIED', timestamp: new Date().toISOString() })
                         });
 
-                        // Mark grant as consumed
                         await updateDoc(grantRef, {
                             status: 'consumed',
                             consumedAt: serverTimestamp(),
                             consumedByUid: currentUser.uid
                         });
-                        console.log("🛠️ [REPAIR] Admin privileges secured and grant record consumed.");
                     }
                 } catch (grantErr) {
-                    console.warn("🛡️ [REPAIR] Grant check bypassed:", grantErr);
+                    console.warn("[REPAIR] Grant check bypassed:", grantErr);
                 }
 
                 let resolvedOnboardingComplete = data.onboardingComplete;
+                const resolvedRole = normalizeRole(claims.role || finalRole || 'tenant');
+                const resolvedStatus = normalizeRole(data.status || 'active');
+                const resolvedIsAdmin = Boolean(claims.admin || claims.isAdmin || finalIsAdmin || roleIsAdmin(resolvedRole));
 
-                // 2. Resolve Role (Priority: Claims > Firestore > Default)
-                const resolvedRole = String(claims.role || finalRole || 'tenant').toLowerCase();
-                const resolvedStatus = (data.status || 'active').toLowerCase();
-                const resolvedIsAdmin = !!(claims.admin || finalIsAdmin);
-
-                // Auto-fix non-owners to have onboardingComplete: true
                 if (resolvedRole !== 'owner' && !resolvedOnboardingComplete) {
-                     resolvedOnboardingComplete = true;
-                     // Auto-heal firestore in background
-                     updateDoc(userDocRef, { onboardingComplete: true }).catch(console.error);
+                    resolvedOnboardingComplete = true;
+                    updateDoc(userDocRef, { onboardingComplete: true }).catch(console.error);
                 }
 
-                setUser({ ...currentUser, ...data, role: finalRole, isAdmin: finalIsAdmin, onboardingComplete: resolvedOnboardingComplete } as any);
-
+                setUser({
+                    ...currentUser,
+                    ...data,
+                    role: resolvedRole,
+                    isAdmin: resolvedIsAdmin,
+                    onboardingComplete: resolvedOnboardingComplete
+                } as SovereignUser);
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
@@ -206,32 +219,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 } else {
                     setError(null);
                 }
-
             } else {
-                console.warn("🔍 [AUTH_DIAG] No Firestore document at users/" + currentUser.uid);
-                // Create profile if missing but user is authenticated
-                if (!claims.role) {
-                    console.log("🔍 [AUTH_DIAG] Auto-initializing missing Firestore profile...");
-                    const newProfile = {
-                        uid: currentUser.uid,
-                        email: (currentUser.email || '').toLowerCase(),
-                        displayName: currentUser.displayName || "New User",
-                        role: 'tenant',
-                        isAdmin: false,
-                        status: 'active',
-                        createdAt: serverTimestamp()
-                    };
-                    await setDoc(userDocRef, newProfile);
-                }
+                const resolvedRole = normalizeRole(claims.role || 'tenant') || 'tenant';
+                const resolvedIsAdmin = Boolean(claims.admin || claims.isAdmin || roleIsAdmin(resolvedRole));
+                const newProfile = {
+                    uid: currentUser.uid,
+                    email: (currentUser.email || '').toLowerCase(),
+                    displayName: currentUser.displayName || "New User",
+                    role: resolvedRole,
+                    isAdmin: resolvedIsAdmin,
+                    status: 'active',
+                    createdAt: serverTimestamp()
+                };
 
-                setRole(String(claims.role || 'tenant'));
-                setIsAdmin(!!claims.admin);
+                await setDoc(userDocRef, newProfile, { merge: true });
+
+                setUser({ ...currentUser, ...newProfile } as SovereignUser);
+                setRole(resolvedRole);
+                setIsAdmin(resolvedIsAdmin);
                 setStatus('active');
                 setPermissions({});
+                setPropertyId(null);
+                setLegalAccepted(true);
+                setError(null);
                 setLoading(false);
             }
         } catch (err: any) {
-            console.error("📜 [ROLE-SYNC] Fatal failure:", err);
+            console.error("[ROLE-SYNC] Fatal failure:", err);
             setError("IDENTITY SYNC FAULT: " + err.message);
         } finally {
             setLoading(false);
@@ -239,7 +253,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const hasPermission = (permission: SovereignPermission): boolean => {
-        if (isAdmin || role === 'ceo' || role === 'admin') return true;
+        if (isAdmin || roleIsAdmin(role)) return true;
         return !!permissions[permission];
     };
 
@@ -256,12 +270,18 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let unsubscribe: () => void = () => {};
+        const timeoutId = window.setTimeout(() => {
+            if (loadingRef.current) {
+                console.warn("[AUTH_DIAG] Auth sync timeout. Releasing blocker.");
+                setLoading(false);
+            }
+        }, AUTH_BOOT_TIMEOUT_MS);
 
         const initAuth = async () => {
-            console.log("🔍 [AUTH_DIAG] Initializing Sovereign Identity Bridge...");
+            console.log("[AUTH_DIAG] Initializing Sovereign Identity Bridge...");
             try {
                 unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-                    console.log("🔍 [AUTH_DIAG] Auth State Changed. User:", currentUser?.email || 'NULL');
+                    console.log("[AUTH_DIAG] Auth state changed. User:", currentUser?.email || 'NULL');
                     if (currentUser) {
                         await syncProfile(currentUser);
                     } else {
@@ -276,28 +296,24 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     }
                     markGlobalAuthReady();
                 }, (err) => {
-                    console.error("❌ [AUTH_DIAG] Auth Observer Error:", err);
+                    console.error("[AUTH_DIAG] Auth observer error:", err);
                     setError("PROTOCOL VIOLATION: " + err.message);
                     setLoading(false);
+                    markGlobalAuthReady();
                 });
-
-                // Fail-safe timeout to prevent infinite loading
-                setTimeout(() => {
-                    if (loadingRef.current) {
-                        console.warn("⚠️ [AUTH_DIAG] Auth Sync Timeout. Bypassing blocker.");
-                        setLoading(false);
-                    }
-                }, AUTH_BOOT_TIMEOUT_MS);
-
             } catch (fatalErr: any) {
-                console.error("❌ [AUTH-BOOT] Bridge Failure:", fatalErr);
+                console.error("[AUTH-BOOT] Bridge failure:", fatalErr);
                 setError("IDENTITY FAULT: " + fatalErr.message);
                 setLoading(false);
+                markGlobalAuthReady();
             }
         };
 
         initAuth();
-        return () => unsubscribe && unsubscribe();
+        return () => {
+            unsubscribe && unsubscribe();
+            window.clearTimeout(timeoutId);
+        };
     }, []);
 
     return (
