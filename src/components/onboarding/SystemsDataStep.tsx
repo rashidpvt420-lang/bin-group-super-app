@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Box, Typography, Grid, Paper, Checkbox, Button, Stack, Chip, Divider, Container } from '@mui/material';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -9,7 +9,41 @@ type AddOnItem = { id: string; name: string; desc: string; price: number; reason
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 
-const REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm', 'waste_management'];
+const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm', 'waste_management'];
+const ELEVATOR_ADDON_ID = 'elevator_amc';
+
+const isMajlisAsset = (property: any) => {
+  const text = [
+    property?.propertyType,
+    property?.subType,
+    property?.assetClass,
+    property?.majlisType,
+    property?.serviceModel,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return Boolean(
+    property?.majlis ||
+    property?.majlisGarden ||
+    (property?.majlisType && property.majlisType !== 'none') ||
+    text.includes('majlis')
+  );
+};
+
+const getRequiredStackIds = (property: any) => {
+  const ids = [...BASE_REQUIRED_STACK_IDS];
+  const hasRealLiftScope = Number(property?.lifts || 0) > 0 || Number(property?.floors || 0) > 1;
+
+  if (!isMajlisAsset(property) && hasRealLiftScope) {
+    ids.push(ELEVATOR_ADDON_ID);
+  }
+
+  return ids;
+};
+
+const getHiddenAddOnIds = (property: any) => (isMajlisAsset(property) ? [ELEVATOR_ADDON_ID] : []);
 
 const systemGroups: Array<{ title: string; systems: SystemItem[] }> = [
   {
@@ -57,7 +91,7 @@ const systemGroups: Array<{ title: string; systems: SystemItem[] }> = [
 const addOns: AddOnItem[] = [
   { id: 'fire_safety', name: 'Fire Safety AMC', required: true, defaultSelected: true, price: 8000, desc: 'Civil Defense compliance checks, alarm readiness and certification support.', reason: 'Mandatory baseline for UAE occupied assets.' },
   { id: 'water_tank', name: 'Water Tank Sterilization', required: true, defaultSelected: true, price: 2200, desc: 'Quarterly cleaning, sterilization and hygiene documentation.', reason: 'Required when water tanks exist.' },
-  { id: 'elevator_amc', name: 'Elevator / Lift AMC', required: true, defaultSelected: true, price: 7500, desc: 'Lift inspections, safety checks and service coordination.', reason: 'Required for multi-floor assets.' },
+  { id: 'elevator_amc', name: 'Elevator / Lift AMC', price: 7500, desc: 'Lift inspections, safety checks and service coordination.', reason: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.' },
   { id: 'hvac_pm', name: 'HVAC Preventive Maintenance', required: true, defaultSelected: true, price: 6680, desc: 'AC inspections, filters, coils, drain lines and performance checks.', reason: 'UAE climate makes HVAC continuity mission-critical.' },
   { id: 'cleaning', name: 'Cleaning Team / Deep Cleaning', price: 18450, desc: 'Common area cleaning and scheduled hygiene operations.', reason: 'Recommended for shared facilities and Majlis readiness.' },
   { id: 'security', name: 'Security Services / CCTV', price: 36600, desc: 'Guarding coordination, access control and incident logging.', reason: 'Optional manpower layer for towers, retail and high-value assets.' },
@@ -73,32 +107,54 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const { isRTL } = useLanguage();
   const activeProperty = properties[0] || propertyData || ({} as any);
   const storedSelectedIds = Array.isArray(selectedAddOns) ? selectedAddOns : [];
-  const selectedIds = new Set([...storedSelectedIds, ...REQUIRED_STACK_IDS]);
-  const selectedAddOnRows = addOns.filter((a) => selectedIds.has(a.id));
+  const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
+  const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
+  const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
+  const selectedIds = new Set([
+    ...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)),
+    ...requiredStackIds,
+  ]);
+  const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
   useEffect(() => {
-    REQUIRED_STACK_IDS.forEach((id) => {
-      if (!storedSelectedIds.includes(id)) toggleAddOn(id);
+    let changed = false;
+
+    requiredStackIds.forEach((id) => {
+      if (!storedSelectedIds.includes(id)) {
+        toggleAddOn(id);
+        changed = true;
+      }
     });
-    calculateSummary();
-    // Run once when this step mounts so the contract and quote screens receive the required add-ons.
+
+    hiddenAddOnIds.forEach((id) => {
+      if (storedSelectedIds.includes(id)) {
+        toggleAddOn(id);
+        changed = true;
+      }
+    });
+
+    if (!changed) calculateSummary();
+    // Keep selectedAddOns synchronized with property-type dependent add-ons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [requiredStackIds.join('|'), hiddenAddOnIds.join('|')]);
 
   const setSystem = (key: string, checked: boolean) => {
     updateProperty(0, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
   };
 
   const setAddOn = (id: string, checked: boolean) => {
-    if (REQUIRED_STACK_IDS.includes(id)) return;
+    if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
     const isSelected = storedSelectedIds.includes(id);
     if (checked !== isSelected) toggleAddOn(id);
   };
 
   const continueNext = () => {
-    REQUIRED_STACK_IDS.forEach((id) => {
+    requiredStackIds.forEach((id) => {
       if (!selectedAddOns.includes(id)) toggleAddOn(id);
+    });
+    hiddenAddOnIds.forEach((id) => {
+      if (selectedAddOns.includes(id)) toggleAddOn(id);
     });
     calculateSummary();
     onNext();
@@ -144,9 +200,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                 <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>Select Additional Service Layers</Typography>
                 <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.52)', mb: 1.5, lineHeight: 1.55 }}>Add manpower, compliance, hygiene, standby and specialist services directly to the same systems page before commercial confirmation.</Typography>
                 <Stack spacing={1} sx={{ maxHeight: { xl: 590 }, overflowY: { xl: 'auto' }, pr: { xl: 0.5 } }}>
-                  {addOns.map((addon) => {
+                  {visibleAddOns.map((addon) => {
                     const checked = selectedIds.has(addon.id);
-                    const locked = REQUIRED_STACK_IDS.includes(addon.id);
+                    const locked = requiredStackIds.includes(addon.id);
                     return (
                       <Paper key={addon.id} onClick={() => setAddOn(addon.id, !checked)} sx={{ p: 1.2, borderRadius: 3, cursor: locked ? 'default' : 'pointer', bgcolor: checked ? 'rgba(198,167,94,.1)' : 'rgba(255,255,255,.025)', border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : 'rgba(255,255,255,.07)'}` }}>
                         <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -154,7 +210,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                           <Box sx={{ minWidth: 0, flex: 1 }}>
                             <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
                               <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: 13 }}>{addon.name}</Typography>
-                              {addon.required && <Chip label="Required" size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
+                              {locked && <Chip label="Required" size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
                             </Stack>
                             <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.54)', lineHeight: 1.45 }}>{addon.desc}</Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mt: 0.5 }}>{aed(addon.price)} / Annual</Typography>
