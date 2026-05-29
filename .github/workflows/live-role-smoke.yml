@@ -11,9 +11,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: live-role-smoke
+  cancel-in-progress: true
+
 env:
-  # Force smoke tests to run against the confirmed Firebase Hosting production URL.
-  # Do not use the custom domain here until DNS/Firebase custom-domain verification is complete.
   E2E_BASE_URL: https://bin-group-57c60.web.app
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
@@ -41,23 +43,31 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Show smoke test target
         run: echo "Running live smoke tests against ${E2E_BASE_URL}"
 
+      - name: Validate public-smoke environment
+        if: github.event_name != 'workflow_dispatch'
+        run: node scripts/verify-e2e-env.mjs
+
+      - name: Validate full role-smoke secrets
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          E2E_STRICT_ROLES: 'true'
+        run: node scripts/verify-e2e-env.mjs
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Run public smoke tests
         if: github.event_name != 'workflow_dispatch'
-        # Run only public smoke tests on push/schedule to avoid false failures from missing E2E secrets
-        run: npx playwright test --grep "production public smoke"
+        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
 
       - name: Run full role smoke tests
         if: github.event_name == 'workflow_dispatch'
-        # Run all non-emulator tests, including authenticated role login smoke tests
-        run: npx playwright test --grep-invert "@emulator-only"
+        run: npx playwright test tests/e2e/live-role-smoke.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop
 
       - name: Upload Playwright report
         if: always()
