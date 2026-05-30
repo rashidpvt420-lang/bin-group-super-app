@@ -408,7 +408,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 value={activeProperty?.address || ''}
                                 onChange={(e) => updateProperty(0, { address: e.target.value } as any)}
                                 autoComplete="off"
-                                inputProps={{ autoComplete: 'off', spellCheck: false }}
                                 helperText="Owner can be at home. Type the actual property address, then click Find Property Address. Use My Current Location only if you are standing at the property."
                                 FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.48)', fontWeight: 700 } }}
                                 sx={fieldSx}
@@ -452,7 +451,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                         value={googleMapsUrlField}
                                         onChange={handleGoogleMapsUrlChange}
                                         autoComplete="off"
-                                        inputProps={{ autoComplete: 'off', spellCheck: false }}
                                         sx={fieldSx}
                                     />
                                 </Grid>
@@ -464,7 +462,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                         value={plusCodeField}
                                         onChange={handlePlusCodeChange}
                                         autoComplete="off"
-                                        inputProps={{ autoComplete: 'off', spellCheck: false }}
                                         sx={fieldSx}
                                     />
                                 </Grid>
