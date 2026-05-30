@@ -43,7 +43,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // App Check (Monitoring Mode)
 if (typeof window !== 'undefined') {
-    const siteKey = process.env.REACT_APP_APP_CHECK_SITE_KEY || "6Lc_REPLACE_ME_WITH_REAL_KEY";
+    const siteKey = process.env.REACT_APP_APP_CHECK_SITE_KEY || process.env.VITE_APP_CHECK_SITE_KEY || "";
     try {
         initializeAppCheck(app, {
             provider: new ReCaptchaV3Provider(siteKey),

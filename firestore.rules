@@ -39,13 +39,35 @@ service cloud.firestore {
         request.auth.token.admin == true ||
         request.auth.token.isAdmin == true ||
         request.auth.token.ceo == true ||
-        hasRole(['admin', 'superAdmin', 'super_admin', 'ceo', 'operations_manager', 'finance_admin', 'dispatcher']) ||
-        (hasUserDoc() && (userDoc().isAdmin == true || userDoc().admin == true))
+        request.auth.token.manager == true ||
+        request.auth.token.operations_admin == true ||
+        request.auth.token.finance_admin == true ||
+        request.auth.token.hr_admin == true ||
+        request.auth.token.support_admin == true ||
+        request.auth.token.role in ['admin', 'ceo', 'super_admin', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        request.auth.token.userRole in ['admin', 'ceo', 'super_admin', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        request.auth.token.primaryRole in ['admin', 'ceo', 'super_admin', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && userDoc().role in ['admin', 'ceo', 'super_admin', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
       );
     }
 
     function hasPermission(permission) {
       return hasUserDoc() && userDoc().permissions[permission] == true;
+    }
+
+    function safeOwnerProfileUpdate() {
+      return signedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid','email','displayName','name','phone','mobile','photoURL','language',
+          'billingContact','notificationPreferences','fcmTokens','pushEnabled','pushUpdatedAt',
+          'updatedAt','lastLoginAt','pdplCompliance','gpsConsent','onboardingComplete'
+        ]) &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
+        (!('activeContractId' in request.resource.data) || request.resource.data.activeContractId == resource.data.activeContractId) &&
+        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.dashboardUnlocked) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
+        (!('adminNotes' in request.resource.data) || request.resource.data.adminNotes == resource.data.adminNotes) &&
+        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions);
     }
 
     function isOwnerId(ownerId) {
@@ -121,9 +143,10 @@ service cloud.firestore {
     }
 
     match /owners/{ownerId} {
-      allow read: if isAdmin() || request.auth.uid == ownerId || emailOwns(resource.data);
-      allow create, update: if isAdmin() || request.auth.uid == ownerId;
-      allow delete: if isAdmin();
+      allow read: if isOwner(ownerId) || emailOwns(resource.data) || isAdmin() || hasPermission('canManageTenants');
+      allow create: if isAdmin() || hasPermission('canManageTenants') || (isOwner(ownerId) && safeOwnerProfileUpdate());
+      allow update: if isAdmin() || hasPermission('canManageTenants') || (isOwner(ownerId) && safeOwnerProfileUpdate());
+      allow delete: if isAdmin() || hasPermission('canManageTenants');
     }
 
     match /tenants/{tenantId} {
@@ -142,6 +165,11 @@ service cloud.firestore {
       allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || request.resource.data.status != 'active'));
       allow delete: if isAdmin();
+    }
+
+    match /properties_pending/{propertyId} {
+      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data);
+      allow create, update, delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
     match /units/{unitId} {
@@ -265,6 +293,11 @@ service cloud.firestore {
     match /occupancies/{occupancyId} {
       allow read: if participantCanRead(resource.data);
       allow write: if isAdmin() || owns(request.resource.data);
+    }
+
+    match /tenant_invitations/{inviteId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.tenantUid == request.auth.uid || resource.data.tenantEmail == request.auth.token.email));
+      allow write: if isAdmin() || (signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid));
     }
 
     match /tenantInvitations/{inviteId} {
