@@ -11,8 +11,16 @@ const getMapsKey = (): string => {
 
 const isEmbeddedMapsEnabled = (): boolean => {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  // Require an explicit 'true' to enable embedded maps. Default: disabled.
-  return env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS === 'true';
+  const flag = env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS ?? env?.REACT_APP_ENABLE_EMBEDDED_GOOGLE_MAPS;
+
+  // Production-safe default:
+  // - explicit "false" disables embedded maps and keeps the manual/open-in-Google-Maps fallback.
+  // - explicit "true" enables embedded maps.
+  // - if the flag is omitted but a Maps key exists, embedded maps should load.
+  // This prevents owner onboarding from silently disabling Maps after a valid key is added.
+  if (flag === 'false') return false;
+  if (flag === 'true') return true;
+  return Boolean(getMapsKey());
 };
 
 const isMapsReady = () => typeof window !== 'undefined' && Boolean((window as any).google?.maps);
@@ -164,7 +172,7 @@ export const useGoogleMaps = () => {
       });
 
     return cleanup;
-  }, [apiKey]);
+  }, [apiKey, mapsEnabled]);
 
   if (!mapsEnabled) {
     return { isLoaded: false, loadError: new Error('EMBEDDED_GOOGLE_MAPS_DISABLED'), apiKey, authFailed: false };
