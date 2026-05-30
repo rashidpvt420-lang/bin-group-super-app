@@ -41,10 +41,10 @@ const LoginPage: React.FC = () => {
         const resolvedRole = isAdmin ? 'admin' : role;
         const roleMatchesIntent = !intendedRoleKey || intendedRoleKey === resolvedRole || (intendedRoleKey === 'owner' && resolvedRole === 'owner');
         if (safeReturnTo && roleMatchesIntent) return safeReturnTo;
-        if (resolvedRole === 'tenant') return '/tenant';
-        if (resolvedRole === 'technician') return '/technician';
-        if (resolvedRole === 'broker') return '/broker';
-        if (resolvedRole === 'admin') return '/admin';
+        if (resolvedRole === 'tenant') return '/tenant/dashboard';
+        if (resolvedRole === 'technician') return '/technician/dashboard';
+        if (resolvedRole === 'broker') return '/broker/dashboard';
+        if (resolvedRole === 'admin') return '/admin/dashboard';
         return '/owner/dashboard';
     };
 
