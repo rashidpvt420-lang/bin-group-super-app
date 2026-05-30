@@ -311,7 +311,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
         initAuth();
         return () => {
-            unsubscribe && unsubscribe();
+            if (unsubscribe) {
+                unsubscribe();
+            }
             window.clearTimeout(timeoutId);
         };
     }, []);
