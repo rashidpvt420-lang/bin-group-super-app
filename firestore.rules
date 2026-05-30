@@ -107,7 +107,7 @@ service cloud.firestore {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
-        (!('status' in request.resource.data) || request.resource.data.status != 'active');
+        (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
     match /users/{userId} {
