@@ -3,7 +3,7 @@ import {
     Box, Typography, Grid, Paper, TextField,
     Button, Stack, Divider, Container, Alert, MenuItem, CircularProgress, alpha
 } from '@mui/material';
-import { MapPin, ArrowRight, ArrowLeft, Info, Globe, ExternalLink, LocateFixed, Navigation } from 'lucide-react';
+import { MapPin, ArrowRight, ArrowLeft, Globe, ExternalLink, LocateFixed, Navigation, Search } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -27,6 +27,24 @@ const readable = (value: string | undefined, fallback: string) => {
 
 const getEmirate = (emirate?: string) => EMIRATES_LIST.find((em) => em.id === emirate) || EMIRATES_LIST[0];
 
+const parseCoordinatesFromText = (value: string): { lat: number; lng: number } | null => {
+    const decoded = decodeURIComponent(value || '');
+    const patterns = [
+        /@(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /[?&](?:q|ll|query)=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /(?:^|\s)(-?\d{1,2}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})(?:\s|$)/
+    ];
+
+    for (const pattern of patterns) {
+        const match = decoded.match(pattern);
+        if (!match) continue;
+        const lat = Number(match[1]);
+        const lng = Number(match[2]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+    }
+    return null;
+};
+
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
@@ -46,6 +64,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [authFailed, setAuthFailed] = useState(false);
     const [initializing, setInitializing] = useState(true);
     const [locating, setLocating] = useState(false);
+    const [resolvingAddress, setResolvingAddress] = useState(false);
     const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
     const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
@@ -160,9 +179,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     emirate: geo.emirate,
                     googleMapsUrl: googleMapsUrlField,
                     plusCode: plusCodeField,
-                    quality: "EXACT_GPS",
+                    quality: 'EXACT_GPS',
                     updatedAt: new Date().toISOString(),
-                    updatedBy: "owner"
+                    updatedBy: 'owner'
                 },
                 lat: geo.lat,
                 lng: geo.lng,
@@ -367,6 +386,107 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         markerRef.current?.setPosition({ lat, lng });
     };
 
+    const resolveWithGoogleGeocoder = (queryText: string): Promise<{ lat: number; lng: number; address: string; emirate?: string; city?: string; area?: string; placeId?: string } | null> => {
+        return new Promise((resolve) => {
+            if (!geocoderRef.current) return resolve(null);
+            geocoderRef.current.geocode({ address: queryText, componentRestrictions: { country: 'AE' } }, (results: any[], status: string) => {
+                if (status !== 'OK' || !results?.[0]?.geometry?.location) return resolve(null);
+                const first = results[0];
+                const parts = extractAddressParts(first.address_components || []);
+                resolve({
+                    lat: first.geometry.location.lat(),
+                    lng: first.geometry.location.lng(),
+                    address: first.formatted_address || queryText,
+                    placeId: first.place_id,
+                    ...parts
+                });
+            });
+        });
+    };
+
+    const resolveWithOpenStreetMap = async (queryText: string): Promise<{ lat: number; lng: number; address: string; emirate?: string; city?: string; area?: string } | null> => {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ae&addressdetails=1&q=${encodeURIComponent(queryText)}`, {
+            headers: { Accept: 'application/json' }
+        });
+        if (!response.ok) return null;
+        const results = await response.json();
+        const first = Array.isArray(results) ? results[0] : null;
+        if (!first?.lat || !first?.lon) return null;
+        const address = first.address || {};
+        return {
+            lat: Number(first.lat),
+            lng: Number(first.lon),
+            address: first.display_name || queryText,
+            emirate: address.state || activeProperty?.emirate || fallbackEmirate.id,
+            city: address.city || address.town || address.village || address.county || activeProperty?.city || activeProperty?.emirate || fallbackEmirate.id,
+            area: address.suburb || address.neighbourhood || address.road || activeProperty?.area || ''
+        };
+    };
+
+    const handleRemotePropertySearch = async () => {
+        const enteredAddress = (activeProperty?.address || '').trim();
+        const selectedEmirate = activeProperty?.emirate || fallbackEmirate.id;
+        const searchableText = [enteredAddress, googleMapsUrlField, plusCodeField].filter(Boolean).join(' ');
+
+        if (!enteredAddress && !googleMapsUrlField && !plusCodeField) {
+            setLocationError('Enter the property address, paste a Google Maps link, or add a Plus Code. You do not need to be at the property.');
+            return;
+        }
+
+        setResolvingAddress(true);
+        setLocationError(null);
+        try {
+            const parsed = parseCoordinatesFromText(searchableText);
+            if (parsed) {
+                commitGeoAnchor({
+                    lat: parsed.lat,
+                    lng: parsed.lng,
+                    address: enteredAddress || `${selectedEmirate}, UAE`,
+                    emirate: selectedEmirate,
+                    city: activeProperty?.city || selectedEmirate,
+                    area: activeProperty?.area || '',
+                    source: 'admin_manual',
+                    placeId: 'MANUAL',
+                    verified: false,
+                    requiresGeoReview: true,
+                    dispatchReady: false
+                });
+                return;
+            }
+
+            const queryText = `${enteredAddress || plusCodeField}, ${selectedEmirate}, UAE`;
+            const googleResult = await resolveWithGoogleGeocoder(queryText);
+            const resolved = googleResult || await resolveWithOpenStreetMap(queryText);
+
+            if (!resolved || !isValidLatLng(resolved.lat, resolved.lng)) {
+                setLocationError('Could not find this property address. Add building name, street, area, and emirate, or paste a Google Maps link with coordinates.');
+                return;
+            }
+
+            commitGeoAnchor({
+                lat: Number(resolved.lat.toFixed(7)),
+                lng: Number(resolved.lng.toFixed(7)),
+                address: resolved.address,
+                emirate: resolved.emirate || selectedEmirate,
+                city: resolved.city || selectedEmirate,
+                area: resolved.area || activeProperty?.area || '',
+                placeId: resolved.placeId || 'REMOTE_ADDRESS',
+                source: resolved.placeId ? 'google_maps' : 'admin_manual',
+                verified: Boolean(resolved.placeId),
+                requiresGeoReview: !resolved.placeId,
+                dispatchReady: Boolean(resolved.placeId)
+            });
+            mapInstanceRef.current?.setCenter({ lat: resolved.lat, lng: resolved.lng });
+            mapInstanceRef.current?.setZoom(17);
+            markerRef.current?.setPosition({ lat: resolved.lat, lng: resolved.lng });
+        } catch (error: any) {
+            console.error('Remote property lookup failed:', error);
+            setLocationError(error?.message || 'Property address lookup failed. Paste a Google Maps link or enter coordinates manually.');
+        } finally {
+            setResolvingAddress(false);
+        }
+    };
+
     const handleContinue = () => {
         const lat = Number(manualLat);
         const lng = Number(manualLng);
@@ -408,7 +528,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     {readable(t('onboarding.location_title'), 'Property Location')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {readable(t('onboarding.location_subtitle'), 'Enter the property address. Google Maps is optional; manual location works for onboarding.')}
+                    Search by property address, paste a Google Maps link, or enter coordinates. You do not need to be at the property.
                 </Typography>
             </Box>
 
@@ -424,59 +544,70 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 {EMIRATES_LIST.map(e => <MenuItem key={e.id} value={e.id}>{readable(t(e.key), e.label)}</MenuItem>)}
                             </TextField>
 
-                            <TextField fullWidth label={readable(t('onboarding.address'), 'Property Address')} placeholder={readable(t('onboarding.address_placeholder'), 'Building name, street, area, emirate')} value={activeProperty?.address || ''} onChange={(e) => updateProperty(0, { address: e.target.value })} inputRef={autocompleteRef} multiline minRows={2} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                            <TextField
+                                fullWidth
+                                label={readable(t('onboarding.address'), 'Property Address')}
+                                placeholder="Building name, street, area, emirate — or paste a Google Maps link"
+                                value={activeProperty?.address || ''}
+                                onChange={(e) => updateProperty(0, { address: e.target.value })}
+                                inputRef={autocompleteRef}
+                                helperText="Owner can be at home. Type the actual property address, then click Find Property Address. Use My Current Location only if you are standing at the property."
+                                FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.48)', fontWeight: 700 } }}
+                                sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                            />
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Latitude" 
-                                        value={manualLat} 
-                                        onChange={(e) => setManualLat(e.target.value)} 
-                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                    <TextField
+                                        fullWidth
+                                        label="Latitude"
+                                        value={manualLat}
+                                        onChange={(e) => setManualLat(e.target.value)}
+                                        helperText="Exact property pin. Auto-filled by Find Property Address, map link, or manual entry."
                                         FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Longitude" 
-                                        value={manualLng} 
-                                        onChange={(e) => setManualLng(e.target.value)} 
-                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                    <TextField
+                                        fullWidth
+                                        label="Longitude"
+                                        value={manualLng}
+                                        onChange={(e) => setManualLng(e.target.value)}
+                                        helperText="Exact property pin. Auto-filled by Find Property Address, map link, or manual entry."
                                         FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
                                     />
                                 </Grid>
                             </Grid>
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Google Maps URL" 
-                                        placeholder="https://maps.google.com/?q=..."
-                                        value={googleMapsUrlField} 
-                                        onChange={handleGoogleMapsUrlChange} 
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    <TextField
+                                        fullWidth
+                                        label="Google Maps URL"
+                                        placeholder="Paste link if the property is elsewhere"
+                                        value={googleMapsUrlField}
+                                        onChange={handleGoogleMapsUrlChange}
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Plus Code" 
+                                    <TextField
+                                        fullWidth
+                                        label="Plus Code"
                                         placeholder="e.g. 785P+GH Dubai"
-                                        value={plusCodeField} 
-                                        onChange={handlePlusCodeChange} 
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        value={plusCodeField}
+                                        onChange={handlePlusCodeChange}
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
                                     />
                                 </Grid>
                             </Grid>
 
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                                <Button variant="contained" onClick={handleRemotePropertySearch} disabled={resolvingAddress} startIcon={resolvingAddress ? <CircularProgress size={14} /> : <Search size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Find Property Address</Button>
                                 <Button variant="outlined" onClick={handleManualCoordinateCommit} startIcon={<MapPin size={16} />} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.35), fontWeight: 900 }}>Save Coordinates</Button>
-                                <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use My Location</Button>
+                                <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use My Current Location</Button>
                                 <Button variant="outlined" href={googleMapsUrl} target="_blank" rel="noreferrer" startIcon={<ExternalLink size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Open in Google Maps</Button>
                             </Stack>
                         </Stack>
@@ -501,7 +632,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                             <Navigation size={20} color={binThemeTokens.gold} /> Live coordinate map preview
                                         </Typography>
                                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
-                                            Google Maps embedded preview is unavailable on this domain, so this step uses a live coordinate map preview. Save coordinates here; technicians still open the exact property location in Google Maps.
+                                            Type the property address or paste a Google Maps link, then click Find Property Address. The owner does not need to be physically at the property.
                                         </Typography>
                                     </Box>
                                     <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
@@ -518,12 +649,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                         sx={{ width: '100%', height: '100%', border: 0 }}
                                     />
                                 </Box>
-
-                                {mapFailureReason && mapFailureReason !== 'EMBEDDED_GOOGLE_MAPS_DISABLED' && (
-                                    <Typography variant="caption" sx={{ display: 'block', px: 2.5, py: 1.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>
-                                        Diagnostic: {mapFailureReason}
-                                    </Typography>
-                                )}
                             </Paper>
                         )}
 
