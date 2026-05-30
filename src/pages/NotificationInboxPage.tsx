@@ -36,7 +36,7 @@ export default function NotificationInboxPage() {
 
         const q = query(
             collection(db, 'notifications'),
-            where('userId', '==', user.uid),
+            where('recipientId', '==', user.uid),
             orderBy('createdAt', 'desc')
         );
 

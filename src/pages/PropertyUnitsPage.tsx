@@ -63,10 +63,15 @@ export default function PropertyUnitsPage() {
                 // 4. Fetch Tickets for this property
                 const ticketsSnap = await getDocs(query(
                     collection(db, 'maintenanceTickets'), 
-                    where('propertyId', '==', propertyId),
-                    orderBy('createdAt', 'desc')
+                    where('propertyId', '==', propertyId)
                 ));
-                setTickets(ticketsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const fetchedTickets = ticketsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                fetchedTickets.sort((a: any, b: any) => {
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+                    return dateB.getTime() - dateA.getTime();
+                });
+                setTickets(fetchedTickets);
 
             } catch (err) {
                 console.error("Failed to fetch asset drill-down:", err);
