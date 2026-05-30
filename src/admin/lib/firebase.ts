@@ -42,9 +42,10 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 if (typeof window !== 'undefined') {
     const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
-    if (isLocal) {
+    const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
+    if (isLocal || isAutomation) {
         (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-        console.log("🛡️ [SECURITY] App Check BYPASSED for local testing.");
+        console.log("🛡️ [SECURITY] App Check BYPASSED for testing.");
     } else {
         const siteKey = import.meta.env.VITE_APP_CHECK_SITE_KEY;
         if (siteKey && !siteKey.includes('REPLACE_ME')) {

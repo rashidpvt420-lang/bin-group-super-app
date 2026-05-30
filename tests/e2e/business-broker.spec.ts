@@ -12,8 +12,8 @@ async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], button:has-text("SIGN IN"), button:has-text("Sign in"), button:has-text("Login")').first().click();
-  await page.waitForURL('**/broker', { timeout: 15_000 });
+  await page.locator('form button[type="submit"]').first().click();
+  await page.waitForURL('**/broker/dashboard', { timeout: 15_000 });
 }
 
 test.describe('Broker Business Workflow', () => {
@@ -24,7 +24,7 @@ test.describe('Broker Business Workflow', () => {
   });
 
   test('Broker can submit a new property lead and view commissions', async ({ page }) => {
-    await page.goto('/broker', { waitUntil: 'networkidle' });
+    await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     
     // Submit Lead
     const submitLeadBtn = page.locator('button:has-text("Submit Lead"), button:has-text("New Lead")').first();
@@ -43,7 +43,7 @@ test.describe('Broker Business Workflow', () => {
     }
 
     // View Commissions
-    await page.goto('/broker/commissions', { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' }).catch(() => {});
     
     const commissionTable = page.locator('table, [role="table"], .MuiDataGrid-root').first();
     await expect(commissionTable).toBeVisible({ timeout: 5000 }).catch(() => {});

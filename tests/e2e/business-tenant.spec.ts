@@ -12,8 +12,8 @@ async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], button:has-text("SIGN IN"), button:has-text("Sign in"), button:has-text("Login")').first().click();
-  await page.waitForURL('**/tenant', { timeout: 15_000 });
+  await page.locator('form button[type="submit"]').first().click();
+  await page.waitForURL('**/tenant/dashboard', { timeout: 15_000 });
 }
 
 test.describe('Tenant Business Workflow', () => {
@@ -25,7 +25,7 @@ test.describe('Tenant Business Workflow', () => {
 
   test('Tenant can create a service request and upload photo', async ({ page }) => {
     // Navigate to tenant dashboard
-    await page.goto('/tenant', { waitUntil: 'networkidle' });
+    await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     
     // Open new ticket modal
     const createBtn = page.locator('button:has-text("New Request"), button:has-text("Report Issue"), button:has-text("Create Ticket")').first();
@@ -59,7 +59,7 @@ test.describe('Tenant Business Workflow', () => {
   });
 
   test('Tenant can approve completed work', async ({ page }) => {
-    await page.goto('/tenant', { waitUntil: 'networkidle' });
+    await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     
     // Wait for tickets to load
     await page.waitForTimeout(2000);

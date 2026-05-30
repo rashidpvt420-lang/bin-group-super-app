@@ -12,8 +12,8 @@ async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], button:has-text("SIGN IN"), button:has-text("Sign in"), button:has-text("Login")').first().click();
-  await page.waitForURL('**/technician', { timeout: 15_000 });
+  await page.locator('form button[type="submit"]').first().click();
+  await page.waitForURL('**/technician/dashboard', { timeout: 15_000 });
 }
 
 test.describe('Technician Business Workflow', () => {
@@ -27,7 +27,7 @@ test.describe('Technician Business Workflow', () => {
   });
 
   test('Technician can accept a job, upload proofs, and resolve ticket', async ({ page }) => {
-    await page.goto('/technician', { waitUntil: 'networkidle' });
+    await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
     
     // Wait for assigned jobs to load
     await page.waitForTimeout(2000);

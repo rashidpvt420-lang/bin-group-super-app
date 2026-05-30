@@ -16,7 +16,7 @@ async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], button:has-text("SIGN IN"), button:has-text("Sign in"), button:has-text("Login")').first().click();
+  await page.locator('form button[type="submit"]').first().click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_500);
 }
