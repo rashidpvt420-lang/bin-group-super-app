@@ -102,10 +102,10 @@ test.describe('Owner Business Workflow', () => {
 
     // Step 3: Property Location
     console.log('Step 3: Filling location...');
-    await page.getByLabel('Property Address', { exact: false }).first().fill('E2E Villa 45, Marina, Dubai');
+    await page.locator('input[name="address"]').first().fill('E2E Villa 45, Marina, Dubai');
     // Ensure coordinates are filled
-    await page.locator('label:has-text("Latitude") + div input, input[aria-label*="latitude" i], input[label*="latitude" i]').first().fill('25.2048');
-    await page.locator('label:has-text("Longitude") + div input, input[aria-label*="longitude" i], input[label*="longitude" i]').first().fill('55.2708');
+    await page.locator('input[name="latitude"]').first().fill('25.2048');
+    await page.locator('input[name="longitude"]').first().fill('55.2708');
 
     // Click Continue
     await page.locator('button:has-text("Continue")').first().click();
@@ -164,7 +164,7 @@ test.describe('Owner Business Workflow', () => {
     // Step 9: Contract Signature
     console.log('Step 9: Signing contract...');
     await page.locator('label:has-text("Type your full legal name to sign") + div input, input[aria-label*="sign" i]').first().fill('E2E Owner');
-    await page.locator('input[type="checkbox"]').first().check();
+    await page.locator('input[type="checkbox"]').first().check({ force: true });
     await page.locator('button:has-text("Sign Full Agreement & Proceed to Payment")').first().click();
     await page.waitForTimeout(2000);
 
