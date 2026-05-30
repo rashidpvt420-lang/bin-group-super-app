@@ -78,12 +78,11 @@ async function login(page: Page, email: string, password: string) {
     'input[name*="password" i]',
     'input[autocomplete="current-password"]'
   ].join(', ')).first();
-
   await expect(emailInput, 'Login email field should be visible').toBeVisible({ timeout: 25_000 });
   await expect(passwordInput, 'Login password field should be visible').toBeVisible({ timeout: 25_000 });
   await emailInput.fill(email);
   await passwordInput.fill(password);
-  await page.locator('button[type="submit"], button:has-text("Login"), button:has-text("Sign in"), button:has-text("SIGN IN"), button:has-text("دخول")').first().click();
+  await page.locator('form button[type="submit"]').first().click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_000);
   await expectNoRuntimeCrash(page, '/login after submit');

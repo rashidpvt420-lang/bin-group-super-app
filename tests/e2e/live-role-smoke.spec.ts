@@ -115,7 +115,7 @@ async function login(page: Page, email: string, password: string) {
   await emailInput.fill(email);
   await passwordInput.fill(password);
 
-  const submit = page.locator('button[type="submit"], button:has-text("Login"), button:has-text("Sign in"), button:has-text("SIGN IN"), button:has-text("دخول")').first();
+  const submit = page.locator('form button[type="submit"]').first();
   await expect(submit, 'Login page must expose a submit button').toBeVisible({ timeout: 20_000 });
   await submit.click();
 }

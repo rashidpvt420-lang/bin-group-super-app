@@ -15,7 +15,7 @@ async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], button:has-text("SIGN IN"), button:has-text("Sign in"), button:has-text("Login")').first().click();
+  await page.locator('form button[type="submit"]').first().click();
   // Wait for the admin dashboard or portal to load
   await page.waitForTimeout(3000); 
 }
@@ -29,7 +29,7 @@ test.describe('Admin Business Workflow', () => {
 
   test('Admin can add a property and bulk-upload 53 tenants', async ({ page }) => {
     // Navigate to properties
-    await page.goto('/admin/properties', { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto('/admin/properties', { waitUntil: 'domcontentloaded' }).catch(() => {});
     
     // Add property
     const addPropertyBtn = page.locator('button:has-text("Add Property"), button:has-text("Create Property")').first();
@@ -41,7 +41,7 @@ test.describe('Admin Business Workflow', () => {
     }
 
     // Navigate to Tenants
-    await page.goto('/admin/tenants', { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto('/admin/tenants', { waitUntil: 'domcontentloaded' }).catch(() => {});
     
     // Bulk Upload
     const bulkUploadBtn = page.locator('button:has-text("Bulk Upload"), button:has-text("Import CSV")').first();
@@ -66,7 +66,7 @@ test.describe('Admin Business Workflow', () => {
 
   test('Admin can assign a technician and approve contract', async ({ page }) => {
     // Navigate to Tickets
-    await page.goto('/admin/tickets', { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto('/admin/tickets', { waitUntil: 'domcontentloaded' }).catch(() => {});
     
     // Open a ticket
     const viewTicketBtn = page.locator('button:has-text("View"), a:has-text("View")').first();
@@ -92,7 +92,7 @@ test.describe('Admin Business Workflow', () => {
     }
 
     // Navigate to Contracts
-    await page.goto('/admin/contracts', { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto('/admin/contracts', { waitUntil: 'domcontentloaded' }).catch(() => {});
     
     // Approve contract
     const approveBtn = page.locator('button:has-text("Approve Contract"), button:has-text("Approve")').first();
