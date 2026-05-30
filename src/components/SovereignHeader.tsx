@@ -20,6 +20,8 @@ const BinGroupHeader: React.FC = () => {
     const location = useLocation();
     const [unreadCount, setUnreadCount] = useState(0);
     const isCompanyRoute = location.pathname === '/' || location.pathname === '/company';
+    const normalizedRole = (role || '').toLowerCase();
+    const canUseAiStudio = normalizedRole === 'owner' || normalizedRole === 'tenant';
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -35,10 +37,13 @@ const BinGroupHeader: React.FC = () => {
     };
 
     const goDashboard = () => {
-        const r = (role || '').toLowerCase();
+        const r = normalizedRole;
         if (r === 'admin' || r === 'ceo') navigate('/admin/dashboard');
         else if (r === 'owner') navigate('/owner/dashboard');
-        else navigate(`/${r}/dashboard`);
+        else if (r === 'tenant') navigate('/tenant/dashboard');
+        else if (r === 'technician') navigate('/technician/dashboard');
+        else if (r === 'broker') navigate('/broker/dashboard');
+        else navigate('/gateway');
     };
 
     return (
@@ -71,9 +76,6 @@ const BinGroupHeader: React.FC = () => {
                                 <Button onClick={() => navigate('/onboarding')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     Start Onboarding
                                 </Button>
-                                <Button onClick={() => navigate('/ai-design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                                    AI Studio
-                                </Button>
                             </Stack>
                         ) : (
                             <Stack direction="row" spacing={1} alignItems="center">
@@ -83,9 +85,11 @@ const BinGroupHeader: React.FC = () => {
                                 <Button onClick={() => navigate('/company')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
                                     {t('nav.company_profile')}
                                 </Button>
-                                <Button onClick={() => navigate('/design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                                    {t('nav.ai_studio')}
-                                </Button>
+                                {canUseAiStudio && (
+                                    <Button onClick={() => navigate('/design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                                        {t('nav.ai_studio')}
+                                    </Button>
+                                )}
                             </Stack>
                         )}
                     </Box>

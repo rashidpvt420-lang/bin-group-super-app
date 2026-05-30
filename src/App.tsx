@@ -167,7 +167,7 @@ function PushNotificationBootstrap() {
 
 const PUBLIC_ROUTE_PATHS = new Set([
   '/', '/owner-landing', '/v1', '/login', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
-  '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance', '/ai-design-studio',
+  '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
   '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
   '/services', '/request-demo', '/tenant-invite', '/company',
 ]);
@@ -252,7 +252,7 @@ function AppContent() {
         <Route path="/brokers" element={<PublicMarketingPage page="brokers" />} />
         <Route path="/property-management" element={<PublicMarketingPage page="property-management" />} />
         <Route path="/maintenance" element={<PublicMarketingPage page="maintenance" />} />
-        <Route path="/ai-design-studio" element={<PublicMarketingPage page="ai-design-studio" />} />
+        <Route path="/ai-design-studio" element={<Navigate to="/login?intendedRole=owner" replace />} />
         <Route path="/majlis-care" element={<PublicMarketingPage page="majlis-care" />} />
         <Route path="/stadiums" element={<PublicMarketingPage page="stadiums" />} />
         <Route path="/hotels" element={<PublicMarketingPage page="hotels" />} />
@@ -274,8 +274,8 @@ function AppContent() {
         <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
         <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'technician', 'broker']}><NotificationInboxPage /></ProtectedRoute>} />
-        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'broker', 'admin', 'ceo']}><DesignStudioPage /></ProtectedRoute>} />
-        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'broker', 'admin', 'ceo']}><DesignRequestDetailPage /></ProtectedRoute>} />
+        <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignStudioPage /></ProtectedRoute>} />
+        <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignRequestDetailPage /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
         <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantApp /></ProtectedRoute>} />
         <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianApp /></ProtectedRoute>} />
@@ -292,7 +292,7 @@ function AppContent() {
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {!location.pathname.startsWith('/onboarding') && !isAdminRoute && (
+      {!location.pathname.startsWith('/onboarding') && !publicRoute && !isAdminRoute && ['owner', 'tenant'].includes((role || '').toLowerCase()) && (
         <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
       )}
       <IOSPwaGuardian />
@@ -312,6 +312,23 @@ export default function App() {
               <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
                 <Routes>
                   <Route path="/" element={null} />
+                  <Route path="/owners" element={null} />
+                  <Route path="/tenants" element={null} />
+                  <Route path="/technicians" element={null} />
+                  <Route path="/brokers" element={null} />
+                  <Route path="/property-management" element={null} />
+                  <Route path="/maintenance" element={null} />
+                  <Route path="/majlis-care" element={null} />
+                  <Route path="/stadiums" element={null} />
+                  <Route path="/hotels" element={null} />
+                  <Route path="/malls" element={null} />
+                  <Route path="/hospitals" element={null} />
+                  <Route path="/government-properties" element={null} />
+                  <Route path="/security" element={null} />
+                  <Route path="/services" element={null} />
+                  <Route path="/contact" element={null} />
+                  <Route path="/request-demo" element={null} />
+                  <Route path="/ai-design-studio" element={null} />
                   <Route path="/tenant/*" element={null} />
                   <Route path="/owner/*" element={null} />
                   <Route path="/technician/*" element={null} />
