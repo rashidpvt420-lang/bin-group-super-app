@@ -91,15 +91,15 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 let appCheckInstance: AppCheck | null = null;
-const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY') || '6LdJpTcqAAAAAPv9z_M7pWbB8J1mYtTRg3e_6H1D';
-const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') !== 'false';
+const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
+const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
 
 if (typeof window !== 'undefined' && appCheckExplicitlyEnabled) {
   const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
   const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
   if (isLocal || isAutomation) {
     (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    console.info('🛡️ [SECURITY] App Check BYPASSED with debug token for testing.');
+    console.info('[Firebase] App Check bypassed with debug token for testing.');
   } else if (appCheckSiteKey && !appCheckSiteKey.includes('REPLACE_ME')) {
     try {
       appCheckInstance = initializeAppCheck(app, {
@@ -110,6 +110,8 @@ if (typeof window !== 'undefined' && appCheckExplicitlyEnabled) {
     } catch (error) {
       console.warn('[Firebase] App Check initialization failed. Continuing without App Check token injection:', error);
     }
+  } else {
+    console.warn('[Firebase] App Check requested but VITE_APP_CHECK_SITE_KEY is missing. Continuing without App Check token injection.');
   }
 }
 
