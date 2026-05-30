@@ -61,6 +61,8 @@
     "@typescript-eslint/eslint-plugin": "^8.59.2",
     "@typescript-eslint/parser": "^8.59.2",
     "@vitejs/plugin-react": "^4.2.1",
+    "ajv": "8.17.1",
+    "ajv-keywords": "5.1.0",
     "eslint": "^8.56.0",
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-react-hooks": "^4.6.2",
@@ -78,7 +80,7 @@
       "ajv": "^6.12.4"
     },
     "ajv-keywords@5": {
-      "ajv": "^8.20.0"
+      "ajv": "8.17.1"
     }
   }
 }
