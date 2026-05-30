@@ -4,6 +4,26 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "ui": {
+      "host": "127.0.0.1",
+      "port": 4000,
+      "enabled": true
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4400
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4500
+    },
+    "singleProjectMode": true
+  },
   "functions": [
     {
       "source": "functions",
