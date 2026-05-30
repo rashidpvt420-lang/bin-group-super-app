@@ -249,10 +249,10 @@ export default function TenantsManagementPage() {
                     <AdminCrudActions 
                         id={tenant.uid}
                         actions={[
-                             { type: 'view', onClick: (id) => {} },
-                             { type: 'edit', onClick: (id) => handleEdit(tenant) },
+                             { type: 'view', onClick: () => undefined },
+                             { type: 'edit', onClick: () => handleEdit(tenant) },
                              { type: 'delete', onClick: (id) => handleDelete(id), requiresConfirm: true, confirmTitle: 'ARCHIVE TENANT', confirmMessage: 'Are you sure you want to archive this tenant? This will vacate their linked unit.' },
-                             { type: 'share', label: 'SEND INVITE', onClick: (id) => handleSendInvite(tenant) }
+                             { type: 'share', label: 'SEND INVITE', onClick: () => handleSendInvite(tenant) }
                         ]}
                     />
                 </TableCell>
@@ -334,7 +334,8 @@ export default function TenantsManagementPage() {
        <BulkTenantImportDialog
             open={openBulk}
             onClose={() => setOpenBulk(false)}
-            onSuccess={(msg) => setSuccess(msg)}
+            properties={properties}
+            onImportComplete={() => setSuccess('Bulk tenant import completed.')}
        />
     </AdminPageFrame>
   );
