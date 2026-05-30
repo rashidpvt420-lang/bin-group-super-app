@@ -31,7 +31,7 @@
     "paths": {
       "@bin/shared": ["./src/shared-exports.ts"],
       "@/*": ["./src/*"],
-      "shared/*": ["../Desktop/bin app/packages/shared/src/*"]
+      "shared/*": ["./packages/shared/src/*"]
     }
   },
   "include": [
