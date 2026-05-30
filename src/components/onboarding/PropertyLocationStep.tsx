@@ -27,6 +27,16 @@ const readable = (value: string | undefined, fallback: string) => {
 
 const getEmirate = (emirate?: string) => EMIRATES_LIST.find((em) => em.id === emirate) || EMIRATES_LIST[0];
 
+type RemoteAddressResult = {
+    lat: number;
+    lng: number;
+    address: string;
+    emirate?: string;
+    city?: string;
+    area?: string;
+    placeId?: string;
+};
+
 const parseCoordinatesFromText = (value: string): { lat: number; lng: number } | null => {
     const decoded = decodeURIComponent(value || '');
     const patterns = [
@@ -386,7 +396,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         markerRef.current?.setPosition({ lat, lng });
     };
 
-    const resolveWithGoogleGeocoder = (queryText: string): Promise<{ lat: number; lng: number; address: string; emirate?: string; city?: string; area?: string; placeId?: string } | null> => {
+    const resolveWithGoogleGeocoder = (queryText: string): Promise<RemoteAddressResult | null> => {
         return new Promise((resolve) => {
             if (!geocoderRef.current) return resolve(null);
             geocoderRef.current.geocode({ address: queryText, componentRestrictions: { country: 'AE' } }, (results: any[], status: string) => {
@@ -404,7 +414,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         });
     };
 
-    const resolveWithOpenStreetMap = async (queryText: string): Promise<{ lat: number; lng: number; address: string; emirate?: string; city?: string; area?: string } | null> => {
+    const resolveWithOpenStreetMap = async (queryText: string): Promise<RemoteAddressResult | null> => {
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ae&addressdetails=1&q=${encodeURIComponent(queryText)}`, {
             headers: { Accept: 'application/json' }
         });
@@ -456,7 +466,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
             const queryText = `${enteredAddress || plusCodeField}, ${selectedEmirate}, UAE`;
             const googleResult = await resolveWithGoogleGeocoder(queryText);
-            const resolved = googleResult || await resolveWithOpenStreetMap(queryText);
+            const resolved: RemoteAddressResult | null = googleResult || await resolveWithOpenStreetMap(queryText);
 
             if (!resolved || !isValidLatLng(resolved.lat, resolved.lng)) {
                 setLocationError('Could not find this property address. Add building name, street, area, and emirate, or paste a Google Maps link with coordinates.');
@@ -666,3 +676,4 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 };
 
 export default PropertyLocationStep;
+
