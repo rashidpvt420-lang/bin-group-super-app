@@ -401,6 +401,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
                             <TextField
                                 fullWidth
+                                name="address"
+                                inputProps={{ 'data-testid': 'property-address-input' }}
                                 label={readable(t('onboarding.address'), 'Property Address')}
                                 placeholder="Building name, street, area, emirate — or paste a Google Maps link"
                                 value={activeProperty?.address || ''}
@@ -416,6 +418,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
                                         fullWidth
+                                        name="latitude"
+                                        inputProps={{ 'data-testid': 'property-latitude-input' }}
                                         label="Latitude"
                                         value={manualLat}
                                         onChange={(e) => setManualLat(e.target.value)}
@@ -427,6 +431,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
                                         fullWidth
+                                        name="longitude"
+                                        inputProps={{ 'data-testid': 'property-longitude-input' }}
                                         label="Longitude"
                                         value={manualLng}
                                         onChange={(e) => setManualLng(e.target.value)}
