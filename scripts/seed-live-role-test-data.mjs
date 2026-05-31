@@ -29,6 +29,15 @@ async function getUserByEmailOrNull(email) {
   }
 }
 
+function uniqueDocs(docs) {
+  const seen = new Set();
+  return docs.filter((docSnap) => {
+    if (seen.has(docSnap.ref.path)) return false;
+    seen.add(docSnap.ref.path);
+    return true;
+  });
+}
+
 const tenantUser = await getUserByEmailOrNull(tenantEmail);
 if (!tenantUser?.uid) {
   throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
@@ -41,6 +50,14 @@ const tenantUid = tenantUser.uid;
 const propertyId = 'e2e-live-role-property';
 const unitId = `e2e-live-role-unit-${safeId(tenantUid)}`;
 const contractId = `e2e-live-role-contract-${safeId(tenantUid)}`;
+
+const gps = {
+  lat: 24.2075,
+  lng: 55.7447,
+  latitude: 24.2075,
+  longitude: 55.7447,
+  address: 'E2E Live Role Tower, Al Ain, UAE',
+};
 
 await db.collection('properties').doc(propertyId).set({
   id: propertyId,
@@ -55,26 +72,32 @@ await db.collection('properties').doc(propertyId).set({
   ownerEmail: ownerEmail || null,
   units: 1,
   floors: 1,
-  location: {
-    lat: 24.2075,
-    lng: 55.7447,
-    latitude: 24.2075,
-    longitude: 55.7447,
-    address: 'E2E Live Role Tower, Al Ain, UAE',
-  },
-  propertyLocation: {
-    lat: 24.2075,
-    lng: 55.7447,
-    latitude: 24.2075,
-    longitude: 55.7447,
-    address: 'E2E Live Role Tower, Al Ain, UAE',
-  },
+  latitude: gps.latitude,
+  longitude: gps.longitude,
+  lat: gps.lat,
+  lng: gps.lng,
+  geoPoint: gps,
+  gps,
+  coordinates: gps,
+  location: gps,
+  propertyLocation: gps,
   status: 'ACTIVE',
   contractStatus: 'ACTIVE',
   e2eLaunchSeed: true,
   updatedAt: now,
   createdAt: now,
 }, { merge: true });
+
+if (ownerUser?.uid) {
+  await db.collection('users').doc(ownerUid).set({
+    uid: ownerUid,
+    email: ownerEmail,
+    role: 'owner',
+    status: 'active',
+    e2eLaunchSeed: true,
+    updatedAt: now,
+  }, { merge: true });
+}
 
 await db.collection('contracts').doc(contractId).set({
   id: contractId,
@@ -98,7 +121,7 @@ await db.collection('contracts').doc(contractId).set({
   createdAt: now,
 }, { merge: true });
 
-await db.collection('units').doc(unitId).set({
+const seededUnitPayload = {
   id: unitId,
   unitId,
   unitNumber: 'E2E-101',
@@ -116,7 +139,34 @@ await db.collection('units').doc(unitId).set({
   e2eLaunchSeed: true,
   updatedAt: now,
   createdAt: now,
-}, { merge: true });
+};
+
+await db.collection('units').doc(unitId).set(seededUnitPayload, { merge: true });
+
+const unitQueries = await Promise.all([
+  db.collection('units').where('tenantId', '==', tenantUid).get(),
+  db.collection('units').where('tenantUid', '==', tenantUid).get(),
+  db.collection('units').where('tenantEmail', '==', tenantEmail).get(),
+]);
+
+const tenantUnitDocs = uniqueDocs(unitQueries.flatMap((snap) => snap.docs));
+const batch = db.batch();
+tenantUnitDocs.forEach((docSnap) => {
+  batch.set(docSnap.ref, {
+    propertyId,
+    propertyName: 'E2E Live Role Tower',
+    tenantId: tenantUid,
+    tenantUid,
+    tenantEmail,
+    contractId,
+    activeContractId: contractId,
+    status: 'OCCUPIED',
+    occupancyStatus: 'OCCUPIED',
+    e2eLaunchSeed: true,
+    updatedAt: now,
+  }, { merge: true });
+});
+await batch.commit();
 
 await db.collection('users').doc(tenantUid).set({
   uid: tenantUid,
@@ -136,3 +186,4 @@ console.log(`tenantUid=${tenantUid}`);
 console.log(`propertyId=${propertyId}`);
 console.log(`unitId=${unitId}`);
 console.log(`contractId=${contractId}`);
+console.log(`repairedTenantUnits=${tenantUnitDocs.length}`);
