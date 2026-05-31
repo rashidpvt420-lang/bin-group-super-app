@@ -73,8 +73,27 @@ patchIfNeeded(
   ["match /technicians/{techId}", "allow read: if isAdmin() || hasPermission('canManageTechnicians') || hasPermission('canDispatchJobs') || isTechnician(techId);"]
 );
 
+const hardenedNotificationRules = `    match /notifications/{notifId} {
+      allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || ((resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow delete: if isAdmin();
+    }`;
+
 patchIfNeeded(
-  'notification creation must be recipient scoped',
+  'notification writes must be server/admin gated',
+  `    match /notifications/{notifId} {
+      allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow create: if signedIn();
+      allow update: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }`,
+  hardenedNotificationRules,
+  ["match /notifications/{notifId}", "allow create: if isAdmin();", "affectedKeys().hasOnly(['read'])"]
+);
+
+patchIfNeeded(
+  'legacy notification creation must not allow arbitrary signed-in writes',
   `    match /notifications/{notifId} {
       allow read: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid);
       allow create: if isAdmin() || signedIn();
@@ -83,11 +102,11 @@ patchIfNeeded(
     }`,
   `    match /notifications/{notifId} {
       allow read: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid);
-      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
       allow delete: if isAdmin();
     }`,
-  ["match /notifications/{notifId}", "allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid);"]
+  ["match /notifications/{notifId}", "allow create: if isAdmin();", "affectedKeys().hasOnly(['read'])"]
 );
 
 patchIfNeeded(
