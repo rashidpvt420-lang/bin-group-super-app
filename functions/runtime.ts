@@ -12,6 +12,7 @@ export * from "./stripePayment";
 export * from "./adminOwnerOperations";
 export * from "./mailDelivery";
 export * from "./notificationDelivery";
+export * from "./ticketNormalization";
 
 if (!admin.apps.length) {
     admin.initializeApp();
