@@ -31,23 +31,23 @@ export const COMPANY_PROFILE_DOC_PATH = ['settings', 'companyProfile'] as const;
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   companyName: 'BIN GROUP - UAE General Maintenance & Property Management',
   licenseInfo: 'All Kind Building Projects Contracting - L.L.C - S.P.C | UAE first unified property care operating model',
-  headline: 'UAE-first no-call property care: maintenance, property management, contracts, tenant service, technician dispatch, proof-of-work, and owner visibility in one system.',
+  headline: 'UAE-first sovereign property care OS: maintenance, property management, owner contracts, tenant service, technician dispatch, proof-of-work, and AI property intelligence in one system.',
   mission: 'To remove delay, confusion, and manual follow-up from UAE property operations by giving owners, tenants, brokers, and technicians one transparent digital operating system.',
-  vision: 'To make BIN GROUP the UAE benchmark for smart maintenance, annual service contracts, property management, and evidence-based facility operations.',
-  promise: 'No waiting. No guessing. Real-time property care with direct field execution, photo evidence, GPS visibility, contract clarity, and owner confidence.',
-  aboutText: 'BIN GROUP solves the full property-care chain: instant owner quote, contract selection, 15% mobilization, monthly or quarterly or annual payment planning, tenant service requests, technician GPS dispatch, before-and-after proof, broker referrals, AI design previews, and property passport records.',
+  vision: 'To make BIN GROUP the UAE benchmark for smart maintenance, annual service contracts, property management, direct technician operations, and evidence-based facility execution.',
+  promise: 'No waiting. No guessing. Real-time property care with direct field execution, photo evidence, GPS visibility, contract clarity, sovereign-grade records, and owner confidence.',
+  aboutText: 'BIN GROUP solves the full property-care chain: instant owner quote, contract selection, 15% mobilization, monthly or quarterly or annual payment planning, tenant service requests, technician GPS dispatch, HR-free workfeed, before-and-after proof, broker referrals, AI design previews, and property passport records.',
   services: [
     { id: 'maintenance-contracts', title: 'Annual Maintenance Contracts', desc: 'High-value maintenance contracts for villas, towers, hotels, schools, clinics, hospitals, offices, accommodations, and government-style portfolios. Typical contract value starts from AED 50,000 per year and scales by asset size and SLA level.', icon: 'wrench' },
     { id: 'property-management', title: 'Property Management', desc: 'Unit management, tenant records, occupancy tracking, complaint handling, lease support, rent-cycle visibility, and owner reporting. Property management can be charged at 5% per rented unit or as agreed per portfolio.', icon: 'briefcase' },
     { id: 'full-coverage', title: 'Maintenance + Property Management', desc: 'Full-coverage operating model combining maintenance execution, tenant support, owner dashboard, proof-of-work, renewal readiness, and financial visibility for serious owners and institutional assets.', icon: 'building' },
-    { id: 'technician-dispatch', title: 'Direct Technician Dispatch', desc: 'HR-free field execution model where technicians receive direct workfeeds, GPS-based jobs, proof upload requirements, and performance accountability without manual bottlenecks.', icon: 'zap' },
+    { id: 'technician-dispatch', title: 'Direct Technician Dispatch', desc: 'HR-free field execution model where technicians receive direct workfeeds, GPS-based jobs, proof upload requirements, safety notes, SLA expectations, and performance accountability without manual bottlenecks.', icon: 'zap' },
     { id: 'ai-property-intelligence', title: 'AI Property Intelligence', desc: 'AI-assisted quote logic, property classification, design previews, predictive maintenance signals, asset health scoring, and portfolio-level decision support.', icon: 'sparkles' },
     { id: 'audit-compliance', title: 'Evidence, Audit & Compliance', desc: 'Before-and-after photos, ticket history, property passport records, invoice traceability, tenant confirmation, owner visibility, and structured UAE-ready reporting.', icon: 'shield' },
   ],
   workflows: [
     'Owner Onboarding: property details, instant quote, contract selection, 15% mobilization, payment plan, and activation.',
     'Tenant Service: photo request, category selection, priority, location confirmation, and service tracking.',
-    'Technician Execution: direct job feed, GPS route context, evidence upload, and completion confirmation.',
+    'Technician Execution: direct job feed, GPS route context, evidence upload, safety guidance, and completion confirmation.',
     'Broker Growth: lead registration, owner referral visibility, and commission-ready pipeline records.',
     'AI Design & Property Passport: interior or exterior visualization, asset history, contracts, tickets, and compliance records.',
   ],
@@ -56,7 +56,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     'GPS-enabled technician routing and field accountability.',
     'Digital proof-of-work with before-and-after evidence.',
     'Property passport records for every building, unit, contract, and service request.',
-    'AI-powered quote, design, classification, and maintenance intelligence.',
+    'AI-powered quote, design, classification, maintenance, and HR-style technician support intelligence.',
   ],
   serviceAreas: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain', 'Al Ain'],
   contact: {
@@ -69,10 +69,13 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
 };
 
 function isLegacyPlaceholderProfile(data?: Partial<CompanyProfile> | null) {
+  const name = String(data?.companyName || '').toLowerCase();
+  const license = String(data?.licenseInfo || '').toLowerCase();
+  const email = String(data?.contact?.email || '').toLowerCase();
   return Boolean(
-    data?.companyName === 'BIN GROUP INSTITUTIONAL' ||
-    data?.licenseInfo === 'License #998273 - Dubai Economy' ||
-    data?.contact?.email === 'support@bingroup.ae'
+    (name.includes('institutional') && !name.includes('maintenance')) ||
+    (license.includes('dubai economy') && !license.includes('l.l.c')) ||
+    (email.startsWith('support@') && !email.includes('bin-group'))
   );
 }
 
