@@ -69,10 +69,14 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
           </Stack>
 
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
-            <IconButton onClick={() => navigate('/design-studio')} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.08) }} title={label('nav.ai_studio', 'AI Studio', 'استوديو الذكاء الاصطناعي')}>
+            <IconButton
+              onClick={() => navigate('/broker/referrals')}
+              sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.08) }}
+              title={label('nav.ai_studio', 'AI Studio requests are available after an owner or tenant contract is linked', 'طلبات الاستوديو متاحة بعد ربط عقد مالك أو مستأجر')}
+            >
               <Paintbrush size={18} />
             </IconButton>
-            <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 3, px: 1.5 }}>
+            <IconButton id="broker-lang-toggle" onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 3, px: 1.5 }}>
               <Globe size={18} />
               <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950 }}>{lang === 'en' ? 'AR' : 'EN'}</Typography>
             </IconButton>
@@ -95,7 +99,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
-              <Button key={item.key} onClick={() => navigate(item.path)} startIcon={item.icon} sx={{ color: active ? '#000' : 'rgba(255,255,255,0.62)', bgcolor: active ? binThemeTokens.gold : 'rgba(255,255,255,0.03)', fontWeight: 950, borderRadius: 3, px: 2.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>
+              <Button id={`broker-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} startIcon={item.icon} sx={{ color: active ? '#000' : 'rgba(255,255,255,0.62)', bgcolor: active ? binThemeTokens.gold : 'rgba(255,255,255,0.03)', fontWeight: 950, borderRadius: 3, px: 2.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>
                 {item.label}
               </Button>
             );
@@ -114,7 +118,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         {menuItems.map((item) => {
           const active = location.pathname.startsWith(item.path);
           return (
-            <IconButton key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? binThemeTokens.gold : 'rgba(255,255,255,0.45)', flexDirection: 'column', gap: 0.4 }}>
+            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? binThemeTokens.gold : 'rgba(255,255,255,0.45)', flexDirection: 'column', gap: 0.4 }}>
               {item.icon}
               <Typography variant="caption" sx={{ fontSize: '0.58rem', fontWeight: 900 }}>{item.label}</Typography>
             </IconButton>
