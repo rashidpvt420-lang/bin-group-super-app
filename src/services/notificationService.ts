@@ -1,12 +1,12 @@
 /**
  * BIN GROUP — Sovereign Notification Service
- * Phase 9A: In-app notifications with Firestore backend.
- * FCM push is wired but gracefully falls back if token is unavailable.
+ * Notification creation is routed through a callable Cloud Function so browser clients
+ * cannot directly create arbitrary push-triggering Firestore documents.
  */
 
 import {
-    db, collection, addDoc, serverTimestamp,
-    query, where, onSnapshot, updateDoc, doc, getDocs, orderBy, limit
+    db, collection, query, where, onSnapshot, updateDoc, doc, orderBy, limit,
+    functions, httpsCallable
 } from '../lib/firebase';
 
 export type NotificationType = string;
@@ -25,59 +25,42 @@ export interface BinNotification {
     link?: string;
 }
 
-// ─── Send a notification to a specific user ──────────────────────────────────
-export async function sendNotification(payload: Omit<BinNotification, 'id' | 'read' | 'createdAt'>) {
+type NotificationCreatePayload = Omit<BinNotification, 'id' | 'read' | 'createdAt'>;
+
+const createNotificationCallable = httpsCallable<NotificationCreatePayload, { notificationIds: string[]; recipientCount: number }>(
+    functions,
+    'createNotification'
+);
+
+// ─── Send a notification through the server-side gatekeeper ──────────────────
+export async function sendNotification(payload: NotificationCreatePayload) {
     try {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotificationCallable({
             ...payload,
-            read: false,
-            createdAt: serverTimestamp(),
+            link: payload.link || '/notifications',
+            metadata: payload.metadata || {},
         });
     } catch (err) {
-        console.error('[Notifications] Failed to write notification:', err);
+        console.error('[Notifications] Failed to create notification:', err);
     }
 }
 
-// ─── Notify admin(s) ─────────────────────────────────────────────────────────
+// ─── Notify admin group ──────────────────────────────────────────────────────
 export async function notifyAdmins(payload: Omit<BinNotification, 'id' | 'read' | 'createdAt' | 'recipientId' | 'recipientRole'>) {
-    try {
-        const adminSnap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['admin', 'super_admin', 'manager'])));
-        const writes = adminSnap.docs.map(d =>
-            addDoc(collection(db, 'notifications'), {
-                ...payload,
-                recipientId: d.id,
-                recipientRole: 'admin',
-                read: false,
-                createdAt: serverTimestamp(),
-            })
-        );
-        await Promise.all(writes);
-    } catch (err) {
-        console.error('[Notifications] Admin broadcast failed:', err);
-    }
+    await sendNotification({
+        ...payload,
+        recipientId: 'ADMIN_GROUP',
+        recipientRole: 'admin',
+    });
 }
 
-// ─── Notify all on-duty technicians (for SOS/Emergency) ──────────────────────
+// ─── Notify all on-duty technicians for SOS/Emergency ────────────────────────
 export async function notifyOnDutyTechnicians(payload: Omit<BinNotification, 'id' | 'read' | 'createdAt' | 'recipientId' | 'recipientRole'>) {
-    try {
-        const techSnap = await getDocs(query(
-            collection(db, 'users'),
-            where('role', '==', 'technician'),
-            where('onDuty', '==', true)
-        ));
-        const writes = techSnap.docs.map(d =>
-            addDoc(collection(db, 'notifications'), {
-                ...payload,
-                recipientId: d.id,
-                recipientRole: 'technician',
-                read: false,
-                createdAt: serverTimestamp(),
-            })
-        );
-        await Promise.all(writes);
-    } catch (err) {
-        console.error('[Notifications] On-duty tech broadcast failed:', err);
-    }
+    await sendNotification({
+        ...payload,
+        recipientId: 'ON_DUTY_TECHNICIANS',
+        recipientRole: 'technician',
+    });
 }
 
 // ─── General 5-profile notification event facade ─────────────────────────────
@@ -184,9 +167,7 @@ export const NotificationEvents = {
     },
     ADMIN: {
         NEW_ONBOARDING: (propertyName: string) =>
-            sendNotification({
-                recipientId: 'ADMIN_GROUP',
-                recipientRole: 'admin',
+            notifyAdmins({
                 type: 'NEW_ONBOARDING',
                 title: 'NEW ASSET INTAKE',
                 body: `A new asset (${propertyName}) requires verification.`,
@@ -194,9 +175,7 @@ export const NotificationEvents = {
                 metadata: { propertyName }
             }),
         EMERGENCY_TICKET: (propertyName: string, category: string) =>
-            sendNotification({
-                recipientId: 'ADMIN_GROUP',
-                recipientRole: 'admin',
+            notifyAdmins({
                 type: 'EMERGENCY_SOS',
                 title: 'CRITICAL SOS DETECTED',
                 body: `Emergency ${category} issue at ${propertyName}. Ensure immediate dispatch.`,
@@ -207,8 +186,6 @@ export const NotificationEvents = {
 };
 
 // ─── Convenience wrappers for lifecycle events ────────────────────────────────
-
-/** Tenant submitted a new ticket — notify admins */
 export async function notifyTicketCreated(ticketId: string, tenantName: string, category: string, priority: string) {
     await notifyAdmins({
         type: 'TICKET_CREATED',
@@ -219,7 +196,6 @@ export async function notifyTicketCreated(ticketId: string, tenantName: string, 
     });
 }
 
-/** Admin assigned a technician — notify the technician */
 export async function notifyTechnicianAssigned(ticketId: string, technicianId: string, propertyName: string, category: string) {
     await sendNotification({
         recipientId: technicianId,
@@ -228,17 +204,21 @@ export async function notifyTechnicianAssigned(ticketId: string, technicianId: s
         title: 'New Job Assigned',
         body: `You have been assigned a ${category} job at ${propertyName}.`,
         ticketId,
+        link: `/tech/ticket/${ticketId}`,
         metadata: { propertyName, category }
     });
 }
 
-/** Technician updated status — notify the tenant */
 export async function notifyStatusUpdate(ticketId: string, tenantId: string, newStatus: string) {
     const statusLabels: Record<string, string> = {
         EN_ROUTE: 'Your technician is on the way.',
+        on_the_way: 'Your technician is on the way.',
         ARRIVED: 'Your technician has arrived.',
+        arrived: 'Your technician has arrived.',
         IN_PROGRESS: 'Work has started on your request.',
+        in_progress: 'Work has started on your request.',
         WAITING_PARTS: 'Waiting for parts. You will be updated shortly.',
+        waiting_parts: 'Waiting for parts. You will be updated shortly.',
     };
     await sendNotification({
         recipientId: tenantId,
@@ -247,11 +227,11 @@ export async function notifyStatusUpdate(ticketId: string, tenantId: string, new
         title: 'Request Update',
         body: statusLabels[newStatus] || `Your request status changed to ${newStatus.replace('_', ' ')}.`,
         ticketId,
+        link: '/tenant',
         metadata: { newStatus }
     });
 }
 
-/** Technician marked complete — notify tenant to approve */
 export async function notifyCompletionRequest(ticketId: string, tenantId: string, techName: string) {
     await sendNotification({
         recipientId: tenantId,
@@ -260,37 +240,38 @@ export async function notifyCompletionRequest(ticketId: string, tenantId: string
         title: 'Work Completed — Your Approval Needed',
         body: `${techName} has completed the job. Please review and approve or reject.`,
         ticketId,
+        link: '/tenant',
     });
 }
 
-/** Tenant approved — notify admin */
 export async function notifyTenantApproved(ticketId: string, tenantName: string) {
     await notifyAdmins({
         type: 'TENANT_APPROVED',
         title: 'Job Approved & Closed',
         body: `${tenantName} approved the completion. Ticket is now CLOSED.`,
         ticketId,
+        link: '/tickets',
     });
 }
 
-/** Tenant rejected — notify admin */
 export async function notifyTenantRejected(ticketId: string, tenantName: string, reason: string) {
     await notifyAdmins({
         type: 'TENANT_REJECTED',
         title: '⚠️ Job Rejected — Dispute Opened',
         body: `${tenantName} rejected the completion. Reason: ${reason}`,
         ticketId,
+        link: '/tickets',
         metadata: { reason }
     });
 }
 
-/** Emergency/SOS — notify admins AND on-duty technicians */
 export async function notifyEmergency(ticketId: string, tenantName: string, propertyName: string, unitNumber: string) {
     const sosPayload = {
         type: 'EMERGENCY_SOS' as NotificationType,
         title: '🚨 EMERGENCY SOS',
         body: `${tenantName} in Unit ${unitNumber}, ${propertyName} has declared an emergency. Respond immediately.`,
         ticketId,
+        link: '/tickets',
         metadata: { propertyName, unitNumber }
     };
     await Promise.all([
@@ -316,7 +297,6 @@ export function subscribeToNotifications(
     }, (err) => console.warn('[Notifications] Listener error:', err));
 }
 
-/** Mark a notification as read */
 export async function markNotificationRead(notificationId: string) {
     try {
         await updateDoc(doc(db, 'notifications', notificationId), { read: true });
