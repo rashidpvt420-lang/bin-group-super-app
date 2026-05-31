@@ -184,5 +184,50 @@ patchIfNeeded(
   ["match /design_requests/{requestId}", "allow create: if signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data));"]
 );
 
+patchIfNeeded(
+  'broker ownership helpers for dashboard collections',
+  `    function emailOwns(data) {`,
+  `    function brokerOwns(data) {
+      return signedIn() && (
+        data.brokerId == request.auth.uid ||
+        data.brokerUid == request.auth.uid ||
+        data.userId == request.auth.uid ||
+        data.createdByUid == request.auth.uid
+      );
+    }
+
+    function emailOwns(data) {`,
+  ["function brokerOwns(data)", "data.brokerId == request.auth.uid", "data.brokerUid == request.auth.uid"]
+);
+
+patchIfNeeded(
+  'broker dashboard collections must be broker-owned',
+  `    match /brokerReferrals/{referralId} {
+      allow read: if isAdmin() || resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid;
+      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }`,
+  `    match /brokerLeads/{leadId} {
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /brokerReferrals/{referralId} {
+      allow read: if isAdmin() || resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid;
+      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }`,
+  ["match /brokerLeads/{leadId}", "match /referrals/{referralId}", "function brokerOwns(data)"]
+);
+
 writeFileSync(path, rules);
 console.log(`Firestore rules hardening preflight complete. Changes applied: ${changes}.`);
