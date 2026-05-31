@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: live-role-smoke
@@ -27,6 +28,7 @@ env:
   E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
 jobs:
   live-role-smoke:
@@ -41,6 +43,15 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Authenticate Google Cloud for manual launch data seed
+        if: github.event_name == 'workflow_dispatch'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
@@ -57,6 +68,10 @@ jobs:
         env:
           E2E_STRICT_ROLES: 'true'
         run: node scripts/verify-e2e-env.mjs
+
+      - name: Seed tenant launch residence data
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/seed-live-role-test-data.mjs
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -90,11 +105,11 @@ jobs:
             echo "event=${GITHUB_EVENT_NAME}"
             echo "actor=${GITHUB_ACTOR}"
             echo "base_url=${E2E_BASE_URL}"
-            echo "admin_secret_configured=$([[ -n \"${E2E_ADMIN_EMAIL}\" && -n \"${E2E_ADMIN_PASSWORD}\" ]] && echo true || echo false)"
-            echo "owner_secret_configured=$([[ -n \"${E2E_OWNER_EMAIL}\" && -n \"${E2E_OWNER_PASSWORD}\" ]] && echo true || echo false)"
-            echo "tenant_secret_configured=$([[ -n \"${E2E_TENANT_EMAIL}\" && -n \"${E2E_TENANT_PASSWORD}\" ]] && echo true || echo false)"
-            echo "technician_secret_configured=$([[ -n \"${E2E_TECHNICIAN_EMAIL}\" && -n \"${E2E_TECHNICIAN_PASSWORD}\" ]] && echo true || echo false)"
-            echo "broker_secret_configured=$([[ -n \"${E2E_BROKER_EMAIL}\" && -n \"${E2E_BROKER_PASSWORD}\" ]] && echo true || echo false)"
+            echo "admin_secret_configured=$([[ -n "${E2E_ADMIN_EMAIL}" && -n "${E2E_ADMIN_PASSWORD}" ]] && echo true || echo false)"
+            echo "owner_secret_configured=$([[ -n "${E2E_OWNER_EMAIL}" && -n "${E2E_OWNER_PASSWORD}" ]] && echo true || echo false)"
+            echo "tenant_secret_configured=$([[ -n "${E2E_TENANT_EMAIL}" && -n "${E2E_TENANT_PASSWORD}" ]] && echo true || echo false)"
+            echo "technician_secret_configured=$([[ -n "${E2E_TECHNICIAN_EMAIL}" && -n "${E2E_TECHNICIAN_PASSWORD}" ]] && echo true || echo false)"
+            echo "broker_secret_configured=$([[ -n "${E2E_BROKER_EMAIL}" && -n "${E2E_BROKER_PASSWORD}" ]] && echo true || echo false)"
             echo
             echo "artifact_file_sha256="
           } > launch-proof/manifest.txt
