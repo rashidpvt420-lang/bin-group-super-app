@@ -8,21 +8,26 @@ import { test, expect, Page } from '@playwright/test';
 const EMAIL    = process.env.E2E_ADMIN_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 
+function requireLaunchCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Missing E2E_ADMIN_EMAIL/PASSWORD. Admin launch validation cannot be skipped for public release.');
+  }
+}
+
 async function login(page: Page) {
-  // We assume the admin panel is either at /admin or it's a separate app domain, 
-  // but based on earlier routing it's a separate admin-panel app. 
+  requireLaunchCredentials();
+  // We assume the admin panel is either at /admin or it's a separate app domain,
+  // but based on earlier routing it's a separate admin-panel app.
   // However, we'll navigate to the admin login route for this project structure.
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
   // Wait for the admin dashboard or portal to load
-  await page.waitForTimeout(3000); 
+  await page.waitForTimeout(3000);
 }
 
 test.describe('Admin Business Workflow', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_ADMIN_EMAIL/PASSWORD — skipping admin business flow.');
-
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
