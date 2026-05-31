@@ -32,12 +32,28 @@ const createNotificationCallable = httpsCallable<NotificationCreatePayload, { no
     'createNotification'
 );
 
+const roleHome = (role?: string) => {
+    switch (String(role || '').toLowerCase()) {
+        case 'tenant': return '/tenant/dashboard';
+        case 'technician': return '/technician/dashboard';
+        case 'broker': return '/broker/dashboard';
+        case 'owner': return '/owner/dashboard';
+        case 'admin': return '/admin/dashboard';
+        default: return '/notifications';
+    }
+};
+
+const technicianJobLink = (ticketId: string) => `/technician/job/${ticketId}`;
+const tenantTicketLink = (ticketId: string) => ticketId ? `/tenant/ticket/${ticketId}` : '/tenant/tickets';
+const ownerTicketLink = (ticketId: string) => ticketId ? `/owner/ticket/${ticketId}` : '/owner/tickets';
+const adminTicketLink = (ticketId: string) => ticketId ? `/admin/tickets?ticketId=${encodeURIComponent(ticketId)}` : '/admin/tickets';
+
 // ─── Send a notification through the server-side gatekeeper ──────────────────
 export async function sendNotification(payload: NotificationCreatePayload) {
     try {
         await createNotificationCallable({
             ...payload,
-            link: payload.link || '/notifications',
+            link: payload.link || roleHome(payload.recipientRole),
             metadata: payload.metadata || {},
         });
     } catch (err) {
@@ -51,6 +67,7 @@ export async function notifyAdmins(payload: Omit<BinNotification, 'id' | 'read' 
         ...payload,
         recipientId: 'ADMIN_GROUP',
         recipientRole: 'admin',
+        link: payload.link || adminTicketLink(payload.ticketId || ''),
     });
 }
 
@@ -60,6 +77,7 @@ export async function notifyOnDutyTechnicians(payload: Omit<BinNotification, 'id
         ...payload,
         recipientId: 'ON_DUTY_TECHNICIANS',
         recipientRole: 'technician',
+        link: payload.ticketId ? technicianJobLink(payload.ticketId) : '/technician/jobs',
     });
 }
 
@@ -73,7 +91,7 @@ export const NotificationEvents = {
                 type: 'DESIGN_NOC',
                 title: 'DESIGN STUDIO: NOC REQUIRED',
                 body: `${tenantName} submitted an AI redesign concept for ${zone}. Approval required.`,
-                link: '/notifications',
+                link: '/owner/design-studio',
                 metadata: { tenantName, zone }
             }),
         ONBOARDING_APPROVED: (userId: string, propertyName: string) =>
@@ -83,7 +101,7 @@ export const NotificationEvents = {
                 type: 'ONBOARDING_VERIFIED',
                 title: 'ONBOARDING APPROVED',
                 body: `Asset ${propertyName} is now active in your portfolio.`,
-                link: '/dashboard',
+                link: '/owner/dashboard',
                 metadata: { propertyName }
             }),
         PAYMENT_VERIFIED: (userId: string, amount: number) =>
@@ -93,7 +111,7 @@ export const NotificationEvents = {
                 type: 'PAYMENT_VERIFIED',
                 title: 'PAYMENT SECURED',
                 body: `Mobilization deposit AED ${amount} verified. Operations commencing.`,
-                link: '/financials',
+                link: '/owner/financials',
                 metadata: { amount }
             }),
         QUOTE_READY: (userId: string, propertyName: string, ticketId: string) =>
@@ -104,7 +122,7 @@ export const NotificationEvents = {
                 title: 'QUOTE AWAITING APPROVAL',
                 body: `A new maintenance quote for ${propertyName} requires authorization.`,
                 ticketId,
-                link: '/dashboard',
+                link: ownerTicketLink(ticketId),
                 metadata: { propertyName, ticketId }
             }),
     },
@@ -116,7 +134,7 @@ export const NotificationEvents = {
                 type: 'DESIGN_APPROVED',
                 title: 'DESIGN STUDIO: APPROVED',
                 body: `Your owner has granted NOC for the ${zone} redesign. You may proceed with payment.`,
-                link: '/design-studio',
+                link: '/tenant/design-studio',
                 metadata: { zone }
             }),
         TICKET_RECEIVED: (userId: string, ticketId: string) =>
@@ -127,7 +145,7 @@ export const NotificationEvents = {
                 title: 'MISSION ACKNOWLEDGED',
                 body: `Request #${ticketId} received. Awaiting specialist dispatch.`,
                 ticketId,
-                link: '/tenant'
+                link: tenantTicketLink(ticketId)
             }),
         TECH_ASSIGNED: (userId: string, techName: string) =>
             sendNotification({
@@ -136,7 +154,7 @@ export const NotificationEvents = {
                 type: 'TECH_ASSIGNED',
                 title: 'SPECIALIST ASSIGNED',
                 body: `${techName} has been assigned to your request.`,
-                link: '/tenant',
+                link: '/tenant/tickets',
                 metadata: { techName }
             }),
     },
@@ -149,7 +167,7 @@ export const NotificationEvents = {
                 title: 'NEW MISSION ASSIGNED',
                 body: `Urgent request received for ${propertyName}. View node for coordinates.`,
                 ticketId,
-                link: `/tech/ticket/${ticketId}`,
+                link: technicianJobLink(ticketId),
                 metadata: { propertyName }
             }),
     },
@@ -161,7 +179,7 @@ export const NotificationEvents = {
                 type: 'LEAD_ACCEPTED',
                 title: 'LEAD ACCEPTED',
                 body: `Your referral for ${leadName} has been accepted into the pipeline.`,
-                link: '/broker',
+                link: '/broker/referrals',
                 metadata: { leadName }
             }),
     },
@@ -171,7 +189,7 @@ export const NotificationEvents = {
                 type: 'NEW_ONBOARDING',
                 title: 'NEW ASSET INTAKE',
                 body: `A new asset (${propertyName}) requires verification.`,
-                link: '/dashboard',
+                link: '/admin/vault',
                 metadata: { propertyName }
             }),
         EMERGENCY_TICKET: (propertyName: string, category: string) =>
@@ -179,7 +197,7 @@ export const NotificationEvents = {
                 type: 'EMERGENCY_SOS',
                 title: 'CRITICAL SOS DETECTED',
                 body: `Emergency ${category} issue at ${propertyName}. Ensure immediate dispatch.`,
-                link: '/tickets',
+                link: '/admin/tickets',
                 metadata: { propertyName, category }
             }),
     }
@@ -192,6 +210,7 @@ export async function notifyTicketCreated(ticketId: string, tenantName: string, 
         title: `New ${priority.toUpperCase()} Request`,
         body: `${tenantName} submitted a ${category} complaint. Requires assignment.`,
         ticketId,
+        link: adminTicketLink(ticketId),
         metadata: { category, priority }
     });
 }
@@ -204,7 +223,7 @@ export async function notifyTechnicianAssigned(ticketId: string, technicianId: s
         title: 'New Job Assigned',
         body: `You have been assigned a ${category} job at ${propertyName}.`,
         ticketId,
-        link: `/tech/ticket/${ticketId}`,
+        link: technicianJobLink(ticketId),
         metadata: { propertyName, category }
     });
 }
@@ -227,7 +246,7 @@ export async function notifyStatusUpdate(ticketId: string, tenantId: string, new
         title: 'Request Update',
         body: statusLabels[newStatus] || `Your request status changed to ${newStatus.replace('_', ' ')}.`,
         ticketId,
-        link: '/tenant',
+        link: tenantTicketLink(ticketId),
         metadata: { newStatus }
     });
 }
@@ -240,7 +259,7 @@ export async function notifyCompletionRequest(ticketId: string, tenantId: string
         title: 'Work Completed — Your Approval Needed',
         body: `${techName} has completed the job. Please review and approve or reject.`,
         ticketId,
-        link: '/tenant',
+        link: tenantTicketLink(ticketId),
     });
 }
 
@@ -250,7 +269,7 @@ export async function notifyTenantApproved(ticketId: string, tenantName: string)
         title: 'Job Approved & Closed',
         body: `${tenantName} approved the completion. Ticket is now CLOSED.`,
         ticketId,
-        link: '/tickets',
+        link: adminTicketLink(ticketId),
     });
 }
 
@@ -260,7 +279,7 @@ export async function notifyTenantRejected(ticketId: string, tenantName: string,
         title: '⚠️ Job Rejected — Dispute Opened',
         body: `${tenantName} rejected the completion. Reason: ${reason}`,
         ticketId,
-        link: '/tickets',
+        link: adminTicketLink(ticketId),
         metadata: { reason }
     });
 }
@@ -271,12 +290,12 @@ export async function notifyEmergency(ticketId: string, tenantName: string, prop
         title: '🚨 EMERGENCY SOS',
         body: `${tenantName} in Unit ${unitNumber}, ${propertyName} has declared an emergency. Respond immediately.`,
         ticketId,
-        link: '/tickets',
+        link: adminTicketLink(ticketId),
         metadata: { propertyName, unitNumber }
     };
     await Promise.all([
         notifyAdmins(sosPayload),
-        notifyOnDutyTechnicians(sosPayload)
+        notifyOnDutyTechnicians({ ...sosPayload, link: technicianJobLink(ticketId) })
     ]);
 }
 
