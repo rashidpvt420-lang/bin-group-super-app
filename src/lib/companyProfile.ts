@@ -29,52 +29,61 @@ export type CompanyProfile = {
 export const COMPANY_PROFILE_DOC_PATH = ['settings', 'companyProfile'] as const;
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
-  companyName: 'BIN GROUP – UAE General Maintenance & Property Management',
-  licenseInfo: 'All Kind Building Projects Contracting – L.L.C – S.P.C · UAE Sovereign Standard',
-  headline: "The UAE's most advanced PropTech and Facility Management operating system for high-value assets and institutional portfolios.",
-  mission: 'To redefine property operations in the UAE by merging elite facility management with real-time digital transparency, ensuring every asset is preserved, every tenant is satisfied, and every owner is informed.',
-  vision: "To become the UAE's benchmark for autonomous property care, institutional maintenance contracts, and sovereign property management operations.",
-  promise: 'Uncompromising quality, real-time accountability, and digital-first asset tracking. One property, one passport, one command center.',
-  aboutText: "The UAE's most advanced PropTech and Facility Management operating system for high-value assets and institutional portfolios.",
+  companyName: 'BIN GROUP - UAE General Maintenance & Property Management',
+  licenseInfo: 'All Kind Building Projects Contracting - L.L.C - S.P.C | UAE first unified property care operating model',
+  headline: 'UAE-first no-call property care: maintenance, property management, contracts, tenant service, technician dispatch, proof-of-work, and owner visibility in one system.',
+  mission: 'To remove delay, confusion, and manual follow-up from UAE property operations by giving owners, tenants, brokers, and technicians one transparent digital operating system.',
+  vision: 'To make BIN GROUP the UAE benchmark for smart maintenance, annual service contracts, property management, and evidence-based facility operations.',
+  promise: 'No waiting. No guessing. Real-time property care with direct field execution, photo evidence, GPS visibility, contract clarity, and owner confidence.',
+  aboutText: 'BIN GROUP solves the full property-care chain: instant owner quote, contract selection, 15% mobilization, monthly or quarterly or annual payment planning, tenant service requests, technician GPS dispatch, before-and-after proof, broker referrals, AI design previews, and property passport records.',
   services: [
-    { id: 'fm', title: 'Facility Management (FM)', desc: 'Full-spectrum facility management for residential towers, luxury villas, and commercial complexes across the UAE.', icon: 'building' },
-    { id: 'pm', title: 'Property Management', desc: 'Rent collection, unit ledgers, tenant screening, legal compliance, and owner net-payout automation.', icon: 'briefcase' },
-    { id: 'maintenance', title: 'General Maintenance (AMC)', desc: 'Annual Maintenance Contracts covering MEP, HVAC, Civil, and specialty works for hotels, hospitals, and schools.', icon: 'wrench' },
-    { id: 'construction', title: 'Construction & Fit-out', desc: 'Structural repairs, interior fit-outs, and construction support for government and private developments.', icon: 'shield-check' },
-    { id: 'ai', title: 'AI Design & Studio', desc: 'Sovereign AI for interior visualization, layout optimization, and predictive maintenance triage.', icon: 'sparkles' },
-    { id: 'compliance', title: 'Audit & Compliance', desc: 'Full audit trails, property passports, and VAT-compliant financial reporting for institutional owners.', icon: 'shield' },
+    { id: 'maintenance-contracts', title: 'Annual Maintenance Contracts', desc: 'High-value maintenance contracts for villas, towers, hotels, schools, clinics, hospitals, offices, accommodations, and government-style portfolios. Typical contract value starts from AED 50,000 per year and scales by asset size and SLA level.', icon: 'wrench' },
+    { id: 'property-management', title: 'Property Management', desc: 'Unit management, tenant records, occupancy tracking, complaint handling, lease support, rent-cycle visibility, and owner reporting. Property management can be charged at 5% per rented unit or as agreed per portfolio.', icon: 'briefcase' },
+    { id: 'full-coverage', title: 'Maintenance + Property Management', desc: 'Full-coverage operating model combining maintenance execution, tenant support, owner dashboard, proof-of-work, renewal readiness, and financial visibility for serious owners and institutional assets.', icon: 'building' },
+    { id: 'technician-dispatch', title: 'Direct Technician Dispatch', desc: 'HR-free field execution model where technicians receive direct workfeeds, GPS-based jobs, proof upload requirements, and performance accountability without manual bottlenecks.', icon: 'zap' },
+    { id: 'ai-property-intelligence', title: 'AI Property Intelligence', desc: 'AI-assisted quote logic, property classification, design previews, predictive maintenance signals, asset health scoring, and portfolio-level decision support.', icon: 'sparkles' },
+    { id: 'audit-compliance', title: 'Evidence, Audit & Compliance', desc: 'Before-and-after photos, ticket history, property passport records, invoice traceability, tenant confirmation, owner visibility, and structured UAE-ready reporting.', icon: 'shield' },
   ],
   workflows: [
-    'AI Design Studio Demo: Visualize property upgrades and fit-outs with real-time AI generation.',
-    'Property Passport Demo: Unified digital record for every unit, contract, and maintenance job.',
-    'Tenant Complaint Demo: Photo-based request submission with live technician tracking.',
-    'Technician Dispatch Demo: Automated assignment to on-duty specialists with proof-of-work.',
-    'Broker/Referral Demo: Transparent lead management and automated commission tracking.',
-    'Owner Onboarding Demo: Seamless property enrollment with instant quote generation.',
+    'Owner Onboarding: property details, instant quote, contract selection, 15% mobilization, payment plan, and activation.',
+    'Tenant Service: photo request, category selection, priority, location confirmation, and service tracking.',
+    'Technician Execution: direct job feed, GPS route context, evidence upload, and completion confirmation.',
+    'Broker Growth: lead registration, owner referral visibility, and commission-ready pipeline records.',
+    'AI Design & Property Passport: interior or exterior visualization, asset history, contracts, tickets, and compliance records.',
   ],
   technologies: [
-    'Sovereign Data Storage: UAE-based secure cloud infrastructure with military-grade encryption.',
-    'Sovereign AI Integration: Advanced LLM and Image-Gen models for property intelligence.',
-    'Real-time Ops Ledger: Instant syncing between technician actions and owner dashboards.',
-    'Institutional Payouts: Automated VAT handling and secure financial dispersal.',
+    'No-call customer journey from quote to contract to service tracking.',
+    'GPS-enabled technician routing and field accountability.',
+    'Digital proof-of-work with before-and-after evidence.',
+    'Property passport records for every building, unit, contract, and service request.',
+    'AI-powered quote, design, classification, and maintenance intelligence.',
   ],
   serviceAreas: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain', 'Al Ain'],
   contact: {
     whatsapp: '+971 50 123 4567',
-    email: 'ops@bin-groups.com',
+    email: 'owner@bin-group.com',
     phone: '+971 50 123 4567',
   },
   termsUrl: '/terms',
   privacyUrl: '/privacy',
 };
 
+function isLegacyPlaceholderProfile(data?: Partial<CompanyProfile> | null) {
+  return Boolean(
+    data?.companyName === 'BIN GROUP INSTITUTIONAL' ||
+    data?.licenseInfo === 'License #998273 - Dubai Economy' ||
+    data?.contact?.email === 'support@bingroup.ae'
+  );
+}
+
 export function normalizeCompanyProfile(data?: Partial<CompanyProfile> | null): CompanyProfile {
+  const safeData = isLegacyPlaceholderProfile(data) ? null : data;
   const merged = {
     ...DEFAULT_COMPANY_PROFILE,
-    ...(data || {}),
+    ...(safeData || {}),
     contact: {
       ...DEFAULT_COMPANY_PROFILE.contact,
-      ...(data?.contact || {}),
+      ...(safeData?.contact || {}),
     },
   } as CompanyProfile;
 
@@ -82,6 +91,9 @@ export function normalizeCompanyProfile(data?: Partial<CompanyProfile> | null): 
     ...merged,
     aboutText: merged.aboutText || merged.headline,
     headline: merged.headline || merged.aboutText || DEFAULT_COMPANY_PROFILE.headline,
+    mission: merged.mission || DEFAULT_COMPANY_PROFILE.mission,
+    vision: merged.vision || DEFAULT_COMPANY_PROFILE.vision,
+    promise: merged.promise || DEFAULT_COMPANY_PROFILE.promise,
     services: Array.isArray(merged.services) && merged.services.length ? merged.services : DEFAULT_COMPANY_PROFILE.services,
     workflows: Array.isArray(merged.workflows) && merged.workflows.length ? merged.workflows : DEFAULT_COMPANY_PROFILE.workflows,
     technologies: Array.isArray(merged.technologies) && merged.technologies.length ? merged.technologies : DEFAULT_COMPANY_PROFILE.technologies,
