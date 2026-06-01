@@ -102,8 +102,8 @@ export default function LiveMapPage() {
       const ticketRef = doc(db, "maintenanceTickets", selectedTicket.id);
       updateDoc(ticketRef, {
         status: 'DISPATCHED',
-        assignedTechId: tech.id,
-        assignedTechnician: tech.name
+        assignedTechnicianId: tech.id,
+        assignedTechnicianName: tech.name
       });
 
       // --- 3. Mock Automated SMS/Push Triggers ---
@@ -126,49 +126,95 @@ export default function LiveMapPage() {
     }
   };
 
-  const generateGatePass = (ticket: any, tech: any) => {
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    script.onload = () => {
-      const { jsPDF } = (window as any).jspdf;
-      const doc = new jsPDF();
+  const generateGatePass = async (ticket: any, tech: any) => {
+    if (!(window as any).jspdf) {
+      await new Promise<void>((resolve) => {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        script.onload = () => resolve(undefined);
+        document.body.appendChild(script);
+      });
+    }
 
-      // Header
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(22);
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.text("BIN GROUP MAINTENANCE", 105, 20, { align: "center" });
+    const { jsPDF } = (window as any).jspdf;
+    const doc = new jsPDF();
 
-      doc.setFontSize(16);
-      doc.setTextColor(16, 185, 129); // emerald-500
-      doc.text("Security Gate Pass", 105, 30, { align: "center" });
+    let cairoBase64 = null;
+    try {
+      const res = await fetch('https://fonts.gstatic.com/s/cairo/v20/SLXQ1O5tq8QA3r565Uq13w.ttf');
+      const buffer = await res.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      cairoBase64 = btoa(binary);
+    } catch (err) {
+      console.error("Failed to load Cairo font, falling back to default:", err);
+    }
 
-      // Body Details
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Ticket ID: ${ticket.id}`, 20, 50);
-      doc.text(`Date of Entry: ${new Date().toLocaleDateString()}`, 20, 60);
+    if (cairoBase64) {
+      doc.addFileToVFS('Cairo-Regular.ttf', cairoBase64);
+      doc.addFont('Cairo-Regular.ttf', 'Cairo', 'normal');
+      doc.setFont('Cairo');
+    }
 
-      doc.setFont("helvetica", "bold");
-      doc.text(`Assigned Technician: ${tech.name}`, 20, 80);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Contact: +971 50 XXXXXXX`, 20, 90);
+    doc.setDrawColor(212, 175, 55);
+    doc.setLineWidth(1.5);
+    doc.rect(10, 10, 190, 277);
+    doc.rect(12, 12, 186, 273);
 
-      doc.text(`Location: ${ticket.unit}`, 20, 110);
-      doc.text(`Approved Issue: ${ticket.issueDescription || ticket.issue}`, 20, 120);
+    doc.setFillColor(15, 23, 42);
+    doc.rect(15, 15, 180, 40, "F");
 
-      // Signature/Stamp
-      doc.setFont("helvetica", "italic");
-      doc.text("Authorized by:", 20, 150);
-      doc.setFont("helvetica", "bold");
-      doc.text("Rashid AbdulGhani - CEO", 20, 160);
-      doc.setTextColor(220, 38, 38); // red-600
-      doc.text("[ BIN GROUP DIGITAL STAMP ]", 20, 175);
+    doc.setTextColor(212, 175, 55);
+    doc.setFontSize(22);
+    doc.text("BIN GROUP MAINTENANCE", 105, 30, { align: "center" });
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text("SECURITY GATE PASS  •  تصريح دخول أمني", 105, 45, { align: "center" });
 
-      doc.save(`GatePass_${ticket.id}_${tech.name}.pdf`);
-    };
-    document.body.appendChild(script);
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+
+    doc.text(`Ticket ID: ${ticket.id}`, 20, 80);
+    doc.text(`Date of Entry: ${new Date().toLocaleDateString()}`, 20, 95);
+    doc.text(`Assigned Technician: ${tech.name}`, 20, 110);
+    doc.text(`Contact: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 20, 125);
+    doc.text(`Location: ${ticket.unit || 'UAE Portfolio Asset'}`, 20, 140);
+    
+    doc.text(`معرف التذكرة: ${ticket.id}`, 190, 80, { align: 'right' });
+    doc.text(`تاريخ الدخول: ${new Date().toLocaleDateString()}`, 190, 95, { align: 'right' });
+    doc.text(`الفني المعين: ${tech.name}`, 190, 110, { align: 'right' });
+    doc.text(`رقم الهاتف: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 190, 125, { align: 'right' });
+    doc.text(`الموقع: ${ticket.unit || 'أصل المحفظة العقارية'}`, 190, 140, { align: 'right' });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(15, 155, 195, 155);
+
+    doc.setFontSize(14);
+    doc.text("APPROVED WORK DETAILS / تفاصيل العمل المعتمد", 105, 170, { align: "center" });
+    
+    doc.setFontSize(11);
+    const descText = ticket.issueDescription || ticket.issue || "General Maintenance and Inspection Ops.";
+    const descTextAr = "أعمال الصيانة العامة والفحص التشغيلي المعتمدة.";
+    
+    doc.text(descText, 20, 185);
+    doc.text(descTextAr, 190, 200, { align: 'right' });
+
+    doc.setDrawColor(212, 175, 55);
+    doc.rect(20, 220, 170, 50);
+
+    doc.setFontSize(12);
+    doc.text("Authorized by / معتمد من:", 25, 235);
+    doc.text("Rashid AbdulGhani - CEO / راشد عبد الغني - الرئيس التنفيذي", 25, 245);
+    
+    doc.setTextColor(220, 38, 38);
+    doc.setFontSize(10);
+    doc.text("[ BIN GROUP DIGITAL SECURITY STAMP  •  ختم مجموعة بن الرقمي الأمني ]", 105, 262, { align: "center" });
+
+    doc.save(`GatePass_${ticket.id}_${tech.name}.pdf`);
   };
 
   return (
@@ -261,7 +307,7 @@ export default function LiveMapPage() {
                        {ticket.status === 'UNASSIGNED' ? <Icon icon={Zap} className="text-blue-400" size={12} /> : <Icon icon={Brain} className="text-emerald-500" size={12} />}
                     </div>
                     <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black' }}>
-                      {ticket.status === 'UNASSIGNED' ? "AI INTERCEPTING..." : `AI DISPATCHED: ${ticket.assignedTechId}`}
+                      {ticket.status === 'UNASSIGNED' ? "AI INTERCEPTING..." : `AI DISPATCHED: ${ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'Technician'}`}
                     </Typography>
                   </Box>
                   <Typography variant="caption" sx={{ color: '#334155', fontWeight: 'bold' }}>{ticket.timestamp}</Typography>
@@ -330,8 +376,8 @@ export default function LiveMapPage() {
           {/* Map Pins & Telemetry Labels */}
           <Box sx={{ position: 'relative', zIndex: 1, height: '100%', pointerEvents: 'none' }}>
                       {/* DYNAMIC TECH MARKERS */}
-             {tickets.filter(t => t.status === 'EN_ROUTE' && t.techLocation).map((ticket) => {
-                const loc = ticket.techLocation;
+             {tickets.filter(t => t.status === 'EN_ROUTE' && t.technicianLocation).map((ticket) => {
+                const loc = ticket.technicianLocation;
                 // Simple projection for Dubai Marina / Downtown area
                 // Mapping Lat [25.0, 25.3] -> [100% to 0%] (Top is North)
                 // Mapping Lng [55.12, 55.42] -> [0% to 100%]
@@ -356,7 +402,7 @@ export default function LiveMapPage() {
                     }}>
                       <div className="w-2 h-2 rounded-full bg-white animate-ping" />
                       <Typography sx={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>
-                        {ticket.assignedTechnician || 'TEC'} • {ticket.unit || 'LOC'}
+                        {ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'TEC'} • {ticket.unit || 'LOC'}
                       </Typography>
                     </Box>
                     <div className="p-1 rounded-full bg-emerald-500 shadow-2xl">

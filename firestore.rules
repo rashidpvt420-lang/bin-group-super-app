@@ -251,7 +251,7 @@ service cloud.firestore {
 
     match /notifications/{notifId} {
       allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
-      allow create: if signedIn();
+      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
       allow update: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
       allow delete: if isAdmin();
     }
@@ -380,6 +380,67 @@ service cloud.firestore {
     match /hrRequests/{requestId} {
       allow read: if isAdmin() || hasPermission('canManageStaff') || resource.data.userId == request.auth.uid;
       allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /salaryBenchmarks/{benchmarkId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff');
+      allow write: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /salaryHistory/{historyId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || resource.data.uid == request.auth.uid;
+      allow create: if isAdmin() || hasPermission('canManageStaff');
+      allow update, delete: if isAdmin();
+    }
+
+    match /staffRequests/{requestId} {
+      allow read: if isAdmin()
+        || hasPermission('canManageStaff')
+        || resource.data.uid == request.auth.uid
+        || resource.data.userId == request.auth.uid
+        || resource.data.technicianId == request.auth.uid;
+
+      allow create: if signedIn() && (
+        isAdmin()
+        || hasPermission('canManageStaff')
+        || request.resource.data.uid == request.auth.uid
+        || request.resource.data.userId == request.auth.uid
+        || request.resource.data.technicianId == request.auth.uid
+      );
+
+      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /staffAgreements/{staffId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || request.auth.uid == staffId;
+      allow create: if isAdmin() || hasPermission('canManageStaff');
+
+      allow update: if isAdmin()
+        || hasPermission('canManageStaff')
+        || (
+          request.auth.uid == staffId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'acceptedAt',
+            'acceptedBy',
+            'acceptanceMethod',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /staffMoodCheckins/{checkinId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
+    }
+
+    match /hrAiConversations/{conversationId} {
+      allow read: if isAdmin() || hasPermission('canManageStaff') || resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if isAdmin() || hasPermission('canManageStaff');
     }
 
