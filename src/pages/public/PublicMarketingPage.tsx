@@ -1,348 +1,76 @@
 import React from 'react';
-import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
-import { ArrowRight, Building2, CheckCircle2, FileText, LockKeyhole, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { useParams, Link } from 'react-router-dom';
+import { Box, Button, Chip, Container, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
+import { Building2, CheckCircle2, FileText, Languages, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { CeoContactButtons } from '../../components/CeoContactButtons';
 import { useLanguage } from '../../context/LanguageContext';
-import { Languages } from 'lucide-react';
-import IconButton from '@mui/material/IconButton';
 
-interface PageContent {
-    eyebrow: string;
-    title: string;
-    subtitle: string;
-    bullets: string[];
-}
+type Sector = { eyebrow: string; title: string; subtitle: string; bullets: string[] };
+
+const en = {
+  chip: 'UAE SOVEREIGN PROPERTY CARE OS',
+  title: 'BIN GROUP — Smart Maintenance, Property Management & Direct Technician Operations',
+  desc: 'One operating system for serious UAE property owners: annual maintenance contracts from AED 50,000+, property management at the 5% model, 15% mobilization, tenant service requests, technician GPS dispatch, before-and-after proof, broker referrals, PDFs, AI design previews, and property passport records.',
+  primary: 'Request Contract', login: 'Portal Login', onboard: 'Onboard Property', language: 'العربية',
+  proofTitle: 'What BIN GROUP solves',
+  proofDesc: 'BIN GROUP removes scattered calls, unclear service history, missing proof, delayed field coordination, weak reporting, and poor owner visibility. Owners, tenants, technicians, and brokers operate from one verified property-care chain.',
+  pricingTitle: 'Contracts & pricing model', coverageTitle: 'Built for every serious UAE property', inquiryTitle: 'Request a property audit', inquiryDesc: 'Tell BIN GROUP what you manage. We prepare the right maintenance, property management, or full-coverage contract path.',
+  sectors: {
+    owners: { eyebrow: 'Owner Command', title: 'Turn every property into a controlled digital asset.', subtitle: 'Contracts, 15% mobilization, payment plans, tenant service, evidence, reports, and property passport records.', bullets: ['AED 50,000+ annual maintenance contracts', '5% property management model', 'Maintenance + property management full coverage', 'Owner reports, approvals, PDFs, and service history'] },
+    tenants: { eyebrow: 'Tenant Care', title: 'Submit clear maintenance requests with proof.', subtitle: 'Tenants send category, priority, photos, location context, and track the service path.', bullets: ['Photo-based service request', 'Priority and category', 'GPS/location context', 'Completion confirmation'] },
+    technicians: { eyebrow: 'Technician Operations', title: 'Field teams receive structured work and accountability.', subtitle: 'Technicians see jobs, route context, proof requirements, safety notes, and completion workflow.', bullets: ['Direct job feed', 'GPS dispatch context', 'Before/after proof', 'SLA performance visibility'] },
+    brokers: { eyebrow: 'Broker Growth', title: 'Broker referrals become structured owner opportunities.', subtitle: 'Referral, property, and commission-ready records stay inside the same platform.', bullets: ['Lead registration', 'Owner referral visibility', 'Property pipeline records', 'Commission-ready tracking'] },
+    security: { eyebrow: 'Sovereign Records', title: 'Every property builds a verified digital passport.', subtitle: 'Contracts, tickets, invoices, photos, and reports become long-term property intelligence.', bullets: ['Role-based access', 'Proof-of-work history', 'PDF traceability', 'UAE-ready reporting'] },
+    'ai-design-studio': { eyebrow: 'AI Design Studio', title: 'Visualize upgrades before work begins.', subtitle: 'AI design previews connect property improvement ideas to scope, quote, and owner approval.', bullets: ['Interior ideas', 'Exterior ideas', 'Scope support', 'Owner approvals'] }
+  } as Record<string, Sector>
+};
+
+const ar = {
+  chip: 'نظام سيادي ذكي للعناية بالعقارات في الإمارات',
+  title: 'BIN GROUP — صيانة ذكية وإدارة عقارات وتشغيل فني مباشر',
+  desc: 'نظام واحد للملاك الجادين في الإمارات: عقود صيانة سنوية من 50,000 درهم، إدارة عقارات بنموذج 5%، دفعة تفعيل 15%، طلبات المستأجرين، تتبع الفنيين عبر GPS، إثبات قبل وبعد، إحالات الوسطاء، ملفات PDF، تصميم AI، وسجل رقمي للعقار.',
+  primary: 'طلب عقد', login: 'دخول البوابة', onboard: 'تسجيل العقار', language: 'English',
+  proofTitle: 'ما الذي تحله BIN GROUP؟',
+  proofDesc: 'BIN GROUP تنهي الاتصالات المتكررة، ضياع الإثباتات، تأخير التنسيق الميداني، ضعف التقارير، وعدم وضوح رؤية المالك. كل الأطراف تعمل داخل سلسلة تشغيل موثقة واحدة.',
+  pricingTitle: 'نموذج العقود والأسعار', coverageTitle: 'مصمم لكل عقار جاد في الإمارات', inquiryTitle: 'اطلب تقييم عقارك', inquiryDesc: 'أخبر BIN GROUP بما تديره لنجهز مسار الصيانة أو الإدارة أو التغطية الكاملة.',
+  sectors: {
+    owners: { eyebrow: 'قيادة الملاك', title: 'حوّل كل عقار إلى أصل رقمي منظم.', subtitle: 'عقود، 15% تفعيل، خطط دفع، خدمة مستأجرين، إثبات، تقارير، وسجل عقاري.', bullets: ['عقود صيانة سنوية من 50,000 درهم+', 'إدارة عقارية بنموذج 5%', 'صيانة + إدارة عقارات بتغطية كاملة', 'تقارير وموافقات وملفات PDF وسجل خدمة'] },
+    tenants: { eyebrow: 'رعاية المستأجر', title: 'طلب صيانة واضح مع إثبات.', subtitle: 'المستأجر يرسل التصنيف والأولوية والصور والموقع ويتابع الخدمة.', bullets: ['طلب خدمة بالصور', 'أولوية وتصنيف', 'سياق الموقع', 'تأكيد الإنجاز'] },
+    technicians: { eyebrow: 'تشغيل الفنيين', title: 'الفريق الميداني يستلم عمل منظم ومسؤولية واضحة.', subtitle: 'المهام، الموقع، متطلبات الإثبات، السلامة، وإغلاق العمل داخل النظام.', bullets: ['قائمة مهام مباشرة', 'سياق GPS', 'إثبات قبل وبعد', 'وضوح أداء SLA'] },
+    brokers: { eyebrow: 'نمو الوسطاء', title: 'إحالات الوسطاء تتحول إلى فرص ملاك منظمة.', subtitle: 'الإحالات والعقارات والعمولات الجاهزة داخل نفس المنصة.', bullets: ['تسجيل الإحالة', 'وضوح إحالة المالك', 'سجل فرص العقارات', 'تتبع العمولة'] },
+    security: { eyebrow: 'سجلات سيادية', title: 'كل عقار يحصل على جواز رقمي موثق.', subtitle: 'العقود والطلبات والفواتير والصور والتقارير تتحول إلى ذكاء عقاري دائم.', bullets: ['صلاحيات حسب الدور', 'تاريخ إثبات العمل', 'تتبع PDF', 'تقارير جاهزة للإمارات'] },
+    'ai-design-studio': { eyebrow: 'استوديو التصميم AI', title: 'شاهد التطوير قبل بدء العمل.', subtitle: 'تصاميم AI تربط الأفكار بالنطاق والتكلفة وموافقة المالك.', bullets: ['أفكار داخلية', 'أفكار خارجية', 'دعم النطاق', 'موافقات المالك'] }
+  } as Record<string, Sector>
+};
+
+const pricing = [['Annual Maintenance Contracts', 'AED 50,000+'], ['Property Management', '5% model'], ['Mobilization', '15% upfront'], ['Payment Plans', 'Monthly / Quarterly / Annual']];
+const problems = ['No-call owner journey', 'Direct technician workfeed', 'GPS dispatch context', 'Before-and-after proof', 'PDF contracts and reports', 'AI property intelligence', 'Broker referral records', 'Property passport history'];
+const coverage = ['Villas', 'Apartments', 'Buildings', 'Towers', 'Hotels', 'Schools', 'Clinics', 'Hospitals', 'Offices', 'Malls', 'Majlis', 'Warehouses', 'Staff Accommodation', 'Retail', 'Industrial', 'Mixed-use Assets'];
 
 export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
-    const params = useParams();
-    const { t, isRTL } = useLanguage();
-    const key = page === 'dynamic' ? params.page || 'home' : page;
-
-    const pageContent: Record<string, PageContent> = {
-        owners: {
-            eyebrow: t('sector.owners.eyebrow'),
-            title: t('sector.owners.title'),
-            subtitle: t('sector.owners.subtitle'),
-            bullets: [t('sector.owners.b1'), t('sector.owners.b2'), t('sector.owners.b3'), t('sector.owners.b4')]
-        },
-        tenants: {
-            eyebrow: t('sector.tenants.eyebrow'),
-            title: t('sector.tenants.title'),
-            subtitle: t('sector.tenants.subtitle'),
-            bullets: [t('sector.tenants.b1'), t('sector.tenants.b2'), t('sector.tenants.b3'), t('sector.tenants.b4')]
-        },
-        technicians: {
-            eyebrow: t('sector.tech.eyebrow'),
-            title: t('sector.tech.title'),
-            subtitle: t('sector.tech.subtitle'),
-            bullets: [t('sector.tech.b1'), t('sector.tech.b2'), t('sector.tech.b3'), t('sector.tech.b4')]
-        },
-        brokers: {
-            eyebrow: t('sector.brokers.eyebrow'),
-            title: t('sector.brokers.title'),
-            subtitle: t('sector.brokers.subtitle'),
-            bullets: [t('sector.brokers.b1'), t('sector.brokers.b2'), t('sector.brokers.b3'), t('sector.brokers.b4')]
-        },
-        security: {
-            eyebrow: t('sector.security.eyebrow'),
-            title: t('sector.security.title'),
-            subtitle: t('sector.security.subtitle'),
-            bullets: [t('sector.security.b1'), t('sector.security.b2'), t('sector.security.b3'), t('sector.security.b4')]
-        }
-    };
-
-    const content = key === 'home' ? null : pageContent[key || ''];
-
-    if (key !== 'home' && !content) {
-        return <PublicMarketingPage page="home" />;
-    }
-
-    return (
-        <Box sx={{ minHeight: '100vh', bgcolor: '#000', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}>
-            <MarketingNav />
-            {key === 'home' ? <HomeHero /> : <SectorHero content={content!} />}
-
-            <Container maxWidth="xl" sx={{ pb: 8 }}>
-                <TrustBand />
-                <VisualProof />
-                <ServicePlans />
-                <Coverage />
-                <DemoForm />
-                <Box sx={{ pt: 5, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
-                        {t('marketing.req_contract')}
-                    </Button>
-                    <Button component={Link} to="/login" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
-                        {t('marketing.inst_login')}
-                    </Button>
-                    <Button component={Link} to="/onboarding" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
-                        {t('marketing.onboard_property')}
-                    </Button>
-                </Box>
-            </Container>
-        </Box>
-    );
+  const params = useParams();
+  const { lang, isRTL } = useLanguage();
+  const c = lang === 'ar' ? ar : en;
+  const key = page === 'dynamic' ? params.page || 'home' : page;
+  const sector = key === 'home' ? null : c.sectors[key || ''];
+  if (key !== 'home' && !sector) return <PublicMarketingPage page="home" />;
+  return <Box sx={{ minHeight: '100vh', bgcolor: '#000', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}><Nav c={c} />{sector ? <Sector c={sector} /> : <Hero c={c} />}<Container maxWidth="xl" sx={{ pb: 8 }}><Trust /><Problems c={c} /><Pricing c={c} /><Coverage c={c} /><Inquiry c={c} /></Container></Box>;
 }
 
-function MarketingNav() {
-    const { lang, setLang, isRTL, t } = useLanguage();
-    
-    return (
-        <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,0.84)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(198,167,94,0.18)' }}>
-            <Container maxWidth="xl" sx={{ py: 1.4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                <Stack component={Link} to="/" direction="row" alignItems="center" spacing={1.5} sx={{ cursor: 'pointer', color: '#FFF', textDecoration: 'none' }}>
-                    <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} onError={(event: any) => { event.currentTarget.style.display = 'none'; }} />
-                    <Typography variant="h6" fontWeight="950">BIN-<Box component="span" sx={{ color: binThemeTokens.gold }}>GROUPS</Box></Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} sx={{ display: { xs: 'none', md: 'flex' } }}>
-                    {['owners', 'tenants', 'technicians', 'brokers', 'security'].map((item) => (
-                        <Button key={item} component={Link} to={`/${item}`} sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 800, textTransform: 'capitalize' }}>
-                            {t(`marketing.${item}`)}
-                        </Button>
-                    ))}
-                    <Button component={Link} to="/login" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('nav.login')}</Button>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <Button 
-                        onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} 
-                        startIcon={<Languages size={20} />}
-                        sx={{ color: binThemeTokens.gold, fontWeight: 900 }}
-                    >
-                        {lang === 'en' ? 'العربية' : 'English'}
-                    </Button>
-                    <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                        {t('marketing.get_started')}
-                    </Button>
-                </Stack>
-            </Container>
-        </Box>
-    );
+function Nav({ c }: any) {
+  const { lang, setLang } = useLanguage();
+  return <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.88)', borderBottom: '1px solid rgba(198,167,94,.18)' }}><Container maxWidth="xl" sx={{ py: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}><Stack component={Link} to="/" direction="row" spacing={1.2} alignItems="center" sx={{ color: '#fff', textDecoration: 'none' }}><Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} /><Typography fontWeight={950}>BIN <Box component="span" sx={{ color: binThemeTokens.gold }}>GROUP</Box></Typography></Stack><Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}><Button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} startIcon={<Languages size={17} />} sx={{ color: binThemeTokens.gold, fontWeight: 900, minWidth: 100 }}>{c.language}</Button><Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>{c.primary}</Button></Stack></Container></Box>;
 }
 
-function HomeHero() {
-    const { t, isRTL } = useLanguage();
-    return (
-        <Box sx={{ minHeight: { xs: '78vh', md: '86vh' }, display: 'flex', alignItems: 'center', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(198,167,94,0.16)' }}>
-            <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(198,167,94,0.16), rgba(0,0,0,0.12) 38%, rgba(20,20,22,0.92))' }} />
-            <Box sx={{ position: 'absolute', inset: 0, opacity: 0.28, backgroundImage: 'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)', backgroundSize: '54px 54px' }} />
-            <Container maxWidth="xl" sx={{ position: 'relative', py: 8 }}>
-                <Grid container spacing={5} alignItems="center" direction={isRTL ? 'row-reverse' : 'row'}>
-                    <Grid item xs={12} md={7} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                        <Chip label={t('marketing.hero_chip')} sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.14), color: binThemeTokens.gold, fontWeight: 950 }} />
-                        <Typography variant="h1" sx={{ fontSize: { xs: 42, md: 72 }, lineHeight: 0.98, fontWeight: 950, letterSpacing: 0, mb: 3 }}>
-                            {t('marketing.hero_title')}
-                        </Typography>
-                        <Typography variant="h6" sx={{ maxWidth: 850, color: 'rgba(255,255,255,0.76)', lineHeight: 1.65, mb: 4 }}>
-                            {t('marketing.hero_desc')}
-                        </Typography>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                            <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
-                                {t('marketing.req_contract')}
-                            </Button>
-                            <Button component={Link} to="/login" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.28)', fontWeight: 950, px: 4, py: 1.5 }}>
-                                {t('marketing.inst_login')}
-                            </Button>
-                            <Button component={Link} to="/onboarding" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, px: 4, py: 1.5 }}>
-                                {t('marketing.onboard_property')}
-                            </Button>
-                        </Stack>
-                    </Grid>
-                    <Grid item xs={12} md={5}>
-                        <CommandMockup />
-                    </Grid>
-                </Grid>
-            </Container>
-        </Box>
-    );
+function Hero({ c }: any) {
+  return <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(198,167,94,.16)' }}><Box sx={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at top right, rgba(198,167,94,.25), transparent 34rem), #050505' }} /><Container maxWidth="xl" sx={{ position: 'relative', py: { xs: 7, md: 11 } }}><Grid container spacing={5} alignItems="center"><Grid item xs={12} md={7}><Chip label={c.chip} sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold,.14), color: binThemeTokens.gold, fontWeight: 950 }} /><Typography variant="h1" sx={{ fontSize: { xs: 38, md: 66 }, lineHeight: .98, fontWeight: 950, mb: 3 }}>{c.title}</Typography><Typography variant="h6" sx={{ color: 'rgba(255,255,255,.76)', lineHeight: 1.65, fontWeight: 800 }}>{c.desc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}><Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>{c.primary}</Button><Button component={Link} to="/login" variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.28)', fontWeight: 950, py: 1.5 }}>{c.login}</Button><Button component={Link} to="/company-profile" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, py: 1.5 }}>{c.onboard}</Button></Stack></Grid><Grid item xs={12} md={5}><Command /></Grid></Grid></Container></Box>;
 }
 
-function SectorHero({ content }: { content: PageContent }) {
-    const { isRTL } = useLanguage();
-    return (
-        <Container maxWidth="xl" sx={{ py: { xs: 7, md: 10 } }}>
-            <Grid container spacing={5} alignItems="center" direction={isRTL ? 'row-reverse' : 'row'}>
-                <Grid item xs={12} md={7} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{content.eyebrow}</Typography>
-                    <Typography variant="h2" sx={{ fontSize: { xs: 36, md: 58 }, lineHeight: 1, fontWeight: 950, mt: 1, mb: 3 }}>{content.title}</Typography>
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.76)', lineHeight: 1.6, mb: 3 }}>{content.subtitle}</Typography>
-                    <Stack spacing={1.2}>
-                        {content.bullets.map((bullet) => (
-                            <Stack key={bullet} direction="row" spacing={1.2} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <CheckCircle2 size={18} color={binThemeTokens.gold} />
-                                <Typography sx={{ color: 'rgba(255,255,255,0.84)' }}>{bullet}</Typography>
-                            </Stack>
-                        ))}
-                    </Stack>
-                </Grid>
-                <Grid item xs={12} md={5}>
-                    <CommandMockup compact />
-                </Grid>
-            </Grid>
-        </Container>
-    );
-}
-
-function CommandMockup({ compact = false }: { compact?: boolean }) {
-    const { t, isRTL } = useLanguage();
-    return (
-        <Paper sx={{ p: 2.5, borderRadius: 3, bgcolor: 'rgba(18,18,20,0.92)', border: '1px solid rgba(198,167,94,0.28)', boxShadow: '0 24px 80px rgba(0,0,0,0.45)' }}>
-            <Stack spacing={1.5}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{t('marketing.live_command')}</Typography>
-                    <Chip label={t('marketing.online')} size="small" sx={{ bgcolor: alpha('#10b981', 0.16), color: '#10b981', fontWeight: 900 }} />
-                </Stack>
-                {[
-                    [t('marketing.owner_contract'), t('marketing.active_protocol'), 'AED 24,500'],
-                    [t('marketing.tenant_sos'), t('marketing.tech_assigned'), t('marketing.eta')],
-                    [t('marketing.move_out_audit'), t('marketing.evidence_captured'), t('marketing.verified')],
-                    [t('marketing.broker_comm'), t('marketing.finance_approved'), 'AED 1,200']
-                ].slice(0, compact ? 3 : 4).map(([a, b, c]) => (
-                    <Box key={a} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                <Typography fontWeight="900">{a}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)' }}>{b}</Typography>
-                            </Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c}</Typography>
-                        </Stack>
-                    </Box>
-                ))}
-            </Stack>
-        </Paper>
-    );
-}
-
-function TrustBand() {
-    const { t } = useLanguage();
-    return (
-        <Grid container spacing={2} sx={{ mt: 5 }}>
-            {[
-                [t('landing.zero_friction'), <ShieldCheck size={24} />],
-                [t('landing.auto_financials'), <FileText size={24} />],
-                [t('landing.gps_dispatch'), <Wrench size={24} />],
-                [t('landing.transparency'), <LockKeyhole size={24} />]
-            ].map(([label, icon]) => (
-                <Grid item xs={12} md={3} key={String(label)}>
-                    <Paper sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 2 }}>
-                        <Box sx={{ color: binThemeTokens.gold, mb: 1 }}>{icon}</Box>
-                        <Typography fontWeight="950">{label}</Typography>
-                    </Paper>
-                </Grid>
-            ))}
-        </Grid>
-    );
-}
-
-function VisualProof() {
-    const { t, isRTL } = useLanguage();
-    const screenshots = [
-        { title: t('proof.owner_onboarding'), body: t('proof.owner_onboarding_desc') },
-        { title: t('proof.tenant_dispatch'), body: t('proof.tenant_dispatch_desc') },
-        { title: t('proof.tech_jobs'), body: t('proof.tech_jobs_desc') },
-        { title: t('proof.owner_command'), body: t('proof.owner_command_desc') },
-        { title: t('proof.ai_studio'), body: t('proof.ai_studio_desc') },
-        { title: t('proof.pdf_reports'), body: t('proof.pdf_reports_desc') }
-    ];
-    return (
-        <Box sx={{ mt: 8, textAlign: isRTL ? 'right' : 'left' }}>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 1 }}>{t('marketing.built_for_ops')}</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.66)', mb: 3 }}>{t('marketing.built_for_ops_desc')}</Typography>
-            <Grid container spacing={2} direction={isRTL ? 'row-reverse' : 'row'}>
-                {screenshots.map((shot) => (
-                    <Grid item xs={12} sm={6} md={4} key={shot.title}>
-                        <Paper sx={{ p: 2.5, minHeight: 170, borderRadius: 2, bgcolor: 'linear-gradient(135deg, rgba(198,167,94,0.12), rgba(255,255,255,0.03))', background: 'linear-gradient(135deg, rgba(198,167,94,0.12), rgba(255,255,255,0.03))', border: '1px solid rgba(198,167,94,0.18)' }}>
-                            <Sparkles size={22} color={binThemeTokens.gold} />
-                            <Typography variant="h6" fontWeight="950" sx={{ mt: 2 }}>{shot.title}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.66)' }}>{shot.body}</Typography>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
-        </Box>
-    );
-}
-
-function ServicePlans() {
-    const { t, isRTL } = useLanguage();
-    return (
-        <Box sx={{ mt: 8, textAlign: isRTL ? 'right' : 'left' }}>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>{t('marketing.service_protocols')}</Typography>
-            <Grid container spacing={2} direction={isRTL ? 'row-reverse' : 'row'}>
-                {[
-                    t('plan.maintenance'),
-                    t('plan.management'),
-                    t('plan.hybrid'),
-                    t('plan.enterprise')
-                ].map((plan) => (
-                    <Grid item xs={12} md={3} key={plan}>
-                        <Paper sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 2 }}>
-                            <Building2 size={24} color={binThemeTokens.gold} />
-                            <Typography fontWeight="950" sx={{ mt: 1.5 }}>{plan}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>{t('onboarding.payment.appreciation_desc')}</Typography>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
-        </Box>
-    );
-}
-
-function Coverage() {
-    const { t, isRTL } = useLanguage();
-    const propertyTypesList = [
-        t('prop.villas'), t('prop.apartments'), t('prop.res_buildings'), t('prop.com_buildings'), t('prop.offices'), t('prop.hotels'), t('prop.malls'), t('prop.hospitals'),
-        t('prop.clinics'), t('prop.schools'), t('prop.warehouses'), t('prop.labour_camps'), t('prop.gov_properties'), t('prop.gov_majlis'), t('prop.pri_majlis'),
-        t('prop.mixed_towers'), t('prop.skyscrapers'), t('prop.stadiums'), t('prop.sports_complex'), t('prop.event_venues'), t('prop.resorts'), t('prop.retail_centers'),
-        t('prop.industrial'), t('prop.staff_acc'), t('prop.farms')
-    ];
-    return (
-        <Box sx={{ mt: 8, textAlign: isRTL ? 'right' : 'left' }}>
-            <Typography variant="h4" fontWeight="950" sx={{ mb: 3 }}>{t('marketing.coverage_title')}</Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                {propertyTypesList.map((type) => (
-                    <Chip key={type} label={type} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: '#FFF', border: '1px solid rgba(198,167,94,0.22)', fontWeight: 800 }} />
-                ))}
-            </Stack>
-        </Box>
-    );
-}
-
-function DemoForm() {
-    const { t, isRTL } = useLanguage();
-    return (
-        <Box sx={{ mt: 8, textAlign: isRTL ? 'right' : 'left' }}>
-            <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, bgcolor: 'rgba(22,22,24,0.82)', border: '1px solid rgba(198,167,94,0.2)' }}>
-                <Grid container spacing={3} direction={isRTL ? 'row-reverse' : 'row'}>
-                    <Grid item xs={12} md={5}>
-                        <Typography variant="h4" fontWeight="950">{t('marketing.inquiry_title')}</Typography>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.66)', mt: 1 }}>{t('marketing.inquiry_desc')}</Typography>
-                        <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
-                        <Stack spacing={1}>
-                            <Stack direction="row" spacing={1} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}><Mail size={18} color={binThemeTokens.gold} /><Typography>Ceo@bin-groups.com</Typography></Stack>
-                            <Stack direction="row" spacing={1} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}><Phone size={18} color={binThemeTokens.gold} /><Typography>+971 55 242 3233</Typography></Stack>
-                            <Stack direction="row" spacing={1} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}><MapPin size={18} color={binThemeTokens.gold} /><Typography>{t('landing.address')}</Typography></Stack>
-                        </Stack>
-                        <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.56)', fontWeight: 800, display: 'block', mb: 1 }}>
-                            {t('form.ceo_note')}
-                        </Typography>
-                        <CeoContactButtons />
-                    </Grid>
-                    <Grid item xs={12} md={7}>
-                        <Grid container spacing={2}>
-                            <Grid item xs={12} md={6}><TextField fullWidth label={t('form.name')} /></Grid>
-                            <Grid item xs={12} md={6}><TextField fullWidth label={t('form.contact')} /></Grid>
-                            <Grid item xs={12} md={6}><TextField fullWidth label={t('form.prop_type')} /></Grid>
-                            <Grid item xs={12} md={6}><TextField fullWidth label={t('form.emirate')} /></Grid>
-                            <Grid item xs={12}><TextField fullWidth multiline minRows={4} label={t('form.details')} /></Grid>
-                            <Grid item xs={12}><Button disabled fullWidth variant="contained" sx={{ py: 1.4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{t('marketing.submit_audit')}</Button></Grid>
-                        </Grid>
-                    </Grid>
-                </Grid>
-            </Paper>
-        </Box>
-    );
-}
-
+function Sector({ c }: { c: Sector }) { return <Container maxWidth="xl" sx={{ py: 9 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c.eyebrow}</Typography><Typography variant="h2" sx={{ fontWeight: 950, mt: 1, mb: 2 }}>{c.title}</Typography><Typography variant="h6" sx={{ color: 'rgba(255,255,255,.72)', maxWidth: 850 }}>{c.subtitle}</Typography><Stack spacing={1.2} sx={{ mt: 3 }}>{c.bullets.map((b) => <Stack key={b} direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography>{b}</Typography></Stack>)}</Stack></Container>; }
+function Command() { return <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}><Stack spacing={1.5}>{[['Owner Contract', '15% mobilization + payment plan', 'AED 50K+'], ['Tenant Request', 'Photo + priority + GPS', 'LIVE'], ['Technician Job', 'Direct workfeed + proof', 'ASSIGNED'], ['AI Design Studio', 'Upgrade preview', 'READY']].map(([a,b,c]) => <Box key={a} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,.035)' }}><Stack direction="row" justifyContent="space-between"><Box><Typography fontWeight={900}>{a}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{b}</Typography></Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c}</Typography></Stack></Box>)}</Stack></Paper>; }
+function Trust() { return <Grid container spacing={2} sx={{ mt: 5 }}>{[['Sovereign records', <ShieldCheck />], ['GPS dispatch', <Wrench />], ['PDF proof', <FileText />], ['Property passport', <Building2 />]].map(([a,i]) => <Grid item xs={12} md={3} key={String(a)}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{i}</Box><Typography fontWeight={950}>{a}</Typography></Paper></Grid>)}</Grid>; }
+function Problems({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950}>{c.proofTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.66)', my: 2, maxWidth: 980 }}>{c.proofDesc}</Typography><Grid container spacing={2}>{problems.map((p) => <Grid item xs={12} sm={6} md={3} key={p}><Paper sx={{ p: 2.2, height: '100%', bgcolor: alpha(binThemeTokens.gold,.07), border: '1px solid rgba(198,167,94,.18)' }}><Sparkles size={20} color={binThemeTokens.gold} /><Typography fontWeight={900} sx={{ mt: 1 }}>{p}</Typography></Paper></Grid>)}</Grid></Box>; }
+function Pricing({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950} sx={{ mb: 3 }}>{c.pricingTitle}</Typography><Grid container spacing={2}>{pricing.map(([a,b]) => <Grid item xs={12} md={3} key={a}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)', fontWeight: 950 }}>{a}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold }}>{b}</Typography></Paper></Grid>)}</Grid></Box>; }
+function Coverage({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950} sx={{ mb: 2 }}>{c.coverageTitle}</Typography><Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{coverage.map((x) => <Chip key={x} label={x} sx={{ color: '#fff', bgcolor: alpha(binThemeTokens.gold,.1), border: '1px solid rgba(198,167,94,.22)', fontWeight: 800 }} />)}</Stack></Box>; }
+function Inquiry({ c }: any) { return <Box sx={{ mt: 8 }}><Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(22,22,24,.82)', border: '1px solid rgba(198,167,94,.2)' }}><Grid container spacing={3}><Grid item xs={12} md={5}><Typography variant="h4" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.66)', mt: 1 }}>{c.inquiryDesc}</Typography><Stack spacing={1} sx={{ my: 3 }}><Stack direction="row" spacing={1}><Mail size={18} color={binThemeTokens.gold}/><Typography>owner@bin-group.com</Typography></Stack><Stack direction="row" spacing={1}><Phone size={18} color={binThemeTokens.gold}/><Typography>+971 50 123 4567</Typography></Stack><Stack direction="row" spacing={1}><MapPin size={18} color={binThemeTokens.gold}/><Typography>United Arab Emirates</Typography></Stack></Stack><CeoContactButtons /></Grid><Grid item xs={12} md={7}><Grid container spacing={2}>{['Name','Phone / Email','Property Type','Emirate'].map((l)=><Grid item xs={12} md={6} key={l}><TextField fullWidth label={l}/></Grid>)}<Grid item xs={12}><TextField fullWidth multiline minRows={4} label="Portfolio Details"/></Grid><Grid item xs={12}><Button disabled fullWidth variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{c.primary}</Button></Grid></Grid></Grid></Grid></Paper></Box>; }
