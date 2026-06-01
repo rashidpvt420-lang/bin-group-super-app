@@ -1,46 +1,150 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../../../lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { 
-  Brain, 
-  Activity, 
-  Radio, 
-  Zap, 
-  ShieldAlert, 
-  Layers, 
-  Cpu,
-  Waves
-} from 'lucide-react';
-
-import { 
-  Box, 
-  Grid, 
-  Paper, 
-  Typography, 
-  Button, 
-  IconButton, 
-  Avatar, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  List, 
-  ListItem, 
-  ListItemAvatar, 
-  ListItemText, 
-  FormControlLabel, 
+import React, { useEffect, useMemo, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Grid,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Paper,
+  Stack,
+  Typography,
+  Avatar,
   Checkbox,
-  LinearProgress
+  Alert,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import {
+  Activity,
+  AlertTriangle,
+  Brain,
+  CheckCircle2,
+  Download,
+  MapPin,
+  Navigation,
+  Radio,
+  ShieldAlert,
+  UserCheck,
+  Wifi,
+  WifiOff,
+  Zap,
+} from 'lucide-react';
+import {
+  db,
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from '../../../lib/firebase';
+import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, isLocationStale, normalizeLocation } from '../../../utils/liveTracking';
 
-// Helper for type-safe icons in React 18
-const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
-    <IconComponent size={size} className={className} color={color} />
-);
+const GOLD = '#DAA520';
+const GREEN = '#10b981';
+const RED = '#ef4444';
+const BLUE = '#3b82f6';
 
+const normalizeStatus = (value?: string | null) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 
+const isUnassigned = (ticket: any) => {
+  const status = normalizeStatus(ticket.status);
+  const dispatch = normalizeStatus(ticket.dispatchStatus);
+  return ['open', 'pending', 'pending_assignment', 'unassigned'].includes(status) || ['pending', 'unassigned'].includes(dispatch) || !ticket.assignedTechnicianId;
+};
+
+const isLiveTracking = (ticket: any) => {
+  const status = normalizeStatus(ticket.status);
+  const tracking = normalizeStatus(ticket.trackingStatus);
+  const dispatch = normalizeStatus(ticket.dispatchStatus);
+  return ['on_the_way', 'en_route', 'live_tracking'].includes(status) || ['live_tracking', 'en_route'].includes(tracking) || dispatch === 'en_route';
+};
+
+const getTicketLocation = (ticket: any) => normalizeLocation(ticket.jobLocation) || normalizeLocation(ticket.propertyLocation) || normalizeLocation(ticket.location) || null;
+const getTechLocation = (ticket: any) => normalizeLocation(ticket.technicianLocation) || null;
+
+function buildDirectionsUrl(ticket: any) {
+  const job = getTicketLocation(ticket);
+  const tech = getTechLocation(ticket);
+  if (tech && job) return `https://www.google.com/maps/dir/?api=1&origin=${tech.lat},${tech.lng}&destination=${job.lat},${job.lng}&travelmode=driving`;
+  if (job) return `https://www.google.com/maps/search/?api=1&query=${job.lat},${job.lng}`;
+  return 'https://www.google.com/maps';
+}
+
+function ticketLabel(ticket: any) {
+  return ticket.propertyName || ticket.unit || ticket.unitNumber || ticket.propertyId || 'UAE Portfolio Asset';
+}
+
+function generateGatePassPdf(ticket: any, tech: any) {
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const safeTechName = tech.name || tech.displayName || 'Technician';
+  const filename = `BIN_GROUP_GatePass_${ticket.id}_${safeTechName}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+  pdf.setProperties({
+    title: `BIN GROUP Gate Pass ${ticket.id}`,
+    subject: 'Maintenance technician access gate pass',
+    author: 'BIN GROUP Super App',
+    creator: 'BIN GROUP Admin Live Map',
+  });
+
+  pdf.setDrawColor(218, 165, 32);
+  pdf.setLineWidth(1.2);
+  pdf.rect(10, 10, 190, 277);
+  pdf.setFillColor(15, 23, 42);
+  pdf.rect(15, 15, 180, 34, 'F');
+
+  pdf.setTextColor(218, 165, 32);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.text('BIN GROUP MAINTENANCE', 105, 29, { align: 'center' });
+  pdf.setFontSize(11);
+  pdf.text('SECURITY GATE PASS / تصريح دخول أمني', 105, 41, { align: 'center' });
+
+  pdf.setTextColor(15, 23, 42);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(11);
+  const rows = [
+    ['Ticket ID', ticket.id],
+    ['Date of Entry', new Date().toLocaleDateString()],
+    ['Assigned Technician', safeTechName],
+    ['Technician Contact', tech.phone || tech.phoneNumber || tech.mobile || '+971'],
+    ['Location', ticketLabel(ticket)],
+    ['Issue', ticket.issueDescription || ticket.issue || ticket.category || 'General maintenance'],
+    ['Dispatch Status', ticket.dispatchStatus || ticket.status || 'ASSIGNED'],
+  ];
+
+  let y = 68;
+  rows.forEach(([label, value]) => {
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`${label}:`, 20, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(String(value || '-').slice(0, 90), 65, y);
+    y += 11;
+  });
+
+  pdf.setDrawColor(226, 232, 240);
+  pdf.line(20, y + 4, 190, y + 4);
+  y += 18;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('APPROVED WORK DETAILS', 105, y, { align: 'center' });
+  y += 12;
+  pdf.setFont('helvetica', 'normal');
+  const notes = pdf.splitTextToSize(ticket.issueDescription || ticket.description || 'Authorized maintenance attendance and inspection.', 160);
+  pdf.text(notes, 25, y);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(220, 38, 38);
+  pdf.text('BIN GROUP DIGITAL SECURITY STAMP', 105, 262, { align: 'center' });
+  pdf.save(`${filename}.pdf`);
+}
 
 export default function LiveMapPage() {
   const [tickets, setTickets] = useState<any[]>([]);
@@ -48,498 +152,229 @@ export default function LiveMapPage() {
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
   const [generatePass, setGeneratePass] = useState(true);
+  const [dispatching, setDispatching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, "maintenanceTickets"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot: any) => {
-      const ticketData: any[] = [];
-      querySnapshot.forEach((doc: any) => {
-        const data = doc.data();
-        ticketData.push({
-          id: doc.id,
-          ...data,
-          // Format timestamp for UI (simplified)
-          timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString() : 'Just now'
-        });
-      });
-      setTickets(ticketData);
-    });
+    const ticketsQuery = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'));
+    const unsubTickets = onSnapshot(
+      ticketsQuery,
+      (snap) => {
+        setTickets(snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString() : 'Live',
+          };
+        }));
+      },
+      (err) => {
+        console.error('[Admin LiveMap] ticket listener failed:', err);
+        setError('Could not load maintenance tickets. Check Firestore rules/indexes.');
+      },
+    );
 
-    const qTech = query(collection(db, "users"), orderBy("createdAt", "desc"));
-    const unsubscribeTech = onSnapshot(qTech, (querySnapshot: any) => {
-      const techData: any[] = [];
-      querySnapshot.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.role === 'technician') {
-          techData.push({
-            id: doc.id,
-            name: data.displayName || 'Technician',
-            distance: 'N/A', // Can be calculated if coordinates exist
-            rating: data.rating || 5.0,
-            avatar: (data.displayName || 'T').charAt(0).toUpperCase(),
-            status: data.isOffDuty ? 'Busy' : 'Available',
-            ...data
-          });
-        }
-      });
-      setTechnicians(techData);
-    });
+    const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    const unsubUsers = onSnapshot(
+      usersQuery,
+      (snap) => {
+        setTechnicians(snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((u: any) => String(u.role || '').toLowerCase() === 'technician')
+          .map((u: any) => ({
+            ...u,
+            name: u.displayName || u.fullName || u.name || u.email || 'Technician',
+            status: u.isOffDuty ? 'Busy' : u.isTracking ? 'Tracking' : 'Available',
+            avatar: String(u.displayName || u.fullName || u.email || 'T').charAt(0).toUpperCase(),
+          })));
+      },
+      (err) => {
+        console.error('[Admin LiveMap] technician listener failed:', err);
+        setError('Could not load technicians. Check Firestore rules/indexes.');
+      },
+    );
 
     return () => {
-      unsubscribe();
-      unsubscribeTech();
+      unsubTickets();
+      unsubUsers();
     };
   }, []);
+
+  const metrics = useMemo(() => {
+    const live = tickets.filter(isLiveTracking).length;
+    const unassigned = tickets.filter(isUnassigned).length;
+    const available = technicians.filter((t) => t.status === 'Available').length;
+    const stale = tickets.filter((t) => isLiveTracking(t) && isLocationStale(t.technicianLocation?.updatedAt || t.technicianLocationUpdatedAt)).length;
+    return { live, unassigned, available, stale, total: tickets.length };
+  }, [tickets, technicians]);
 
   const handleAssignClick = (ticket: any) => {
     setSelectedTicket(ticket);
     setDispatchDialogOpen(true);
   };
 
-  const handleDispatch = (tech: any) => {
-    // 1. Update the actual ticket in Firestore to DISPATCHED
-    if (selectedTicket) {
-      const ticketRef = doc(db, "maintenanceTickets", selectedTicket.id);
-      updateDoc(ticketRef, {
+  const handleDispatch = async (tech: any) => {
+    if (!selectedTicket) return;
+    setDispatching(true);
+    setError(null);
+    try {
+      await updateDoc(doc(db, 'maintenanceTickets', selectedTicket.id), {
         status: 'accepted',
         dispatchStatus: 'ASSIGNED',
         trackingStatus: 'TECHNICIAN_ASSIGNED',
         assignedTechnicianId: tech.id,
-        assignedTechnicianName: tech.name
+        assignedTechnicianName: tech.name,
+        assignedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
-      // --- 3. Mock Automated SMS/Push Triggers ---
-      // Fire a browser notification to alert the Technician
-      if ("Notification" in window) {
-        Notification.requestPermission().then(permission => {
-          if (permission === "granted") {
-            new Notification("BIN Group Server", {
-              body: `Auto-SMS Triggered: Technician ${tech.name} has been dispatched to ${selectedTicket.unit}.`
-            });
-          }
-        });
-      }
-    }
-
-    setDispatchDialogOpen(false);
-
-    if (generatePass && selectedTicket) {
-      generateGatePass(selectedTicket, tech);
-    }
-  };
-
-  const generateGatePass = async (ticket: any, tech: any) => {
-    if (!(window as any).jspdf) {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-        script.onload = () => resolve();
-        document.body.appendChild(script);
-      });
-    }
-
-    const { jsPDF } = (window as any).jspdf;
-    const doc = new jsPDF();
-
-    let cairoBase64 = null;
-    try {
-      const res = await fetch('https://fonts.gstatic.com/s/cairo/v20/SLXQ1O5tq8QA3r565Uq13w.ttf');
-      const buffer = await res.arrayBuffer();
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      cairoBase64 = btoa(binary);
+      if (generatePass) generateGatePassPdf(selectedTicket, tech);
+      setDispatchDialogOpen(false);
+      setSelectedTicket(null);
     } catch (err) {
-      console.error("Failed to load Cairo font, falling back to default:", err);
+      console.error('[Admin LiveMap] dispatch failed:', err);
+      setError('Dispatch failed. Check ticket write permissions and try again.');
+    } finally {
+      setDispatching(false);
     }
-
-    if (cairoBase64) {
-      doc.addFileToVFS('Cairo-Regular.ttf', cairoBase64);
-      doc.addFont('Cairo-Regular.ttf', 'Cairo', 'normal');
-      doc.setFont('Cairo');
-    }
-
-    doc.setDrawColor(212, 175, 55);
-    doc.setLineWidth(1.5);
-    doc.rect(10, 10, 190, 277);
-    doc.rect(12, 12, 186, 273);
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(15, 15, 180, 40, "F");
-
-    doc.setTextColor(212, 175, 55);
-    doc.setFontSize(22);
-    doc.text("BIN GROUP MAINTENANCE", 105, 30, { align: "center" });
-    doc.setFontSize(14);
-    doc.setTextColor(255, 255, 255);
-    doc.text("SECURITY GATE PASS  •  تصريح دخول أمني", 105, 45, { align: "center" });
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(12);
-
-    doc.text(`Ticket ID: ${ticket.id}`, 20, 80);
-    doc.text(`Date of Entry: ${new Date().toLocaleDateString()}`, 20, 95);
-    doc.text(`Assigned Technician: ${tech.name}`, 20, 110);
-    doc.text(`Contact: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 20, 125);
-    doc.text(`Location: ${ticket.unit || 'UAE Portfolio Asset'}`, 20, 140);
-    
-    doc.text(`معرف التذكرة: ${ticket.id}`, 190, 80, { align: 'right' });
-    doc.text(`تاريخ الدخول: ${new Date().toLocaleDateString()}`, 190, 95, { align: 'right' });
-    doc.text(`الفني المعين: ${tech.name}`, 190, 110, { align: 'right' });
-    doc.text(`رقم الهاتف: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 190, 125, { align: 'right' });
-    doc.text(`الموقع: ${ticket.unit || 'أصل المحفظة العقارية'}`, 190, 140, { align: 'right' });
-
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.5);
-    doc.line(15, 155, 195, 155);
-
-    doc.setFontSize(14);
-    doc.text("APPROVED WORK DETAILS / تفاصيل العمل المعتمد", 105, 170, { align: "center" });
-    
-    doc.setFontSize(11);
-    const descText = ticket.issueDescription || ticket.issue || "General Maintenance and Inspection Ops.";
-    const descTextAr = "أعمال الصيانة العامة والفحص التشغيلي المعتمدة.";
-    
-    doc.text(descText, 20, 185);
-    doc.text(descTextAr, 190, 200, { align: 'right' });
-
-    doc.setDrawColor(212, 175, 55);
-    doc.rect(20, 220, 170, 50);
-
-    doc.setFontSize(12);
-    doc.text("Authorized by / معتمد من:", 25, 235);
-    doc.text("Rashid AbdulGhani - CEO / راشد عبد الغني - الرئيس التنفيذي", 25, 245);
-    
-    doc.setTextColor(220, 38, 38);
-    doc.setFontSize(10);
-    doc.text("[ BIN GROUP DIGITAL SECURITY STAMP  •  ختم مجموعة بن الرقمي الأمني ]", 105, 262, { align: "center" });
-
-    doc.save(`GatePass_${ticket.id}_${tech.name}.pdf`);
   };
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#020617', overflow: 'hidden' }}>
-      
-      {/* 🟢 TOP HEADER: REAL-TIME PORTFOLIO STATS */}
-      <Box sx={{ 
-        height: 80, borderBottom: '1px solid rgba(255,255,255,0.05)', 
-        display: 'flex', alignItems: 'center', px: 4, justifyContent: 'space-between',
-        background: 'linear-gradient(to right, #020617, #0f172a)' 
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-             <Icon icon={Cpu} className="text-emerald-500 animate-pulse" size={24} />
-          </div>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>
-              BIN-GROUP <Box component="span" sx={{ color: '#10b981' }}>MISSION CONTROL</Box>
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold' }}>VERSION 3.0 • DUBAI-HQ PORTFOLIO</Typography>
-          </Box>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#fff', p: { xs: 2, md: 4 } }}>
+      <Stack spacing={3}>
+        <Box>
+          <Typography variant="overline" sx={{ color: GOLD, fontWeight: 950, letterSpacing: 4 }}>BIN GROUP LIVE OPS</Typography>
+          <Typography variant="h4" fontWeight="950">Technician Dispatch & GPS Command</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1, maxWidth: 900 }}>
+            Real-time Firestore feed for tickets, technician assignment, live tracking state, stale GPS detection, gate pass generation, and Google Maps handoff.
+          </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 6 }}>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>DAILY AI SAVINGS</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#10b981' }}>AED 42,880.00</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>AUTONOMOUS DISPATCHES</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#3b82f6' }}>142 <Box component="span" sx={{ fontSize: 10, color: '#64748b' }}>TIC/24H</Box></Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>FORENSIC SYNC UPTIME</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff' }}>99.99%</Typography>
-          </Box>
-        </Box>
-      </Box>
+        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
-      {/* Split Screen Container */}
-      <Grid container sx={{ flexGrow: 1, overflow: 'hidden' }}>
+        <Grid container spacing={2}>
+          {[
+            ['Total Tickets', metrics.total, BLUE],
+            ['Unassigned', metrics.unassigned, RED],
+            ['Live GPS', metrics.live, GREEN],
+            ['Available Techs', metrics.available, GOLD],
+            ['Stale GPS', metrics.stale, RED],
+          ].map(([label, value, color]) => (
+            <Grid item xs={6} md={2.4} key={String(label)}>
+              <Paper sx={{ p: 2.5, bgcolor: 'rgba(15,23,42,0.85)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 900 }}>{label}</Typography>
+                <Typography variant="h5" fontWeight="950" sx={{ color: String(color) }}>{String(value)}</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
 
-        {/* Left Panel: AI Dispatch Feed */}
-        <Grid item xs={12} md={4} sx={{
-          borderRight: '1px solid rgba(255,255,255,0.05)',
-          height: '100%',
-          overflowY: 'auto',
-          p: 0,
-          bgcolor: '#020617'
-        }}>
-          <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'sticky', top: 0, bgcolor: '#020617', zIndex: 10 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <Icon icon={Radio} className="text-emerald-500 animate-ping" size={16} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                AI Autonomous <Box component="span" sx={{ color: '#10b981' }}>Dispatch Feed</Box>
-              </Typography>
-            </Box>
-            <Typography variant="caption" sx={{ color: '#64748b' }}>Streaming live telemetry from Dubai Residential Clusters...</Typography>
-          </Box>
-
-          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {(tickets || []).map((ticket) => (
-              <Box
-                key={ticket.id}
-                sx={{
-                  p: 2,
-                  bgcolor: '#0f172a80',
-                  border: '1px solid rgba(255,255,255,0.03)',
-                  borderRadius: 3,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  transition: 'background 0.2s',
-                  '&:hover': { bgcolor: '#0f172a' }
-                }}
-              >
-                {/* AI Progress Bar (Simulation) */}
-                <LinearProgress 
-                  variant="determinate" 
-                  value={ticket.status === 'UNASSIGNED' ? 45 : 100} 
-                  sx={{ 
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-                    bgcolor: 'transparent',
-                    '& .MuiLinearProgress-bar': { bgcolor: ticket.status === 'UNASSIGNED' ? '#3b82f6' : '#10b981' }
-                  }} 
-                />
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <div className="bg-slate-800 p-1.5 rounded-lg">
-                       {ticket.status === 'UNASSIGNED' ? <Icon icon={Zap} className="text-blue-400" size={12} /> : <Icon icon={Brain} className="text-emerald-500" size={12} />}
-                    </div>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black' }}>
-                      {ticket.status === 'UNASSIGNED' ? "AI INTERCEPTING..." : `AI DISPATCHED: ${ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'Technician'}`}
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ color: '#334155', fontWeight: 'bold' }}>{ticket.timestamp}</Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <Box>
-                      <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 900, lineHeight: 1.2 }}>{ticket.unit}</Typography>
-                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', mt: 0.5 }}>{ticket.issueDescription || ticket.issue}</Typography>
-                   </Box>
-                   {ticket.status === 'UNASSIGNED' && (
-                     <Button 
-                       size="small" 
-                       onClick={() => handleAssignClick(ticket)}
-                       sx={{ bgcolor: '#fff', color: '#000', borderRadius: '8px', fontSize: '9px', fontWeight: 900, '&:hover': { bgcolor: '#cbd5e1' } }}>
-                        MANUAL OVERRIDE
-                     </Button>
-                   )}
-                </Box>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, overflow: 'hidden' }}>
+              <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Radio size={18} color={GREEN} />
+                  <Typography fontWeight="950">Dispatch Feed</Typography>
+                </Stack>
               </Box>
-            ))}
-          </Box>
+              <Stack spacing={1.2} sx={{ p: 2, maxHeight: 680, overflowY: 'auto' }}>
+                {tickets.length === 0 && <Typography variant="body2" color="text.secondary">No tickets found.</Typography>}
+                {tickets.map((ticket) => {
+                  const live = isLiveTracking(ticket);
+                  const open = isUnassigned(ticket);
+                  const loc = getTechLocation(ticket);
+                  const stale = live && isLocationStale(ticket.technicianLocation?.updatedAt || ticket.technicianLocationUpdatedAt);
+                  return (
+                    <Paper key={ticket.id} sx={{ p: 2, bgcolor: 'rgba(2,6,23,0.82)', border: `1px solid ${live ? 'rgba(16,185,129,0.25)' : open ? 'rgba(239,68,68,0.22)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 3 }}>
+                      <Stack spacing={1}>
+                        <Stack direction="row" justifyContent="space-between" spacing={1}>
+                          <Chip size="small" icon={live ? <Wifi size={12} /> : open ? <Zap size={12} /> : <CheckCircle2 size={12} />} label={live ? 'LIVE GPS' : open ? 'NEEDS DISPATCH' : String(ticket.status || 'TRACKED').toUpperCase()} sx={{ bgcolor: live ? 'rgba(16,185,129,0.12)' : open ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', color: live ? '#4ade80' : open ? '#f87171' : '#93c5fd', fontWeight: 950 }} />
+                          <Typography variant="caption" color="text.secondary">{ticket.timestamp}</Typography>
+                        </Stack>
+                        <Typography fontWeight="950">{ticketLabel(ticket)}</Typography>
+                        <Typography variant="caption" color="text.secondary">{ticket.issueDescription || ticket.issue || ticket.category || 'Maintenance request'}</Typography>
+                        {live && <Typography variant="caption" sx={{ color: stale ? '#f87171' : '#4ade80' }}>{stale ? 'GPS stale' : 'GPS live'} · {loc ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}` : 'Location pending'} · {getStaleLabel(ticket.technicianLocation?.updatedAt || ticket.technicianLocationUpdatedAt)}</Typography>}
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          {open && <Button size="small" variant="contained" onClick={() => handleAssignClick(ticket)} sx={{ bgcolor: GOLD, color: '#000', fontWeight: 950 }}>Assign</Button>}
+                          <Button size="small" variant="outlined" onClick={() => window.open(buildDirectionsUrl(ticket), '_blank', 'noopener,noreferrer')} sx={{ borderColor: 'rgba(255,255,255,0.16)', color: '#fff', fontWeight: 900 }}>Map</Button>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ minHeight: 680, position: 'relative', overflow: 'hidden', bgcolor: '#020617', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+              <Box sx={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0)', backgroundSize: '42px 42px' }} />
+              <Box sx={{ position: 'relative', zIndex: 1, p: 3 }}>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <Chip icon={<Activity size={14} />} label="Firestore Live" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#4ade80', fontWeight: 950 }} />
+                  <Chip icon={<Brain size={14} />} label="Dispatch Status Synced" sx={{ bgcolor: 'rgba(218,165,32,0.12)', color: GOLD, fontWeight: 950 }} />
+                  <Chip icon={<ShieldAlert size={14} />} label="Stale GPS Detection" sx={{ bgcolor: 'rgba(239,68,68,0.12)', color: '#f87171', fontWeight: 950 }} />
+                </Stack>
+              </Box>
+
+              <Box sx={{ position: 'relative', zIndex: 1, height: 560 }}>
+                {tickets.filter((t) => isLiveTracking(t) || isUnassigned(t)).slice(0, 12).map((ticket, idx) => {
+                  const live = isLiveTracking(ticket);
+                  const techLoc = getTechLocation(ticket);
+                  const jobLoc = getTicketLocation(ticket);
+                  const distance = calculateDistanceKm(techLoc, jobLoc);
+                  const eta = calculateEtaMinutes(distance);
+                  const fallbackPositions = [
+                    { top: 18, left: 20 }, { top: 35, left: 72 }, { top: 58, left: 42 }, { top: 72, left: 78 },
+                    { top: 28, left: 52 }, { top: 46, left: 26 }, { top: 68, left: 18 }, { top: 16, left: 82 },
+                    { top: 80, left: 55 }, { top: 52, left: 86 }, { top: 38, left: 38 }, { top: 64, left: 65 },
+                  ];
+                  const pos = fallbackPositions[idx] || { top: 50, left: 50 };
+                  return (
+                    <Box key={ticket.id} sx={{ position: 'absolute', top: `${pos.top}%`, left: `${pos.left}%`, transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                      <Paper sx={{ px: 1.5, py: 1, bgcolor: live ? 'rgba(16,185,129,0.92)' : 'rgba(59,130,246,0.9)', color: '#fff', borderRadius: 2, mb: 1, whiteSpace: 'nowrap', boxShadow: live ? '0 0 30px rgba(16,185,129,0.35)' : '0 0 30px rgba(59,130,246,0.35)' }}>
+                        <Typography variant="caption" fontWeight="950">{live ? 'LIVE' : 'PENDING'} · {ticketLabel(ticket)}</Typography>
+                        {eta && <Typography variant="caption" sx={{ display: 'block', opacity: 0.8 }}>ETA ~{eta} min</Typography>}
+                      </Paper>
+                      <Box sx={{ width: 44, height: 44, borderRadius: '50%', bgcolor: live ? GREEN : BLUE, display: 'grid', placeItems: 'center', mx: 'auto', border: '3px solid rgba(255,255,255,0.5)' }}>
+                        {live ? <Navigation size={24} color="#fff" /> : <MapPin size={24} color="#fff" />}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              <Paper sx={{ position: 'absolute', left: 24, right: 24, bottom: 24, p: 2, bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-around">
+                  <Stack direction="row" spacing={1.2} alignItems="center"><Wifi size={18} color={GREEN} /><Typography variant="caption" fontWeight="950">LIVE = technician pressed ON THE WAY</Typography></Stack>
+                  <Stack direction="row" spacing={1.2} alignItems="center"><WifiOff size={18} color={RED} /><Typography variant="caption" fontWeight="950">STALE = no update for 2+ minutes</Typography></Stack>
+                  <Stack direction="row" spacing={1.2} alignItems="center"><Download size={18} color={GOLD} /><Typography variant="caption" fontWeight="950">Gate pass PDF on assignment</Typography></Stack>
+                </Stack>
+              </Paper>
+            </Paper>
+          </Grid>
         </Grid>
+      </Stack>
 
-        {/* Right Panel: Live Map & Risk Profile */}
-        <Grid item xs={12} md={8} sx={{ height: '100%', position: 'relative', bgcolor: '#020617' }}>
-          {/* Map Controls Floating Header */}
-          <Box sx={{ position: 'absolute', top: 24, left: 24, right: 24, zIndex: 100, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-             <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Button startIcon={<Icon icon={Layers} size={16}/>} sx={{ color: '#fff', textTransform: 'none', fontWeight: 900 }}>Portfolio Risk Heatmap</Button>
-                <Button startIcon={<Icon icon={Activity} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Tech Locations</Button>
-                <Button startIcon={<Icon icon={Waves} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Unit Telemetry</Button>
-             </Paper>
-
-             <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black', alignSelf: 'center', ml: 1, mr: 1 }}>VERTICAL DEPTH:</Typography>
-                <Button size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5, fontSize: 10, fontWeight: 900 }}>ALL</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F1-40</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F41-80</Button>
-                <Button size="small" sx={{ color: '#10b981', fontSize: 10, fontWeight: 900 }}>MEGA (120+)</Button>
-             </Paper>
-
-             <Paper sx={{ px: 2, py: 1, ml: 'auto', bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>SLA HEALTH: 98.4%</Typography>
-                </Box>
-                <Box sx={{ width: 1, height: 20, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                <Typography variant="caption" sx={{ color: '#64748b' }}>LIVE CLUSTER: MARINA BRIDGES</Typography>
-             </Paper>
-          </Box>
-
-          {/* Map Overlay Canvas */}
-          <Box sx={{
-            position: 'absolute', inset: 0,
-            backgroundImage: `radial-gradient(circle at 2px 2px, rgba(255,255,255,0.02) 1px, transparent 0)`,
-            backgroundSize: '40px 40px',
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              inset: 0,
-              background: 'radial-gradient(circle at 50% 50%, transparent 20%, #020617 100%)'
-            }
-          }} />
-
-          {/* Map Pins & Telemetry Labels */}
-          <Box sx={{ position: 'relative', zIndex: 1, height: '100%', pointerEvents: 'none' }}>
-                      {/* DYNAMIC TECH MARKERS */}
-             {tickets.filter(t => t.status === 'EN_ROUTE' && t.technicianLocation).map((ticket) => {
-                const loc = ticket.technicianLocation;
-                // Simple projection for Dubai Marina / Downtown area
-                // Mapping Lat [25.0, 25.3] -> [100% to 0%] (Top is North)
-                // Mapping Lng [55.12, 55.42] -> [0% to 100%]
-                const top = ((25.3 - loc.lat) / 0.3) * 100;
-                const left = ((loc.lng - 55.12) / 0.3) * 100;
-
-                return (
-                  <Box 
-                    key={ticket.id} 
-                    sx={{ 
-                      position: 'absolute', 
-                      top: `${Math.min(Math.max(top, 5), 95)}%`, 
-                      left: `${Math.min(Math.max(left, 5), 95)}%`, 
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      transition: 'all 0.5s ease-in-out' // Smooth movement
-                    }}
-                  >
-                    <Box sx={{ 
-                      bgcolor: '#10b981', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                      boxShadow: '0 10px 30px rgba(16,185,129,0.3)', border: '1px solid rgba(255,255,255,0.2)',
-                      display: 'flex', alignItems: 'center', gap: 1, whiteSpace: 'nowrap'
-                    }}>
-                      <div className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      <Typography sx={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>
-                        {ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'TEC'} • {ticket.unit || 'LOC'}
-                      </Typography>
-                    </Box>
-                    <div className="p-1 rounded-full bg-emerald-500 shadow-2xl">
-                      <PersonPinCircleIcon sx={{ color: '#fff', fontSize: 32 }} />
-                    </div>
-                  </Box>
-                );
-             })}
-
-             {/* CLUSTER MARKERS FOR PENDING JOBS */}
-             {tickets.filter(t => t.status === 'OPEN' || t.status === 'assigned').slice(0, 3).map((ticket, i) => {
-                 // Place at random or semi-fixed locations if no unit coords
-                 const positions = [
-                     { top: '55%', left: '42%' },
-                     { top: '35%', left: '75%' },
-                     { top: '20%', left: '80%' }
-                 ];
-                 const pos = positions[i] || { top: '50%', left: '50%' };
-                 return (
-                    <Box key={ticket.id} sx={{ position: 'absolute', top: pos.top, left: pos.left, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Box sx={{ 
-                        bgcolor: i === 1 ? '#ef4444' : 'rgba(59, 130, 246, 0.95)', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                        boxShadow: i === 1 ? '0 10px 30px rgba(239,68,68,0.3)' : '0 0 40px rgba(59, 130, 246, 0.4)', 
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1
-                        }}>
-                        <Typography sx={{ fontSize: '10px', fontWeight: 900 }}>
-                            {i === 1 ? 'CRITICAL RISK' : 'PENDING DISPATCH'}
-                        </Typography>
-                        </Box>
-                        {i === 1 ? (
-                            <Icon icon={ShieldAlert} className="text-red-500 drop-shadow-2xl animate-pulse" size={40} />
-                        ) : (
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center text-blue-500 font-black text-xs">
-                                {i + 1}
-                            </div>
-                        )}
-                    </Box>
-                    );
-                    })}
-
-                    </Box>
-          {/* Dynamic Map Indicators */}
-          <Paper sx={{
-            position: 'absolute', bottom: 32, left: 32, right: 32, p: 2.5,
-            bgcolor: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
-            display: 'flex', justifyContent: 'space-around', alignItems: 'center'
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-emerald-500 w-3 h-3 rounded-full shadow-[0_0_10px_#10b981]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>AUTO-DISPATCH ACTIVE</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>AI identifying and routing faults</Typography>
-               </Box>
-            </Box>
-            <div className="w-[1px] h-8 bg-slate-800" />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-blue-500 w-3 h-3 rounded-full shadow-[0_0_10px_#3b82f6]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>FORENSIC SYNC PENDING</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Specialists uploading offline data</Typography>
-               </Box>
-            </Box>
-            <div className="w-[1px] h-8 bg-slate-800" />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-red-500 w-3 h-3 rounded-full shadow-[0_0_10px_#ef4444]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>SLA VIOLATION RISK</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Response time exceeds 30m target</Typography>
-               </Box>
-            </Box>
-          </Paper>
-
-        </Grid>
-      </Grid>
-
-      {/* Dispatch Modal */}
-      <Dialog
-        open={dispatchDialogOpen}
-        onClose={() => setDispatchDialogOpen(false)}
-        PaperProps={{
-          sx: { bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, minWidth: 400 }
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6" fontWeight={900}>DISPATCH TECHNICIAN</Typography>
-          <IconButton onClick={() => setDispatchDialogOpen(false)} sx={{ color: '#64748b' }}><CloseIcon /></IconButton>
-        </DialogTitle>
+      <Dialog open={dispatchDialogOpen} onClose={() => setDispatchDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { bgcolor: '#0f172a', color: '#fff', borderRadius: 4 } }}>
+        <DialogTitle sx={{ fontWeight: 950 }}>Assign Technician</DialogTitle>
         <DialogContent>
-          <Box sx={{ mb: 3, p: 2, bgcolor: '#020617', borderRadius: 2 }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Selected Ticket</Typography>
-            <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{selectedTicket?.unit} - {selectedTicket?.issue}</Typography>
-          </Box>
-
-          <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 2 }}>
-            <FormControlLabel
-              control={<Checkbox checked={generatePass} onChange={(e) => setGeneratePass(e.target.checked)} sx={{ color: '#10b981', '&.Mui-checked': { color: '#10b981' } }} />}
-              label={<Typography sx={{ fontWeight: 'bold', color: '#10b981' }}>Generate Security Gate Pass PDF</Typography>}
-            />
-            <Typography variant="caption" sx={{ display: 'block', pl: 4, color: '#64748b' }}>Automatically generates a stamped PDF for immediate WhatsApp delivery to Tenant/Security.</Typography>
-          </Box>
-
-          <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>Available Near Property</Typography>
-          <List>
-            {(technicians || []).filter(tech => tech.status === 'Available').map((tech) => (
-              <ListItem
-                key={tech.id}
-                sx={{
-                  mb: 1, bgcolor: '#020617', borderRadius: 3,
-                  '&:hover': { bgcolor: '#1e293b' },
-                  cursor: 'pointer'
-                }}
-                onClick={() => handleDispatch(tech)}
-              >
-                <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: '#3b82f6', fontWeight: 'bold' }}>{tech.avatar}</Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={tech.name}
-                  secondary={
-                    <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <AccessTimeIcon sx={{ fontSize: 12, color: '#10b981' }} />
-                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 'bold' }}>{tech.distance}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: '#94a3b8' }}>Rating: {tech.rating}</Typography>
-                      </Box>
-                    </Box>
-                  }
-                />
-                <Button size="small" variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>Dispatch</Button>
-              </ListItem>
-            ))}
-          </List>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">Ticket: {selectedTicket ? ticketLabel(selectedTicket) : '-'}</Typography>
+            <FormControlLabel control={<Checkbox checked={generatePass} onChange={(e) => setGeneratePass(e.target.checked)} sx={{ color: GOLD, '&.Mui-checked': { color: GOLD } }} />} label="Generate gate pass PDF" />
+            {dispatching && <LinearProgress sx={{ '& .MuiLinearProgress-bar': { bgcolor: GOLD } }} />}
+            <List>
+              {technicians.length === 0 && <Typography variant="body2" color="text.secondary">No technicians found.</Typography>}
+              {technicians.map((tech) => (
+                <ListItem key={tech.id} secondaryAction={<Button disabled={dispatching || tech.status === 'Busy'} onClick={() => handleDispatch(tech)} variant="contained" sx={{ bgcolor: GOLD, color: '#000', fontWeight: 950 }}>Assign</Button>} sx={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3, mb: 1 }}>
+                  <ListItemAvatar><Avatar sx={{ bgcolor: tech.status === 'Tracking' ? GREEN : GOLD, color: '#000', fontWeight: 950 }}>{tech.avatar}</Avatar></ListItemAvatar>
+                  <ListItemText primary={<Stack direction="row" spacing={1} alignItems="center"><Typography fontWeight="950">{tech.name}</Typography>{tech.status === 'Tracking' && <UserCheck size={14} color={GREEN} />}</Stack>} secondary={<Typography variant="caption" color="text.secondary">{tech.status} · {tech.phone || tech.email || 'No contact'}</Typography>} />
+                </ListItem>
+              ))}
+            </List>
+          </Stack>
         </DialogContent>
       </Dialog>
     </Box>
