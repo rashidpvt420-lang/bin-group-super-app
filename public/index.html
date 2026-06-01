@@ -7,7 +7,6 @@
     <meta name="theme-color" content="#0b0b0c" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.firebaseapp.com https://*.googleapis.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.run.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
 
-    <!-- PWA & Modern Mobile Configuration -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -16,22 +15,19 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/logo.png" />
 
-    <!-- SEO & Institutional Branding -->
     <title>BIN-GROUPS | Real-Time Property Operations OS for the UAE</title>
-    <meta name="description" content="BIN-GROUPS connects UAE property owners, tenants, technicians, brokers, payments, documents, contracts, and AI design in one verified real-time operations system." />
-    <meta property="og:title" content="BIN-Groups | Institutional Asset OS" />
-    <meta property="og:description" content="The real-time property operations OS for villas, towers, malls, hospitals, hotels, stadiums, Majlis operations, and government properties across the UAE." />
+    <meta name="description" content="BIN-GROUPS connects UAE property owners, tenants, technicians, brokers, payments, documents, contracts, demo videos, and AI design in one verified real-time operations system." />
+    <meta property="og:title" content="BIN-Groups | UAE Property Operations OS" />
+    <meta property="og:description" content="Smart maintenance, property management, technician dispatch, tenant service, owner contracts, demo videos, and AI design across the UAE." />
     <meta property="og:image" content="https://bin-groups.com/logo.png" />
     <meta property="og:url" content="https://bin-groups.com" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!-- Performance & Font Assets -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 
-    <!-- [SOVEREIGN-BOOT] GLOBAL STATE & ERROR CAPTURE -->
     <script>
       window.__BIN_GROUPS_BOOT__ = {
         staticReady: true,
@@ -39,31 +35,19 @@
         authReady: false,
         startedAt: Date.now()
       };
-
       window.addEventListener("error", function (event) {
         console.error("BIN-GROUPS BOOT ERROR:", event.message, event.filename, event.lineno, event.colno);
       });
-
       window.addEventListener("unhandledrejection", function (event) {
         console.error("BIN-GROUPS BOOT PROMISE REJECTION:", event.reason);
       });
     </script>
-    <!-- Google Maps is loaded safely by PropertyLocationStep when REACT_APP_GOOGLE_MAPS_API_KEY exists. -->
 
     <style>
         body { background-color: #0B0B0C; color: #FFFFFF; margin: 0; font-family: 'Inter', 'Cairo', sans-serif; overflow-x: hidden; }
-
-        /* [SOVEREIGN-STATE] HIDE STATIC SHELL ONCE REACT MOUNTS */
-        [data-bin-groups-react="mounted"] .bin-static-shell {
-            display: none !important;
-        }
-
+        [data-bin-groups-react="mounted"] .bin-static-shell { display: none !important; }
         .system-loader { height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #C6A75E; font-family: sans-serif; font-weight: 900; letter-spacing: 4px; flex-direction: column; line-height: 1.5; }
         .ar-font { font-family: 'Cairo', sans-serif; }
-        .system-error { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif; }
-        .error-title { font-weight: 900; letter-spacing: 2px; }
-        .error-msg { color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6; }
-        .btn-reload { background: #c6a75e; color: #000; border: none; padding: 12px 24px; font-weight: 900; cursor: pointer; border-radius: 4px; margin-top: 20px; }
         .public-shell { min-height: 100vh; background: radial-gradient(circle at top left, rgba(198,167,94,0.16), transparent 32rem), #0b0b0c; color: #fff; padding: 32px; box-sizing: border-box; }
         .public-shell-inner { max-width: 1160px; margin: 0 auto; }
         .public-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 52px; }
@@ -88,11 +72,8 @@
         .public-contact { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; color: rgba(255,255,255,0.65); }
         .public-contact a { color: #c6a75e; }
         .system-loader { min-height: auto; height: auto; padding: 22px; background: transparent; font-size: 12px; }
-        
-        /* [ROUTE-AWARE CONTENT] */
         .route-content { display: none; }
         body:not(.bin-groups-timeout-visible) .route-home { display: block; }
-        
         @media (max-width: 800px) {
             .public-shell { padding: 22px; }
             .public-nav, .public-hero { display: block; }
@@ -101,15 +82,14 @@
         }
     </style>
 </head>
-
 <body>
     <noscript>
         <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif;">
             <h1 style="font-weight: 900; letter-spacing: 2px;">JAVASCRIPT REQUIRED / تفعيل الجافا سكربت مطلوب</h1>
-            <p style="color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6;">To access the Sovereign OS, please enable JavaScript in your browser settings. / للوصول إلى نظام التشغيل السيادي، يرجى تفعيل الجافا سكربت في إعدادات متصفحك.</p>
+            <p style="color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6;">To access the BIN GROUP property operations OS, please enable JavaScript in your browser settings.</p>
         </div>
     </noscript>
-    
+
     <div id="root">
         <main class="public-shell bin-static-shell" aria-label="BIN-GROUPS public company profile">
             <div class="public-shell-inner">
@@ -121,7 +101,7 @@
                         <a href="/technicians">Technicians</a>
                         <a href="/brokers">Brokers</a>
                         <a href="/security">Security</a>
-                        <a href="/login" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Login</a>
+                        <a href="/request-demo" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Demo</a>
                         <a href="/onboarding" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Get Started</a>
                     </div>
                 </nav>
@@ -134,22 +114,21 @@
                             <p class="public-copy">
                                 From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties,
                                 and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers,
-                                payments, documents, contracts, and AI design in one verified command system.
+                                payments, documents, contracts, demo videos, and AI design in one verified command system.
                             </p>
                             <div class="public-cta">
                                 <a href="/onboarding" class="primary-cta">Request Contract</a>
-                                <a href="/login" class="secondary-cta">Institutional Login</a>
-                                <a href="/onboarding" class="secondary-cta">Onboard Your Property</a>
+                                <a href="/request-demo" class="secondary-cta">Watch Demo</a>
+                                <a href="/contact" class="secondary-cta">Contact BIN GROUP</a>
                             </div>
                         </div>
-
                         <aside class="public-panel">
                             <h2>Built For Every UAE Asset Type</h2>
                             <ul>
                                 <li>Villas, apartments, towers, offices, and retail centers</li>
                                 <li>Malls, hotels, hospitals, clinics, schools, and warehouses</li>
                                 <li>Government properties, private Majlis, stadiums, and event venues</li>
-                                <li>Verified documents, geo-anchored properties, contracts, payments, and reports</li>
+                                <li>Verified documents, geo-anchored properties, contracts, payments, reports, and demo workflows</li>
                             </ul>
                         </aside>
                     </section>
@@ -157,64 +136,37 @@
 
                 <div id="static-route-owners" class="route-content">
                     <h1 class="public-title">Owner Command</h1>
-                    <p class="public-copy">Operate every property with verified contracts, documents, payments, and approvals. Get real-time portfolio analytics and AI design upgrades.</p>
-                    <div class="public-cta">
-                        <a href="/onboarding" class="primary-cta">Request Contract</a>
-                        <a href="/login" class="secondary-cta">Institutional Login</a>
-                    </div>
+                    <p class="public-copy">Operate every property with verified contracts, documents, payments, service proof, and approvals. Get real-time portfolio analytics and AI design upgrades.</p>
+                    <div class="public-cta"><a href="/onboarding" class="primary-cta">Request Contract</a><a href="/request-demo" class="secondary-cta">Watch Demo</a></div>
                 </div>
 
                 <div id="static-route-tenants" class="route-content">
                     <h1 class="public-title">Tenant Care</h1>
-                    <p class="public-copy">Fast maintenance requests, technician tracking, and clear move-in/move-out support. Sovereign SOS dispatch ensures your unit is always operational.</p>
-                    <div class="public-cta">
-                        <a href="/login" class="primary-cta">Institutional Login</a>
-                        <a href="/onboarding" class="secondary-cta">Onboard Your Property</a>
-                    </div>
+                    <p class="public-copy">Fast maintenance requests, technician tracking, and clear move-in/move-out support with photo proof and status visibility.</p>
+                    <div class="public-cta"><a href="/login" class="primary-cta">Tenant Login</a><a href="/request-demo" class="secondary-cta">Watch Demo</a></div>
                 </div>
-                
+
                 <div id="static-route-security" class="route-content">
                     <h1 class="public-title">Sovereign Security</h1>
-                    <p class="public-copy">Document protection, audit logs, role access, and evidence protocols. Every interaction is secured by BIN-GROUPS Sovereign Identity.</p>
-                    <div class="public-cta">
-                        <a href="/login" class="primary-cta">Institutional Login</a>
-                        <a href="/onboarding" class="secondary-cta">Get Started</a>
-                    </div>
+                    <p class="public-copy">Document protection, audit logs, role access, and evidence protocols. Every interaction is secured through structured access controls.</p>
+                    <div class="public-cta"><a href="/request-demo" class="primary-cta">Watch Demo</a><a href="/onboarding" class="secondary-cta">Get Started</a></div>
                 </div>
 
                 <section class="public-grid" aria-label="Platform capabilities">
-                    <div class="public-card">
-                        <strong>Owners</strong>
-                        <span>Onboard properties, upload title deeds, select service plans, approve payments, and receive reports.</span>
-                    </div>
-                    <div class="public-card">
-                        <strong>Tenants</strong>
-                        <span>Submit emergency requests, track technician status, upload evidence, and chat with support.</span>
-                    </div>
-                    <div class="public-card">
-                        <strong>Technicians</strong>
-                        <span>Receive routed jobs, open maps, update status, track duty, and handle field evidence.</span>
-                    </div>
-                    <div class="public-card">
-                        <strong>Admins</strong>
-                        <span>Review onboarding, verify payments, manage documents, route missions, and audit operations.</span>
-                    </div>
-                    <div class="public-card">
-                        <strong>AI Design Studio</strong>
-                        <span>Create property improvement concepts, owner approvals, scope packages, and design reports.</span>
-                    </div>
-                    <div class="public-card">
-                        <strong>Security</strong>
-                        <span>Role-based access, App Check-ready architecture, document protection, and audit logging.</span>
-                    </div>
+                    <div class="public-card"><strong>Owners</strong><span>Onboard properties, upload title deeds, select service plans, approve payments, and receive reports.</span></div>
+                    <div class="public-card"><strong>Tenants</strong><span>Submit emergency requests, track technician status, upload evidence, and chat with support.</span></div>
+                    <div class="public-card"><strong>Technicians</strong><span>Receive routed jobs, open maps, update status, track duty, and handle field evidence.</span></div>
+                    <div class="public-card"><strong>Brokers</strong><span>Register leads, support owners, track referrals, and prepare commission-ready records.</span></div>
+                    <div class="public-card"><strong>Demo & Videos</strong><span>Show owner, tenant, technician, broker, GPS, PDF, and AI Design Studio workflows before onboarding.</span></div>
+                    <div class="public-card"><strong>Security</strong><span>Role-based access, document protection, proof history, and audit logging.</span></div>
                 </section>
 
                 <footer class="public-contact">
-                    <span>Support and escalation:</span>
-                    <a href="https://wa.me/971552423233">WhatsApp CEO Office</a>
-                    <a href="mailto:Ceo@bin-groups.com">Ceo@bin-groups.com</a>
+                    <span>Contact BIN GROUP:</span>
+                    <a href="https://wa.me/971552423233">WhatsApp +971 55 2423233</a>
+                    <a href="tel:+971557474560">Phone +971 55 7474560</a>
+                    <a href="mailto:owner@bin-group.com">owner@bin-group.com</a>
                     <a href="/support">Support Center</a>
-                    <a href="/contact">Contact</a>
                 </footer>
 
                 <div id="bin-boot-loader" class="system-loader" aria-live="polite">
@@ -230,68 +182,12 @@
         var path = window.location.pathname;
         var contents = document.querySelectorAll('.route-content');
         contents.forEach(function(c) { c.style.display = 'none'; });
-        
         if (path === '/owners') document.getElementById('static-route-owners').style.display = 'block';
         else if (path === '/tenants') document.getElementById('static-route-tenants').style.display = 'block';
         else if (path === '/security') document.getElementById('static-route-security').style.display = 'block';
         else document.getElementById('static-route-home').style.display = 'block';
       })();
-
-      // [STABILITY] RECOVERY SCRIPT FOR INITIALIZATION HANGS
-      setTimeout(function () {
-        var boot = window.__BIN_GROUPS_BOOT__ || {};
-        var path = window.location.pathname;
-
-        // Skip timeout warnings for public-facing marketing routes
-        var isPublicLanding =
-          path === "/" ||
-          path === "" ||
-          path === "/index.html" ||
-          path === "/owners" ||
-          path === "/tenants" ||
-          path === "/technicians" ||
-          path === "/brokers" ||
-          path === "/security" ||
-          path === "/support" ||
-          path === "/contact" ||
-          path === "/request-demo" ||
-          path === "/onboarding" ||
-          path === "/property-management" ||
-          path === "/maintenance" ||
-          path === "/ai-design-studio" ||
-          path === "/majlis-care" ||
-          path === "/stadiums" ||
-          path === "/hotels" ||
-          path === "/malls" ||
-          path === "/hospitals" ||
-          path === "/government-properties";
-
-        if (boot.reactMounted) {
-          return;
-        }
-
-        if (isPublicLanding && boot.staticReady) {
-          console.warn("BIN-GROUPS: React did not mount yet, static public homepage remains available.");
-          var publicLoader = document.getElementById('bin-boot-loader');
-          if (publicLoader) {
-            publicLoader.style.display = "none";
-          }
-          return;
-        }
-
-        var loader = document.getElementById('bin-boot-loader');
-        if (loader) {
-          document.body.classList.add("bin-groups-timeout-visible");
-          console.error("FATAL: BIN-Groups OS Initialization timed out on an interactive route.");
-          loader.innerHTML = `
-            <div class="system-error" style="height: auto; min-height: 220px; background: transparent;">
-              <h2 class="error-title">APP RECOVERY MODE / وضع استعادة التطبيق</h2>
-              <p class="error-msg">This is an interactive route requiring the Sovereign React bundle. Please reload to retry. / هذا المسار يتطلب تحميل حزمة التفاعل. يرجى إعادة المحاولة.</p>
-              <button onclick="window.location.reload()" class="btn-reload">RELOAD / إعادة تحميل</button>
-            </div>
-          `;
-        }
-      }, 12000);
     </script>
+    <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
