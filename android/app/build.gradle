@@ -19,14 +19,28 @@ android {
     signingConfigs {
         release {
             def keystorePropertiesFile = rootProject.file("keystore.properties")
-            def keystoreProperties = new Properties()
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-                storeFile file(keystoreProperties["storeFile"])
-                storePassword keystoreProperties["storePassword"]
-                keyAlias keystoreProperties["keyAlias"]
-                keyPassword keystoreProperties["keyPassword"]
+            if (!keystorePropertiesFile.exists()) {
+                throw new GradleException("Missing android/keystore.properties. Create it locally; do not commit it.")
             }
+
+            def keystoreProperties = new Properties()
+            keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
+            ["storeFile", "storePassword", "keyAlias", "keyPassword"].each { key ->
+                if (!keystoreProperties[key]) {
+                    throw new GradleException("Missing '${key}' in android/keystore.properties")
+                }
+            }
+
+            def releaseStoreFile = rootProject.file(keystoreProperties["storeFile"])
+            if (!releaseStoreFile.exists()) {
+                throw new GradleException("Release keystore not found at ${releaseStoreFile}. Check storeFile in android/keystore.properties.")
+            }
+
+            storeFile releaseStoreFile
+            storePassword keystoreProperties["storePassword"]
+            keyAlias keystoreProperties["keyAlias"]
+            keyPassword keystoreProperties["keyPassword"]
         }
     }
     buildTypes {
