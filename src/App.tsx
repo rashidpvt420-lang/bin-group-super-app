@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -147,7 +147,10 @@ function PushNotificationBootstrap() {
 
     registerPushNotifications(user.uid, role)
       .then((result) => {
-        if (!result.enabled) console.warn('[Push] Registration skipped:', result.reason);
+        if (!result.enabled) {
+          const reason = 'reason' in result ? result.reason : 'unknown';
+          console.warn('[Push] Registration skipped:', reason);
+        }
       })
       .catch((error) => console.warn('[Push] Registration failed:', error));
 
@@ -348,3 +351,4 @@ export default function App() {
     </Router>
   );
 }
+
