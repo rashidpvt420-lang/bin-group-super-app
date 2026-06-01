@@ -43,6 +43,37 @@ function wrappedRTL(doc: jsPDF, value: string, x: number, y: number, width: numb
   return y + lines.length * lineHeight;
 }
 
+function savePdfMobileSafe(doc: jsPDF, filename: string) {
+  try {
+    doc.save(filename);
+    return { ok: true, mode: 'download' };
+  } catch (err) {
+    console.warn('[PDF] Native save failed, opening blob fallback:', err);
+  }
+
+  try {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+
+    if (!opened) {
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return { ok: true, mode: opened ? 'blob_window' : 'anchor_fallback' };
+  } catch (fallbackErr) {
+    console.error('[PDF] Mobile PDF fallback failed:', fallbackErr);
+    return { ok: false, mode: 'failed', error: String(fallbackErr) };
+  }
+}
+
 export function generateBilingualContractPdf(input: ContractPdfInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const provider = input.providerName || 'BIN GROUP PROPERTY MANAGEMENT LLC';
@@ -127,5 +158,5 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   doc.setFontSize(8);
   writeLTR(doc, 'This bilingual PDF is generated from the BIN GROUP digital acceptance record. English and Arabic sections are provided for operational clarity.', 105, 284, { align: 'center' });
 
-  doc.save(`BIN_GROUP_Contract_${input.artifact.institutionalHash}.pdf`);
+  return savePdfMobileSafe(doc, `BIN_GROUP_Contract_${input.artifact.institutionalHash}.pdf`);
 }
