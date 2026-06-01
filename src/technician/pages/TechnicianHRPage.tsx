@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Button, CircularProgress,
     Chip, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -20,6 +20,11 @@ export default function TechnicianHRPage() {
     const [submitting, setSubmitting] = useState(false);
     const [profile, setProfile] = useState<any>(null);
     const [requests, setRequests] = useState<any[]>([]);
+    const [agreement, setAgreement] = useState<any>(null);
+    const [aiQuestion, setAiQuestion] = useState('');
+    const [aiAnswer, setAiAnswer] = useState('');
+    const [aiSubmitting, setAiSubmitting] = useState(false);
+    const [moodSubmitting, setMoodSubmitting] = useState(false);
     
     // Dialog state
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -555,3 +560,4 @@ export default function TechnicianHRPage() {
         </Box>
     );
 }
+

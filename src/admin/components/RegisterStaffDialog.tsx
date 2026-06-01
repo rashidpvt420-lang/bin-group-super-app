@@ -214,6 +214,7 @@ const buildAutoSalaryPackage = () => {
     };
 
     const salaryPackage = buildAutoSalaryPackage();
+    const generatedAgreementText = buildStaffAgreementText(salaryPackage);
 
 const handleSubmit = async () => {
         if (!formData.fullName || !formData.email || !formData.role) {
@@ -245,8 +246,8 @@ const handleSubmit = async () => {
                 passportExpiry: formData.passportExpiry,
                 medicalExpiry: formData.medicalExpiry,
                 drivingLicenseExpiry: formData.drivingLicenseExpiry,
-                basicSalary: parseFloat(formData.basicSalary) || 0,
-                allowances: parseFloat(formData.allowances) || 0,
+                basicSalary: salaryPackage.basicSalary,
+                allowances: salaryPackage.totalAllowances,
                 salary: salaryPackage.grossSalary,
                 salaryPackage,
                 supervisorName: formData.supervisorName,
@@ -285,8 +286,8 @@ const handleSubmit = async () => {
                 phone: formData.phone,
                 role: formData.role,
                 department: formData.department,
-                basicSalary: parseFloat(formData.basicSalary) || 0,
-                allowances: parseFloat(formData.allowances) || 0,
+                basicSalary: salaryPackage.basicSalary,
+                allowances: salaryPackage.totalAllowances,
                 salary: salaryPackage.grossSalary,
                 salaryPackage,
                 workingHours: formData.workingHours,
@@ -382,7 +383,7 @@ const handleSubmit = async () => {
                     passportExpiry: formData.passportExpiry,
                     medicalExpiry: formData.medicalExpiry,
                     drivingLicenseExpiry: formData.drivingLicenseExpiry,
-                    basicSalary: parseFloat(formData.basicSalary) || 0,
+                    basicSalary: salaryPackage.basicSalary,
                     salary: salaryPackage.grossSalary,
                 salaryPackage,
                     leaveBalance: parseFloat(formData.leaveBalance) || 0,
@@ -426,6 +427,18 @@ const handleSubmit = async () => {
                     drivingLicenseExpiry: '',
                     basicSalary: '',
                     allowances: '',
+                    housingAllowance: '',
+                    transportAllowance: '',
+                    foodAllowance: '',
+                    otherAllowance: '',
+                    contractEndDate: '',
+                    employmentType: 'full_time',
+                    salaryPaymentDay: '1',
+                    salaryGrade: '',
+                    overtimeEligible: true,
+                    companyAccommodationProvided: false,
+                    companyTransportProvided: false,
+                    companyMedicalInsuranceProvided: true,
                     supervisorName: '',
                     shiftName: 'Day Shift'
                 });
@@ -619,4 +632,5 @@ const handleSubmit = async () => {
         </Dialog>
     );
 }
+
 
