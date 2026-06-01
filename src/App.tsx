@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -35,6 +35,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 import OwnerApp from './owner/OwnerApp';
 import CompanyProfilePage from './pages/public/CompanyProfilePage';
+import DemoVideosPage from './pages/public/DemoVideosPage';
 import { AuthProvider, useRole, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
@@ -147,7 +148,10 @@ function PushNotificationBootstrap() {
 
     registerPushNotifications(user.uid, role)
       .then((result) => {
-        if (!result.enabled) console.warn('[Push] Registration skipped:', result.reason);
+        if (!result.enabled) {
+          const reason = 'reason' in result ? result.reason : 'unknown';
+          console.warn('[Push] Registration skipped:', reason);
+        }
       })
       .catch((error) => console.warn('[Push] Registration failed:', error));
 
@@ -169,7 +173,7 @@ const PUBLIC_ROUTE_PATHS = new Set([
   '/', '/owner-landing', '/v1', '/login', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
   '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
   '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
-  '/services', '/request-demo', '/tenant-invite', '/company',
+  '/services', '/request-demo', '/videos', '/demo-videos', '/tenant-invite', '/company',
 ]);
 
 const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
@@ -252,7 +256,7 @@ function AppContent() {
         <Route path="/brokers" element={<PublicMarketingPage page="brokers" />} />
         <Route path="/property-management" element={<PublicMarketingPage page="property-management" />} />
         <Route path="/maintenance" element={<PublicMarketingPage page="maintenance" />} />
-        <Route path="/ai-design-studio" element={<Navigate to="/login?intendedRole=owner" replace />} />
+        <Route path="/ai-design-studio" element={<Navigate to="/request-demo?demo=ai-design" replace />} />
         <Route path="/majlis-care" element={<PublicMarketingPage page="majlis-care" />} />
         <Route path="/stadiums" element={<PublicMarketingPage page="stadiums" />} />
         <Route path="/hotels" element={<PublicMarketingPage page="hotels" />} />
@@ -262,7 +266,9 @@ function AppContent() {
         <Route path="/security" element={<PublicMarketingPage page="security" />} />
         <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
         <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
-        <Route path="/request-demo" element={<PublicMarketingPage page="request-demo" />} />
+        <Route path="/request-demo" element={<DemoVideosPage />} />
+        <Route path="/videos" element={<DemoVideosPage />} />
+        <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
         <Route path="/company" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
@@ -328,6 +334,8 @@ export default function App() {
                   <Route path="/services" element={null} />
                   <Route path="/contact" element={null} />
                   <Route path="/request-demo" element={null} />
+                  <Route path="/videos" element={null} />
+                  <Route path="/demo-videos" element={null} />
                   <Route path="/ai-design-studio" element={null} />
                   <Route path="/tenant/*" element={null} />
                   <Route path="/owner/*" element={null} />
@@ -348,3 +356,4 @@ export default function App() {
     </Router>
   );
 }
+

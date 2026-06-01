@@ -65,7 +65,6 @@ import {
   type FirebaseStorage,
 } from 'firebase/storage';
 import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
-import { initializeAppCheck, ReCaptchaV3Provider, type AppCheck } from 'firebase/app-check';
 import {
   getMessaging,
   getToken,
@@ -90,30 +89,15 @@ const firebaseConfig = {
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-let appCheckInstance: AppCheck | null = null;
-const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY') || '6LdJpTcqAAAAAPv9z_M7pWbB8J1mYtTRg3e_6H1D';
-const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') !== 'false';
+// TEMPORARY PRODUCTION FIX:
+// Firebase App Check is disabled in the browser runtime until the reCAPTCHA/App Check
+// provider is verified for bin-groups.com. The previous runtime initialized App Check
+// when env flags drifted, which caused appCheck/recaptcha-error, broke Firebase Auth
+// token refresh, and made Google Maps fail with InvalidAppCheckTokenMapError.
+const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
+const appCheckExplicitlyEnabled = false;
+export const appCheck = null;
 
-if (typeof window !== 'undefined' && appCheckExplicitlyEnabled) {
-  const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
-  const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
-  if (isLocal || isAutomation) {
-    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    console.info('🛡️ [SECURITY] App Check BYPASSED with debug token for testing.');
-  } else if (appCheckSiteKey && !appCheckSiteKey.includes('REPLACE_ME')) {
-    try {
-      appCheckInstance = initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(appCheckSiteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-      console.info('[Firebase] App Check initialized for root app.');
-    } catch (error) {
-      console.warn('[Firebase] App Check initialization failed. Continuing without App Check token injection:', error);
-    }
-  }
-}
-
-export const appCheck = appCheckInstance;
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
 
@@ -133,7 +117,7 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
   appCheckExplicitlyEnabled,
-  appCheckInitialized: Boolean(appCheckInstance),
+  appCheckInitialized: false,
   host: typeof window !== 'undefined' ? window.location.host : 'server',
 });
 

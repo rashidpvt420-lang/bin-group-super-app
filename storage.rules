@@ -72,7 +72,9 @@ service firebase.storage {
         ticket(ticketId).tenantId == request.auth.uid ||
         ticket(ticketId).tenantUid == request.auth.uid ||
         ticket(ticketId).assignedTechnicianId == request.auth.uid ||
-        ticket(ticketId).technicianId == request.auth.uid
+        ticket(ticketId).technicianId == request.auth.uid ||
+        ticket(ticketId).assignedTechId == request.auth.uid ||
+        ticket(ticketId).technicianUid == request.auth.uid
       );
     }
 
@@ -80,7 +82,9 @@ service firebase.storage {
       return isAuth() && ticketExists(ticketId) && (
         isAdmin() ||
         ticket(ticketId).assignedTechnicianId == request.auth.uid ||
-        ticket(ticketId).technicianId == request.auth.uid
+        ticket(ticketId).technicianId == request.auth.uid ||
+        ticket(ticketId).assignedTechId == request.auth.uid ||
+        ticket(ticketId).technicianUid == request.auth.uid
       );
     }
 
@@ -173,11 +177,17 @@ service firebase.storage {
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
+    // Backward/current app path used by TechnicianJobDetailPage.tsx.
+    match /maintenanceTickets/{ticketId}/proofPhotos/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+    }
+
     // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
     // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
-      allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(10);
+      allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 

@@ -80,6 +80,14 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
     const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
     const selectedStrategy = property.strategy || 'fm_only';
+    const selectedPaymentPlan = property.paymentPlan || 'annual';
+    const isAnnualPayment = selectedPaymentPlan === 'annual';
+    const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
+        ? quote?.monthlyPayment || 0
+        : selectedPaymentPlan === 'quarterly'
+            ? quote?.quarterlyPayment || 0
+            : quote?.annualTotal || 0;
+    const selectedPaymentLabel = isAnnualPayment ? 'Full annual payment' : t(`onboarding.payment.${selectedPaymentPlan}`);
 
     return (
         <Box sx={{ py: 2 }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -159,7 +167,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>
                                         3. {t('onboarding.payment_title')}
                                     </Typography>
-                                    <RadioGroup value={property.paymentPlan || 'annual'} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>
+                                    <RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>
                                         {paymentPlans.map(plan => (
                                             <FormControlLabel
                                                 key={plan.id} value={plan.id}
@@ -192,16 +200,22 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
 
                             <Stack spacing={2} sx={{ mb: 4 }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                    <Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography>
-                                    <Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
+                                    <Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography>
+                                    <Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography>
                                 </Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                    <Typography variant="body2" color="rgba(255,255,255,0.6)">{t(`onboarding.payment.${property.paymentPlan || 'annual'}`)}</Typography>
-                                    <Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>
-                                        AED {formatAED(property.paymentPlan === 'monthly' ? quote?.monthlyPayment || 0 : (property.paymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0))}
-                                    </Typography>
-                                </Box>
+
+                                {isAnnualPayment ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
+                                        <Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography>
+                                        <Typography variant="body2" fontWeight="900" color="rgba(255,255,255,0.72)">Included</Typography>
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
+                                        <Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography>
+                                        <Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography>
+                                    </Box>
+                                )}
                             </Stack>
 
                             <Button

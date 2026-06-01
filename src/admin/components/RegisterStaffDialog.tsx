@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     TextField, Grid, FormControl, InputLabel, Select, MenuItem,
@@ -71,6 +71,18 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         drivingLicenseExpiry: '',
         basicSalary: '',
         allowances: '',
+        housingAllowance: '',
+        transportAllowance: '',
+        foodAllowance: '',
+        otherAllowance: '',
+        contractEndDate: '',
+        employmentType: 'full_time',
+        salaryPaymentDay: '1',
+        salaryGrade: '',
+        overtimeEligible: true,
+        companyAccommodationProvided: false,
+        companyTransportProvided: false,
+        companyMedicalInsuranceProvided: true,
         supervisorName: '',
         shiftName: 'Day Shift'
     });
@@ -86,7 +98,125 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         setPermissions(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const handleSubmit = async () => {
+    const moneyValue = (value: any) => {
+        const parsed = parseFloat(String(value || '0'));
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const buildSalaryPackage = () => {
+        const splitAllowances = moneyValue((formData as any).housingAllowance) + moneyValue((formData as any).transportAllowance) + moneyValue((formData as any).foodAllowance) + moneyValue((formData as any).otherAllowance);
+        const totalAllowances = splitAllowances > 0 ? splitAllowances : moneyValue((formData as any).allowances);
+        const basicSalary = moneyValue((formData as any).basicSalary || (formData as any).salary);
+        return {
+            currency: 'AED',
+            basicSalary,
+            housingAllowance: moneyValue((formData as any).housingAllowance),
+            transportAllowance: moneyValue((formData as any).transportAllowance),
+            foodAllowance: moneyValue((formData as any).foodAllowance),
+            otherAllowance: moneyValue((formData as any).otherAllowance),
+            totalAllowances,
+            grossSalary: basicSalary + totalAllowances,
+            wpsSalary: basicSalary + totalAllowances,
+            salaryGrade: (formData as any).salaryGrade || '',
+            overtimeEligible: (formData as any).overtimeEligible !== false,
+            overtimeCalculationBase: 'basic_salary',
+            salaryPaymentDay: (formData as any).salaryPaymentDay || '1'
+        };
+    };
+
+    const buildStaffAgreementText = (salaryPackage: any) => [
+        'BIN GROUP Staff and Technician Employment Acknowledgement',
+        '',
+        `Employee: ${formData.fullName}`,
+        `Role: ${formData.role}`,
+        `Department: ${formData.department}`,
+        `Work Emirate: ${formData.emirate}`,
+        `Joining Date: ${formData.joiningDate}`,
+        `Basic Salary: AED ${salaryPackage.basicSalary.toLocaleString()}`,
+        `Allowances: AED ${salaryPackage.totalAllowances.toLocaleString()}`,
+        `Gross Monthly Package: AED ${salaryPackage.grossSalary.toLocaleString()}`,
+        `Working Hours: ${formData.workingHours}`,
+        `Weekly Off Day: ${formData.offDay}`,
+        '',
+        'This in-app acknowledgement supports onboarding, HR self-service, attendance, payroll support, tools, safety, documents, and app usage records. It does not replace mandatory government-approved employment documents where required.',
+        'Overtime, where applicable and approved, is reviewed by HR/Admin and calculated from basic salary, not gross salary.',
+        'Sensitive HR matters require human HR/Admin review.',
+        '',
+        'By accepting in the app, the employee confirms this onboarding record is understood and agrees to follow company policy, safety rules, confidentiality duties, and lawful workplace instructions.'
+    ].join('\\n');
+
+
+    
+    const moneyValueAuto = (value: any) => {
+        const parsed = parseFloat(String(value || '0').replace(/,/g, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+const buildAutoSalaryPackage = () => {
+        const monthlySalary =
+            moneyValueAuto((formData as any).monthlySalary) ||
+            moneyValueAuto((formData as any).salary) ||
+            moneyValueAuto((formData as any).grossSalary);
+
+        const basicInput = moneyValueAuto((formData as any).basicSalary);
+        const manualAllowances = moneyValueAuto((formData as any).allowances);
+
+        const housingAllowance = moneyValueAuto((formData as any).housingAllowance);
+        const transportAllowance = moneyValueAuto((formData as any).transportAllowance);
+        const foodAllowance = moneyValueAuto((formData as any).foodAllowance);
+        const otherAllowance = moneyValueAuto((formData as any).otherAllowance);
+        const splitAllowances = housingAllowance + transportAllowance + foodAllowance + otherAllowance;
+
+        let basicSalary = basicInput;
+        let totalAllowances = splitAllowances > 0 ? splitAllowances : manualAllowances;
+
+        // If Admin enters only Monthly Salary, auto-split package:
+        // 60% basic salary, 40% allowances.
+        if (monthlySalary > 0 && basicSalary <= 0 && totalAllowances <= 0) {
+            basicSalary = Math.round(monthlySalary * 0.60);
+            totalAllowances = monthlySalary - basicSalary;
+        }
+
+        // If Admin enters Monthly Salary + Basic Salary only, allowances become the difference.
+        if (monthlySalary > 0 && basicSalary > 0 && totalAllowances <= 0) {
+            totalAllowances = Math.max(monthlySalary - basicSalary, 0);
+        }
+
+        // If Admin enters Monthly Salary + Allowances only, basic becomes the difference.
+        if (monthlySalary > 0 && basicSalary <= 0 && totalAllowances > 0) {
+            basicSalary = Math.max(monthlySalary - totalAllowances, 0);
+        }
+
+        const grossSalary = monthlySalary > 0 ? monthlySalary : basicSalary + totalAllowances;
+
+        return {
+            currency: 'AED',
+            monthlySalary: grossSalary,
+            basicSalary,
+            housingAllowance,
+            transportAllowance,
+            foodAllowance,
+            otherAllowance,
+            totalAllowances,
+            allowances: totalAllowances,
+            grossSalary,
+            wpsSalary: grossSalary,
+            salaryGrade: (formData as any).salaryGrade || '',
+            salaryPaymentDay: (formData as any).salaryPaymentDay || '1',
+            overtimeEligible: (formData as any).overtimeEligible !== false,
+            overtimeCalculationBase: 'basic_salary',
+            companyAccommodationProvided: (formData as any).companyAccommodationProvided || false,
+            companyTransportProvided: (formData as any).companyTransportProvided || false,
+            companyMedicalInsuranceProvided: (formData as any).companyMedicalInsuranceProvided !== false,
+            contractEndDate: (formData as any).contractEndDate || null,
+            employmentType: (formData as any).employmentType || 'full_time'
+        };
+    };
+
+    const salaryPackage = buildAutoSalaryPackage();
+    const generatedAgreementText = buildStaffAgreementText(salaryPackage);
+
+const handleSubmit = async () => {
         if (!formData.fullName || !formData.email || !formData.role) {
             setError('Please fill in all required fields.');
             return;
@@ -116,9 +246,10 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 passportExpiry: formData.passportExpiry,
                 medicalExpiry: formData.medicalExpiry,
                 drivingLicenseExpiry: formData.drivingLicenseExpiry,
-                basicSalary: parseFloat(formData.basicSalary) || 0,
-                allowances: parseFloat(formData.allowances) || 0,
-                salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
+                basicSalary: salaryPackage.basicSalary,
+                allowances: salaryPackage.totalAllowances,
+                salary: salaryPackage.grossSalary,
+                salaryPackage,
                 supervisorName: formData.supervisorName,
                 shiftName: formData.shiftName,
                 workingHours: formData.workingHours,
@@ -155,9 +286,10 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 phone: formData.phone,
                 role: formData.role,
                 department: formData.department,
-                basicSalary: parseFloat(formData.basicSalary) || 0,
-                allowances: parseFloat(formData.allowances) || 0,
-                salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
+                basicSalary: salaryPackage.basicSalary,
+                allowances: salaryPackage.totalAllowances,
+                salary: salaryPackage.grossSalary,
+                salaryPackage,
                 workingHours: formData.workingHours,
                 emirate: formData.emirate,
                 joiningDate: formData.joiningDate,
@@ -173,6 +305,62 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 status: 'ACTIVE',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
+            });
+
+            // 4A. Salary history and staff agreement
+            await addDoc(collection(db, 'salaryHistory'), {
+                uid: staffUid,
+                staffName: formData.fullName,
+                role: formData.role,
+                department: formData.department,
+                previousPackage: null,
+                newPackage: salaryPackage,
+                reason: 'initial_registration',
+                approvedBy: currentUser?.uid,
+                status: 'active',
+                createdAt: serverTimestamp()
+            });
+
+            await setDoc(doc(db, 'staffAgreements', staffUid), {
+                uid: staffUid,
+                employeeName: formData.fullName,
+                employeeEmail: formData.email.toLowerCase().trim(),
+                role: formData.role,
+                department: formData.department,
+                emirate: formData.emirate,
+                employmentType: (formData as any).employmentType || 'full_time',
+                joiningDate: formData.joiningDate,
+                contractStartDate: formData.joiningDate,
+                contractEndDate: (formData as any).contractEndDate || null,
+                probationMonths: 6,
+                basicSalary: salaryPackage.basicSalary,
+                allowances: salaryPackage.totalAllowances,
+                grossMonthlySalary: salaryPackage.grossSalary,
+                overtimeEligible: salaryPackage.overtimeEligible,
+                overtimeCalculationBase: 'basic_salary',
+                workingHours: formData.workingHours,
+                offDay: formData.offDay,
+                leaveBalance: parseFloat(formData.leaveBalance) || 0,
+                companyAccommodationProvided: (formData as any).companyAccommodationProvided || false,
+                companyTransportProvided: (formData as any).companyTransportProvided || false,
+                companyMedicalInsuranceProvided: (formData as any).companyMedicalInsuranceProvided !== false,
+                agreementTitle: 'BIN GROUP Staff and Technician Employment Acknowledgement',
+                agreementText: generatedAgreementText,
+                status: 'pending_signature',
+                version: 'BIN-PEOPLE-AI-V1.2',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdBy: currentUser?.uid
+            });
+
+            await addDoc(collection(db, 'auditLogs'), {
+                action: 'STAFF_AGREEMENT_CREATED',
+                actorId: currentUser?.uid,
+                actorName: currentUser?.displayName || 'Admin',
+                targetId: staffUid,
+                targetName: formData.fullName,
+                details: 'Created BIN People AI staff agreement and salary package.',
+                timestamp: serverTimestamp()
             });
 
             // 4B. Write to 'technicians' collection if technician
@@ -195,8 +383,9 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                     passportExpiry: formData.passportExpiry,
                     medicalExpiry: formData.medicalExpiry,
                     drivingLicenseExpiry: formData.drivingLicenseExpiry,
-                    basicSalary: parseFloat(formData.basicSalary) || 0,
-                    salary: (parseFloat(formData.basicSalary) || 0) + (parseFloat(formData.allowances) || 0),
+                    basicSalary: salaryPackage.basicSalary,
+                    salary: salaryPackage.grossSalary,
+                salaryPackage,
                     leaveBalance: parseFloat(formData.leaveBalance) || 0,
                     status: 'ACTIVE',
                     createdAt: serverTimestamp(),
@@ -238,6 +427,18 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                     drivingLicenseExpiry: '',
                     basicSalary: '',
                     allowances: '',
+                    housingAllowance: '',
+                    transportAllowance: '',
+                    foodAllowance: '',
+                    otherAllowance: '',
+                    contractEndDate: '',
+                    employmentType: 'full_time',
+                    salaryPaymentDay: '1',
+                    salaryGrade: '',
+                    overtimeEligible: true,
+                    companyAccommodationProvided: false,
+                    companyTransportProvided: false,
+                    companyMedicalInsuranceProvided: true,
                     supervisorName: '',
                     shiftName: 'Day Shift'
                 });
@@ -379,7 +580,14 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                             fullWidth label="Allowances (AED)" name="allowances" type="number" value={formData.allowances} onChange={handleInputChange}
                             variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
                         />
-                    </Grid>
+                    </Grid>                    <Grid item xs={12} md={6}><TextField fullWidth label="Housing Allowance (AED)" name="housingAllowance" type="number" value={(formData as any).housingAllowance} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Transport Allowance (AED)" name="transportAllowance" type="number" value={(formData as any).transportAllowance} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Food Allowance (AED)" name="foodAllowance" type="number" value={(formData as any).foodAllowance} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Other Allowance (AED)" name="otherAllowance" type="number" value={(formData as any).otherAllowance} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Salary Payment Day" name="salaryPaymentDay" type="number" value={(formData as any).salaryPaymentDay} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Salary Grade" name="salaryGrade" value={(formData as any).salaryGrade} onChange={handleInputChange} variant="outlined" sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+                    <Grid item xs={12} md={6}><TextField fullWidth label="Contract End Date" name="contractEndDate" type="date" value={(formData as any).contractEndDate} onChange={handleInputChange} variant="outlined" InputLabelProps={{ shrink: true }} sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }} /></Grid>
+
                     <Grid item xs={12} md={6}>
                         <TextField
                             fullWidth label="Supervisor Name" name="supervisorName" value={formData.supervisorName} onChange={handleInputChange}
@@ -424,3 +632,5 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         </Dialog>
     );
 }
+
+

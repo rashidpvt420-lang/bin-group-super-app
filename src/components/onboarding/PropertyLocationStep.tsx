@@ -1,14 +1,14 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Box, Typography, Grid, Paper, TextField,
     Button, Stack, Divider, Container, Alert, MenuItem, CircularProgress, alpha
 } from '@mui/material';
-import { MapPin, ArrowRight, ArrowLeft, Info, Globe, ExternalLink, LocateFixed, Navigation } from 'lucide-react';
+import { MapPin, ArrowRight, ArrowLeft, ExternalLink, LocateFixed, Navigation, Search } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
-import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
+import { buildGoogleMapsSearchUrl } from '../../lib/maps';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', label: 'Dubai', lat: 25.2048, lng: 55.2708 },
@@ -27,29 +27,83 @@ const readable = (value: string | undefined, fallback: string) => {
 
 const getEmirate = (emirate?: string) => EMIRATES_LIST.find((em) => em.id === emirate) || EMIRATES_LIST[0];
 
+type RemoteAddressResult = {
+    lat: number;
+    lng: number;
+    address: string;
+    emirate?: string;
+    city?: string;
+    area?: string;
+    placeId?: string;
+};
+
+const parseCoordinatesFromText = (value: string): { lat: number; lng: number } | null => {
+    const decoded = decodeURIComponent(value || '');
+    const patterns = [
+        /@(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /[?&](?:q|ll|query)=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /(?:^|\s)(-?\d{1,2}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})(?:\s|$)/
+    ];
+
+    for (const pattern of patterns) {
+        const match = decoded.match(pattern);
+        if (!match) continue;
+        const lat = Number(match[1]);
+        const lng = Number(match[2]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+    }
+    return null;
+};
+
+const fieldSx = {
+    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
+    '& .MuiOutlinedInput-root': {
+        color: '#FFF',
+        bgcolor: 'rgba(255,255,255,0.03)',
+        '& fieldset': { borderColor: 'rgba(198,167,94,0.18)' },
+        '&:hover fieldset': { borderColor: 'rgba(198,167,94,0.38)' },
+        '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold }
+    }
+};
+
 const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
-    const autocompleteRef = useRef<HTMLInputElement>(null);
-    const mapRef = useRef<HTMLDivElement>(null);
-    const mapInstanceRef = useRef<any>(null);
-    const markerRef = useRef<any>(null);
-    const geocoderRef = useRef<any>(null);
-    const mapHealthTimerRef = useRef<number | null>(null);
 
     const activeProperty = properties[0];
     const fallbackEmirate = getEmirate(activeProperty?.emirate);
 
     const [locationError, setLocationError] = useState<string | null>(null);
-    const [mapFailed, setMapFailed] = useState(false);
-    const [mapFailureReason, setMapFailureReason] = useState<string | null>(null);
-    const [authFailed, setAuthFailed] = useState(false);
-    const [initializing, setInitializing] = useState(true);
     const [locating, setLocating] = useState(false);
+    const [resolvingAddress, setResolvingAddress] = useState(false);
     const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
     const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
+
+    useEffect(() => {
+        if (!activeProperty?.emirate) {
+            updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
+        }
+        if (!activeProperty?.location?.lat && !activeProperty?.geo?.lat) {
+            setManualLat(String(fallbackEmirate.lat));
+            setManualLng(String(fallbackEmirate.lng));
+        }
+    }, []);
+
+    const googleMapsUrl = useMemo(() => buildGoogleMapsSearchUrl({
+        lat: manualLat,
+        lng: manualLng,
+        address: activeProperty?.address,
+        emirate: activeProperty?.emirate || fallbackEmirate.id
+    }), [manualLat, manualLng, activeProperty?.address, activeProperty?.emirate, fallbackEmirate.id]);
+
+    const osmPreviewUrl = useMemo(() => {
+        const lat = Number(manualLat) || fallbackEmirate.lat;
+        const lng = Number(manualLng) || fallbackEmirate.lng;
+        const padding = 0.004;
+        return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - padding},${lat - padding},${lng + padding},${lat + padding}&layer=mapnik&marker=${lat},${lng}`;
+    }, [manualLat, manualLng, fallbackEmirate.lat, fallbackEmirate.lng]);
 
     const handleGoogleMapsUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -60,7 +114,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 ...(activeProperty?.location || {}),
                 googleMapsUrl: val
             } as any
-        });
+        } as any);
     };
 
     const handlePlusCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,43 +126,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 ...(activeProperty?.location || {}),
                 plusCode: val
             } as any
-        });
+        } as any);
     };
-
-    const googleMapsUrl = buildGoogleMapsSearchUrl({
-        lat: manualLat,
-        lng: manualLng,
-        address: activeProperty?.address,
-        emirate: activeProperty?.emirate || fallbackEmirate.id
-    });
-
-    const failMap = (reason?: string) => {
-        console.warn('[MAPS] failMap triggered:', reason);
-        setMapFailed(true);
-        setAuthFailed(true);
-        if (reason) setMapFailureReason(reason);
-        setInitializing(false);
-
-        if (mapRef.current) {
-            mapRef.current.innerHTML = '';
-        }
-        document.querySelectorAll('.gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message, .gm-style, .pac-container').forEach((el) => {
-            (el as HTMLElement).style.display = 'none';
-        });
-    };
-
-    useEffect(() => {
-        if (!activeProperty?.emirate) {
-            updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id });
-        }
-        if (!activeProperty?.location?.lat && !activeProperty?.geo?.lat) {
-            setManualLat(String(fallbackEmirate.lat));
-            setManualLng(String(fallbackEmirate.lng));
-        }
-        return () => {
-            if (mapHealthTimerRef.current) window.clearTimeout(mapHealthTimerRef.current);
-        };
-    }, []);
 
     const commitGeoAnchor = (payload: {
         lat: number;
@@ -121,10 +140,10 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         source?: 'google_maps' | 'title_deed' | 'admin_manual';
         verified?: boolean;
         requiresGeoReview?: boolean;
-        dispatchReady?: boolean
+        dispatchReady?: boolean;
     }) => {
         try {
-            const isManual = payload.source === 'admin_manual' || !payload.placeId || payload.placeId === 'MANUAL';
+            const isManual = payload.source === 'admin_manual' || !payload.placeId || payload.placeId === 'MANUAL' || payload.placeId === 'REMOTE_ADDRESS';
             const resolvedEmirate = payload.emirate || activeProperty?.emirate || fallbackEmirate.id;
             const resolvedCity = payload.city || activeProperty?.city || resolvedEmirate;
             const resolvedArea = payload.area || activeProperty?.area || '';
@@ -160,9 +179,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     emirate: geo.emirate,
                     googleMapsUrl: googleMapsUrlField,
                     plusCode: plusCodeField,
-                    quality: "EXACT_GPS",
+                    quality: 'EXACT_GPS',
                     updatedAt: new Date().toISOString(),
-                    updatedBy: "owner"
+                    updatedBy: 'owner'
                 },
                 lat: geo.lat,
                 lng: geo.lng,
@@ -170,10 +189,10 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 longitude: geo.lng,
                 googleMapsUrl: googleMapsUrlField,
                 plusCode: plusCodeField
-            });
+            } as any);
 
-            setManualLat(String(payload.lat));
-            setManualLng(String(payload.lng));
+            setManualLat(String(Number(payload.lat.toFixed(7))));
+            setManualLng(String(Number(payload.lng.toFixed(7))));
             setLocationError(null);
         } catch (err: any) {
             console.error('Geo Commit Error:', err);
@@ -181,131 +200,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         }
     };
 
-    const extractAddressParts = (components: any[] = []) => {
-        let emirate = ''; let city = ''; let area = '';
-        components.forEach((component) => {
-            if (component.types.includes('administrative_area_level_1')) emirate = component.long_name.replace('Emirate of ', '').replace(' Emirate', '');
-            if (component.types.includes('locality') || component.types.includes('administrative_area_level_2')) city = component.long_name;
-            if (component.types.includes('sublocality') || component.types.includes('neighborhood')) area = component.long_name;
-        });
-        return { emirate, city, area };
-    };
-
-    const { isLoaded, loadError, apiKey, authFailed: mapAuthFailed } = useGoogleMaps();
-
-    const validateMapRender = () => {
-        if (mapHealthTimerRef.current) window.clearTimeout(mapHealthTimerRef.current);
-        mapHealthTimerRef.current = window.setTimeout(() => {
-            if (!mapRef.current) return;
-            const errorText = mapRef.current.textContent || '';
-            const hasGoogleError = errorText.includes('Something went wrong') || errorText.includes("didn't load Google Maps correctly");
-            if (hasGoogleError || authFailed || mapAuthFailed || (window as any).__BIN_GOOGLE_MAPS_AUTH_FAILED__ === true) {
-                failMap('GOOGLE_MAPS_RENDER_AUTH_OR_BILLING_FAILURE');
-            }
-        }, 1200);
-    };
-
-    const initAutocomplete = async () => {
-        const embeddedMapsDisabled = loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED';
-        if (!isLoaded || !apiKey || embeddedMapsDisabled || loadError || authFailed || mapAuthFailed) return;
-
-        setInitializing(true);
-        setMapFailed(false);
-        setMapFailureReason(null);
-        try {
-            const googleMaps = (window as any).google?.maps;
-            if (!googleMaps) throw new Error('GOOGLE_MAPS_NOT_AVAILABLE');
-
-            const mapsLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('maps') : googleMaps;
-            const placesLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('places') : googleMaps.places;
-            const geocodingLibrary = googleMaps.importLibrary ? await googleMaps.importLibrary('geocoding') : googleMaps;
-
-            if (!mapsLibrary?.Map || !placesLibrary?.Autocomplete) throw new Error('GOOGLE_MAPS_LIBRARY_MISSING');
-            geocoderRef.current = new geocodingLibrary.Geocoder();
-
-            if (autocompleteRef.current && placesLibrary?.Autocomplete) {
-                const autocomplete = new placesLibrary.Autocomplete(autocompleteRef.current, {
-                    componentRestrictions: { country: 'ae' },
-                    fields: ['address_components', 'geometry', 'formatted_address', 'place_id'],
-                });
-
-                autocomplete.addListener('place_changed', () => {
-                    const place = autocomplete.getPlace();
-                    if (!place.geometry) return;
-                    const parts = extractAddressParts(place.address_components || []);
-                    const lat = place.geometry.location.lat();
-                    const lng = place.geometry.location.lng();
-                    commitGeoAnchor({ address: place.formatted_address, placeId: place.place_id, lat, lng, ...parts, source: 'google_maps' });
-                    mapInstanceRef.current?.setCenter({ lat, lng });
-                    markerRef.current?.setPosition({ lat, lng });
-                });
-            }
-
-            if (mapRef.current) {
-                const initial = { lat: Number(manualLat) || fallbackEmirate.lat, lng: Number(manualLng) || fallbackEmirate.lng };
-                mapInstanceRef.current = new mapsLibrary.Map(mapRef.current, {
-                    center: initial,
-                    zoom: activeProperty?.location?.lat ? 16 : 10,
-                    mapTypeControl: false,
-                    streetViewControl: false,
-                    fullscreenControl: false,
-                    gestureHandling: 'greedy',
-                    styles: [{ elementType: 'geometry', stylers: [{ color: '#212121' }] }]
-                });
-                markerRef.current = new googleMaps.Marker({ map: mapInstanceRef.current, position: initial, draggable: true });
-                markerRef.current.addListener('dragend', () => {
-                    const pos = markerRef.current.getPosition();
-                    if (!pos) return;
-                    geocoderRef.current?.geocode({ location: pos }, (results: any[]) => {
-                        if (results?.[0]) {
-                            const parts = extractAddressParts(results[0].address_components);
-                            commitGeoAnchor({ lat: pos.lat(), lng: pos.lng(), address: results[0].formatted_address, ...parts, source: 'google_maps' });
-                        } else {
-                            commitGeoAnchor({ lat: pos.lat(), lng: pos.lng(), source: 'admin_manual' });
-                        }
-                    });
-                });
-                validateMapRender();
-            }
-        } catch (e: any) {
-            console.error('Map Init Error:', e);
-            failMap(e?.message || 'GOOGLE_MAPS_INIT_FAILED');
-        } finally {
-            setInitializing(false);
-        }
-    };
-
-    useEffect(() => {
-        const origAuthFailure = (window as any).gm_authFailure;
-        (window as any).gm_authFailure = () => {
-            failMap('GOOGLE_MAPS_AUTH_FAILED');
-            if (origAuthFailure) origAuthFailure();
-        };
-
-        if (loadError?.message === 'EMBEDDED_GOOGLE_MAPS_DISABLED') {
-            failMap('EMBEDDED_GOOGLE_MAPS_DISABLED');
-        } else if (isLoaded && !authFailed && !mapAuthFailed) {
-            initAutocomplete();
-        } else if (loadError || authFailed || mapAuthFailed) {
-            failMap(loadError?.message || 'GOOGLE_MAPS_NOT_AVAILABLE');
-        }
-
-        return () => {
-            if (origAuthFailure) (window as any).gm_authFailure = origAuthFailure;
-        };
-    }, [isLoaded, loadError, authFailed, mapAuthFailed]);
-
     const handleEmirateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = e.target.value;
         const emirateData = getEmirate(emirateId);
-        updateProperty(0, { emirate: emirateId, city: emirateId });
+        updateProperty(0, { emirate: emirateId, city: emirateId } as any);
         setManualLat(String(emirateData.lat));
         setManualLng(String(emirateData.lng));
-        if (mapInstanceRef.current) {
-            mapInstanceRef.current.setCenter({ lat: emirateData.lat, lng: emirateData.lng });
-            mapInstanceRef.current.setZoom(12);
-            markerRef.current?.setPosition({ lat: emirateData.lat, lng: emirateData.lng });
-        }
     };
 
     const useCurrentLocation = () => {
@@ -331,8 +231,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     requiresGeoReview: true,
                     dispatchReady: false
                 });
-                mapInstanceRef.current?.setCenter({ lat, lng });
-                markerRef.current?.setPosition({ lat, lng });
                 setLocating(false);
             },
             (error) => {
@@ -363,8 +261,86 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             requiresGeoReview: true,
             dispatchReady: false
         });
-        mapInstanceRef.current?.setCenter({ lat, lng });
-        markerRef.current?.setPosition({ lat, lng });
+    };
+
+    const resolveWithOpenStreetMap = async (queryText: string): Promise<RemoteAddressResult | null> => {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ae&addressdetails=1&q=${encodeURIComponent(queryText)}`, {
+            headers: { Accept: 'application/json' }
+        });
+        if (!response.ok) return null;
+        const results = await response.json();
+        const first = Array.isArray(results) ? results[0] : null;
+        if (!first?.lat || !first?.lon) return null;
+        const address = first.address || {};
+        return {
+            lat: Number(first.lat),
+            lng: Number(first.lon),
+            address: first.display_name || queryText,
+            emirate: address.state || activeProperty?.emirate || fallbackEmirate.id,
+            city: address.city || address.town || address.village || address.county || activeProperty?.city || activeProperty?.emirate || fallbackEmirate.id,
+            area: address.suburb || address.neighbourhood || address.road || activeProperty?.area || '',
+            placeId: 'REMOTE_ADDRESS'
+        };
+    };
+
+    const handleRemotePropertySearch = async () => {
+        const enteredAddress = (activeProperty?.address || '').trim();
+        const selectedEmirate = activeProperty?.emirate || fallbackEmirate.id;
+        const searchableText = [enteredAddress, googleMapsUrlField, plusCodeField].filter(Boolean).join(' ');
+
+        if (!enteredAddress && !googleMapsUrlField && !plusCodeField) {
+            setLocationError('Enter the property address, paste a Google Maps link, or add a Plus Code. You do not need to be at the property.');
+            return;
+        }
+
+        setResolvingAddress(true);
+        setLocationError(null);
+        try {
+            const parsed = parseCoordinatesFromText(searchableText);
+            if (parsed) {
+                commitGeoAnchor({
+                    lat: parsed.lat,
+                    lng: parsed.lng,
+                    address: enteredAddress || `${selectedEmirate}, UAE`,
+                    emirate: selectedEmirate,
+                    city: activeProperty?.city || selectedEmirate,
+                    area: activeProperty?.area || '',
+                    source: 'admin_manual',
+                    placeId: 'MANUAL',
+                    verified: false,
+                    requiresGeoReview: true,
+                    dispatchReady: false
+                });
+                return;
+            }
+
+            const queryText = `${enteredAddress || plusCodeField}, ${selectedEmirate}, UAE`;
+            const resolved = await resolveWithOpenStreetMap(queryText);
+
+            if (!resolved || !isValidLatLng(resolved.lat, resolved.lng)) {
+                setLocationError('Could not find this property address. Add building name, street, area, emirate, or paste a Google Maps link with coordinates.');
+                return;
+            }
+
+            commitGeoAnchor({
+                lat: Number(resolved.lat.toFixed(7)),
+                lng: Number(resolved.lng.toFixed(7)),
+                address: resolved.address,
+                emirate: resolved.emirate || selectedEmirate,
+                city: resolved.city || selectedEmirate,
+                area: resolved.area || activeProperty?.area || '',
+                placeId: 'REMOTE_ADDRESS',
+                source: 'admin_manual',
+                verified: false,
+                requiresGeoReview: true,
+                dispatchReady: false
+            });
+        } catch (error: any) {
+            console.error('Remote property lookup failed:', error);
+            setLocationError(error?.message || 'Property address lookup failed. Paste a Google Maps link or enter coordinates manually.');
+        } finally {
+            setResolvingAddress(false);
+        }
     };
 
     const handleContinue = () => {
@@ -374,7 +350,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         if (!activeProperty?.address || activeProperty.address.trim().length < 3) return setLocationError('Enter the property address before continuing.');
         if (!isValidLatLng(lat, lng)) return setLocationError('Please enter valid coordinates.');
 
-        const isMapEntry = !!(activeProperty?.googlePlaceId && activeProperty?.googlePlaceId !== 'MANUAL' && !mapFailed);
         commitGeoAnchor({
             lat,
             lng,
@@ -382,11 +357,11 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             emirate: activeProperty?.emirate,
             city: activeProperty?.city || activeProperty?.emirate,
             area: activeProperty?.area || '',
-            source: isMapEntry ? 'google_maps' : 'admin_manual',
-            placeId: isMapEntry ? activeProperty?.googlePlaceId : 'MANUAL',
-            verified: isMapEntry,
-            requiresGeoReview: !isMapEntry,
-            dispatchReady: isMapEntry
+            source: 'admin_manual',
+            placeId: activeProperty?.googlePlaceId || 'MANUAL',
+            verified: false,
+            requiresGeoReview: true,
+            dispatchReady: false
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
         onNext();
@@ -397,7 +372,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     return (
         <Box sx={{ py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
             <style>{`
-                .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message {
+                .pac-container, .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message, .gm-style {
                     display: none !important;
                     visibility: hidden !important;
                     pointer-events: none !important;
@@ -408,7 +383,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     {readable(t('onboarding.location_title'), 'Property Location')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {readable(t('onboarding.location_subtitle'), 'Enter the property address. Google Maps is optional; manual location works for onboarding.')}
+                    Search by property address, paste a Google Maps link, or enter coordinates. You do not need to be at the property.
                 </Typography>
             </Box>
 
@@ -420,103 +395,113 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 <MapPin size={18} /> {readable(t('onboarding.property_address'), 'Property Address')}
                             </Typography>
 
-                            <TextField select fullWidth label={readable(t('onboarding.emirate'), 'Emirate')} value={activeProperty?.emirate || fallbackEmirate.id} onChange={handleEmirateChange} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
+                            <TextField select fullWidth label={readable(t('onboarding.emirate'), 'Emirate')} value={activeProperty?.emirate || fallbackEmirate.id} onChange={handleEmirateChange} sx={fieldSx}>
                                 {EMIRATES_LIST.map(e => <MenuItem key={e.id} value={e.id}>{readable(t(e.key), e.label)}</MenuItem>)}
                             </TextField>
 
-                            <TextField fullWidth label={readable(t('onboarding.address'), 'Property Address')} placeholder={readable(t('onboarding.address_placeholder'), 'Building name, street, area, emirate')} value={activeProperty?.address || ''} onChange={(e) => updateProperty(0, { address: e.target.value })} inputRef={autocompleteRef} multiline minRows={2} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                            <TextField
+                                fullWidth
+                                name="address"
+                                inputProps={{ 'data-testid': 'property-address-input' }}
+                                label={readable(t('onboarding.address'), 'Property Address')}
+                                placeholder="Building name, street, area, emirate — or paste a Google Maps link"
+                                value={activeProperty?.address || ''}
+                                onChange={(e) => updateProperty(0, { address: e.target.value } as any)}
+                                autoComplete="off"
+                                helperText="Owner can be at home. Type the actual property address, then click Find Property Address. Use My Current Location only if you are standing at the property."
+                                FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.48)', fontWeight: 700 } }}
+                                sx={fieldSx}
+                            />
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Latitude" 
-                                        value={manualLat} 
-                                        onChange={(e) => setManualLat(e.target.value)} 
-                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                    <TextField
+                                        fullWidth
+                                        name="latitude"
+                                        inputProps={{ 'data-testid': 'property-latitude-input' }}
+                                        label="Latitude"
+                                        value={manualLat}
+                                        onChange={(e) => setManualLat(e.target.value)}
+                                        helperText="Exact property pin. Auto-filled by Find Property Address, map link, or manual entry."
                                         FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        sx={fieldSx}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Longitude" 
-                                        value={manualLng} 
-                                        onChange={(e) => setManualLng(e.target.value)} 
-                                        helperText="Use exact building gate/service entrance pin, not general area."
+                                    <TextField
+                                        fullWidth
+                                        name="longitude"
+                                        inputProps={{ 'data-testid': 'property-longitude-input' }}
+                                        label="Longitude"
+                                        value={manualLng}
+                                        onChange={(e) => setManualLng(e.target.value)}
+                                        helperText="Exact property pin. Auto-filled by Find Property Address, map link, or manual entry."
                                         FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.45)', fontWeight: 800 } }}
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        sx={fieldSx}
                                     />
                                 </Grid>
                             </Grid>
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Google Maps URL" 
-                                        placeholder="https://maps.google.com/?q=..."
-                                        value={googleMapsUrlField} 
-                                        onChange={handleGoogleMapsUrlChange} 
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                    <TextField
+                                        fullWidth
+                                        label="Google Maps URL"
+                                        placeholder="Paste link if the property is elsewhere"
+                                        value={googleMapsUrlField}
+                                        onChange={handleGoogleMapsUrlChange}
+                                        autoComplete="off"
+                                        sx={fieldSx}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                    <TextField 
-                                        fullWidth 
-                                        label="Plus Code" 
+                                    <TextField
+                                        fullWidth
+                                        label="Plus Code"
                                         placeholder="e.g. 785P+GH Dubai"
-                                        value={plusCodeField} 
-                                        onChange={handlePlusCodeChange} 
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} 
+                                        value={plusCodeField}
+                                        onChange={handlePlusCodeChange}
+                                        autoComplete="off"
+                                        sx={fieldSx}
                                     />
                                 </Grid>
                             </Grid>
 
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                                <Button variant="contained" onClick={handleRemotePropertySearch} disabled={resolvingAddress} startIcon={resolvingAddress ? <CircularProgress size={14} /> : <Search size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Find Property Address</Button>
                                 <Button variant="outlined" onClick={handleManualCoordinateCommit} startIcon={<MapPin size={16} />} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.35), fontWeight: 900 }}>Save Coordinates</Button>
-                                <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use My Location</Button>
+                                <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use My Current Location</Button>
                                 <Button variant="outlined" href={googleMapsUrl} target="_blank" rel="noreferrer" startIcon={<ExternalLink size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Open in Google Maps</Button>
                             </Stack>
                         </Stack>
 
                         <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
 
-                        {!mapFailed ? (
-                            <Box sx={{ position: 'relative' }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Globe size={14} /> {readable(t('onboarding.map_optional'), 'Optional map verification')}
+                        <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.22)', overflow: 'hidden' }}>
+                            <Box sx={{ p: 2.5, display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                                <Box>
+                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Navigation size={20} color={binThemeTokens.gold} /> Live coordinate map preview
                                     </Typography>
-                                    {initializing && <CircularProgress size={16} sx={{ color: binThemeTokens.gold }} />}
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
+                                        Type the property address or paste a Google Maps link, then click Find Property Address. The owner does not need to be physically at the property.
+                                    </Typography>
                                 </Box>
-                                <Box ref={mapRef} sx={{ width: '100%', height: { xs: 220, md: 300 }, borderRadius: 4, border: '1px solid rgba(198,167,94,0.18)', bgcolor: '#000', overflow: 'hidden' }} />
+                                <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
+                                    Open Google Maps
+                                </Button>
                             </Box>
-                        ) : (
-                            <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.22)' }}>
-                                <Stack spacing={2.2} alignItems="center" textAlign="center">
-                                    <Navigation size={38} color={binThemeTokens.gold} />
-                                    <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950 }}>
-                                        {mapFailureReason === 'EMBEDDED_GOOGLE_MAPS_DISABLED' 
-                                            ? 'Production location capture is active'
-                                            : 'Map preview is unavailable, but location capture still works'}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', maxWidth: 620 }}>
-                                        {mapFailureReason === 'EMBEDDED_GOOGLE_MAPS_DISABLED'
-                                            ? 'Embedded Google Maps preview is disabled on this step to prevent Google auth failure overlays. Save the address and GPS coordinates here; technicians can open the exact property location in Google Maps.'
-                                            : 'Google Maps rejected the embedded preview. Save the address and coordinates here; technicians can still open the exact property location in Google Maps.'}
-                                    </Typography>
-                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                                        <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Open Navigation</Button>
-                                        <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use Current GPS</Button>
-                                    </Stack>
-                                    {mapFailureReason && mapFailureReason !== 'EMBEDDED_GOOGLE_MAPS_DISABLED' && (
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>Diagnostic: {mapFailureReason}</Typography>
-                                    )}
-                                </Stack>
-                            </Paper>
-                        )}
+
+                            <Box sx={{ height: { xs: 260, md: 340 }, width: '100%', bgcolor: '#050505', borderTop: '1px solid rgba(198,167,94,0.16)' }}>
+                                <Box
+                                    component="iframe"
+                                    title="Property coordinate map preview"
+                                    src={osmPreviewUrl}
+                                    loading="lazy"
+                                    sx={{ width: '100%', height: '100%', border: 0 }}
+                                />
+                            </Box>
+                        </Paper>
 
                         {locationError && <Alert severity="warning">{locationError}</Alert>}
 

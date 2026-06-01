@@ -15,7 +15,11 @@
         "forceConsistentCasingInFileNames": true,
         "noFallthroughCasesInSwitch": true,
         "module": "esnext",
+ fix/firebase-proof-hardening-clean
         "moduleResolution": "bundler",
+
+        "moduleResolution": "node",
+ main
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,

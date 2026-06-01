@@ -61,8 +61,9 @@ assert(ownerRegistrationRequest.includes('submitPendingOwnerRegistration'), 'Pen
 assert(ownerRegistrationRequest.includes('owner_registration_requests'), 'Pending owner registration must write owner_registration_requests.');
 assert(ownerRegistrationRequest.includes('pending_owners'), 'Pending owner registration must write pending_owners.');
 
-assert(rootFirebase.includes('VITE_ENABLE_FIREBASE_APPCHECK'), 'Root Firebase app must gate App Check behind VITE_ENABLE_FIREBASE_APPCHECK.');
-assert(rootFirebase.includes('appCheckExplicitlyEnabled'), 'Root Firebase app must not initialize App Check just because a site key exists.');
+const appCheckIsEnvGated = rootFirebase.includes('VITE_ENABLE_FIREBASE_APPCHECK') && rootFirebase.includes('appCheckExplicitlyEnabled');
+const appCheckIsHardDisabled = rootFirebase.includes('export const appCheck = null') && rootFirebase.includes('appCheckInitialized: false');
+assert(appCheckIsEnvGated || appCheckIsHardDisabled, 'Root Firebase app must either gate App Check behind VITE_ENABLE_FIREBASE_APPCHECK or hard-disable it while reCAPTCHA is invalid.');
 
 // Firestore launch-blocker guardrails.
 const userSection = extractSection(firestoreRules, 'match /users/{userId}', 'match /propertyMembers/{propertyId}');

@@ -41,8 +41,9 @@ const firebaseConfig: BinFirebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// App Check (Monitoring Mode)
+// App Check (Environment Gated)
 if (typeof window !== 'undefined') {
+  fix/firebase-proof-hardening-clean
     const siteKey = process.env.REACT_APP_APP_CHECK_SITE_KEY || process.env.VITE_APP_CHECK_SITE_KEY || "";
     try {
         initializeAppCheck(app, {
@@ -52,6 +53,38 @@ if (typeof window !== 'undefined') {
         console.log("🛡️ [SECURITY] App Check active in MONITORING mode.");
     } catch (err) {
         console.warn("App Check initialization failed:", err);
+
+    const enableAppCheck = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_ENABLE_FIREBASE_APPCHECK === 'true') || 
+                          (typeof process !== 'undefined' && process.env && process.env.VITE_ENABLE_FIREBASE_APPCHECK === 'true') ||
+                          readRequiredEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+    const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+    const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
+    
+    if (enableAppCheck) {
+        if (isLocal || isAutomation) {
+            (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+            console.log("🛡️ [SECURITY] App Check debug token set for local/automation testing.");
+        }
+        const siteKey = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_APP_CHECK_SITE_KEY : '') || 
+                        (typeof process !== 'undefined' && process.env ? process.env.VITE_APP_CHECK_SITE_KEY : '') ||
+                        readRequiredEnv('VITE_APP_CHECK_SITE_KEY') || 
+                        readRequiredEnv('REACT_APP_APP_CHECK_SITE_KEY');
+        if (siteKey && !siteKey.includes('REPLACE_ME')) {
+            try {
+                initializeAppCheck(app, {
+                    provider: new ReCaptchaV3Provider(siteKey),
+                    isTokenAutoRefreshEnabled: true
+                });
+                console.log("🛡️ [SECURITY] App Check active.");
+            } catch (err) {
+                console.warn("App Check initialization failed:", err);
+            }
+        } else {
+            console.warn("VITE_APP_CHECK_SITE_KEY missing or placeholder. App Check not initialized.");
+        }
+    } else {
+        console.log("🛡️ [SECURITY] App Check is disabled via environment configuration.");
+ main
     }
 }
 

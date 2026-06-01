@@ -73,8 +73,27 @@ patchIfNeeded(
   ["match /technicians/{techId}", "allow read: if isAdmin() || hasPermission('canManageTechnicians') || hasPermission('canDispatchJobs') || isTechnician(techId);"]
 );
 
+const hardenedNotificationRules = `    match /notifications/{notifId} {
+      allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || ((resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow delete: if isAdmin();
+    }`;
+
 patchIfNeeded(
-  'notification creation must be recipient scoped',
+  'notification writes must be server/admin gated',
+  `    match /notifications/{notifId} {
+      allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow create: if signedIn();
+      allow update: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }`,
+  hardenedNotificationRules,
+  ["match /notifications/{notifId}", "allow create: if isAdmin();", "affectedKeys().hasOnly(['read'])"]
+);
+
+patchIfNeeded(
+  'legacy notification creation must not allow arbitrary signed-in writes',
   `    match /notifications/{notifId} {
       allow read: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid);
       allow create: if isAdmin() || signedIn();
@@ -83,11 +102,11 @@ patchIfNeeded(
     }`,
   `    match /notifications/{notifId} {
       allow read: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid);
-      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin() || (signedIn() && resource.data.recipientId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
       allow delete: if isAdmin();
     }`,
-  ["match /notifications/{notifId}", "allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid);"]
+  ["match /notifications/{notifId}", "allow create: if isAdmin();", "affectedKeys().hasOnly(['read'])"]
 );
 
 patchIfNeeded(
@@ -163,6 +182,51 @@ patchIfNeeded(
       allow delete: if isAdmin();
     }`,
   ["match /design_requests/{requestId}", "allow create: if signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data));"]
+);
+
+patchIfNeeded(
+  'broker ownership helpers for dashboard collections',
+  `    function emailOwns(data) {`,
+  `    function brokerOwns(data) {
+      return signedIn() && (
+        data.brokerId == request.auth.uid ||
+        data.brokerUid == request.auth.uid ||
+        data.userId == request.auth.uid ||
+        data.createdByUid == request.auth.uid
+      );
+    }
+
+    function emailOwns(data) {`,
+  ["function brokerOwns(data)", "data.brokerId == request.auth.uid", "data.brokerUid == request.auth.uid"]
+);
+
+patchIfNeeded(
+  'broker dashboard collections must be broker-owned',
+  `    match /brokerReferrals/{referralId} {
+      allow read: if isAdmin() || resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid;
+      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }`,
+  `    match /brokerLeads/{leadId} {
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    match /brokerReferrals/{referralId} {
+      allow read: if isAdmin() || resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid;
+      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }`,
+  ["match /brokerLeads/{leadId}", "match /referrals/{referralId}", "function brokerOwns(data)"]
 );
 
 writeFileSync(path, rules);
