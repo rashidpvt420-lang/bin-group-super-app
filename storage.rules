@@ -154,11 +154,24 @@ service firebase.storage {
     // Tenant issue photos uploaded by TenantRequestPage.tsx:
     // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
     match /maintenanceTickets/{tenantId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor() || isTechnicianRole());
-      allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
+      allow write: if false;
     }
 
     // Technician/admin job completion evidence for maintenance tickets.
+    // Tenant issue photos are ticket-scoped to prevent broad technician access.
+    // Canonical path: maintenanceTickets/{ticketId}/tenant/{fileName}
+    match /maintenanceTickets/{ticketId}/tenant/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if isAuth() && ticketExists(ticketId) && (
+        ticket(ticketId).tenantId == request.auth.uid ||
+        ticket(ticketId).tenantUid == request.auth.uid ||
+        ticket(ticketId).ownerId == request.auth.uid ||
+        ticket(ticketId).ownerUid == request.auth.uid ||
+        isAdmin()
+      ) && isImageUpload(10);
+    }
+
     match /maintenanceTickets/{ticketId}/proofs/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);

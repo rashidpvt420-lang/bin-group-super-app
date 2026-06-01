@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Card, CardContent, Chip, CircularProgress, Container, Grid, IconButton, Link as MuiLink, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Award, Briefcase, Building2, CheckCircle2, Globe, Mail, MapPin, MessageSquare, Phone, PlayCircle, Rocket, Shield, ShieldCheck, Sparkles, Users, Video, Wrench, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, doc, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
-import { COMPANY_PROFILE_DOC_PATH, CompanyProfile, CompanyService, DEFAULT_COMPANY_PROFILE, normalizeCompanyProfile } from '../../lib/companyProfile';
+import { COMPANY_PROFILE_DOC_PATH, DEFAULT_COMPANY_PROFILE, normalizeCompanyProfile } from '../../lib/companyProfile';
+import type { CompanyProfile, CompanyService } from '../../lib/companyProfile';
 
 const PUBLIC_CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'owner@bin-group.com' };
 
@@ -405,3 +406,4 @@ export default function CompanyProfilePage() {
     </Box>
   );
 }
+

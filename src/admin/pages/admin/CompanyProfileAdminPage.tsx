@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack, TextField, Typography } from '@mui/material';
 import { Save } from 'lucide-react';
 import { useSnackbar } from 'notistack';
 import { db, doc, onSnapshot, setDoc } from '../../../lib/firebase';
 import { useLanguage } from '../../../context/LanguageContext';
-import { COMPANY_PROFILE_DOC_PATH, DEFAULT_COMPANY_PROFILE, CompanyProfile, normalizeCompanyProfile } from '../../../lib/companyProfile';
+import { COMPANY_PROFILE_DOC_PATH, DEFAULT_COMPANY_PROFILE, normalizeCompanyProfile } from '../../../lib/companyProfile';
+import type { CompanyProfile } from '../../../lib/companyProfile';
 
 export default function CompanyProfileAdminPage() {
   const { isRTL } = useLanguage();
@@ -115,3 +116,4 @@ export default function CompanyProfileAdminPage() {
     </Box>
   );
 }
+
