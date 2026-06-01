@@ -72,11 +72,29 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 local.properties
+**/local.properties
 
-# Android / signing / captures
-captures/
+# Android SDK/local state
+android/local.properties
+.android/
+android-sdk/
+
+# Android signing secrets
+android/keystore.properties
+android/app/*.jks
+android/app/*.keystore
 *.jks
 *.keystore
+
+# Android build artifacts
+*.apk
+*.aab
+*.apks
+android/app/build/outputs/
+android/app/release/
+
+# Android / captures
+captures/
 
 # Dataconnect generated
 .dataconnect
@@ -112,4 +130,3 @@ qa-verify-all.js
 test-results/
 test_output.txt
 playwright-report/
-
