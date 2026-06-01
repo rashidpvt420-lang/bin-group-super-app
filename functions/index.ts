@@ -683,6 +683,8 @@ export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
 
 export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin", "super_admin", "operations_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
@@ -691,13 +693,18 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
     const ticketData = ticketDoc.data()!;
 
-    if (ticketData.status !== 'assigned' && ticketData.status !== 'OPEN' && ticketData.status !== 'pending_assignment') {
+    const existingTechId = ticketData.assignedTechnicianId || ticketData.technicianId || '';
+    if (existingTechId && existingTechId !== request.auth.uid) {
+        throw new HttpsError("failed-precondition", "Ticket is already assigned to another technician.");
+    }
+
+    if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'assigned', 'pending_assignment'].includes(ticketData.status)) {
         throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
     await ticketRef.update({
-        status: 'assigned',
+        status: 'ACCEPTED',
         assignedTechnicianId: request.auth.uid,
         acceptedAt: now,
         updatedAt: now
@@ -714,7 +721,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
 export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl } = request.data;
-    const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED'];
+    const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
     if (!allowedStatuses.includes(status)) throw new HttpsError("invalid-argument", "Invalid status transition.");
 
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
@@ -732,10 +739,10 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
         updatedAt: now
     };
 
-    if (status === 'EN_ROUTE') updateData.enRouteAt = now;
+    if (status === 'EN_ROUTE') updateData.onTheWayAt = now;
     if (status === 'ARRIVED') updateData.arrivedAt = now;
     if (status === 'IN_PROGRESS') updateData.startedAt = now;
-    if (status === 'COMPLETED') {
+    if (status === 'COMPLETED' || status === 'COMPLETED_PENDING_APPROVAL') {
         updateData.completedAt = now;
         updateData.notes = notes || ticketData.notes;
     }
