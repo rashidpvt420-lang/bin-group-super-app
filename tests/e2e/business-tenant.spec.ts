@@ -8,7 +8,14 @@ import { test, expect, Page } from '@playwright/test';
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
 
+function requireLaunchCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Missing E2E_TENANT_EMAIL/PASSWORD. Tenant launch validation cannot be skipped for public release.');
+  }
+}
+
 async function login(page: Page) {
+  requireLaunchCredentials();
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -16,62 +23,78 @@ async function login(page: Page) {
   await page.waitForURL('**/tenant/dashboard', { timeout: 15_000 });
 }
 
-test.describe('Tenant Business Workflow', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_TENANT_EMAIL/PASSWORD — skipping tenant business flow.');
+async function selectFirstMuiOption(page: Page, label: RegExp | string) {
+  const combobox = page.getByLabel(label).first().or(page.locator('[role="combobox"]').first());
+  await expect(combobox).toBeVisible({ timeout: 10_000 });
+  await combobox.click();
+  const option = page.locator('[role="option"]').first();
+  await expect(option).toBeVisible({ timeout: 10_000 });
+  await option.click();
+}
 
+test.describe('Tenant Business Workflow', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
 
   test('Tenant can create a service request and upload photo', async ({ page }) => {
-    // Navigate to tenant dashboard
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
-    
-    // Open new ticket modal
-    const createBtn = page.locator('button:has-text("New Request"), button:has-text("Report Issue"), button:has-text("Create Ticket")').first();
-    await expect(createBtn).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+
+    const createBtn = page
+      .locator('button:has-text("New Complaint / Request"), button:has-text("Management Request"), button:has-text("New Request"), button:has-text("Report Issue"), button:has-text("Create Ticket")')
+      .first();
+    await expect(createBtn).toBeVisible({ timeout: 15_000 });
     await createBtn.click();
 
-    // Fill ticket details
-    const issueInput = page.locator('textarea, input[placeholder*="issue" i], input[placeholder*="describe" i]').first();
-    await expect(issueInput).toBeVisible();
-    await issueInput.fill('E2E Test: AC is not cooling properly.');
+    await expect(page).toHaveURL(/\/tenant\/request/, { timeout: 15_000 });
 
-    // Upload photo (simulate file chooser)
-    const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null);
-    const uploadBtn = page.locator('button:has-text("Upload"), input[type="file"]').first();
-    if (await uploadBtn.isVisible()) {
-      if (await uploadBtn.getAttribute('type') === 'file') {
-        // Just checking it exists, skip real upload if purely input type="file" in CI for now
-      } else {
-        await uploadBtn.click();
-        const fileChooser = await fileChooserPromise;
-        // In a real run, we'd set files here if we had a dummy image
-      }
+    await selectFirstMuiOption(page, /Category/i);
+
+    const locationInput = page
+      .locator('input[placeholder*="technician" i], input[placeholder*="location" i], input[aria-label*="location" i]')
+      .first();
+    if (await locationInput.isVisible().catch(() => false)) {
+      await locationInput.fill('E2E Kitchen AC vent');
     }
 
-    // Submit ticket
-    const submitBtn = page.locator('button:has-text("Submit"), button:has-text("Create")').first();
-    await submitBtn.click();
-    
-    // Verify success state or modal closure
-    await expect(page.locator('text=success').or(page.locator('text=created'))).toBeVisible({ timeout: 10_000 }).catch(() => {});
+    const issueInput = page.locator('textarea, input[placeholder*="issue" i], input[placeholder*="describe" i]').first();
+    await expect(issueInput).toBeVisible({ timeout: 10_000 });
+    await issueInput.fill('E2E Test: AC is not cooling properly.');
+
+    const fileInput = page.locator('input[type="file"]').first();
+    if (await fileInput.count()) {
+      await fileInput.setInputFiles({
+        name: 'tenant-request-evidence.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
+      }).catch(() => undefined);
+    }
+
+    const dispatchBtn = page
+      .locator('button:has-text("DISPATCH REQUEST"), button:has-text("Dispatch Request"), button[type="submit"]')
+      .first();
+    await expect(dispatchBtn).toBeVisible({ timeout: 15_000 });
+    await expect(dispatchBtn).toBeEnabled({ timeout: 15_000 });
+    await dispatchBtn.click();
+
+    await Promise.race([
+      page.waitForURL('**/tenant/tickets', { timeout: 25_000 }),
+      expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 25_000 }),
+    ]);
+    await expect(page.locator('body')).not.toContainText(/Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i, { timeout: 5_000 });
   });
 
   test('Tenant can approve completed work', async ({ page }) => {
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
-    
-    // Wait for tickets to load
-    await page.waitForTimeout(2000);
-    
-    // Find a resolved ticket awaiting approval
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+
     const approveBtn = page.locator('button:has-text("Approve"), button:has-text("Accept Work")').first();
-    if (await approveBtn.isVisible()) {
+    if (await approveBtn.isVisible().catch(() => false)) {
       await approveBtn.click();
       
-      // Confirm approval
       const confirmBtn = page.locator('button:has-text("Confirm"), button:has-text("Yes")').first();
-      if (await confirmBtn.isVisible()) {
+      if (await confirmBtn.isVisible().catch(() => false)) {
         await confirmBtn.click();
       }
       

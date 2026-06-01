@@ -7,7 +7,7 @@
  * the technician after accepting or completing a job.
  */
 
-import { db, doc, updateDoc, serverTimestamp } from '../lib/firebase';
+import { db, doc, setDoc, updateDoc, serverTimestamp } from '../lib/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,14 @@ export interface TrackingState {
     activeTicketId: string | null;
 }
 
+export type GpsReadiness = {
+    supported: boolean;
+    secureContext: boolean;
+    permissionState: PermissionState | 'unsupported' | 'unknown';
+    userAgent: string;
+    platform: string;
+};
+
 // ─── Module-level GPS watch state ─────────────────────────────────────────────
 
 const _state: TrackingState = {
@@ -44,6 +52,48 @@ const _state: TrackingState = {
     lastPushTime: 0,
     activeTicketId: null,
 };
+
+async function readGpsPermissionState(): Promise<PermissionState | 'unsupported' | 'unknown'> {
+    try {
+        if (!navigator.permissions?.query) return 'unsupported';
+        const permission = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        return permission.state;
+    } catch {
+        return 'unknown';
+    }
+}
+
+export async function getGpsReadiness(): Promise<GpsReadiness> {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+        return {
+            supported: false,
+            secureContext: false,
+            permissionState: 'unsupported',
+            userAgent: 'server',
+            platform: 'server',
+        };
+    }
+
+    return {
+        supported: 'geolocation' in navigator,
+        secureContext: window.isSecureContext === true,
+        permissionState: await readGpsPermissionState(),
+        userAgent: navigator.userAgent,
+        platform: navigator.platform || 'unknown',
+    };
+}
+
+async function persistTrackingDiagnostic(technicianUid: string, ticketId: string, payload: Record<string, any>) {
+    try {
+        await setDoc(doc(db, 'technicians', technicianUid, 'deviceReadiness', 'gps'), {
+            ticketId,
+            ...payload,
+            updatedAt: serverTimestamp(),
+        }, { merge: true });
+    } catch (err) {
+        console.warn('[Tracking] Failed to persist GPS readiness diagnostic:', err);
+    }
+}
 
 // ─── 1. normalizeLocation ─────────────────────────────────────────────────────
 
@@ -223,15 +273,31 @@ export function isLocationStale(updatedAt: any, maxMinutes = 2): boolean {
  *
  * SAFETY: Only writes when explicitly called. Never auto-starts.
  */
-export const startLiveTracking = (
+export const startLiveTracking = async (
     ticketId: string,
     technicianUid: string,
     onLocationUpdate?: (loc: GeoPoint) => void,
     onError?: (msg: string) => void
-): void => {
+): Promise<void> => {
+    const readiness = await getGpsReadiness();
+    await persistTrackingDiagnostic(technicianUid, ticketId, {
+        status: readiness.supported ? 'READY' : 'UNSUPPORTED',
+        readiness,
+        startedAt: serverTimestamp(),
+    });
+
     if (!navigator.geolocation) {
         const msg = 'Geolocation is not supported by this browser.';
         console.error(msg);
+        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'UNSUPPORTED', error: msg, readiness });
+        if (onError) onError(msg);
+        return;
+    }
+
+    if (!readiness.secureContext) {
+        const msg = 'GPS requires a secure HTTPS context.';
+        console.error(msg);
+        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'INSECURE_CONTEXT', error: msg, readiness });
         if (onError) onError(msg);
         return;
     }
@@ -255,6 +321,11 @@ export const startLiveTracking = (
             // Safety: reject weak GPS signals
             if (position.coords.accuracy > 100) {
                 console.warn(`[Tracking] Weak GPS accuracy: ${position.coords.accuracy}m, skipping.`);
+                await persistTrackingDiagnostic(technicianUid, ticketId, {
+                    status: 'WEAK_SIGNAL',
+                    accuracy: position.coords.accuracy,
+                    lastWeakSignalAt: serverTimestamp(),
+                });
                 return;
             }
 
@@ -293,25 +364,45 @@ export const startLiveTracking = (
                         lastSeenAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
                     }),
+                    persistTrackingDiagnostic(technicianUid, ticketId, {
+                        status: 'LIVE',
+                        accuracy: position.coords.accuracy,
+                        lastSuccessfulPushAt: serverTimestamp(),
+                    }),
                 ]);
             } catch (err) {
                 console.error('[Tracking] Firestore write failed:', err);
+                await persistTrackingDiagnostic(technicianUid, ticketId, {
+                    status: 'FIRESTORE_WRITE_FAILED',
+                    error: String(err),
+                    failedAt: serverTimestamp(),
+                });
             }
         },
-        (error) => {
+        async (error) => {
             let msg = 'Unknown GPS error.';
+            let status = 'GPS_ERROR';
             switch (error.code) {
                 case error.PERMISSION_DENIED:
                     msg = 'GPS permission denied. Please enable location in your browser/device settings.';
+                    status = 'PERMISSION_DENIED';
                     break;
                 case error.POSITION_UNAVAILABLE:
                     msg = 'GPS position unavailable. Check your device GPS.';
+                    status = 'POSITION_UNAVAILABLE';
                     break;
                 case error.TIMEOUT:
                     msg = 'GPS timed out. Try moving to an open area.';
+                    status = 'TIMEOUT';
                     break;
             }
             console.error('[Tracking] GPS Error:', msg);
+            await persistTrackingDiagnostic(technicianUid, ticketId, {
+                status,
+                error: msg,
+                errorCode: error.code,
+                failedAt: serverTimestamp(),
+            });
             if (onError) onError(msg);
         },
         {
@@ -357,6 +448,14 @@ export const stopLiveTracking = async (
             trackingStatus: finalStatus,
             technicianLocationUpdatedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
+        }));
+    }
+
+    if (technicianUid && activeTicketId) {
+        writes.push(persistTrackingDiagnostic(technicianUid, activeTicketId, {
+            status: 'STOPPED',
+            finalStatus,
+            stoppedAt: serverTimestamp(),
         }));
     }
 

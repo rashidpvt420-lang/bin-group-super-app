@@ -8,7 +8,14 @@ import { test, expect, Page } from '@playwright/test';
 const EMAIL    = process.env.E2E_BROKER_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
+function requireLaunchCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Missing E2E_BROKER_EMAIL/PASSWORD. Broker launch validation cannot be skipped for public release.');
+  }
+}
+
 async function login(page: Page) {
+  requireLaunchCredentials();
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -17,8 +24,6 @@ async function login(page: Page) {
 }
 
 test.describe('Broker Business Workflow', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_BROKER_EMAIL/PASSWORD — skipping broker business flow.');
-
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
