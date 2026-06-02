@@ -13,7 +13,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const BinGroupHeader: React.FC = () => {
-    const { lang, setLang, t } = useLanguage();
+    const { lang, setLang, t, isRTL } = useLanguage();
     const { mode, toggleTheme } = useCustomTheme();
     const { user, role } = useRole();
     const navigate = useNavigate();
@@ -22,6 +22,10 @@ const BinGroupHeader: React.FC = () => {
     const isCompanyRoute = location.pathname === '/' || location.pathname === '/company';
     const normalizedRole = (role || '').toLowerCase();
     const canUseAiStudio = normalizedRole === 'owner' || normalizedRole === 'tenant';
+
+    const madeInUaeLabel = lang === 'ar' ? 'صنع في الإمارات 🇦🇪' : 'MADE IN UAE 🇦🇪';
+    const companyProfileLabel = lang === 'ar' ? 'ملف الشركة' : 'Company Profile';
+    const startOnboardingLabel = lang === 'ar' ? 'ابدأ التسجيل' : 'Start Onboarding';
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -47,7 +51,7 @@ const BinGroupHeader: React.FC = () => {
     };
 
     return (
-        <AppBar position="sticky" sx={{
+        <AppBar position="sticky" dir={isRTL ? 'rtl' : 'ltr'} sx={{
             bgcolor: mode === 'dark' ? 'rgba(11,11,12,0.85)' : 'rgba(255,255,255,0.85)',
             backdropFilter: 'blur(10px)',
             borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`,
@@ -55,14 +59,14 @@ const BinGroupHeader: React.FC = () => {
             color: mode === 'dark' ? '#fff' : '#000',
             zIndex: 1500
         }}>
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
+            <Toolbar sx={{ justifyContent: 'space-between', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/company')}>
                     <Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1 }} onError={(e: any) => e.target.style.display = 'none'} />
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
                         BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
                     </Typography>
-                    <Box sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.2, borderRadius: 1, bgcolor: alpha(binThemeTokens.gold, 0.15), border: `1px solid ${binThemeTokens.gold}`, color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 950, ml: 1 }}>
-                        MADE IN UAE 🇦🇪
+                    <Box sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.2, borderRadius: 1, bgcolor: alpha(binThemeTokens.gold, 0.15), border: `1px solid ${binThemeTokens.gold}`, color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 950, ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0 }}>
+                        {madeInUaeLabel}
                     </Box>
                 </Box>
 
@@ -71,10 +75,10 @@ const BinGroupHeader: React.FC = () => {
                         {!user || isCompanyRoute ? (
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <Button onClick={() => navigate('/company')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                                    Company Profile
+                                    {companyProfileLabel}
                                 </Button>
                                 <Button onClick={() => navigate('/onboarding')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                                    Start Onboarding
+                                    {startOnboardingLabel}
                                 </Button>
                             </Stack>
                         ) : (
@@ -83,7 +87,7 @@ const BinGroupHeader: React.FC = () => {
                                     {t('nav.dashboard')}
                                 </Button>
                                 <Button onClick={() => navigate('/company')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                                    {t('nav.company_profile')}
+                                    {companyProfileLabel}
                                 </Button>
                                 {canUseAiStudio && (
                                     <Button onClick={() => navigate('/design-studio')} sx={{ color: mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.85rem' }}>
