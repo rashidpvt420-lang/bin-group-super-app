@@ -182,7 +182,7 @@ function PushNotificationBootstrap() {
 }
 
 const PUBLIC_ROUTE_PATHS = new Set([
-  '/', '/owner-landing', '/v1', '/login', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
+  '/', '/owner-landing', '/v1', '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
   '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
   '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
   '/services', '/request-demo', '/videos', '/demo-videos', '/tenant-invite', '/company',
@@ -307,6 +307,30 @@ function AppContent() {
   );
 }
 
+const HEADERLESS_ROUTES = new Set([
+  '/', '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
+  '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security',
+  '/services', '/contact', '/request-demo', '/videos', '/demo-videos', '/company', '/ai-design-studio',
+  '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
+  '/owner-landing', '/v1', '/tenant-invite',
+]);
+
+function HeaderSlot() {
+  const location = useLocation();
+  const pathname = location.pathname;
+  const hideHeader = HEADERLESS_ROUTES.has(pathname)
+    || pathname.startsWith('/onboarding')
+    || pathname.startsWith('/verify')
+    || pathname.startsWith('/invoices')
+    || pathname.startsWith('/tenant')
+    || pathname.startsWith('/owner')
+    || pathname.startsWith('/technician')
+    || pathname.startsWith('/admin')
+    || pathname.startsWith('/broker');
+
+  return hideHeader ? null : <BinGroupHeader />;
+}
+
 export default function App() {
   return (
     <Router>
@@ -316,35 +340,7 @@ export default function App() {
             <AIProvider>
               <CssBaseline />
               <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
-                <Routes>
-                  <Route path="/" element={null} />
-                  <Route path="/owners" element={null} />
-                  <Route path="/tenants" element={null} />
-                  <Route path="/technicians" element={null} />
-                  <Route path="/brokers" element={null} />
-                  <Route path="/property-management" element={null} />
-                  <Route path="/maintenance" element={null} />
-                  <Route path="/majlis-care" element={null} />
-                  <Route path="/stadiums" element={null} />
-                  <Route path="/hotels" element={null} />
-                  <Route path="/malls" element={null} />
-                  <Route path="/hospitals" element={null} />
-                  <Route path="/government-properties" element={null} />
-                  <Route path="/security" element={null} />
-                  <Route path="/services" element={null} />
-                  <Route path="/contact" element={null} />
-                  <Route path="/request-demo" element={null} />
-                  <Route path="/videos" element={null} />
-                  <Route path="/demo-videos" element={null} />
-                  <Route path="/company" element={null} />
-                  <Route path="/ai-design-studio" element={null} />
-                  <Route path="/tenant/*" element={null} />
-                  <Route path="/owner/*" element={null} />
-                  <Route path="/technician/*" element={null} />
-                  <Route path="/admin/*" element={null} />
-                  <Route path="/broker/*" element={null} />
-                  <Route path="*" element={<BinGroupHeader />} />
-                </Routes>
+                <HeaderSlot />
                 <Box component="main" sx={{ flexGrow: 1, position: 'relative', minHeight: 0, overflow: 'visible' }}>
                   <AppContent />
                 </Box>
