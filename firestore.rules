@@ -135,6 +135,28 @@ service cloud.firestore {
       return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data);
     }
 
+    function maintenanceTicketPath(ticketId) {
+      return /databases/$(database)/documents/maintenanceTickets/$(ticketId);
+    }
+
+    function canAccessMaintenanceTicket(ticketId) {
+      return signedIn() && exists(maintenanceTicketPath(ticketId)) && (
+        isAdmin() ||
+        hasPermission('canDispatchJobs') ||
+        participantCanRead(get(maintenanceTicketPath(ticketId)).data)
+      );
+    }
+
+    function safeTicketMessageCreate(ticketId) {
+      return canAccessMaintenanceTicket(ticketId) && (
+        !('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid
+      ) && (
+        !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid
+      ) && (
+        !('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid
+      );
+    }
+
     function ownerDraftCreate(data) {
       return signedIn() && owns(data) &&
         (!('status' in data) || data.status in ['draft', 'quote_generated', 'contract_selected', 'payment_pending', 'pending_admin_approval', 'pending_approval']) &&
@@ -258,7 +280,8 @@ service cloud.firestore {
       allow update: if isAdmin() || hasPermission('canDispatchJobs') || (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'])) || (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','techNotes','technicianNotes','materialsUsed','actualCost','completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes','tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt','waitingPartsAt','escalatedAt','completedPendingApprovalAt','beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos','technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus','assignedTechnicianId','technicianId','acceptedAt','assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar','technicianSpecialty']));
       allow delete: if isAdmin();
       match /messages/{messageId} {
-        allow read, create: if signedIn();
+        allow read: if canAccessMaintenanceTicket(ticketId);
+        allow create: if safeTicketMessageCreate(ticketId);
         allow update: if false;
         allow delete: if isAdmin();
       }
