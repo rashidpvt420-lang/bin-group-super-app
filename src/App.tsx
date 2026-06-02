@@ -29,6 +29,7 @@ import AuditorPortalPage from './pages/public/AuditorPortalPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
+import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import TenantInvitePage from './pages/TenantInvitePage';
 import AdminTerminal from './admin/AdminTerminal';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -182,7 +183,7 @@ function PushNotificationBootstrap() {
 }
 
 const PUBLIC_ROUTE_PATHS = new Set([
-  '/', '/owner-landing', '/v1', '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
+  '/', '/owner-landing', '/v1', '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support', '/feedback', '/pilot-feedback',
   '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
   '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
   '/services', '/request-demo', '/videos', '/demo-videos', '/tenant-invite', '/company',
@@ -252,6 +253,8 @@ function AppContent() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/support" element={<SupportPage />} />
+        <Route path="/feedback" element={<PilotFeedbackPage />} />
+        <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
         <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
         <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
         <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
@@ -311,7 +314,7 @@ const HEADERLESS_ROUTES = new Set([
   '/', '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
   '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security',
   '/services', '/contact', '/request-demo', '/videos', '/demo-videos', '/company', '/ai-design-studio',
-  '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support',
+  '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support', '/feedback', '/pilot-feedback',
   '/owner-landing', '/v1', '/tenant-invite',
 ]);
 
@@ -339,13 +342,9 @@ export default function App() {
           <AuthProvider>
             <AIProvider>
               <CssBaseline />
-              <Box sx={{ minHeight: '100dvh', height: 'auto', bgcolor: '#000', display: 'flex', flexDirection: 'column', overflowX: 'hidden', overflowY: 'visible', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
-                <HeaderSlot />
-                <Box component="main" sx={{ flexGrow: 1, position: 'relative', minHeight: 0, overflow: 'visible' }}>
-                  <AppContent />
-                </Box>
-                <SovereignAlertHandler />
-              </Box>
+              <HeaderSlot />
+              <AppContent />
+              <SovereignAlertHandler />
             </AIProvider>
           </AuthProvider>
         </CustomThemeProvider>
