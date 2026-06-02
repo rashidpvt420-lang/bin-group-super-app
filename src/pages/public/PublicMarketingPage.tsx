@@ -6,7 +6,10 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 
 type Sector = { eyebrow: string; title: string; subtitle: string; bullets: string[] };
+type CommandRow = { title: string; subtitle: string; status: string };
+type PricingRow = { label: string; value: string };
 type MarketingCopy = {
+  brand: string;
   chip: string;
   title: string;
   desc: string;
@@ -24,12 +27,18 @@ type MarketingCopy = {
   coverageTitle: string;
   inquiryTitle: string;
   inquiryDesc: string;
+  commandRows: CommandRow[];
+  trustLabels: string[];
+  problems: string[];
+  pricing: PricingRow[];
+  coverage: string[];
   sectors: Record<string, Sector>;
 };
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
 
 const en: MarketingCopy = {
+  brand: 'BIN GROUP',
   chip: 'UAE PROPERTY CARE SYSTEM',
   title: 'Start Property Details. Get Quote. Sign Contract.',
   desc: 'BIN GROUP helps serious UAE property owners move from scattered calls and maintenance confusion to one clear digital system: property details, instant quote, contract selection, 15% mobilization, tenant requests, technician dispatch, before-and-after proof, owner reports, and property passport history.',
@@ -47,6 +56,21 @@ const en: MarketingCopy = {
   coverageTitle: 'Built for every serious UAE property',
   inquiryTitle: 'Contact BIN GROUP',
   inquiryDesc: 'Talk to BIN GROUP by WhatsApp or phone. We prepare the right maintenance, property management, or full-coverage contract path.',
+  commandRows: [
+    { title: 'Property Details', subtitle: 'Building, villa, units, systems, location', status: 'START' },
+    { title: 'Instant Quote', subtitle: 'Maintenance or management scope path', status: 'QUOTE' },
+    { title: 'Owner Contract', subtitle: '15% mobilization + payment plan', status: 'SIGN' },
+    { title: 'Service Tracking', subtitle: 'Tenant request, GPS, proof, report', status: 'LIVE' },
+  ],
+  trustLabels: ['Verified records', 'GPS dispatch', 'PDF proof', 'Property passport'],
+  problems: ['No-call owner journey', 'Direct technician workfeed', 'GPS dispatch context', 'Before-and-after proof', 'PDF contracts and reports', 'Demo/video walkthroughs', 'AI property intelligence', 'Property passport history'],
+  pricing: [
+    { label: 'Maintenance Contracts', value: 'Custom Quote' },
+    { label: 'Property Management', value: '5% model' },
+    { label: 'Mobilization', value: '15% upfront' },
+    { label: 'Payment Plans', value: 'Monthly / Quarterly / Annual' },
+  ],
+  coverage: ['Villas', 'Apartments', 'Buildings', 'Towers', 'Hotels', 'Schools', 'Clinics', 'Hospitals', 'Offices', 'Malls', 'Majlis', 'Warehouses', 'Staff Accommodation', 'Retail', 'Industrial', 'Mixed-use Assets'],
   sectors: {
     owners: { eyebrow: 'Owner Command', title: 'Turn every property into a controlled digital asset.', subtitle: 'Contracts, 15% mobilization, payment plans, tenant service, evidence, reports, and property passport records.', bullets: ['Start property details', 'Get quote and scope', 'Select maintenance, management, or full coverage', 'Track reports, approvals, PDFs, demos, and service history'] },
     tenants: { eyebrow: 'Tenant Care', title: 'Submit clear maintenance requests with proof.', subtitle: 'Tenants send category, priority, photos, location context, and track the service path.', bullets: ['Photo-based service request', 'Priority and category', 'GPS/location context', 'Completion confirmation'] },
@@ -59,53 +83,49 @@ const en: MarketingCopy = {
 };
 
 const ar: MarketingCopy = {
+  brand: 'مجموعة بن',
   chip: 'نظام العناية بالعقارات في الإمارات',
   title: 'ابدأ تفاصيل العقار. احصل على عرض سعر. وقّع العقد.',
-  desc: 'BIN GROUP يساعد ملاك العقارات الجادين في الإمارات على الانتقال من الاتصالات المتفرقة وفوضى الصيانة إلى نظام رقمي واضح: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، طلبات المستأجرين، إرسال الفنيين، إثبات قبل وبعد، تقارير المالك، وسجل عقاري دائم.',
+  desc: 'مجموعة بن تساعد ملاك العقارات الجادين في الإمارات على الانتقال من الاتصالات المتفرقة وفوضى الصيانة إلى نظام رقمي واضح: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، طلبات المستأجرين، إرسال الفنيين، إثبات قبل وبعد، تقارير المالك، وسجل عقاري دائم.',
   primary: 'ابدأ تفاصيل العقار',
   quote: 'احصل على عرض سعر فوري',
   login: 'دخول البوابة',
   demo: 'شاهد العرض',
   videos: 'الفيديوهات',
-  language: 'English',
-  whatsapp: 'واتساب BIN GROUP',
-  ownerFlowTitle: 'رحلة المالك: تفاصيل → عرض سعر → عقد → تتبع الخدمة',
-  proofTitle: 'ما الذي تحله BIN GROUP؟',
-  proofDesc: 'BIN GROUP تنهي الاتصالات المتكررة، ضياع تاريخ الخدمة، غياب الإثباتات، تأخير التنسيق الميداني، ضعف التقارير، وعدم وضوح رؤية المالك. كل الأطراف تعمل داخل سلسلة تشغيل موثقة واحدة.',
+  language: 'EN',
+  whatsapp: 'تواصل عبر واتساب',
+  ownerFlowTitle: 'رحلة المالك: تفاصيل ← عرض سعر ← عقد ← تتبع الخدمة',
+  proofTitle: 'ما الذي تحله مجموعة بن؟',
+  proofDesc: 'مجموعة بن تنهي الاتصالات المتكررة، ضياع تاريخ الخدمة، غياب الإثباتات، تأخير التنسيق الميداني، ضعف التقارير، وعدم وضوح رؤية المالك. كل الأطراف تعمل داخل سلسلة تشغيل موثقة واحدة.',
   pricingTitle: 'نموذج العقود والأسعار',
   coverageTitle: 'مصمم لكل عقار جاد في الإمارات',
-  inquiryTitle: 'تواصل مع BIN GROUP',
-  inquiryDesc: 'تواصل مع BIN GROUP عبر واتساب أو الهاتف لنجهز مسار الصيانة أو الإدارة أو التغطية الكاملة.',
+  inquiryTitle: 'تواصل مع مجموعة بن',
+  inquiryDesc: 'تواصل مع مجموعة بن عبر واتساب أو الهاتف لنجهز مسار الصيانة أو الإدارة أو التغطية الكاملة.',
+  commandRows: [
+    { title: 'تفاصيل العقار', subtitle: 'المبنى، الفيلا، الوحدات، الأنظمة، الموقع', status: 'ابدأ' },
+    { title: 'عرض سعر فوري', subtitle: 'نطاق الصيانة أو إدارة العقار', status: 'سعر' },
+    { title: 'عقد المالك', subtitle: 'دفعة تفعيل 15٪ + خطة دفع', status: 'وقّع' },
+    { title: 'تتبع الخدمة', subtitle: 'طلب المستأجر، الموقع، الإثبات، التقرير', status: 'مباشر' },
+  ],
+  trustLabels: ['سجلات موثقة', 'إرسال الفنيين حسب الموقع', 'إثبات موثق', 'جواز العقار'],
+  problems: ['رحلة مالك بدون اتصالات متكررة', 'مهام مباشرة للفنيين', 'توجيه حسب موقع العقار', 'إثبات قبل وبعد', 'عقود وتقارير موثقة', 'عروض توضيحية بالفيديو', 'ذكاء عقاري تشغيلي', 'سجل جواز العقار'],
+  pricing: [
+    { label: 'عقود الصيانة', value: 'عرض سعر مخصص' },
+    { label: 'إدارة العقار', value: 'نموذج 5٪' },
+    { label: 'دفعة التفعيل', value: '15٪ مقدماً' },
+    { label: 'خطط الدفع', value: 'شهري / ربع سنوي / سنوي' },
+  ],
+  coverage: ['فلل', 'شقق', 'مبانٍ', 'أبراج', 'فنادق', 'مدارس', 'عيادات', 'مستشفيات', 'مكاتب', 'مراكز تجارية', 'مجالس', 'مستودعات', 'سكن موظفين', 'محلات', 'منشآت صناعية', 'عقارات متعددة الاستخدام'],
   sectors: {
-    owners: { eyebrow: 'قيادة الملاك', title: 'حوّل كل عقار إلى أصل رقمي منظم.', subtitle: 'عقود، دفعة تفعيل 15٪، خطط دفع، خدمة مستأجرين، إثبات، تقارير، وسجل عقاري.', bullets: ['ابدأ تفاصيل العقار', 'احصل على عرض السعر والنطاق', 'اختر الصيانة أو الإدارة أو التغطية الكاملة', 'تابع التقارير والموافقات وملفات PDF وسجل الخدمة'] },
-    tenants: { eyebrow: 'رعاية المستأجر', title: 'طلب صيانة واضح مع إثبات.', subtitle: 'المستأجر يرسل التصنيف والأولوية والصور والموقع ويتابع الخدمة.', bullets: ['طلب خدمة بالصور', 'أولوية وتصنيف', 'سياق GPS', 'تأكيد الإنجاز'] },
-    technicians: { eyebrow: 'تشغيل الفنيين', title: 'الفريق الميداني يستلم عمل منظم ومسؤولية واضحة.', subtitle: 'المهام، الموقع، متطلبات الإثبات، السلامة، وإغلاق العمل داخل النظام.', bullets: ['قائمة مهام مباشرة', 'سياق GPS', 'إثبات قبل وبعد', 'وضوح أداء SLA'] },
+    owners: { eyebrow: 'قيادة الملاك', title: 'حوّل كل عقار إلى أصل رقمي منظم.', subtitle: 'عقود، دفعة تفعيل 15٪، خطط دفع، خدمة مستأجرين، إثبات، تقارير، وسجل عقاري.', bullets: ['ابدأ تفاصيل العقار', 'احصل على عرض السعر والنطاق', 'اختر الصيانة أو الإدارة أو التغطية الكاملة', 'تابع التقارير والموافقات والملفات وسجل الخدمة'] },
+    tenants: { eyebrow: 'رعاية المستأجر', title: 'طلب صيانة واضح مع إثبات.', subtitle: 'المستأجر يرسل التصنيف والأولوية والصور والموقع ويتابع الخدمة.', bullets: ['طلب خدمة بالصور', 'أولوية وتصنيف', 'سياق الموقع', 'تأكيد الإنجاز'] },
+    technicians: { eyebrow: 'تشغيل الفنيين', title: 'الفريق الميداني يستلم عمل منظم ومسؤولية واضحة.', subtitle: 'المهام، الموقع، متطلبات الإثبات، السلامة، وإغلاق العمل داخل النظام.', bullets: ['قائمة مهام مباشرة', 'سياق الموقع', 'إثبات قبل وبعد', 'وضوح أداء الخدمة'] },
     brokers: { eyebrow: 'نمو الوسطاء', title: 'إحالات الوسطاء تتحول إلى فرص ملاك منظمة.', subtitle: 'الإحالات والعقارات والعمولات الجاهزة داخل نفس المنصة.', bullets: ['تسجيل الإحالة', 'وضوح إحالة المالك', 'سجل فرص العقارات', 'تتبع العمولة'] },
-    security: { eyebrow: 'الثقة والسجلات', title: 'كل عقار يحصل على جواز رقمي موثق.', subtitle: 'العقود والطلبات والفواتير والصور والتقارير تتحول إلى ذكاء عقاري دائم.', bullets: ['صلاحيات حسب الدور', 'تاريخ إثبات العمل', 'تتبع PDF', 'تقارير جاهزة للإمارات'] },
-    contact: { eyebrow: 'تواصل مع BIN GROUP', title: 'تواصل وابدأ مسار العقد الصحيح.', subtitle: 'استخدم واتساب أو الهاتف أو التسجيل لبدء تفاصيل العقار وطلب نطاق الصيانة أو الإدارة المناسب.', bullets: ['تواصل واتساب', 'تسجيل العقار', 'مسار عرض السعر', 'طلب العقد'] },
-    'ai-design-studio': { eyebrow: 'استوديو التصميم AI', title: 'شاهد التطوير قبل بدء العمل.', subtitle: 'تصاميم AI تربط الأفكار بالنطاق والتكلفة وموافقة المالك.', bullets: ['أفكار داخلية', 'أفكار خارجية', 'دعم النطاق', 'موافقات المالك'] },
+    security: { eyebrow: 'الثقة والسجلات', title: 'كل عقار يحصل على جواز رقمي موثق.', subtitle: 'العقود والطلبات والفواتير والصور والتقارير تتحول إلى ذكاء عقاري دائم.', bullets: ['صلاحيات حسب الدور', 'تاريخ إثبات العمل', 'تتبع الملفات', 'تقارير جاهزة للإمارات'] },
+    contact: { eyebrow: 'تواصل مع مجموعة بن', title: 'تواصل وابدأ مسار العقد الصحيح.', subtitle: 'استخدم واتساب أو الهاتف أو التسجيل لبدء تفاصيل العقار وطلب نطاق الصيانة أو الإدارة المناسب.', bullets: ['تواصل واتساب', 'تسجيل العقار', 'مسار عرض السعر', 'طلب العقد'] },
+    'ai-design-studio': { eyebrow: 'استوديو التصميم الذكي', title: 'شاهد التطوير قبل بدء العمل.', subtitle: 'تصاميم ذكية تربط الأفكار بالنطاق والتكلفة وموافقة المالك.', bullets: ['أفكار داخلية', 'أفكار خارجية', 'دعم النطاق', 'موافقات المالك'] },
   },
 };
-
-const pricing = [
-  ['Maintenance Contracts', 'Custom Quote'],
-  ['Property Management', '5% model'],
-  ['Mobilization', '15% upfront'],
-  ['Payment Plans', 'Monthly / Quarterly / Annual'],
-];
-
-const problems = [
-  'No-call owner journey',
-  'Direct technician workfeed',
-  'GPS dispatch context',
-  'Before-and-after proof',
-  'PDF contracts and reports',
-  'Demo/video walkthroughs',
-  'AI property intelligence',
-  'Property passport history',
-];
-
-const coverage = ['Villas', 'Apartments', 'Buildings', 'Towers', 'Hotels', 'Schools', 'Clinics', 'Hospitals', 'Offices', 'Malls', 'Majlis', 'Warehouses', 'Staff Accommodation', 'Retail', 'Industrial', 'Mixed-use Assets'];
 
 export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
   const params = useParams();
@@ -121,7 +141,7 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
       <Nav c={c} />
       {sector ? <Sector c={sector} actionLabel={c.primary} whatsappLabel={c.whatsapp} /> : <Hero c={c} />}
       <Container maxWidth="xl" sx={{ pb: 8 }}>
-        <Trust />
+        <Trust c={c} />
         <Problems c={c} />
         <Pricing c={c} />
         <Coverage c={c} />
@@ -140,7 +160,7 @@ function Nav({ c }: { c: MarketingCopy }) {
         <Button component={Link} to="/" sx={{ color: '#fff', textDecoration: 'none', p: 0, minWidth: 0 }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
             <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} />
-            <Typography fontWeight={950}>BIN <Box component="span" sx={{ color: binThemeTokens.gold }}>GROUP</Box></Typography>
+            <Typography fontWeight={950} sx={{ color: binThemeTokens.gold }}>{c.brand}</Typography>
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: isRTL ? 0 : 'auto', mr: isRTL ? 'auto' : 0, flexWrap: 'wrap', justifyContent: isRTL ? 'flex-start' : 'flex-end' }}>
@@ -172,7 +192,7 @@ function Hero({ c }: { c: MarketingCopy }) {
             </Stack>
             <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 3 }}>{c.ownerFlowTitle}</Typography>
           </Grid>
-          <Grid item xs={12} md={5}><Command /></Grid>
+          <Grid item xs={12} md={5}><Command c={c} /></Grid>
         </Grid>
       </Container>
     </Box>
@@ -194,35 +214,25 @@ function Sector({ c, actionLabel, whatsappLabel }: { c: Sector; actionLabel: str
   );
 }
 
-function Command() {
-  const rows = [
-    ['Property Details', 'Building, villa, units, systems, location', 'START'],
-    ['Instant Quote', 'Maintenance or management scope path', 'QUOTE'],
-    ['Owner Contract', '15% mobilization + payment plan', 'SIGN'],
-    ['Service Tracking', 'Tenant request, GPS, proof, report', 'LIVE'],
-  ];
-  return <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}><Stack spacing={1.5}>{rows.map(([a, b, d]) => <Box key={a} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,.035)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography fontWeight={900}>{a}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{b}</Typography></Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{d}</Typography></Stack></Box>)}</Stack></Paper>;
+function Command({ c }: { c: MarketingCopy }) {
+  return <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}><Stack spacing={1.5}>{c.commandRows.map((row) => <Box key={row.title} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,.035)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography fontWeight={900}>{row.title}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{row.subtitle}</Typography></Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{row.status}</Typography></Stack></Box>)}</Stack></Paper>;
 }
 
-function Trust() {
-  return <Grid container spacing={2} sx={{ mt: 5 }}>{[
-    { label: 'Verified records', icon: <ShieldCheck /> },
-    { label: 'GPS dispatch', icon: <Wrench /> },
-    { label: 'PDF proof', icon: <FileText /> },
-    { label: 'Property passport', icon: <Building2 /> },
-  ].map((item) => <Grid item xs={12} md={3} key={item.label}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography fontWeight={950}>{item.label}</Typography></Paper></Grid>)}</Grid>;
+function Trust({ c }: { c: MarketingCopy }) {
+  const icons = [<ShieldCheck key="verified" />, <Wrench key="dispatch" />, <FileText key="proof" />, <Building2 key="passport" />];
+  return <Grid container spacing={2} sx={{ mt: 5 }}>{c.trustLabels.map((label, index) => <Grid item xs={12} md={3} key={label}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{icons[index]}</Box><Typography fontWeight={950}>{label}</Typography></Paper></Grid>)}</Grid>;
 }
 
 function Problems({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.proofTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.68)', maxWidth: 900, mt: 1.5, lineHeight: 1.8 }}>{c.proofDesc}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{problems.map((p) => <Grid item xs={12} sm={6} md={3} key={p}><Paper sx={{ p: 2.2, height: '100%', bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography fontWeight={900} sx={{ mt: 1 }}>{p}</Typography></Paper></Grid>)}</Grid></Box>;
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.proofTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.68)', maxWidth: 900, mt: 1.5, lineHeight: 1.8 }}>{c.proofDesc}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.problems.map((p) => <Grid item xs={12} sm={6} md={3} key={p}><Paper sx={{ p: 2.2, height: '100%', bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography fontWeight={900} sx={{ mt: 1 }}>{p}</Typography></Paper></Grid>)}</Grid></Box>;
 }
 
 function Pricing({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.pricingTitle}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{pricing.map(([label, value]) => <Grid item xs={12} sm={6} md={3} key={label}><Paper sx={{ p: 3, height: '100%', bgcolor: alpha(binThemeTokens.gold, .06), border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}><Typography sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 900 }}>{label}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold, mt: 1 }}>{value}</Typography></Paper></Grid>)}</Grid></Box>;
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.pricingTitle}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.pricing.map((item) => <Grid item xs={12} sm={6} md={3} key={item.label}><Paper sx={{ p: 3, height: '100%', bgcolor: alpha(binThemeTokens.gold, .06), border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}><Typography sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 900 }}>{item.label}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold, mt: 1 }}>{item.value}</Typography></Paper></Grid>)}</Grid></Box>;
 }
 
 function Coverage({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.coverageTitle}</Typography><Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>{coverage.map((item) => <Chip key={item} label={item} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)', fontWeight: 800 }} />)}</Stack></Box>;
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.coverageTitle}</Typography><Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>{c.coverage.map((item) => <Chip key={item} label={item} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)', fontWeight: 800 }} />)}</Stack></Box>;
 }
 
 function Inquiry({ c }: { c: MarketingCopy }) {
