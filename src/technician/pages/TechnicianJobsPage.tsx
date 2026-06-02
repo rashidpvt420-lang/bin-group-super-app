@@ -1,7 +1,8 @@
 /**
  * BIN GROUP — TechnicianJobsPage
  * Lists assigned active jobs and open pool jobs a technician can accept.
- * Shows live tracking status badge and GPS indicator for on_the_way jobs.
+ * Acceptance is routed through the backend callable so unassigned jobs are not
+ * blocked by Firestore ownership rules.
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -10,9 +11,9 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-    Clock, MapPin, Navigation, ArrowRight, CheckCircle, Zap, User
+    Clock, MapPin, Navigation, ArrowRight, CheckCircle, User
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, runTransaction } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, doc, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
@@ -20,14 +21,19 @@ import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 
 const STATUS_COLOR: Record<string, string> = {
-    accepted:    '#3b82f6',
-    ASSIGNED:    '#3b82f6',
-    on_the_way:  binThemeTokens.gold,
-    EN_ROUTE:    binThemeTokens.gold,
-    arrived:     '#8b5cf6',
-    ARRIVED:     '#8b5cf6',
+    accepted: '#3b82f6',
+    auto_assigned: '#3b82f6',
+    ASSIGNED: '#3b82f6',
+    AUTO_ASSIGNED: '#3b82f6',
+    ACCEPTED: '#3b82f6',
+    on_the_way: binThemeTokens.gold,
+    EN_ROUTE: binThemeTokens.gold,
+    arrived: '#8b5cf6',
+    ARRIVED: '#8b5cf6',
     in_progress: '#10b981',
     IN_PROGRESS: '#10b981',
+    waiting_parts: '#ef4444',
+    WAITING_PARTS: '#ef4444',
 };
 
 export default function TechnicianJobsPage() {
@@ -35,12 +41,11 @@ export default function TechnicianJobsPage() {
     const navigate = useNavigate();
 
     const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
-    const [poolJobs, setPoolJobs]         = useState<any[]>([]);
-    const [loading, setLoading]           = useState(true);
-    const [accepting, setAccepting]       = useState<string | null>(null);
-    const [techProfile, setTechProfile]   = useState<any>(null);
+    const [poolJobs, setPoolJobs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [accepting, setAccepting] = useState<string | null>(null);
+    const [acceptError, setAcceptError] = useState<string | null>(null);
 
-    // Load assigned/active jobs
     useEffect(() => {
         if (!user?.uid) return;
         const unsub = onSnapshotSplitIn(
@@ -54,18 +59,8 @@ export default function TechnicianJobsPage() {
             }
         );
         return () => unsub();
-    }, [user]);
+    }, [user?.uid]);
 
-    // Load technician profile (for identity snapshot on accept)
-    useEffect(() => {
-        if (!user?.uid) return;
-        const unsub = onSnapshot(doc(db, 'technicians', user.uid), (snap) => {
-            if (snap.exists()) setTechProfile({ id: snap.id, ...snap.data() });
-        });
-        return () => unsub();
-    }, [user]);
-
-    // Load open pool jobs (unassigned, OPEN/PENDING)
     useEffect(() => {
         if (!user?.uid) return;
         const q = query(
@@ -73,50 +68,28 @@ export default function TechnicianJobsPage() {
             where('status', 'in', ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment'])
         );
         const unsub = onSnapshot(q, (snap) => {
-            // Filter out jobs that already have an assignee
-            setPoolJobs(snap.docs
-                .map(d => ({ id: d.id, ...d.data() }))
-                .filter((j: any) => !j.assignedTechnicianId && !j.technicianId)
+            setPoolJobs(
+                snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter((j: any) => !j.assignedTechnicianId && !j.technicianId)
             );
         }, (err) => {
-            console.warn('[JobPool] listener error (check permissions):', err);
+            console.warn('[JobPool] listener error:', err);
         });
         return () => unsub();
-    }, [user]);
+    }, [user?.uid]);
 
-    // Accept a job from the open pool
     const handleAccept = async (jobId: string) => {
         if (!user?.uid) return;
         setAccepting(jobId);
+        setAcceptError(null);
         try {
-            await runTransaction(db, async (transaction) => {
-                const ticketRef = doc(db, 'maintenanceTickets', jobId);
-                const ticketSnap = await transaction.get(ticketRef);
-                if (!ticketSnap.exists()) {
-                    throw new Error("Job document does not exist.");
-                }
-                const ticketData = ticketSnap.data();
-                if (ticketData.assignedTechnicianId || ticketData.technicianId) {
-                    throw new Error("This job has already been accepted by another technician.");
-                }
-                transaction.update(ticketRef, {
-                    assignedTechnicianId:    user.uid,
-                    technicianId:            user.uid,
-                    assignedTechnicianName:  user.displayName || techProfile?.name || 'Technician',
-                    assignedTechnicianPhone: user.phoneNumber || techProfile?.phone || '',
-                    assignedTechnicianAvatar: user.photoURL || techProfile?.photoURL || '',
-                    technicianSpecialty:     techProfile?.specialty || techProfile?.trade || '',
-                    status:          'accepted',
-                    dispatchStatus:  'ASSIGNED',
-                    trackingStatus:  'TECHNICIAN_ASSIGNED',
-                    acceptedAt:      serverTimestamp(),
-                    updatedAt:       serverTimestamp(),
-                });
-            });
+            const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
+            await acceptTechnicianTicket({ ticketId: jobId });
             navigate(`/technician/job/${jobId}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Accept] Failed:', err);
-            alert('Failed to accept job: ' + (err instanceof Error ? err.message : String(err)));
+            setAcceptError(err?.message || 'Failed to accept job. Please try again.');
         } finally {
             setAccepting(null);
         }
@@ -128,6 +101,84 @@ export default function TechnicianJobsPage() {
         </Box>
     );
 
+    const renderJobCard = (job: any) => {
+        const statusColor = STATUS_COLOR[String(job.status)] || 'rgba(255,255,255,0.4)';
+        const isLive = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
+        const techLoc = getTechnicianLocation(job);
+        const jobLoc = getTicketJobLocation(job);
+        const dist = calculateDistanceKm(techLoc, jobLoc);
+        const eta = calculateEtaMinutes(dist);
+
+        return (
+            <Paper key={job.id} sx={{
+                p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6,
+                border: `1px solid ${isLive ? alpha(binThemeTokens.gold, 0.35) : 'rgba(255,255,255,0.05)'}`,
+                transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
+            }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 2 }}>
+                    <Box>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>
+                            REF #{String(job.id).substring(0, 8)}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">
+                            {String(job.category || job.complaintCategory || 'Maintenance')}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                            {String(job.propertyName || 'Property')} · Unit {String(job.unitNumber || 'N/A')}
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        {isLive && eta !== null && (
+                            <Chip
+                                size="small"
+                                icon={<Clock size={11} />}
+                                label={`~${eta} min ETA`}
+                                sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
+                            />
+                        )}
+                        <Chip
+                            label={String(job.status || '').replace(/_/g, ' ')}
+                            size="small"
+                            sx={{ bgcolor: alpha(statusColor, 0.12), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.25)}` }}
+                        />
+                    </Stack>
+                </Stack>
+
+                {isLive && (
+                    <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold }}>
+                        GPS tracking ACTIVE — sharing location with requester
+                    </Alert>
+                )}
+
+                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" color="textSecondary">REQUESTER</Typography>
+                        <Typography variant="body1" fontWeight="900" color="#FFF">
+                            {String(job.tenantName || job.ownerName || 'N/A')}
+                        </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" color="textSecondary">PRIORITY</Typography>
+                        <Typography variant="body1" fontWeight="900" sx={{ color: String(job.priority).toLowerCase() === 'emergency' ? '#ef4444' : '#FFF', textTransform: 'uppercase' }}>
+                            {String(job.priority || 'normal')}
+                        </Typography>
+                    </Grid>
+                </Grid>
+
+                <Button
+                    fullWidth variant="contained"
+                    onClick={() => navigate(`/technician/job/${job.id}`)}
+                    endIcon={<ArrowRight size={18} />}
+                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}
+                >
+                    OPEN JOB CARD
+                </Button>
+            </Paper>
+        );
+    };
+
     return (
         <Box>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
@@ -137,7 +188,8 @@ export default function TechnicianJobsPage() {
                 Active assignments and open pool jobs.
             </Typography>
 
-            {/* ── Active Assigned Jobs ─────────────────────────────────────── */}
+            {acceptError && <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>{acceptError}</Alert>}
+
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
                 ACTIVE ASSIGNMENTS ({assignedJobs.length})
             </Typography>
@@ -148,87 +200,10 @@ export default function TechnicianJobsPage() {
                 </Paper>
             ) : (
                 <Stack spacing={3} sx={{ mb: 6 }}>
-                    {assignedJobs.map(job => {
-                        const statusColor = STATUS_COLOR[String(job.status)] || 'rgba(255,255,255,0.4)';
-                        const isLive = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
-                        const techLoc = getTechnicianLocation(job);
-                        const jobLoc  = getTicketJobLocation(job);
-                        const dist    = calculateDistanceKm(techLoc, jobLoc);
-                        const eta     = calculateEtaMinutes(dist);
-
-                        return (
-                            <Paper key={job.id} sx={{
-                                p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6,
-                                border: `1px solid ${isLive ? alpha(binThemeTokens.gold, 0.35) : 'rgba(255,255,255,0.05)'}`,
-                                transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
-                            }}>
-                                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 2 }}>
-                                    <Box>
-                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>
-                                            REF #{String(job.id).substring(0, 8)}
-                                        </Typography>
-                                        <Typography variant="h6" fontWeight="950" color="#FFF">
-                                            {String(job.category || job.complaintCategory || 'Maintenance')}
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary">
-                                            {String(job.propertyName || 'Property')} · Unit {String(job.unitNumber || 'N/A')}
-                                        </Typography>
-                                    </Box>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        {isLive && eta !== null && (
-                                            <Chip
-                                                size="small"
-                                                icon={<Clock size={11} />}
-                                                label={`~${eta} min ETA`}
-                                                sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
-                                            />
-                                        )}
-                                        <Chip
-                                            label={String(job.status || '').replace(/_/g, ' ')}
-                                            size="small"
-                                            sx={{ bgcolor: alpha(statusColor, 0.12), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.25)}` }}
-                                        />
-                                    </Stack>
-                                </Stack>
-
-                                {isLive && (
-                                    <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold }}>
-                                        GPS tracking ACTIVE — sharing location with requester
-                                    </Alert>
-                                )}
-
-                                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                                <Grid container spacing={2} sx={{ mb: 3 }}>
-                                    <Grid item xs={12} sm={6}>
-                                        <Typography variant="caption" color="textSecondary">REQUESTER</Typography>
-                                        <Typography variant="body1" fontWeight="900" color="#FFF">
-                                            {String(job.tenantName || job.ownerName || 'N/A')}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <Typography variant="caption" color="textSecondary">PRIORITY</Typography>
-                                        <Typography variant="body1" fontWeight="900" sx={{ color: job.priority === 'emergency' ? '#ef4444' : '#FFF', textTransform: 'uppercase' }}>
-                                            {String(job.priority || 'normal')}
-                                        </Typography>
-                                    </Grid>
-                                </Grid>
-
-                                <Button
-                                    fullWidth variant="contained"
-                                    onClick={() => navigate(`/technician/job/${job.id}`)}
-                                    endIcon={<ArrowRight size={18} />}
-                                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}
-                                >
-                                    OPEN JOB CARD
-                                </Button>
-                            </Paper>
-                        );
-                    })}
+                    {assignedJobs.map(renderJobCard)}
                 </Stack>
             )}
 
-            {/* ── Open Pool ─────────────────────────────────────────────────── */}
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
                 OPEN JOB POOL ({poolJobs.length})
             </Typography>
@@ -252,8 +227,8 @@ export default function TechnicianJobsPage() {
                                             size="small"
                                             label={String(job.priority || 'normal').toUpperCase()}
                                             sx={{
-                                                bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.15) : alpha(binThemeTokens.gold, 0.08),
-                                                color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold,
+                                                bgcolor: String(job.priority).toLowerCase() === 'emergency' ? alpha('#ef4444', 0.15) : alpha(binThemeTokens.gold, 0.08),
+                                                color: String(job.priority).toLowerCase() === 'emergency' ? '#ef4444' : binThemeTokens.gold,
                                                 fontWeight: 950, fontSize: '0.6rem', height: 20
                                             }}
                                         />
