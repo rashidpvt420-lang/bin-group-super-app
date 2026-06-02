@@ -34,7 +34,6 @@ import AdminTerminal from './admin/AdminTerminal';
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 import OwnerApp from './owner/OwnerApp';
-import CompanyProfilePage from './pages/public/CompanyProfilePage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
 import { AuthProvider, useRole, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
@@ -272,7 +271,7 @@ function AppContent() {
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<CompanyProfilePage />} />
+        <Route path="/company" element={<Navigate to="/" replace />} />
         <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
         <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
@@ -337,6 +336,7 @@ export default function App() {
                   <Route path="/request-demo" element={null} />
                   <Route path="/videos" element={null} />
                   <Route path="/demo-videos" element={null} />
+                  <Route path="/company" element={null} />
                   <Route path="/ai-design-studio" element={null} />
                   <Route path="/tenant/*" element={null} />
                   <Route path="/owner/*" element={null} />
