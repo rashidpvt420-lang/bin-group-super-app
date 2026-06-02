@@ -45,6 +45,8 @@ export type GpsReadiness = {
     platform: string;
 };
 
+type StopTrackingStatus = TrackingStatus | 'PRESERVE';
+
 // ─── Module-level GPS watch state ─────────────────────────────────────────────
 
 const _state: TrackingState = {
@@ -426,14 +428,16 @@ export const startLiveTracking = async (
 };
 
 /**
- * Stops GPS tracking and clears live tracking flags.
- * SAFETY: Always call this on ARRIVED, COMPLETED, or CANCELLED.
+ * Stops GPS tracking and clears technician live-tracking flags.
+ * SAFETY: default finalStatus is PRESERVE, so page close/refresh never marks a
+ * ticket ARRIVED. Pass ARRIVED, WORK_STARTED, COMPLETED, or CANCELLED only from
+ * explicit lifecycle actions.
  * Backward-compatible: existing callers may pass only technicianUid.
  */
 export const stopLiveTracking = async (
     technicianUid?: string,
     ticketId?: string,
-    finalStatus: TrackingStatus = 'ARRIVED'
+    finalStatus: StopTrackingStatus = 'PRESERVE'
 ): Promise<void> => {
     const activeTicketId = ticketId || _state.activeTicketId;
 
@@ -461,7 +465,7 @@ export const stopLiveTracking = async (
         }));
     }
 
-    if (activeTicketId) {
+    if (activeTicketId && finalStatus !== 'PRESERVE') {
         writes.push(updateDoc(doc(db, 'maintenanceTickets', activeTicketId), {
             trackingStatus: finalStatus,
             technicianLocationUpdatedAt: serverTimestamp(),
