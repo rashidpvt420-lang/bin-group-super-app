@@ -25,15 +25,6 @@ service cloud.firestore {
       return signedIn() && authEmail() != null && value != null && value == authEmail();
     }
 
-    function hasRole(roles) {
-      return signedIn() && (
-        request.auth.token.role in roles ||
-        request.auth.token.userRole in roles ||
-        request.auth.token.primaryRole in roles ||
-        (hasUserDoc() && userDoc().role in roles)
-      );
-    }
-
     function isAdmin() {
       return signedIn() && (
         request.auth.token.admin == true ||
@@ -143,9 +134,9 @@ service cloud.firestore {
     }
 
     match /owners/{ownerId} {
-      allow read: if isOwner(ownerId) || emailOwns(resource.data) || isAdmin() || hasPermission('canManageTenants');
-      allow create: if isAdmin() || hasPermission('canManageTenants') || (isOwner(ownerId) && safeOwnerProfileUpdate());
-      allow update: if isAdmin() || hasPermission('canManageTenants') || (isOwner(ownerId) && safeOwnerProfileUpdate());
+      allow read: if isOwnerId(ownerId) || emailOwns(resource.data) || isAdmin() || hasPermission('canManageTenants');
+      allow create: if isAdmin() || hasPermission('canManageTenants') || (isOwnerId(ownerId) && safeOwnerProfileUpdate());
+      allow update: if isAdmin() || hasPermission('canManageTenants') || (isOwnerId(ownerId) && safeOwnerProfileUpdate());
       allow delete: if isAdmin() || hasPermission('canManageTenants');
     }
 
@@ -223,7 +214,7 @@ service cloud.firestore {
     match /maintenanceTickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'])) || (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','techNotes','technicianNotes','materialsUsed','actualCost','completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes','tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt','waitingPartsAt','escalatedAt','completedPendingApprovalAt','beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos','technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus','assignedTechnicianId','technicianId','acceptedAt','assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar','technicianSpecialty']));
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'])) || (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','techNotes','technicianNotes','materialsUsed','actualCost','completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes','tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt','waitingPartsAt','escalatedAt','completedPendingApprovalAt','beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos','technicianLocation','technicianLocationUpdatedAt','technicianLocationState','trackingStatus','dispatchStatus','assignedTechnicianId','technicianId','acceptedAt','assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar','technicianSpecialty']));
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read, create: if signedIn();
@@ -311,7 +302,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /design_requests/{requestId} {
+    match /design_requests/{designRequestId} {
       allow read: if participantCanRead(resource.data);
       allow create: if participantCanRead(request.resource.data) && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus in ['NOT_STARTED','PENDING']);
       allow update: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(resource.data);
@@ -394,7 +385,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    match /staffRequests/{requestId} {
+    match /staffRequests/{staffRequestId} {
       allow read: if isAdmin()
         || hasPermission('canManageStaff')
         || resource.data.uid == request.auth.uid
@@ -415,20 +406,12 @@ service cloud.firestore {
     match /staffAgreements/{staffId} {
       allow read: if isAdmin() || hasPermission('canManageStaff') || request.auth.uid == staffId;
       allow create: if isAdmin() || hasPermission('canManageStaff');
-
       allow update: if isAdmin()
         || hasPermission('canManageStaff')
         || (
           request.auth.uid == staffId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status',
-            'acceptedAt',
-            'acceptedBy',
-            'acceptanceMethod',
-            'updatedAt'
-          ])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','acceptedAt','acceptedBy','acceptanceMethod','updatedAt'])
         );
-
       allow delete: if isAdmin();
     }
 
