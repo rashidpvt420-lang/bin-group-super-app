@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Button, Divider, TextField, Grid, alpha, Avatar,
-    IconButton, ImageList, ImageListItem
+    IconButton, ImageList, ImageListItem, Rating
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -24,6 +24,8 @@ export default function TenantTicketDetailPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
     const [showRejectInput, setShowRejectInput] = useState(false);
+    const [rating, setRating] = useState<number | null>(5);
+    const [feedback, setFeedback] = useState('');
 
     // Real-time listener so technicianLocation updates reflect instantly
     useEffect(() => {
@@ -33,6 +35,8 @@ export default function TenantTicketDetailPage() {
                 const data = snap.data();
                 if (data.tenantId === user.uid || data.tenantUid === user.uid) {
                     setTicket({ id: snap.id, ...data });
+                    if (data.rating && !rating) setRating(Number(data.rating));
+                    if (data.feedback && !feedback) setFeedback(String(data.feedback));
                 } else {
                     alert('Ticket not found or unauthorized');
                     navigate('/tenant/tickets');
@@ -44,64 +48,72 @@ export default function TenantTicketDetailPage() {
             setLoading(false);
         });
         return () => unsub();
-    }, [id, user]);
+    }, [id, user, navigate, rating, feedback]);
 
     const handleApprove = async () => {
-        if (!id || !user) return;
+        if (!id || !user || !rating) return;
         setActionLoading(true);
+        const safeRating = Math.max(1, Math.min(5, Number(rating || 5)));
+        const cleanFeedback = feedback.trim() || 'Approved by tenant. Service completed successfully.';
         try {
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'CLOSED',
                 tenantApproved: true,
+                rating: safeRating,
+                feedback: cleanFeedback,
                 closedAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
             await addDoc(collection(db, 'audit_logs'), {
-                action: 'TENANT_APPROVED_COMPLETION',
+                action: 'TENANT_APPROVED_COMPLETION_WITH_FEEDBACK',
                 ticketId: id,
                 actorId: user.uid,
                 actorRole: 'tenant',
+                rating: safeRating,
+                feedback: cleanFeedback,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true }));
+            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true, rating: safeRating, feedback: cleanFeedback }));
             notifyTenantApproved(id, user.displayName || 'Tenant').catch(console.warn);
         } catch (err) {
             console.error(err);
+            alert('Could not submit feedback. Please try again.');
         } finally {
             setActionLoading(false);
         }
     };
 
     const handleReject = async () => {
-        if (!id || !user || !rejectReason.trim()) return;
+        if (!id || !user) return;
+        const cleanReason = (rejectReason || feedback).trim();
+        if (!cleanReason) return;
         setActionLoading(true);
         try {
+            // Keep this update limited to tenant-allowed Firestore fields.
+            // The rules permit: status, rating, feedback, tenantApproved, rejectionReason, closedAt, updatedAt.
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'DISPUTED',
                 tenantApproved: false,
-                rejectionReason: rejectReason,
+                rating: rating || 1,
+                feedback: cleanReason,
+                rejectionReason: cleanReason,
                 updatedAt: serverTimestamp()
             });
-            await addDoc(collection(db, 'disputes'), {
-                ticketId: id,
-                tenantId: user.uid,
-                reason: rejectReason,
-                status: 'open',
-                createdAt: serverTimestamp()
-            });
             await addDoc(collection(db, 'audit_logs'), {
-                action: 'TENANT_DISPUTED_COMPLETION',
+                action: 'TENANT_DISPUTED_COMPLETION_WITH_FEEDBACK',
                 ticketId: id,
                 actorId: user.uid,
                 actorRole: 'tenant',
-                reason: rejectReason,
+                rating: rating || 1,
+                reason: cleanReason,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false }));
-            notifyTenantRejected(id, user.displayName || 'Tenant', rejectReason).catch(console.warn);
+            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false, rating: rating || 1, feedback: cleanReason, rejectionReason: cleanReason }));
+            notifyTenantRejected(id, user.displayName || 'Tenant', cleanReason).catch(console.warn);
             setShowRejectInput(false);
         } catch (err) {
             console.error(err);
+            alert('Could not submit dispute. Please try again.');
         } finally {
             setActionLoading(false);
         }
@@ -110,9 +122,12 @@ export default function TenantTicketDetailPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (!ticket) return null;
 
-    const isCompleted = ticket.status === 'COMPLETED_PENDING_APPROVAL' || ticket.status === 'completed_pending_tenant_approval';
-    const isDisputed = ticket.status === 'DISPUTED' || ticket.status === 'disputed';
-    const isClosed = ticket.status === 'CLOSED';
+    const normalizedStatus = String(ticket.status || '').toUpperCase();
+    const isCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL'].includes(normalizedStatus) && ticket.tenantApproved !== true;
+    const isDisputed = normalizedStatus === 'DISPUTED';
+    const isClosed = normalizedStatus === 'CLOSED' || ticket.tenantApproved === true;
+    const afterProof = ticket.afterPhotos?.[0] || ticket.completionPhotos?.[0] || ticket.proofPhotos?.[0] || ticket.evidencePhotos?.[0] || ticket.afterPhotoUrl;
+    const beforeProof = ticket.beforePhotos?.[0] || ticket.beforePhotoUrl || ticket.photos?.[0] || ticket.tenantPhotos?.[0];
 
     return (
         <Box sx={{ maxWidth: 900, mx: 'auto', pb: 10 }}>
@@ -131,13 +146,13 @@ export default function TenantTicketDetailPage() {
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4 }}>
                             <Box>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category}</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category || ticket.complaintCategory || ticket.trade || 'Maintenance Request'}</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                                     <Calendar size={12} /> {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : 'Just now'}
                                 </Typography>
                             </Box>
                             <Chip 
-                                label={ticket.status?.replace('_', ' ')} 
+                                label={String(ticket.status || 'OPEN').replace(/_/g, ' ')} 
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, fontSize: '0.7rem' }} 
                             />
                         </Stack>
@@ -147,7 +162,7 @@ export default function TenantTicketDetailPage() {
                         <Stack spacing={3}>
                             <Box>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>SPECIFIC LOCATION</Typography>
-                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5, fontWeight: 700 }}>{ticket.specificLocation || 'General Residence'}</Typography>
+                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5, fontWeight: 700 }}>{ticket.specificLocation || ticket.propertyLocation?.address || ticket.address || 'General Residence'}</Typography>
                             </Box>
 
                             <Box>
@@ -173,10 +188,10 @@ export default function TenantTicketDetailPage() {
                     {isCompleted && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid #10b981', borderRadius: 6 }}>
                             <Typography variant="h6" fontWeight="950" color="#10b981" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <CheckCircle2 /> WORK COMPLETED
+                                <CheckCircle2 /> WORK COMPLETED — REVIEW REQUIRED
                             </Typography>
                             <Typography variant="body2" color="rgba(255,255,255,0.6)" sx={{ mb: 4 }}>
-                                Our technician has finalized the work. Please review and confirm resolution.
+                                Please check the work, rate the technician, and either approve the service or dispute it with a reason. Your rating will be saved on the ticket record.
                             </Typography>
                             
                             {ticket.technicianNotes && (
@@ -186,37 +201,57 @@ export default function TenantTicketDetailPage() {
                                 </Box>
                             )}
 
-                            {(ticket.beforePhotos || ticket.afterPhotos) && (
+                            {(beforeProof || afterProof) && (
                                 <Grid container spacing={2} sx={{ mb: 4 }}>
                                     <Grid item xs={6}>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>BEFORE</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
-                                            {ticket.beforePhotos?.[0] ? <img src={ticket.beforePhotos[0]} alt="Before maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
+                                            {beforeProof ? <img src={beforeProof} alt="Before maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>AFTER</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
-                                            {ticket.afterPhotos?.[0] ? <img src={ticket.afterPhotos[0]} alt="After maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
+                                            {afterProof ? <img src={afterProof} alt="After maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
                                     </Grid>
                                 </Grid>
                             )}
 
+                            <Box sx={{ mb: 3, p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', mb: 1 }}>RATE TECHNICIAN SERVICE</Typography>
+                                <Rating
+                                    value={rating}
+                                    onChange={(_, nextValue) => setRating(nextValue || 1)}
+                                    size="large"
+                                    sx={{ mb: 2, '& .MuiRating-iconFilled': { color: binThemeTokens.gold }, '& .MuiRating-iconEmpty': { color: 'rgba(255,255,255,0.25)' } }}
+                                />
+                                <TextField
+                                    fullWidth
+                                    multiline
+                                    rows={3}
+                                    label="Feedback for technician / BIN GROUP"
+                                    value={feedback}
+                                    onChange={(e) => setFeedback(e.target.value)}
+                                    placeholder="Example: Technician arrived on time and fixed the issue properly."
+                                    sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }}
+                                />
+                            </Box>
+
                             {!showRejectInput ? (
-                                <Stack direction="row" spacing={2}>
-                                    <Button fullWidth variant="contained" color="success" startIcon={<Check />} onClick={handleApprove} disabled={actionLoading} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
-                                        APPROVE COMPLETION
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                    <Button fullWidth variant="contained" color="success" startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <Check />} onClick={handleApprove} disabled={actionLoading || !rating} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
+                                        APPROVE, RATE & CLOSE
                                     </Button>
                                     <Button fullWidth variant="outlined" color="error" startIcon={<X />} onClick={() => setShowRejectInput(true)} disabled={actionLoading} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
-                                        DISPUTE
+                                        DISPUTE SERVICE
                                     </Button>
                                 </Stack>
                             ) : (
                                 <Stack spacing={2}>
-                                    <TextField fullWidth multiline rows={3} label="Reason for Disputing Resolution" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' } }} />
-                                    <Stack direction="row" spacing={2}>
-                                        <Button fullWidth variant="contained" color="error" onClick={handleReject} disabled={actionLoading || !rejectReason.trim()} sx={{ fontWeight: 950, borderRadius: 3 }}>
+                                    <TextField fullWidth multiline rows={3} label="Reason for disputing resolution" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
+                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                        <Button fullWidth variant="contained" color="error" onClick={handleReject} disabled={actionLoading || !(rejectReason || feedback).trim()} sx={{ fontWeight: 950, borderRadius: 3 }}>
                                             CONFIRM DISPUTE
                                         </Button>
                                         <Button fullWidth variant="text" onClick={() => setShowRejectInput(false)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>
@@ -238,7 +273,7 @@ export default function TenantTicketDetailPage() {
                             </Typography>
                             <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>YOUR DISPUTE REASON</Typography>
-                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>{ticket.rejectionReason}</Typography>
+                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>{ticket.rejectionReason || ticket.feedback}</Typography>
                             </Box>
                         </Paper>
                     )}
@@ -247,7 +282,9 @@ export default function TenantTicketDetailPage() {
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 6, textAlign: 'center' }}>
                             <CheckCircle2 size={48} color="#10b981" style={{ margin: '0 auto 16px' }} />
                             <Typography variant="h6" fontWeight="950" color="#10b981">SERVICE FINALIZED</Typography>
-                            <Typography variant="body2" color="rgba(255,255,255,0.4)">This ticket has been successfully closed and archived.</Typography>
+                            <Typography variant="body2" color="rgba(255,255,255,0.4)" sx={{ mb: ticket.rating || ticket.feedback ? 2 : 0 }}>This ticket has been successfully closed and archived.</Typography>
+                            {ticket.rating && <Rating readOnly value={Number(ticket.rating)} sx={{ '& .MuiRating-iconFilled': { color: binThemeTokens.gold } }} />}
+                            {ticket.feedback && <Typography variant="body2" color="rgba(255,255,255,0.75)" sx={{ mt: 1, fontStyle: 'italic' }}>“{ticket.feedback}”</Typography>}
                         </Paper>
                     )}
                 </Grid>
@@ -258,7 +295,7 @@ export default function TenantTicketDetailPage() {
                             ticket={ticket}
                             onChatClick={() => navigate(`/tenant/chat/${ticket.id}`)}
                             onCallClick={() => {
-                                const phone = ticket.assignedTechnicianPhone || ticket.tenantPhone;
+                                const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone || ticket.tenantPhone;
                                 if (phone) window.open(`tel:${phone}`);
                             }}
                             showTimeline={true}
