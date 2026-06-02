@@ -6,6 +6,7 @@ import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
+import BrandWatermark from '../components/BrandWatermark';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -27,14 +28,16 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const pathnames = location.pathname.split('/').filter((x) => x);
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
+            <BrandWatermark opacity={0.035} compact />
             <AppBar 
                 position="sticky" 
                 sx={{ 
                     bgcolor: 'rgba(2, 6, 23, 0.8)', 
                     backdropFilter: 'blur(20px)', 
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    px: { xs: 1, md: 4 }
+                    px: { xs: 1, md: 4 },
+                    zIndex: 1200
                 }} 
                 elevation={0}
             >
@@ -92,7 +95,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 </Toolbar>
             </AppBar>
             
-            <Container maxWidth="md" sx={{ py: 6 }}>
+            <Container maxWidth="md" sx={{ py: 6, position: 'relative', zIndex: 1 }}>
                 {location.pathname !== '/technician' && location.pathname !== '/technician/dashboard' && (
                     <Breadcrumbs 
                         separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: 'rgba(255,255,255,0.2)' }} />}
@@ -121,7 +124,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 </Box>
             </Container>
 
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto' }}>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
                     © 2026 BIN GROUP SOVEREIGN · FIELD NODE · MADE IN UAE 🇦🇪
                 </Typography>
