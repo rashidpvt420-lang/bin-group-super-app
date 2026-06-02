@@ -66,6 +66,24 @@ const OWNER_SIDE_ROLES = ['owner', 'admin', 'ceo', 'super_admin', 'manager'];
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
 const MAX_IMAGE_SIZE_BYTES = 50 * 1024 * 1024;
 
+type AiDesignStudioReadiness = {
+  externalImageGeneration: boolean;
+};
+
+const getAiDesignStudioReadiness = (): AiDesignStudioReadiness => {
+  const env = import.meta.env as Record<string, string | undefined>;
+  const configuredKeys = [
+    'VITE_AI_IMAGE_API_KEY',
+    'VITE_OPENAI_API_KEY',
+    'VITE_IMAGE_GENERATION_API_KEY',
+    'VITE_DESIGN_STUDIO_IMAGE_API_KEY',
+  ];
+
+  return {
+    externalImageGeneration: configuredKeys.some((key) => Boolean(env[key]?.trim())),
+  };
+};
+
 const isOwnerSideRole = (role?: string | null) => OWNER_SIDE_ROLES.includes(String(role || '').toLowerCase());
 const normalizeEmail = (email?: string | null) => String(email || '').trim().toLowerCase();
 
@@ -520,7 +538,10 @@ export default function DesignStudioPage() {
             {designLabels.titlePrefix} <Box component="span" sx={{ color: binThemeTokens.gold }}>{designLabels.titleSuffix}</Box>
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">`n          <Chip icon={<Sparkles size={16} />} label={designLabels.freeConcepts} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />`n          <Chip label={aiReadiness.externalImageGeneration ? designLabels.aiStatusReady : designLabels.aiStatusWorkflow} sx={{ bgcolor: alpha(aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", 0.12), color: aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", fontWeight: 900 }} />`n        </Stack>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Chip icon={<Sparkles size={16} />} label={designLabels.freeConcepts} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
+          <Chip label={aiReadiness.externalImageGeneration ? designLabels.aiStatusReady : designLabels.aiStatusWorkflow} sx={{ bgcolor: alpha(aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", 0.12), color: aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", fontWeight: 900 }} />
+        </Stack>
       </Box>
 
       {uploadError && (
@@ -683,32 +704,3 @@ export default function DesignStudioPage() {
 
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
                 {tenantMode 
-                  ? designLabels.tenantSubmission 
-                  : designLabels.ownerSubmission}
-              </Typography>
-              <Button variant="contained" fullWidth size="large" onClick={handleInitializeStudio} disabled={submitting || !selectedPropertyId} endIcon={submitting ? <CircularProgress size={20} /> : <ArrowRight />} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                {tenantMode ? designLabels.submitOwnerApproval : designLabels.createQuotePayment}
-              </Button>
-            </Paper>
-
-            <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid #10b981' }}>
-              <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#10b981', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShieldCheck size={18} /> {designLabels.protected}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>
-                {designLabels.protectedDesc}
-              </Typography>
-            </Paper>
-          </Stack>
-        </Grid>
-      </Grid>
-
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Container>
-  );
-}
-
