@@ -56,6 +56,7 @@ import AddPropertyPage from './pages/properties/AddPropertyPage';
 import AdminContractsPage from './pages/contracts/AdminContractsPage';
 import AdminPermissionsPage from './pages/admin/AdminPermissionsPage';
 import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
+import BrandWatermark from '../components/BrandWatermark';
 import { adminTheme } from './theme/adminTheme';
 
 const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
@@ -75,9 +76,10 @@ function AdminLayout() {
     };
     
     return (
-        <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
+            <BrandWatermark opacity={0.03} compact />
             <Navigation />
-            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
                 <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
                         {label('admin.shell.breadcrumb_admin', 'ADMIN / ', 'المسؤول / ')}<Box component="span" sx={{ color: '#DAA520' }}>{label('admin.shell.command_uae', 'COMMAND · UAE 🇦🇪', 'التحكم · الإمارات 🇦🇪')}</Box>
@@ -87,7 +89,7 @@ function AdminLayout() {
                         <Button onClick={handleLogout} sx={{ color: '#ef4444', fontWeight: 900 }}>{label('nav.logout', 'LOGOUT', 'تسجيل الخروج')}</Button>
                     </Box>
                 </Box>
-                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#020617', display: 'flex', flexDirection: 'column' }}>
+                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: 'rgba(2, 6, 23, 0.88)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
                         <Outlet />
                     </Box>
