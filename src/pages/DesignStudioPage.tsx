@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -47,6 +47,7 @@ import {
   getDownloadURL,
 } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
+import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useNavigate } from 'react-router-dom';
 import { DESIGN_ZONES, calculateDesignStudioQuote } from '../utils/DesignStudioPricingEngine';
@@ -88,6 +89,49 @@ const safeTimestamp = () => `${Date.now()}_${Math.random().toString(36).slice(2,
 
 export default function DesignStudioPage() {
   const { user, role } = useRole();
+  const { isRTL, tx } = useLanguage();
+  const aiReadiness = useMemo(() => getAiDesignStudioReadiness(), []);
+  const designLabels = {
+    eyebrow: tx('design.eyebrow', '{designLabels.eyebrow}'),
+    titlePrefix: tx('design.title_prefix', 'AI Design'),
+    titleSuffix: tx('design.title_suffix', 'Studio'),
+    freeConcepts: tx('design.free_concepts', 'FREE AI CONCEPTS'),
+    visualContext: tx('design.visual_context', '1. VISUAL CONTEXT'),
+    add: tx('design.add', 'ADD'),
+    accepted: tx('design.accepted', '{designLabels.accepted}'),
+    objective: tx('design.objective', 'Redesign Objective'),
+    objectivePlaceholder: tx('design.objective_placeholder', 'Describe what you want to achieve...'),
+    constraints: tx('design.constraints', 'Constraints (Must keep / Must avoid)'),
+    constraintsPlaceholder: tx('design.constraints_placeholder', 'e.g. Keep the flooring, avoid dark colors...'),
+    conditionWork: tx('design.condition_work', 'Existing Condition & Required Work'),
+    currentStatePlaceholder: tx('design.current_state_placeholder', 'Describe current state...'),
+    requiredWorkPlaceholder: tx('design.required_work_placeholder', 'List required work...'),
+    selectAsset: tx('design.select_asset', '2. SELECT ASSET'),
+    propertyNode: tx('design.property_node', 'Property Node'),
+    noProperty: tx('design.no_property', '{designLabels.noProperty}'),
+    redesignZone: tx('design.redesign_zone', 'Redesign Zone'),
+    designStyle: tx('design.design_style', 'Design Style'),
+    unit: tx('design.unit', 'Unit #'),
+    floor: tx('design.floor', 'Floor'),
+    dimensionsBudget: tx('design.dimensions_budget', '3. DIMENSIONS & BUDGET'),
+    area: tx('design.area', 'AREA'),
+    furnitureBudget: tx('design.furniture_budget', 'FURNITURE BUDGET'),
+    mep: tx('design.mep', 'MEP Changes (Electrical/Plumbing)'),
+    structural: tx('design.structural', 'Structural Changes (Walls/Partitions)'),
+    nightShift: tx('design.night_shift', 'Night-shift Execution'),
+    tenantInfo: tx('design.tenant_info', '{designLabels.tenantInfo}'),
+    generateConcept: tx('design.generate_concept', '{designLabels.generateConcept}'),
+    estimatedQuote: tx('design.estimated_quote', '{designLabels.estimatedQuote}'),
+    mobilization: tx('design.mobilization', '15% Mobilization'),
+    tenantSubmission: tx('design.tenant_submission', 'Tenant submission goes to owner approval first. Payment opens only after owner approval.'),
+    ownerSubmission: tx('design.owner_submission', 'Owner submission goes directly to 15% mobilization payment request.'),
+    submitOwnerApproval: tx('design.submit_owner_approval', 'SUBMIT FOR OWNER APPROVAL'),
+    createQuotePayment: tx('design.create_quote_payment', 'CREATE QUOTE + PAYMENT STEP'),
+    protected: tx('design.protected', '{designLabels.protected}'),
+    protectedDesc: tx('design.protected_desc', 'All designs generated are compliant with BIN GROUP technical standards and local municipality codes.'),
+    aiStatusReady: tx('design.ai_status_ready', 'AI image generation configured'),
+    aiStatusWorkflow: tx('design.ai_status_workflow', 'Workflow AI active / external image API pending'),
+  };
   const navigate = useNavigate();
   const tenantMode = String(role || '').toLowerCase() === 'tenant';
   const ownerSide = isOwnerSideRole(role);
@@ -466,17 +510,17 @@ export default function DesignStudioPage() {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: { xs: 4, md: 6 }, pr: { xs: 9, md: 3 }, pb: { xs: 14, md: 8 } }}>
+    <Container maxWidth="xl" dir={isRTL ? "rtl" : "ltr"} sx={{ py: { xs: 4, md: 6 }, pr: { xs: 9, md: 3 }, pb: { xs: 14, md: 8 }, textAlign: isRTL ? "right" : "left" }}>
       <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, gap: 3, flexDirection: { xs: 'column', sm: 'row' }, minWidth: 0 }}>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: { xs: 3, md: 4 }, overflowWrap: 'anywhere' }}>
-            SOVEREIGN CREATIVE ENGINE
+            {designLabels.eyebrow}
           </Typography>
           <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ fontSize: { xs: '2.35rem', md: '3rem' }, overflowWrap: 'anywhere' }}>
-            AI Design <Box component="span" sx={{ color: binThemeTokens.gold }}>Studio</Box>
+            {designLabels.titlePrefix} <Box component="span" sx={{ color: binThemeTokens.gold }}>{designLabels.titleSuffix}</Box>
           </Typography>
         </Box>
-        <Chip icon={<Sparkles size={16} />} label="FREE AI CONCEPTS" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
+        <Stack direction="row" spacing={1} flexWrap="wrap">`n          <Chip icon={<Sparkles size={16} />} label={designLabels.freeConcepts} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />`n          <Chip label={aiReadiness.externalImageGeneration ? designLabels.aiStatusReady : designLabels.aiStatusWorkflow} sx={{ bgcolor: alpha(aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", 0.12), color: aiReadiness.externalImageGeneration ? "#10b981" : "#f59e0b", fontWeight: 900 }} />`n        </Stack>
       </Box>
 
       {uploadError && (
@@ -503,7 +547,7 @@ export default function DesignStudioPage() {
           <Stack spacing={4}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', minWidth: 0 }}>
               <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2, overflowWrap: 'anywhere' }}>
-                <Camera color={binThemeTokens.gold} /> 1. VISUAL CONTEXT
+                <Camera color={binThemeTokens.gold} /> {designLabels.visualContext}
               </Typography>
 
               <Box sx={{ mb: 3 }}>
@@ -519,7 +563,7 @@ export default function DesignStudioPage() {
                   {!uploading && (
                     <Button component="label" sx={{ width: 92, height: 92, flexShrink: 0, border: '1px dashed rgba(255,255,255,0.25)', borderRadius: 3, display: 'flex', flexDirection: 'column', color: 'text.secondary', bgcolor: 'rgba(255,255,255,0.02)', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold } }}>
                       <Camera size={24} />
-                      <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>
+                      <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>{designLabels.add}</Typography>
                       <input type="file" hidden accept="image/*,.heic,.heif,.webp" capture="environment" multiple onChange={handleImageUpload} />
                     </Button>
                   )}
@@ -530,7 +574,7 @@ export default function DesignStudioPage() {
                   )}
                 </Stack>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 1 }}>
-                  Accepted: JPG, PNG, WEBP, HEIC/HEIF images. Max 50 MB per image.
+                  {designLabels.accepted}
                 </Typography>
                 {uploading && (
                   <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -540,49 +584,49 @@ export default function DesignStudioPage() {
                 )}
               </Box>
 
-              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Redesign Objective</Typography>
-              <TextField multiline rows={3} fullWidth placeholder="Describe what you want to achieve..." value={scopeDescription} onChange={(e) => setScopeDescription(e.target.value)} sx={{ mb: 3 }} />
+              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>{designLabels.objective}</Typography>
+              <TextField multiline rows={3} fullWidth placeholder={designLabels.objectivePlaceholder} value={scopeDescription} onChange={(e) => setScopeDescription(e.target.value)} sx={{ mb: 3 }} />
 
-              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Constraints (Must keep / Must avoid)</Typography>
-              <TextField multiline rows={2} fullWidth placeholder="e.g. Keep the flooring, avoid dark colors..." value={keepConstraints} onChange={(e) => setKeepConstraints(e.target.value)} sx={{ mb: 3 }} />
+              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>{designLabels.constraints}</Typography>
+              <TextField multiline rows={2} fullWidth placeholder={designLabels.constraintsPlaceholder} value={keepConstraints} onChange={(e) => setKeepConstraints(e.target.value)} sx={{ mb: 3 }} />
 
-              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>Existing Condition & Required Work</Typography>
-              <TextField multiline rows={2} fullWidth placeholder="Describe current state..." value={existingCondition} onChange={(e) => setExistingCondition(e.target.value)} sx={{ mb: 2 }} />
-              <TextField multiline rows={2} fullWidth placeholder="List required work..." value={requiredWork} onChange={(e) => setRequiredWork(e.target.value)} />
+              <Typography variant="overline" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 900 }}>{designLabels.conditionWork}</Typography>
+              <TextField multiline rows={2} fullWidth placeholder={designLabels.currentStatePlaceholder} value={existingCondition} onChange={(e) => setExistingCondition(e.target.value)} sx={{ mb: 2 }} />
+              <TextField multiline rows={2} fullWidth placeholder={designLabels.requiredWorkPlaceholder} value={requiredWork} onChange={(e) => setRequiredWork(e.target.value)} />
             </Paper>
 
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Home color={binThemeTokens.gold} /> 2. SELECT ASSET
+                <Home color={binThemeTokens.gold} /> {designLabels.selectAsset}
               </Typography>
-              <TextField select fullWidth label="Property Node" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} sx={{ mb: 3 }}>
+              <TextField select fullWidth label={designLabels.propertyNode} value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} sx={{ mb: 3 }}>
                 {properties.map((property) => <MenuItem key={property.id} value={property.id}>{property.name || property.propertyName || property.address || property.id}</MenuItem>)}
               </TextField>
 
               {properties.length === 0 && (
                 <Alert severity="warning" icon={<Info />} sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.08)', color: '#facc15', border: '1px solid rgba(245,158,11,0.2)' }}>
-                  No linked property was found for this account. Refresh identity from the dashboard or contact BIN GROUP Admin.
+                  {designLabels.noProperty}
                 </Alert>
               )}
 
-              <TextField select fullWidth label="Redesign Zone" value={scope.zoneType} onChange={(e) => setScope({ ...scope, zoneType: e.target.value })} sx={{ mb: 3 }}>
+              <TextField select fullWidth label={designLabels.redesignZone} value={scope.zoneType} onChange={(e) => setScope({ ...scope, zoneType: e.target.value })} sx={{ mb: 3 }}>
                 {DESIGN_SPACE_TYPES.map((zone) => <MenuItem key={zone} value={zone}>{zone.toUpperCase()}</MenuItem>)}
               </TextField>
 
-              <TextField select fullWidth label="Redesign Objective" value={designObjective} onChange={(e) => setDesignObjective(e.target.value)} sx={{ mb: 3 }}>
+              <TextField select fullWidth label={designLabels.objective} value={designObjective} onChange={(e) => setDesignObjective(e.target.value)} sx={{ mb: 3 }}>
                 {DESIGN_OBJECTIVES.map((obj) => <MenuItem key={obj} value={obj}>{obj.toUpperCase()}</MenuItem>)}
               </TextField>
 
-              <TextField select fullWidth label="Design Style" value={designStyle} onChange={(e) => setDesignStyle(e.target.value)} sx={{ mb: 3 }}>
+              <TextField select fullWidth label={designLabels.designStyle} value={designStyle} onChange={(e) => setDesignStyle(e.target.value)} sx={{ mb: 3 }}>
                 {DESIGN_STYLES.map((style) => <MenuItem key={style} value={style}>{style.toUpperCase()}</MenuItem>)}
               </TextField>
 
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Unit #" value={unitNumber} onChange={(e) => setUnitNumber(e.target.value)} />
+                  <TextField fullWidth label={designLabels.unit} value={unitNumber} onChange={(e) => setUnitNumber(e.target.value)} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Floor" value={floorLevel} onChange={(e) => setFloorLevel(e.target.value)} />
+                  <TextField fullWidth label={designLabels.floor} value={floorLevel} onChange={(e) => setFloorLevel(e.target.value)} />
                 </Grid>
               </Grid>
             </Paper>
@@ -593,32 +637,32 @@ export default function DesignStudioPage() {
           <Stack spacing={4} sx={{ height: '100%' }}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Ruler color={binThemeTokens.gold} /> 3. DIMENSIONS & BUDGET
+                <Ruler color={binThemeTokens.gold} /> {designLabels.dimensionsBudget}
               </Typography>
 
               <Box sx={{ mb: 4 }}>
-                <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>AREA: {scope.dimensions} SQ FT</Typography>
+                <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>{designLabels.area}: {scope.dimensions} SQ FT</Typography>
                 <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, value) => setScope({ ...scope, dimensions: value as number })} sx={{ color: binThemeTokens.gold }} />
               </Box>
 
               {!tenantMode && (
                 <Box sx={{ mb: 4 }}>
-                  <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>FURNITURE BUDGET: AED {scope.furnitureBudget.toLocaleString()}</Typography>
+                  <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block', fontWeight: 900 }}>{designLabels.furnitureBudget}: AED {scope.furnitureBudget.toLocaleString()}</Typography>
                   <Slider value={scope.furnitureBudget} min={0} max={500000} step={5000} onChange={(_, value) => setScope({ ...scope, furnitureBudget: value as number })} sx={{ color: binThemeTokens.gold }} />
                 </Box>
               )}
 
               {!tenantMode && (
                 <Stack spacing={1}>
-                  <FormControlLabel control={<Checkbox checked={scope.hasMEP} onChange={(e) => setScope({ ...scope, hasMEP: e.target.checked })} />} label="MEP Changes (Electrical/Plumbing)" />
-                  <FormControlLabel control={<Checkbox checked={scope.hasStructural} onChange={(e) => setScope({ ...scope, hasStructural: e.target.checked })} />} label="Structural Changes (Walls/Partitions)" />
-                  <FormControlLabel control={<Checkbox checked={scope.isNightWork} onChange={(e) => setScope({ ...scope, isNightWork: e.target.checked })} />} label="Night-shift Execution" />
+                  <FormControlLabel control={<Checkbox checked={scope.hasMEP} onChange={(e) => setScope({ ...scope, hasMEP: e.target.checked })} />} label={designLabels.mep} />
+                  <FormControlLabel control={<Checkbox checked={scope.hasStructural} onChange={(e) => setScope({ ...scope, hasStructural: e.target.checked })} />} label={designLabels.structural} />
+                  <FormControlLabel control={<Checkbox checked={scope.isNightWork} onChange={(e) => setScope({ ...scope, isNightWork: e.target.checked })} />} label={designLabels.nightShift} />
                 </Stack>
               )}
 
               {tenantMode && (
                 <Alert severity="info" icon={<Info />} sx={{ mt: 2, bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-                  Tenant requests are submitted as owner NOC design concepts. Paid execution add-ons are hidden until owner approval.
+                  {designLabels.tenantInfo}
                 </Alert>
               )}
             </Paper>
@@ -629,30 +673,30 @@ export default function DesignStudioPage() {
           <Stack spacing={4}>
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, textAlign: 'center' }}>
               <Sparkles size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 24px' }} />
-              <Typography variant="h5" fontWeight="950" sx={{ mb: 2 }}>GENERATE CONCEPT</Typography>
+              <Typography variant="h5" fontWeight="950" sx={{ mb: 2 }}>{designLabels.generateConcept}</Typography>
               
               <Box sx={{ my: 3, p: 2, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900 }}>ESTIMATED QUOTE</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900 }}>{designLabels.estimatedQuote}</Typography>
                 <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, my: 1 }}>AED {liveQuote.finalTotal.toLocaleString()}</Typography>
-                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>15% Mobilization: AED {liveMobilization.toLocaleString()}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{designLabels.mobilization}: AED {liveMobilization.toLocaleString()}</Typography>
               </Box>
 
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
                 {tenantMode 
-                  ? "Tenant submission goes to owner approval first. Payment opens only after owner approval." 
-                  : "Owner submission goes directly to 15% mobilization payment request."}
+                  ? designLabels.tenantSubmission 
+                  : designLabels.ownerSubmission}
               </Typography>
               <Button variant="contained" fullWidth size="large" onClick={handleInitializeStudio} disabled={submitting || !selectedPropertyId} endIcon={submitting ? <CircularProgress size={20} /> : <ArrowRight />} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                {tenantMode ? "SUBMIT FOR OWNER APPROVAL" : "CREATE QUOTE + PAYMENT STEP"}
+                {tenantMode ? designLabels.submitOwnerApproval : designLabels.createQuotePayment}
               </Button>
             </Paper>
 
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid #10b981' }}>
               <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#10b981', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ShieldCheck size={18} /> INSTITUTIONAL PROTECTED
+                <ShieldCheck size={18} /> {designLabels.protected}
               </Typography>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>
-                All designs generated are compliant with BIN Group technical standards and local municipality codes.
+                {designLabels.protectedDesc}
               </Typography>
             </Paper>
           </Stack>
@@ -667,3 +711,4 @@ export default function DesignStudioPage() {
     </Container>
   );
 }
+
