@@ -119,7 +119,7 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#000', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}>
       <Nav c={c} />
-      {sector ? <Sector c={sector} /> : <Hero c={c} />}
+      {sector ? <Sector c={sector} actionLabel={c.primary} whatsappLabel={c.whatsapp} /> : <Hero c={c} />}
       <Container maxWidth="xl" sx={{ pb: 8 }}>
         <Trust />
         <Problems c={c} />
@@ -133,18 +133,21 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
 
 function Nav({ c }: { c: MarketingCopy }) {
   const { lang, setLang, isRTL } = useLanguage();
+  const nextLang = lang === 'en' ? 'ar' : 'en';
   return (
-    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.9)', borderBottom: '1px solid rgba(198,167,94,.18)', backdropFilter: 'blur(14px)' }}>
+    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.9)', borderBottom: '1px solid rgba(198,167,94,.18)' }}>
       <Container maxWidth="xl" sx={{ py: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-        <Stack component={Link} to="/" direction="row" spacing={1.2} alignItems="center" sx={{ color: '#fff', textDecoration: 'none', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} />
-          <Typography fontWeight={950}>BIN <Box component="span" sx={{ color: binThemeTokens.gold }}>GROUP</Box></Typography>
-        </Stack>
+        <Button component={Link} to="/" sx={{ color: '#fff', textDecoration: 'none', p: 0, minWidth: 0 }}>
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
+            <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} />
+            <Typography fontWeight={950}>BIN <Box component="span" sx={{ color: binThemeTokens.gold }}>GROUP</Box></Typography>
+          </Stack>
+        </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: isRTL ? 0 : 'auto', mr: isRTL ? 'auto' : 0, flexWrap: 'wrap', justifyContent: isRTL ? 'flex-start' : 'flex-end' }}>
           <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>{c.primary}</Button>
           <Button component={Link} to="/request-demo" startIcon={<PlayCircle size={17} />} sx={{ color: '#fff', fontWeight: 900 }}>{c.demo}</Button>
           <Button component={Link} to="/videos" sx={{ color: '#fff', fontWeight: 900 }}>{c.videos}</Button>
-          <Button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} startIcon={<Languages size={17} />} sx={{ color: binThemeTokens.gold, fontWeight: 950, minWidth: 100 }}>{c.language}</Button>
+          <Button onClick={() => setLang(nextLang)} startIcon={<Languages size={17} />} sx={{ color: binThemeTokens.gold, fontWeight: 950, minWidth: 100 }}>{c.language}</Button>
         </Stack>
       </Container>
     </Box>
@@ -176,7 +179,7 @@ function Hero({ c }: { c: MarketingCopy }) {
   );
 }
 
-function Sector({ c }: { c: Sector }) {
+function Sector({ c, actionLabel, whatsappLabel }: { c: Sector; actionLabel: string; whatsappLabel: string }) {
   return (
     <Container maxWidth="xl" sx={{ py: 9 }}>
       <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c.eyebrow}</Typography>
@@ -184,8 +187,8 @@ function Sector({ c }: { c: Sector }) {
       <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.72)', maxWidth: 850 }}>{c.subtitle}</Typography>
       <Stack spacing={1.2} sx={{ mt: 3 }}>{c.bullets.map((b) => <Stack key={b} direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography>{b}</Typography></Stack>)}</Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
-        <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Start Property Details</Button>
-        <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>WhatsApp BIN GROUP</Button>
+        <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{actionLabel}</Button>
+        <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{whatsappLabel}</Button>
       </Stack>
     </Container>
   );
@@ -202,8 +205,12 @@ function Command() {
 }
 
 function Trust() {
-  const items: [string, React.ReactNode][] = [['Verified records', <ShieldCheck key="shield" />], ['GPS dispatch', <Wrench key="wrench" />], ['PDF proof', <FileText key="file" />], ['Property passport', <Building2 key="building" />]];
-  return <Grid container spacing={2} sx={{ mt: 5 }}>{items.map(([a, i]) => <Grid item xs={12} md={3} key={a}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{i}</Box><Typography fontWeight={950}>{a}</Typography></Paper></Grid>)}</Grid>;
+  return <Grid container spacing={2} sx={{ mt: 5 }}>{[
+    { label: 'Verified records', icon: <ShieldCheck /> },
+    { label: 'GPS dispatch', icon: <Wrench /> },
+    { label: 'PDF proof', icon: <FileText /> },
+    { label: 'Property passport', icon: <Building2 /> },
+  ].map((item) => <Grid item xs={12} md={3} key={item.label}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography fontWeight={950}>{item.label}</Typography></Paper></Grid>)}</Grid>;
 }
 
 function Problems({ c }: { c: MarketingCopy }) {
