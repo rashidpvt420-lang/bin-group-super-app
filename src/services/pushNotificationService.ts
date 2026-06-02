@@ -8,6 +8,27 @@ const readEnv = (key: string): string => {
 
 const DEFAULT_WEB_PUSH_VAPID_KEY = 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ';
 
+const PUSH_ENABLED_ROLES = new Set([
+  'tenant',
+  'technician',
+  'owner',
+  'broker',
+  'admin',
+  'super_admin',
+  'ceo',
+  'manager',
+  'operations_admin',
+  'finance_admin',
+  'hr_admin',
+  'support_admin',
+  'hr_manager',
+  'hr_staff',
+  'finance_staff',
+  'account_manager',
+  'dispatcher',
+  'operations_manager',
+]);
+
 const getVapidKey = () =>
   readEnv('VITE_FIREBASE_VAPID_KEY') ||
   readEnv('REACT_APP_FIREBASE_VAPID_KEY') ||
@@ -68,7 +89,7 @@ async function persistPushReadiness(userId: string, role: string | null | undefi
       updatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (err) {
-    console.warn('[Push] Failed to persist readiness diagnostics:', err);
+    console.warn('[Push] Failed to persist readiness diagnostics. Firestore rules must allow users/{uid}/deviceReadiness/push:', err);
   }
 }
 
@@ -76,8 +97,7 @@ export async function registerPushNotifications(userId: string, role?: string | 
   const readiness = getPushReadiness();
 
   if (typeof window === 'undefined') {
-    const result = { enabled: false, reason: 'window_unavailable', readiness };
-    return result;
+    return { enabled: false, reason: 'window_unavailable', readiness };
   }
 
   if (!readiness.supportsNotification) {
@@ -147,6 +167,7 @@ export async function registerPushNotifications(userId: string, role?: string | 
       fcmTokens: arrayUnion(token),
       pushEnabled: true,
       pushPlatform: readiness.platform,
+      pushRole: role || 'unknown',
       pushUpdatedAt: serverTimestamp(),
     }).catch(async () => {
       await setDoc(doc(db, 'users', userId), {
@@ -155,6 +176,7 @@ export async function registerPushNotifications(userId: string, role?: string | 
         fcmTokens: [token],
         pushEnabled: true,
         pushPlatform: readiness.platform,
+        pushRole: role || 'unknown',
         pushUpdatedAt: serverTimestamp(),
       }, { merge: true });
     })
@@ -186,5 +208,5 @@ export async function attachForegroundPushListener(onForeground?: (payload: any)
 }
 
 export function shouldRequestPushForRole(role?: string | null) {
-  return ['tenant', 'technician', 'owner', 'admin', 'ceo', 'broker'].includes(String(role || '').toLowerCase());
+  return PUSH_ENABLED_ROLES.has(String(role || '').toLowerCase());
 }
