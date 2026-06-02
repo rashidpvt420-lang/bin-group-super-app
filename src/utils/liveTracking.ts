@@ -364,6 +364,18 @@ export const startLiveTracking = async (
                         lastSeenAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
                     }),
+                    updateDoc(doc(db, 'users', technicianUid), {
+                        currentLocation: payload,
+                        lastLocation: payload,
+                        locationUpdatedAt: serverTimestamp(),
+                        activeTicketId: ticketId,
+                        isOnDuty: true,
+                        onDuty: true,
+                        available: true,
+                        isTracking: true,
+                        lastSeenAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    }),
                     persistTrackingDiagnostic(technicianUid, ticketId, {
                         status: 'LIVE',
                         accuracy: position.coords.accuracy,
@@ -436,6 +448,12 @@ export const stopLiveTracking = async (
 
     if (technicianUid) {
         writes.push(updateDoc(doc(db, 'technicians', technicianUid), {
+            isTracking: false,
+            activeTicketId: null,
+            lastSeenAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }));
+        writes.push(updateDoc(doc(db, 'users', technicianUid), {
             isTracking: false,
             activeTicketId: null,
             lastSeenAt: serverTimestamp(),
