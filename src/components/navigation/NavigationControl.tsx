@@ -81,6 +81,10 @@ export const NavigationControl: React.FC = () => {
   if (location.pathname.startsWith('/admin')) return null;
   if (['/', '/login', '/gateway'].includes(location.pathname) || location.pathname.startsWith('/onboarding')) return null;
 
+  const profileLabel = lang === 'ar' ? 'الملف' : 'Profile';
+  const madeInUaeLabel = lang === 'ar' ? 'صنع في الإمارات 🇦🇪' : 'Made in UAE 🇦🇪';
+  const switchLanguageLabel = lang === 'en' ? 'Switch to Arabic' : 'التبديل إلى الإنجليزية';
+
   const buttonSx = {
     bgcolor: alpha('#020617', 0.92),
     backdropFilter: 'blur(12px)',
@@ -101,7 +105,7 @@ export const NavigationControl: React.FC = () => {
         <Tooltip title={t('nav.back') || 'Back'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleBack} sx={buttonSx}>{isRTL ? <ArrowRight size={20} /> : <ArrowLeft size={20} />}</IconButton></Tooltip>
         <Tooltip title={t('nav.dashboard') || 'Dashboard'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getDashboardRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><LayoutDashboard size={20} /></IconButton></Tooltip>
         <Tooltip title={t('nav.ai_studio') || 'AI Studio'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate(getAIStudioRoute())} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important` }}><Paintbrush size={20} /></IconButton></Tooltip>
-        <Tooltip title={lang === 'en' ? 'Switch to Arabic' : 'Switch to English'} placement={isRTL ? 'right' : 'left'}>
+        <Tooltip title={switchLanguageLabel} placement={isRTL ? 'right' : 'left'}>
           <IconButton onClick={toggleLanguage} sx={{ ...buttonSx, color: `${binThemeTokens.gold} !important`, gap: 0.6 }}>
             <Languages size={19} />
             <Box component="span" sx={{ fontSize: '0.62rem', fontWeight: 950, lineHeight: 1 }}>{lang === 'en' ? 'AR' : 'EN'}</Box>
@@ -109,8 +113,8 @@ export const NavigationControl: React.FC = () => {
         </Tooltip>
         {user ? <Tooltip title={t('nav.logout') || 'Logout'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={handleSignOut} sx={{ ...buttonSx, color: '#ef4444' }}><LogOut size={20} /></IconButton></Tooltip> : <Tooltip title={t('nav.login') || 'Login'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={() => navigate('/login')} sx={{ ...buttonSx, color: binThemeTokens.gold }}><LogIn size={20} /></IconButton></Tooltip>}
         {showScrollBottom && <Tooltip title={t('nav.scroll_bottom') || 'Scroll to bottom'} placement={isRTL ? 'right' : 'left'}><IconButton onClick={scrollToBottom} sx={buttonSx}><ArrowDown size={20} /></IconButton></Tooltip>}
-        <Button size="small" onClick={() => navigate('/company')} sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.62rem', fontWeight: 950, color: binThemeTokens.gold }}>Profile</Button>
-        <Button size="small" disabled sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.58rem', fontWeight: 950, color: `${binThemeTokens.gold} !important`, opacity: '1 !important' }}>Made in UAE 🇦🇪</Button>
+        <Button size="small" onClick={() => navigate('/company')} sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.62rem', fontWeight: 950, color: binThemeTokens.gold }}>{profileLabel}</Button>
+        <Button size="small" disabled sx={{ ...buttonSx, px: 1.5, minWidth: 44, fontSize: '0.58rem', fontWeight: 950, color: `${binThemeTokens.gold} !important`, opacity: '1 !important' }}>{madeInUaeLabel}</Button>
       </Stack>
     </Box>
   );
