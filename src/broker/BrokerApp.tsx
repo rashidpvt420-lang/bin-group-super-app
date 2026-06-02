@@ -20,6 +20,7 @@ import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { auth } from '../lib/firebase';
 import { NotificationBell } from '../components/NotificationBell';
+import BrandWatermark from '../components/BrandWatermark';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -51,8 +52,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#fff', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 } }}>
-      <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(2,6,23,0.86)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#fff', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
+      <BrandWatermark opacity={0.035} compact />
+      <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(2,6,23,0.86)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.07)', zIndex: 1200 }}>
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
             <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: binThemeTokens.gold, borderRadius: 2, color: '#000', cursor: 'pointer', display: 'flex' }}>
@@ -94,7 +96,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: 5 }}>
+      <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>
         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
@@ -108,7 +110,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         {children}
       </Container>
 
-      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto', mb: { xs: 8, lg: 0 } }}>
+      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
           {label('broker.footer', '© 2026 BIN GROUP SOVEREIGN · BROKER TERMINAL · MADE IN UAE 🇦🇪', '© 2026 BIN GROUP SOVEREIGN · محطة الوسطاء · صنع في الإمارات 🇦🇪')}
         </Typography>
