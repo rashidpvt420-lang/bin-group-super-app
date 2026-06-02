@@ -8,6 +8,7 @@ export const TICKET_STATUS = {
     OPEN: 'OPEN',
     PENDING_ASSIGNMENT: 'PENDING_ASSIGNMENT',
     ASSIGNED: 'ASSIGNED',
+    AUTO_ASSIGNED: 'AUTO_ASSIGNED',
     ACCEPTED: 'ACCEPTED',
     EN_ROUTE: 'EN_ROUTE',
     ARRIVED: 'ARRIVED',
@@ -23,6 +24,7 @@ export const TICKET_STATUS = {
  */
 export const TECHNICIAN_ACTIVE_STATUSES_LOWER = [
     'accepted',
+    'auto_assigned',
     'on_the_way',
     'arrived',
     'in_progress',
@@ -35,6 +37,7 @@ export const TECHNICIAN_ACTIVE_STATUSES_LOWER = [
  */
 export const TECHNICIAN_ACTIVE_STATUSES_UPPER = [
     TICKET_STATUS.ASSIGNED,
+    TICKET_STATUS.AUTO_ASSIGNED,
     TICKET_STATUS.ACCEPTED,
     TICKET_STATUS.EN_ROUTE,
     TICKET_STATUS.ARRIVED,
