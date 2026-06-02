@@ -1,5 +1,5 @@
 // admin-panel/src/pages/settings/SettingsPage.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Container,
   Paper,
@@ -14,12 +14,13 @@ import {
   Alert,
   Card,
   CardContent,
-  alpha
+  alpha,
+  CircularProgress
 } from '@mui/material';
-import { Building2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Building2, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '@/theme/binGroupTheme';
-import { apiClient } from '@/services/api';
+import { db, doc, onSnapshot, serverTimestamp, setDoc } from '@/lib/firebase';
 
 interface SystemSettings {
   maintenanceMode: boolean;
@@ -35,43 +36,92 @@ interface SystemSettings {
   smsNotificationsEnabled: boolean;
 }
 
+const DEFAULT_SETTINGS: SystemSettings = {
+  maintenanceMode: false,
+  autoDispatchEnabled: true,
+  maxTicketsPerTechnician: 8,
+  sosResponseTimeMinutes: 30,
+  turnoverQuoteAutoGeneration: true,
+  paymentReminderDays: 3,
+  suspensionThreshold: 2,
+  binGroupFeePercent: 5,
+  partsMarkupPercent: 20,
+  emailNotificationsEnabled: true,
+  smsNotificationsEnabled: true,
+};
+
+const SETTINGS_DOC = ['settings', 'system'] as const;
+const safeNumber = (value: string, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+const normalizeSettings = (value?: Partial<SystemSettings> | null): SystemSettings => ({ ...DEFAULT_SETTINGS, ...(value || {}) });
+
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<SystemSettings>({
-    maintenanceMode: false,
-    autoDispatchEnabled: true,
-    maxTicketsPerTechnician: 8,
-    sosResponseTimeMinutes: 30,
-    turnoverQuoteAutoGeneration: true,
-    paymentReminderDays: 3,
-    suspensionThreshold: 2,
-    binGroupFeePercent: 5,
-    partsMarkupPercent: 20,
-    emailNotificationsEnabled: true,
-    smsNotificationsEnabled: true,
-  });
-
+  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, ...SETTINGS_DOC), (snap) => {
+      setSettings(normalizeSettings(snap.exists() ? (snap.data() as Partial<SystemSettings>) : null));
+      setDirty(false);
+      setLoading(false);
+      setError(null);
+    }, (err) => {
+      console.error('Failed to load settings:', err);
+      setSettings(DEFAULT_SETTINGS);
+      setDirty(false);
+      setLoading(false);
+      setError('Settings could not be loaded from Firestore. Default settings are shown locally.');
+    });
+    return () => unsub();
+  }, []);
 
   const handleChange = (key: keyof SystemSettings, value: any) => {
     setSettings({ ...settings, [key]: value });
     setSaved(false);
+    setDirty(true);
   };
 
   const handleSave = async () => {
     try {
-      setLoading(true);
-      await apiClient.post('/api/admin/settings', settings);
+      setSaving(true);
+      setError(null);
+      await setDoc(doc(db, ...SETTINGS_DOC), {
+        ...settings,
+        updatedAt: serverTimestamp(),
+        source: 'admin_settings_page',
+      }, { merge: true });
       setSaved(true);
+      setDirty(false);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      alert('Failed to save settings');
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+      setError('Failed to save settings to Firestore. Check admin permissions and rules.');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  const resetToDefaults = () => {
+    setSettings(DEFAULT_SETTINGS);
+    setSaved(false);
+    setDirty(true);
+  };
+
+  if (loading) {
+    return (
+      <Container maxWidth="md" sx={{ py: 8, color: '#fff', display: 'flex', gap: 2, alignItems: 'center' }}>
+        <CircularProgress />
+        <Typography>Loading admin settings...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -79,16 +129,17 @@ export default function SettingsPage() {
         System Settings
       </Typography>
 
-      {saved && <Alert severity="success" sx={{ mb: 2 }}>Settings saved successfully!</Alert>}
+      {saved && <Alert severity="success" sx={{ mb: 2 }}>Settings saved successfully to Firestore.</Alert>}
+      {dirty && <Alert severity="warning" sx={{ mb: 2 }}>You have unpublished settings changes. Press Save Settings to publish them.</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Institutional Profile Link */}
       <Card sx={{ 
           mb: 4, 
           background: 'linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(218, 165, 32, 0.05) 100%)', 
           border: '1px solid rgba(218, 165, 32, 0.3)',
           borderRadius: 4
       }}>
-        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 3 }}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 3, gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <Box sx={{ p: 2, bgcolor: 'rgba(218, 165, 32, 0.1)', borderRadius: 3, color: '#DAA520' }}>
               <Building2 size={32} />
@@ -117,7 +168,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* System Status */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -144,7 +194,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Operational Settings */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -169,7 +218,7 @@ export default function SettingsPage() {
                 type="number"
                 label="Max Tickets per Technician"
                 value={settings.maxTicketsPerTechnician}
-                onChange={(e) => handleChange('maxTicketsPerTechnician', parseInt(e.target.value))}
+                onChange={(e) => handleChange('maxTicketsPerTechnician', safeNumber(e.target.value, DEFAULT_SETTINGS.maxTicketsPerTechnician))}
               />
             </Grid>
           </Grid>
@@ -181,7 +230,7 @@ export default function SettingsPage() {
                 type="number"
                 label="SOS Response Time (minutes)"
                 value={settings.sosResponseTimeMinutes}
-                onChange={(e) => handleChange('sosResponseTimeMinutes', parseInt(e.target.value))}
+                onChange={(e) => handleChange('sosResponseTimeMinutes', safeNumber(e.target.value, DEFAULT_SETTINGS.sosResponseTimeMinutes))}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -199,7 +248,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Financial Settings */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -213,7 +261,7 @@ export default function SettingsPage() {
                 type="number"
                 label="BIN Group Fee (%)"
                 value={settings.binGroupFeePercent}
-                onChange={(e) => handleChange('binGroupFeePercent', parseFloat(e.target.value))}
+                onChange={(e) => handleChange('binGroupFeePercent', safeNumber(e.target.value, DEFAULT_SETTINGS.binGroupFeePercent))}
                 inputProps={{ step: 0.1 }}
               />
               <Typography variant="caption" color="textSecondary">
@@ -226,7 +274,7 @@ export default function SettingsPage() {
                 type="number"
                 label="Parts Markup (%)"
                 value={settings.partsMarkupPercent}
-                onChange={(e) => handleChange('partsMarkupPercent', parseFloat(e.target.value))}
+                onChange={(e) => handleChange('partsMarkupPercent', safeNumber(e.target.value, DEFAULT_SETTINGS.partsMarkupPercent))}
                 inputProps={{ step: 0.1 }}
               />
               <Typography variant="caption" color="textSecondary">
@@ -244,7 +292,7 @@ export default function SettingsPage() {
                 type="number"
                 label="Payment Reminder (days)"
                 value={settings.paymentReminderDays}
-                onChange={(e) => handleChange('paymentReminderDays', parseInt(e.target.value))}
+                onChange={(e) => handleChange('paymentReminderDays', safeNumber(e.target.value, DEFAULT_SETTINGS.paymentReminderDays))}
               />
               <Typography variant="caption" color="textSecondary">
                 Send reminder after X days
@@ -256,7 +304,7 @@ export default function SettingsPage() {
                 type="number"
                 label="Suspension Threshold"
                 value={settings.suspensionThreshold}
-                onChange={(e) => handleChange('suspensionThreshold', parseInt(e.target.value))}
+                onChange={(e) => handleChange('suspensionThreshold', safeNumber(e.target.value, DEFAULT_SETTINGS.suspensionThreshold))}
               />
               <Typography variant="caption" color="textSecondary">
                 Unpaid invoices before suspension
@@ -266,7 +314,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Notification Settings */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -294,20 +341,15 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <Button variant="contained" onClick={handleSave} disabled={loading}>
-          {loading ? 'Saving...' : 'Save Settings'}
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Settings'}
         </Button>
-        <Button
-          variant="outlined"
-          onClick={() => alert('Settings reset to defaults')}
-        >
-          Reset to Defaults
+        <Button variant="outlined" onClick={resetToDefaults} disabled={saving}>
+          Reset Draft to Defaults
         </Button>
       </Box>
 
-      {/* System Information */}
       <Paper sx={{ p: 3, mt: 4, backgroundColor: '#f5f5f5' }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
           System Information
@@ -323,7 +365,7 @@ export default function SettingsPage() {
           </Grid>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2">
-              <strong>API Server:</strong> Production
+              <strong>API Server:</strong> Firebase Functions / Firestore
             </Typography>
             <Typography variant="body2">
               <strong>Last Updated:</strong> {new Date().toLocaleString()}
