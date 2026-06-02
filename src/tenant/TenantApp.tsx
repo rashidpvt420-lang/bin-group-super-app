@@ -8,6 +8,7 @@ import { ArrowLeft, Home, Globe, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
+import BrandWatermark from '../components/BrandWatermark';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
@@ -39,8 +40,11 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             color: binThemeTokens.textPrimary, 
             direction: isRTL ? 'rtl' : 'ltr',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            position: 'relative',
+            isolation: 'isolate'
         }}>
+            <BrandWatermark opacity={0.038} />
             <AppBar 
                 position="sticky" 
                 elevation={0}
@@ -86,7 +90,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 </Toolbar>
             </AppBar>
             
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1 }}>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                 {pathnames.length > 1 && (
                     <Breadcrumbs 
                         sx={{ 
@@ -113,7 +117,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 </Box>
             </Container>
 
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
                     © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS · MADE IN UAE 🇦🇪
                 </Typography>
