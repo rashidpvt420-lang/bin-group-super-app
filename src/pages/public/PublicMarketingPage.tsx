@@ -1,12 +1,12 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, CheckCircle2, FileText, Languages, MessageCircle, PlayCircle, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 
 type Sector = { eyebrow: string; title: string; subtitle: string; bullets: string[] };
-type CommandRow = { title: string; subtitle: string; status: string };
+type CommandRow = { title: string; subtitle: string; status: string; href: string };
 type PricingRow = { label: string; value: string };
 type MarketingCopy = {
   brand: string;
@@ -36,6 +36,10 @@ type MarketingCopy = {
 };
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
+const ONBOARDING_URL = '/onboarding';
+const QUOTE_URL = '/onboarding?intent=quote';
+const DEMO_URL = '/request-demo';
+const VIDEOS_URL = '/videos';
 
 const en: MarketingCopy = {
   brand: 'BIN GROUP',
@@ -57,10 +61,10 @@ const en: MarketingCopy = {
   inquiryTitle: 'Contact BIN GROUP',
   inquiryDesc: 'Talk to BIN GROUP by WhatsApp or phone. We prepare the right maintenance, property management, or full-coverage contract path.',
   commandRows: [
-    { title: 'Property Details', subtitle: 'Building, villa, units, systems, location', status: 'START' },
-    { title: 'Instant Quote', subtitle: 'Maintenance or management scope path', status: 'QUOTE' },
-    { title: 'Owner Contract', subtitle: '15% mobilization + payment plan', status: 'SIGN' },
-    { title: 'Service Tracking', subtitle: 'Tenant request, GPS, proof, report', status: 'LIVE' },
+    { title: 'Property Details', subtitle: 'Building, villa, units, systems, location', status: 'START', href: ONBOARDING_URL },
+    { title: 'Instant Quote', subtitle: 'Maintenance or management scope path', status: 'QUOTE', href: QUOTE_URL },
+    { title: 'Owner Contract', subtitle: '15% mobilization + payment plan', status: 'SIGN', href: ONBOARDING_URL },
+    { title: 'Service Tracking', subtitle: 'Tenant request, GPS, proof, report', status: 'LIVE', href: DEMO_URL },
   ],
   trustLabels: ['Verified records', 'GPS dispatch', 'PDF proof', 'Property passport'],
   problems: ['No-call owner journey', 'Direct technician workfeed', 'GPS dispatch context', 'Before-and-after proof', 'PDF contracts and reports', 'Demo/video walkthroughs', 'AI property intelligence', 'Property passport history'],
@@ -102,10 +106,10 @@ const ar: MarketingCopy = {
   inquiryTitle: 'تواصل مع مجموعة بن',
   inquiryDesc: 'تواصل مع مجموعة بن عبر واتساب أو الهاتف لنجهز مسار الصيانة أو الإدارة أو التغطية الكاملة.',
   commandRows: [
-    { title: 'تفاصيل العقار', subtitle: 'المبنى، الفيلا، الوحدات، الأنظمة، الموقع', status: 'ابدأ' },
-    { title: 'عرض سعر فوري', subtitle: 'نطاق الصيانة أو إدارة العقار', status: 'سعر' },
-    { title: 'عقد المالك', subtitle: 'دفعة تفعيل 15٪ + خطة دفع', status: 'وقّع' },
-    { title: 'تتبع الخدمة', subtitle: 'طلب المستأجر، الموقع، الإثبات، التقرير', status: 'مباشر' },
+    { title: 'تفاصيل العقار', subtitle: 'المبنى، الفيلا، الوحدات، الأنظمة، الموقع', status: 'ابدأ', href: ONBOARDING_URL },
+    { title: 'عرض سعر فوري', subtitle: 'نطاق الصيانة أو إدارة العقار', status: 'سعر', href: QUOTE_URL },
+    { title: 'عقد المالك', subtitle: 'دفعة تفعيل 15٪ + خطة دفع', status: 'وقّع', href: ONBOARDING_URL },
+    { title: 'تتبع الخدمة', subtitle: 'طلب المستأجر، الموقع، الإثبات، التقرير', status: 'مباشر', href: DEMO_URL },
   ],
   trustLabels: ['سجلات موثقة', 'إرسال الفنيين حسب الموقع', 'إثبات موثق', 'جواز العقار'],
   problems: ['رحلة مالك بدون اتصالات متكررة', 'مهام مباشرة للفنيين', 'توجيه حسب موقع العقار', 'إثبات قبل وبعد', 'عقود وتقارير موثقة', 'عروض توضيحية بالفيديو', 'ذكاء عقاري تشغيلي', 'سجل جواز العقار'],
@@ -151,23 +155,71 @@ export default function PublicMarketingPage({ page = 'home' }: { page?: string }
   );
 }
 
+function InternalActionButton({ href, children, variant = 'outlined', gold = false, icon }: { href: string; children: React.ReactNode; variant?: 'text' | 'outlined' | 'contained'; gold?: boolean; icon?: React.ReactNode }) {
+  return (
+    <Button
+      component="a"
+      href={href}
+      variant={variant}
+      startIcon={icon}
+      sx={{
+        bgcolor: variant === 'contained' ? binThemeTokens.gold : 'transparent',
+        color: variant === 'contained' ? '#000' : gold ? binThemeTokens.gold : '#fff',
+        borderColor: variant === 'outlined' ? (gold ? binThemeTokens.gold : 'rgba(255,255,255,.32)') : undefined,
+        fontWeight: 950,
+        py: 1.45,
+        px: 3,
+        minHeight: 52,
+        textDecoration: 'none',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'auto',
+        '&:hover': {
+          bgcolor: variant === 'contained' ? '#d8bd72' : 'rgba(198,167,94,.08)',
+          borderColor: gold ? binThemeTokens.gold : 'rgba(255,255,255,.5)',
+        },
+      }}
+    >
+      {children}
+    </Button>
+  );
+}
+
 function Nav({ c }: { c: MarketingCopy }) {
   const { lang, setLang, isRTL } = useLanguage();
   const nextLang = lang === 'en' ? 'ar' : 'en';
   return (
-    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.9)', borderBottom: '1px solid rgba(198,167,94,.18)' }}>
-      <Container maxWidth="xl" sx={{ py: 1.1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-        <Button component={Link} to="/" sx={{ color: '#fff', textDecoration: 'none', p: 0, minWidth: 0 }}>
+    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.94)', borderBottom: '1px solid rgba(198,167,94,.18)' }}>
+      <Container maxWidth="xl" sx={{ py: 1.1, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <Button component="a" href="/" sx={{ color: '#fff', textDecoration: 'none', p: 0, minWidth: 0, mr: isRTL ? 0 : 'auto', ml: isRTL ? 'auto' : 0 }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
             <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} />
             <Typography fontWeight={950} sx={{ color: binThemeTokens.gold }}>{c.brand}</Typography>
           </Stack>
         </Button>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: isRTL ? 0 : 'auto', mr: isRTL ? 'auto' : 0, flexWrap: 'wrap', justifyContent: isRTL ? 'flex-start' : 'flex-end' }}>
-          <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>{c.primary}</Button>
-          <Button component={Link} to="/request-demo" startIcon={<PlayCircle size={17} />} sx={{ color: '#fff', fontWeight: 900 }}>{c.demo}</Button>
-          <Button component={Link} to="/videos" sx={{ color: '#fff', fontWeight: 900 }}>{c.videos}</Button>
-          <Button onClick={() => setLang(nextLang)} startIcon={<Languages size={17} />} sx={{ color: binThemeTokens.gold, fontWeight: 950, minWidth: 100 }}>{c.language}</Button>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1, justifyContent: isRTL ? 'flex-start' : 'flex-end', width: { xs: '100%', md: 'auto' } }}>
+          <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
+          <InternalActionButton href={DEMO_URL} variant="text" icon={<PlayCircle size={17} />}>{c.demo}</InternalActionButton>
+          <InternalActionButton href={VIDEOS_URL} variant="text">{c.videos}</InternalActionButton>
+          <Button
+            type="button"
+            onClick={() => setLang(nextLang)}
+            aria-label="Switch language"
+            sx={{
+              color: '#000',
+              bgcolor: binThemeTokens.gold,
+              fontWeight: 950,
+              minWidth: 72,
+              minHeight: 52,
+              borderRadius: 999,
+              px: 2,
+              '&:hover': { bgcolor: '#d8bd72' },
+            }}
+          >
+            <Stack direction="row" spacing={0.6} alignItems="center">
+              <Languages size={16} />
+              <span>{c.language}</span>
+            </Stack>
+          </Button>
         </Stack>
       </Container>
     </Box>
@@ -177,18 +229,18 @@ function Nav({ c }: { c: MarketingCopy }) {
 function Hero({ c }: { c: MarketingCopy }) {
   return (
     <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(198,167,94,.16)' }}>
-      <Box sx={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at top right, rgba(198,167,94,.25), transparent 34rem), #050505' }} />
-      <Container maxWidth="xl" sx={{ position: 'relative', py: { xs: 7, md: 11 } }}>
+      <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(circle at top right, rgba(198,167,94,.25), transparent 34rem), #050505' }} />
+      <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 1, py: { xs: 7, md: 11 } }}>
         <Grid container spacing={5} alignItems="center">
           <Grid item xs={12} md={7}>
             <Chip label={c.chip} sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 950 }} />
             <Typography variant="h1" sx={{ fontSize: { xs: 38, md: 66 }, lineHeight: .98, fontWeight: 950, mb: 3 }}>{c.title}</Typography>
             <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.76)', lineHeight: 1.65, fontWeight: 800 }}>{c.desc}</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4, flexWrap: 'wrap' }}>
-              <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, px: 3 }}>{c.primary}</Button>
-              <Button component={Link} to="/onboarding" variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.32)', fontWeight: 950, py: 1.5, px: 3 }}>{c.quote}</Button>
-              <Button component={Link} to="/request-demo" variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.28)', fontWeight: 950, py: 1.5, px: 3 }}>{c.demo}</Button>
-              <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, py: 1.5, px: 3 }}>{c.whatsapp}</Button>
+              <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
+              <InternalActionButton href={QUOTE_URL}>{c.quote}</InternalActionButton>
+              <InternalActionButton href={DEMO_URL}>{c.demo}</InternalActionButton>
+              <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, py: 1.45, px: 3, minHeight: 52, pointerEvents: 'auto' }}>{c.whatsapp}</Button>
             </Stack>
             <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 3 }}>{c.ownerFlowTitle}</Typography>
           </Grid>
@@ -207,15 +259,46 @@ function Sector({ c, actionLabel, whatsappLabel }: { c: Sector; actionLabel: str
       <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.72)', maxWidth: 850 }}>{c.subtitle}</Typography>
       <Stack spacing={1.2} sx={{ mt: 3 }}>{c.bullets.map((b) => <Stack key={b} direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography>{b}</Typography></Stack>)}</Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
-        <Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{actionLabel}</Button>
-        <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{whatsappLabel}</Button>
+        <InternalActionButton href={ONBOARDING_URL} variant="contained">{actionLabel}</InternalActionButton>
+        <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{whatsappLabel}</Button>
       </Stack>
     </Container>
   );
 }
 
 function Command({ c }: { c: MarketingCopy }) {
-  return <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}><Stack spacing={1.5}>{c.commandRows.map((row) => <Box key={row.title} sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,.035)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography fontWeight={900}>{row.title}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{row.subtitle}</Typography></Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{row.status}</Typography></Stack></Box>)}</Stack></Paper>;
+  return (
+    <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}>
+      <Stack spacing={1.5}>
+        {c.commandRows.map((row) => (
+          <Box
+            key={row.title}
+            component="a"
+            href={row.href}
+            sx={{
+              display: 'block',
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(255,255,255,.035)',
+              color: '#fff',
+              textDecoration: 'none',
+              pointerEvents: 'auto',
+              border: '1px solid transparent',
+              '&:hover': { borderColor: alpha(binThemeTokens.gold, .45), bgcolor: 'rgba(198,167,94,.08)' },
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center">
+              <Box>
+                <Typography fontWeight={900}>{row.title}</Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{row.subtitle}</Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{row.status}</Typography>
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+    </Paper>
+  );
 }
 
 function Trust({ c }: { c: MarketingCopy }) {
@@ -236,5 +319,5 @@ function Coverage({ c }: { c: MarketingCopy }) {
 }
 
 function Inquiry({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 4 }}><Stack spacing={2}><Sparkles color={binThemeTokens.gold} /><Typography variant="h3" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.7)', lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><Button component={Link} to="/onboarding" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{c.primary}</Button><Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{c.whatsapp}</Button></Stack></Stack></Paper></Box>;
+  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 4 }}><Stack spacing={2}><Sparkles color={binThemeTokens.gold} /><Typography variant="h3" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.7)', lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton><Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{c.whatsapp}</Button></Stack></Stack></Paper></Box>;
 }
