@@ -79,16 +79,72 @@ const addMonths = (date: Date, months: number) => {
   return copy;
 };
 
+const formatDateTime = (date: Date | null) => {
+  if (!date) return 'Pending admin confirmation';
+  return date.toLocaleString('en-AE', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const termMonthsOf = (contract: any) => firstPositiveNumber(
+  contract?.contractTermMonths,
+  contract?.termSummary?.months,
+  CONTRACT_TERM_MONTHS,
+) || CONTRACT_TERM_MONTHS;
+
 const termDates = (contract: any) => {
-  const start = asDate(contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt, contract?.effectiveFrom, contract?.validFrom, contract?.startedAt, contract?.createdAt) || new Date();
-  const end = asDate(contract?.effectiveTo, contract?.validTo, contract?.expiresAt, contract?.endDate, contract?.expiryDate) || addMonths(start, Number(contract?.contractTermMonths || CONTRACT_TERM_MONTHS));
-  const firstMonthEnd = asDate(contract?.firstMonthWindowEndsAt, contract?.ownerCanRequestPlanChangeUntil, contract?.ownerSignature?.firstMonthWindowEndsAt) || addMonths(start, 1);
-  return { start, end, firstMonthEnd };
+  const start = asDate(
+    contract?.signatureState?.ownerSignedAt,
+    contract?.ownerSignature?.signedAt,
+    contract?.ownerSignedAt,
+    contract?.signedAt,
+    contract?.effectiveFrom,
+    contract?.validFrom,
+    contract?.startedAt,
+    contract?.createdAt,
+  ) || new Date();
+  const months = termMonthsOf(contract);
+  const end = asDate(
+    contract?.effectiveTo,
+    contract?.validTo,
+    contract?.expiresAt,
+    contract?.endDate,
+    contract?.expiryDate,
+    contract?.termSummary?.validToIso,
+  ) || addMonths(start, months);
+  const firstMonthEnd = asDate(
+    contract?.ownerCanRequestCancelOrUpgradeUntil,
+    contract?.ownerCanRequestPlanChangeUntil,
+    contract?.firstMonthWindowEndsAt,
+    contract?.cancellationUpgradePolicy?.requestWindowEndsAtIso,
+    contract?.ownerSignature?.firstMonthWindowEndsAt,
+  ) || addMonths(start, 1);
+  return { start, end, firstMonthEnd, months };
 };
 
 const termSummaryText = (contract: any) => {
   const term = termDates(contract);
-  return `${CONTRACT_TERM_MONTHS} months: ${term.start.toLocaleDateString()} → ${term.end.toLocaleDateString()}`;
+  return `${term.months} months: ${formatDateTime(term.start)} → ${formatDateTime(term.end)}`;
+};
+
+const signatureSummaryText = (contract: any) => {
+  const signedAt = asDate(contract?.signatureState?.ownerSignedAt, contract?.ownerSignature?.signedAt, contract?.ownerSignedAt, contract?.signedAt);
+  const signatureName = firstText(contract?.signatureState?.ownerSignatureName, contract?.ownerSignature?.name, contract?.signatureName, contract?.ownerName);
+  if (!signedAt) return 'Owner signature pending';
+  return `Owner signed${signatureName ? ` as ${signatureName}` : ''}: ${formatDateTime(signedAt)}`;
+};
+
+const adminStampSummaryText = (contract: any) => {
+  const stamp = contract?.binGroupStamp || {};
+  const approved = stamp?.stamped === true || contract?.signatureState?.binGroupsApproved === true || contract?.binGroupsApproved === true || contract?.approved === true || contract?.adminApproved === true;
+  if (!approved) return 'BIN GROUP admin stamp pending';
+  const stampDate = asDate(stamp?.stampedAt, stamp?.stampedAtIso, contract?.signatureState?.binGroupsApprovedAt, contract?.binGroupsApprovedAt, contract?.approvedAt);
+  const stampedBy = firstText(stamp?.stampedBy, contract?.signatureState?.binGroupsApprovedBy, contract?.binGroupsApprovedBy, contract?.approvedBy, 'BIN GROUP Admin');
+  return `${firstText(stamp?.label, contract?.binGroupsApprovalLabel, 'BIN GROUP ADMIN APPROVED / DIGITAL STAMP')} — ${stampedBy}${stampDate ? ` at ${formatDateTime(stampDate)}` : ''}`;
 };
 
 const annualValueOf = (contract: any) => firstPositiveNumber(
@@ -156,7 +212,7 @@ const scopeCopy = (scope: ContractScope) => {
 
 const isPostSignature = (contract: any) => {
   const status = String(contract?.status || '').toUpperCase();
-  return POST_SIGNATURE_STATUSES.includes(status) || contract?.ownerSigned === true || contract?.signatureStatus === 'OWNER_SIGNED';
+  return POST_SIGNATURE_STATUSES.includes(status) || contract?.ownerSigned === true || contract?.signatureStatus === 'OWNER_SIGNED' || contract?.signatureState?.ownerSigned === true;
 };
 
 const isSignable = (contract: any) => {
@@ -165,7 +221,7 @@ const isSignable = (contract: any) => {
   return SIGNABLE_STATUSES.includes(status) || contract?.contractStatus === 'awaiting_owner_signature';
 };
 
-const storedContractUrl = (contract: any) => contract?.finalPdfUrl || contract?.pdfUrl || contract?.downloadUrl || contract?.contractUrl || contract?.signedPdfUrl || '';
+const storedContractUrl = (contract: any) => contract?.finalPdfUrl || contract?.pdfUrl || contract?.downloadUrl || contract?.contractUrl || contract?.signedPdfUrl || contract?.signatureState?.pdfUrl || '';
 
 const openOrDownloadContract = (contract: any) => {
   if (!contract) return;
@@ -174,7 +230,8 @@ const openOrDownloadContract = (contract: any) => {
     window.open(url, '_blank', 'noopener,noreferrer');
     return;
   }
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>BIN GROUP Contract</title></head><body style="font-family:Arial;padding:32px"><h1>BIN GROUP Owner Service Agreement</h1><p><b>Reference:</b> ${contract.id || contract.contractId || 'N/A'}</p><p><b>Owner:</b> ${firstText(contract.ownerName, contract.companyProfile?.name, 'Owner')}</p><p><b>Email:</b> ${firstText(contract.ownerEmail, contract.emailDelivery?.recipient, contract.companyProfile?.email, 'N/A')}</p><p><b>Status:</b> ${contract.status || contract.activationStatus || 'N/A'}</p><p><b>Package:</b> ${contract.packageName || contract.planType || normalizeScope(contract)}</p><p><b>Annual Value:</b> ${money(annualValueOf(contract))}</p><p><b>15% Mobilization:</b> ${money(mobilizationOf(contract))}</p></body></html>`;
+  const term = termDates(contract);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>BIN GROUP Contract</title></head><body style="font-family:Arial;padding:32px"><h1>BIN GROUP Owner Service Agreement</h1><p><b>Reference:</b> ${contract.id || contract.contractId || 'N/A'}</p><p><b>Owner:</b> ${firstText(contract.ownerName, contract.companyProfile?.name, 'Owner')}</p><p><b>Email:</b> ${firstText(contract.ownerEmail, contract.emailDelivery?.recipient, contract.companyProfile?.email, 'N/A')}</p><p><b>Status:</b> ${contract.status || contract.activationStatus || 'N/A'}</p><p><b>Package:</b> ${contract.packageName || contract.planType || normalizeScope(contract)}</p><p><b>Contract Term:</b> ${term.months} months from ${formatDateTime(term.start)} to ${formatDateTime(term.end)}</p><p><b>Cancel/Upgrade Window:</b> Until ${formatDateTime(term.firstMonthEnd)}</p><p><b>Owner Signature:</b> ${signatureSummaryText(contract)}</p><p><b>BIN GROUP Stamp:</b> ${adminStampSummaryText(contract)}</p><p><b>Annual Value:</b> ${money(annualValueOf(contract))}</p><p><b>15% Mobilization:</b> ${money(mobilizationOf(contract))}</p></body></html>`;
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -388,6 +445,7 @@ export default function OwnerContractsResolvedPage() {
         <Grid container spacing={2}>
           {contracts.map((contract) => {
             const contractScope = scopeCopy(normalizeScope(contract));
+            const term = termDates(contract);
             return (
               <Grid item xs={12} key={contract.id}>
                 <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 5 }}>
@@ -397,7 +455,14 @@ export default function OwnerContractsResolvedPage() {
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography>
                     </Grid>
                     <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} /></Grid>
-                    <Grid item xs={12} md={3}><Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.65)', fontWeight: 800 }}>{termSummaryText(contract)}</Typography></Stack></Grid>
+                    <Grid item xs={12} md={3}>
+                      <Stack spacing={0.75}>
+                        <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>Cancel/upgrade request window: until {formatDateTime(term.firstMonthEnd)}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>{signatureSummaryText(contract)}</Typography>
+                        <Typography variant="caption" sx={{ color: alpha(binThemeTokens.gold, 0.85), fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
+                      </Stack>
+                    </Grid>
                     <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Download</Button></Stack></Grid>
                   </Grid>
                 </Paper>
