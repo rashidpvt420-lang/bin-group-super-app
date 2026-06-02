@@ -9,13 +9,18 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import ArticleIcon from '@mui/icons-material/Article';
 import { useLanguage } from '../context/LanguageContext';
 import { formatAED } from '../utils/formatters';
-import { generateBilingualContractPdf } from '../../../src/utils/bilingualContractPdf';
 
 interface Props {
     propertyData: any;
     selectedPlan: any;
     onSign: (data: any) => void;
 }
+
+const LEGAL_PROVIDER_NAME = 'BIN GROUP L.L.C - S.P.C';
+const INITIAL_TERM_MONTHS = 13;
+const SERVICE_MONTHS = 12;
+const REVIEW_MONTHS = 1;
+const RENEWAL_TERM_MONTHS = 12;
 
 export default function ContractDigitalSignature({ propertyData, selectedPlan, onSign }: Props) {
     const { t, isRTL } = useLanguage();
@@ -31,29 +36,31 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
 
     const copy = {
         title: isRTL ? 'التوقيع الرقمي والتفعيل' : 'Digital Signature & Activation',
-        otpSent: isRTL ? 'تم إرسال رمز التحقق إلى رقم الهاتف المسجل في سند الملكية.' : 'Institutional Activation: OTP sent to the registered mobile number on the Title Deed.',
-        noticeTitle: isRTL ? 'إشعار البروتوكول القانوني:' : 'Legal Protocol Notice:',
+        otpSent: isRTL ? 'تم تسجيل خطوة التحقق. يتم إصدار النسخة الرسمية من العقد عبر خادم مجموعة بن بعد اعتماد الإدارة.' : 'Verification step recorded. The official contract PDF is generated only by the BIN GROUP backend after admin approval.',
+        noticeTitle: isRTL ? 'إشعار قانوني:' : 'Legal Notice:',
         noticeBody: isRTL
-            ? 'يخضع هذا العقد للأنظمة البلدية والاتحادية ذات الصلة في دولة الإمارات. يؤدي التوقيع إلى تفعيل طبقة إدارة الأصول المؤسسية.'
-            : 'This contract is governed by the relevant UAE municipal and federal regulations. Signing this activates the institutional asset management layer.',
-        version: isRTL ? 'الإصدار: v2.0-UAE-INSTITUTIONAL' : 'VERSION: v2.0-UAE-INSTITUTIONAL',
+            ? 'العقد الأول مدته 13 شهراً: سنة خدمة واحدة مع شهر إضافي للمراجعة والتقييم التشغيلي. يمكن للمالك طلب الإلغاء أو التعديل خلال أول شهر بعد الاعتماد. التجديدات اللاحقة تكون لمدة سنة واحدة فقط ما لم يتم الاتفاق كتابةً على غير ذلك.'
+            : 'The first contract term is 13 months: one service year plus one extra real-time review month. The owner may request cancellation or correction during the first month after approval. Later renewals run for one year only unless agreed otherwise in writing.',
+        version: isRTL ? 'الإصدار: عقد المالك الأول 13 شهراً / التجديد سنة واحدة' : 'VERSION: Initial 13-month owner agreement / one-year renewals',
         parties: isRTL ? '١. الأطراف' : '1. PARTIES',
         property: isRTL ? 'العقار' : 'Property',
         owner: isRTL ? 'المالك / الجهة' : 'Owner/Entity',
         provider: isRTL ? 'مزود الخدمة' : 'Provider',
         scope: isRTL ? '٢. نطاق الخدمات' : '2. SCOPE OF SERVICES',
-        pricing: isRTL ? '٣. الأسعار والدفع' : '3. PRICING & DISBURSEMENT',
-        annualFee: isRTL ? 'الرسوم السنوية' : 'Annual Management Fee',
-        paymentSchedule: isRTL ? 'جدول الدفع: يطبق بيان التسوية المؤسسي.' : 'Payment Schedule: Institutional settlement manifest applies.',
-        durationTitle: isRTL ? '٤. المدة' : '4. DURATION',
-        duration: isRTL ? 'عقد مؤسسي لمدة 12 شهراً مع تجديد تلقائي وفق البروتوكول السيادي.' : '12-month institutional contract with evergreen auto-renewal under Sovereign Protocol.',
+        pricing: isRTL ? '٣. الأسعار والدفع' : '3. PRICING & PAYMENT',
+        annualFee: isRTL ? 'القيمة السنوية' : 'Annual Contract Value',
+        paymentSchedule: isRTL ? 'جدول الدفع: حسب خطة السداد المعتمدة داخل النظام.' : 'Payment schedule: as approved in the digital onboarding and admin verification flow.',
+        durationTitle: isRTL ? '٤. مدة العقد' : '4. CONTRACT TERM',
+        duration: isRTL
+            ? `العقد الأول: ${INITIAL_TERM_MONTHS} شهراً (${SERVICE_MONTHS} شهراً خدمة + ${REVIEW_MONTHS} شهر مراجعة). التجديد: ${RENEWAL_TERM_MONTHS} شهراً فقط.`
+            : `Initial contract: ${INITIAL_TERM_MONTHS} months (${SERVICE_MONTHS} service months + ${REVIEW_MONTHS} review month). Renewal contracts: ${RENEWAL_TERM_MONTHS} months only.`,
         signatureLabel: isRTL ? 'اكتب التوقيع الرقمي' : 'Type Digital Signature',
-        signaturePlaceholder: isRTL ? 'اكتب الاسم الكامل / الشخص المخول' : 'Type Full Name / Authority Authorized Person',
-        signatureHelper: isRTL ? 'اكتب اسمك لتوقيع الاتفاقية رقمياً.' : 'Type your name to digitally sign the agreement.',
-        acceptance: isRTL ? 'أؤكد أنني المالك القانوني أو الممثل المخول وأقبل الاتفاقية وبروتوكول الامتثال للبيانات.' : 'I verify that I am the legal owner or authorized representative and accept the Agreement and Data Compliance Protocol.',
-        verifyOtp: isRTL ? 'التحقق برمز الهاتف' : 'Verify with Mobile OTP',
-        otpLabel: isRTL ? 'أدخل رمز التحقق المكون من 6 أرقام' : 'Enter 6-digit OTP',
-        finalize: isRTL ? 'إنهاء التوقيع والتفعيل' : 'Finalize & Activate',
+        signaturePlaceholder: isRTL ? 'اكتب الاسم الكامل / الشخص المخول' : 'Type Full Name / Authorized Person',
+        signatureHelper: isRTL ? 'هذه خطوة قبول داخل رحلة التقديم. النسخة الرسمية تُنشأ من الخادم بعد اعتماد الإدارة.' : 'This records onboarding acceptance. The official locked PDF is generated server-side after admin approval.',
+        acceptance: isRTL ? 'أؤكد أنني المالك القانوني أو الممثل المخول وأقبل شروط العقد وسياسة أول شهر مراجعة.' : 'I verify that I am the legal owner or authorized representative and accept the contract terms and first-month review policy.',
+        verifyOtp: isRTL ? 'تسجيل خطوة التحقق' : 'Record Verification Step',
+        otpLabel: isRTL ? 'أدخل رمز التحقق المكون من 6 أرقام' : 'Enter 6-digit code',
+        finalize: isRTL ? 'تسجيل القبول والمتابعة' : 'Record Acceptance & Continue',
     };
 
     const handleSendOtp = () => {
@@ -65,30 +72,21 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
         const signedArtifact = {
             signature,
             timestamp: new Date().toISOString(),
-            version: 'v2.0-UAE-INSTITUTIONAL',
+            version: 'INITIAL-13-MONTH-OWNER-AGREEMENT',
             institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            contractTermMonths: INITIAL_TERM_MONTHS,
+            serviceTermMonths: SERVICE_MONTHS,
+            reviewWindowMonths: REVIEW_MONTHS,
+            renewalTermMonths: RENEWAL_TERM_MONTHS,
+            officialPdfSource: 'SERVER_ONLY_AFTER_ADMIN_APPROVAL',
             acceptanceLog: {
                 accepted,
-                otpVerified: true,
-                platform: 'BIN-GENESIS-SOVEREIGN-OS'
+                otpEntered: otp.length >= 6,
+                platform: 'BIN-GROUP-SUPER-APP'
             }
         };
-        
-        generateContractPDF(signedArtifact);
-        onSign(signedArtifact);
-    };
 
-    const generateContractPDF = (artifact: any) => {
-        const contractInfo = getContractContent();
-        generateBilingualContractPdf({
-            artifact,
-            propertyName,
-            ownerName,
-            providerName: 'BIN GROUP PROPERTY MANAGEMENT LLC',
-            contractTitle: contractInfo.title,
-            contractBody: contractInfo.body,
-            annualFeeText: `AED ${formatAED(annualPrice)}`,
-        });
+        onSign(signedArtifact);
     };
 
     const getContractContent = () => {
@@ -126,13 +124,13 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                 <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', mb: 4 }}>
                     {copy.version}
                 </Typography>
-                
+
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="subtitle2" fontWeight="bold">{copy.parties}</Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
                         {copy.property}: {propertyName} <br/>
                         {copy.owner}: {ownerName}<br/>
-                        {copy.provider}: BIN GROUP PROPERTY MANAGEMENT LLC
+                        {copy.provider}: {LEGAL_PROVIDER_NAME}
                     </Typography>
 
                     <Typography variant="subtitle2" fontWeight="bold">{copy.scope}</Typography>
@@ -158,10 +156,10 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
             <Stack spacing={3}>
                 <Box>
                     <Typography variant="subtitle2" fontWeight="bold" gutterBottom>{copy.signatureLabel}</Typography>
-                    <TextField 
-                        fullWidth 
+                    <TextField
+                        fullWidth
                         placeholder={copy.signaturePlaceholder}
-                        value={signature} 
+                        value={signature}
                         onChange={(e) => setSignature(e.target.value)}
                         helperText={copy.signatureHelper}
                         inputProps={{ dir: isRTL ? 'rtl' : 'ltr' }}
@@ -171,18 +169,14 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                 <FormControlLabel
                     sx={{ m: 0, alignItems: 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}
                     control={<Checkbox checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />}
-                    label={
-                        <Typography variant="body2">
-                            {copy.acceptance}
-                        </Typography>
-                    }
+                    label={<Typography variant="body2">{copy.acceptance}</Typography>}
                 />
 
                 {!otpSent ? (
-                    <Button 
-                        variant="outlined" 
-                        size="large" 
-                        disabled={!accepted || !signature} 
+                    <Button
+                        variant="outlined"
+                        size="large"
+                        disabled={!accepted || !signature}
                         onClick={handleSendOtp}
                         startIcon={!isRTL ? <ArticleIcon /> : undefined}
                         endIcon={isRTL ? <ArticleIcon /> : undefined}
@@ -191,15 +185,15 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                     </Button>
                 ) : (
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexDirection: { xs: 'column', sm: isRTL ? 'row-reverse' : 'row' } }}>
-                        <TextField 
+                        <TextField
                             label={copy.otpLabel}
-                            size="small" 
-                            value={otp} 
+                            size="small"
+                            value={otp}
                             onChange={(e) => setOtp(e.target.value)}
                             inputProps={{ dir: 'ltr', inputMode: 'numeric' }}
                         />
-                        <Button 
-                            variant="contained" 
+                        <Button
+                            variant="contained"
                             color="success"
                             size="large"
                             disabled={otp.length < 6}
@@ -214,9 +208,9 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
                 )}
             </Stack>
 
-            <Snackbar 
-                open={snackbar.open} 
-                autoHideDuration={6000} 
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
