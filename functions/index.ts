@@ -919,10 +919,10 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
                 assignedTechnicianPhone: bestTech.data.phone || bestTech.data.phoneNumber || "",
                 assignedTechnicianAvatar: bestTech.data.photoURL || "",
                 technicianSpecialty: bestTech.data.specialty || bestTech.data.trade || "",
-                status: "accepted",
-                dispatchStatus: "ASSIGNED",
+                status: "AUTO_ASSIGNED",
+                dispatchStatus: "AUTO_ASSIGNED",
                 trackingStatus: "TECHNICIAN_ASSIGNED",
-                acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+                autoAssignedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
