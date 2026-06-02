@@ -39,7 +39,6 @@ const WHATSAPP_URL = 'https://wa.me/971552423233';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
 const DEMO_URL = '/request-demo';
-const VIDEOS_URL = '/videos';
 
 const en: MarketingCopy = {
   brand: 'BIN GROUP',
@@ -199,7 +198,6 @@ function Nav({ c }: { c: MarketingCopy }) {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1, justifyContent: isRTL ? 'flex-start' : 'flex-end', width: { xs: '100%', md: 'auto' } }}>
           <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
           <InternalActionButton href={DEMO_URL} variant="text" icon={<PlayCircle size={17} />}>{c.demo}</InternalActionButton>
-          <InternalActionButton href={VIDEOS_URL} variant="text">{c.videos}</InternalActionButton>
           <Button
             type="button"
             onClick={() => setLang(nextLang)}
