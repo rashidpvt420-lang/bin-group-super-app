@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, onAuthStateChanged, app } from '@/lib/firebase';
-import { signOut, getIdTokenResult } from 'firebase/auth';
+import { signOut, getIdTokenResult, signInWithEmailAndPassword } from 'firebase/auth';
 import { getDoc, doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken } from 'firebase/messaging';
 
@@ -9,7 +9,7 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     user: any;
-    login: (credentials: any) => Promise<void>;
+    login: (credentials: { email?: string; password?: string }) => Promise<void>;
     logout: () => void;
 }
 
@@ -164,8 +164,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, []);
 
-    const login = async (credentials: any) => {
-        // Implementation provided by UnifiedLogin or direct firebase call
+    const login = async (credentials: { email?: string; password?: string }) => {
+        const email = String(credentials?.email || '').trim();
+        const password = String(credentials?.password || '');
+
+        if (!email || !password) {
+            const validationError = 'Admin email and password are required.';
+            setError(validationError);
+            throw new Error(validationError);
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            // The onAuthStateChanged handshake above performs role validation and audit logging.
+        } catch (err: any) {
+            console.error('🛡️ [AUTH] Admin login failed:', err);
+            const message = err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found'
+                ? 'Invalid admin email or password.'
+                : 'Admin login failed. Please try again.';
+            setError(message);
+            setLoading(false);
+            throw new Error(message);
+        }
     };
 
     const logout = async () => {
