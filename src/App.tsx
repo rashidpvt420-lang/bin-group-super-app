@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
@@ -43,28 +43,41 @@ import { NavigationControl } from './components/navigation/NavigationControl';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { attachForegroundPushListener, registerPushNotifications, shouldRequestPushForRole } from './services/pushNotificationService';
 
-/**
- * [CRITICAL FIX #1]: One-time legacy onboarding cleanup
- * This guard ensures ONLY old keys are removed, NEVER the active v3 store.
- * The active v3 store ('bin-group-onboarding-v3') persists correctly and should NEVER be cleared here.
- */
 const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'];
 const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';
 const ACTIVE_ONBOARDING_STORE_KEY = 'bin-group-onboarding-v3';
 
+const ADMIN_STAFF_ROLES = [
+  'admin',
+  'super_admin',
+  'ceo',
+  'manager',
+  'operations_admin',
+  'finance_admin',
+  'hr_admin',
+  'support_admin',
+  'hr_manager',
+  'hr_staff',
+  'finance_staff',
+  'account_manager',
+  'dispatcher',
+  'operations_manager',
+];
+
+const NOTIFICATION_ROLES = [
+  'owner',
+  'tenant',
+  'technician',
+  'broker',
+  ...ADMIN_STAFF_ROLES,
+];
+
 function runOneTimeLegacyOnboardingCleanup() {
   try {
     if (localStorage.getItem(MIGRATION_KEY) === 'true') return;
-    
-    // SAFETY: Verify active store key exists before cleanup
     const hasActiveStore = localStorage.getItem(ACTIVE_ONBOARDING_STORE_KEY);
-    
-    // Only clear legacy keys, never the active store
     LEGACY_ONBOARDING_KEYS.forEach((key) => localStorage.removeItem(key));
-    
-    // Mark migration complete
     localStorage.setItem(MIGRATION_KEY, 'true');
-    
     console.log('[APP] One-time legacy cleanup done. Active store preserved:', !!hasActiveStore);
   } catch (error) {
     console.warn('[APP] One-time legacy onboarding cleanup failed', error);
@@ -195,17 +208,7 @@ function RoleRedirector({ children }: { children: React.ReactNode }) {
     if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
-    if (
-      normalizedRole === 'admin' ||
-      normalizedRole === 'ceo' ||
-      normalizedRole === 'hr_manager' ||
-      normalizedRole === 'hr_staff' ||
-      normalizedRole === 'finance_staff' ||
-      normalizedRole === 'account_manager' ||
-      normalizedRole === 'finance_admin' ||
-      normalizedRole === 'dispatcher' ||
-      normalizedRole === 'operations_manager'
-    ) return <Navigate to="/admin/dashboard" replace />;
+    if (ADMIN_STAFF_ROLES.includes(normalizedRole)) return <Navigate to="/admin/dashboard" replace />;
     if (normalizedRole === 'owner') return <Navigate to="/owner/dashboard" replace />;
   }
 
@@ -279,7 +282,7 @@ function AppContent() {
         <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
         <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
         <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
-        <Route path="/notifications" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'technician', 'broker']}><NotificationInboxPage /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute allowedRoles={NOTIFICATION_ROLES}><NotificationInboxPage /></ProtectedRoute>} />
         <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignStudioPage /></ProtectedRoute>} />
         <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignRequestDetailPage /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
@@ -289,9 +292,7 @@ function AppContent() {
         <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerApp /></ProtectedRoute>} />
         <Route path="/owner/*" element={<ProtectedRoute allowedRoles={['owner', 'ceo']}><OwnerApp /></ProtectedRoute>} />
         <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
-        <Route path="/admin/*" element={<ProtectedRoute allowedRoles={[
-          'admin', 'ceo', 'hr_manager', 'hr_staff', 'finance_staff', 'account_manager', 'finance_admin', 'dispatcher', 'operations_manager'
-        ]}><AdminTerminal /></ProtectedRoute>} />
+        <Route path="/admin/*" element={<ProtectedRoute allowedRoles={ADMIN_STAFF_ROLES}><AdminTerminal /></ProtectedRoute>} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
@@ -356,4 +357,3 @@ export default function App() {
     </Router>
   );
 }
-
