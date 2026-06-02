@@ -41,16 +41,11 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
 
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   if (!key || key === "mock_key") {
-    console.warn("Stripe key is missing or mock; returning mock session URL.");
-    let mockUrl = `https://bin-group-57c60.web.app/payment-success?session_id=mock&ownerUid=${encodeURIComponent(ownerUid)}`;
-    if (intakeId) mockUrl += `&intakeId=${encodeURIComponent(intakeId)}`;
-    if (ticketId) mockUrl += `&ticketId=${encodeURIComponent(ticketId)}`;
-    if (designRequestId) mockUrl += `&designRequestId=${encodeURIComponent(designRequestId)}`;
-    
-    return {
-      id: "mock_session_id_" + Date.now(),
-      url: mockUrl
-    };
+    console.error("Stripe checkout blocked: STRIPE_SECRET_KEY is not configured for production.");
+    throw new HttpsError(
+      "failed-precondition",
+      "Online card payment is not configured. Use bank transfer/manual verification until the payment provider is activated."
+    );
   }
 
   const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
