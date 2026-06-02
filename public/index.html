@@ -1,24 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="utf-8" />
     <meta name="google-site-verification" content="mm_dIPIuegRkyjnI5sMjxWmzCOESKt3_I0CdG9oUwHg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0b0c" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.firebaseapp.com https://*.googleapis.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.run.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
 
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="BIN-Groups" />
+    <meta name="apple-mobile-web-app-title" content="BIN GROUP" />
 
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/logo.png" />
 
-    <title>BIN-GROUPS | Real-Time Property Operations OS for the UAE</title>
-    <meta name="description" content="BIN-GROUPS connects UAE property owners, tenants, technicians, brokers, payments, documents, contracts, demo videos, and AI design in one verified real-time operations system." />
-    <meta property="og:title" content="BIN-Groups | UAE Property Operations OS" />
-    <meta property="og:description" content="Smart maintenance, property management, technician dispatch, tenant service, owner contracts, demo videos, and AI design across the UAE." />
+    <title>BIN GROUP | Smart Maintenance & Property Management UAE</title>
+    <meta name="description" content="BIN GROUP helps UAE property owners start property details, receive quotes, select maintenance or property management contracts, track technicians, and keep proof-of-work records in one app." />
+    <meta property="og:title" content="BIN GROUP | Smart Maintenance & Property Management UAE" />
+    <meta property="og:description" content="Start property details, get a quote, request a contract, track maintenance, and manage property proof in one trusted UAE property-care system." />
     <meta property="og:image" content="https://bin-groups.com/logo.png" />
     <meta property="og:url" content="https://bin-groups.com" />
     <meta property="og:type" content="website" />
@@ -36,49 +36,63 @@
         startedAt: Date.now()
       };
       window.addEventListener("error", function (event) {
-        console.error("BIN-GROUPS BOOT ERROR:", event.message, event.filename, event.lineno, event.colno);
+        console.error("BIN GROUP BOOT ERROR:", event.message, event.filename, event.lineno, event.colno);
       });
       window.addEventListener("unhandledrejection", function (event) {
-        console.error("BIN-GROUPS BOOT PROMISE REJECTION:", event.reason);
+        console.error("BIN GROUP BOOT PROMISE REJECTION:", event.reason);
       });
     </script>
 
     <style>
-        body { background-color: #0B0B0C; color: #FFFFFF; margin: 0; font-family: 'Inter', 'Cairo', sans-serif; overflow-x: hidden; }
+        :root { --gold: #c6a75e; --bg: #050505; --panel: rgba(255,255,255,0.045); --muted: rgba(255,255,255,0.72); }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; }
+        body { background-color: var(--bg); color: #FFFFFF; margin: 0; font-family: 'Inter', 'Cairo', sans-serif; overflow-x: hidden; }
         [data-bin-groups-react="mounted"] .bin-static-shell { display: none !important; }
-        .system-loader { height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; color: #C6A75E; font-family: sans-serif; font-weight: 900; letter-spacing: 4px; flex-direction: column; line-height: 1.5; }
-        .ar-font { font-family: 'Cairo', sans-serif; }
-        .public-shell { min-height: 100vh; background: radial-gradient(circle at top left, rgba(198,167,94,0.16), transparent 32rem), #0b0b0c; color: #fff; padding: 32px; box-sizing: border-box; }
+        .ar-font, [dir="rtl"] body { font-family: 'Cairo', 'Inter', sans-serif; }
+        .public-shell { min-height: 100vh; background: radial-gradient(circle at top left, rgba(198,167,94,0.18), transparent 32rem), #050505; color: #fff; padding: 28px; }
         .public-shell-inner { max-width: 1160px; margin: 0 auto; }
-        .public-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 52px; }
-        .public-brand { color: #c6a75e; font-weight: 950; letter-spacing: 3px; text-transform: uppercase; }
-        .public-links { display: flex; flex-wrap: wrap; gap: 14px; justify-content: flex-end; }
-        .public-links a, .public-cta a, .public-contact a { color: #fff; text-decoration: none; font-weight: 800; }
-        .public-links a { color: rgba(255,255,255,0.74); font-size: 13px; }
-        .public-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr); gap: 36px; align-items: center; }
-        .public-kicker { color: #c6a75e; font-size: 12px; font-weight: 950; letter-spacing: 4px; text-transform: uppercase; }
-        .public-title { margin: 16px 0; font-size: clamp(40px, 6vw, 76px); line-height: 0.95; font-weight: 950; letter-spacing: 0; }
-        .public-copy { max-width: 760px; color: rgba(255,255,255,0.72); font-size: 18px; line-height: 1.7; }
-        .public-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 30px 0; }
-        .public-cta a { border: 1px solid rgba(198,167,94,0.55); border-radius: 8px; padding: 13px 18px; }
-        .public-cta a:first-child { background: #c6a75e; color: #050505; }
-        .public-panel { border: 1px solid rgba(198,167,94,0.22); background: rgba(255,255,255,0.045); border-radius: 8px; padding: 24px; }
-        .public-panel h2 { margin: 0 0 12px; color: #c6a75e; font-size: 18px; }
-        .public-panel ul { margin: 0; padding-left: 18px; color: rgba(255,255,255,0.72); line-height: 1.9; }
-        .public-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 36px; }
-        .public-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 18px; background: rgba(255,255,255,0.035); }
+        .public-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0 38px; }
+        .public-brand { color: var(--gold); font-weight: 950; letter-spacing: 3px; text-transform: uppercase; font-size: 18px; }
+        .public-links { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; align-items: center; }
+        .public-links a, .public-links button, .public-cta a, .public-cta button, .public-contact a { color: #fff; text-decoration: none; font-weight: 900; font-family: inherit; }
+        .public-links a, .public-links button { color: rgba(255,255,255,0.76); font-size: 13px; background: transparent; border: 0; cursor: pointer; padding: 0; }
+        .public-links .gold-link, .public-links .lang-btn { color: var(--gold); }
+        .public-hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: 36px; align-items: center; }
+        .public-kicker { color: var(--gold); font-size: 12px; font-weight: 950; letter-spacing: 4px; text-transform: uppercase; }
+        .public-title { margin: 16px 0; font-size: clamp(38px, 6vw, 72px); line-height: 0.95; font-weight: 950; letter-spacing: -1.8px; }
+        .public-copy { max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.72; }
+        .public-cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 30px 0 16px; }
+        .public-cta a, .public-cta button { border: 1px solid rgba(198,167,94,0.6); border-radius: 14px; padding: 15px 20px; cursor: pointer; background: transparent; font-size: 16px; min-height: 54px; display: inline-flex; align-items: center; justify-content: center; }
+        .public-cta .primary-cta { background: var(--gold); color: #050505; border-color: var(--gold); }
+        .public-cta .secondary-cta { color: #fff; }
+        .public-cta .whatsapp-cta { color: var(--gold); }
+        .public-panel { border: 1px solid rgba(198,167,94,0.24); background: var(--panel); border-radius: 18px; padding: 26px; }
+        .public-panel h2 { margin: 0 0 14px; color: var(--gold); font-size: 22px; }
+        .public-panel ul { margin: 0; padding-left: 20px; color: var(--muted); line-height: 1.9; }
+        [dir="rtl"] .public-panel ul { padding-left: 0; padding-right: 20px; }
+        .flow-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
+        .flow-step { border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.035); border-radius: 14px; padding: 16px; }
+        .flow-step strong { display: block; color: #fff; margin-bottom: 8px; }
+        .flow-step span { color: rgba(255,255,255,0.62); font-size: 14px; line-height: 1.55; }
+        .public-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 34px; }
+        .public-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 18px; background: rgba(255,255,255,0.035); }
         .public-card strong { display: block; color: #fff; margin-bottom: 8px; }
         .public-card span { color: rgba(255,255,255,0.62); font-size: 14px; line-height: 1.55; }
         .public-contact { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; color: rgba(255,255,255,0.65); }
-        .public-contact a { color: #c6a75e; }
-        .system-loader { min-height: auto; height: auto; padding: 22px; background: transparent; font-size: 12px; }
+        .public-contact a { color: var(--gold); }
+        .system-loader { margin-top: 26px; padding: 14px 0; background: transparent; color: rgba(198,167,94,0.55); font-size: 11px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
         .route-content { display: none; }
         body:not(.bin-groups-timeout-visible) .route-home { display: block; }
+        [dir="rtl"] .public-shell { text-align: right; }
+        [dir="rtl"] .public-nav { direction: rtl; }
         @media (max-width: 800px) {
             .public-shell { padding: 22px; }
             .public-nav, .public-hero { display: block; }
             .public-links { justify-content: flex-start; margin-top: 18px; }
-            .public-grid { grid-template-columns: 1fr; }
+            [dir="rtl"] .public-links { justify-content: flex-end; }
+            .public-grid, .flow-strip { grid-template-columns: 1fr; }
+            .public-cta a, .public-cta button { width: 100%; }
         }
     </style>
 </head>
@@ -86,99 +100,146 @@
     <noscript>
         <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif;">
             <h1 style="font-weight: 900; letter-spacing: 2px;">JAVASCRIPT REQUIRED / تفعيل الجافا سكربت مطلوب</h1>
-            <p style="color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6;">To access the BIN GROUP property operations OS, please enable JavaScript in your browser settings.</p>
+            <p style="color: #fff; opacity: 0.8; max-width: 600px; line-height: 1.6;">To access the BIN GROUP property operations app, please enable JavaScript in your browser settings.</p>
         </div>
     </noscript>
 
     <div id="root">
-        <main class="public-shell bin-static-shell" aria-label="BIN-GROUPS public company profile">
+        <main class="public-shell bin-static-shell" aria-label="BIN GROUP public company profile">
             <div class="public-shell-inner">
                 <nav class="public-nav" aria-label="Public navigation">
-                    <div class="public-brand">BIN-GROUPS</div>
+                    <div class="public-brand" data-i18n="brand">BIN GROUP</div>
                     <div class="public-links">
-                        <a href="/owners">Owners</a>
-                        <a href="/tenants">Tenants</a>
-                        <a href="/technicians">Technicians</a>
-                        <a href="/brokers">Brokers</a>
-                        <a href="/security">Security</a>
-                        <a href="/request-demo" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Demo</a>
-                        <a href="/onboarding" style="color: #c6a75e; font-weight: 950; margin-left: 8px;">Get Started</a>
+                        <a href="/owners" data-i18n="navOwners">Owners</a>
+                        <a href="/tenants" data-i18n="navTenants">Tenants</a>
+                        <a href="/technicians" data-i18n="navTechnicians">Technicians</a>
+                        <a href="/brokers" data-i18n="navBrokers">Brokers</a>
+                        <a href="/security" data-i18n="navSecurity">Security</a>
+                        <a href="/request-demo" class="gold-link" data-i18n="navDemo">Demo</a>
+                        <a href="/onboarding" class="gold-link" data-i18n="navStart">Start</a>
+                        <button type="button" class="lang-btn" onclick="toggleStaticLanguage()" data-i18n="language">العربية</button>
                     </div>
                 </nav>
 
                 <div id="static-route-home" class="route-content route-home">
                     <section class="public-hero">
                         <div>
-                            <div class="public-kicker">UAE Property Operations</div>
-                            <h1 class="public-title">BIN-GROUPS — The Real-Time Property Operations OS for the UAE</h1>
-                            <p class="public-copy">
-                                From villas to skyscrapers, malls, hospitals, stadiums, hotels, government properties,
-                                and Majlis operations — BIN-GROUPS connects owners, tenants, technicians, brokers,
-                                payments, documents, contracts, demo videos, and AI design in one verified command system.
+                            <div class="public-kicker" data-i18n="kicker">UAE Property Care System</div>
+                            <h1 class="public-title" data-i18n="title">Start Your Property Details. Get Quote. Sign Contract.</h1>
+                            <p class="public-copy" data-i18n="copy">
+                                BIN GROUP helps UAE property owners move from maintenance confusion to one clear system: property details, instant quote, contract selection, 15% mobilization, tenant requests, technician dispatch, proof-of-work, and owner reports.
                             </p>
                             <div class="public-cta">
-                                <a href="/onboarding" class="primary-cta">Request Contract</a>
-                                <a href="/request-demo" class="secondary-cta">Watch Demo</a>
-                                <a href="/contact" class="secondary-cta">Contact BIN GROUP</a>
+                                <a href="/onboarding" class="primary-cta" data-i18n="startProperty">Start Property Details</a>
+                                <a href="/onboarding" class="secondary-cta" data-i18n="getQuote">Get Instant Quote</a>
+                                <a href="/request-demo" class="secondary-cta" data-i18n="watchDemo">Watch Demo</a>
+                                <a href="https://wa.me/971552423233" class="whatsapp-cta" data-i18n="whatsapp">WhatsApp BIN GROUP</a>
+                            </div>
+                            <div class="flow-strip" aria-label="Owner onboarding flow">
+                              <div class="flow-step"><strong data-i18n="flow1Title">1. Property Details</strong><span data-i18n="flow1Text">Add building, villa, tower, units, age, systems, and location.</span></div>
+                              <div class="flow-step"><strong data-i18n="flow2Title">2. Instant Quote</strong><span data-i18n="flow2Text">See maintenance or property management scope and pricing path.</span></div>
+                              <div class="flow-step"><strong data-i18n="flow3Title">3. Contract</strong><span data-i18n="flow3Text">Choose maintenance, management, or full coverage.</span></div>
+                              <div class="flow-step"><strong data-i18n="flow4Title">4. Service Tracking</strong><span data-i18n="flow4Text">Track tenants, technicians, evidence, reports, and property passport.</span></div>
                             </div>
                         </div>
                         <aside class="public-panel">
-                            <h2>Built For Every UAE Asset Type</h2>
+                            <h2 data-i18n="panelTitle">Built For Serious UAE Property Owners</h2>
                             <ul>
-                                <li>Villas, apartments, towers, offices, and retail centers</li>
-                                <li>Malls, hotels, hospitals, clinics, schools, and warehouses</li>
-                                <li>Government properties, private Majlis, stadiums, and event venues</li>
-                                <li>Verified documents, geo-anchored properties, contracts, payments, reports, and demo workflows</li>
+                                <li data-i18n="panel1">Villas, apartments, towers, offices, and retail centers</li>
+                                <li data-i18n="panel2">Malls, hotels, hospitals, clinics, schools, and warehouses</li>
+                                <li data-i18n="panel3">Government-style portfolios, private Majlis, and event venues</li>
+                                <li data-i18n="panel4">Contracts, payments, reports, GPS dispatch, proof, and property history</li>
                             </ul>
                         </aside>
                     </section>
                 </div>
 
                 <div id="static-route-owners" class="route-content">
-                    <h1 class="public-title">Owner Command</h1>
-                    <p class="public-copy">Operate every property with verified contracts, documents, payments, service proof, and approvals. Get real-time portfolio analytics and AI design upgrades.</p>
-                    <div class="public-cta"><a href="/onboarding" class="primary-cta">Request Contract</a><a href="/request-demo" class="secondary-cta">Watch Demo</a></div>
+                    <h1 class="public-title" data-i18n="ownersTitle">Owner Command</h1>
+                    <p class="public-copy" data-i18n="ownersCopy">Start property details, request contracts, manage tenant service, review evidence, and track property reports from one place.</p>
+                    <div class="public-cta"><a href="/onboarding" class="primary-cta" data-i18n="startProperty">Start Property Details</a><a href="/request-demo" class="secondary-cta" data-i18n="watchDemo">Watch Demo</a></div>
                 </div>
 
                 <div id="static-route-tenants" class="route-content">
-                    <h1 class="public-title">Tenant Care</h1>
-                    <p class="public-copy">Fast maintenance requests, technician tracking, and clear move-in/move-out support with photo proof and status visibility.</p>
-                    <div class="public-cta"><a href="/login" class="primary-cta">Tenant Login</a><a href="/request-demo" class="secondary-cta">Watch Demo</a></div>
+                    <h1 class="public-title" data-i18n="tenantsTitle">Tenant Care</h1>
+                    <p class="public-copy" data-i18n="tenantsCopy">Tenants can submit maintenance requests, upload photos, track technician status, and confirm completion.</p>
+                    <div class="public-cta"><a href="/login" class="primary-cta" data-i18n="tenantLogin">Tenant Login</a><a href="/request-demo" class="secondary-cta" data-i18n="watchDemo">Watch Demo</a></div>
                 </div>
 
                 <div id="static-route-security" class="route-content">
-                    <h1 class="public-title">Sovereign Security</h1>
-                    <p class="public-copy">Document protection, audit logs, role access, and evidence protocols. Every interaction is secured through structured access controls.</p>
-                    <div class="public-cta"><a href="/request-demo" class="primary-cta">Watch Demo</a><a href="/onboarding" class="secondary-cta">Get Started</a></div>
+                    <h1 class="public-title" data-i18n="securityTitle">Trust, Proof & Security</h1>
+                    <p class="public-copy" data-i18n="securityCopy">Role-based access, proof-of-work records, document protection, audit logs, and verified property history.</p>
+                    <div class="public-cta"><a href="/request-demo" class="primary-cta" data-i18n="watchDemo">Watch Demo</a><a href="/onboarding" class="secondary-cta" data-i18n="startProperty">Start Property Details</a></div>
                 </div>
 
                 <section class="public-grid" aria-label="Platform capabilities">
-                    <div class="public-card"><strong>Owners</strong><span>Onboard properties, upload title deeds, select service plans, approve payments, and receive reports.</span></div>
-                    <div class="public-card"><strong>Tenants</strong><span>Submit emergency requests, track technician status, upload evidence, and chat with support.</span></div>
-                    <div class="public-card"><strong>Technicians</strong><span>Receive routed jobs, open maps, update status, track duty, and handle field evidence.</span></div>
-                    <div class="public-card"><strong>Brokers</strong><span>Register leads, support owners, track referrals, and prepare commission-ready records.</span></div>
-                    <div class="public-card"><strong>Demo & Videos</strong><span>Show owner, tenant, technician, broker, GPS, PDF, and AI Design Studio workflows before onboarding.</span></div>
-                    <div class="public-card"><strong>Security</strong><span>Role-based access, document protection, proof history, and audit logging.</span></div>
+                    <div class="public-card"><strong data-i18n="cardOwners">Owners</strong><span data-i18n="cardOwnersText">Onboard properties, request contracts, approve payments, and receive reports.</span></div>
+                    <div class="public-card"><strong data-i18n="cardTenants">Tenants</strong><span data-i18n="cardTenantsText">Submit service requests, upload evidence, and track technician status.</span></div>
+                    <div class="public-card"><strong data-i18n="cardTechnicians">Technicians</strong><span data-i18n="cardTechniciansText">Receive routed jobs, update status, and upload before-and-after proof.</span></div>
+                    <div class="public-card"><strong data-i18n="cardBrokers">Brokers</strong><span data-i18n="cardBrokersText">Register leads, support owners, and track referral opportunities.</span></div>
+                    <div class="public-card"><strong data-i18n="cardDemos">Demo & Videos</strong><span data-i18n="cardDemosText">Preview owner, tenant, technician, broker, GPS, PDF, and AI design flows.</span></div>
+                    <div class="public-card"><strong data-i18n="cardSecurity">Security</strong><span data-i18n="cardSecurityText">Role-based access, document protection, evidence history, and audit logging.</span></div>
                 </section>
 
                 <footer class="public-contact">
-                    <span>Contact BIN GROUP:</span>
+                    <span data-i18n="contactLabel">Contact BIN GROUP:</span>
                     <a href="https://wa.me/971552423233">WhatsApp +971 55 2423233</a>
                     <a href="tel:+971557474560">Phone +971 55 7474560</a>
                     <a href="mailto:owner@bin-group.com">owner@bin-group.com</a>
-                    <a href="/support">Support Center</a>
+                    <a href="/support" data-i18n="support">Support Center</a>
                 </footer>
 
                 <div id="bin-boot-loader" class="system-loader" aria-live="polite">
-                    <div>INITIALIZING BIN-GROUPS OS...</div>
-                    <div class="ar-font">جاري تهيئة النظام...</div>
+                    <div>FULL APP IS LOADING...</div>
+                    <div class="ar-font">جاري تحميل التطبيق الكامل...</div>
                 </div>
             </div>
         </main>
     </div>
 
     <script>
+      var COPY = {
+        en: {
+          brand: 'BIN GROUP', navOwners: 'Owners', navTenants: 'Tenants', navTechnicians: 'Technicians', navBrokers: 'Brokers', navSecurity: 'Security', navDemo: 'Demo', navStart: 'Start', language: 'العربية',
+          kicker: 'UAE Property Care System', title: 'Start Your Property Details. Get Quote. Sign Contract.', copy: 'BIN GROUP helps UAE property owners move from maintenance confusion to one clear system: property details, instant quote, contract selection, 15% mobilization, tenant requests, technician dispatch, proof-of-work, and owner reports.',
+          startProperty: 'Start Property Details', getQuote: 'Get Instant Quote', watchDemo: 'Watch Demo', whatsapp: 'WhatsApp BIN GROUP',
+          flow1Title: '1. Property Details', flow1Text: 'Add building, villa, tower, units, age, systems, and location.', flow2Title: '2. Instant Quote', flow2Text: 'See maintenance or property management scope and pricing path.', flow3Title: '3. Contract', flow3Text: 'Choose maintenance, management, or full coverage.', flow4Title: '4. Service Tracking', flow4Text: 'Track tenants, technicians, evidence, reports, and property passport.',
+          panelTitle: 'Built For Serious UAE Property Owners', panel1: 'Villas, apartments, towers, offices, and retail centers', panel2: 'Malls, hotels, hospitals, clinics, schools, and warehouses', panel3: 'Government-style portfolios, private Majlis, and event venues', panel4: 'Contracts, payments, reports, GPS dispatch, proof, and property history',
+          ownersTitle: 'Owner Command', ownersCopy: 'Start property details, request contracts, manage tenant service, review evidence, and track property reports from one place.', tenantsTitle: 'Tenant Care', tenantsCopy: 'Tenants can submit maintenance requests, upload photos, track technician status, and confirm completion.', tenantLogin: 'Tenant Login', securityTitle: 'Trust, Proof & Security', securityCopy: 'Role-based access, proof-of-work records, document protection, audit logs, and verified property history.',
+          cardOwners: 'Owners', cardOwnersText: 'Onboard properties, request contracts, approve payments, and receive reports.', cardTenants: 'Tenants', cardTenantsText: 'Submit service requests, upload evidence, and track technician status.', cardTechnicians: 'Technicians', cardTechniciansText: 'Receive routed jobs, update status, and upload before-and-after proof.', cardBrokers: 'Brokers', cardBrokersText: 'Register leads, support owners, and track referral opportunities.', cardDemos: 'Demo & Videos', cardDemosText: 'Preview owner, tenant, technician, broker, GPS, PDF, and AI design flows.', cardSecurity: 'Security', cardSecurityText: 'Role-based access, document protection, evidence history, and audit logging.', contactLabel: 'Contact BIN GROUP:', support: 'Support Center'
+        },
+        ar: {
+          brand: 'BIN GROUP', navOwners: 'الملاك', navTenants: 'المستأجرون', navTechnicians: 'الفنيون', navBrokers: 'الوسطاء', navSecurity: 'الأمان', navDemo: 'العرض', navStart: 'ابدأ', language: 'English',
+          kicker: 'نظام العناية بالعقارات في الإمارات', title: 'ابدأ تفاصيل العقار. احصل على عرض سعر. وقّع العقد.', copy: 'BIN GROUP يساعد ملاك العقارات في الإمارات على الانتقال من فوضى الصيانة إلى نظام واضح واحد: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، طلبات المستأجرين، إرسال الفنيين، إثبات العمل، وتقارير المالك.',
+          startProperty: 'ابدأ تفاصيل العقار', getQuote: 'احصل على عرض سعر فوري', watchDemo: 'شاهد العرض', whatsapp: 'واتساب BIN GROUP',
+          flow1Title: '١. تفاصيل العقار', flow1Text: 'أضف المبنى أو الفيلا أو البرج والوحدات والعمر والأنظمة والموقع.', flow2Title: '٢. عرض سعر فوري', flow2Text: 'شاهد نطاق الصيانة أو إدارة العقار ومسار التسعير.', flow3Title: '٣. العقد', flow3Text: 'اختر الصيانة أو الإدارة أو التغطية الكاملة.', flow4Title: '٤. تتبع الخدمة', flow4Text: 'تتبع المستأجرين والفنيين والإثباتات والتقارير وجواز العقار.',
+          panelTitle: 'مصمم لملاك العقارات الجادين في الإمارات', panel1: 'فلل، شقق، أبراج، مكاتب، ومراكز تجارية', panel2: 'مولات، فنادق، مستشفيات، عيادات، مدارس، ومستودعات', panel3: 'محافظ عقارية حكومية الطابع، مجالس خاصة، ومواقع فعاليات', panel4: 'عقود، مدفوعات، تقارير، إرسال GPS، إثباتات، وتاريخ العقار',
+          ownersTitle: 'قيادة الملاك', ownersCopy: 'ابدأ تفاصيل العقار، اطلب العقود، أدر خدمة المستأجرين، راجع الإثباتات، وتابع تقارير العقار من مكان واحد.', tenantsTitle: 'رعاية المستأجرين', tenantsCopy: 'يمكن للمستأجرين إرسال طلبات الصيانة ورفع الصور وتتبع حالة الفني وتأكيد الإنجاز.', tenantLogin: 'دخول المستأجر', securityTitle: 'الثقة والإثبات والأمان', securityCopy: 'صلاحيات حسب الدور، سجلات إثبات العمل، حماية المستندات، سجلات تدقيق، وتاريخ عقاري موثق.',
+          cardOwners: 'الملاك', cardOwnersText: 'تسجيل العقارات، طلب العقود، اعتماد المدفوعات، واستلام التقارير.', cardTenants: 'المستأجرون', cardTenantsText: 'إرسال طلبات الخدمة ورفع الإثباتات وتتبع حالة الفني.', cardTechnicians: 'الفنيون', cardTechniciansText: 'استلام المهام وتحديث الحالة ورفع صور قبل وبعد.', cardBrokers: 'الوسطاء', cardBrokersText: 'تسجيل العملاء المحتملين ودعم الملاك وتتبع فرص الإحالة.', cardDemos: 'العروض والفيديوهات', cardDemosText: 'معاينة مسارات المالك والمستأجر والفني والوسيط وGPS وPDF وتصميم AI.', cardSecurity: 'الأمان', cardSecurityText: 'صلاحيات حسب الدور، حماية المستندات، تاريخ الإثباتات، وسجلات التدقيق.', contactLabel: 'تواصل مع BIN GROUP:', support: 'مركز الدعم'
+        }
+      };
+
+      function applyStaticLanguage(lang) {
+        var selected = lang === 'ar' ? 'ar' : 'en';
+        localStorage.setItem('bin_language', selected);
+        localStorage.setItem('language', selected);
+        document.documentElement.lang = selected;
+        document.documentElement.dir = selected === 'ar' ? 'rtl' : 'ltr';
+        document.body.dir = selected === 'ar' ? 'rtl' : 'ltr';
+        Object.keys(COPY[selected]).forEach(function(key) {
+          document.querySelectorAll('[data-i18n="' + key + '"]').forEach(function(node) {
+            node.textContent = COPY[selected][key];
+          });
+        });
+      }
+
+      function toggleStaticLanguage() {
+        var current = localStorage.getItem('bin_language') === 'ar' ? 'ar' : 'en';
+        applyStaticLanguage(current === 'ar' ? 'en' : 'ar');
+      }
+
       (function() {
+        applyStaticLanguage(localStorage.getItem('bin_language') || 'en');
         var path = window.location.pathname;
         var contents = document.querySelectorAll('.route-content');
         contents.forEach(function(c) { c.style.display = 'none'; });
