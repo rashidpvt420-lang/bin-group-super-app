@@ -117,6 +117,13 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     ...requiredStackIds,
   ]);
   const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
+  const selectedSystemGroups = systemGroups
+    .map((group) => ({
+      title: group.title,
+      systems: group.systems.filter((system) => Boolean((activeProperty as any)[system.key])),
+    }))
+    .filter((group) => group.systems.length > 0);
+  const selectedSystemCount = selectedSystemGroups.reduce((count, group) => count + group.systems.length, 0);
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
   useEffect(() => {
@@ -156,6 +163,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
 
   const setSystem = (key: string, checked: boolean) => {
     updateProperty(0, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
+    calculateSummary();
   };
 
   const setAddOn = (id: string, checked: boolean) => {
@@ -242,14 +250,42 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             <Grid item xs={12} xl={2}>
               <Paper sx={{ p: 2.2, height: '100%', borderRadius: 5, bgcolor: '#111112', border: '1px solid rgba(198,167,94,.28)' }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>Service Stack</Typography>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mb: 2 }}>Selected add-ons</Typography>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mb: 0.5 }}>Selected systems & add-ons</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mb: 2 }}>{selectedSystemCount} selected systems · {selectedAddOnRows.length} priced add-ons</Typography>
                 <Stack spacing={1.5} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,.06)' }} />}>
-                  {selectedAddOnRows.map((addon) => (
-                    <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 850, lineHeight: 1.4 }}>{addon.name}</Typography>
-                      <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{aed(addon.price)}</Typography>
+                  {selectedSystemGroups.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Selected building systems</Typography>
+                      <Stack spacing={1}>
+                        {selectedSystemGroups.map((group) => (
+                          <Box key={group.title}>
+                            <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.42)', fontWeight: 900, mb: 0.5 }}>{group.title}</Typography>
+                            <Stack spacing={0.5}>
+                              {group.systems.map((system) => (
+                                <Box key={system.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, flex: '0 0 auto' }} />
+                                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 800, lineHeight: 1.35 }}>{system.label}</Typography>
+                                </Box>
+                              ))}
+                            </Stack>
+                          </Box>
+                        ))}
+                      </Stack>
                     </Box>
-                  ))}
+                  )}
+
+                  <Box>
+                    <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Selected priced add-ons</Typography>
+                    <Stack spacing={1}>
+                      {selectedAddOnRows.map((addon) => (
+                        <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 850, lineHeight: 1.4 }}>{addon.name}</Typography>
+                          <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{aed(addon.price)}</Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+
                   <Box sx={{ pt: 2 }}>
                     <Typography sx={{ color: '#fff', fontWeight: 950, lineHeight: 1.25 }}>Total annual add-ons</Typography>
                     <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 0.75 }}>{aed(total)}</Typography>
