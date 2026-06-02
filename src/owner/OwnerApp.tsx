@@ -4,7 +4,7 @@ import {
     Box, AppBar, Toolbar, Typography, Container, IconButton,
     Breadcrumbs, Link as MuiLink, alpha, Stack, Button
 } from '@mui/material';
-import { ArrowLeft, Globe, LayoutDashboard, Paintbrush, Settings } from 'lucide-react';
+import { ArrowLeft, Globe, LayoutDashboard, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -15,6 +15,7 @@ import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
 import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
+import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
 import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
@@ -74,8 +75,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                             </Typography>
                         </IconButton>
                         <NotificationBell />
-                        <IconButton onClick={() => navigate('/owner/iban')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
-                            <Settings size={18} />
+                        <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
+                            <UserCircle size={18} />
                         </IconButton>
                     </Stack>
                 </Toolbar>
@@ -122,6 +123,7 @@ export default function OwnerApp() {
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
                 <Route path="/iban" element={<OwnerIbanPage />} />
+                <Route path="/profile" element={<OwnerProfilePage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
                 <Route path="/units" element={<OwnerUnitRegistryPage />} />
                 <Route path="/legacy-units" element={<OwnerUnitsPage />} />
@@ -131,7 +133,6 @@ export default function OwnerApp() {
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
-                {/* Complaint & Ticket tracking routes */}
                 <Route path="/complaint" element={<OwnerComplaintPage />} />
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
