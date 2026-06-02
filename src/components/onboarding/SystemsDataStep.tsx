@@ -15,33 +15,17 @@ const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
 const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
 
 const isMajlisAsset = (property: any) => {
-  const text = [
-    property?.propertyType,
-    property?.subType,
-    property?.assetClass,
-    property?.majlisType,
-    property?.serviceModel,
-  ]
+  const text = [property?.propertyType, property?.subType, property?.assetClass, property?.majlisType, property?.serviceModel]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-
-  return Boolean(
-    property?.majlis ||
-    property?.majlisGarden ||
-    (property?.majlisType && property.majlisType !== 'none') ||
-    text.includes('majlis')
-  );
+  return Boolean(property?.majlis || property?.majlisGarden || (property?.majlisType && property.majlisType !== 'none') || text.includes('majlis'));
 };
 
 const getRequiredStackIds = (property: any) => {
   const ids = [...BASE_REQUIRED_STACK_IDS];
   const hasRealLiftScope = Number(property?.lifts || 0) > 0 || Number(property?.floors || 0) > 1;
-
-  if (!isMajlisAsset(property) && hasRealLiftScope) {
-    ids.push(ELEVATOR_ADDON_ID);
-  }
-
+  if (!isMajlisAsset(property) && hasRealLiftScope) ids.push(ELEVATOR_ADDON_ID);
   return ids;
 };
 
@@ -112,23 +96,16 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
   const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
-  const selectedIds = new Set([
-    ...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)),
-    ...requiredStackIds,
-  ]);
+  const selectedIds = new Set([...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)), ...requiredStackIds]);
   const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
   const selectedSystemGroups = systemGroups
-    .map((group) => ({
-      title: group.title,
-      systems: group.systems.filter((system) => Boolean((activeProperty as any)[system.key])),
-    }))
+    .map((group) => ({ title: group.title, systems: group.systems.filter((system) => Boolean((activeProperty as any)[system.key])) }))
     .filter((group) => group.systems.length > 0);
   const selectedSystemCount = selectedSystemGroups.reduce((count, group) => count + group.systems.length, 0);
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.localStorage.getItem(LEGACY_OPTIONAL_PRUNE_KEY) === 'done') return;
-
     let changed = false;
     LEGACY_OPTIONAL_ADDON_IDS.forEach((id) => {
       if (storedSelectedIds.includes(id)) {
@@ -136,28 +113,24 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         changed = true;
       }
     });
-
     window.localStorage.setItem(LEGACY_OPTIONAL_PRUNE_KEY, 'done');
     if (changed) calculateSummary();
   }, []);
 
   useEffect(() => {
     let changed = false;
-
     requiredStackIds.forEach((id) => {
       if (!storedSelectedIds.includes(id)) {
         toggleAddOn(id);
         changed = true;
       }
     });
-
     hiddenAddOnIds.forEach((id) => {
       if (storedSelectedIds.includes(id)) {
         toggleAddOn(id);
         changed = true;
       }
     });
-
     if (!changed) calculateSummary();
   }, [requiredStackIds.join('|'), hiddenAddOnIds.join('|')]);
 
@@ -250,32 +223,27 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             <Grid item xs={12} xl={2}>
               <Paper sx={{ p: 2.2, height: '100%', borderRadius: 5, bgcolor: '#111112', border: '1px solid rgba(198,167,94,.28)' }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>Service Stack</Typography>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mb: 0.5 }}>Selected systems & add-ons</Typography>
-                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mb: 2 }}>{selectedSystemCount} selected systems · {selectedAddOnRows.length} priced add-ons</Typography>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mb: 0.5 }}>Service scope summary</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mb: 2 }}>{selectedSystemCount} systems selected · {selectedAddOnRows.length} commercial add-ons</Typography>
                 <Stack spacing={1.5} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,.06)' }} />}>
-                  {selectedSystemGroups.length > 0 && (
-                    <Box>
-                      <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Selected building systems</Typography>
-                      <Stack spacing={1}>
-                        {selectedSystemGroups.map((group) => (
-                          <Box key={group.title}>
-                            <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.42)', fontWeight: 900, mb: 0.5 }}>{group.title}</Typography>
-                            <Stack spacing={0.5}>
-                              {group.systems.map((system) => (
-                                <Box key={system.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, flex: '0 0 auto' }} />
-                                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 800, lineHeight: 1.35 }}>{system.label}</Typography>
-                                </Box>
-                              ))}
-                            </Stack>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
+                  <Box>
+                    <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Building systems scope</Typography>
+                    <Stack spacing={1}>
+                      {systemGroups.map((group) => {
+                        const count = selectedSystemGroups.find((selected) => selected.title === group.title)?.systems.length || 0;
+                        return (
+                          <Paper key={group.title} sx={{ p: 1.15, bgcolor: count > 0 ? 'rgba(198,167,94,.09)' : 'rgba(255,255,255,.025)', border: `1px solid ${count > 0 ? 'rgba(198,167,94,.34)' : 'rgba(255,255,255,.06)'}`, borderRadius: 3 }}>
+                            <Typography variant="caption" sx={{ display: 'block', color: count > 0 ? '#fff' : 'rgba(255,255,255,.45)', fontWeight: 900, lineHeight: 1.25 }}>{group.title}</Typography>
+                            <Typography variant="caption" sx={{ color: count > 0 ? binThemeTokens.gold : 'rgba(255,255,255,.35)', fontWeight: 950 }}>{count} selected</Typography>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                    {selectedSystemCount > 0 && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.38)', mt: 1.25, lineHeight: 1.45 }}>Full system details remain selected in the matrix and will be saved to the property scope.</Typography>}
+                  </Box>
 
                   <Box>
-                    <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Selected priced add-ons</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>Commercial add-ons</Typography>
                     <Stack spacing={1}>
                       {selectedAddOnRows.map((addon) => (
                         <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
@@ -287,8 +255,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                   </Box>
 
                   <Box sx={{ pt: 2 }}>
-                    <Typography sx={{ color: '#fff', fontWeight: 950, lineHeight: 1.25 }}>Total annual add-ons</Typography>
+                    <Typography sx={{ color: '#fff', fontWeight: 950, lineHeight: 1.25 }}>Annual add-on total</Typography>
                     <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 0.75 }}>{aed(total)}</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.4)', mt: 0.75, lineHeight: 1.35 }}>Systems define scope. Only commercial add-ons are counted in this AED total.</Typography>
                   </Box>
                 </Stack>
               </Paper>
