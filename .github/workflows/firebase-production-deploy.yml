@@ -69,11 +69,18 @@ jobs:
       - name: Build main public app
         run: npm run build
 
-      - name: Build admin panel
+      - name: Deploy public Firebase Hosting on main pushes
+        if: github.event_name == 'push'
+        run: npx firebase deploy --only hosting:bin-group-57c60 --project "${GCP_PROJECT_ID}" --non-interactive --force
+
+      - name: Build admin panel for full manual deploy
+        if: github.event_name == 'workflow_dispatch'
         run: npm run build --workspace=home-os-admin-panel
 
-      - name: Build Firebase Functions
+      - name: Build Firebase Functions for full manual deploy
+        if: github.event_name == 'workflow_dispatch'
         run: npm run build --workspace=functions
 
-      - name: Deploy Firebase full production stack
+      - name: Deploy Firebase full production stack manually only
+        if: github.event_name == 'workflow_dispatch'
         run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
