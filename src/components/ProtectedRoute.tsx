@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useRole, type SovereignPermission } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
-import { Box, Typography, CircularProgress, Button, Stack } from '@mui/material';
+import { Box, Typography, Button, Stack } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { Lock, LogOut } from 'lucide-react';
 import { auth } from '../lib/firebase';
@@ -11,6 +11,29 @@ interface ProtectedRouteProps {
     allowedRoles?: string[];
     requiredPermission?: SovereignPermission;
 }
+
+const ROLE_HOME_PATHS: Record<string, string> = {
+    owner: '/owner/dashboard',
+    tenant: '/tenant/dashboard',
+    technician: '/technician/dashboard',
+    broker: '/broker/dashboard',
+    admin: '/admin/dashboard',
+    super_admin: '/admin/dashboard',
+    ceo: '/admin/dashboard',
+    manager: '/admin/dashboard',
+    operations_admin: '/admin/dashboard',
+    finance_admin: '/admin/dashboard',
+    hr_admin: '/admin/dashboard',
+    support_admin: '/admin/dashboard',
+    hr_manager: '/admin/dashboard',
+    hr_staff: '/admin/dashboard',
+    finance_staff: '/admin/dashboard',
+    account_manager: '/admin/dashboard',
+    dispatcher: '/admin/dashboard',
+    operations_manager: '/admin/dashboard',
+};
+
+const resolveRoleHomePath = (normalizedRole: string) => ROLE_HOME_PATHS[normalizedRole] || '/gateway';
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, requiredPermission }) => {
     const { user, role, status, isAdmin, loading, hasPermission } = useRole();
@@ -29,12 +52,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const normalizedRole = (role || '').toLowerCase();
 
     // 1. [STRICT ROLE ENFORCEMENT]
-    // If a user doesn't have the required role, bounce them to their specific portal
+    // If a user doesn't have the required role, bounce them to their canonical portal route.
     if (allowedRoles && !allowedRoles.includes(normalizedRole) && !isAdmin) {
-        if (normalizedRole === 'tenant') return <Navigate to="/tenant" replace />;
-        if (normalizedRole === 'technician') return <Navigate to="/tech" replace />;
-        if (normalizedRole === 'broker') return <Navigate to="/broker" replace />;
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
     // 1B. [GRANULAR PERMISSION ENFORCEMENT]
