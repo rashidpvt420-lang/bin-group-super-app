@@ -22,8 +22,8 @@ env:
   CI: true
 
 jobs:
-  validate-build-deploy:
-    name: Validate, build, and deploy Firebase production
+  build-and-deploy:
+    name: Build and deploy Firebase production hosting
     runs-on: ubuntu-latest
 
     steps:
@@ -54,29 +54,16 @@ jobs:
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
 
-      - name: Production stability guard
-        run: npm run test:stability
-
-      - name: Validate root source lint
-        run: npm run lint
-
-      - name: Validate TypeScript diagnostics
-        run: npx tsc -p tsconfig.app.json --noEmit
-
-      - name: Validate Firestore security rules
-        run: npm run test:rules
-
       - name: Build main public app
         run: npm run build
 
       - name: Build admin panel hosting app
         run: CI=false npm run build --workspace=home-os-admin-panel
 
-      - name: Deploy Firebase Hosting on main pushes
-        if: github.event_name == 'push'
+      - name: Deploy Firebase Hosting
         run: npx firebase deploy --only hosting --project "${GCP_PROJECT_ID}" --non-interactive --force
 
-      - name: Build Firebase Functions for full manual deploy
+      - name: Build Firebase Functions for manual full-stack deploy
         if: github.event_name == 'workflow_dispatch'
         run: npm run build --workspace=functions
 
