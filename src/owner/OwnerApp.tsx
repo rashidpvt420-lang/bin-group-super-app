@@ -9,6 +9,7 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
+import BrandWatermark from '../components/BrandWatermark';
 
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
@@ -39,7 +40,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
+            <BrandWatermark opacity={0.04} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(11, 11, 12, 0.9)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -82,7 +84,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                 </Toolbar>
             </AppBar>
 
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1 }}>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                 {pathnames.length > 1 && (
                     <Breadcrumbs sx={{ mb: 4, '& .MuiBreadcrumbs-separator': { color: 'rgba(255,255,255,0.2)' }, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}>
                         <MuiLink component="button" onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -100,7 +102,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                 </OwnerActivationGuard>
             </Container>
 
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
                     © 2026 BIN GROUP SOVEREIGN · INSTITUTIONAL ASSET LEDGER · MADE IN UAE 🇦🇪
                 </Typography>
