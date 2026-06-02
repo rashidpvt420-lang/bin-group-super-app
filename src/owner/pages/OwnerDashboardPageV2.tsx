@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Divider,
   Grid,
   Paper,
   Stack,
@@ -29,6 +30,27 @@ type OwnerIdentityResolution = {
   contracts: any[];
 };
 
+type PortfolioStats = {
+  properties: number;
+  units: number;
+  tenants: number;
+  tickets: number;
+  rentCollected: number;
+  payoutsPending: number;
+  maintenanceCost: number;
+};
+
+type OwnerIntelligence = {
+  assets: any[];
+  tenants: any[];
+  units: any[];
+  tickets: any[];
+  activeContract: any | null;
+  actionItems: string[];
+  leaseTrackedAssets: number;
+  leaseExemptAssets: number;
+};
+
 const ACTIVE_TICKET_STATUSES = new Set([
   'OPEN',
   'PENDING_ASSIGNMENT',
@@ -41,6 +63,18 @@ const ACTIVE_TICKET_STATUSES = new Set([
   'WAITING_PARTS',
   'ESCALATED',
 ]);
+
+const EXEMPT_LEASE_TYPES = [
+  'majlis',
+  'majils',
+  'government majlis',
+  'hotel',
+  'school',
+  'hospital',
+  'clinic',
+  'healthcare',
+  'medical',
+];
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const normalizeId = (value: unknown) => String(value || '').trim();
@@ -81,13 +115,56 @@ const emailsFromProfile = (profile: any) => unique([
   ...emailLookupCandidates(profile?.emailDelivery?.recipient),
 ]);
 
+const firstText = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const firstNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+  }
+  return 0;
+};
+
+const money = (value: unknown) => {
+  const numeric = Number(value || 0);
+  return numeric > 0 ? `AED ${Math.round(numeric).toLocaleString('en-AE')}` : 'Pending';
+};
+
+const asDate = (...values: any[]) => {
+  for (const value of values) {
+    if (!value) continue;
+    const candidate = value?.toDate?.() || value;
+    if (candidate instanceof Date && !Number.isNaN(candidate.getTime())) return candidate;
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      const parsed = new Date(candidate);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    if (typeof candidate === 'object' && Number.isFinite(Number(candidate.seconds))) {
+      const parsed = new Date(Number(candidate.seconds) * 1000);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return null;
+};
+
+const formatDate = (value: any) => {
+  const date = asDate(value);
+  return date ? date.toLocaleDateString('en-AE') : 'Pending';
+};
+
 const hasTrustedActivation = (record: any) => {
   if (!record) return false;
   const status = String(record.status || '').toUpperCase();
   const activationStatus = String(record.activationStatus || '').toUpperCase();
   const signatureStatus = String(record.contractSignatureStatus || record.signatureStatus || record.signatureState?.status || '').toUpperCase();
   return record.dashboardUnlocked === true ||
-    record.dashboardLocked === false && (status === 'ACTIVE' || activationStatus === 'ACTIVE') ||
+    (record.dashboardLocked === false && (status === 'ACTIVE' || activationStatus === 'ACTIVE')) ||
     status === 'ACTIVE' ||
     activationStatus === 'ACTIVE' ||
     signatureStatus === 'ACTIVE' ||
@@ -103,10 +180,12 @@ const contractIsActive = (contract: any) => {
     activationStatus === 'ACTIVE' ||
     signatureStatus === 'ACTIVE' ||
     signatureStatus === 'OWNER_SIGNED' ||
-    contract?.ownerSigned === true;
+    contract?.ownerSigned === true ||
+    contract?.signatureState?.ownerSigned === true;
 };
 
 async function safeCollectionQuery(collectionName: string, field: string, value: string) {
+  if (!value) return [] as any[];
   try {
     const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
     return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
@@ -188,7 +267,6 @@ async function resolveOwnerIdentity(profile: any): Promise<OwnerIdentityResoluti
   }
 
   const contracts = Array.from(contractMap.values()).sort(sortContracts);
-
   const trustedProfile = [profile, ...profileDocs].find(hasTrustedActivation);
   const trustedContract = contracts.find(contractIsActive);
 
@@ -237,49 +315,169 @@ async function resolveOwnerIdentity(profile: any): Promise<OwnerIdentityResoluti
   };
 }
 
+const propertyIdOf = (asset: any) => firstText(asset?.propertyId, asset?.id, asset?.passportId, asset?.propertyPassportId);
+const assetUnitsOf = (asset: any) => firstNumber(asset?.numberOfUnits, asset?.units, asset?.unitCount, asset?.totalUnits, asset?.unitsCount);
+const assetFloorsOf = (asset: any) => firstNumber(asset?.floors, asset?.floorCount, asset?.numberOfFloors);
+const assetRoomsOf = (asset: any) => firstNumber(asset?.rooms, asset?.roomsCount, asset?.roomCount, asset?.majlis?.rooms, asset?.majlisProfile?.rooms);
+const assetHallsOf = (asset: any) => firstNumber(asset?.halls, asset?.hallsCount, asset?.hallCount, asset?.majlis?.halls, asset?.majlisProfile?.halls);
+
+const assetTypeText = (asset: any) => firstText(
+  asset?.propertyType,
+  asset?.assetType,
+  asset?.assetClass,
+  asset?.buildingType,
+  asset?.type,
+  asset?.category,
+  'Property',
+);
+
+const isMajlisAsset = (asset: any) => {
+  const raw = `${assetTypeText(asset)} ${asset?.majlisType || ''} ${asset?.majlisSubtype || ''} ${asset?.serviceModel || ''}`.toLowerCase();
+  return raw.includes('majlis') || raw.includes('majils') || asset?.majlis === true || Boolean(asset?.majlisProfile);
+};
+
+const isLeaseExemptAsset = (asset: any) => {
+  const raw = `${assetTypeText(asset)} ${asset?.riskProfile || ''} ${asset?.serviceModel || ''}`.toLowerCase();
+  return EXEMPT_LEASE_TYPES.some((type) => raw.includes(type)) || isMajlisAsset(asset);
+};
+
+const serviceZonesOf = (asset: any) => {
+  const zones = asset?.serviceZones || asset?.guestReadinessZones || asset?.majlisProfile?.serviceZones || asset?.zones || asset?.missions;
+  if (Array.isArray(zones)) return zones.filter(Boolean).map((item) => typeof item === 'string' ? item : firstText(item?.name, item?.title, item?.label)).filter(Boolean);
+  if (zones && typeof zones === 'object') return Object.values(zones).map((item: any) => typeof item === 'string' ? item : firstText(item?.name, item?.title, item?.label)).filter(Boolean);
+  if (typeof zones === 'string') return zones.split(',').map((item) => item.trim()).filter(Boolean);
+  return [] as string[];
+};
+
+const normalizeAsset = (asset: any, source: string, contract?: any, index = 0) => {
+  const contractId = firstText(contract?.id, contract?.contractId, asset?.contractId, asset?.sourceContractId);
+  const fallbackId = `${contractId || source}_${index}_${firstText(asset?.propertyName, asset?.name, asset?.addressLine, 'asset').replace(/[^a-z0-9_-]/gi, '_')}`;
+  return {
+    ...asset,
+    id: firstText(asset?.id, asset?.propertyId, asset?.passportId, fallbackId),
+    propertyId: firstText(asset?.propertyId, asset?.id, asset?.passportId, fallbackId),
+    source,
+    sourceContractId: contractId,
+    sourceContractStatus: firstText(contract?.status, contract?.activationStatus),
+    sourcePackage: firstText(contract?.packageName, contract?.selectedPlan?.name, contract?.planType, contract?.contractType),
+  };
+};
+
+const isPlaceholderAsset = (asset: any) => {
+  const name = firstText(asset?.propertyName, asset?.name, asset?.addressLine).toLowerCase();
+  return assetUnitsOf(asset) === 0 && (name.includes('new asset') || name.includes('draft') || !name);
+};
+
+const sortAssets = (a: any, b: any) => {
+  const aUnits = assetUnitsOf(a);
+  const bUnits = assetUnitsOf(b);
+  if (aUnits !== bUnits) return bUnits - aUnits;
+  const aName = firstText(a.propertyName, a.name, a.addressLine);
+  const bName = firstText(b.propertyName, b.name, b.addressLine);
+  return aName.localeCompare(bName);
+};
+
+function tenantsForProperty(tenants: any[], propertyId: string, ownerIds: string[]) {
+  return tenants.filter((tenant) => {
+    const tenantPropertyId = firstText(tenant?.propertyId, tenant?.propertyUid, tenant?.passportId);
+    const tenantUid = firstText(tenant?.tenantUid, tenant?.uid, tenant?.userId, tenant?.authUid);
+    return tenantPropertyId === propertyId && !ownerIds.includes(tenantUid);
+  });
+}
+
+function unitsForProperty(units: any[], propertyId: string) {
+  return units.filter((unit) => firstText(unit?.propertyId, unit?.propertyUid, unit?.passportId) === propertyId);
+}
+
+function ticketsForProperty(tickets: any[], propertyId: string) {
+  return tickets.filter((ticket) => firstText(ticket?.propertyId, ticket?.propertyUid, ticket?.passportId) === propertyId);
+}
+
 async function loadPortfolioStats(identity: OwnerIdentityResolution) {
   const propertyMap = new Map<string, any>();
   const passportMap = new Map<string, any>();
   const ticketMap = new Map<string, any>();
   const bankMap = new Map<string, any>();
+  const tenantMap = new Map<string, any>();
+  const unitMap = new Map<string, any>();
 
   const add = (target: Map<string, any>, rows: any[]) => rows.forEach((row) => row?.id && target.set(row.id, row));
 
+  identity.contracts.forEach((contract) => {
+    if (Array.isArray(contract?.properties)) {
+      contract.properties.forEach((property: any, index: number) => {
+        const normalized = normalizeAsset(property, 'contract.properties', contract, index);
+        propertyMap.set(normalized.propertyId, normalized);
+      });
+    }
+  });
+
   for (const ownerId of identity.ownerIds) {
     add(propertyMap, await safeCollectionQuery('properties', 'ownerId', ownerId));
+    add(propertyMap, await safeCollectionQuery('properties', 'ownerUid', ownerId));
     add(passportMap, await safeCollectionQuery('propertyPassports', 'ownerId', ownerId));
     add(ticketMap, await safeCollectionQuery('maintenanceTickets', 'ownerId', ownerId));
+    add(ticketMap, await safeCollectionQuery('tickets', 'ownerId', ownerId));
     add(bankMap, await safeCollectionQuery('ownerBankAccounts', 'ownerId', ownerId));
+    add(tenantMap, await safeCollectionQuery('tenants', 'ownerId', ownerId));
+    add(tenantMap, await safeCollectionQuery('tenants', 'ownerUid', ownerId));
+    add(unitMap, await safeCollectionQuery('units', 'ownerId', ownerId));
+    add(unitMap, await safeCollectionQuery('units', 'ownerUid', ownerId));
   }
 
   for (const email of identity.emails) {
     add(propertyMap, await safeCollectionQuery('properties', 'ownerEmail', email));
     add(passportMap, await safeCollectionQuery('propertyPassports', 'ownerEmail', email));
     add(ticketMap, await safeCollectionQuery('maintenanceTickets', 'ownerEmail', email));
+    add(ticketMap, await safeCollectionQuery('tickets', 'ownerEmail', email));
     add(bankMap, await safeCollectionQuery('ownerBankAccounts', 'ownerEmail', email));
+    add(tenantMap, await safeCollectionQuery('tenants', 'ownerEmail', email));
+    add(unitMap, await safeCollectionQuery('units', 'ownerEmail', email));
   }
 
-  const properties = Array.from(propertyMap.values());
+  const passportAssets = Array.from(passportMap.values()).map((passport, index) => normalizeAsset(passport, 'propertyPassports', null, index));
+  passportAssets.forEach((asset) => propertyMap.set(propertyIdOf(asset), { ...(propertyMap.get(propertyIdOf(asset)) || {}), ...asset }));
+
+  const rawProperties = Array.from(propertyMap.values()).map((property, index) => normalizeAsset(property, property.source || 'properties', null, index));
+  const realProperties = rawProperties.filter((property) => !isPlaceholderAsset(property));
+  const properties = (realProperties.length ? realProperties : rawProperties).sort(sortAssets);
   const passports = Array.from(passportMap.values());
   const tickets = Array.from(ticketMap.values());
+  const tenants = Array.from(tenantMap.values());
+  const units = Array.from(unitMap.values());
 
-  const unitsFromPassports = passports.reduce((total, item) => total + Number(item.totalUnits || item.units || item.unitCount || 0), 0);
-  const unitsFromProperties = properties.reduce((total, item) => total + Number(item.unitsCount || item.numberOfUnits || item.units || 0), 0);
-  const tenantCount = passports.reduce((total, item) => total + Number(item.occupiedUnits || item.activeTenants || 0), 0);
+  const unitsFromAssets = properties.reduce((total, item) => total + assetUnitsOf(item), 0);
+  const unitsFromUnitsCollection = units.length;
+  const linkedTenantCount = tenants.filter((tenant) => !identity.ownerIds.includes(firstText(tenant?.tenantUid, tenant?.uid, tenant?.userId, tenant?.authUid))).length;
   const rentCollected = passports.reduce((total, item) => total + Number(item.rentCollectedTotal || 0), 0);
   const maintenanceCost = passports.reduce((total, item) => total + Number(item.maintenanceCostTotal || 0), 0);
   const openTickets = tickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
 
-  const activeContract = identity.contracts.find(contractIsActive) || identity.contracts[0];
-  const contractScope = String(activeContract?.managementScope || activeContract?.contractType || activeContract?.planType || '').toUpperCase();
+  const activeContract = identity.contracts.find(contractIsActive) || identity.contracts[0] || null;
+  const contractScope = String(activeContract?.managementScope || activeContract?.contractType || activeContract?.planType || activeContract?.packageName || '').toUpperCase();
   const unitsMissingDetails = passports.some((item) => !Array.isArray(item.rentPerUnitTable) || item.rentPerUnitTable.length === 0);
+  const leaseExemptAssets = properties.filter(isLeaseExemptAsset).length;
+  const leaseTrackedAssets = Math.max(properties.length - leaseExemptAssets, 0);
+
+  const actionItems = unique([
+    bankMap.size === 0 ? 'Add verified IBAN / payout bank account.' : '',
+    unitsMissingDetails && ['PM_ONLY', 'BOTH', 'HYBRID'].includes(contractScope) ? 'Complete rent-per-unit table for PM visibility.' : '',
+    properties.length === 0 ? 'No active properties linked to this owner dashboard yet.' : '',
+    properties.some((asset) => isMajlisAsset(asset) && (assetRoomsOf(asset) === 0 || assetHallsOf(asset) === 0)) ? 'Complete Majlis rooms and halls metadata for guest-readiness view.' : '',
+    properties.some((asset) => {
+      const propertyId = propertyIdOf(asset);
+      const expectedUnits = assetUnitsOf(asset);
+      return expectedUnits > 0 && tenantsForProperty(tenants, propertyId, identity.ownerIds).length < expectedUnits && !isLeaseExemptAsset(asset);
+    }) ? 'Continue tenant invitations: some rentable units are not linked to tenant auth records.' : '',
+    openTickets > 0 ? `${openTickets} active maintenance ticket(s) require operational monitoring.` : '',
+  ]);
 
   return {
     properties,
     stats: {
       properties: properties.length,
-      units: unitsFromPassports || unitsFromProperties,
-      tenants: tenantCount,
+      units: unitsFromAssets || unitsFromUnitsCollection,
+      tenants: linkedTenantCount,
       tickets: openTickets,
       rentCollected,
       payoutsPending: rentCollected * 0.92,
@@ -287,6 +485,16 @@ async function loadPortfolioStats(identity: OwnerIdentityResolution) {
     },
     missingInfo: { iban: bankMap.size === 0, units: unitsMissingDetails },
     contractScope,
+    intelligence: {
+      assets: properties,
+      tenants,
+      units,
+      tickets,
+      activeContract,
+      actionItems,
+      leaseTrackedAssets,
+      leaseExemptAssets,
+    } as OwnerIntelligence,
   };
 }
 
@@ -297,10 +505,12 @@ export default function OwnerDashboardPageV2() {
   const [state, setState] = useState<DashboardState>('loading');
   const [activationSource, setActivationSource] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [stats, setStats] = useState({ properties: 0, units: 0, tenants: 0, tickets: 0, rentCollected: 0, payoutsPending: 0, maintenanceCost: 0 });
+  const [stats, setStats] = useState<PortfolioStats>({ properties: 0, units: 0, tenants: 0, tickets: 0, rentCollected: 0, payoutsPending: 0, maintenanceCost: 0 });
   const [properties, setProperties] = useState<any[]>([]);
   const [missingInfo, setMissingInfo] = useState({ iban: false, units: false });
   const [contractScope, setContractScope] = useState('');
+  const [intelligence, setIntelligence] = useState<OwnerIntelligence>({ assets: [], tenants: [], units: [], tickets: [], activeContract: null, actionItems: [], leaseTrackedAssets: 0, leaseExemptAssets: 0 });
+  const [ownerIds, setOwnerIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -317,6 +527,7 @@ export default function OwnerDashboardPageV2() {
         const identity = await resolveOwnerIdentity(user);
         if (cancelled) return;
         setActivationSource(identity.activationSource);
+        setOwnerIds(identity.ownerIds);
         setState(identity.state);
 
         if (identity.state !== 'active') return;
@@ -327,6 +538,7 @@ export default function OwnerDashboardPageV2() {
         setProperties(portfolio.properties);
         setMissingInfo(portfolio.missingInfo);
         setContractScope(portfolio.contractScope);
+        setIntelligence(portfolio.intelligence);
       } catch (error: any) {
         console.error('[OwnerDashboard] hardened identity load failed:', error);
         if (!cancelled) {
@@ -341,11 +553,20 @@ export default function OwnerDashboardPageV2() {
   }, [user]);
 
   const kpis = useMemo(() => [
-    { label: 'Total Revenue', value: `AED ${stats.rentCollected.toLocaleString()}`, icon: <CreditCard size={20} />, color: '#10b981', sub: 'Gross rent / portfolio revenue' },
-    { label: 'Net Payout', value: `AED ${stats.payoutsPending.toLocaleString()}`, icon: <Shield size={20} />, color: binThemeTokens.gold, sub: 'Estimated owner settlement' },
+    { label: 'Total Revenue', value: `AED ${stats.rentCollected.toLocaleString('en-AE')}`, icon: <CreditCard size={20} />, color: '#10b981', sub: 'Gross rent / portfolio revenue' },
+    { label: 'Net Payout', value: `AED ${Math.round(stats.payoutsPending).toLocaleString('en-AE')}`, icon: <Shield size={20} />, color: binThemeTokens.gold, sub: 'Estimated owner settlement' },
     { label: 'Asset Portfolio', value: stats.properties, icon: <Building2 size={20} />, color: '#3b82f6', sub: `${stats.units} units` },
     { label: 'Open Maintenance', value: stats.tickets, icon: <Wrench size={20} />, color: '#ef4444', sub: 'Active operational tickets' },
   ], [stats]);
+
+  const activeContract = intelligence.activeContract;
+  const annualContractValue = firstNumber(activeContract?.annualContractValue, activeContract?.annualValue, activeContract?.paymentSchedule?.annualContractValue, activeContract?.latestContractValue);
+  const mobilizationAmount = firstNumber(activeContract?.mobilizationAmount, activeContract?.depositAmount, activeContract?.paymentSchedule?.mobilizationAmount, annualContractValue ? annualContractValue * 0.15 : 0);
+  const contractTermMonths = firstNumber(activeContract?.contractTermMonths, activeContract?.termSummary?.months, 13) || 13;
+  const paymentStatus = firstText(activeContract?.paymentStatus, activeContract?.paymentState, activeContract?.payment?.status, 'Pending admin confirmation');
+  const contractStatus = firstText(activeContract?.status, activeContract?.activationStatus, activeContract?.contractStatus, 'Pending');
+  const servicePackage = firstText(activeContract?.packageName, activeContract?.selectedPlan?.name, activeContract?.planType, contractScope || 'Service package pending');
+  const slaTier = firstText(activeContract?.slaTier, activeContract?.selectedPlan?.slaTier, activeContract?.tier, 'Standard SLA');
 
   if (state === 'loading') {
     return (
@@ -428,7 +649,7 @@ export default function OwnerDashboardPageV2() {
         ))}
       </Grid>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={4} sx={{ mb: 5 }}>
         <Grid item xs={12} lg={8}>
           <Paper sx={{ bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
             <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -448,7 +669,7 @@ export default function OwnerDashboardPageV2() {
                     <Grid item xs={12} md={6} key={property.id}>
                       <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
                         <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF' }}>{property.propertyName || property.name || 'Property'}</Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{property.emirate || property.location || 'UAE'} · {property.units || property.numberOfUnits || property.unitsCount || 0} units</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{property.emirate || property.location || 'UAE'} · {assetUnitsOf(property)} units</Typography>
                       </Paper>
                     </Grid>
                   ))}
@@ -472,6 +693,113 @@ export default function OwnerDashboardPageV2() {
           </Paper>
         </Grid>
       </Grid>
+
+      <Paper sx={{ p: 3, mb: 5, bgcolor: 'rgba(8,13,24,0.74)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 5 }}>
+        <Stack spacing={3}>
+          <Box>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>OWNER INTELLIGENCE</Typography>
+            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>UAE Owner Control Room</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.52)', mt: 0.75 }}>
+              Real assets are prioritized over zero-unit drafts. Majlis, hotels, schools, hospitals and clinics are exempt from lease-expiry pressure while residential/rental units keep normal tenancy tracking.
+            </Typography>
+          </Box>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={3}><MiniMetric label="Annual Contract" value={money(annualContractValue)} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="15% Mobilization" value={money(mobilizationAmount)} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="Payment Status" value={paymentStatus} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="Contract Term" value={`${contractTermMonths} months`} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="Service Package" value={servicePackage} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="SLA Tier" value={slaTier} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="Contract Status" value={contractStatus} /></Grid>
+            <Grid item xs={12} md={3}><MiniMetric label="Next Invoice" value={formatDate(activeContract?.nextInvoiceAt || activeContract?.nextInstallmentAt || activeContract?.paymentSchedule?.nextDueAt)} /></Grid>
+          </Grid>
+
+          <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }} />
+
+          <Grid container spacing={2}>
+            {intelligence.assets.slice(0, 8).map((asset) => {
+              const propertyId = propertyIdOf(asset);
+              const unitCount = assetUnitsOf(asset);
+              const linkedTenants = tenantsForProperty(intelligence.tenants, propertyId, ownerIds).length;
+              const propertyUnits = unitsForProperty(intelligence.units, propertyId).length;
+              const propertyTickets = ticketsForProperty(intelligence.tickets, propertyId).filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
+              const rooms = assetRoomsOf(asset);
+              const halls = assetHallsOf(asset);
+              const zones = serviceZonesOf(asset);
+              const majlis = isMajlisAsset(asset);
+              const leaseExempt = isLeaseExemptAsset(asset);
+              return (
+                <Grid item xs={12} md={6} key={`intel-${asset.id}`}>
+                  <Paper sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4 }}>
+                    <Stack spacing={1.4}>
+                      <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start">
+                        <Box>
+                          <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{firstText(asset.propertyName, asset.name, asset.addressLine, 'Property')}</Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{firstText(asset.emirate, asset.city, asset.area, 'UAE')} · {assetTypeText(asset)}</Typography>
+                        </Box>
+                        <Chip size="small" label={leaseExempt ? 'No lease alert' : 'Lease tracked'} sx={{ bgcolor: alpha(leaseExempt ? '#10b981' : binThemeTokens.gold, 0.12), color: leaseExempt ? '#86efac' : binThemeTokens.gold, fontWeight: 900 }} />
+                      </Stack>
+
+                      <Grid container spacing={1}>
+                        <Grid item xs={4}><SmallFact label="Units" value={unitCount || propertyUnits || 0} /></Grid>
+                        <Grid item xs={4}><SmallFact label="Floors" value={assetFloorsOf(asset)} /></Grid>
+                        <Grid item xs={4}><SmallFact label="Tickets" value={propertyTickets} /></Grid>
+                        <Grid item xs={6}><SmallFact label="Tenants linked" value={`${linkedTenants}/${unitCount || propertyUnits || 0}`} /></Grid>
+                        <Grid item xs={6}><SmallFact label="Passport" value={firstText(asset.passportStatus, asset.status, asset.activationState, 'Active')} /></Grid>
+                      </Grid>
+
+                      {majlis && (
+                        <Alert severity={(rooms && halls) ? 'success' : 'warning'} sx={{ bgcolor: alpha((rooms && halls) ? '#10b981' : '#f59e0b', 0.08), color: (rooms && halls) ? '#bbf7d0' : '#fde68a', border: `1px solid ${alpha((rooms && halls) ? '#10b981' : '#f59e0b', 0.22)}` }}>
+                          Majlis profile: {halls ? `${halls} hall(s)` : 'halls missing'} · {rooms ? `${rooms} room(s)` : 'rooms missing'} · {zones.length ? zones.slice(0, 3).join(', ') : 'service zones pending'}.
+                        </Alert>
+                      )}
+
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 800 }}>
+                        Source: {asset.source || 'property'}{asset.sourceContractId ? ` · Contract ${String(asset.sourceContractId).slice(0, 8)}` : ''}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}><MiniMetric label="Tenant Registry" value={`${stats.tenants}/${stats.units || 0} linked`} helper="Tenants must use their own auth UID and link through ownerId/propertyId/unitId/invitation status." /></Grid>
+            <Grid item xs={12} md={4}><MiniMetric label="Lease Rules" value={`${intelligence.leaseExemptAssets} exempt / ${intelligence.leaseTrackedAssets} tracked`} helper="Majlis, hotels, schools, hospitals and clinics suppress lease-expiry alerts." /></Grid>
+            <Grid item xs={12} md={4}><MiniMetric label="Operations" value={`${stats.tickets} open ticket(s)`} helper="Preventive maintenance, inspections and recent evidence are monitored through property passports and tickets." /></Grid>
+          </Grid>
+
+          {intelligence.actionItems.length > 0 && (
+            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.07), color: '#fef3c7', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
+              <Typography variant="subtitle2" fontWeight="950" sx={{ mb: 1 }}>Owner action items</Typography>
+              <Stack component="ul" sx={{ pl: 2, m: 0 }}>
+                {intelligence.actionItems.map((item) => <Typography component="li" variant="caption" key={item} sx={{ mb: 0.5 }}>{item}</Typography>)}
+              </Stack>
+            </Alert>
+          )}
+        </Stack>
+      </Paper>
+    </Box>
+  );
+}
+
+function MiniMetric({ label, value, helper }: { label: string; value: React.ReactNode; helper?: string }) {
+  return (
+    <Paper sx={{ p: 2, height: '100%', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
+      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 1 }}>{label.toUpperCase()}</Typography>
+      <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mt: 0.5 }}>{value}</Typography>
+      {helper && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', display: 'block', mt: 0.75, lineHeight: 1.5 }}>{helper}</Typography>}
+    </Paper>
+  );
+}
+
+function SmallFact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <Box sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.035)', borderRadius: 2 }}>
+      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.34)', fontWeight: 800, display: 'block' }}>{label}</Typography>
+      <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 950 }}>{value}</Typography>
     </Box>
   );
 }
