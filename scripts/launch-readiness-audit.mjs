@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -16,6 +16,15 @@ function advisory(area, name, ok, note = '') {
 
 const app = text('src/App.tsx');
 const lang = text('src/context/LanguageContext.tsx');
+const adminDesignStudio = text('apps/admin-panel/src/pages/admin/DesignStudioAdminPage.tsx');
+const functionsIndex = text('functions/index.ts');
+const aiImageGenerationWired = (
+  adminDesignStudio.includes("httpsCallable(functions, 'generateDesignConcept')") &&
+  adminDesignStudio.includes('generatedImage') &&
+  functionsIndex.includes('export const generateDesignConcept') &&
+  functionsIndex.includes('GEMINI_API_KEY') &&
+  functionsIndex.includes('generatedImage')
+);
 
 check('Core', 'package.json', hasFile('package.json'));
 check('Core', 'firebase.json', hasFile('firebase.json'));
@@ -46,7 +55,7 @@ check('Push', 'Push token persistence', contains('src/services/pushNotificationS
 advisory('Push', 'Messaging service worker', hasFile('public/firebase-messaging-sw.js'), 'Required for web push.');
 check('AI Studio', 'Design studio exists', hasFile('src/pages/DesignStudioPage.tsx'));
 check('AI Studio', 'Design records written', contains('src/pages/DesignStudioPage.tsx', ['design_requests', 'design_quotes', 'design_concepts']));
-advisory('AI Studio', 'External AI image generation wired', contains('src/pages/DesignStudioPage.tsx', ['httpsCallable']) || contains('src/pages/DesignStudioPage.tsx', ['generateContent']), 'If warning remains, studio is workflow/quote/concept engine, not confirmed image-generation engine.');
+advisory('AI Studio', 'External AI image generation wired', aiImageGenerationWired, 'Admin Design Studio calls generateDesignConcept and backend returns generatedImage.');
 check('HR', 'Technician HR page exists', hasFile('src/technician/pages/TechnicianHRPage.tsx'));
 check('HR', 'Staff agreements allowed', text('firestore.rules').includes('staffAgreements'));
 check('HR', 'Salary history allowed', text('firestore.rules').includes('salaryHistory'));
@@ -77,3 +86,5 @@ const lines = [
 fs.mkdirSync(path.join(root, 'audit'), { recursive: true });
 fs.writeFileSync(path.join(root, 'audit', 'launch-readiness-report.md'), lines.join('\n'));
 console.log(lines.join('\n'));
+
+
