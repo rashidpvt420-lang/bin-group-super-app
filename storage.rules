@@ -213,7 +213,7 @@ service firebase.storage {
 
     match /temp_kyc/{fileName} {
       allow read: if isAdmin();
-      allow write: if isDocumentUpload(15);
+      allow write: if isAuth() && isDocumentUpload(15);
     }
 
     match /{allPaths=**} {
