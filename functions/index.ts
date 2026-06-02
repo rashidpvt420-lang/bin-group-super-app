@@ -743,8 +743,36 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (status === 'ARRIVED') updateData.arrivedAt = now;
     if (status === 'IN_PROGRESS') updateData.startedAt = now;
     if (status === 'COMPLETED' || status === 'COMPLETED_PENDING_APPROVAL') {
+        const nextBeforePhotoUrl = proofType === 'BEFORE' && proofUrl ? proofUrl : ticketData.beforePhotoUrl;
+        const nextAfterPhotoUrl = proofType === 'AFTER' && proofUrl ? proofUrl : ticketData.afterPhotoUrl;
+        const nextNotes = String(notes || ticketData.notes || ticketData.technicianNotes || '').trim();
+
+        const beforePhotos = Array.isArray(ticketData.beforePhotos) ? ticketData.beforePhotos : [];
+        const afterPhotos = Array.isArray(ticketData.afterPhotos) ? ticketData.afterPhotos : [];
+        const evidencePhotos = Array.isArray(ticketData.evidencePhotos) ? ticketData.evidencePhotos : [];
+        const proofPhotos = Array.isArray(ticketData.proofPhotos) ? ticketData.proofPhotos : [];
+        const completionPhotos = Array.isArray(ticketData.completionPhotos) ? ticketData.completionPhotos : [];
+
+        const hasBeforeProof = Boolean(nextBeforePhotoUrl) || beforePhotos.length > 0;
+        const hasAfterProof = Boolean(nextAfterPhotoUrl) || afterPhotos.length > 0 || completionPhotos.length > 0 || proofPhotos.length > 0 || evidencePhotos.length > 0;
+        const hasNotes = nextNotes.length >= 10;
+
+        if (!hasBeforeProof) {
+            throw new HttpsError('failed-precondition', 'Before photo proof is required before completing this ticket.');
+        }
+
+        if (!hasAfterProof) {
+            throw new HttpsError('failed-precondition', 'After photo proof is required before completing this ticket.');
+        }
+
+        if (!hasNotes) {
+            throw new HttpsError('failed-precondition', 'Technician completion notes are required before completing this ticket.');
+        }
+
         updateData.completedAt = now;
-        updateData.notes = notes || ticketData.notes;
+        updateData.notes = nextNotes;
+        updateData.technicianNotes = nextNotes;
+        updateData.tenantApprovalRequired = true;
     }
 
     if (proofType && proofUrl) {
