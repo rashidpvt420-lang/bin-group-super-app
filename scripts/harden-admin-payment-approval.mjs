@@ -2,15 +2,35 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'src/admin/components/AdminPaymentApproval.tsx';
 let source = readFileSync(path, 'utf8');
+let changed = false;
 
 function replaceRequired(label, before, after) {
-  if (!source.includes(before)) {
-    throw new Error(`Admin payment approval hardening failed: missing pattern for ${label}`);
+  if (source.includes(before)) {
+    source = source.replace(before, after);
+    changed = true;
+    console.log(`Applied hardening: ${label}`);
+    return;
   }
-  source = source.replace(before, after);
+
+  if (source.includes(after)) {
+    console.log(`Already hardened: ${label}`);
+    return;
+  }
+
+  throw new Error(`Admin payment approval hardening failed: missing legacy or hardened pattern for ${label}`);
 }
 
-source = source.replace("import axios from 'axios';\n", '');
+function replaceOptional(label, before, after) {
+  if (source.includes(before)) {
+    source = source.replace(before, after);
+    changed = true;
+    console.log(`Applied optional hardening: ${label}`);
+    return;
+  }
+  console.log(`Optional hardening already applied or not required: ${label}`);
+}
+
+replaceOptional('remove axios import', "import axios from 'axios';\n", '');
 
 replaceRequired(
   'firebase import should include functions callable and remove auth',
@@ -18,7 +38,8 @@ replaceRequired(
   "import { db, functions, collection, query, where, onSnapshot, httpsCallable } from '@/lib/firebase';"
 );
 
-source = source.replace(
+replaceRequired(
+  'contract interface should support payment transaction fields',
   `interface Contract {
     id: string;
     paymentId: string;`,
@@ -87,13 +108,18 @@ replaceRequired(
   callableVerificationBlock
 );
 
-source = source.replace(
+replaceOptional(
+  'pending contract filter should include payment state',
   'setPendingContracts(fetched);',
   'setPendingContracts(fetched.filter((payment) => String(payment.status || "").toUpperCase() === "PENDING" || String(payment.verificationState || "").toUpperCase() === "ADMIN_VERIFICATION_REQUIRED"));'
 );
-source = source.replace('contract.propertyName || \'ASSET NODE\'', 'contract.propertyName || contract.companyProfile?.name || contract.serviceDetails?.selectedPlan || \'ASSET NODE\'');
-source = source.replace('contract.ownerEmail || \'OWNER\'', 'contract.ownerEmail || contract.companyProfile?.email || \'OWNER\'');
-source = source.replace("contract.provider || 'MANUAL'", "contract.paymentMethod || contract.provider || 'MANUAL'");
+replaceOptional('asset node fallback should show company/plan', "contract.propertyName || 'ASSET NODE'", "contract.propertyName || contract.companyProfile?.name || contract.serviceDetails?.selectedPlan || 'ASSET NODE'");
+replaceOptional('owner fallback should show company email', "contract.ownerEmail || 'OWNER'", "contract.ownerEmail || contract.companyProfile?.email || 'OWNER'");
+replaceOptional('method fallback should prefer paymentMethod', "contract.provider || 'MANUAL'", "contract.paymentMethod || contract.provider || 'MANUAL'");
 
-writeFileSync(path, source);
-console.log('Admin payment approval aligned with payment_transactions and callable verification.');
+if (changed) {
+  writeFileSync(path, source);
+  console.log('Admin payment approval aligned with payment_transactions and callable verification.');
+} else {
+  console.log('Admin payment approval already hardened. No file changes required.');
+}
