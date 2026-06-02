@@ -24,10 +24,6 @@ service firebase.storage {
       );
     }
 
-    function hasRole(role) {
-      return hasAnyRole([role]);
-    }
-
     function isAdmin() {
       return isAuth() && (
         request.auth.token.admin == true ||
@@ -41,14 +37,6 @@ service firebase.storage {
 
     function isAuditor() {
       return hasAnyRole(['AUDITOR', 'auditor', 'compliance_officer']);
-    }
-
-    function isTenantRole() {
-      return hasAnyRole(['tenant', 'TENANT']);
-    }
-
-    function isTechnicianRole() {
-      return hasAnyRole(['technician', 'TECHNICIAN']);
     }
 
     function isOwnerRole() {
@@ -151,16 +139,11 @@ service firebase.storage {
              request.resource.contentType.matches('application/pdf|image/.*');
     }
 
-    // Tenant issue photos uploaded by TenantRequestPage.tsx:
-    // maintenanceTickets/{tenantUid}/{timestamp}_{fileName}
     match /maintenanceTickets/{tenantId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
       allow write: if false;
     }
 
-    // Technician/admin job completion evidence for maintenance tickets.
-    // Tenant issue photos are ticket-scoped to prevent broad technician access.
-    // Canonical path: maintenanceTickets/{ticketId}/tenant/{fileName}
     match /maintenanceTickets/{ticketId}/tenant/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if isAuth() && ticketExists(ticketId) && (
@@ -177,45 +160,37 @@ service firebase.storage {
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
-    // Backward/current app path used by TechnicianJobDetailPage.tsx.
     match /maintenanceTickets/{ticketId}/proofPhotos/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
-    // AI Design Studio reference images uploaded by owners/tenants/brokers/admins.
-    // Path used by DesignStudioPage.tsx: design_requests/{userId}/{timestamp}_{fileName}
     match /design_requests/{userId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
       allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
-    // Proofs: before/after photos for tickets
     match /proofs/{ticketId}/{allPaths=**} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
-    // Owner Documents: title deeds, passports, etc.
     match /owners/{ownerId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin() || isAuditor());
       allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) && isDocumentUpload(15);
     }
 
-    // Tenant Documents: EJARI, IDs, etc.
     match /tenants/{tenantId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
       allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) && isDocumentUpload(15);
     }
 
-    // Contracts: Institutional agreements
     match /contracts/{contractId}/{allPaths=**} {
       allow read: if canReadContractFile(contractId);
       allow write: if isAdmin() && isDocumentUpload(25);
     }
 
-    // Invoices: Financial records
     match /invoices/{invoiceId}/{allPaths=**} {
       allow read: if canReadInvoiceFile(invoiceId);
       allow write: if isAdmin() && isDocumentUpload(15);
@@ -231,19 +206,16 @@ service firebase.storage {
       allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
-    // Ticket evidence photos:
     match /evidence/{ticketId}/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
-    // Temporary KYC/Title deed uploads during anonymous onboarding:
     match /temp_kyc/{fileName} {
       allow read: if isAdmin();
       allow write: if isDocumentUpload(15);
     }
 
-    // Default lockdown for unmanaged paths
     match /{allPaths=**} {
       allow read, write: if isAdmin();
     }
