@@ -18,8 +18,8 @@ import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
 import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 
-const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'READY_FOR_ACTIVATION', 'SIGNED']);
-const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'OWNER_SIGNED', 'SIGNED']);
+const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'SIGNED']);
+const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'SIGNED']);
 const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
 
 type DashboardState = 'loading' | 'locked' | 'pending' | 'active';
@@ -55,11 +55,14 @@ const isActiveProfile = (profile: any) => {
   const status = String(profile.status || '').trim().toUpperCase();
   const activationStatus = String(profile.activationStatus || '').trim().toUpperCase();
   const signatureStatus = String(profile.contractSignatureStatus || profile.signatureStatus || '').trim().toUpperCase();
-  return profile.dashboardUnlocked === true ||
-    (profile.dashboardLocked === false && (profile.paymentVerified === true || profile.adminApproved === true) && !!(profile.activeContractId || profile.latestActivationContractId)) ||
-    status === 'ACTIVE' ||
-    activationStatus === 'ACTIVE' ||
-    ACTIVE_SIGNATURE_STATUSES.has(signatureStatus);
+  const verified = profile.paymentVerified === true;
+  const linkedContract = !!(profile.activeContractId || profile.latestActivationContractId);
+
+  return verified && (
+    profile.dashboardUnlocked === true ||
+    (profile.dashboardLocked === false && linkedContract) ||
+    (linkedContract && (status === 'ACTIVE' || activationStatus === 'ACTIVE' || ACTIVE_SIGNATURE_STATUSES.has(signatureStatus)))
+  );
 };
 
 const isActiveContract = (contract: any) => {
@@ -68,12 +71,16 @@ const isActiveContract = (contract: any) => {
   const contractStatus = String(contract.contractStatus || '').trim().toUpperCase();
   const activationStatus = String(contract.activationStatus || '').trim().toUpperCase();
   const signatureStatus = String(contract.signatureStatus || contract.signatureState?.status || '').trim().toUpperCase();
-  return contract.dashboardUnlocked === true ||
-    (contract.paymentVerified === true && (contract.ownerSigned === true || ACTIVE_CONTRACT_STATUSES.has(status) || ACTIVE_CONTRACT_STATUSES.has(activationStatus))) ||
+  const verified = contract.paymentVerified === true;
+
+  return verified && (
+    contract.dashboardUnlocked === true ||
+    contract.ownerSigned === true ||
     ACTIVE_CONTRACT_STATUSES.has(status) ||
     ACTIVE_CONTRACT_STATUSES.has(contractStatus) ||
     ACTIVE_CONTRACT_STATUSES.has(activationStatus) ||
-    ACTIVE_SIGNATURE_STATUSES.has(signatureStatus);
+    ACTIVE_SIGNATURE_STATUSES.has(signatureStatus)
+  );
 };
 
 const sortByRecent = (a: any, b: any) => getSeconds(b.updatedAt || b.createdAt) - getSeconds(a.updatedAt || a.createdAt);
@@ -163,7 +170,7 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   const finalEmails = compact([...trustedEmails, normalizeEmail(contract?.ownerEmail), normalizeEmail(contract?.emailDelivery?.recipient)]).flatMap(emailVariants);
 
   if (isActiveProfile(profile) || isActiveContract(contract)) return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
-  if (profile || contract) return { state: 'pending', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'Identity found, but activation flags are not complete.' };
+  if (profile || contract) return { state: 'pending', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'Identity found, but verified activation flags are not complete yet.' };
   return { state: 'locked', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'No owner profile or contract found for this login.' };
 }
 
@@ -329,7 +336,7 @@ export default function OwnerDashboardResolvedPage() {
       notes: String(reporterData.notes || '').trim(),
       inviteCode: makeInviteCode(),
       portalRoute: canActOnOwnerBehalf ? '/owner/dashboard' : '/tenant/request',
-      loginHint: 'Reporter must use their own Firebase Auth UID. Never share the owner UID or owner password.',
+      loginHint: 'Reporter must use a separate verified login for portal access.',
       accessStatus: 'INVITED',
       canCreateComplaints: true,
       canViewOwnComplaints: true,
@@ -370,8 +377,8 @@ export default function OwnerDashboardResolvedPage() {
       <Box sx={{ minHeight: '70vh', display: 'grid', placeItems: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
         <Paper sx={{ p: { xs: 3, md: 6 }, maxWidth: 720, bgcolor: 'rgba(22,22,24,.82)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 6, textAlign: 'center' }}>
           <Shield size={58} color={binThemeTokens.gold} style={{ margin: '0 auto 20px' }} />
-          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? 'Owner profile not linked yet' : 'Activation still requires final sync'}</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || 'Your profile was found, but the active contract/payment flags are not complete yet.'}</Typography>
+          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? 'Owner profile not linked yet' : 'Activation still requires verified approval'}</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || 'Your profile was found, but verified activation flags are not complete yet.'}</Typography>
           {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
             <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Review Contracts</Button>
