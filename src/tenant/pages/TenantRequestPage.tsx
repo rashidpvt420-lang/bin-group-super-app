@@ -6,11 +6,13 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Camera, X, MapPin, AlertCircle, ChevronLeft, Info } from 'lucide-react';
-import { db, storage, collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
+import { db, storage, collection, addDoc, updateDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTicketCreated, notifyEmergency } from '../../services/notificationService';
+
+const sanitizeStorageFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
 
 export default function TenantRequestPage() {
     const { user } = useRole();
@@ -70,11 +72,11 @@ export default function TenantRequestPage() {
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const filesArray = Array.from(e.target.files);
-            setPhotos(prev => [...prev, ...filesArray]);
+            const filesArray = Array.from(e.target.files).slice(0, Math.max(5 - photos.length, 0));
+            setPhotos(prev => [...prev, ...filesArray].slice(0, 5));
             
             const newPreviews = filesArray.map(file => URL.createObjectURL(file));
-            setPreviews(prev => [...prev, ...newPreviews]);
+            setPreviews(prev => [...prev, ...newPreviews].slice(0, 5));
         }
     };
 
@@ -83,8 +85,10 @@ export default function TenantRequestPage() {
         setPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
-    const uploadPhotosToStorage = async (): Promise<string[]> => {
-        if (photos.length === 0) return [];
+    const uploadPhotosToStorage = async (ticketId: string): Promise<string[]> => {
+        if (photos.length === 0) {
+            throw new Error('At least one photo is required before dispatch.');
+        }
 
         const photoUrls: string[] = [];
         const timestamp = Date.now();
@@ -92,20 +96,25 @@ export default function TenantRequestPage() {
         try {
             for (let i = 0; i < photos.length; i++) {
                 const file = photos[i];
-                const fileName = `${timestamp}_${file.name}`;
-                const storagePath = `maintenanceTickets/${user?.uid}/${fileName}`;
+                const fileName = `${timestamp}_${i + 1}_${sanitizeStorageFileName(file.name)}`;
+                const storagePath = `maintenanceTickets/${ticketId}/tenant/${fileName}`;
                 const fileRef = ref(storage, storagePath);
 
-                // Upload file to Firebase Storage
-                await uploadBytes(fileRef, file);
+                await uploadBytes(fileRef, file, {
+                    contentType: file.type || 'image/jpeg',
+                    customMetadata: {
+                        ticketId,
+                        uploadedBy: user?.uid || '',
+                        evidenceRole: 'tenant',
+                    },
+                });
 
-                // Get download URL
                 const downloadUrl = await getDownloadURL(fileRef);
                 photoUrls.push(downloadUrl);
             }
         } catch (err) {
             console.error("Photo upload failed:", err);
-            throw new Error("Failed to upload photos to Storage");
+            throw new Error("Failed to upload evidence photos to secure ticket storage.");
         }
 
         return photoUrls;
@@ -118,7 +127,11 @@ export default function TenantRequestPage() {
             return;
         }
 
-        // Derive jobLocation from property data
+        if (photos.length === 0) {
+            alert('Please attach at least one photo before submitting. Photo evidence is required for dispatch.');
+            return;
+        }
+
         const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
         const jobLocation = locationSource ? {
             lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
@@ -129,7 +142,6 @@ export default function TenantRequestPage() {
             source: 'property',
         } : null;
 
-        // Block submission if no location — technician cannot navigate
         if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
             alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
             return;
@@ -141,11 +153,8 @@ export default function TenantRequestPage() {
         }
 
         setSubmitting(true);
+        let createdTicketId = '';
         try {
-            setUploadingPhotos(true);
-            const photoUrls = await uploadPhotosToStorage();
-            setUploadingPhotos(false);
-
             const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
                 requesterRole: 'tenant',
                 tenantId: user.uid,
@@ -164,9 +173,11 @@ export default function TenantRequestPage() {
                 priority,
                 description,
                 specificLocation,
-                photos: photoUrls,
+                photos: [],
+                primaryPhotoUrl: null,
                 jobLocation,
                 photoEvidenceRequired: true,
+                evidenceStatus: 'PENDING_TENANT_UPLOAD',
                 source: 'TENANT_PORTAL',
                 status: 'OPEN',
                 dispatchStatus: 'PENDING_ASSIGNMENT',
@@ -176,6 +187,19 @@ export default function TenantRequestPage() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 slaMinutes: priority === 'emergency' ? 60 : priority === 'urgent' ? 240 : 1440,
+            });
+            createdTicketId = docRef.id;
+
+            setUploadingPhotos(true);
+            const photoUrls = await uploadPhotosToStorage(docRef.id);
+            setUploadingPhotos(false);
+
+            await updateDoc(doc(db, 'maintenanceTickets', docRef.id), {
+                photos: photoUrls,
+                primaryPhotoUrl: photoUrls[0] || null,
+                evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+                evidenceUploadedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
             });
 
             if (priority === 'emergency') {
@@ -191,6 +215,13 @@ export default function TenantRequestPage() {
             navigate('/tenant/tickets');
         } catch (err) {
             console.error('Submit failed', err);
+            if (createdTicketId) {
+                updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
+                    evidenceStatus: 'TENANT_EVIDENCE_UPLOAD_FAILED',
+                    dispatchStatus: 'WAITING_FOR_EVIDENCE',
+                    updatedAt: serverTimestamp(),
+                }).catch(console.warn);
+            }
             alert('Failed to submit request: ' + (err instanceof Error ? err.message : String(err)));
         } finally {
             setSubmitting(false);
@@ -286,7 +317,7 @@ export default function TenantRequestPage() {
                             {uploadingPhotos && (
                                 <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <CircularProgress size={20} sx={{ color: binThemeTokens.gold }} />
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to Storage...</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to secure ticket evidence storage...</Typography>
                                 </Box>
                             )}
                             <Grid container spacing={2}>
@@ -348,7 +379,7 @@ export default function TenantRequestPage() {
                             type="submit" 
                             variant="contained" 
                             size="large" 
-                            disabled={submitting || uploadingPhotos || isOwnerSuspended} 
+                            disabled={submitting || uploadingPhotos || isOwnerSuspended || photos.length === 0} 
                             sx={{ 
                                 bgcolor: binThemeTokens.gold, 
                                 color: '#000', 
