@@ -22,9 +22,53 @@ env:
   CI: true
 
 jobs:
-  build-and-deploy:
-    name: Build and deploy Firebase production hosting
+  validate-production-build:
+    name: Validate production build
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Create production environment file
+        run: |
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
+
+      - name: Production stability guard
+        run: npm run test:stability
+
+      - name: Validate TypeScript diagnostics
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Validate Firestore security rules
+        run: npm run test:rules
+
+      - name: Build main public app
+        run: npm run build
+
+      - name: Build admin panel hosting app
+        run: CI=false npm run build --workspace=home-os-admin-panel
+
+      - name: Build Firebase Functions
+        run: npm run build --workspace=functions
+
+  deploy-production:
+    name: Deploy Firebase production stack
+    runs-on: ubuntu-latest
+    needs: validate-production-build
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -60,13 +104,8 @@ jobs:
       - name: Build admin panel hosting app
         run: CI=false npm run build --workspace=home-os-admin-panel
 
-      - name: Deploy Firebase Hosting
-        run: npx firebase deploy --only hosting --project "${GCP_PROJECT_ID}" --non-interactive --force
-
-      - name: Build Firebase Functions for manual full-stack deploy
-        if: github.event_name == 'workflow_dispatch'
+      - name: Build Firebase Functions
         run: npm run build --workspace=functions
 
-      - name: Deploy Firebase full production stack manually only
-        if: github.event_name == 'workflow_dispatch'
+      - name: Deploy Firebase full production stack
         run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
