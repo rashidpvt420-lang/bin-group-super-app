@@ -56,31 +56,32 @@ const visibleStageProgress = (internalStep: number) => {
 
 const PropertyOnboardingPage = () => {
     const { step, setStep, nextStep, prevStep } = useOnboardingStore();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
     const visibleStages = [
-        'Owner Property',
-        'Systems + Add-ons',
-        'Plan Price',
-        'Documents Account',
-        'Contract',
-        'Payment',
+        label('Owner Property', 'بيانات المالك والعقار'),
+        label('Systems + Add-ons', 'الأنظمة والإضافات'),
+        label('Plan Price', 'الخطة والسعر'),
+        label('Documents Account', 'المستندات والحساب'),
+        label('Contract', 'العقد'),
+        label('Payment', 'الدفع'),
     ];
 
     const internalStepLabels = [
-        readable(t('onboarding.company'), 'Company'),
-        readable(t('onboarding.asset'), 'Asset'),
-        readable(t('onboarding.location'), 'Location'),
-        readable(t('onboarding.systems'), 'Systems + Add-ons'),
-        readable(t('onboarding.service_plan'), 'Service Plan'),
-        readable(t('onboarding.documents'), 'Documents'),
-        readable(t('onboarding.verification'), 'Account'),
-        readable(t('onboarding.review'), 'Review'),
-        readable(t('onboarding.contract'), 'Contract'),
-        readable(t('onboarding.payment_options'), 'Payment Options'),
-        readable(t('onboarding.payment_submission'), 'Payment Submission'),
+        readable(t('onboarding.company'), label('Company', 'الشركة')),
+        readable(t('onboarding.asset'), label('Asset', 'الأصل')),
+        readable(t('onboarding.location'), label('Location', 'الموقع')),
+        readable(t('onboarding.systems'), label('Systems + Add-ons', 'الأنظمة والإضافات')),
+        readable(t('onboarding.service_plan'), label('Service Plan', 'خطة الخدمة')),
+        readable(t('onboarding.documents'), label('Documents', 'المستندات')),
+        readable(t('onboarding.verification'), label('Account', 'الحساب')),
+        readable(t('onboarding.review'), label('Review', 'المراجعة')),
+        readable(t('onboarding.contract'), label('Contract', 'العقد')),
+        readable(t('onboarding.payment_options'), label('Payment Options', 'خيارات الدفع')),
+        readable(t('onboarding.payment_submission'), label('Payment Submission', 'تقديم الدفع')),
     ];
 
     const safeStep = clampStep(step, INTERNAL_STEP_COUNT);
@@ -130,10 +131,10 @@ const PropertyOnboardingPage = () => {
 
             <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 1, md: 2 }, px: { xs: 1.5, sm: 3 } }}>
                 <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, textAlign: 'center', mb: 0.75 }}>
-                    {`Stage ${visibleStage} of ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`}
+                    {lang === 'ar' ? `المرحلة ${visibleStage} من ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}` : `Stage ${visibleStage} of ${VISIBLE_STAGE_COUNT}: ${currentVisibleLabel}`}
                 </Typography>
                 <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontWeight: 800, textAlign: 'center', mb: { xs: 1, md: 2 } }}>
-                    {`Part ${currentStageProgress}: ${currentInternalLabel}`}
+                    {lang === 'ar' ? `الجزء ${currentStageProgress}: ${currentInternalLabel}` : `Part ${currentStageProgress}: ${currentInternalLabel}`}
                 </Typography>
                 <Stepper
                     activeStep={activeVisibleStageIndex}
@@ -148,8 +149,8 @@ const PropertyOnboardingPage = () => {
                         '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr', minWidth: isMobile ? 48 : 'auto' },
                     }}
                 >
-                    {visibleStages.map((label) => (
-                        <Step key={label}>
+                    {visibleStages.map((stageLabel) => (
+                        <Step key={stageLabel}>
                             <StepLabel
                                 StepIconProps={{
                                     sx: {
@@ -160,7 +161,7 @@ const PropertyOnboardingPage = () => {
                             >
                                 {!isMobile && (
                                     <Typography variant="caption" fontWeight="700" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                                        {label}
+                                        {stageLabel}
                                     </Typography>
                                 )}
                             </StepLabel>
