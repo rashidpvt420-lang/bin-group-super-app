@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import React, { createContext, useContext, type ReactNode } from "react";
 import { ThemeProvider as MuiThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import { binThemeTokens } from "../theme/binGroupTheme";
 import { useLanguage } from "./LanguageContext";
@@ -17,7 +17,7 @@ const cacheLtr = createCache({
   key: 'muiltr',
 });
 
-type ThemeMode = 'light' | 'dark';
+type ThemeMode = 'light';
 
 interface ThemeContextType {
     mode: ThemeMode;
@@ -25,30 +25,30 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const SOVEREIGN_LIGHT_MODE: ThemeMode = 'light';
 
 export function CustomThemeProvider({ children }: { children: ReactNode }) {
-    const [mode, setMode] = useState<ThemeMode>(() => {
-        const stored = localStorage.getItem('app_theme') as ThemeMode | null;
-        return stored === 'dark' ? 'dark' : 'light';
-    });
+    const { isRTL } = useLanguage();
 
-    useEffect(() => {
-        document.documentElement.setAttribute('data-bin-theme', mode);
-        document.documentElement.style.colorScheme = mode;
-    }, [mode]);
+    React.useEffect(() => {
+        localStorage.setItem('app_theme', SOVEREIGN_LIGHT_MODE);
+        document.documentElement.setAttribute('data-bin-theme', SOVEREIGN_LIGHT_MODE);
+        document.documentElement.style.colorScheme = SOVEREIGN_LIGHT_MODE;
+        document.body.style.backgroundColor = binThemeTokens.canvas;
+        document.body.style.color = binThemeTokens.textPrimary;
+    }, []);
 
     const toggleTheme = () => {
-        const newMode = mode === 'dark' ? 'light' : 'dark';
-        setMode(newMode);
-        localStorage.setItem('app_theme', newMode);
+        // Public launch design rule: BIN GROUP runs the audited White & Platinum Sovereign Aesthetic only.
+        localStorage.setItem('app_theme', SOVEREIGN_LIGHT_MODE);
+        document.documentElement.setAttribute('data-bin-theme', SOVEREIGN_LIGHT_MODE);
+        document.documentElement.style.colorScheme = SOVEREIGN_LIGHT_MODE;
     };
-
-    const { isRTL } = useLanguage();
 
     const theme = React.useMemo(() => createTheme({
         direction: isRTL ? 'rtl' : 'ltr',
         palette: {
-            mode,
+            mode: SOVEREIGN_LIGHT_MODE,
             primary: {
                 main: binThemeTokens.gold,
                 light: binThemeTokens.goldLight,
@@ -62,39 +62,39 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 contrastText: binThemeTokens.textPrimary,
             },
             background: {
-                default: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
-                paper: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
+                default: binThemeTokens.canvas,
+                paper: binThemeTokens.card,
             },
             text: {
-                primary: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
-                secondary: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
+                primary: binThemeTokens.textPrimary,
+                secondary: binThemeTokens.textSecondary,
             },
-            divider: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
+            divider: binThemeTokens.border,
         },
         typography: {
             fontFamily: "'Cairo', 'Inter', 'Outfit', sans-serif",
-            h1: { fontWeight: 900 },
-            h2: { fontWeight: 900 },
-            h3: { fontWeight: 900 },
-            h4: { fontWeight: 900 },
-            h5: { fontWeight: 900 },
-            h6: { fontWeight: 900 },
+            h1: { fontWeight: 900, letterSpacing: '-0.03em', color: binThemeTokens.textPrimary },
+            h2: { fontWeight: 900, letterSpacing: '-0.025em', color: binThemeTokens.textPrimary },
+            h3: { fontWeight: 900, letterSpacing: '-0.02em', color: binThemeTokens.textPrimary },
+            h4: { fontWeight: 900, color: binThemeTokens.textPrimary },
+            h5: { fontWeight: 900, color: binThemeTokens.textPrimary },
+            h6: { fontWeight: 900, color: binThemeTokens.textPrimary },
         },
         shape: { borderRadius: 22 },
         components: {
             MuiCssBaseline: {
                 styleOverrides: {
                     html: {
-                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
-                        colorScheme: mode,
+                        backgroundColor: binThemeTokens.canvas,
+                        colorScheme: SOVEREIGN_LIGHT_MODE,
                     },
                     body: {
-                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
-                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        backgroundColor: binThemeTokens.canvas,
+                        color: binThemeTokens.textPrimary,
                     },
                     '#root': {
-                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
-                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        backgroundColor: binThemeTokens.canvas,
+                        color: binThemeTokens.textPrimary,
                         minHeight: '100%',
                     },
                 },
@@ -103,10 +103,10 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 styleOverrides: {
                     root: {
                         backgroundImage: 'none',
-                        backgroundColor: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
-                        border: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
+                        backgroundColor: binThemeTokens.card,
+                        border: `1px solid ${binThemeTokens.border}`,
                         borderRadius: 22,
-                        boxShadow: mode === 'dark' ? '0 12px 32px rgba(0,0,0,0.24)' : binThemeTokens.cardShadow,
+                        boxShadow: binThemeTokens.cardShadow,
                     },
                 },
             },
@@ -114,14 +114,14 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 styleOverrides: {
                     root: {
                         backgroundImage: 'none',
-                        backgroundColor: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
-                        border: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.2) : binThemeTokens.border}`,
+                        backgroundColor: binThemeTokens.card,
+                        border: `1px solid ${binThemeTokens.border}`,
                         borderRadius: 22,
-                        boxShadow: mode === 'dark' ? '0 12px 32px rgba(0,0,0,0.24)' : binThemeTokens.cardShadow,
+                        boxShadow: binThemeTokens.cardShadow,
                         transition: 'all 0.22s ease',
                         '&:hover': {
                             transform: 'translateY(-2px)',
-                            boxShadow: mode === 'dark' ? `0 18px 45px ${alpha(binThemeTokens.gold, 0.16)}` : binThemeTokens.cardShadowHover,
+                            boxShadow: binThemeTokens.cardShadowHover,
                         },
                     },
                 },
@@ -129,10 +129,10 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
             MuiAppBar: {
                 styleOverrides: {
                     root: {
-                        backgroundColor: mode === 'dark' ? alpha('#111827', 0.92) : alpha(binThemeTokens.canvas, 0.92),
-                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
-                        borderBottom: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
-                        boxShadow: mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.26)' : '0 8px 24px rgba(17, 24, 39, 0.06)',
+                        backgroundColor: alpha(binThemeTokens.canvas, 0.94),
+                        color: binThemeTokens.textPrimary,
+                        borderBottom: `1px solid ${binThemeTokens.border}`,
+                        boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)',
                         backdropFilter: 'blur(18px)',
                     },
                 },
@@ -140,10 +140,10 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
             MuiDrawer: {
                 styleOverrides: {
                     paper: {
-                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
-                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
-                        borderRight: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
-                        boxShadow: mode === 'dark' ? '8px 0 28px rgba(0,0,0,0.26)' : '8px 0 28px rgba(17, 24, 39, 0.06)',
+                        backgroundColor: binThemeTokens.canvas,
+                        color: binThemeTokens.textPrimary,
+                        borderRight: `1px solid ${binThemeTokens.border}`,
+                        boxShadow: '8px 0 28px rgba(17, 24, 39, 0.06)',
                     },
                 },
             },
@@ -168,7 +168,7 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                     },
                     outlinedPrimary: {
                         borderColor: alpha(binThemeTokens.gold, 0.55),
-                        color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
+                        color: binThemeTokens.goldHover,
                         '&:hover': {
                             borderColor: binThemeTokens.gold,
                             background: alpha(binThemeTokens.gold, 0.08),
@@ -180,76 +180,58 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 styleOverrides: {
                     root: {
                         '& .MuiOutlinedInput-root': {
-                            backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : binThemeTokens.card,
+                            backgroundColor: binThemeTokens.card,
                             borderRadius: 16,
-                            '& fieldset': {
-                                borderColor: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
-                            },
-                            '&:hover fieldset': {
-                                borderColor: alpha(binThemeTokens.gold, 0.45),
-                            },
+                            '& fieldset': { borderColor: binThemeTokens.border },
+                            '&:hover fieldset': { borderColor: alpha(binThemeTokens.gold, 0.45) },
                             '&.Mui-focused fieldset': {
                                 borderColor: binThemeTokens.gold,
                                 boxShadow: `0 0 0 3px ${alpha(binThemeTokens.gold, 0.12)}`,
                             },
                         },
-                        '& .MuiInputBase-input': {
-                            color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
-                        },
-                        '& .MuiInputLabel-root': {
-                            color: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
-                        },
+                        '& .MuiInputBase-input': { color: binThemeTokens.textPrimary },
+                        '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary },
                     },
                 },
             },
             MuiSelect: {
                 styleOverrides: {
                     root: {
-                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
-                        backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : binThemeTokens.card,
+                        color: binThemeTokens.textPrimary,
+                        backgroundColor: binThemeTokens.card,
                         borderRadius: 16,
-                        '& .MuiOutlinedInput-notchedOutline': {
-                            borderColor: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
-                        },
-                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: alpha(binThemeTokens.gold, 0.45),
-                        },
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                            borderColor: binThemeTokens.gold,
-                        },
-                        '& .MuiSvgIcon-root': {
-                            color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
-                        },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.border },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha(binThemeTokens.gold, 0.45) },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.gold },
+                        '& .MuiSvgIcon-root': { color: binThemeTokens.goldHover },
                     },
                 },
             },
             MuiInputLabel: {
                 styleOverrides: {
                     root: {
-                        color: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
-                        '&.Mui-focused': {
-                            color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
-                        },
+                        color: binThemeTokens.textSecondary,
+                        '&.Mui-focused': { color: binThemeTokens.goldHover },
                     },
                 },
             },
             MuiStepper: {
                 styleOverrides: {
                     root: {
-                        '& .MuiStepLabel-label': { color: mode === 'dark' ? '#9CA3AF' : binThemeTokens.textTertiary, fontWeight: 700 },
-                        '& .MuiStepLabel-label.Mui-active': { color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover },
-                        '& .MuiStepLabel-label.Mui-completed': { color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover },
-                        '& .MuiStepIcon-root': { color: mode === 'dark' ? alpha('#FFFFFF', 0.18) : binThemeTokens.platinum },
+                        '& .MuiStepLabel-label': { color: binThemeTokens.textTertiary, fontWeight: 700 },
+                        '& .MuiStepLabel-label.Mui-active': { color: binThemeTokens.goldHover },
+                        '& .MuiStepLabel-label.Mui-completed': { color: binThemeTokens.goldHover },
+                        '& .MuiStepIcon-root': { color: binThemeTokens.platinum },
                         '& .MuiStepIcon-root.Mui-active': { color: binThemeTokens.gold },
                         '& .MuiStepIcon-root.Mui-completed': { color: binThemeTokens.gold },
                     }
                 }
             }
         },
-    }), [mode, isRTL]);
+    }), [isRTL]);
 
     return (
-        <ThemeContext.Provider value={{ mode, toggleTheme }}>
+        <ThemeContext.Provider value={{ mode: SOVEREIGN_LIGHT_MODE, toggleTheme }}>
             <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
                 <MuiThemeProvider theme={theme}>
                     {children}
