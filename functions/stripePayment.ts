@@ -49,6 +49,7 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   }
 
   const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
+  const returnParams = `session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}`;
 
   try {
     const session = await stripeInstance.checkout.sessions.create({
@@ -67,8 +68,8 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
         },
       ],
       mode: "payment",
-      success_url: `https://bin-group-57c60.web.app/payment-success?session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}`,
-      cancel_url: `https://bin-group-57c60.web.app/payment-failed?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `https://bin-group-57c60.web.app/owner/activation?payment_success=true&${returnParams}`,
+      cancel_url: `https://bin-group-57c60.web.app/owner/activation?payment_failed=true&${returnParams}`,
       customer_email: ownerEmail,
       metadata: {
         ownerUid,
