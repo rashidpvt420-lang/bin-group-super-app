@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { 
+import {
     Box, Typography, Grid, Paper, alpha, Stack, TextField, MenuItem, Container, Button, CircularProgress, Snackbar, Alert, Chip
 } from '@mui/material';
-import { 
-    Home, Building2, Building, Hotel, Landmark, Gem, 
+import {
+    Home, Building2, Building, Hotel, Landmark, Gem,
     Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -110,12 +110,10 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const [scanning, setScanning] = useState(false);
     const [scanned, setScanned] = useState(false);
     const [ocrError, setOcrError] = useState<string | null>(null);
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success'|'error' });
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
     React.useEffect(() => {
-        if (properties.length === 0) {
-            addProperty();
-        }
+        if (properties.length === 0) addProperty();
     }, [properties.length, addProperty]);
 
     const activeProperty = properties[0];
@@ -157,59 +155,59 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                     titleDeedStatus: 'extracted'
                 });
                 setScanned(true);
-                setSnackbar({ open: true, message: "Title deed data extracted successfully.", severity: 'success' });
+                setSnackbar({ open: true, message: 'Title deed data extracted successfully.', severity: 'success' });
             } else {
-                throw new Error("OCR_NODE_BUSY");
+                throw new Error('OCR_NODE_BUSY');
             }
         } catch (err) {
-            console.error("OCR Failure:", err);
-            setOcrError("Scanner node busy or document unclear. Please fill data manually or retry.");
+            console.error('OCR Failure:', err);
+            setOcrError('Scanner node busy or document unclear. Please fill data manually or retry.');
             updateProperty(0, { titleDeedStatus: 'manual_review_required' });
         } finally {
             setScanning(false);
         }
     };
 
-    const types = [
-        { id: 'Villa', label: t('onboarding.type.villa'), icon: <Home size={24} /> },
-        { id: 'Apartment', label: t('onboarding.type.apartment'), icon: <Building size={24} /> },
-        { id: 'Residential Building', label: t('onboarding.type.res_building'), icon: <Building2 size={24} /> },
-        { id: 'Commercial Building', label: t('onboarding.type.com_building'), icon: <Warehouse size={24} /> },
-        { id: 'Office', label: t('onboarding.type.office'), icon: <Briefcase size={24} /> },
-        { id: 'Retail Center', label: t('onboarding.type.retail'), icon: <Building size={24} /> },
-        { id: 'Mall', label: t('onboarding.type.mall'), icon: <Building2 size={24} />, premium: true },
-        { id: 'Hotel', label: t('onboarding.type.hotel'), icon: <Hotel size={24} />, premium: true, useType: 'hospitality' },
-        { id: 'Mosque / Masjid', label: isRTL ? 'مسجد' : 'Mosque / Masjid', icon: <Landmark size={24} />, premium: true, useType: 'religious', ownerType: 'government', assetClass: 'RELIGIOUS_FACILITY' },
-        { id: 'Hospital', label: t('onboarding.type.hospital'), icon: <ShieldCheck size={24} />, premium: true, useType: 'healthcare' },
-        { id: 'Clinic', label: t('onboarding.type.clinic'), icon: <ShieldCheck size={24} />, premium: true, useType: 'healthcare' },
-        { id: 'School', label: t('onboarding.type.school'), icon: <Landmark size={24} />, premium: true, useType: 'education' },
-        { id: 'Warehouse', label: t('onboarding.type.warehouse'), icon: <Warehouse size={24} /> },
-        { id: 'Labour Camp', label: t('onboarding.type.labour_camp'), icon: <Building2 size={24} />, premium: true },
-        { id: 'Government Property', label: t('onboarding.type.gov_prop'), icon: <ShieldCheck size={24} />, premium: true, ownerType: 'government' },
-        { id: 'Government Majlis', label: t('onboarding.type.gov_majlis'), icon: <Landmark size={24} />, premium: true, ownerType: 'government', majlis: true, majlisType: 'government' },
-        { id: 'Private Majlis', label: t('onboarding.type.priv_majlis'), icon: <Landmark size={24} />, premium: true, majlis: true, majlisType: 'private' },
-        { id: 'Mixed-Use Tower', label: t('onboarding.type.mixed_tower'), icon: <Gem size={24} />, premium: true },
-        { id: 'Skyscraper', label: t('onboarding.type.skyscraper'), icon: <Building2 size={24} />, premium: true },
-        { id: 'Stadium', label: t('onboarding.type.stadium'), icon: <Gem size={24} />, premium: true, useType: 'event' },
-        { id: 'Sports Complex', label: t('onboarding.type.sports_complex'), icon: <Gem size={24} />, premium: true, useType: 'event' },
-        { id: 'Event Venue', label: t('onboarding.type.event_venue'), icon: <Gem size={24} />, premium: true, useType: 'event' },
-        { id: 'Resort', label: t('onboarding.type.resort'), icon: <Hotel size={24} />, premium: true, useType: 'hospitality' },
-        { id: 'Industrial Property', label: t('onboarding.type.industrial'), icon: <Warehouse size={24} /> },
-        { id: 'Staff Accommodation', label: t('onboarding.type.staff_acc'), icon: <Building2 size={24} /> },
-        { id: 'Farm / Estate', label: t('onboarding.type.farm'), icon: <Home size={24} /> },
+    const types: any[] = [
+        { id: 'Villa', label: t('onboarding.type.villa'), icon: <Home size={22} />, category: 'Residential' },
+        { id: 'Apartment', label: t('onboarding.type.apartment'), icon: <Building size={22} />, category: 'Residential' },
+        { id: 'Residential Building', label: t('onboarding.type.res_building'), icon: <Building2 size={22} />, category: 'Residential' },
+        { id: 'Commercial Building', label: t('onboarding.type.com_building'), icon: <Warehouse size={22} />, category: 'Commercial' },
+        { id: 'Office', label: t('onboarding.type.office'), icon: <Briefcase size={22} />, category: 'Commercial' },
+        { id: 'Retail Center', label: t('onboarding.type.retail'), icon: <Building size={22} />, category: 'Commercial' },
+        { id: 'Mall', label: t('onboarding.type.mall'), icon: <Building2 size={22} />, premium: true, category: 'Retail' },
+        { id: 'Hotel', label: t('onboarding.type.hotel'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
+        { id: 'Resort', label: t('onboarding.type.resort'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
+        { id: 'Hospital', label: t('onboarding.type.hospital'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
+        { id: 'Clinic', label: t('onboarding.type.clinic'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
+        { id: 'School', label: t('onboarding.type.school'), icon: <Landmark size={22} />, premium: true, useType: 'education', category: 'Education' },
+        { id: 'Warehouse', label: t('onboarding.type.warehouse'), icon: <Warehouse size={22} />, category: 'Industrial' },
+        { id: 'Industrial Property', label: t('onboarding.type.industrial'), icon: <Warehouse size={22} />, category: 'Industrial' },
+        { id: 'Labour Camp', label: t('onboarding.type.labour_camp'), icon: <Building2 size={22} />, premium: true, category: 'Accommodation' },
+        { id: 'Staff Accommodation', label: t('onboarding.type.staff_acc'), icon: <Building2 size={22} />, category: 'Accommodation' },
+        { id: 'Government Property', label: t('onboarding.type.gov_prop'), icon: <ShieldCheck size={22} />, premium: true, ownerType: 'government', category: 'Government' },
+        { id: 'Government Majlis', label: t('onboarding.type.gov_majlis'), icon: <Landmark size={22} />, premium: true, ownerType: 'government', majlis: true, majlisType: 'government', category: 'Majlis' },
+        { id: 'Private Majlis', label: t('onboarding.type.priv_majlis'), icon: <Landmark size={22} />, premium: true, majlis: true, majlisType: 'private', category: 'Majlis' },
+        { id: 'Mosque / Masjid', label: isRTL ? 'مسجد' : 'Mosque / Masjid', icon: <Landmark size={22} />, premium: true, useType: 'religious', ownerType: 'government', assetClass: 'RELIGIOUS_FACILITY', category: 'Religious' },
+        { id: 'Mixed-Use Tower', label: t('onboarding.type.mixed_tower'), icon: <Gem size={22} />, premium: true, category: 'Tower' },
+        { id: 'Skyscraper', label: t('onboarding.type.skyscraper'), icon: <Building2 size={22} />, premium: true, category: 'Tower' },
+        { id: 'Stadium', label: t('onboarding.type.stadium'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Sports Complex', label: t('onboarding.type.sports_complex'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Event Venue', label: t('onboarding.type.event_venue'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Farm / Estate', label: t('onboarding.type.farm'), icon: <Home size={22} />, category: 'Estate' },
     ];
 
-    const selectPropertyType = (type: typeof types[number]) => {
+    const selectPropertyType = (type: any) => {
         const isSelectedMosque = type.id === 'Mosque / Masjid';
         const nextEmirate = activeProperty?.emirate || 'Dubai';
         updateProperty(0, {
             propertyType: type.id,
             subType: isSelectedMosque ? 'Mosque Facilities Management' : activeProperty?.subType,
-            majlis: Boolean((type as any).majlis),
-            majlisType: (type as any).majlisType || 'none',
-            ownerType: (type as any).ownerType || activeProperty?.ownerType || 'Private',
-            useType: (type as any).useType || activeProperty?.useType || 'Rental',
-            assetGrade: isSelectedMosque ? 'Sovereign' : activeProperty?.assetGrade || 'Premium',
+            majlis: Boolean(type.majlis),
+            majlisType: type.majlisType || 'none',
+            ownerType: type.ownerType || activeProperty?.ownerType || 'Private',
+            useType: type.useType || activeProperty?.useType || 'Rental',
+            assetGrade: isSelectedMosque || type.premium ? 'Sovereign' : activeProperty?.assetGrade || 'Premium',
             sira: isSelectedMosque ? true : activeProperty?.sira,
             tank: isSelectedMosque ? true : activeProperty?.tank,
             hvac: isSelectedMosque ? true : activeProperty?.hvac,
@@ -226,9 +224,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
     const updateMosqueProfile = (patch: Record<string, any>) => {
         const nextProfile = { ...mosqueProfile, ...patch };
-        if (patch.emirate) {
-            nextProfile.regulatoryAuthority = getMosqueRegulatoryAuthority(patch.emirate);
-        }
+        if (patch.emirate) nextProfile.regulatoryAuthority = getMosqueRegulatoryAuthority(patch.emirate);
         updateProperty(0, {
             emirate: nextProfile.emirate,
             age: nextProfile.propertyAgeYears || activeProperty?.age || 0,
@@ -240,6 +236,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     };
 
     const canProceed = activeProperty?.propertyType && activeProperty?.units > 0 && activeProperty?.sqft > 0;
+    const selectedType = types.find((type) => type.id === activeProperty?.propertyType);
 
     return (
         <Box sx={{ py: 2 }}>
@@ -247,19 +244,19 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
                     {t('onboarding.asset_profile')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 760, mx: 'auto' }}>
                     {t('onboarding.asset_desc')}
                 </Typography>
             </Box>
 
             <Container maxWidth="lg">
                 {ocrError && (
-                    <Alert 
-                        severity="warning" 
+                    <Alert
+                        severity="warning"
                         icon={<AlertTriangle />}
                         sx={{ mb: 4, bgcolor: 'rgba(255, 152, 0, 0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.2)' }}
                         action={
-                            <Button size="small" color="inherit" component="label" startIcon={<RefreshCcw size={14}/>}>
+                            <Button size="small" color="inherit" component="label" startIcon={<RefreshCcw size={14} />}>
                                 {t('onboarding.retry_scan')}
                                 <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />
                             </Button>
@@ -271,45 +268,70 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
                 <Grid container spacing={4}>
                     <Grid item xs={12} lg={7}>
-                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
-                                1. {t('onboarding.asset_type').toUpperCase()}
-                            </Typography>
-                            <Grid container spacing={2}>
-                                {types.map((type) => (
-                                    <Grid item xs={12} sm={4} key={type.id}>
-                                        <Paper 
-                                            onClick={() => selectPropertyType(type)}
-                                            sx={{ 
-                                                p: 2, 
-                                                cursor: 'pointer',
-                                                bgcolor: activeProperty?.propertyType === type.id ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
-                                                border: `1px solid ${activeProperty?.propertyType === type.id ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
-                                                borderRadius: 3,
-                                                transition: 'all 0.2s ease',
-                                                textAlign: 'center',
-                                                '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198, 167, 94, 0.05)' }
-                                            }}
-                                        >
-                                            <Box sx={{ color: activeProperty?.propertyType === type.id ? binThemeTokens.gold : 'rgba(255,255,255,0.3)', mb: 1, display: 'flex', justifyContent: 'center' }}>
-                                                {type.icon}
-                                            </Box>
-                                            <Typography variant="caption" fontWeight="900" sx={{ color: '#FFF', display: 'block', lineHeight: 1.2 }}>
-                                                {type.label}
-                                            </Typography>
-                                            {(type as any).assetClass === 'RELIGIOUS_FACILITY' && (
-                                                <Chip size="small" label="Awqaf / IACAD" sx={{ mt: 1, height: 18, fontSize: 10, color: '#000', bgcolor: binThemeTokens.gold }} />
-                                            )}
-                                        </Paper>
-                                    </Grid>
-                                ))}
+                        <Paper sx={{ p: { xs: 2.2, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Stack spacing={1.5} sx={{ mb: 3 }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block' }}>
+                                        1. {t('onboarding.asset_type').toUpperCase()}
+                                    </Typography>
+                                    <Chip size="small" label={`${types.length} asset types`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
+                                </Stack>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', lineHeight: 1.6 }}>
+                                    Scroll or tap below. BIN GROUP supports villas, apartments, towers, hotels, hospitals, schools, mosques, majlis, warehouses, labour camps, staff accommodation and government assets.
+                                </Typography>
+                                <Stack direction="row" flexWrap="wrap" gap={1}>
+                                    {['Residential', 'Commercial', 'Hospitality', 'Healthcare', 'Government', 'Majlis', 'Industrial'].map((category) => (
+                                        <Chip key={category} size="small" label={category} sx={{ height: 22, bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 10 }} />
+                                    ))}
+                                </Stack>
+                            </Stack>
+
+                            <Grid container spacing={{ xs: 1.2, sm: 2 }}>
+                                {types.map((type) => {
+                                    const isSelected = activeProperty?.propertyType === type.id;
+                                    return (
+                                        <Grid item xs={6} sm={4} key={type.id}>
+                                            <Paper
+                                                onClick={() => selectPropertyType(type)}
+                                                sx={{
+                                                    p: { xs: 1.4, sm: 2 },
+                                                    minHeight: { xs: 104, sm: 122 },
+                                                    cursor: 'pointer',
+                                                    bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.12) : 'rgba(255,255,255,0.02)',
+                                                    border: `1px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.06)'}`,
+                                                    borderRadius: { xs: 3, sm: 3.5 },
+                                                    transition: 'all 0.2s ease',
+                                                    textAlign: 'center',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: 0.75,
+                                                    '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198, 167, 94, 0.05)' }
+                                                }}
+                                            >
+                                                <Box sx={{ color: isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.35)', display: 'flex', justifyContent: 'center' }}>
+                                                    {type.icon}
+                                                </Box>
+                                                <Typography variant="caption" fontWeight="950" sx={{ color: '#FFF', display: 'block', lineHeight: 1.18, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
+                                                    {type.label}
+                                                </Typography>
+                                                <Stack direction="row" spacing={0.5} justifyContent="center" flexWrap="wrap" useFlexGap>
+                                                    {type.premium && <Chip size="small" label="Sovereign" sx={{ height: 17, fontSize: 9, color: '#000', bgcolor: binThemeTokens.gold, fontWeight: 900 }} />}
+                                                    {type.ownerType === 'government' && <Chip size="small" label="Gov" sx={{ height: 17, fontSize: 9, color: '#bfdbfe', bgcolor: 'rgba(59,130,246,0.14)', fontWeight: 900 }} />}
+                                                    {type.assetClass === 'RELIGIOUS_FACILITY' && <Chip size="small" label="Awqaf" sx={{ height: 17, fontSize: 9, color: '#000', bgcolor: binThemeTokens.gold, fontWeight: 900 }} />}
+                                                </Stack>
+                                            </Paper>
+                                        </Grid>
+                                    );
+                                })}
                             </Grid>
                         </Paper>
 
                         {isMosque && (
-                            <Paper sx={{ mt: 4, p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-                                    <Box>
+                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Mosque Facility Profile</Typography>
                                         <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Clean. Compliant. Prayer-Time Safe. Ramadan Ready.</Typography>
                                     </Box>
@@ -388,28 +410,36 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                     </Grid>
 
                     <Grid item xs={12} lg={5}>
-                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
+                        <Paper sx={{ p: { xs: 3, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
                                 2. {t('onboarding.verification').toUpperCase()}
                             </Typography>
                             <Stack spacing={3}>
-                                    <Button 
-                                        variant="outlined" 
-                                        component="label"
-                                        fullWidth
-                                        startIcon={scanning ? <CircularProgress size={16} color="inherit" /> : <Scan size={18} />}
-                                        sx={{ mb: 3, py: 1.5, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderStyle: 'dashed' }}
-                                    >
-                                        {scanning ? t('onboarding.scanning') : scanned ? t('onboarding.scanned') : t('onboarding.scan_btn')}
-                                        {!scanning && !scanned && <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />}
-                                    </Button>
+                                <Button
+                                    variant="outlined"
+                                    component="label"
+                                    fullWidth
+                                    startIcon={scanning ? <CircularProgress size={16} color="inherit" /> : <Scan size={18} />}
+                                    sx={{ mb: 1, py: 1.5, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderStyle: 'dashed' }}
+                                >
+                                    {scanning ? t('onboarding.scanning') : scanned ? t('onboarding.scanned') : t('onboarding.scan_btn')}
+                                    {!scanning && !scanned && <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />}
+                                </Button>
 
-                                    <TextField 
-                                        select fullWidth label={t('onboarding.asset_type')} size="small"
-                                        value={activeProperty?.assetGrade || 'Premium'} 
-                                        onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
-                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                    >
+                                {selectedType && (
+                                    <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>Selected asset</Typography>
+                                        <Typography variant="subtitle2" sx={{ color: '#FFF', fontWeight: 950 }}>{selectedType.label}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)' }}>{selectedType.category} · {selectedType.premium ? 'Sovereign / enhanced pricing logic' : 'Standard pricing logic'}</Typography>
+                                    </Paper>
+                                )}
+
+                                <TextField
+                                    select fullWidth label={t('onboarding.asset_type')} size="small"
+                                    value={activeProperty?.assetGrade || 'Premium'}
+                                    onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
+                                    sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                                >
                                     <MenuItem value="Standard">{t('onboarding.grade.standard')}</MenuItem>
                                     <MenuItem value="Premium">{t('onboarding.grade.premium')}</MenuItem>
                                     <MenuItem value="Luxury">{t('onboarding.grade.luxury')}</MenuItem>
@@ -418,45 +448,16 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
-                                        <TextField 
-                                            fullWidth label={isMosque ? 'Wudu areas' : t('onboarding.units')} type="number" size="small"
-                                            value={activeProperty?.units || 0} 
-                                            onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })}
-                                            InputProps={{
-                                                endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
-                                            }}
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                        />
+                                        <TextField fullWidth label={isMosque ? 'Wudu areas' : t('onboarding.units')} type="number" size="small" value={activeProperty?.units || 0} onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <TextField 
-                                            fullWidth label={t('onboarding.floors')} type="number" size="small"
-                                            value={activeProperty?.floors || 1} 
-                                            onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })}
-                                            InputProps={{
-                                                endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
-                                            }}
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                        />
+                                        <TextField fullWidth label={t('onboarding.floors')} type="number" size="small" value={activeProperty?.floors || 1} onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <TextField 
-                                            fullWidth label={t('onboarding.sqft')} type="number" size="small"
-                                            value={activeProperty?.sqft || 0} 
-                                            onChange={(e) => updateProperty(0, { sqft: parseInt(e.target.value) || 0 })}
-                                            InputProps={{
-                                                endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null
-                                            }}
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                        />
+                                        <TextField fullWidth label={t('onboarding.sqft')} type="number" size="small" value={activeProperty?.sqft || 0} onChange={(e) => updateProperty(0, { sqft: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <TextField 
-                                            fullWidth label={t('onboarding.age')} type="number" size="small"
-                                            value={activeProperty?.age || 0} 
-                                            onChange={(e) => updateProperty(0, { age: parseInt(e.target.value) || 0 })}
-                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                        />
+                                        <TextField fullWidth label={t('onboarding.age')} type="number" size="small" value={activeProperty?.age || 0} onChange={(e) => updateProperty(0, { age: parseInt(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
                                     </Grid>
                                 </Grid>
 
