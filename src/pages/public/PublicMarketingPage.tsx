@@ -4,6 +4,27 @@ import { Bot, Building2, Camera, CheckCircle2, Clock3, FileText, Languages, LogI
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
+type PublicMarketingPageKey =
+  | 'home'
+  | 'owners'
+  | 'tenants'
+  | 'technicians'
+  | 'brokers'
+  | 'property-management'
+  | 'maintenance'
+  | 'majlis-care'
+  | 'stadiums'
+  | 'hotels'
+  | 'malls'
+  | 'hospitals'
+  | 'government-properties'
+  | 'security'
+  | 'contact';
+
+type PublicMarketingPageProps = {
+  page?: PublicMarketingPageKey;
+};
+
 const WHATSAPP_URL = 'https://wa.me/971552423233';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
@@ -87,13 +108,13 @@ const copy = {
   },
 };
 
-export default function PublicMarketingPage() {
+export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPageProps) {
   const { lang, setLang, isRTL } = useLanguage();
   const c = lang === 'ar' ? copy.ar : copy.en;
   const nextLang = lang === 'en' ? 'ar' : 'en';
 
   return (
-    <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflow: 'hidden' }}>
+    <Box dir={isRTL ? 'rtl' : 'ltr'} data-page={page} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflow: 'hidden' }}>
       <Box sx={{ position: 'fixed', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: { xs: '18vw', md: '12vw' }, fontWeight: 950, letterSpacing: '-0.08em', color: ink, opacity: 0.035, zIndex: 0 }}>BIN GROUP</Box>
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Nav c={c} nextLang={nextLang} setLang={setLang} />
@@ -146,44 +167,59 @@ function Hero({ c }: { c: any }) {
           <Grid item xs={12} md={7}>
             <Chip label={c.chip} sx={{ mb: 3, bgcolor: alpha(gold, .12), color: '#5E4A1F', fontWeight: 950, border: `1px solid ${alpha(gold, 0.20)}` }} />
             <Typography variant="h1" sx={{ fontSize: { xs: 42, md: 72 }, lineHeight: .96, fontWeight: 950, mb: 3, color: ink, letterSpacing: '-0.06em' }}>{c.title}</Typography>
-            <Typography variant="h6" sx={{ color: muted, lineHeight: 1.65, fontWeight: 750, maxWidth: 950 }}>{c.desc}</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4, flexWrap: 'wrap' }}>
+            <Typography variant="h6" sx={{ color: muted, lineHeight: 1.65, fontWeight: 750, maxWidth: 920 }}>{c.desc}</Typography>
+            <Stack direction="row" spacing={1.5} sx={{ mt: 4, flexWrap: 'wrap', gap: 1.5 }}>
               <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
-              <ActionButton href={QUOTE_URL}>{c.quote}</ActionButton>
+              <ActionButton href={QUOTE_URL} icon={<WalletCards size={17} />}>{c.quote}</ActionButton>
               <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
-            <Typography sx={{ color: '#6F5522', fontWeight: 900, mt: 3 }}>{c.flow}</Typography>
+            <Typography variant="caption" sx={{ mt: 3, display: 'block', color: muted, fontWeight: 900 }}>{c.flow}</Typography>
           </Grid>
-          <Grid item xs={12} md={5}><Command c={c} /></Grid>
+          <Grid item xs={12} md={5}>
+            <Paper sx={{ p: 2.4, borderRadius: 7, bgcolor: 'rgba(255,255,255,0.82)', border: `1px solid ${line}`, boxShadow: `0 28px 80px ${alpha('#000', 0.10)}` }}>
+              <Stack spacing={1.3}>
+                {c.command.map((row: string[]) => (
+                  <Paper key={row[0]} sx={{ p: 2.2, borderRadius: 4, bgcolor: '#fff', border: `1px solid ${line}`, boxShadow: `0 12px 34px ${alpha('#000', 0.04)}` }}>
+                    <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
+                      <Box>
+                        <Typography fontWeight={950} sx={{ color: ink }}>{row[0]}</Typography>
+                        <Typography variant="caption" sx={{ color: muted, fontWeight: 750 }}>{row[1]}</Typography>
+                      </Box>
+                      <Chip label={row[2]} sx={{ bgcolor: alpha(gold, .13), color: '#6F5522', fontWeight: 950 }} />
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Paper>
+          </Grid>
         </Grid>
       </Container>
     </Box>
   );
 }
 
-function Command({ c }: { c: any }) {
-  const icons = [Workflow, WalletCards, Building2, Bot];
-  return <Paper sx={{ p: 2.5, borderRadius: 5, bgcolor: 'rgba(255,255,255,.94)', border: `1px solid ${line}`, boxShadow: `0 28px 70px ${alpha('#000', 0.10)}` }}><Stack spacing={1.5}>{c.command.map((row: string[], index: number) => { const Icon = icons[index]; return <Box key={row[0]} component="a" href={index === 1 ? QUOTE_URL : index === 3 ? DEMO_URL : ONBOARDING_URL} sx={{ display: 'block', p: 2.2, borderRadius: 3, bgcolor: index === 0 ? alpha(gold, 0.12) : '#FFFFFF', color: ink, textDecoration: 'none', border: `1px solid ${index === 0 ? alpha(gold, 0.22) : line}`, boxShadow: `0 12px 30px ${alpha('#000', 0.055)}` }}><Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center"><Stack direction="row" spacing={1.4} alignItems="center"><Box sx={{ color: gold, display: 'flex' }}><Icon size={22} /></Box><Box><Typography fontWeight={950}>{row[0]}</Typography><Typography variant="caption" sx={{ color: muted }}>{row[1]}</Typography></Box></Stack><Typography variant="caption" sx={{ color: '#6F5522', fontWeight: 950 }}>{row[2]}</Typography></Stack></Box>; })}</Stack></Paper>;
-}
-
 function Trust() {
-  const labels = ['Home OS workflow', 'Rent ledger waterfall', 'SLA timers', 'Before/after proof'];
-  const icons = [ShieldCheck, WalletCards, Clock3, Camera];
-  return <Grid container spacing={2} sx={{ mt: 5 }}>{labels.map((label, index) => { const Icon = icons[index]; return <Grid item xs={12} md={3} key={label}><Paper sx={{ p: 2.5, bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 4, boxShadow: `0 18px 45px ${alpha('#000', 0.06)}` }}><Box sx={{ color: gold }}><Icon /></Box><Typography fontWeight={950} color={ink}>{label}</Typography></Paper></Grid>; })}</Grid>;
+  const items = [
+    ['15%', 'Mobilization gate before activation'],
+    ['5%', 'Management fee waterfall logic'],
+    ['SLA', 'Timers, proof, escalation'],
+    ['UAE', 'Asset-adaptive PropTech operations'],
+  ];
+  return <Grid container spacing={2.5} sx={{ mt: -4, mb: 5, position: 'relative', zIndex: 2 }}>{items.map((i) => <Grid item xs={12} sm={6} md={3} key={i[0]}><Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${line}`, boxShadow: `0 18px 45px ${alpha('#000', 0.06)}` }}><Typography variant="h4" fontWeight={950} sx={{ color: gold }}>{i[0]}</Typography><Typography variant="caption" sx={{ color: muted, fontWeight: 900 }}>{i[1]}</Typography></Paper></Grid>)}</Grid>;
 }
 
 function Proof({ c }: { c: any }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.proofTitle}</Typography><Typography sx={{ color: muted, maxWidth: 900, mt: 1.5, lineHeight: 1.8 }}>{c.proofDesc}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.cards.map((p: string[]) => <Grid item xs={12} sm={6} md={3} key={p[0]}><Paper sx={{ p: 2.2, height: '100%', bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 4, boxShadow: `0 14px 34px ${alpha('#000', 0.052)}` }}><CheckCircle2 size={18} color={gold} /><Typography fontWeight={950} sx={{ mt: 1, color: ink }}>{p[0]}</Typography><Typography variant="body2" sx={{ color: muted, mt: 1, lineHeight: 1.7 }}>{p[1]}</Typography></Paper></Grid>)}</Grid></Box>;
+  return <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 7, bgcolor: '#fff', border: `1px solid ${line}`, mb: 5, boxShadow: `0 20px 70px ${alpha('#000', 0.05)}` }}><Grid container spacing={4} alignItems="center"><Grid item xs={12} md={5}><Chip label="THE PITCH" sx={{ bgcolor: alpha(gold, .12), color: '#6F5522', fontWeight: 950, mb: 2 }} /><Typography variant="h3" fontWeight={950} sx={{ color: ink, letterSpacing: '-0.04em', mb: 2 }}>{c.proofTitle}</Typography><Typography sx={{ color: muted, lineHeight: 1.8, fontWeight: 700 }}>{c.proofDesc}</Typography></Grid><Grid item xs={12} md={7}><Grid container spacing={2}>{c.cards.map((card: string[], idx: number) => { const icons = [<Workflow />, <WalletCards />, <Building2 />, <Bot />]; return <Grid item xs={12} sm={6} key={card[0]}><Paper sx={{ p: 3, minHeight: 180, borderRadius: 5, bgcolor: platinum, border: `1px solid ${line}` }}><Box sx={{ color: gold, mb: 1.5 }}>{icons[idx]}</Box><Typography fontWeight={950} sx={{ color: ink, mb: 1 }}>{card[0]}</Typography><Typography variant="body2" sx={{ color: muted, lineHeight: 1.7, fontWeight: 700 }}>{card[1]}</Typography></Paper></Grid>; })}</Grid></Grid></Grid></Paper>;
 }
 
 function Pricing({ c }: { c: any }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.pricingTitle}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.pricing.map((item: string[]) => <Grid item xs={12} sm={6} md={3} key={item[0]}><Paper sx={{ p: 3, height: '100%', bgcolor: alpha(gold, .07), border: `1px solid ${alpha(gold, .20)}`, borderRadius: 4 }}><Typography sx={{ color: muted, fontWeight: 900 }}>{item[0]}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: '#6F5522', mt: 1 }}>{item[1]}</Typography></Paper></Grid>)}</Grid></Box>;
+  return <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 7, bgcolor: platinum, border: `1px solid ${line}`, mb: 5 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><FileText color={gold} /><Typography variant="h4" fontWeight={950} sx={{ color: ink }}>{c.pricingTitle}</Typography></Stack><Grid container spacing={2}>{c.pricing.map((p: string[]) => <Grid item xs={12} sm={6} md={3} key={p[0]}><Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${line}` }}><Typography fontWeight={950} sx={{ color: ink }}>{p[0]}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: gold }}>{p[1]}</Typography></Paper></Grid>)}</Grid></Paper>;
 }
 
 function Coverage({ c }: { c: any }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.coverageTitle}</Typography><Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>{c.coverage.map((item: string) => <Chip key={item} label={item} sx={{ color: ink, bgcolor: '#FFFFFF', border: `1px solid ${line}`, fontWeight: 850 }} />)}</Stack></Box>;
+  return <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 7, bgcolor: '#fff', border: `1px solid ${line}`, mb: 5 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><ShieldCheck color={gold} /><Typography variant="h4" fontWeight={950} sx={{ color: ink }}>{c.coverageTitle}</Typography></Stack><Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>{c.coverage.map((asset: string) => <Chip key={asset} label={asset} sx={{ bgcolor: alpha(gold, .08), color: '#59451D', border: `1px solid ${alpha(gold, .16)}`, fontWeight: 850 }} />)}</Stack></Paper>;
 }
 
 function Inquiry({ c }: { c: any }) {
-  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 5, boxShadow: `0 24px 70px ${alpha('#000', 0.08)}` }}><Stack spacing={2}><FileText color={gold} /><Typography variant="h3" fontWeight={950} color={ink}>{c.inquiryTitle}</Typography><Typography sx={{ color: muted, lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton><ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton><ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton></Stack></Stack></Paper></Box>;
+  return <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 8, bgcolor: `linear-gradient(135deg, ${gold}, ${goldLight})`, border: `1px solid ${alpha(gold, .32)}`, boxShadow: `0 28px 80px ${alpha(gold, 0.22)}` }}><Grid container spacing={4} alignItems="center"><Grid item xs={12} md={8}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Camera color="#111" /><Typography variant="h3" fontWeight={950} sx={{ color: '#111', letterSpacing: '-0.04em' }}>{c.inquiryTitle}</Typography></Stack><Typography sx={{ color: alpha('#111', .72), lineHeight: 1.75, fontWeight: 800 }}>{c.inquiryDesc}</Typography></Grid><Grid item xs={12} md={4}><Stack spacing={1.3}><ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton><ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton></Stack></Grid></Grid></Paper>;
 }
