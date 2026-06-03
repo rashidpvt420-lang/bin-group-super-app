@@ -28,8 +28,14 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function CustomThemeProvider({ children }: { children: ReactNode }) {
     const [mode, setMode] = useState<ThemeMode>(() => {
-        return (localStorage.getItem('app_theme') as ThemeMode) || 'dark';
+        const stored = localStorage.getItem('app_theme') as ThemeMode | null;
+        return stored === 'dark' ? 'dark' : 'light';
     });
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-bin-theme', mode);
+        document.documentElement.style.colorScheme = mode;
+    }, [mode]);
 
     const toggleTheme = () => {
         const newMode = mode === 'dark' ? 'light' : 'dark';
@@ -46,16 +52,24 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
             primary: {
                 main: binThemeTokens.gold,
                 light: binThemeTokens.goldLight,
+                dark: binThemeTokens.goldHover,
+                contrastText: binThemeTokens.textPrimary,
+            },
+            secondary: {
+                main: binThemeTokens.platinumDark,
+                light: binThemeTokens.platinum,
+                dark: '#9CA3AF',
+                contrastText: binThemeTokens.textPrimary,
             },
             background: {
-                default: mode === 'dark' ? binThemeTokens.black : '#F8FAFC',
-                paper: mode === 'dark' ? binThemeTokens.graphite : '#FFFFFF',
+                default: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
+                paper: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
             },
             text: {
-                primary: mode === 'dark' ? '#FFFFFF' : '#0F172A',
-                secondary: mode === 'dark' ? '#A1A1AA' : '#64748B',
+                primary: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                secondary: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
             },
-            divider: alpha(binThemeTokens.gold, 0.1),
+            divider: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
         },
         typography: {
             fontFamily: "'Cairo', 'Inter', 'Outfit', sans-serif",
@@ -66,28 +80,99 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
             h5: { fontWeight: 900 },
             h6: { fontWeight: 900 },
         },
-        shape: { borderRadius: 12 },
+        shape: { borderRadius: 22 },
         components: {
+            MuiCssBaseline: {
+                styleOverrides: {
+                    html: {
+                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
+                        colorScheme: mode,
+                    },
+                    body: {
+                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
+                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                    },
+                    '#root': {
+                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
+                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        minHeight: '100%',
+                    },
+                },
+            },
             MuiPaper: {
                 styleOverrides: {
                     root: {
                         backgroundImage: 'none',
-                        border: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.15) : '#E2E8F0'}`,
-                        boxShadow: mode === 'light' ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
+                        backgroundColor: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
+                        border: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
+                        borderRadius: 22,
+                        boxShadow: mode === 'dark' ? '0 12px 32px rgba(0,0,0,0.24)' : binThemeTokens.cardShadow,
+                    },
+                },
+            },
+            MuiCard: {
+                styleOverrides: {
+                    root: {
+                        backgroundImage: 'none',
+                        backgroundColor: mode === 'dark' ? '#1F2937' : binThemeTokens.card,
+                        border: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.2) : binThemeTokens.border}`,
+                        borderRadius: 22,
+                        boxShadow: mode === 'dark' ? '0 12px 32px rgba(0,0,0,0.24)' : binThemeTokens.cardShadow,
+                        transition: 'all 0.22s ease',
+                        '&:hover': {
+                            transform: 'translateY(-2px)',
+                            boxShadow: mode === 'dark' ? `0 18px 45px ${alpha(binThemeTokens.gold, 0.16)}` : binThemeTokens.cardShadowHover,
+                        },
+                    },
+                },
+            },
+            MuiAppBar: {
+                styleOverrides: {
+                    root: {
+                        backgroundColor: mode === 'dark' ? alpha('#111827', 0.92) : alpha(binThemeTokens.canvas, 0.92),
+                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        borderBottom: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
+                        boxShadow: mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.26)' : '0 8px 24px rgba(17, 24, 39, 0.06)',
+                        backdropFilter: 'blur(18px)',
+                    },
+                },
+            },
+            MuiDrawer: {
+                styleOverrides: {
+                    paper: {
+                        backgroundColor: mode === 'dark' ? '#111827' : binThemeTokens.canvas,
+                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        borderRight: `1px solid ${mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border}`,
+                        boxShadow: mode === 'dark' ? '8px 0 28px rgba(0,0,0,0.26)' : '8px 0 28px rgba(17, 24, 39, 0.06)',
                     },
                 },
             },
             MuiButton: {
                 styleOverrides: {
                     root: {
-                        borderRadius: 12,
+                        borderRadius: 999,
                         textTransform: 'none',
                         fontWeight: 900,
                         padding: '12px 24px',
+                        transition: 'all 0.22s ease',
                     },
                     containedPrimary: {
-                        background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,
-                        color: mode === 'dark' ? binThemeTokens.black : '#000000',
+                        background: binThemeTokens.goldGradient,
+                        color: binThemeTokens.textPrimary,
+                        boxShadow: `0 10px 24px ${alpha(binThemeTokens.gold, 0.28)}`,
+                        '&:hover': {
+                            background: `linear-gradient(135deg, ${binThemeTokens.goldHover}, #F2F2F2)`,
+                            boxShadow: `0 14px 30px ${alpha(binThemeTokens.gold, 0.32)}`,
+                            transform: 'translateY(-1px)',
+                        },
+                    },
+                    outlinedPrimary: {
+                        borderColor: alpha(binThemeTokens.gold, 0.55),
+                        color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
+                        '&:hover': {
+                            borderColor: binThemeTokens.gold,
+                            background: alpha(binThemeTokens.gold, 0.08),
+                        },
                     },
                 },
             },
@@ -95,20 +180,71 @@ export function CustomThemeProvider({ children }: { children: ReactNode }) {
                 styleOverrides: {
                     root: {
                         '& .MuiOutlinedInput-root': {
-                            backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+                            backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : binThemeTokens.card,
+                            borderRadius: 16,
                             '& fieldset': {
-                                borderColor: mode === 'dark' ? 'rgba(198,167,94,0.15)' : '#CBD5E1',
+                                borderColor: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
+                            },
+                            '&:hover fieldset': {
+                                borderColor: alpha(binThemeTokens.gold, 0.45),
+                            },
+                            '&.Mui-focused fieldset': {
+                                borderColor: binThemeTokens.gold,
+                                boxShadow: `0 0 0 3px ${alpha(binThemeTokens.gold, 0.12)}`,
                             },
                         },
                         '& .MuiInputBase-input': {
-                            color: mode === 'dark' ? '#FFFFFF' : '#0F172A',
+                            color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
                         },
                         '& .MuiInputLabel-root': {
-                            color: mode === 'dark' ? 'rgba(255,255,255,0.75)' : '#475569',
+                            color: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
                         },
                     },
                 },
             },
+            MuiSelect: {
+                styleOverrides: {
+                    root: {
+                        color: mode === 'dark' ? '#F9FAFB' : binThemeTokens.textPrimary,
+                        backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.04)' : binThemeTokens.card,
+                        borderRadius: 16,
+                        '& .MuiOutlinedInput-notchedOutline': {
+                            borderColor: mode === 'dark' ? alpha(binThemeTokens.gold, 0.18) : binThemeTokens.border,
+                        },
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: alpha(binThemeTokens.gold, 0.45),
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                            borderColor: binThemeTokens.gold,
+                        },
+                        '& .MuiSvgIcon-root': {
+                            color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
+                        },
+                    },
+                },
+            },
+            MuiInputLabel: {
+                styleOverrides: {
+                    root: {
+                        color: mode === 'dark' ? '#D1D5DB' : binThemeTokens.textSecondary,
+                        '&.Mui-focused': {
+                            color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover,
+                        },
+                    },
+                },
+            },
+            MuiStepper: {
+                styleOverrides: {
+                    root: {
+                        '& .MuiStepLabel-label': { color: mode === 'dark' ? '#9CA3AF' : binThemeTokens.textTertiary, fontWeight: 700 },
+                        '& .MuiStepLabel-label.Mui-active': { color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover },
+                        '& .MuiStepLabel-label.Mui-completed': { color: mode === 'dark' ? binThemeTokens.goldLight : binThemeTokens.goldHover },
+                        '& .MuiStepIcon-root': { color: mode === 'dark' ? alpha('#FFFFFF', 0.18) : binThemeTokens.platinum },
+                        '& .MuiStepIcon-root.Mui-active': { color: binThemeTokens.gold },
+                        '& .MuiStepIcon-root.Mui-completed': { color: binThemeTokens.gold },
+                    }
+                }
+            }
         },
     }), [mode, isRTL]);
 
@@ -130,4 +266,3 @@ export function useCustomTheme() {
     }
     return context;
 }
-

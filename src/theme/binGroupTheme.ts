@@ -1,48 +1,63 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
 /**
- * BIN-GROUP Sovereign Identity System (V1.18)
- * Theme: BLACK + GOLD
- * Usage: Ultra-Luxury, Sovereign Infrastructure, Institutional Assets.
+ * BIN GROUP Sovereign Identity System (V1.20)
+ * Theme: WHITE + PLATINUM + GOLD
+ * Usage: Institutional property operations, audited finance, transparent ownership.
  */
 
 export const binThemeTokens = {
-  black: '#0B0B0C',
-  graphite: '#161618',
-  gold: '#C6A75E',
-  goldLight: '#E6C77A',
-  champagne: '#F2E2B6',
+  black: '#111827',
+  canvas: '#FFFFFF',
+  softCanvas: '#F8F9FB',
+  card: '#FFFFFF',
+  platinum: '#E5E4E2',
+  platinumDark: '#BFC1C2',
+  gold: '#C9A646',
+  goldLight: '#E5C86B',
+  goldHover: '#B8932F',
+  champagne: '#F7E8B9',
   darkBlue: '#0F172A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A1A1AA',
-  textTertiary: '#71717A',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
   danger: '#EF4444',
   warning: '#F59E0B',
   alert: '#F59E0B',
-  active: '#C6A75E',
-  border: 'rgba(198,167,94,0.15)',
-  panel: 'rgba(22, 22, 24, 0.9)',
-  tray: 'rgba(22, 22, 24, 0.6)',
-  goldGradient: 'linear-gradient(135deg, #C6A75E, #E6C77A)'
+  active: '#C9A646',
+  border: '#E5E7EB',
+  panel: '#FFFFFF',
+  tray: '#F8F9FB',
+  watermarkOpacity: 0.04,
+  cardShadow: '0 12px 32px rgba(17, 24, 39, 0.08)',
+  cardShadowHover: '0 18px 45px rgba(17, 24, 39, 0.12)',
+  goldGradient: 'linear-gradient(135deg, #C9A646, #E5E4E2)',
 };
 
 export const binGroupTheme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
       main: binThemeTokens.gold,
       light: binThemeTokens.goldLight,
-      dark: '#b5934a',
+      dark: binThemeTokens.goldHover,
+      contrastText: binThemeTokens.textPrimary,
+    },
+    secondary: {
+      main: binThemeTokens.platinumDark,
+      light: binThemeTokens.platinum,
+      dark: '#9CA3AF',
+      contrastText: binThemeTokens.textPrimary,
     },
     background: {
-      default: binThemeTokens.black,
-      paper: binThemeTokens.graphite,
+      default: binThemeTokens.canvas,
+      paper: binThemeTokens.card,
     },
     text: {
       primary: binThemeTokens.textPrimary,
       secondary: binThemeTokens.textSecondary,
     },
-    divider: alpha(binThemeTokens.gold, 0.1),
+    divider: binThemeTokens.border,
   },
   typography: {
     fontFamily: "'Cairo', 'Inter', 'Outfit', sans-serif",
@@ -56,33 +71,51 @@ export const binGroupTheme = createTheme({
     subtitle2: { color: binThemeTokens.textSecondary },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 22,
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        html: {
+          backgroundColor: binThemeTokens.canvas,
+          colorScheme: 'light',
+        },
+        body: {
+          backgroundColor: binThemeTokens.canvas,
+          color: binThemeTokens.textPrimary,
+        },
+        '#root': {
+          backgroundColor: binThemeTokens.canvas,
+          color: binThemeTokens.textPrimary,
+          minHeight: '100%',
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 999,
           textTransform: 'none',
           fontWeight: 900,
           padding: '12px 24px',
-          transition: 'all 0.3s ease',
+          transition: 'all 0.22s ease',
         },
         containedPrimary: {
-          background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,
-          color: binThemeTokens.black,
+          background: binThemeTokens.goldGradient,
+          color: binThemeTokens.textPrimary,
+          boxShadow: `0 10px 24px ${alpha(binThemeTokens.gold, 0.28)}`,
           '&:hover': {
-            background: `linear-gradient(135deg, ${binThemeTokens.goldLight}, ${binThemeTokens.gold})`,
-            boxShadow: `0 0 20px ${alpha(binThemeTokens.gold, 0.45)}`,
-            transform: 'scale(1.02)'
+            background: `linear-gradient(135deg, ${binThemeTokens.goldHover}, #F2F2F2)`,
+            boxShadow: `0 14px 30px ${alpha(binThemeTokens.gold, 0.32)}`,
+            transform: 'translateY(-1px)',
           },
         },
         outlinedPrimary: {
-          borderColor: binThemeTokens.gold,
-          color: binThemeTokens.gold,
+          borderColor: alpha(binThemeTokens.gold, 0.55),
+          color: binThemeTokens.goldHover,
           '&:hover': {
-            borderColor: binThemeTokens.goldLight,
-            background: alpha(binThemeTokens.gold, 0.05),
+            borderColor: binThemeTokens.gold,
+            background: alpha(binThemeTokens.gold, 0.08),
           },
         },
       },
@@ -91,8 +124,10 @@ export const binGroupTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: binThemeTokens.graphite,
-          border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`,
+          backgroundColor: binThemeTokens.card,
+          border: `1px solid ${binThemeTokens.border}`,
+          borderRadius: 22,
+          boxShadow: binThemeTokens.cardShadow,
         },
       },
     },
@@ -100,14 +135,36 @@ export const binGroupTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: binThemeTokens.graphite,
-          borderRadius: 16,
-          border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`,
-          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+          backgroundColor: binThemeTokens.card,
+          borderRadius: 22,
+          border: `1px solid ${binThemeTokens.border}`,
+          boxShadow: binThemeTokens.cardShadow,
+          transition: 'all 0.22s ease',
           '&:hover': {
-            transform: 'translateY(-4px)',
-            boxShadow: `0 10px 40px ${alpha(binThemeTokens.gold, 0.25)}`,
+            transform: 'translateY(-2px)',
+            boxShadow: binThemeTokens.cardShadowHover,
           },
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundColor: alpha(binThemeTokens.canvas, 0.92),
+          color: binThemeTokens.textPrimary,
+          borderBottom: `1px solid ${binThemeTokens.border}`,
+          boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)',
+          backdropFilter: 'blur(18px)',
+        },
+      },
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: binThemeTokens.canvas,
+          color: binThemeTokens.textPrimary,
+          borderRight: `1px solid ${binThemeTokens.border}`,
+          boxShadow: '8px 0 28px rgba(17, 24, 39, 0.06)',
         },
       },
     },
@@ -115,29 +172,31 @@ export const binGroupTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiInputBase-input': {
-            color: '#FFFFFF',
+            color: binThemeTokens.textPrimary,
             '&::placeholder': {
-              color: 'rgba(255,255,255,0.45)',
+              color: alpha(binThemeTokens.textSecondary, 0.7),
               opacity: 1,
             },
           },
           '& .MuiInputLabel-root': {
-            color: 'rgba(255,255,255,0.75)',
+            color: binThemeTokens.textSecondary,
           },
           '& .MuiOutlinedInput-root': {
-            backgroundColor: 'rgba(255,255,255,0.04)',
+            backgroundColor: binThemeTokens.card,
+            borderRadius: 16,
             '& fieldset': {
-              borderColor: 'rgba(198,167,94,0.15)',
+              borderColor: binThemeTokens.border,
             },
             '&:hover fieldset': {
-              borderColor: 'rgba(198,167,94,0.35)',
+              borderColor: alpha(binThemeTokens.gold, 0.45),
             },
             '&.Mui-focused fieldset': {
               borderColor: binThemeTokens.gold,
+              boxShadow: `0 0 0 3px ${alpha(binThemeTokens.gold, 0.12)}`,
             },
           },
           '& .MuiFormHelperText-root': {
-            color: 'rgba(255,255,255,0.6)',
+            color: binThemeTokens.textSecondary,
           },
         },
       },
@@ -145,19 +204,20 @@ export const binGroupTheme = createTheme({
     MuiSelect: {
       styleOverrides: {
         root: {
-          color: '#FFFFFF',
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          color: binThemeTokens.textPrimary,
+          backgroundColor: binThemeTokens.card,
+          borderRadius: 16,
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(198,167,94,0.15)',
+            borderColor: binThemeTokens.border,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(198,167,94,0.35)',
+            borderColor: alpha(binThemeTokens.gold, 0.45),
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: binThemeTokens.gold,
           },
           '& .MuiSvgIcon-root': {
-            color: binThemeTokens.gold,
+            color: binThemeTokens.goldHover,
           },
         },
       },
@@ -165,9 +225,9 @@ export const binGroupTheme = createTheme({
     MuiInputLabel: {
       styleOverrides: {
         root: {
-          color: 'rgba(255,255,255,0.75)',
+          color: binThemeTokens.textSecondary,
           '&.Mui-focused': {
-            color: binThemeTokens.gold,
+            color: binThemeTokens.goldHover,
           },
         },
       },
@@ -175,14 +235,14 @@ export const binGroupTheme = createTheme({
     MuiStepper: {
       styleOverrides: {
         root: {
-          '& .MuiStepLabel-label': { color: 'rgba(255,255,255,0.45)', fontWeight: 700 },
-          '& .MuiStepLabel-label.Mui-active': { color: binThemeTokens.gold },
-          '& .MuiStepLabel-label.Mui-completed': { color: binThemeTokens.gold },
-          '& .MuiStepIcon-root': { color: 'rgba(255,255,255,0.1)' },
+          '& .MuiStepLabel-label': { color: binThemeTokens.textTertiary, fontWeight: 700 },
+          '& .MuiStepLabel-label.Mui-active': { color: binThemeTokens.goldHover },
+          '& .MuiStepLabel-label.Mui-completed': { color: binThemeTokens.goldHover },
+          '& .MuiStepIcon-root': { color: binThemeTokens.platinum },
           '& .MuiStepIcon-root.Mui-active': { color: binThemeTokens.gold },
           '& .MuiStepIcon-root.Mui-completed': { color: binThemeTokens.gold },
-        }
-      }
-    }
+        },
+      },
+    },
   },
 });
