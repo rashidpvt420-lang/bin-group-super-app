@@ -96,5 +96,5 @@ jobs:
           test -f dist/index.html
           ls -la dist/index.html
 
-      - name: Deploy Firebase hosting site
-        run: npx firebase deploy --only hosting:bin-group-57c60 --project "${GCP_PROJECT_ID}" --non-interactive --force
+      - name: Deploy Firebase public hosting target
+        run: npx firebase deploy --only hosting:app --project "${GCP_PROJECT_ID}" --non-interactive --force
