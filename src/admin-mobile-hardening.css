@@ -3,10 +3,100 @@ body,
 #root {
   max-width: 100vw;
   overflow-x: hidden;
+  background: #FFFFFF;
+  color: #111827;
+}
+
+:root {
+  --bin-bg-primary: #FFFFFF;
+  --bin-bg-soft: #F8F9FB;
+  --bin-card-bg: #FFFFFF;
+  --bin-gold: #C9A646;
+  --bin-gold-hover: #B8932F;
+  --bin-platinum: #E5E4E2;
+  --bin-platinum-dark: #BFC1C2;
+  --bin-text-main: #111827;
+  --bin-text-muted: #6B7280;
+  --bin-border-soft: #E5E7EB;
+  --bin-shadow-card: 0 12px 32px rgba(17, 24, 39, 0.08);
+  --bin-shadow-hover: 0 18px 45px rgba(17, 24, 39, 0.12);
 }
 
 * {
   box-sizing: border-box;
+}
+
+.bin-screen,
+.bin-page,
+.sovereign-screen,
+.sovereign-page {
+  min-height: 100vh;
+  background: var(--bin-bg-primary);
+  color: var(--bin-text-main);
+  position: relative;
+  overflow: hidden;
+}
+
+.bin-screen::before,
+.bin-page::before,
+.sovereign-screen::before,
+.sovereign-page::before {
+  content: "BIN GROUPS";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  color: rgba(17, 24, 39, 0.04);
+  font-size: clamp(2.5rem, 8vw, 8rem);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-align: center;
+  transform: rotate(-10deg);
+}
+
+.bin-screen > *,
+.bin-page > *,
+.sovereign-screen > *,
+.sovereign-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bin-card,
+.sovereign-card,
+.MuiPaper-root,
+.MuiCard-root {
+  max-width: 100%;
+  background-color: var(--bin-card-bg);
+  border-color: var(--bin-border-soft);
+  box-shadow: var(--bin-shadow-card);
+}
+
+.bin-card:hover,
+.sovereign-card:hover {
+  box-shadow: var(--bin-shadow-hover);
+}
+
+.bin-primary-btn,
+.bin-action-btn,
+.MuiButton-containedPrimary {
+  background: linear-gradient(135deg, var(--bin-gold), var(--bin-platinum));
+  color: var(--bin-text-main);
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(201, 166, 70, 0.28);
+}
+
+.bin-sla-active,
+.sla-active,
+[data-sla="active"] {
+  color: var(--bin-gold-hover);
+  background: rgba(201, 166, 70, 0.10);
+  border: 1px solid rgba(201, 166, 70, 0.35);
+  border-radius: 999px;
+  font-weight: 800;
 }
 
 .MuiTableContainer-root {
@@ -17,11 +107,6 @@ body,
 
 .MuiTable-root {
   min-width: 680px;
-}
-
-.MuiPaper-root,
-.MuiCard-root {
-  max-width: 100%;
 }
 
 .MuiTypography-root {
