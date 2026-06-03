@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, CheckCircle2, FileText, Languages, MessageCircle, PlayCircle, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { Building2, CheckCircle2, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
@@ -39,6 +39,7 @@ const WHATSAPP_URL = 'https://wa.me/971552423233';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
 const DEMO_URL = '/request-demo';
+const LOGIN_URL = '/login';
 
 const en: MarketingCopy = {
   brand: 'BIN GROUP',
@@ -197,6 +198,7 @@ function Nav({ c }: { c: MarketingCopy }) {
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1, justifyContent: isRTL ? 'flex-start' : 'flex-end', width: { xs: '100%', md: 'auto' } }}>
           <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
+          <InternalActionButton href={LOGIN_URL} variant="outlined" gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton>
           <InternalActionButton href={DEMO_URL} variant="text" icon={<PlayCircle size={17} />}>{c.demo}</InternalActionButton>
           <Button
             type="button"
@@ -237,6 +239,7 @@ function Hero({ c }: { c: MarketingCopy }) {
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4, flexWrap: 'wrap' }}>
               <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
               <InternalActionButton href={QUOTE_URL}>{c.quote}</InternalActionButton>
+              <InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton>
               <InternalActionButton href={DEMO_URL}>{c.demo}</InternalActionButton>
               <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, py: 1.45, px: 3, minHeight: 52, pointerEvents: 'auto' }}>{c.whatsapp}</Button>
             </Stack>
@@ -258,6 +261,7 @@ function Sector({ c, actionLabel, whatsappLabel }: { c: Sector; actionLabel: str
       <Stack spacing={1.2} sx={{ mt: 3 }}>{c.bullets.map((b) => <Stack key={b} direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography>{b}</Typography></Stack>)}</Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
         <InternalActionButton href={ONBOARDING_URL} variant="contained">{actionLabel}</InternalActionButton>
+        <InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{actionLabel === ar.primary ? ar.login : en.login}</InternalActionButton>
         <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{whatsappLabel}</Button>
       </Stack>
     </Container>
@@ -317,5 +321,5 @@ function Coverage({ c }: { c: MarketingCopy }) {
 }
 
 function Inquiry({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 4 }}><Stack spacing={2}><Sparkles color={binThemeTokens.gold} /><Typography variant="h3" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.7)', lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton><Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{c.whatsapp}</Button></Stack></Stack></Paper></Box>;
+  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 4 }}><Stack spacing={2}><Sparkles color={binThemeTokens.gold} /><Typography variant="h3" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.7)', lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton><InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton><Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{c.whatsapp}</Button></Stack></Stack></Paper></Box>;
 }
