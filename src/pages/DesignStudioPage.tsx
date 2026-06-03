@@ -6,6 +6,7 @@ import {
   Chip,
   Container,
   Grid,
+  LinearProgress,
   MenuItem,
   Paper,
   Slider,
@@ -16,6 +17,7 @@ import {
   alpha,
 } from '@mui/material';
 import { Camera, Home, MessageCircle, Ruler, ShieldCheck, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -26,11 +28,36 @@ import {
   DESIGN_SPACE_TYPES,
   DESIGN_STYLES,
   buildDesignConcepts,
+  getApprovalRequired,
   getDepositAmount,
+  getInitialDesignStatus,
 } from '../utils/aiDesignStudioWorkflow';
+import {
+  addDoc,
+  collection,
+  db,
+  doc,
+  getDoc,
+  getDocs,
+  getDownloadURL,
+  query,
+  ref,
+  serverTimestamp,
+  storage,
+  uploadBytes,
+  where,
+} from '../lib/firebase';
+import { logAuditAction } from '../utils/auditLogger';
 
 type AiDesignStudioReadiness = {
   externalImageGeneration: boolean;
+};
+
+type ReferenceImage = {
+  file: File;
+  previewUrl: string;
+  name: string;
+  size: number;
 };
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
@@ -64,11 +91,48 @@ const readImageAsDataUrl = (file: File) => new Promise<string>((resolve, reject)
   reader.readAsDataURL(file);
 });
 
+const safeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+async function resolveTenantContext(user: any) {
+  if (!user?.uid) return {} as any;
+
+  const lookups = [
+    query(collection(db, 'units'), where('tenantId', '==', user.uid)),
+    query(collection(db, 'units'), where('tenantUid', '==', user.uid)),
+  ];
+  if (user.email) lookups.push(query(collection(db, 'units'), where('tenantEmail', '==', String(user.email).toLowerCase())));
+
+  for (const unitQuery of lookups) {
+    try {
+      const snap = await getDocs(unitQuery);
+      if (!snap.empty) {
+        const unit: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
+        let property: any = null;
+        if (unit.propertyId) {
+          try {
+            const propertySnap = await getDoc(doc(db, 'properties', unit.propertyId));
+            if (propertySnap.exists()) property = { id: propertySnap.id, ...propertySnap.data() };
+          } catch (error) {
+            console.warn('[AI Studio] property lookup failed:', error);
+          }
+        }
+        return { unit, property };
+      }
+    } catch (error) {
+      console.warn('[AI Studio] tenant unit lookup failed:', error);
+    }
+  }
+
+  return {} as any;
+}
+
 export default function DesignStudioPage() {
   const { user, role } = useRole();
   const { isRTL, tx } = useLanguage();
+  const navigate = useNavigate();
   const aiReadiness = useMemo(() => getAiDesignStudioReadiness(), []);
-  const tenantMode = String(role || '').toLowerCase() === 'tenant';
+  const normalizedRole = String(role || '').toLowerCase();
+  const tenantMode = normalizedRole === 'tenant';
 
   const [scope, setScope] = useState<DesignScope>({
     dimensions: 50,
@@ -85,10 +149,12 @@ export default function DesignStudioPage() {
     isMallEnvironment: false,
     addons: [],
   });
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [scopeDescription, setScopeDescription] = useState('');
   const [designStyle, setDesignStyle] = useState('Modern');
   const [designObjective, setDesignObjective] = useState('refresh');
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' });
 
   const quote = useMemo(() => {
@@ -107,7 +173,7 @@ export default function DesignStudioPage() {
     zoneType: scope.zoneType,
     designStyle,
     designObjective,
-    uploadedImageUrl: referenceImages[0],
+    uploadedImageUrl: referenceImages[0]?.previewUrl,
     notes: scopeDescription,
   }), [scope.zoneType, designStyle, designObjective, referenceImages, scopeDescription]);
 
@@ -141,7 +207,12 @@ export default function DesignStudioPage() {
     }
 
     try {
-      const previews = await Promise.all(files.map(readImageAsDataUrl));
+      const previews = await Promise.all(files.map(async (file) => ({
+        file,
+        previewUrl: await readImageAsDataUrl(file),
+        name: file.name,
+        size: file.size,
+      })));
       setReferenceImages((current) => [...current, ...previews].slice(0, 8));
       setSnackbar({ open: true, message: 'Image preview added. Concept workflow is ready.', severity: 'success' });
     } catch (error) {
@@ -149,7 +220,22 @@ export default function DesignStudioPage() {
     }
   };
 
-  const handleCreateConcept = () => {
+  const uploadReferenceImages = async (requestId: string) => {
+    if (!user?.uid) return [] as string[];
+    const urls: string[] = [];
+    for (let index = 0; index < referenceImages.length; index += 1) {
+      const image = referenceImages[index];
+      const path = `design_requests/${user.uid}/${requestId}_${index}_${Date.now()}_${safeFileName(image.name)}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, image.file, { contentType: image.file.type || 'image/jpeg' });
+      const url = await getDownloadURL(storageRef);
+      urls.push(url);
+      setUploadProgress(Math.round(((index + 1) / referenceImages.length) * 100));
+    }
+    return urls;
+  };
+
+  const handleCreateConcept = async () => {
     if (!user?.uid) {
       setSnackbar({ open: true, message: 'Please sign in before submitting a design request.', severity: 'error' });
       return;
@@ -160,7 +246,134 @@ export default function DesignStudioPage() {
       return;
     }
 
-    setSnackbar({ open: true, message: 'Design concept prepared. Full submission/payment handoff will open in the owner workflow.', severity: 'success' });
+    setSubmitting(true);
+    setUploadProgress(0);
+    try {
+      const tenantContext = tenantMode ? await resolveTenantContext(user) : {};
+      const unit = tenantContext.unit || {};
+      const property = tenantContext.property || {};
+      const ownerId = tenantMode ? (property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid || null) : user.uid;
+      const ownerEmail = tenantMode ? (property.ownerEmail || unit.ownerEmail || null) : (user.email || null);
+      const status = getInitialDesignStatus(normalizedRole, true);
+      const requestRef = doc(collection(db, 'design_requests'));
+      const uploadedUrls = await uploadReferenceImages(requestRef.id);
+      const persistedConcepts = buildDesignConcepts({
+        zoneType: scope.zoneType,
+        designStyle,
+        designObjective,
+        uploadedImageUrl: uploadedUrls[0],
+        notes: scopeDescription,
+      });
+
+      const requestPayload = {
+        userId: user.uid,
+        createdByUid: user.uid,
+        authUid: user.uid,
+        role: normalizedRole || 'owner',
+        userName: user.displayName || user.email || 'BIN GROUP user',
+        userEmail: user.email || null,
+        ownerId,
+        ownerUid: ownerId,
+        ownerEmail,
+        tenantId: tenantMode ? user.uid : null,
+        tenantUid: tenantMode ? user.uid : null,
+        tenantEmail: tenantMode ? (user.email || null) : null,
+        propertyId: property.id || unit.propertyId || null,
+        propertyName: property.name || property.propertyName || unit.propertyName || (tenantMode ? 'Tenant assigned unit' : 'Owner design request'),
+        propertyLocation: property.address || property.location || unit.propertyLocation || null,
+        unitId: unit.id || null,
+        roomType: scope.zoneType,
+        theme: designStyle,
+        budget: quote.finalTotal,
+        scope: {
+          ...scope,
+          scopeDescription,
+          requiredWork: scopeDescription,
+          designObjective,
+          referenceImages: uploadedUrls,
+          unitNumber: unit.unitNumber || '',
+          floorLevel: unit.floorNumber || '',
+          imageCount: uploadedUrls.length,
+        },
+        designStyle,
+        designObjective,
+        quote,
+        concepts: persistedConcepts,
+        conceptPrompt: persistedConcepts[0]?.prompt || quote.conceptDesignResult,
+        status,
+        workflowStage: status,
+        approvalStatus: getApprovalRequired(normalizedRole) ? 'PENDING_OWNER_APPROVAL' : 'OWNER_CREATED',
+        quoteStatus: tenantMode ? 'PENDING_OWNER_APPROVAL' : 'DEPOSIT_PENDING',
+        paymentStatus: 'NOT_STARTED',
+        adminHandoffStatus: tenantMode ? 'WAITING_OWNER_APPROVAL' : 'PAYMENT_NOT_STARTED',
+        engineerHandoffStatus: 'WAITING_PAYMENT',
+        source: 'AI_DESIGN_STUDIO_PUBLIC_PORTAL',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, 'design_requests'), { ...requestPayload, id: requestRef.id });
+
+      await addDoc(collection(db, 'design_quotes'), {
+        requestId: requestRef.id,
+        ...requestPayload,
+        createdAt: serverTimestamp(),
+      });
+
+      await Promise.all(persistedConcepts.map((concept) => addDoc(collection(db, 'design_concepts'), {
+        requestId: requestRef.id,
+        ownerId,
+        ownerUid: ownerId,
+        tenantId: tenantMode ? user.uid : null,
+        tenantUid: tenantMode ? user.uid : null,
+        userId: user.uid,
+        role: normalizedRole || 'owner',
+        ...concept,
+        createdAt: serverTimestamp(),
+      })));
+
+      if (tenantMode) {
+        await addDoc(collection(db, 'design_approvals'), {
+          requestId: requestRef.id,
+          ownerId,
+          ownerUid: ownerId,
+          tenantUid: user.uid,
+          tenantEmail: user.email || null,
+          propertyId: property.id || unit.propertyId || null,
+          status: 'PENDING_OWNER_APPROVAL',
+          approvalStatus: 'PENDING_OWNER_APPROVAL',
+          decision: 'pending',
+          payerRole: 'tenant',
+          payerId: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      await logAuditAction({
+        actorId: user.uid,
+        actorRole: normalizedRole || 'owner',
+        action: 'AI_DESIGN_REQUEST_SUBMITTED',
+        targetType: 'design_requests',
+        targetId: requestRef.id,
+        metadata: {
+          imageCount: uploadedUrls.length,
+          quoteTotal: quote.finalTotal,
+          tenantMode,
+          ownerId,
+        },
+      });
+
+      setSnackbar({ open: true, message: tenantMode ? 'Design request submitted for owner approval.' : 'Design request created. Deposit workflow is ready.', severity: 'success' });
+      const prefix = tenantMode ? '/tenant' : '/owner';
+      navigate(`${prefix}/design-studio/request/${requestRef.id}`);
+    } catch (error: any) {
+      console.error('[AI Studio] request submission failed:', error);
+      setSnackbar({ open: true, message: error?.code?.includes('permission-denied') ? 'Submission blocked by access rules. Please sign in again or contact support.' : 'Design request could not be submitted. Please retry.', severity: 'error' });
+    } finally {
+      setSubmitting(false);
+      setUploadProgress(0);
+    }
   };
 
   return (
@@ -188,17 +401,24 @@ export default function DesignStudioPage() {
               <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Camera color={binThemeTokens.gold} /> {labels.upload}
               </Typography>
-              <Button component="label" variant="outlined" fullWidth sx={{ py: 2, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
+              <Button component="label" variant="outlined" fullWidth disabled={submitting} sx={{ py: 2, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
                 {labels.upload}
                 <input type="file" hidden accept="image/*,.heic,.heif,.webp" multiple onChange={handleImageUpload} />
               </Button>
               <Grid container spacing={1.5} sx={{ mt: 2 }}>
-                {referenceImages.map((url, index) => (
-                  <Grid item xs={4} key={`${url}-${index}`}>
-                    <Box component="img" src={url} alt={`Reference ${index + 1}`} sx={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 2, border: `1px solid ${binThemeTokens.gold}` }} />
+                {referenceImages.map((image, index) => (
+                  <Grid item xs={4} key={`${image.name}-${index}`}>
+                    <Box component="img" src={image.previewUrl} alt={`Reference ${index + 1}`} sx={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 2, border: `1px solid ${binThemeTokens.gold}` }} />
                   </Grid>
                 ))}
               </Grid>
+
+              {submitting && uploadProgress > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 6, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                  <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{uploadProgress}% uploaded</Typography>
+                </Box>
+              )}
 
               <TextField
                 multiline
@@ -249,8 +469,8 @@ export default function DesignStudioPage() {
               <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>
                 {labels.mobilization}: AED {mobilization.toLocaleString()}
               </Typography>
-              <Button variant="contained" fullWidth onClick={handleCreateConcept} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                {labels.action}
+              <Button variant="contained" fullWidth onClick={handleCreateConcept} disabled={submitting} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                {submitting ? 'Submitting...' : labels.action}
               </Button>
               <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" fullWidth startIcon={<MessageCircle size={17} />} sx={{ mt: 1.5, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
                 WhatsApp BIN GROUP
@@ -283,7 +503,7 @@ export default function DesignStudioPage() {
         </Paper>
 
         <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-          This launch-safe Design Studio keeps quote generation and concept preparation online. Full Firestore submission/payment handoff can be reconnected after the public route smoke tests are green.
+          AI Studio now saves the uploaded images, quote, concept prompts, approval state, and execution handoff record into the BIN GROUP workflow ledger.
         </Alert>
       </Stack>
 
