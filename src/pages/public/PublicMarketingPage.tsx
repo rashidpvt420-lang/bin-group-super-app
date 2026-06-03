@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Bot, Building2, Camera, CheckCircle2, Clock3, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
+import { Bot, Building2, Camera, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
@@ -38,6 +38,19 @@ const platinum = '#F7F7F4';
 const line = '#E8E3D7';
 const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
+
+const watermarkSx = {
+  position: 'fixed',
+  top: '50%',
+  left: '50%',
+  width: { xs: '72vw', md: '46vw' },
+  maxWidth: 620,
+  transform: 'translate(-50%, -50%)',
+  opacity: 0.045,
+  filter: 'grayscale(1) sepia(1) saturate(1.45)',
+  pointerEvents: 'none',
+  zIndex: 0,
+};
 
 const copy = {
   en: {
@@ -115,7 +128,7 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
 
   return (
     <Box dir={isRTL ? 'rtl' : 'ltr'} data-page={page} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflow: 'hidden' }}>
-      <Box sx={{ position: 'fixed', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: { xs: '18vw', md: '12vw' }, fontWeight: 950, letterSpacing: '-0.08em', color: ink, opacity: 0.035, zIndex: 0 }}>BIN GROUP</Box>
+      <Box component="img" src="/logo.png" alt="" aria-hidden="true" sx={watermarkSx} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Nav c={c} nextLang={nextLang} setLang={setLang} />
         <Hero c={c} />
