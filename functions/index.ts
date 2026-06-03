@@ -2302,10 +2302,19 @@ export const pauseTechnicianWork = onCall({ cors: true }, async (request) => {
  */
 export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    const { ticketId, afterPhotos, notes } = request.data;
+    const { ticketId, afterPhotos, beforePhotos, notes } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
+    if (!beforePhotos || !Array.isArray(beforePhotos) || beforePhotos.length === 0) {
+        throw new HttpsError("invalid-argument", "Before photo proof is mandatory to finish work.");
+    }
+
     if (!afterPhotos || !Array.isArray(afterPhotos) || afterPhotos.length === 0) {
-        throw new HttpsError("invalid-argument", "Photographic proof (afterPhotos) is mandatory to finish work.");
+        throw new HttpsError("invalid-argument", "After photo proof is mandatory to finish work.");
+    }
+
+    const completionNotes = String(notes || '').trim();
+    if (completionNotes.length < 10) {
+        throw new HttpsError("invalid-argument", "Technician completion notes must be at least 10 characters.");
     }
 
     const techId = request.auth.uid;
@@ -2315,11 +2324,15 @@ export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
 
     await db.runTransaction(async (transaction) => {
         transaction.update(ticketRef, {
-            status: "COMPLETED",
+            status: "COMPLETED_PENDING_APPROVAL",
             technicianStatus: "COMPLETED",
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            beforePhotos,
             afterPhotos,
-            completionNotes: notes || "",
+            completionNotes,
+            notes: completionNotes,
+            technicianNotes: completionNotes,
+            tenantApprovalRequired: true,
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
