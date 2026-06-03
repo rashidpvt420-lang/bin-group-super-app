@@ -25,6 +25,14 @@ const ownerDashboard = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
 
+const ownerActivationIsAdminControlled =
+  firestoreRules.includes('adminCreateOrUpdateActivatedContract') ||
+  (
+    firestoreRules.includes('safeOwnerContractUpdate') &&
+    firestoreRules.includes("!(request.resource.data.status in ['active', 'ACTIVE'])") &&
+    firestoreRules.includes("allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate()")
+  );
+
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
 assert(firebaseJson.includes('"rules": "storage.rules"'), 'Firebase must reference storage.rules.');
@@ -55,7 +63,8 @@ assert(ownerDashboard.includes('profile.paymentVerified === true'), 'Owner dashb
 assert(ownerDashboard.includes('contract.paymentVerified === true'), 'Owner dashboard contract active check must require paymentVerified.');
 
 assert(firestoreRules.includes('paymentDraftCreate'), 'Firestore rules must guard payment draft creation.');
-assert(firestoreRules.includes('adminCreateOrUpdateActivatedContract'), 'Firestore rules must keep activation admin controlled.');
+assert(firestoreRules.includes('safeTenantEvidenceUpdate'), 'Firestore rules must allow narrow tenant-owned evidence metadata updates.');
+assert(ownerActivationIsAdminControlled, 'Firestore rules must keep activation admin controlled.');
 assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onboarding proof uploads.');
 
 // Payment result page route wiring is expected before full public launch.
