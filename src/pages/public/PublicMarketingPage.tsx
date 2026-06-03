@@ -1,39 +1,8 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, CheckCircle2, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { useParams } from 'react-router-dom';
-import { binThemeTokens } from '../../theme/binGroupTheme';
+import { Bot, Building2, Camera, CheckCircle2, Clock3, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-
-type Sector = { eyebrow: string; title: string; subtitle: string; bullets: string[] };
-type CommandRow = { title: string; subtitle: string; status: string; href: string };
-type PricingRow = { label: string; value: string };
-type MarketingCopy = {
-  brand: string;
-  chip: string;
-  title: string;
-  desc: string;
-  primary: string;
-  quote: string;
-  login: string;
-  demo: string;
-  videos: string;
-  language: string;
-  whatsapp: string;
-  ownerFlowTitle: string;
-  proofTitle: string;
-  proofDesc: string;
-  pricingTitle: string;
-  coverageTitle: string;
-  inquiryTitle: string;
-  inquiryDesc: string;
-  commandRows: CommandRow[];
-  trustLabels: string[];
-  problems: string[];
-  pricing: PricingRow[];
-  coverage: string[];
-  sectors: Record<string, Sector>;
-};
+import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
 const ONBOARDING_URL = '/onboarding';
@@ -41,209 +10,149 @@ const QUOTE_URL = '/onboarding?intent=quote';
 const DEMO_URL = '/request-demo';
 const LOGIN_URL = '/login';
 
-const en: MarketingCopy = {
-  brand: 'BIN GROUP',
-  chip: 'UAE PROPERTY CARE SYSTEM',
-  title: 'Start Property Details. Get Quote. Sign Contract.',
-  desc: 'BIN GROUP helps serious UAE property owners move from scattered calls and maintenance confusion to one clear digital system: property details, instant quote, contract selection, 15% mobilization, tenant requests, technician dispatch, before-and-after proof, owner reports, and property passport history.',
-  primary: 'Start Property Details',
-  quote: 'Get Instant Quote',
-  login: 'Portal Login',
-  demo: 'Watch Demo',
-  videos: 'Videos',
-  language: 'العربية',
-  whatsapp: 'WhatsApp BIN GROUP',
-  ownerFlowTitle: 'Owner journey: details → quote → contract → service tracking',
-  proofTitle: 'What BIN GROUP solves',
-  proofDesc: 'BIN GROUP removes scattered calls, unclear service history, missing proof, delayed field coordination, weak reporting, and poor owner visibility. Owners, tenants, technicians, and brokers operate from one verified property-care chain.',
-  pricingTitle: 'Contracts & pricing model',
-  coverageTitle: 'Built for every serious UAE property',
-  inquiryTitle: 'Contact BIN GROUP',
-  inquiryDesc: 'Talk to BIN GROUP by WhatsApp or phone. We prepare the right maintenance, property management, or full-coverage contract path.',
-  commandRows: [
-    { title: 'Property Details', subtitle: 'Building, villa, units, systems, location', status: 'START', href: ONBOARDING_URL },
-    { title: 'Instant Quote', subtitle: 'Maintenance or management scope path', status: 'QUOTE', href: QUOTE_URL },
-    { title: 'Owner Contract', subtitle: '15% mobilization + payment plan', status: 'SIGN', href: ONBOARDING_URL },
-    { title: 'Service Tracking', subtitle: 'Tenant request, GPS, proof, report', status: 'LIVE', href: DEMO_URL },
-  ],
-  trustLabels: ['Verified records', 'GPS dispatch', 'PDF proof', 'Property passport'],
-  problems: ['No-call owner journey', 'Direct technician workfeed', 'GPS dispatch context', 'Before-and-after proof', 'PDF contracts and reports', 'Demo/video walkthroughs', 'AI property intelligence', 'Property passport history'],
-  pricing: [
-    { label: 'Maintenance Contracts', value: 'Custom Quote' },
-    { label: 'Property Management', value: '5% model' },
-    { label: 'Mobilization', value: '15% upfront' },
-    { label: 'Payment Plans', value: 'Monthly / Quarterly / Annual' },
-  ],
-  coverage: ['Villas', 'Apartments', 'Buildings', 'Towers', 'Hotels', 'Schools', 'Clinics', 'Hospitals', 'Offices', 'Malls', 'Majlis', 'Warehouses', 'Staff Accommodation', 'Retail', 'Industrial', 'Mixed-use Assets'],
-  sectors: {
-    owners: { eyebrow: 'Owner Command', title: 'Turn every property into a controlled digital asset.', subtitle: 'Contracts, 15% mobilization, payment plans, tenant service, evidence, reports, and property passport records.', bullets: ['Start property details', 'Get quote and scope', 'Select maintenance, management, or full coverage', 'Track reports, approvals, PDFs, demos, and service history'] },
-    tenants: { eyebrow: 'Tenant Care', title: 'Submit clear maintenance requests with proof.', subtitle: 'Tenants send category, priority, photos, location context, and track the service path.', bullets: ['Photo-based service request', 'Priority and category', 'GPS/location context', 'Completion confirmation'] },
-    technicians: { eyebrow: 'Technician Operations', title: 'Field teams receive structured work and accountability.', subtitle: 'Technicians see jobs, route context, proof requirements, safety notes, and completion workflow.', bullets: ['Direct job feed', 'GPS dispatch context', 'Before/after proof', 'SLA performance visibility'] },
-    brokers: { eyebrow: 'Broker Growth', title: 'Broker referrals become structured owner opportunities.', subtitle: 'Referral, property, and commission-ready records stay inside the same platform.', bullets: ['Lead registration', 'Owner referral visibility', 'Property pipeline records', 'Commission-ready tracking'] },
-    security: { eyebrow: 'Trust & Records', title: 'Every property builds a verified digital passport.', subtitle: 'Contracts, tickets, invoices, photos, and reports become long-term property intelligence.', bullets: ['Role-based access', 'Proof-of-work history', 'PDF traceability', 'UAE-ready reporting'] },
-    contact: { eyebrow: 'Contact BIN GROUP', title: 'Talk to BIN GROUP and start the right contract path.', subtitle: 'Use WhatsApp, phone, or onboarding to start property details and request the correct maintenance or management scope.', bullets: ['WhatsApp contact', 'Property onboarding', 'Quote path', 'Contract request'] },
-    'ai-design-studio': { eyebrow: 'AI Design Studio', title: 'Visualize upgrades before work begins.', subtitle: 'AI design previews connect property improvement ideas to scope, quote, and owner approval.', bullets: ['Interior ideas', 'Exterior ideas', 'Scope support', 'Owner approvals'] },
+const ink = '#111827';
+const muted = '#5B6270';
+const canvas = '#FFFFFF';
+const platinum = '#F7F7F4';
+const line = '#E8E3D7';
+const gold = binThemeTokens.gold;
+const goldLight = binThemeTokens.goldLight;
+
+const copy = {
+  en: {
+    brand: 'BIN GROUP',
+    language: 'العربية',
+    chip: 'UAE PROPERTY CARE HOME OS',
+    title: 'One Operating System for Property Care, Management, and Proof.',
+    desc: 'BIN GROUP gives serious UAE property owners a unified Home OS: property details, instant quote, contract selection, 15% mobilization, tenant registry, rent ledger waterfall, 5% management fee logic, technician dispatch, SLA timers, before-and-after proof, owner reports, and permanent property passport history.',
+    primary: 'Start Property Details',
+    quote: 'Get Instant Quote',
+    login: 'Portal Login',
+    demo: 'Watch Demo',
+    whatsapp: 'WhatsApp BIN GROUP',
+    flow: 'Owner journey: details → quote → contract → service tracking → verified payout record',
+    proofTitle: 'A complete agentic PropTech ecosystem',
+    proofDesc: 'BIN GROUP replaces scattered WhatsApp messages, manual invoices, missing evidence, delayed coordination, and unclear owner reporting with one audited workflow across owners, tenants, technicians, brokers, finance, and admin.',
+    command: [
+      ['Home OS Intake', 'One intelligent prompt instead of scattered calls', 'START'],
+      ['Instant Quote', 'Maintenance, management, or hybrid contract scope', 'QUOTE'],
+      ['Total Care Hybrid', 'Tenant registry, rent ledger waterfall, 5% fee logic', 'CARE'],
+      ['No-Call Operations', 'AI triage, SLA timers, photo proof, owner reports', 'LIVE'],
+    ],
+    cards: [
+      ['Home OS Concept', 'Replace scattered calls, chats, and invoices with one prompt-to-workflow operating layer.'],
+      ['Total Care Hybrid', 'Handle tenant registry, rent ledger waterfall, management fee logic, maintenance deductions, and owner payout visibility.'],
+      ['Sovereign Property Intelligence', 'Adapt the SOP by asset type: tower, villa, Majlis, residential building, commercial asset, or portfolio.'],
+      ['Agentic No-Call Efficiency', 'Classify issues, enforce SLA timers, dispatch technicians, and require before-and-after proof automatically.'],
+    ],
+    pricingTitle: 'Contracts & financial logic',
+    pricing: [['Maintenance', 'Custom Quote'], ['Management', '5% model'], ['Mobilization', '15% upfront'], ['Payment Plans', 'Monthly / Quarterly / Annual']],
+    coverageTitle: 'Asset-adaptive operations for UAE property types',
+    coverage: ['Villas', 'Apartments', 'Buildings', 'Commercial Towers', 'Hotels', 'Schools', 'Clinics', 'Hospitals', 'Offices', 'Malls', 'Private Majlis', 'Government Majlis', 'Warehouses', 'Staff Accommodation', 'Retail', 'Industrial', 'Mixed-use Assets'],
+    inquiryTitle: 'Start the correct contract path',
+    inquiryDesc: 'Send the property profile and BIN GROUP prepares the right maintenance, property management, or Total Care Hybrid package for your asset.',
+  },
+  ar: {
+    brand: 'مجموعة بن',
+    language: 'EN',
+    chip: 'نظام تشغيل العناية بالعقار في الإمارات',
+    title: 'نظام تشغيل واحد للعناية بالعقار وإدارته وإثبات الخدمة.',
+    desc: 'مجموعة بن تمنح ملاك العقارات في الإمارات نظام Home OS موحد: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، سجل المستأجرين، دفتر الإيجارات، منطق رسوم الإدارة 5٪، إرسال الفنيين، مؤقتات SLA، إثبات قبل وبعد، تقارير المالك، وسجل جواز العقار الدائم.',
+    primary: 'ابدأ تفاصيل العقار',
+    quote: 'احصل على عرض سعر فوري',
+    login: 'دخول البوابة',
+    demo: 'شاهد العرض',
+    whatsapp: 'تواصل عبر واتساب',
+    flow: 'رحلة المالك: تفاصيل ← عرض سعر ← عقد ← تتبع الخدمة ← سجل دفع موثق',
+    proofTitle: 'منظومة PropTech ذكية ومتكاملة',
+    proofDesc: 'مجموعة بن تستبدل رسائل واتساب المتفرقة والفواتير اليدوية وغياب الإثباتات وتأخر التنسيق بتدفق عمل موثق يجمع المالك والمستأجر والفني والوسيط والمالية والإدارة.',
+    command: [
+      ['إدخال Home OS', 'طلب ذكي واحد بدل الاتصالات المتفرقة', 'ابدأ'],
+      ['عرض سعر فوري', 'صيانة أو إدارة أو نطاق هجين', 'سعر'],
+      ['Total Care Hybrid', 'سجل المستأجرين ودفتر الإيجارات ومنطق 5٪', 'رعاية'],
+      ['تشغيل بدون اتصالات', 'تصنيف ذكي، SLA، إثبات صور، تقارير المالك', 'مباشر'],
+    ],
+    cards: [
+      ['Home OS للعقار', 'استبدال الاتصالات والرسائل والفواتير المتفرقة بطبقة تشغيل موحدة.'],
+      ['Total Care Hybrid', 'إدارة سجل المستأجرين ودفتر الإيجارات ورسوم الإدارة وخصومات الصيانة ووضوح التحويل للمالك.'],
+      ['Sovereign Property Intelligence', 'تكييف التشغيل حسب نوع الأصل: برج، فيلا، مجلس، مبنى سكني، أصل تجاري، أو محفظة.'],
+      ['كفاءة No-Call الذكية', 'تصنيف الأعطال، فرض SLA، إرسال الفنيين، وطلب إثبات قبل وبعد تلقائياً.'],
+    ],
+    pricingTitle: 'العقود والمنطق المالي',
+    pricing: [['الصيانة', 'عرض مخصص'], ['الإدارة', 'نموذج 5٪'], ['التفعيل', '15٪ مقدماً'], ['الدفع', 'شهري / ربع سنوي / سنوي']],
+    coverageTitle: 'تشغيل يتكيف مع نوع العقار في الإمارات',
+    coverage: ['فلل', 'شقق', 'مبانٍ', 'أبراج تجارية', 'فنادق', 'مدارس', 'عيادات', 'مستشفيات', 'مكاتب', 'مراكز تجارية', 'مجالس خاصة', 'مجالس حكومية', 'مستودعات', 'سكن موظفين', 'محلات', 'منشآت صناعية'],
+    inquiryTitle: 'ابدأ مسار العقد الصحيح',
+    inquiryDesc: 'أرسل ملف العقار لتجهز مجموعة بن مسار الصيانة أو إدارة العقار أو باقة Total Care Hybrid المناسبة للأصل.',
   },
 };
 
-const ar: MarketingCopy = {
-  brand: 'مجموعة بن',
-  chip: 'نظام العناية بالعقارات في الإمارات',
-  title: 'ابدأ تفاصيل العقار. احصل على عرض سعر. وقّع العقد.',
-  desc: 'مجموعة بن تساعد ملاك العقارات الجادين في الإمارات على الانتقال من الاتصالات المتفرقة وفوضى الصيانة إلى نظام رقمي واضح: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، طلبات المستأجرين، إرسال الفنيين، إثبات قبل وبعد، تقارير المالك، وسجل عقاري دائم.',
-  primary: 'ابدأ تفاصيل العقار',
-  quote: 'احصل على عرض سعر فوري',
-  login: 'دخول البوابة',
-  demo: 'شاهد العرض',
-  videos: 'الفيديوهات',
-  language: 'EN',
-  whatsapp: 'تواصل عبر واتساب',
-  ownerFlowTitle: 'رحلة المالك: تفاصيل ← عرض سعر ← عقد ← تتبع الخدمة',
-  proofTitle: 'ما الذي تحله مجموعة بن؟',
-  proofDesc: 'مجموعة بن تنهي الاتصالات المتكررة، ضياع تاريخ الخدمة، غياب الإثباتات، تأخير التنسيق الميداني، ضعف التقارير، وعدم وضوح رؤية المالك. كل الأطراف تعمل داخل سلسلة تشغيل موثقة واحدة.',
-  pricingTitle: 'نموذج العقود والأسعار',
-  coverageTitle: 'مصمم لكل عقار جاد في الإمارات',
-  inquiryTitle: 'تواصل مع مجموعة بن',
-  inquiryDesc: 'تواصل مع مجموعة بن عبر واتساب أو الهاتف لنجهز مسار الصيانة أو الإدارة أو التغطية الكاملة.',
-  commandRows: [
-    { title: 'تفاصيل العقار', subtitle: 'المبنى، الفيلا، الوحدات، الأنظمة، الموقع', status: 'ابدأ', href: ONBOARDING_URL },
-    { title: 'عرض سعر فوري', subtitle: 'نطاق الصيانة أو إدارة العقار', status: 'سعر', href: QUOTE_URL },
-    { title: 'عقد المالك', subtitle: 'دفعة تفعيل 15٪ + خطة دفع', status: 'وقّع', href: ONBOARDING_URL },
-    { title: 'تتبع الخدمة', subtitle: 'طلب المستأجر، الموقع، الإثبات، التقرير', status: 'مباشر', href: DEMO_URL },
-  ],
-  trustLabels: ['سجلات موثقة', 'إرسال الفنيين حسب الموقع', 'إثبات موثق', 'جواز العقار'],
-  problems: ['رحلة مالك بدون اتصالات متكررة', 'مهام مباشرة للفنيين', 'توجيه حسب موقع العقار', 'إثبات قبل وبعد', 'عقود وتقارير موثقة', 'عروض توضيحية بالفيديو', 'ذكاء عقاري تشغيلي', 'سجل جواز العقار'],
-  pricing: [
-    { label: 'عقود الصيانة', value: 'عرض سعر مخصص' },
-    { label: 'إدارة العقار', value: 'نموذج 5٪' },
-    { label: 'دفعة التفعيل', value: '15٪ مقدماً' },
-    { label: 'خطط الدفع', value: 'شهري / ربع سنوي / سنوي' },
-  ],
-  coverage: ['فلل', 'شقق', 'مبانٍ', 'أبراج', 'فنادق', 'مدارس', 'عيادات', 'مستشفيات', 'مكاتب', 'مراكز تجارية', 'مجالس', 'مستودعات', 'سكن موظفين', 'محلات', 'منشآت صناعية', 'عقارات متعددة الاستخدام'],
-  sectors: {
-    owners: { eyebrow: 'قيادة الملاك', title: 'حوّل كل عقار إلى أصل رقمي منظم.', subtitle: 'عقود، دفعة تفعيل 15٪، خطط دفع، خدمة مستأجرين، إثبات، تقارير، وسجل عقاري.', bullets: ['ابدأ تفاصيل العقار', 'احصل على عرض السعر والنطاق', 'اختر الصيانة أو الإدارة أو التغطية الكاملة', 'تابع التقارير والموافقات والملفات وسجل الخدمة'] },
-    tenants: { eyebrow: 'رعاية المستأجر', title: 'طلب صيانة واضح مع إثبات.', subtitle: 'المستأجر يرسل التصنيف والأولوية والصور والموقع ويتابع الخدمة.', bullets: ['طلب خدمة بالصور', 'أولوية وتصنيف', 'سياق الموقع', 'تأكيد الإنجاز'] },
-    technicians: { eyebrow: 'تشغيل الفنيين', title: 'الفريق الميداني يستلم عمل منظم ومسؤولية واضحة.', subtitle: 'المهام، الموقع، متطلبات الإثبات، السلامة، وإغلاق العمل داخل النظام.', bullets: ['قائمة مهام مباشرة', 'سياق الموقع', 'إثبات قبل وبعد', 'وضوح أداء الخدمة'] },
-    brokers: { eyebrow: 'نمو الوسطاء', title: 'إحالات الوسطاء تتحول إلى فرص ملاك منظمة.', subtitle: 'الإحالات والعقارات والعمولات الجاهزة داخل نفس المنصة.', bullets: ['تسجيل الإحالة', 'وضوح إحالة المالك', 'سجل فرص العقارات', 'تتبع العمولة'] },
-    security: { eyebrow: 'الثقة والسجلات', title: 'كل عقار يحصل على جواز رقمي موثق.', subtitle: 'العقود والطلبات والفواتير والصور والتقارير تتحول إلى ذكاء عقاري دائم.', bullets: ['صلاحيات حسب الدور', 'تاريخ إثبات العمل', 'تتبع الملفات', 'تقارير جاهزة للإمارات'] },
-    contact: { eyebrow: 'تواصل مع مجموعة بن', title: 'تواصل وابدأ مسار العقد الصحيح.', subtitle: 'استخدم واتساب أو الهاتف أو التسجيل لبدء تفاصيل العقار وطلب نطاق الصيانة أو الإدارة المناسب.', bullets: ['تواصل واتساب', 'تسجيل العقار', 'مسار عرض السعر', 'طلب العقد'] },
-    'ai-design-studio': { eyebrow: 'استوديو التصميم الذكي', title: 'شاهد التطوير قبل بدء العمل.', subtitle: 'تصاميم ذكية تربط الأفكار بالنطاق والتكلفة وموافقة المالك.', bullets: ['أفكار داخلية', 'أفكار خارجية', 'دعم النطاق', 'موافقات المالك'] },
-  },
-};
-
-export default function PublicMarketingPage({ page = 'home' }: { page?: string }) {
-  const params = useParams();
-  const { lang, isRTL } = useLanguage();
-  const c = lang === 'ar' ? ar : en;
-  const key = page === 'dynamic' ? params.page || 'home' : page;
-  const sector = key === 'home' ? null : c.sectors[key || ''];
-
-  if (key !== 'home' && !sector) return <PublicMarketingPage page="home" />;
+export default function PublicMarketingPage() {
+  const { lang, setLang, isRTL } = useLanguage();
+  const c = lang === 'ar' ? copy.ar : copy.en;
+  const nextLang = lang === 'en' ? 'ar' : 'en';
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#000', color: '#FFF', direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Nav c={c} />
-      {sector ? <Sector c={sector} actionLabel={c.primary} whatsappLabel={c.whatsapp} /> : <Hero c={c} />}
-      <Container maxWidth="xl" sx={{ pb: 8 }}>
-        <Trust c={c} />
-        <Problems c={c} />
-        <Pricing c={c} />
-        <Coverage c={c} />
-        <Inquiry c={c} />
-      </Container>
+    <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflow: 'hidden' }}>
+      <Box sx={{ position: 'fixed', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: { xs: '18vw', md: '12vw' }, fontWeight: 950, letterSpacing: '-0.08em', color: ink, opacity: 0.035, zIndex: 0 }}>BIN GROUP</Box>
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
+        <Nav c={c} nextLang={nextLang} setLang={setLang} />
+        <Hero c={c} />
+        <Container maxWidth="xl" sx={{ pb: 8 }}>
+          <Trust />
+          <Proof c={c} />
+          <Pricing c={c} />
+          <Coverage c={c} />
+          <Inquiry c={c} />
+        </Container>
+      </Box>
     </Box>
   );
 }
 
-function InternalActionButton({ href, children, variant = 'outlined', gold = false, icon }: { href: string; children: React.ReactNode; variant?: 'text' | 'outlined' | 'contained'; gold?: boolean; icon?: React.ReactNode }) {
+function ActionButton({ href, children, contained = false, icon }: { href: string; children: React.ReactNode; contained?: boolean; icon?: React.ReactNode }) {
   return (
-    <Button
-      component="a"
-      href={href}
-      variant={variant}
-      startIcon={icon}
-      sx={{
-        bgcolor: variant === 'contained' ? binThemeTokens.gold : 'transparent',
-        color: variant === 'contained' ? '#000' : gold ? binThemeTokens.gold : '#fff',
-        borderColor: variant === 'outlined' ? (gold ? binThemeTokens.gold : 'rgba(255,255,255,.32)') : undefined,
-        fontWeight: 950,
-        py: 1.45,
-        px: 3,
-        minHeight: 52,
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-        pointerEvents: 'auto',
-        '&:hover': {
-          bgcolor: variant === 'contained' ? '#d8bd72' : 'rgba(198,167,94,.08)',
-          borderColor: gold ? binThemeTokens.gold : 'rgba(255,255,255,.5)',
-        },
-      }}
-    >
-      {children}
-    </Button>
+    <Button component="a" href={href} startIcon={icon} sx={{ minHeight: 52, px: 3, py: 1.4, borderRadius: 999, fontWeight: 950, textDecoration: 'none', color: contained ? '#111' : gold, border: contained ? 'none' : `1px solid ${alpha(gold, 0.42)}`, background: contained ? `linear-gradient(135deg, ${goldLight}, ${gold})` : '#fff', boxShadow: contained ? `0 16px 40px ${alpha(gold, 0.26)}` : `0 10px 26px ${alpha('#000', 0.05)}`, '&:hover': { background: contained ? `linear-gradient(135deg, ${gold}, ${goldLight})` : alpha(gold, 0.08), transform: 'translateY(-1px)' } }}>{children}</Button>
   );
 }
 
-function Nav({ c }: { c: MarketingCopy }) {
-  const { lang, setLang, isRTL } = useLanguage();
-  const nextLang = lang === 'en' ? 'ar' : 'en';
+function Nav({ c, nextLang, setLang }: { c: any; nextLang: 'en' | 'ar'; setLang: (lang: 'en' | 'ar') => void }) {
   return (
-    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(0,0,0,.94)', borderBottom: '1px solid rgba(198,167,94,.18)' }}>
-      <Container maxWidth="xl" sx={{ py: 1.1, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-        <Button component="a" href="/" sx={{ color: '#fff', textDecoration: 'none', p: 0, minWidth: 0, mr: isRTL ? 0 : 'auto', ml: isRTL ? 'auto' : 0 }}>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
-            <Box component="img" src="/logo.png" sx={{ width: 38, height: 38, borderRadius: 1 }} />
-            <Typography fontWeight={950} sx={{ color: binThemeTokens.gold }}>{c.brand}</Typography>
+    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.9)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${line}` }}>
+      <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
+        <Button component="a" href="/" sx={{ p: 0, minWidth: 0, color: ink, mr: 'auto' }}>
+          <Stack direction="row" spacing={1.2} alignItems="center">
+            <Box component="img" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 2.2, boxShadow: `0 12px 28px ${alpha('#000', 0.10)}`, bgcolor: '#fff' }} />
+            <Typography fontWeight={950} sx={{ color: ink }}>{c.brand}</Typography>
           </Stack>
         </Button>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1, justifyContent: isRTL ? 'flex-start' : 'flex-end', width: { xs: '100%', md: 'auto' } }}>
-          <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
-          <InternalActionButton href={LOGIN_URL} variant="outlined" gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton>
-          <InternalActionButton href={DEMO_URL} variant="text" icon={<PlayCircle size={17} />}>{c.demo}</InternalActionButton>
-          <Button
-            type="button"
-            onClick={() => setLang(nextLang)}
-            aria-label="Switch language"
-            sx={{
-              color: '#000',
-              bgcolor: binThemeTokens.gold,
-              fontWeight: 950,
-              minWidth: 72,
-              minHeight: 52,
-              borderRadius: 999,
-              px: 2,
-              '&:hover': { bgcolor: '#d8bd72' },
-            }}
-          >
-            <Stack direction="row" spacing={0.6} alignItems="center">
-              <Languages size={16} />
-              <span>{c.language}</span>
-            </Stack>
-          </Button>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+          <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
+          <ActionButton href={DEMO_URL} icon={<PlayCircle size={17} />}>{c.demo}</ActionButton>
+          <Button onClick={() => setLang(nextLang)} sx={{ minWidth: 76, minHeight: 52, borderRadius: 999, color: '#111', background: `linear-gradient(135deg, ${goldLight}, ${gold})`, fontWeight: 950, boxShadow: `0 14px 34px ${alpha(gold, 0.25)}` }}><Languages size={16} />&nbsp;{c.language}</Button>
         </Stack>
       </Container>
     </Box>
   );
 }
 
-function Hero({ c }: { c: MarketingCopy }) {
+function Hero({ c }: { c: any }) {
   return (
-    <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(198,167,94,.16)' }}>
-      <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(circle at top right, rgba(198,167,94,.25), transparent 34rem), #050505' }} />
+    <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: `1px solid ${line}` }}>
+      <Box sx={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 90% 8%, ${alpha(gold, 0.18)}, transparent 28rem), radial-gradient(circle at 10% 95%, ${alpha('#C0C6CF', 0.26)}, transparent 30rem), ${platinum}` }} />
       <Container maxWidth="xl" sx={{ position: 'relative', zIndex: 1, py: { xs: 7, md: 11 } }}>
         <Grid container spacing={5} alignItems="center">
           <Grid item xs={12} md={7}>
-            <Chip label={c.chip} sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 950 }} />
-            <Typography variant="h1" sx={{ fontSize: { xs: 38, md: 66 }, lineHeight: .98, fontWeight: 950, mb: 3 }}>{c.title}</Typography>
-            <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.76)', lineHeight: 1.65, fontWeight: 800 }}>{c.desc}</Typography>
+            <Chip label={c.chip} sx={{ mb: 3, bgcolor: alpha(gold, .12), color: '#5E4A1F', fontWeight: 950, border: `1px solid ${alpha(gold, 0.20)}` }} />
+            <Typography variant="h1" sx={{ fontSize: { xs: 42, md: 72 }, lineHeight: .96, fontWeight: 950, mb: 3, color: ink, letterSpacing: '-0.06em' }}>{c.title}</Typography>
+            <Typography variant="h6" sx={{ color: muted, lineHeight: 1.65, fontWeight: 750, maxWidth: 950 }}>{c.desc}</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4, flexWrap: 'wrap' }}>
-              <InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton>
-              <InternalActionButton href={QUOTE_URL}>{c.quote}</InternalActionButton>
-              <InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton>
-              <InternalActionButton href={DEMO_URL}>{c.demo}</InternalActionButton>
-              <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, py: 1.45, px: 3, minHeight: 52, pointerEvents: 'auto' }}>{c.whatsapp}</Button>
+              <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+              <ActionButton href={QUOTE_URL}>{c.quote}</ActionButton>
+              <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
-            <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 3 }}>{c.ownerFlowTitle}</Typography>
+            <Typography sx={{ color: '#6F5522', fontWeight: 900, mt: 3 }}>{c.flow}</Typography>
           </Grid>
           <Grid item xs={12} md={5}><Command c={c} /></Grid>
         </Grid>
@@ -252,74 +161,29 @@ function Hero({ c }: { c: MarketingCopy }) {
   );
 }
 
-function Sector({ c, actionLabel, whatsappLabel }: { c: Sector; actionLabel: string; whatsappLabel: string }) {
-  return (
-    <Container maxWidth="xl" sx={{ py: 9 }}>
-      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c.eyebrow}</Typography>
-      <Typography variant="h2" sx={{ fontWeight: 950, mt: 1, mb: 2 }}>{c.title}</Typography>
-      <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.72)', maxWidth: 850 }}>{c.subtitle}</Typography>
-      <Stack spacing={1.2} sx={{ mt: 3 }}>{c.bullets.map((b) => <Stack key={b} direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography>{b}</Typography></Stack>)}</Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
-        <InternalActionButton href={ONBOARDING_URL} variant="contained">{actionLabel}</InternalActionButton>
-        <InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{actionLabel === ar.primary ? ar.login : en.login}</InternalActionButton>
-        <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{whatsappLabel}</Button>
-      </Stack>
-    </Container>
-  );
+function Command({ c }: { c: any }) {
+  const icons = [Workflow, WalletCards, Building2, Bot];
+  return <Paper sx={{ p: 2.5, borderRadius: 5, bgcolor: 'rgba(255,255,255,.94)', border: `1px solid ${line}`, boxShadow: `0 28px 70px ${alpha('#000', 0.10)}` }}><Stack spacing={1.5}>{c.command.map((row: string[], index: number) => { const Icon = icons[index]; return <Box key={row[0]} component="a" href={index === 1 ? QUOTE_URL : index === 3 ? DEMO_URL : ONBOARDING_URL} sx={{ display: 'block', p: 2.2, borderRadius: 3, bgcolor: index === 0 ? alpha(gold, 0.12) : '#FFFFFF', color: ink, textDecoration: 'none', border: `1px solid ${index === 0 ? alpha(gold, 0.22) : line}`, boxShadow: `0 12px 30px ${alpha('#000', 0.055)}` }}><Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center"><Stack direction="row" spacing={1.4} alignItems="center"><Box sx={{ color: gold, display: 'flex' }}><Icon size={22} /></Box><Box><Typography fontWeight={950}>{row[0]}</Typography><Typography variant="caption" sx={{ color: muted }}>{row[1]}</Typography></Box></Stack><Typography variant="caption" sx={{ color: '#6F5522', fontWeight: 950 }}>{row[2]}</Typography></Stack></Box>; })}</Stack></Paper>;
 }
 
-function Command({ c }: { c: MarketingCopy }) {
-  return (
-    <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(18,18,20,.92)', border: '1px solid rgba(198,167,94,.28)' }}>
-      <Stack spacing={1.5}>
-        {c.commandRows.map((row) => (
-          <Box
-            key={row.title}
-            component="a"
-            href={row.href}
-            sx={{
-              display: 'block',
-              p: 2,
-              borderRadius: 2,
-              bgcolor: 'rgba(255,255,255,.035)',
-              color: '#fff',
-              textDecoration: 'none',
-              pointerEvents: 'auto',
-              border: '1px solid transparent',
-              '&:hover': { borderColor: alpha(binThemeTokens.gold, .45), bgcolor: 'rgba(198,167,94,.08)' },
-            }}
-          >
-            <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="center">
-              <Box>
-                <Typography fontWeight={900}>{row.title}</Typography>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{row.subtitle}</Typography>
-              </Box>
-              <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{row.status}</Typography>
-            </Stack>
-          </Box>
-        ))}
-      </Stack>
-    </Paper>
-  );
+function Trust() {
+  const labels = ['Home OS workflow', 'Rent ledger waterfall', 'SLA timers', 'Before/after proof'];
+  const icons = [ShieldCheck, WalletCards, Clock3, Camera];
+  return <Grid container spacing={2} sx={{ mt: 5 }}>{labels.map((label, index) => { const Icon = icons[index]; return <Grid item xs={12} md={3} key={label}><Paper sx={{ p: 2.5, bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 4, boxShadow: `0 18px 45px ${alpha('#000', 0.06)}` }}><Box sx={{ color: gold }}><Icon /></Box><Typography fontWeight={950} color={ink}>{label}</Typography></Paper></Grid>; })}</Grid>;
 }
 
-function Trust({ c }: { c: MarketingCopy }) {
-  const icons = [<ShieldCheck key="verified" />, <Wrench key="dispatch" />, <FileText key="proof" />, <Building2 key="passport" />];
-  return <Grid container spacing={2} sx={{ mt: 5 }}>{c.trustLabels.map((label, index) => <Grid item xs={12} md={3} key={label}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Box sx={{ color: binThemeTokens.gold }}>{icons[index]}</Box><Typography fontWeight={950}>{label}</Typography></Paper></Grid>)}</Grid>;
+function Proof({ c }: { c: any }) {
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.proofTitle}</Typography><Typography sx={{ color: muted, maxWidth: 900, mt: 1.5, lineHeight: 1.8 }}>{c.proofDesc}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.cards.map((p: string[]) => <Grid item xs={12} sm={6} md={3} key={p[0]}><Paper sx={{ p: 2.2, height: '100%', bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 4, boxShadow: `0 14px 34px ${alpha('#000', 0.052)}` }}><CheckCircle2 size={18} color={gold} /><Typography fontWeight={950} sx={{ mt: 1, color: ink }}>{p[0]}</Typography><Typography variant="body2" sx={{ color: muted, mt: 1, lineHeight: 1.7 }}>{p[1]}</Typography></Paper></Grid>)}</Grid></Box>;
 }
 
-function Problems({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.proofTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.68)', maxWidth: 900, mt: 1.5, lineHeight: 1.8 }}>{c.proofDesc}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.problems.map((p) => <Grid item xs={12} sm={6} md={3} key={p}><Paper sx={{ p: 2.2, height: '100%', bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><CheckCircle2 size={18} color={binThemeTokens.gold} /><Typography fontWeight={900} sx={{ mt: 1 }}>{p}</Typography></Paper></Grid>)}</Grid></Box>;
+function Pricing({ c }: { c: any }) {
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.pricingTitle}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.pricing.map((item: string[]) => <Grid item xs={12} sm={6} md={3} key={item[0]}><Paper sx={{ p: 3, height: '100%', bgcolor: alpha(gold, .07), border: `1px solid ${alpha(gold, .20)}`, borderRadius: 4 }}><Typography sx={{ color: muted, fontWeight: 900 }}>{item[0]}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: '#6F5522', mt: 1 }}>{item[1]}</Typography></Paper></Grid>)}</Grid></Box>;
 }
 
-function Pricing({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.pricingTitle}</Typography><Grid container spacing={2} sx={{ mt: 3 }}>{c.pricing.map((item) => <Grid item xs={12} sm={6} md={3} key={item.label}><Paper sx={{ p: 3, height: '100%', bgcolor: alpha(binThemeTokens.gold, .06), border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}><Typography sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 900 }}>{item.label}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold, mt: 1 }}>{item.value}</Typography></Paper></Grid>)}</Grid></Box>;
+function Coverage({ c }: { c: any }) {
+  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950} color={ink}>{c.coverageTitle}</Typography><Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>{c.coverage.map((item: string) => <Chip key={item} label={item} sx={{ color: ink, bgcolor: '#FFFFFF', border: `1px solid ${line}`, fontWeight: 850 }} />)}</Stack></Box>;
 }
 
-function Coverage({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Typography variant="h3" fontWeight={950}>{c.coverageTitle}</Typography><Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>{c.coverage.map((item) => <Chip key={item} label={item} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)', fontWeight: 800 }} />)}</Stack></Box>;
-}
-
-function Inquiry({ c }: { c: MarketingCopy }) {
-  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 4 }}><Stack spacing={2}><Sparkles color={binThemeTokens.gold} /><Typography variant="h3" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.7)', lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><InternalActionButton href={ONBOARDING_URL} variant="contained">{c.primary}</InternalActionButton><InternalActionButton href={LOGIN_URL} gold icon={<LogIn size={17} />}>{c.login}</InternalActionButton><Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950, minHeight: 52 }}>{c.whatsapp}</Button></Stack></Stack></Paper></Box>;
+function Inquiry({ c }: { c: any }) {
+  return <Box sx={{ mt: 7 }}><Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: '#FFFFFF', border: `1px solid ${line}`, borderRadius: 5, boxShadow: `0 24px 70px ${alpha('#000', 0.08)}` }}><Stack spacing={2}><FileText color={gold} /><Typography variant="h3" fontWeight={950} color={ink}>{c.inquiryTitle}</Typography><Typography sx={{ color: muted, lineHeight: 1.8, maxWidth: 850 }}>{c.inquiryDesc}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton><ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton><ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton></Stack></Stack></Paper></Box>;
 }
