@@ -91,6 +91,78 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
 };
 
 const MAJLIS_ASSET_IDS = new Set(['government_majlis', 'private_majlis', 'majlis']);
+const VALID_ZONES = new Set(['A', 'B', 'C']);
+const VALID_CONTRACT_TYPES = new Set(['FM_ONLY', 'PM_ONLY', 'BOTH']);
+const VALID_SLA_TIERS = new Set(['standard', 'premium', 'elite']);
+const VALID_PAYMENT_PLANS = new Set(['annual', 'quarterly', 'monthly']);
+
+function finiteNumber(value: unknown, fallback = 0): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function positiveNumber(value: unknown, fallback = 0): number {
+  return Math.max(finiteNumber(value, fallback), 0);
+}
+
+function safeZone(value: unknown): 'A' | 'B' | 'C' {
+  const zone = String(value || '').trim().toUpperCase();
+  return VALID_ZONES.has(zone) ? zone as 'A' | 'B' | 'C' : 'B';
+}
+
+function safeContractType(value: unknown): 'FM_ONLY' | 'PM_ONLY' | 'BOTH' {
+  const contractType = String(value || '').trim().toUpperCase();
+  return VALID_CONTRACT_TYPES.has(contractType) ? contractType as 'FM_ONLY' | 'PM_ONLY' | 'BOTH' : 'FM_ONLY';
+}
+
+function safeSlaTier(value: unknown): 'standard' | 'premium' | 'elite' {
+  const tier = String(value || '').trim().toLowerCase();
+  return VALID_SLA_TIERS.has(tier) ? tier as 'standard' | 'premium' | 'elite' : 'standard';
+}
+
+function safePaymentPlan(value: unknown): 'annual' | 'quarterly' | 'monthly' {
+  const plan = String(value || '').trim().toLowerCase();
+  return VALID_PAYMENT_PLANS.has(plan) ? plan as 'annual' | 'quarterly' | 'monthly' : 'annual';
+}
+
+function safeEmirate(value: unknown): string {
+  const emirate = String(value || '').trim();
+  return emirate || 'dubai';
+}
+
+function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): QuoteInput {
+  const raw = input || {};
+  return {
+    assetClassId: normalizeAssetClassId(raw.assetClassId),
+    emirate: safeEmirate(raw.emirate),
+    zone: safeZone(raw.zone),
+    contractType: safeContractType(raw.contractType),
+    sqft: positiveNumber(raw.sqft, 0),
+    units: positiveNumber(raw.units, 0),
+    beds: positiveNumber(raw.beds, 0),
+    annualRent: positiveNumber(raw.annualRent, 0),
+    annualRevenue: positiveNumber(raw.annualRevenue, 0),
+    propertyAge: positiveNumber(raw.propertyAge, 0),
+    floors: positiveNumber(raw.floors, 0),
+    lifts: positiveNumber(raw.lifts, 0),
+    hasPool: raw.hasPool === true,
+    hasGym: raw.hasGym === true,
+    hasCentralHVAC: raw.hasCentralHVAC === true,
+    hasDistrictCooling: raw.hasDistrictCooling === true,
+    hasCivilDefenseSystem: raw.hasCivilDefenseSystem === true,
+    hasSiraCctv: raw.hasSiraCctv === true,
+    hasGenerator: raw.hasGenerator === true,
+    hasBmu: raw.hasBmu === true,
+    hasDataCenterCriticality: raw.hasDataCenterCriticality === true,
+    addOns: Array.isArray(raw.addOns) ? raw.addOns.filter(Boolean) : [],
+    slaTier: safeSlaTier(raw.slaTier),
+    paymentPlan: safePaymentPlan(raw.paymentPlan),
+    hasWaterTank: raw.hasWaterTank === true,
+    hvacCount: positiveNumber(raw.hvacCount, 0),
+    offices: positiveNumber(raw.offices, 0),
+    shops: positiveNumber(raw.shops, 0),
+  };
+}
 
 export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   const ids = new Set<string>();
@@ -180,9 +252,9 @@ function normalizeAssetClassId(assetClassId?: string): string {
 function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const pricingExplanation: string[] = [];
   const riskFlags: string[] = [];
-  const sqft = Math.max(input.sqft || 0, 1000);
-  const age = input.propertyAge || 0;
-  const worshipperProxy = Math.max(input.units || 1, 1);
+  const sqft = Math.max(positiveNumber(input.sqft, 0), 1000);
+  const age = positiveNumber(input.propertyAge, 0);
+  const worshipperProxy = Math.max(positiveNumber(input.units, 1), 1);
 
   const mepRate = input.contractType === 'FM_ONLY' ? 20 : input.contractType === 'BOTH' ? 38 : 30;
   const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.18 : age <= 15 ? 1.35 : 1.55;
@@ -190,7 +262,7 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
 
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 8 * capacityMultiplier;
-  const wuduCleaning = Math.max(input.units || 1, 1) * 5 * 35 * 365;
+  const wuduCleaning = Math.max(positiveNumber(input.units, 1), 1) * 5 * 35 * 365;
   const ramadanSurge = 15500 + (input.hasCentralHVAC ? 2500 : 0);
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
   const complexityPremium = (baseQuote + softServices) * 0.1;
@@ -237,11 +309,12 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   };
 }
 
-export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
-  const normalizedAssetClassId = normalizeAssetClassId(input.assetClassId);
+export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefined): QuoteOutput {
+  const safeInput = sanitizeQuoteInput(input);
+  const normalizedAssetClassId = safeInput.assetClassId;
 
   if (normalizedAssetClassId === 'mosque_fm') {
-    return calculateMosqueQuote(input);
+    return calculateMosqueQuote(safeInput);
   }
 
   let assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === normalizedAssetClassId);
@@ -251,30 +324,33 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
 
   if (!assetClass) {
     assetClass = UAE_PRICING_MATRIX_2026.assetClasses.find(a => a.id === 'apt-std') || UAE_PRICING_MATRIX_2026.assetClasses[0];
-    pricingExplanation.push(`Unknown asset class '${input.assetClassId}' was normalized to '${assetClass.id}'. Admin review required.`);
+    pricingExplanation.push(`Unknown asset class '${input?.assetClassId}' was normalized to '${assetClass.id}'. Admin review required.`);
     riskFlags.push('Asset Class Review Required');
-  } else if (normalizedAssetClassId !== input.assetClassId) {
-    pricingExplanation.push(`Asset class '${input.assetClassId}' normalized to '${normalizedAssetClassId}'.`);
+  } else if (normalizedAssetClassId !== input?.assetClassId) {
+    pricingExplanation.push(`Asset class '${input?.assetClassId || 'blank'}' normalized to '${normalizedAssetClassId}'.`);
   }
 
   let baseRate = 0;
-  if (input.contractType === 'FM_ONLY') baseRate = assetClass.maintenanceRange.min;
-  else if (input.contractType === 'PM_ONLY') {
-      const rent = input.annualRent || 100000;
+  if (safeInput.contractType === 'FM_ONLY') baseRate = assetClass.maintenanceRange.min;
+  else if (safeInput.contractType === 'PM_ONLY') {
+      const rent = safeInput.annualRent || 100000;
       baseRate = (rent * assetClass.managementRange.min) / 100;
   }
   else baseRate = assetClass.combinedRange.min;
 
   let baseQuote = baseRate;
-  if (assetClass.pricingUnit === 'sqft' && input.sqft) {
-      baseQuote = baseRate * input.sqft;
-      pricingExplanation.push(`Base rate of ${baseRate} AED/sqft applied to ${input.sqft} sqft.`);
-  } else if (assetClass.pricingUnit === 'unit' && input.units) {
-      baseQuote = baseRate * input.units;
-      pricingExplanation.push(`Base rate of ${baseRate} AED/unit applied to ${input.units} units.`);
-  } else if (assetClass.pricingUnit === 'bed' && input.beds) {
-      baseQuote = baseRate * input.beds;
-      pricingExplanation.push(`Base rate of ${baseRate} AED/bed applied to ${input.beds} beds.`);
+  if (assetClass.pricingUnit === 'sqft' && safeInput.sqft) {
+      baseQuote = baseRate * safeInput.sqft;
+      pricingExplanation.push(`Base rate of ${baseRate} AED/sqft applied to ${safeInput.sqft} sqft.`);
+  } else if (assetClass.pricingUnit === 'unit' && safeInput.units) {
+      baseQuote = baseRate * safeInput.units;
+      pricingExplanation.push(`Base rate of ${baseRate} AED/unit applied to ${safeInput.units} units.`);
+  } else if (assetClass.pricingUnit === 'bed' && safeInput.beds) {
+      baseQuote = baseRate * safeInput.beds;
+      pricingExplanation.push(`Base rate of ${baseRate} AED/bed applied to ${safeInput.beds} beds.`);
+  } else {
+      riskFlags.push('Missing Pricing Driver');
+      pricingExplanation.push('Missing pricing driver was safely handled; minimum annual contract threshold applied.');
   }
 
   if (baseQuote < assetClass.minimumAnnualContract) {
@@ -282,40 +358,41 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
       pricingExplanation.push(`Minimum annual contract threshold of ${assetClass.minimumAnnualContract} AED applied.`);
   }
 
-  const zoneMultiplier = (UAE_PRICING_MATRIX_2026.zones as any)[input.zone].multiplier;
+  const zoneEntry = (UAE_PRICING_MATRIX_2026.zones as any)[safeInput.zone] || (UAE_PRICING_MATRIX_2026.zones as any).B || { multiplier: 1 };
+  const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
   if (zoneMultiplier !== 1) {
-      pricingExplanation.push(`Strategic location premium applied for Zone ${input.zone} positioning.`);
+      pricingExplanation.push(`Strategic location premium applied for Zone ${safeInput.zone} positioning.`);
   }
 
-  const emirateEntry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find(e => e.label.toLowerCase().includes(input.emirate.toLowerCase()));
-  const emirateMultiplier = emirateEntry ? parseFloat(emirateEntry.value) : 1.0;
+  const emirateEntry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find(e => e.label.toLowerCase().includes(safeInput.emirate.toLowerCase()));
+  const emirateMultiplier = emirateEntry ? finiteNumber(emirateEntry.value, 1) : 1.0;
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) {
-      pricingExplanation.push(`Regional operational cost adjustment for ${input.emirate} (${emirateMultiplier}x) applied.`);
+      pricingExplanation.push(`Regional operational cost adjustment for ${safeInput.emirate} (${emirateMultiplier}x) applied.`);
   }
 
   let ageMultiplier = 1.0;
-  if (input.propertyAge > 20) ageMultiplier = 1.25;
-  else if (input.propertyAge > 10) ageMultiplier = 1.15;
-  else if (input.propertyAge > 5) ageMultiplier = 1.08;
+  if (safeInput.propertyAge > 20) ageMultiplier = 1.25;
+  else if (safeInput.propertyAge > 10) ageMultiplier = 1.15;
+  else if (safeInput.propertyAge > 5) ageMultiplier = 1.08;
 
   if (ageMultiplier > 1) {
-      pricingExplanation.push(`Structural maintenance adjustment applied for ${input.propertyAge}-year asset age.`);
+      pricingExplanation.push(`Structural maintenance adjustment applied for ${safeInput.propertyAge}-year asset age.`);
   }
 
   let complexityPremiumPercent = 0;
-  if ((input.floors || 0) >= 40) complexityPremiumPercent += 15;
-  else if ((input.floors || 0) >= 15) complexityPremiumPercent += 8;
+  if ((safeInput.floors || 0) >= 40) complexityPremiumPercent += 15;
+  else if ((safeInput.floors || 0) >= 15) complexityPremiumPercent += 8;
 
-  if ((input.lifts || 0) > 10) complexityPremiumPercent += 10;
-  else if ((input.lifts || 0) > 4) complexityPremiumPercent += 5;
+  if ((safeInput.lifts || 0) > 10) complexityPremiumPercent += 10;
+  else if ((safeInput.lifts || 0) > 4) complexityPremiumPercent += 5;
 
-  if (input.hasCentralHVAC) complexityPremiumPercent += 5;
-  if (input.hasDistrictCooling) complexityPremiumPercent -= 5;
-  if (input.hasGenerator) complexityPremiumPercent += 4;
-  if (input.hasBmu) complexityPremiumPercent += 6;
-  if (input.hasCivilDefenseSystem) complexityPremiumPercent += 5;
+  if (safeInput.hasCentralHVAC) complexityPremiumPercent += 5;
+  if (safeInput.hasDistrictCooling) complexityPremiumPercent -= 5;
+  if (safeInput.hasGenerator) complexityPremiumPercent += 4;
+  if (safeInput.hasBmu) complexityPremiumPercent += 6;
+  if (safeInput.hasCivilDefenseSystem) complexityPremiumPercent += 5;
 
   if (['hosp', 'data-ctr'].includes(normalizedAssetClassId)) {
       complexityPremiumPercent += 20;
@@ -324,29 +401,29 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
 
   const complexityPremium = emirateAdjustedQuote * (complexityPremiumPercent / 100);
   if (complexityPremiumPercent !== 0) {
-      pricingExplanation.push(`Institutional technical complexity and compliance premium included.`);
+      pricingExplanation.push('Institutional technical complexity and compliance premium included.');
   }
 
   let slaMultiplier = 1.0;
-  if (input.slaTier === 'premium') slaMultiplier = 1.15;
-  else if (input.slaTier === 'elite') slaMultiplier = 1.30;
+  if (safeInput.slaTier === 'premium') slaMultiplier = 1.15;
+  else if (safeInput.slaTier === 'elite') slaMultiplier = 1.30;
 
   if (slaMultiplier > 1) {
-      pricingExplanation.push(`${input.slaTier.toUpperCase()} Performance Service Level Agreement applied.`);
+      pricingExplanation.push(`${safeInput.slaTier.toUpperCase()} Performance Service Level Agreement applied.`);
   }
 
-  const mergedAddOns = Array.from(new Set([...(input.addOns || []), ...resolveMandatoryAddOns(input)]));
-  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, input);
+  const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, safeInput);
 
   const subtotal = (emirateAdjustedQuote * ageMultiplier * slaMultiplier) + complexityPremium + addOnTotal;
 
   let paymentSurcharge = 0;
-  if (input.paymentPlan === 'quarterly') paymentSurcharge = 0.03;
-  else if (input.paymentPlan === 'monthly') paymentSurcharge = 0.06;
+  if (safeInput.paymentPlan === 'quarterly') paymentSurcharge = 0.03;
+  else if (safeInput.paymentPlan === 'monthly') paymentSurcharge = 0.06;
 
   const annualTotal = subtotal * (1 + paymentSurcharge);
   if (paymentSurcharge > 0) {
-      pricingExplanation.push(`${input.paymentPlan.toUpperCase()} installment facility fee applied.`);
+      pricingExplanation.push(`${safeInput.paymentPlan.toUpperCase()} installment facility fee applied.`);
   }
 
   return {
@@ -361,7 +438,7 @@ export function calculateUaeQuote2026(input: QuoteInput): QuoteOutput {
     quarterlyPayment: annualTotal / 4,
     monthlyPayment: annualTotal / 12,
     mobilizationFee: annualTotal * 0.15,
-    recommendedTier: input.slaTier,
+    recommendedTier: safeInput.slaTier,
     pricingExplanation,
     riskFlags
   };
