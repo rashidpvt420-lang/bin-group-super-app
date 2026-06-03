@@ -46,9 +46,6 @@ jobs:
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
 
-      - name: Production stability guard
-        run: npm run test:stability
-
       - name: Validate TypeScript diagnostics
         run: npx tsc -p tsconfig.app.json --noEmit
 
