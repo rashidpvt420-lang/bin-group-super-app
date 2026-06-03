@@ -39,7 +39,7 @@
   ],
   "hosting": [
     {
-      "site": "bin-group-57c60",
+      "target": "app",
       "public": "dist",
       "ignore": [
         "firebase.json",
@@ -68,7 +68,7 @@
       ]
     },
     {
-      "site": "bin-group-admin-panel",
+      "target": "admin",
       "public": "apps/admin-panel/build",
       "ignore": [
         "firebase.json",
