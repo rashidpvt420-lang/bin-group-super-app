@@ -1,19 +1,33 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
     Box, Typography, Container, Grid, Card, CardContent, 
-    CardActionArea, alpha, Stack, Chip 
+    CardActionArea, alpha, Stack, Chip, Alert, CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
+import { auth, db, doc, setDoc, serverTimestamp } from '../lib/firebase';
+import { useRole } from '../context/RoleContext';
 import { 
     User, Users, Wrench, Briefcase, ShieldCheck, 
     ChevronRight, ArrowLeft 
 } from 'lucide-react';
 
+const PUBLIC_SELF_ASSIGN_ROLES = new Set(['owner', 'tenant', 'technician', 'broker']);
+
+const roleHome: Record<string, string> = {
+    owner: '/owner/dashboard',
+    tenant: '/tenant/dashboard',
+    technician: '/technician/dashboard',
+    broker: '/broker/dashboard',
+};
+
 const RoleGatewayPage: React.FC = () => {
     const navigate = useNavigate();
     const { t, tx, isRTL } = useLanguage();
+    const { user, role, isAdmin, refreshRole } = useRole();
+    const [savingRole, setSavingRole] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     const roles = [
         { 
@@ -48,8 +62,59 @@ const RoleGatewayPage: React.FC = () => {
         }
     ];
 
-    const handleRoleSelect = (roleId: string) => {
-        navigate(`/login?intendedRole=${roleId}`);
+    const handleRoleSelect = async (roleId: string) => {
+        setNotice(null);
+
+        if (!auth.currentUser && !user) {
+            navigate(`/login?intendedRole=${roleId}`);
+            return;
+        }
+
+        if (roleId === 'admin') {
+            if (isAdmin || role === 'admin') {
+                navigate('/admin/dashboard');
+                return;
+            }
+            setNotice('Admin access cannot be self-assigned. Use an approved admin account or contact BIN GROUP administration.');
+            return;
+        }
+
+        if (!PUBLIC_SELF_ASSIGN_ROLES.has(roleId)) {
+            setNotice('This role is not available for self-selection.');
+            return;
+        }
+
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            navigate(`/login?intendedRole=${roleId}`);
+            return;
+        }
+
+        setSavingRole(roleId);
+        try {
+            const status = roleId === 'owner' ? 'onboarding' : 'active';
+            await setDoc(doc(db, 'users', currentUser.uid), {
+                uid: currentUser.uid,
+                email: (currentUser.email || '').toLowerCase(),
+                displayName: currentUser.displayName || currentUser.email || 'BIN GROUP User',
+                photoURL: currentUser.photoURL || null,
+                role: roleId,
+                status,
+                isAdmin: false,
+                onboardingComplete: roleId !== 'owner',
+                roleSelectedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+            }, { merge: true });
+
+            await refreshRole();
+            navigate(roleHome[roleId] || '/owner/dashboard', { replace: true });
+        } catch (error) {
+            console.error('[ROLE_GATEWAY] Role selection failed:', error);
+            setNotice('Role selection could not be saved. Please refresh and try again, or contact BIN GROUP support.');
+        } finally {
+            setSavingRole(null);
+        }
     };
 
     return (
@@ -62,7 +127,6 @@ const RoleGatewayPage: React.FC = () => {
             position: 'relative',
             overflow: 'hidden'
         }}>
-            {/* Back Button */}
             <Box sx={{ p: 4, position: 'absolute', top: 0, left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', zIndex: 10 }}>
                 <Chip 
                     icon={<ArrowLeft size={16} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} 
@@ -93,14 +157,21 @@ const RoleGatewayPage: React.FC = () => {
                     </Typography>
                 </Box>
 
+                {notice && (
+                    <Alert severity="warning" sx={{ mb: 4, bgcolor: 'rgba(255,152,0,0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.2)' }}>
+                        {notice}
+                    </Alert>
+                )}
+
                 <Grid container spacing={3} justifyContent="center">
-                    {roles.map((role) => (
-                        <Grid item xs={12} sm={6} md={4} key={role.id}>
+                    {roles.map((roleOption) => (
+                        <Grid item xs={12} sm={6} md={4} key={roleOption.id}>
                             <Card sx={{ 
                                 bgcolor: 'rgba(22, 22, 24, 0.6)', 
                                 border: '1px solid rgba(255,255,255,0.05)', 
                                 borderRadius: 6,
                                 transition: 'all 0.3s ease',
+                                opacity: savingRole && savingRole !== roleOption.id ? 0.55 : 1,
                                 '&:hover': {
                                     borderColor: binThemeTokens.gold,
                                     transform: 'translateY(-10px)',
@@ -108,7 +179,7 @@ const RoleGatewayPage: React.FC = () => {
                                     bgcolor: 'rgba(198, 167, 94, 0.03)'
                                 }
                             }}>
-                                <CardActionArea onClick={() => handleRoleSelect(role.id)} sx={{ p: 4, height: '100%' }}>
+                                <CardActionArea disabled={Boolean(savingRole)} onClick={() => handleRoleSelect(roleOption.id)} sx={{ p: 4, height: '100%' }}>
                                     <Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'} textAlign={isRTL ? 'right' : 'left'}>
                                         <Box sx={{ 
                                             p: 2, 
@@ -116,14 +187,14 @@ const RoleGatewayPage: React.FC = () => {
                                             bgcolor: alpha(binThemeTokens.gold, 0.1), 
                                             color: binThemeTokens.gold 
                                         }}>
-                                            {role.icon}
+                                            {savingRole === roleOption.id ? <CircularProgress size={40} sx={{ color: binThemeTokens.gold }} /> : roleOption.icon}
                                         </Box>
                                         <Box>
                                             <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 1 }}>
-                                                {role.label}
+                                                {roleOption.label}
                                             </Typography>
                                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
-                                                {role.desc}
+                                                {roleOption.desc}
                                             </Typography>
                                         </Box>
                                         <Box sx={{ 
@@ -155,4 +226,3 @@ const RoleGatewayPage: React.FC = () => {
 };
 
 export default RoleGatewayPage;
-
