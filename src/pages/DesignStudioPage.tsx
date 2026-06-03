@@ -43,6 +43,7 @@ import {
   query,
   ref,
   serverTimestamp,
+  setDoc,
   storage,
   uploadBytes,
   where,
@@ -312,7 +313,7 @@ export default function DesignStudioPage() {
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'design_requests'), { ...requestPayload, id: requestRef.id });
+      await setDoc(requestRef, { ...requestPayload, id: requestRef.id });
 
       await addDoc(collection(db, 'design_quotes'), {
         requestId: requestRef.id,
