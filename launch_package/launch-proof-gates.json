@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
+  "requiredProviderGates": {
+    "firebaseAuth": { "required": true, "status": "pending_proof", "proof": "Role login tests for admin, owner, tenant, technician, broker." },
+    "firestoreRules": { "required": true, "status": "pending_proof", "proof": "Emulator test output and deployed rules version." },
+    "storageRules": { "required": true, "status": "pending_proof", "proof": "Owner, tenant, technician, admin, auditor upload/read-denial evidence." },
+    "firebaseFunctions": { "required": true, "status": "pending_proof", "proof": "Functions build/deploy logs, region, callable permission checks." },
+    "firebaseCloudMessaging": { "required": true, "status": "pending_proof", "proof": "Android foreground/background and iOS PWA token delivery screenshots/logs." },
+    "googleMaps": { "required": true, "status": "pending_provider_activation", "proof": "Billing enabled, restricted key, map render, geocode/GPS tests." },
+    "aiVisionOrTriage": { "required": true, "status": "pending_provider_activation", "proof": "Backend-only secret, confidence fallback, Arabic/English triage tests." },
+    "paymentGatewayOrManualBank": { "required": true, "status": "pending_provider_activation", "proof": "Chosen gateway/manual bank flow, webhook or admin verification tests, VAT wording." },
+    "whatsappBusiness": { "required": false, "status": "pending_provider_activation", "proof": "Business verification, templates, opt-in, send logs." },
+    "smsVoiceFallback": { "required": false, "status": "pending_provider_activation", "proof": "Carrier approval, cost control, emergency fallback test." },
+    "uaeDataResidencyPosition": { "required": true, "status": "pending_legal_architecture", "proof": "Documented data categories, subprocessors, hosting region, retention policy." }
+  },
+  "requiredDeviceGates": {
+    "androidPwaSmoke": { "required": true, "status": "pending_real_device_test" },
+    "iosPwaSmoke": { "required": true, "status": "pending_real_device_test" },
+    "technicianGpsTracking": { "required": true, "status": "pending_real_device_test" },
+    "pushNotifications": { "required": true, "status": "pending_real_device_test" },
+    "pdfMobileDownload": { "required": true, "status": "pending_real_device_test" },
+    "arabicRtlAllCoreScreens": { "required": true, "status": "pending_manual_qa" },
+    "everyButtonWritesFirestoreOrStorage": { "required": true, "status": "pending_manual_qa" },
+    "androidReleaseAab": { "required": true, "status": "pending_native_release_pack" }
+  },
+  "allowedWaiverFormat": {
+    "waivedBy": "CEO/admin owner name",
+    "waivedAt": "ISO-8601 timestamp",
+    "riskNote": "Explicit operational risk accepted for pilot only",
+    "expiresAt": "ISO-8601 timestamp"
+  }
+}

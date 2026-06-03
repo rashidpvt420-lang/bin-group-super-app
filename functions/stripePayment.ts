@@ -4,6 +4,7 @@ import * as admin from "firebase-admin";
 import Stripe from "stripe";
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -19,6 +20,10 @@ function cleanEmail(value: unknown) {
   const email = cleanText(value, "Email", 160).toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new HttpsError("invalid-argument", "Valid email is required.");
   return email;
+}
+
+function onboardingPaymentId(intakeId: string) {
+  return `${intakeId}_mobilization`;
 }
 
 export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripeSecretKey] }, async (request) => {
@@ -73,7 +78,7 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
       customer_email: ownerEmail,
       metadata: {
         ownerUid,
-        ...(intakeId && { intakeId }),
+        ...(intakeId && { intakeId, paymentId: onboardingPaymentId(intakeId) }),
         ...(onboardingSessionId && { onboardingSessionId }),
         ...(ticketId && { ticketId }),
         ...(designRequestId && { designRequestId }),
@@ -87,12 +92,18 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   }
 });
 
-export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] }, async (request, response) => {
+export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey, stripeWebhookSecret] }, async (request, response) => {
   const sig = request.headers["stripe-signature"];
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = stripeWebhookSecret.value() || process.env.STRIPE_WEBHOOK_SECRET;
   
   if (!key || key === "mock_key") {
     response.status(400).send("Webhook setup error: Stripe secret key is unconfigured.");
+    return;
+  }
+
+  if (!webhookSecret || webhookSecret === "mock_webhook_secret") {
+    response.status(400).send("Webhook setup error: Stripe webhook secret is unconfigured.");
     return;
   }
 
@@ -103,7 +114,7 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
     event = stripeInstance.webhooks.constructEvent(
       request.rawBody,
       sig || "",
-      process.env.STRIPE_WEBHOOK_SECRET || ""
+      webhookSecret
     );
   } catch (err: any) {
     console.error(`Webhook Error: ${err.message}`);
@@ -124,20 +135,26 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
     const batch = db.batch();
 
     if (ownerUid && intakeId) {
-      const paymentRef = db.collection("payment_transactions").doc(intakeId);
+      const paymentId = metadata.paymentId || onboardingPaymentId(intakeId);
+      const paymentRef = db.collection("payment_transactions").doc(paymentId);
       batch.set(paymentRef, {
+        paymentId,
         ownerUid,
         ownerId: ownerUid,
         intakeId,
         onboardingSessionId: onboardingSessionId || "",
         paymentMethod: "STRIPE",
+        gateway: "STRIPE",
         amount,
         currency: "AED",
         status: "PAID",
         verificationState: "AUTO_VERIFIED",
+        verified: true,
+        unlocksDashboard: true,
         stripeSessionId: session.id,
         stripePaymentIntentId: String(session.payment_intent || ""),
         submittedAt: timestamp,
+        verifiedAt: timestamp,
         createdAt: timestamp,
         updatedAt: timestamp
       }, { merge: true });
@@ -147,6 +164,8 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
         paymentSubmitted: true,
         paymentSubmittedAt: timestamp,
         paymentMethod: "STRIPE",
+        paymentState: "PAYMENT_VERIFIED",
+        paymentStatus: "PAID",
         status: "payment_approved",
         ownerUid,
         ownerId: ownerUid,
@@ -159,6 +178,16 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
         dashboardLocked: false,
         dashboardUnlocked: true,
         status: "active",
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const ownerRef = db.collection("owners").doc(ownerUid);
+      batch.set(ownerRef, {
+        paymentVerified: true,
+        dashboardLocked: false,
+        dashboardUnlocked: true,
+        paymentStatus: "PAID",
+        status: "ACTIVE",
         updatedAt: timestamp
       }, { merge: true });
 
@@ -177,6 +206,7 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
         ownerUid,
         ownerId: ownerUid,
         intakeId,
+        paymentId,
         sessionId: onboardingSessionId || "",
         paymentMethod: "STRIPE",
         stripeSessionId: session.id,
@@ -185,7 +215,7 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey] 
       });
 
       await batch.commit();
-      console.log(`Successfully processed Stripe payment for owner ${ownerUid}, intake ${intakeId}`);
+      console.log(`Successfully processed Stripe payment for owner ${ownerUid}, intake ${intakeId}, payment ${paymentId}`);
     } else if (ownerUid && designRequestId) {
       const designRef = db.collection("design_requests").doc(designRequestId);
       batch.set(designRef, {
