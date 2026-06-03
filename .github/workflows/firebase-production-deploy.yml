@@ -22,8 +22,8 @@ env:
   CI: true
 
 jobs:
-  validate-hosting-build:
-    name: Validate Firebase hosting build
+  validate-production-build:
+    name: Validate production build
     runs-on: ubuntu-latest
 
     steps:
@@ -46,18 +46,41 @@ jobs:
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
 
+      - name: Production stability guard
+        run: npm run test:stability
+
+      - name: TypeScript check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Lint root app
+        run: npm run lint
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
       - name: Build public hosting app
         run: npm run build
 
-      - name: Verify Firebase hosting entrypoint
+      - name: Build admin panel
+        run: npm run build --workspace=home-os-admin-panel
+
+      - name: Build Firebase Functions
+        run: npm run build --workspace=functions
+
+      - name: Run Firestore rules tests
+        run: npm run test:rules
+
+      - name: Verify Firebase hosting entrypoints
         run: |
           test -f dist/index.html
+          test -f apps/admin-panel/build/index.html
           ls -la dist/index.html
+          ls -la apps/admin-panel/build/index.html
 
-  deploy-hosting-production:
-    name: Deploy Firebase hosting production
+  deploy-firebase-production-stack:
+    name: Deploy Firebase production stack
     runs-on: ubuntu-latest
-    needs: validate-hosting-build
+    needs: validate-production-build
     if: github.event_name == 'workflow_dispatch'
 
     steps:
@@ -88,13 +111,17 @@ jobs:
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
 
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
       - name: Build public hosting app
         run: npm run build
 
-      - name: Verify Firebase hosting entrypoint
-        run: |
-          test -f dist/index.html
-          ls -la dist/index.html
+      - name: Build admin panel
+        run: npm run build --workspace=home-os-admin-panel
 
-      - name: Deploy Firebase public hosting target
-        run: npx firebase deploy --only hosting:app --project "${GCP_PROJECT_ID}" --non-interactive --force
+      - name: Build Firebase Functions
+        run: npm run build --workspace=functions
+
+      - name: Deploy Firebase production stack
+        run: npx firebase deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
