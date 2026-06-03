@@ -9,9 +9,11 @@ import {
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot, orderBy, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+
+const MANAGEMENT_FEE_RATE = 0.05;
 
 export default function OwnerFinancialsPage() {
     const { user } = useRole();
@@ -30,27 +32,26 @@ export default function OwnerFinancialsPage() {
 
         const email = user.email.toLowerCase();
         
-        // 1. Get Financial Summary from Property Passports
         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
         const unsubscribePassports = onSnapshot(passportQ, (snap) => {
-            let rev = 0, maint = 0;
+            let rev = 0, maint = 0, pending = 0;
             snap.docs.forEach(d => {
                 const data = d.data();
-                rev += (data.rentCollectedTotal || 0);
-                maint += (data.maintenanceCostTotal || 0);
+                rev += Number(data.rentCollectedTotal || data.grossRentCollected || data.grossRent || 0);
+                maint += Number(data.maintenanceCostTotal || data.outstandingMaintenanceInvoices || data.maintenanceDeductions || 0);
+                pending += Number(data.pendingRentVerification || data.pendingVerification || 0);
             });
             
-            const fees = rev * 0.08; // 8% BIN GROUP Management Fee
+            const fees = rev * MANAGEMENT_FEE_RATE;
             setSummary({
                 totalRevenue: rev,
-                netPayout: rev - fees - maint,
-                pendingVerification: rev * 0.1, // Mock pending logic
+                netPayout: Math.max(rev - fees - maint, 0),
+                pendingVerification: pending,
                 managementFees: fees,
                 maintenanceDeductions: maint
             });
         });
 
-        // 2. Get Transaction History
         const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), orderBy('createdAt', 'desc'), limit(10));
         const unsubscribeTrans = onSnapshot(transQ, (snap) => {
             setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -79,7 +80,6 @@ export default function OwnerFinancialsPage() {
 
     return (
         <Box sx={{ pb: 6 }}>
-            {/* Header */}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>INSTITUTIONAL REVENUE LEDGER</Typography>
@@ -91,7 +91,6 @@ export default function OwnerFinancialsPage() {
                 </Stack>
             </Box>
 
-            {/* KPI Grid */}
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {FINANCIAL_KPIs.map((kpi, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
@@ -108,7 +107,6 @@ export default function OwnerFinancialsPage() {
             </Grid>
 
             <Grid container spacing={4}>
-                {/* Transaction History */}
                 <Grid item xs={12} lg={8}>
                     <Paper sx={{ bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
                         <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -161,18 +159,17 @@ export default function OwnerFinancialsPage() {
                     </Paper>
                 </Grid>
 
-                {/* Sidebar Breakdown */}
                 <Grid item xs={12} lg={4}>
                     <Paper sx={{ p: 4, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, mb: 4 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>FEE ARCHITECTURE</Typography>
                         <Stack spacing={2.5}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>BIN GROUP Management</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>8%</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>5%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Operational VAT</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>5%</Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Maintenance Deductions</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {summary.maintenanceDeductions.toLocaleString()}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Bank Processing</Typography>
@@ -181,8 +178,8 @@ export default function OwnerFinancialsPage() {
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>NEXT PROJECTED PAYOUT</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {(summary.netPayout * 0.8).toLocaleString()}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'block' }}>Expected on 1st of next month</Typography>
+                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {summary.netPayout.toLocaleString()}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'block' }}>Gross rent minus 5% management fee and maintenance deductions</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -192,8 +189,7 @@ export default function OwnerFinancialsPage() {
                             <CheckCircle2 size={16} /> ESCROW COMPLIANCE
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
-                            All rental collections are processed via RERA-approved escrow channels. 
-                            BIN GROUP maintains 100% financial transparency with automated audit reports.
+                            Rental collections are calculated through the owner ledger waterfall: gross rent, 5% BIN GROUP management fee, approved maintenance deductions, then net owner payout.
                         </Typography>
                     </Paper>
                 </Grid>
