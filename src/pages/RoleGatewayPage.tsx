@@ -104,7 +104,6 @@ const RoleGatewayPage: React.FC = () => {
                 onboardingComplete: roleId !== 'owner',
                 roleSelectedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
             }, { merge: true });
 
             await refreshRole();
