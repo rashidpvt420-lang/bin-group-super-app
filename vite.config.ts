@@ -18,17 +18,6 @@ export default defineConfig({
     sourcemap: false,
     minify: false,
     reportCompressedSize: false,
-    chunkSizeWarningLimit: 2500,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom'],
-          mui: ['@mui/material', '@emotion/react', '@emotion/styled'],
-          firebase: ['firebase'],
-          charts: ['recharts'],
-          documents: ['jspdf', 'jspdf-autotable'],
-        }
-      }
-    }
+    chunkSizeWarningLimit: 2500
   }
 })
