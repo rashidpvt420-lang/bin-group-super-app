@@ -218,7 +218,7 @@ export default function TenantRequestPage() {
             if (createdTicketId) {
                 updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
                     evidenceStatus: 'TENANT_EVIDENCE_UPLOAD_FAILED',
-                    dispatchStatus: 'WAITING_FOR_EVIDENCE',
+                    evidenceUploadError: err instanceof Error ? err.message : String(err),
                     updatedAt: serverTimestamp(),
                 }).catch(console.warn);
             }
