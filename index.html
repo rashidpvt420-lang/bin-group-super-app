@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="BIN_BUILD_ID" content="2026-06-03-WHITE-PLATINUM-LOGO-WATERMARK-001" />
+    <meta name="BIN_BUILD_ID" content="2026-06-03-WHITE-PLATINUM-LOGO-WATERMARK-002" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>BIN GROUP | UAE Property Operations OS</title>
@@ -41,11 +41,22 @@
         background-image: url('/logo.png');
         background-repeat: no-repeat;
         background-position: center center;
-        background-size: min(48vw, 540px);
-        opacity: 0.04;
-        filter: grayscale(1) sepia(1) saturate(1.6);
+        background-size: min(68vw, 720px);
+        opacity: 0.085;
+        filter: grayscale(1) sepia(1) saturate(1.85);
       }
       #root { position: relative; z-index: 1; }
+      #root [aria-hidden="true"][src="/logo.png"] {
+        opacity: 0.09 !important;
+        width: min(84vw, 760px) !important;
+        max-width: 760px !important;
+        filter: grayscale(1) sepia(1) saturate(1.85) !important;
+      }
+      .white-platinum-onboarding::before {
+        opacity: 0.09 !important;
+        background-size: min(84vw, 760px) !important;
+        filter: grayscale(1) sepia(1) saturate(1.85) !important;
+      }
       #bin-boot-loader {
         position: fixed;
         inset: 0;
@@ -65,9 +76,9 @@
         background-image: url('/logo.png');
         background-repeat: no-repeat;
         background-position: center center;
-        background-size: min(52vw, 560px);
-        opacity: 0.045;
-        filter: grayscale(1) sepia(1) saturate(1.6);
+        background-size: min(72vw, 760px);
+        opacity: 0.09;
+        filter: grayscale(1) sepia(1) saturate(1.85);
         pointer-events: none;
       }
       #bin-boot-loader > * { position: relative; z-index: 1; }
