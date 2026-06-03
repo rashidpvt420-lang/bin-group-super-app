@@ -41,7 +41,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const location = useLocation();
 
     if (loading) {
-        return null; // Parent (AppContent) handles full-screen loading
+        return null;
     }
 
     if (!user) {
@@ -51,20 +51,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const currentStatus = (status || '').toLowerCase();
     const normalizedRole = (role || '').toLowerCase();
 
-    // 1. [STRICT ROLE ENFORCEMENT]
-    // If a user doesn't have the required role, bounce them to their canonical portal route.
+    if (!isAdmin && (currentStatus === 'role_required' || !normalizedRole)) {
+        return <Navigate to="/gateway" state={{ reason: 'role_required', from: location }} replace />;
+    }
+
     if (allowedRoles && !allowedRoles.includes(normalizedRole) && !isAdmin) {
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
-    // 1B. [GRANULAR PERMISSION ENFORCEMENT]
     if (requiredPermission && !hasPermission(requiredPermission)) {
         return (
-            <Box sx={{ 
-                height: '100vh', 
-                display: 'flex', 
+            <Box sx={{
+                height: '100vh',
+                display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', 
+                alignItems: 'center',
                 justifyContent: 'center',
                 bgcolor: '#000',
                 color: '#fff',
@@ -78,8 +79,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, maxWidth: 400 }}>
                     Your account does not have the required institutional permission: <strong>{requiredPermission}</strong>. Contact your administrator to request access.
                 </Typography>
-                <Button 
-                    variant="outlined" 
+                <Button
+                    variant="outlined"
                     onClick={() => window.history.back()}
                     sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800 }}
                 >
@@ -89,14 +90,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         );
     }
 
-    // 2. [OWNER LOCK PROTOCOL]
-    // Only lock out owners who are pending or haven't paid. 
-    // Tenants/Technicians bypass this as their status is managed differently.
     const ownerLockedStatuses = ['pending', 'pending_approval', 'payment_pending', 'awaiting_verification', 'awaiting_approval', 'rejected', 'onboarding'];
-    
-    const isProtectedPortal = location.pathname.startsWith('/admin') || 
-                              location.pathname.startsWith('/tenant') || 
-                              location.pathname.startsWith('/technician') || 
+
+    const isProtectedPortal = location.pathname.startsWith('/admin') ||
+                              location.pathname.startsWith('/tenant') ||
+                              location.pathname.startsWith('/technician') ||
                               location.pathname.startsWith('/broker');
 
     if (normalizedRole === 'owner' && ownerLockedStatuses.includes(currentStatus) && !isAdmin && !isProtectedPortal) {
@@ -104,11 +102,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
             const isPendingApproval = currentStatus === 'pending_approval' || currentStatus === 'awaiting_verification' || currentStatus === 'payment_pending';
 
             return (
-                <Box sx={{ 
-                    height: '100vh', 
-                    display: 'flex', 
+                <Box sx={{
+                    height: '100vh',
+                    display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center', 
+                    alignItems: 'center',
                     justifyContent: 'center',
                     bgcolor: '#000',
                     color: '#fff',
@@ -116,9 +114,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     p: 4,
                     backgroundImage: 'radial-gradient(circle at center, rgba(198, 167, 94, 0.05) 0%, transparent 70%)'
                 }}>
-                    <Box sx={{ 
-                        p: 3, borderRadius: '50%', bgcolor: 'rgba(198, 167, 94, 0.1)', 
-                        border: `1px solid ${binThemeTokens.gold}44`, mb: 4,
+                    <Box sx={{
+                        p: 3,
+                        borderRadius: '50%',
+                        bgcolor: 'rgba(198, 167, 94, 0.1)',
+                        border: `1px solid ${binThemeTokens.gold}44`,
+                        mb: 4,
                         boxShadow: `0 0 50px ${binThemeTokens.gold}22`
                     }}>
                         <Lock size={64} color={binThemeTokens.gold} />
@@ -129,10 +130,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, maxWidth: 600, fontWeight: 700 }}>
                         {isPendingApproval ? t('lock.desc_offline') : t('lock.desc')}
                     </Typography>
-                    
+
                     <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
-                        <Button 
-                            variant="outlined" 
+                        <Button
+                            variant="outlined"
                             startIcon={<LogOut size={18} />}
                             onClick={() => auth.signOut()}
                             sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800, px: 4 }}
@@ -140,8 +141,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                             {t('lock.signout')}
                         </Button>
                         {!isPendingApproval && (
-                            <Button 
-                                variant="contained" 
+                            <Button
+                                variant="contained"
                                 href="/onboarding"
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, '&:hover': { bgcolor: '#b59410' } }}
                             >
