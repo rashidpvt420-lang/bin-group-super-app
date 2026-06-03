@@ -33,6 +33,12 @@ const ownerActivationIsAdminControlled =
     firestoreRules.includes("allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate()")
   );
 
+const stripeReturnsToOwnerActivation =
+  stripePayment.includes('/owner/activation?payment_success=true') &&
+  stripePayment.includes('/owner/activation?payment_failed=true') &&
+  stripePayment.includes('session_id={CHECKOUT_SESSION_ID}') &&
+  app.includes('<Route path="/owner/*"');
+
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
 assert(firebaseJson.includes('"rules": "storage.rules"'), 'Firebase must reference storage.rules.');
@@ -56,6 +62,8 @@ assert(paymentStep.includes('waitForCurrentUser'), 'Payment submission must wait
 
 assert(!stripePayment.includes('mock_session_id'), 'Stripe checkout must not return mock sessions.');
 assert(stripePayment.includes('failed-precondition'), 'Stripe checkout must fail closed when unconfigured.');
+assert(stripeReturnsToOwnerActivation, 'Stripe return URLs must route to the owner activation flow.');
+assert(!existsSync('src/pages/public/PaymentResultPage.tsx'), 'Legacy PaymentResultPage must be removed after Stripe owner activation routing.');
 
 assert(!ownerDashboard.includes("'READY_FOR_ACTIVATION'"), 'Owner dashboard active states must not include READY_FOR_ACTIVATION.');
 assert(!ownerDashboard.includes("'OWNER_SIGNED'"), 'Owner dashboard active states must not include OWNER_SIGNED.');
@@ -66,9 +74,6 @@ assert(firestoreRules.includes('paymentDraftCreate'), 'Firestore rules must guar
 assert(firestoreRules.includes('safeTenantEvidenceUpdate'), 'Firestore rules must allow narrow tenant-owned evidence metadata updates.');
 assert(ownerActivationIsAdminControlled, 'Firestore rules must keep activation admin controlled.');
 assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onboarding proof uploads.');
-
-// Payment result page route wiring is expected before full public launch.
-assert(app.includes('PaymentResultPage') || !existsSync('src/pages/public/PaymentResultPage.tsx'), 'PaymentResultPage exists but is not wired in App routes.');
 
 if (failures.length) {
   console.error('\nProduction stability guard failed:\n');
