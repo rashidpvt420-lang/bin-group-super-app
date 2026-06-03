@@ -10,9 +10,9 @@
 
     <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BIN GROUP" />
-    <meta name="theme-color" content="#0B0B0C" />
+    <meta name="theme-color" content="#FFFFFF" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.json" />
 
@@ -25,8 +25,34 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <style>
-      html, body, #root { min-height: 100%; }
+      :root {
+        color-scheme: light;
+        --bin-bg-primary: #FFFFFF;
+        --bin-bg-soft: #F8F9FB;
+        --bin-card-bg: #FFFFFF;
+        --bin-gold: #C9A646;
+        --bin-gold-hover: #B8932F;
+        --bin-platinum: #E5E4E2;
+        --bin-platinum-dark: #BFC1C2;
+        --bin-text-main: #111827;
+        --bin-text-muted: #6B7280;
+        --bin-border-soft: #E5E7EB;
+        --bin-shadow-card: 0 12px 32px rgba(17, 24, 39, 0.08);
+        --bin-shadow-hover: 0 18px 45px rgba(17, 24, 39, 0.12);
+      }
+      html, body, #root { min-height: 100%; background: #FFFFFF; }
       * { box-sizing: border-box; }
+      body {
+        background: #FFFFFF;
+        color: #111827;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
       body::before {
         content: "";
         position: fixed;
@@ -37,13 +63,27 @@
         background-repeat: no-repeat;
         background-position: center center;
         background-size: min(42vw, 520px);
-        opacity: 0.045;
-        filter: grayscale(1) sepia(1) saturate(1.6);
+        opacity: 0.04;
+        filter: grayscale(1) sepia(0.35) saturate(1.1) brightness(1.08);
+      }
+      body::after {
+        content: "BIN GROUPS";
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, calc(-50% + 210px));
+        pointer-events: none;
+        z-index: 0;
+        color: rgba(17, 24, 39, 0.035);
+        font-size: clamp(1.8rem, 5vw, 5rem);
+        font-weight: 900;
+        letter-spacing: 0.18em;
+        white-space: nowrap;
       }
       #root { position: relative; z-index: 1; }
     </style>
   </head>
-  <body style="background: #000; margin: 0; padding: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; font-family: system-ui, -apple-system, sans-serif;">
+  <body>
     <script>
       (function() {
         var lang = localStorage.getItem('bin_language') || 'en';
@@ -52,12 +92,12 @@
       })();
     </script>
     <!-- [BIN-BOOT] Static Loading Layer -->
-    <div id="bin-boot-loader" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999;">
-      <div style="width: 120px; height: 120px; border: 2px solid rgba(198,167,94,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 40px;">
-        <div style="width: 80px; height: 80px; border: 4px solid #C6A75E; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <div id="bin-boot-loader" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; color: #111827;">
+      <div style="width: 120px; height: 120px; border: 2px solid rgba(201,166,70,0.14); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; box-shadow: 0 12px 32px rgba(17,24,39,0.08); background: #FFFFFF;">
+        <div style="width: 80px; height: 80px; border: 4px solid #C9A646; border-top-color: #E5E4E2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
       </div>
-      <h2 style="color: #C6A75E; letter-spacing: 6px; font-weight: 900; margin: 0; font-size: 14px; text-transform: uppercase;">BIN GROUP Super App</h2>
-      <p style="color: rgba(198,167,94,0.4); margin-top: 15px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Establishing Production Connection...</p>
+      <h2 style="color: #111827; letter-spacing: 6px; font-weight: 900; margin: 0; font-size: 14px; text-transform: uppercase;">BIN GROUP Super App</h2>
+      <p style="color: #6B7280; margin-top: 15px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">Establishing Production Connection...</p>
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
       </style>
