@@ -34,6 +34,10 @@ service cloud.firestore {
       ];
     }
 
+    function publicSelfAssignRoles() {
+      return ['owner', 'tenant', 'technician', 'broker'];
+    }
+
     function hasRole(roles) {
       return signedIn() && (
         request.auth.token.role in roles ||
@@ -62,6 +66,53 @@ service cloud.firestore {
 
     function hasPermission(permission) {
       return hasUserDoc() && userDoc().permissions[permission] == true;
+    }
+
+    function safeUserBootstrapCreate(data, userId) {
+      return signedIn() && request.auth.uid == userId &&
+        data.keys().hasOnly([
+          'uid','email','displayName','photoURL','role','status','isAdmin','onboardingComplete',
+          'roleSelectedAt','roleMissingDetectedAt','createdAt','updatedAt','lastLoginAt'
+        ]) &&
+        (!('uid' in data) || data.uid == request.auth.uid) &&
+        (!('email' in data) || data.email == request.auth.token.email) &&
+        (!('isAdmin' in data) || data.isAdmin == false) &&
+        (!('permissions' in data)) &&
+        (
+          (
+            data.status == 'role_required' &&
+            !('role' in data)
+          ) ||
+          (
+            data.role in publicSelfAssignRoles() &&
+            data.status in ['active','onboarding','pending_approval','role_required']
+          )
+        );
+    }
+
+    function safeUserSelfUpdate(userId) {
+      return signedIn() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid','email','displayName','photoURL','role','status','isAdmin','onboardingComplete',
+          'roleSelectedAt','roleMissingDetectedAt','updatedAt','lastLoginAt',
+          'fcmTokens','pushEnabled','pushUpdatedAt','pushPlatform','pushRole','language','legalAcceptedAt'
+        ]) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
+        (!('email' in request.resource.data) || request.resource.data.email == resource.data.email || request.resource.data.email == request.auth.token.email) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || request.resource.data.isAdmin == resource.data.isAdmin) &&
+        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
+        (
+          (
+            resource.data.status == 'role_required' &&
+            request.resource.data.role in publicSelfAssignRoles() &&
+            request.resource.data.status in ['active','onboarding','pending_approval']
+          ) ||
+          (
+            resource.data.role in publicSelfAssignRoles() &&
+            request.resource.data.role == resource.data.role &&
+            (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
+          )
+        );
     }
 
     function safeOwnerProfileCreate(data, ownerId) {
@@ -203,8 +254,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == userId) || emailOwns(resource.data);
-      allow create: if signedIn() && request.auth.uid == userId && request.resource.data.role in ['owner', 'tenant', 'technician', 'broker'];
-      allow update: if isAdmin() || (signedIn() && request.auth.uid == userId && request.resource.data.role == resource.data.role && (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin));
+      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
+      allow update: if isAdmin() || safeUserSelfUpdate(userId);
       allow delete: if isAdmin();
       match /fcmTokens/{tokenId} {
         allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
