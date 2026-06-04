@@ -30,10 +30,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
+
+      - name: Repository hygiene guard
+        run: node scripts/repo-hygiene-guard.mjs
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Production stability guard
         run: npm run test:stability
@@ -44,11 +46,8 @@ jobs:
       - name: Lint root app
         run: npm run lint
 
-      - name: Build root app
+      - name: Build unified Vite app
         run: npm run build
-
-      - name: Build admin panel
-        run: npm run build --workspace=home-os-admin-panel
 
       - name: Build functions
         run: npm run build --workspace=functions

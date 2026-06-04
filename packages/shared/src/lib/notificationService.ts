@@ -14,14 +14,9 @@ export interface RoleNotification {
     language?: 'en' | 'ar';
 }
 
-const readViteEnv = (key: string): string => {
-    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-    return metaEnv?.[key] || '';
-};
-
 /**
  * [SOVEREIGN NOTIFICATION ENGINE]
- * Dispatches a notification record to Firestore. 
+ * Dispatches a notification record to Firestore.
  * A background Cloud Function will route this to the user's active FCM tokens.
  * Multi-device and language-aware.
  */
@@ -78,69 +73,13 @@ export const NotificationEvents = {
         DESIGN_APPROVED: (userId: string, zone: string) =>
             sendRoleNotification({ userId, role: 'tenant', title: 'DESIGN STUDIO: APPROVED', body: `Your owner has granted NOC for the ${zone} redesign. You may now proceed with payment.`, type: 'DESIGN_APPROVED', link: '/design-studio' }),
     },
-    TECH: {
-        NEW_JOB: (userId: string, propertyName: string, ticketId: string) =>
-            sendRoleNotification({ userId, role: 'technician', title: 'NEW MISSION ASSIGNED', body: `Urgent request received for ${propertyName}. View node for coordinates.`, type: 'NEW_JOB', link: `/tech/ticket/${ticketId}` }),
-        PRIORITY_ESCALATION: (userId: string, ticketId: string) =>
-            sendRoleNotification({ userId, role: 'technician', title: 'PRIORITY ESCALATED', body: `Mission #${ticketId} has been escalated to EMERGENCY status.`, type: 'ESCALATION', link: `/tech/ticket/${ticketId}` }),
-        OVERDUE_REMINDER: (userId: string, ticketId: string) =>
-            sendRoleNotification({ userId, role: 'technician', title: 'SLA WARNING', body: `Mission #${ticketId} is approaching SLA breach threshold.`, type: 'SLA_WARNING', link: `/tech/ticket/${ticketId}` }),
-        OWNER_APPROVED: (userId: string, ticketId: string) =>
-            sendRoleNotification({ userId, role: 'technician', title: 'QUOTE APPROVED', body: `Owner has approved the estimate for Mission #${ticketId}. Proceed with repair.`, type: 'OWNER_APPROVED', link: `/tech/ticket/${ticketId}` }),
-        JOB_CANCELLED: (userId: string, ticketId: string) =>
-            sendRoleNotification({ userId, role: 'technician', title: 'MISSION ABORTED', body: `Mission #${ticketId} has been reassigned or cancelled.`, type: 'JOB_CANCELLED', link: '/tech' }),
-    },
-    BROKER: {
-        LEAD_ACCEPTED: (userId: string, leadName: string) =>
-            sendRoleNotification({ userId, role: 'broker', title: 'LEAD ACCEPTED', body: `Your referral for ${leadName} has been accepted into the pipeline.`, type: 'LEAD_ACCEPTED', link: '/broker' }),
-        ONBOARDING_PROGRESSED: (userId: string, leadName: string) =>
-            sendRoleNotification({ userId, role: 'broker', title: 'PIPELINE UPDATE', body: `Onboarding progressed for ${leadName}. Contract pending.`, type: 'LEAD_PROGRESSED', link: '/broker' }),
-        PAYMENT_RECEIVED: (userId: string, leadName: string) =>
-            sendRoleNotification({ userId, role: 'broker', title: 'MOBILIZATION VERIFIED', body: `Initial payment secured for ${leadName}. Commission pending clearance.`, type: 'PAYMENT_RECEIVED', link: '/broker' }),
-        COMMISSION_APPROVED: (userId: string, amount: number) =>
-            sendRoleNotification({ userId, role: 'broker', title: 'COMMISSION APPROVED', body: `AED ${amount} commission approved and scheduled for payout.`, type: 'COMMISSION_APPROVED', link: '/broker' }),
-        COMMISSION_PAID: (userId: string, amount: number) =>
-            sendRoleNotification({ userId, role: 'broker', title: 'FUNDS DISPATCHED', body: `AED ${amount} has been wired to your registered account.`, type: 'COMMISSION_PAID', link: '/broker' }),
-    },
-    ADMIN: {
-        NEW_ONBOARDING: (propertyName: string) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'NEW ASSET INTAKE', body: `A new asset (${propertyName}) requires verification.`, type: 'NEW_ONBOARDING', link: '/dashboard' }),
-        PAYMENT_PENDING: (propertyName: string) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'PAYMENT VERIFICATION', body: `Mobilization payment for ${propertyName} requires manual clearance.`, type: 'PAYMENT_PENDING', link: '/dashboard' }),
-        ORPHAN_DETECTED: (count: number) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'INTEGRITY FAULT', body: `${count} relational orphans detected. War Room review required.`, type: 'ORPHAN_DETECTED', link: '/admin/orphans' }),
-        OVERDUE_APPROVAL: (ticketId: string) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'APPROVAL BOTTLENECK', body: `Mission #${ticketId} estimate is overdue for owner approval.`, type: 'OVERDUE_APPROVAL', link: '/dashboard' }),
-        EMERGENCY_TICKET: (propertyName: string, category: string) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'CRITICAL SOS DETECTED', body: `Emergency ${category} issue at ${propertyName}. Ensure immediate dispatch.`, type: 'EMERGENCY_SOS', link: '/tickets' }),
-        SLA_BREACHED: (ticketId: string) =>
-            sendRoleNotification({ userId: 'ADMIN_GROUP', role: 'admin', title: 'SLA BREACH', body: `Mission #${ticketId} has breached response/resolution thresholds.`, type: 'SLA_BREACH', link: '/reports' }),
-    }
 };
 
-export async function requestAndRegisterNotificationPermission() {
-    if (!messaging) return;
-    
-    try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            const vapidKey = readViteEnv('VITE_FIREBASE_VAPID_KEY');
-            
-            const token = await getToken(messaging, {
-                vapidKey
-            });
-            
-            if (token) {
-                const registerFCMToken = httpsCallable(functions, 'registerFCMToken');
-                await registerFCMToken({ 
-                    token, 
-                    platform: 'web', 
-                    userAgent: navigator.userAgent 
-                });
-                console.log("⚡ [NOTIFY] Sovereign FCM Token Anchored.");
-            }
-        }
-    } catch (err) {
-        console.error("🚨 [NOTIFY] Permission/Registration Fault:", err);
-    }
+export async function requestNotificationPermission(vapidKey?: string) {
+    if (!messaging || typeof Notification === 'undefined') return null;
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return null;
+    return getToken(messaging, vapidKey ? { vapidKey } : undefined);
 }
+
+export const notifyRole = httpsCallable(functions, 'notifyRole');

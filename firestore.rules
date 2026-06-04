@@ -55,10 +55,19 @@ service cloud.firestore {
     }
 
     function emailOwns(data) {
-      return emailMatches(data.email) || emailMatches(data.ownerEmail) || emailMatches(data.tenantEmail) || emailMatches(data.recipientEmail) || emailMatches(data.contactEmail);
+      return emailMatches(data.email) ||
+        emailMatches(data.ownerEmail) ||
+        emailMatches(data.tenantEmail) ||
+        emailMatches(data.technicianEmail) ||
+        emailMatches(data.staffEmail) ||
+        emailMatches(data.brokerEmail) ||
+        emailMatches(data.recipientEmail) ||
+        emailMatches(data.contactEmail);
     }
 
     function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
+    function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || emailOwns(data)); }
+    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
 
     function ownerDraftCreate(data) {
@@ -156,6 +165,11 @@ service cloud.firestore {
           'pushPermission',
           'deviceInfo',
           'onboardingLastSeenAt',
+ fix/security-rbac-rules-hardening
+
+          'dutyStatus',
+          'onDuty',
+ main
           'updatedAt'
         ]) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
@@ -234,7 +248,7 @@ service cloud.firestore {
     }
 
     match /technicians/{techId} {
-      allow read: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId);
+      allow read: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId) || emailOwns(resource.data);
       allow create: if isAdmin() || hasPermission('canManageTechnicians');
       allow update: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId);
       allow delete: if isAdmin() || hasPermission('canManageTechnicians');
@@ -248,14 +262,14 @@ service cloud.firestore {
     }
 
     match /units/{unitId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data);
+      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin() || hasPermission('canManageProperties');
       allow update: if isAdmin() || hasPermission('canManageProperties');
       allow delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
     match /contracts/{contractId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canManageContracts');
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageContracts');
       allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate();
       allow delete: if isAdmin();
@@ -283,9 +297,9 @@ service cloud.firestore {
     }
 
     match /maintenanceTickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
+      allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data);
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data) || (openMissionPoolRead(resource.data) && request.resource.data.assignedTechnicianId == request.auth.uid);
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -296,7 +310,7 @@ service cloud.firestore {
     }
 
     match /documents/{documentId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canManageProperties');
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageProperties');
       allow create: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageProperties');
       allow delete: if isAdmin() || hasPermission('canManageProperties');
@@ -316,6 +330,62 @@ service cloud.firestore {
       allow delete: if isAdmin() || hasPermission('canManageCompanyProfile');
     }
 
+    match /systemLogs/{logId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.type == 'TENANT_NOTICE');
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /staff_roster/{staffId} {
+      allow read: if isAdmin() || staffCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /hr_staff/{staffId} {
+      allow read: if isAdmin() || staffCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isAdmin() || staffCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /technician_certifications/{certificationId} {
+      allow read: if isAdmin() || staffCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /certifications/{certificationId} {
+      allow read: if isAdmin() || staffCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /brokerLeads/{leadId} {
+      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
+      allow create: if isAdmin() || brokerOwns(request.resource.data);
+      allow update: if isAdmin() || brokerOwns(resource.data);
+      allow delete: if isAdmin() || brokerOwns(resource.data);
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
+      allow create: if isAdmin() || brokerOwns(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /brokerReferrals/{referralId} {
       allow read: if isAdmin() || brokerOwns(resource.data);
       allow create: if brokerOwns(request.resource.data);
@@ -324,28 +394,28 @@ service cloud.firestore {
     }
 
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /commissions/{commissionId} {
-      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /leases/{leaseId} {
-      allow read: if participantCanRead(resource.data) || isAdmin();
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /invoices/{invoiceId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || isAdmin();
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
