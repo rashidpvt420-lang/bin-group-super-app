@@ -43,13 +43,8 @@ jobs:
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
-      - name: Build app
+      - name: Build unified Vite app
         run: npm run build
-        env:
-          CI: false
-
-      - name: Build admin panel
-        run: npm run build --workspace=home-os-admin-panel
         env:
           CI: false
 
