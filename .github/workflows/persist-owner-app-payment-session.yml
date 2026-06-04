@@ -22,25 +22,28 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Harden owner app payment session handling
+      - name: Harden owner app session handling
         run: node scripts/harden-owner-app-payment-session.mjs
 
       - name: Validate TypeScript
         run: npx tsc -p tsconfig.app.json --noEmit
 
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
       - name: Build main public app
         run: npm run build
 
-      - name: Commit hardened owner app payment step
+      - name: Commit hardened owner app step
         run: |
           if ! git diff --quiet -- apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx
-            git commit -m "fix(owner-app): persist payment session hardening"
+            git commit -m "fix(owner-app): persist session hardening"
             git push
           else
-            echo "Owner app payment step already hardened."
+            echo "Owner app step already hardened."
           fi
