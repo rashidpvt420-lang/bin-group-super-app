@@ -131,32 +131,36 @@ service cloud.firestore {
 
     function safeUserSelfUpdate(userId) {
       return signedIn() && request.auth.uid == userId &&
- fix/security-rbac-rules-hardening
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName',
           'photoURL',
+          'phone',
           'phoneNumber',
+          'mobile',
+          'preferredLanguage',
+          'language',
+          'lang',
           'legalAcceptedAt',
-          'legalVersion',
-          'updatedAt',
-          'lastLoginAt',
+          'legalAcceptedVersion',
+          'termsAcceptedAt',
+          'termsVersion',
+          'privacyAcceptedAt',
+          'notificationPreferences',
+          'fcmTokens',
           'platform',
           'isStandalone',
           'userAgent',
-          'fcmTokens',
-          'notificationPreferences',
-          'language',
-          'preferences'
+          'lastLoginAt',
+          'lastSeenAt',
+          'pushEnabled',
+          'pushPermission',
+          'deviceInfo',
+          'onboardingLastSeenAt',
+          'updatedAt'
         ]) &&
-        (!('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid) &&
-        (!('email' in request.resource.data) || request.resource.data.email == resource.data.email) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
         (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.userRole) &&
         (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.primaryRole) &&
-      
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'phoneNumber', 'mobile', 'preferredLanguage', 'language', 'lang', 'legalAcceptedAt', 'legalAcceptedVersion', 'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'notificationPreferences', 'fcmTokens', 'platform', 'isStandalone', 'userAgent', 'lastLoginAt', 'lastSeenAt', 'pushEnabled', 'pushPermission', 'deviceInfo', 'onboardingLastSeenAt', 'updatedAt']) &&
-        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
- main
         (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
         (!('admin' in request.resource.data) || request.resource.data.admin == resource.data.admin) &&
         (!('superAdmin' in request.resource.data) || request.resource.data.superAdmin == resource.data.superAdmin) &&
@@ -209,13 +213,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
       match /{document=**} {
         allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
- fix/security-rbac-rules-hardening
-        allow write: if isAdmin();
-
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
- main
       }
     }
 
@@ -352,16 +352,10 @@ service cloud.firestore {
     }
 
     match /onboarding-proof/{proofId} {
- fix/security-rbac-rules-hardening
       allow read: if isAdmin() || ownsOnboardingProof(resource.data);
       allow create: if safeOnboardingProofCreate(request.resource.data);
-      allow update, delete: if isAdmin();
-
-      allow read: if isAdmin() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || (signedIn() && (owns(request.resource.data) || tenantOwns(request.resource.data) || emailOwns(request.resource.data)));
-      allow update: if isAdmin() || (signedIn() && (ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data)));
+      allow update: if isAdmin();
       allow delete: if isAdmin();
- main
     }
 
     match /{document=**} {
