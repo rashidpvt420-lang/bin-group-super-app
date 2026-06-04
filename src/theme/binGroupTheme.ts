@@ -1,14 +1,17 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
 /**
- * BIN GROUP Sovereign Identity System (V1.20)
+ * BIN GROUP Sovereign Identity System
  * Theme: WHITE + PLATINUM + GOLD
  * Usage: Institutional property operations, audited finance, transparent ownership.
  */
-
 export const binThemeTokens = {
   black: '#111827',
+theme-token-compat
   graphite: '#F3F4F6',
+
+  graphite: '#1F2937',
+main
   canvas: '#FFFFFF',
   softCanvas: '#F8F9FB',
   card: '#FFFFFF',
@@ -77,19 +80,9 @@ export const binGroupTheme = createTheme({
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        html: {
-          backgroundColor: binThemeTokens.canvas,
-          colorScheme: 'light',
-        },
-        body: {
-          backgroundColor: binThemeTokens.canvas,
-          color: binThemeTokens.textPrimary,
-        },
-        '#root': {
-          backgroundColor: binThemeTokens.canvas,
-          color: binThemeTokens.textPrimary,
-          minHeight: '100%',
-        },
+        html: { backgroundColor: binThemeTokens.canvas, colorScheme: 'light' },
+        body: { backgroundColor: binThemeTokens.canvas, color: binThemeTokens.textPrimary },
+        '#root': { backgroundColor: binThemeTokens.canvas, color: binThemeTokens.textPrimary, minHeight: '100%' },
       },
     },
     MuiButton: {
@@ -114,10 +107,7 @@ export const binGroupTheme = createTheme({
         outlinedPrimary: {
           borderColor: alpha(binThemeTokens.gold, 0.55),
           color: binThemeTokens.goldHover,
-          '&:hover': {
-            borderColor: binThemeTokens.gold,
-            background: alpha(binThemeTokens.gold, 0.08),
-          },
+          '&:hover': { borderColor: binThemeTokens.gold, background: alpha(binThemeTokens.gold, 0.08) },
         },
       },
     },
@@ -141,10 +131,7 @@ export const binGroupTheme = createTheme({
           border: `1px solid ${binThemeTokens.border}`,
           boxShadow: binThemeTokens.cardShadow,
           transition: 'all 0.22s ease',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: binThemeTokens.cardShadowHover,
-          },
+          '&:hover': { transform: 'translateY(-2px)', boxShadow: binThemeTokens.cardShadowHover },
         },
       },
     },
@@ -166,82 +153,6 @@ export const binGroupTheme = createTheme({
           color: binThemeTokens.textPrimary,
           borderRight: `1px solid ${binThemeTokens.border}`,
           boxShadow: '8px 0 28px rgba(17, 24, 39, 0.06)',
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiInputBase-input': {
-            color: binThemeTokens.textPrimary,
-            '&::placeholder': {
-              color: alpha(binThemeTokens.textSecondary, 0.7),
-              opacity: 1,
-            },
-          },
-          '& .MuiInputLabel-root': {
-            color: binThemeTokens.textSecondary,
-          },
-          '& .MuiOutlinedInput-root': {
-            backgroundColor: binThemeTokens.card,
-            borderRadius: 16,
-            '& fieldset': {
-              borderColor: binThemeTokens.border,
-            },
-            '&:hover fieldset': {
-              borderColor: alpha(binThemeTokens.gold, 0.45),
-            },
-            '&.Mui-focused fieldset': {
-              borderColor: binThemeTokens.gold,
-              boxShadow: `0 0 0 3px ${alpha(binThemeTokens.gold, 0.12)}`,
-            },
-          },
-          '& .MuiFormHelperText-root': {
-            color: binThemeTokens.textSecondary,
-          },
-        },
-      },
-    },
-    MuiSelect: {
-      styleOverrides: {
-        root: {
-          color: binThemeTokens.textPrimary,
-          backgroundColor: binThemeTokens.card,
-          borderRadius: 16,
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: binThemeTokens.border,
-          },
-          '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: alpha(binThemeTokens.gold, 0.45),
-          },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: binThemeTokens.gold,
-          },
-          '& .MuiSvgIcon-root': {
-            color: binThemeTokens.goldHover,
-          },
-        },
-      },
-    },
-    MuiInputLabel: {
-      styleOverrides: {
-        root: {
-          color: binThemeTokens.textSecondary,
-          '&.Mui-focused': {
-            color: binThemeTokens.goldHover,
-          },
-        },
-      },
-    },
-    MuiStepper: {
-      styleOverrides: {
-        root: {
-          '& .MuiStepLabel-label': { color: binThemeTokens.textTertiary, fontWeight: 700 },
-          '& .MuiStepLabel-label.Mui-active': { color: binThemeTokens.goldHover },
-          '& .MuiStepLabel-label.Mui-completed': { color: binThemeTokens.goldHover },
-          '& .MuiStepIcon-root': { color: binThemeTokens.platinum },
-          '& .MuiStepIcon-root.Mui-active': { color: binThemeTokens.gold },
-          '& .MuiStepIcon-root.Mui-completed': { color: binThemeTokens.gold },
         },
       },
     },

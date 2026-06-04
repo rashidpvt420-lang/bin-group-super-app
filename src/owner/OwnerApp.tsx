@@ -40,44 +40,60 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
-            <BrandWatermark opacity={0.04} />
-            <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(11, 11, 12, 0.9)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, zIndex: 1200 }}>
+        <Box sx={{
+            minHeight: '100vh',
+            bgcolor: binThemeTokens.canvas,
+            color: binThemeTokens.textPrimary,
+            direction: isRTL ? 'rtl' : 'ltr',
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            isolation: 'isolate',
+            background: `linear-gradient(180deg, ${binThemeTokens.canvas} 0%, ${binThemeTokens.softCanvas} 100%)`,
+        }}>
+            <BrandWatermark label="BIN GROUPS" opacity={binThemeTokens.watermarkOpacity} />
+            <AppBar position="sticky" elevation={0} sx={{
+                bgcolor: alpha(binThemeTokens.canvas, 0.94),
+                backdropFilter: 'blur(18px)',
+                borderBottom: `1px solid ${binThemeTokens.border}`,
+                boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)',
+                zIndex: 1200,
+            }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         {location.pathname !== '/owner' && location.pathname !== '/owner/dashboard' && (
-                            <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary }}>
+                            <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}>
                                 <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                             </IconButton>
                         )}
-                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.gold }}>
+                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
                             <LayoutDashboard size={22} />
                         </IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
                                 {label('portal.owner.title', 'OWNER PORTAL', 'بوابة المالك')}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                {label('portal.owner.subtitle', 'SOVEREIGN ASSET TERMINAL · UAE 🇦🇪', 'محطة الأصول السيادية · الإمارات 🇦🇪')}
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
+                                {label('portal.owner.subtitle', 'WHITE & PLATINUM PROPERTY OS · UAE 🇦🇪', 'نظام العقار الأبيض والبلاتيني · الإمارات 🇦🇪')}
                             </Typography>
                         </Box>
                     </Box>
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
-                        <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
+                        <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.property_passport', 'Property Passport', 'جواز العقار')}
                         </Button>
-                        <Button onClick={() => navigate('/owner/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
+                        <Button onClick={() => navigate('/owner/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {t('nav.ai_studio') || 'AI Studio'}
                         </Button>
-                        <IconButton onClick={toggleLanguage} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3, px: 2 }}>
-                            <Globe size={18} color={binThemeTokens.gold} />
-                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950, color: binThemeTokens.gold }}>
+                        <IconButton onClick={toggleLanguage} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 3, px: 2 }}>
+                            <Globe size={18} color={binThemeTokens.goldHover} />
+                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950, color: binThemeTokens.goldHover }}>
                                 {lang === 'en' ? 'AR' : 'EN'}
                             </Typography>
                         </IconButton>
                         <NotificationBell />
-                        <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
+                        <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}>
                             <UserCircle size={18} />
                         </IconButton>
                     </Stack>
@@ -86,12 +102,12 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                 {pathnames.length > 1 && (
-                    <Breadcrumbs sx={{ mb: 4, '& .MuiBreadcrumbs-separator': { color: 'rgba(255,255,255,0.2)' }, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}>
-                        <MuiLink component="button" onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                    <Breadcrumbs sx={{ mb: 4, '& .MuiBreadcrumbs-separator': { color: alpha(binThemeTokens.textSecondary, 0.45) }, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}>
+                        <MuiLink component="button" onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                             {t('nav.dashboard')}
                         </MuiLink>
                         {pathnames.slice(1).map((value, idx) => (
-                            <Typography key={idx} sx={{ color: idx === pathnames.length - 2 ? '#FFF' : 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                            <Typography key={idx} sx={{ color: idx === pathnames.length - 2 ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase' }}>
                                 {label(`nav.${value.replace('-', '_')}`, value.replace('-', ' '), value.replace('-', ' '))}
                             </Typography>
                         ))}
@@ -102,9 +118,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                 </OwnerActivationGuard>
             </Container>
 
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
-                    © 2026 BIN GROUP SOVEREIGN · INSTITUTIONAL ASSET LEDGER · MADE IN UAE 🇦🇪
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>
+                    © 2026 BIN GROUP SOVEREIGN · WHITE & PLATINUM PROPERTY OS · MADE IN UAE 🇦🇪
                 </Typography>
             </Box>
 

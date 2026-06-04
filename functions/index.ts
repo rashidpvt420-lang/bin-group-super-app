@@ -2192,26 +2192,63 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
  */
 export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
+
+    const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
+    if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
     const techId = request.auth.uid;
+    const now = admin.firestore.FieldValue.serverTimestamp();
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketSnap = await ticketRef.get();
-    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
+    const userRef = db.collection("users").doc(techId);
 
     await db.runTransaction(async (transaction) => {
+        const ticketSnap = await transaction.get(ticketRef);
+        if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
+
+        const ticketData = ticketSnap.data() || {};
+        const statusNorm = String(ticketData.status || "").toLowerCase();
+        const technicianStatusNorm = String(ticketData.technicianStatus || "").toLowerCase();
+        const assignedTechnicianId = ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || "";
+
+        const acceptableStatuses = new Set([
+            "open",
+            "auto_assigned",
+            "assigned",
+            "pending_assignment",
+            "technician_assigned"
+        ]);
+
+        if (!acceptableStatuses.has(statusNorm) && technicianStatusNorm !== "assigned") {
+            throw new HttpsError("failed-precondition", "Ticket is not available for technician acceptance.");
+        }
+
+        if (["completed", "closed", "cancelled", "rejected"].includes(statusNorm)) {
+            throw new HttpsError("failed-precondition", "Ticket is already closed or unavailable.");
+        }
+
+        if (assignedTechnicianId && assignedTechnicianId !== techId && request.auth?.token?.admin !== true) {
+            throw new HttpsError("permission-denied", "This ticket is assigned to another technician.");
+        }
+
         transaction.update(ticketRef, {
-            status: "assigned", // Keep sovereign status, update sub-status
+            assignedTechnicianId: assignedTechnicianId || techId,
+            technicianId: assignedTechnicianId || techId,
+            status: "ACCEPTED",
             technicianStatus: "ACCEPTED",
-            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            dispatchStatus: "ACCEPTED",
+            acceptedAt: now,
+            updatedAt: now
         });
 
-        transaction.update(db.collection("users").doc(techId), {
+        transaction.update(userRef, {
             dutyStatus: "ON_JOB",
             currentTicketId: ticketId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            activeTicketId: ticketId,
+            available: false,
+            updatedAt: now
         });
     });
 
