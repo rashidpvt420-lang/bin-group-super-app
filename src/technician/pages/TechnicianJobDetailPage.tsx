@@ -14,7 +14,7 @@ import {
     alpha
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Camera, Check, ChevronLeft, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, Camera, Check, ChevronLeft, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
 import { db, doc, functions, getDownloadURL, httpsCallable, onSnapshot, ref, storage, uploadBytes, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -22,6 +22,7 @@ import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
+type TechnicianTicketRecord = Record<string, any> & { id: string };
 
 const norm = (status?: string) => String(status || '').toUpperCase();
 
@@ -49,7 +50,7 @@ export default function TechnicianJobDetailPage() {
                 setLoading(false);
                 return;
             }
-            const data = { id: snap.id, ...snap.data() };
+            const data: TechnicianTicketRecord = { id: snap.id, ...(snap.data() as Record<string, any>) };
             const assigned = data.assignedTechnicianId || data.technicianId;
             if (assigned && assigned !== user.uid) {
                 alert('This mission is assigned to another technician.');
