@@ -110,13 +110,73 @@ body,
 }
 
 .MuiTypography-root {
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
-@media (max-width: 700px) {
+/* Emergency production UI hardening: prevents the admin shell from collapsing text into one-letter columns. */
+body:has(a[href^="/admin/"]) {
+  background: #FFFFFF !important;
+}
+
+.MuiTypography-root,
+.MuiButton-root,
+.MuiListItemText-primary,
+.MuiListItemText-secondary {
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  hyphens: none !important;
+}
+
+.MuiDrawer-root,
+.MuiDrawer-paper {
+  flex-shrink: 0 !important;
+}
+
+.MuiDrawer-paper {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  box-shadow: 8px 0 30px rgba(17, 24, 39, 0.06) !important;
+}
+
+.MuiDrawer-paper .MuiListItemIcon-root,
+.MuiDrawer-paper svg {
+  color: var(--bin-gold-hover) !important;
+}
+
+.MuiDrawer-paper .MuiTypography-root,
+.MuiDrawer-paper .MuiListItemText-root {
+  color: #111827 !important;
+}
+
+.MuiDrawer-paper a.MuiListItem-root.active,
+.MuiDrawer-paper a.MuiListItem-root[aria-current="page"] {
+  background: rgba(201, 166, 70, 0.12) !important;
+}
+
+/* Login/partner portal white platinum override. */
+form .MuiOutlinedInput-root {
+  background: #FFFFFF !important;
+}
+
+form .MuiInputBase-input {
+  color: #111827 !important;
+}
+
+form .MuiInputLabel-root {
+  color: #667085 !important;
+}
+
+@media (max-width: 900px) {
+  body,
+  #root {
+    min-width: 0 !important;
+  }
+
   .MuiDrawer-paper {
-    width: 72px !important;
-    max-width: 72px !important;
+    width: 76px !important;
+    max-width: 76px !important;
     overflow-x: hidden !important;
   }
 
@@ -126,17 +186,35 @@ body,
     display: none !important;
   }
 
+  .MuiDrawer-paper .MuiListItem-root,
   .MuiDrawer-paper .MuiListItemButton-root,
   .MuiDrawer-paper .MuiButtonBase-root {
     justify-content: center !important;
     padding-left: 8px !important;
     padding-right: 8px !important;
+    min-width: 0 !important;
+  }
+
+  .MuiDrawer-paper .MuiListItemIcon-root {
+    min-width: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
   }
 
   .MuiContainer-root {
     padding-left: 16px !important;
     padding-right: 16px !important;
     max-width: 100% !important;
+  }
+
+  .MuiTypography-overline {
+    display: block !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: calc(100vw - 210px) !important;
+    letter-spacing: 0.04em !important;
   }
 
   .MuiTypography-h1,
@@ -159,7 +237,7 @@ body,
   }
 
   .MuiButton-root {
-    white-space: normal !important;
+    white-space: nowrap !important;
     min-height: 44px;
   }
 
