@@ -16,19 +16,38 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    minify: false,
+    minify: 'esbuild',
     reportCompressedSize: false,
-    chunkSizeWarningLimit: 2500,
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor';
-          if (id.includes('@mui') || id.includes('@emotion')) return 'mui-vendor';
-          if (id.includes('firebase') || id.includes('@firebase')) return 'firebase-vendor';
-          if (id.includes('recharts')) return 'charts-vendor';
-          if (id.includes('jspdf') || id.includes('jspdf-autotable')) return 'documents-vendor';
-          if (id.includes('lucide-react')) return 'icons-vendor';
+
+          // Keep React together. Splitting react/react-dom/router produced circular vendor edges.
+          if (id.includes('/node_modules/react/') ||
+              id.includes('/node_modules/react-dom/') ||
+              id.includes('/node_modules/react-router-dom/') ||
+              id.includes('/node_modules/@remix-run/router/')) {
+            return 'react-core';
+          }
+
+          // Keep MUI and Emotion together to avoid MUI <-> emotion circular chunks.
+          if (id.includes('/node_modules/@mui/') ||
+              id.includes('/node_modules/@emotion/') ||
+              id.includes('/node_modules/@popperjs/')) {
+            return 'mui-core';
+          }
+
+          // Keep all Firebase packages in one async vendor target.
+          if (id.includes('/node_modules/firebase/') || id.includes('/node_modules/@firebase/')) {
+            return 'firebase-core';
+          }
+
+          if (id.includes('/node_modules/recharts/')) return 'charts';
+          if (id.includes('/node_modules/jspdf/') || id.includes('/node_modules/jspdf-autotable/')) return 'documents';
+          if (id.includes('/node_modules/lucide-react/')) return 'icons';
+
           return 'vendor';
         }
       }
