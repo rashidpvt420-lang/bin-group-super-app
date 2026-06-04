@@ -46,11 +46,8 @@ jobs:
       - name: Lint root app
         run: npm run lint
 
-      - name: Build root app
+      - name: Build unified Vite app
         run: npm run build
-
-      - name: Build admin panel
-        run: npm run build --workspace=home-os-admin-panel
 
       - name: Build functions
         run: npm run build --workspace=functions
