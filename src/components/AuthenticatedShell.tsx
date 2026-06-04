@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import BinGroupHeader from './SovereignHeader';
 import { NavigationControl } from './navigation/NavigationControl';
-import { AuthProvider, useRole } from '../context/RoleContext';
+import { RoleProvider, useRole } from '../context/RoleContext';
 import { AIProvider } from '../context/AIContext';
 import { SovereignAIChat } from './SovereignAIChat';
 import { SovereignAlertHandler } from './SovereignAlertHandler';
@@ -130,10 +130,10 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
 
 export default function AuthenticatedShell(props: AuthenticatedShellProps) {
   return (
-    <AuthProvider>
+    <RoleProvider>
       <AIProvider>
         <AuthenticatedShellContent {...props} />
       </AIProvider>
-    </AuthProvider>
+    </RoleProvider>
   );
 }

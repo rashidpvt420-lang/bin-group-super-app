@@ -50,6 +50,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
 
     const currentStatus = (status || '').toLowerCase();
     const normalizedRole = (role || '').toLowerCase();
+    const isAdminRoute = location.pathname.startsWith('/admin');
+
+    if (isAdminRoute && !isAdmin) {
+        return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
+    }
 
     if (!isAdmin && (currentStatus === 'role_required' || !normalizedRole)) {
         return <Navigate to="/gateway" state={{ reason: 'role_required', from: location }} replace />;
@@ -67,22 +72,22 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: '#000',
-                color: '#fff',
+                bgcolor: binThemeTokens.canvas,
+                color: binThemeTokens.textPrimary,
                 textAlign: 'center',
                 p: 4,
             }}>
-                <Lock size={64} color="#ef4444" />
-                <Typography variant="h4" sx={{ color: '#ef4444', fontWeight: 900, mt: 3, mb: 1 }}>
+                <Lock size={64} color={binThemeTokens.danger} />
+                <Typography variant="h4" sx={{ color: binThemeTokens.danger, fontWeight: 900, mt: 3, mb: 1 }}>
                     ACCESS RESTRICTED
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, maxWidth: 400 }}>
+                <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 4, maxWidth: 400 }}>
                     Your account does not have the required institutional permission: <strong>{requiredPermission}</strong>. Contact your administrator to request access.
                 </Typography>
                 <Button
                     variant="outlined"
                     onClick={() => window.history.back()}
-                    sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800 }}
+                    sx={{ borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 800 }}
                 >
                     RETURN TO SAFETY
                 </Button>
@@ -108,26 +113,26 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: '#000',
-                    color: '#fff',
+                    bgcolor: binThemeTokens.canvas,
+                    color: binThemeTokens.textPrimary,
                     textAlign: 'center',
                     p: 4,
-                    backgroundImage: 'radial-gradient(circle at center, rgba(198, 167, 94, 0.05) 0%, transparent 70%)'
+                    backgroundImage: 'radial-gradient(circle at center, rgba(201, 166, 70, 0.08) 0%, transparent 70%)'
                 }}>
                     <Box sx={{
                         p: 3,
                         borderRadius: '50%',
-                        bgcolor: 'rgba(198, 167, 94, 0.1)',
+                        bgcolor: 'rgba(201, 166, 70, 0.1)',
                         border: `1px solid ${binThemeTokens.gold}44`,
                         mb: 4,
                         boxShadow: `0 0 50px ${binThemeTokens.gold}22`
                     }}>
                         <Lock size={64} color={binThemeTokens.gold} />
                     </Box>
-                    <Typography variant="h3" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, letterSpacing: -1 }}>
+                    <Typography variant="h3" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, mb: 2, letterSpacing: -1 }}>
                         {isPendingApproval ? t('lock.title_offline') : t('lock.title')}
                     </Typography>
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, maxWidth: 600, fontWeight: 700 }}>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, mb: 4, maxWidth: 600, fontWeight: 700 }}>
                         {isPendingApproval ? t('lock.desc_offline') : t('lock.desc')}
                     </Typography>
 
@@ -136,7 +141,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                             variant="outlined"
                             startIcon={<LogOut size={18} />}
                             onClick={() => auth.signOut()}
-                            sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 800, px: 4 }}
+                            sx={{ borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 800, px: 4 }}
                         >
                             {t('lock.signout')}
                         </Button>
@@ -144,7 +149,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                             <Button
                                 variant="contained"
                                 href="/onboarding"
-                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, '&:hover': { bgcolor: '#b59410' } }}
+                                sx={{ bgcolor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 900, px: 4, '&:hover': { bgcolor: binThemeTokens.goldHover } }}
                             >
                                 {t('lock.resume')}
                             </Button>
