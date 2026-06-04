@@ -9,11 +9,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: bin-group-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Install, build, and test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -23,14 +27,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
+      - name: Production stability guard
+        run: npm run test:stability
+
+      - name: TypeScript check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
       - name: Build app
         run: npm run build
         env:
-          CI: true
+          CI: false
+
+      - name: Build admin panel
+        run: npm run build --workspace=home-os-admin-panel
+        env:
+          CI: false
+
+      - name: Build functions
+        run: npm run build --workspace=functions
 
       - name: Run security rules tests
         run: npm run test:rules
