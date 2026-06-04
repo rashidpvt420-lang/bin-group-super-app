@@ -5,7 +5,6 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*",
     "functions"
   ],
   "scripts": {
@@ -38,8 +37,6 @@
     "@google/generative-ai": "^0.24.1",
     "@mui/icons-material": "^5.14.0",
     "@mui/material": "^5.15.0",
-    "ajv": "^8.17.1",
-    "ajv-keywords": "^5.1.0",
     "axios": "^1.4.0",
     "firebase": "10.14.1",
     "framer-motion": "^10.12.0",
@@ -73,9 +70,5 @@
     "globals": "^13.24.0",
     "typescript": "^5.3.3",
     "vite": "^5.1.1"
-  },
-  "overrides": {
-    "ajv": "^8.17.1",
-    "ajv-keywords": "^5.1.0"
   }
 }
