@@ -91,6 +91,11 @@ const ADMIN_ROLES = new Set([
 const normalizeRole = (value: unknown): string => String(value || '').trim().toLowerCase();
 const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
 const roleIsValid = (value: unknown): boolean => VALID_PORTAL_ROLES.has(normalizeRole(value));
+const claimRoleFrom = (claims: Record<string, any>): string => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
+const claimsAreAdmin = (claims: Record<string, any>): boolean => {
+    const claimRole = claimRoleFrom(claims);
+    return claims.admin === true || claims.isAdmin === true || claims.ceo === true || claims.manager === true || roleIsAdmin(claimRole);
+};
 
 const markGlobalAuthReady = () => {
     window.__BIN_GROUPS_BOOT__ = {
@@ -135,6 +140,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             });
 
             const claims = tokenResult.claims || {};
+            const claimRole = claimRoleFrom(claims);
+            const claimIsAdmin = claimsAreAdmin(claims);
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
 
@@ -142,9 +149,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 snap = await getDoc(userDocRef);
             } catch (err: any) {
                 console.error("[ROLE-SYNC] Firestore read permission/error:", err);
-                const claimRole = normalizeRole(claims.role);
                 if (roleIsValid(claimRole)) {
-                    const claimIsAdmin = Boolean(claims.admin || claims.isAdmin || roleIsAdmin(claimRole));
                     setRole(claimRole);
                     setIsAdmin(claimIsAdmin);
                     setStatus('active');
@@ -164,24 +169,23 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
             if (snap && snap.exists()) {
                 const data = snap.data();
-
-                let finalRole = normalizeRole(data.role || claims.role);
-                let finalIsAdmin = Boolean(data.isAdmin || data.admin || roleIsAdmin(finalRole));
+                let finalRole = roleIsValid(claimRole) ? claimRole : normalizeRole(data.role);
+                let finalIsAdmin = claimIsAdmin;
 
                 try {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
                     const grantRef = doc(db, "pending_admin_grants", grantEmailKey);
                     const grantSnap = await getDoc(grantRef);
 
-                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login') {
-                        finalRole = 'admin';
+                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && claimIsAdmin) {
+                        finalRole = claimRole || 'admin';
                         finalIsAdmin = true;
 
                         await updateDoc(userDocRef, {
-                            role: 'admin',
+                            role: finalRole,
                             isAdmin: true,
                             updatedAt: serverTimestamp(),
-                            repairLogs: arrayUnion({ action: 'ADMIN_GRANT_APPLIED', timestamp: new Date().toISOString() })
+                            repairLogs: arrayUnion({ action: 'ADMIN_GRANT_APPLIED_FROM_VERIFIED_CLAIMS', timestamp: new Date().toISOString() })
                         });
 
                         await updateDoc(grantRef, {
@@ -205,6 +209,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                         ...currentUser,
                         ...data,
                         status: 'role_required',
+                        isAdmin: false,
                     } as SovereignUser);
                     setRole(null);
                     setStatus('role_required');
@@ -218,9 +223,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 }
 
                 let resolvedOnboardingComplete = data.onboardingComplete;
-                const resolvedRole = normalizeRole(claims.role || finalRole);
+                const resolvedRole = finalRole;
                 const resolvedStatus = normalizeRole(data.status || 'active');
-                const resolvedIsAdmin = Boolean(claims.admin || claims.isAdmin || finalIsAdmin || roleIsAdmin(resolvedRole));
+                const resolvedIsAdmin = finalIsAdmin;
 
                 if (resolvedRole !== 'owner' && !resolvedOnboardingComplete) {
                     resolvedOnboardingComplete = true;
@@ -237,7 +242,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
-                setPermissions(data.permissions || {});
+                setPermissions(claimIsAdmin ? (claims.permissions || data.permissions || {}) : (data.permissions || {}));
                 setPropertyId(data.propertyId || data.unitId || null);
                 setLegalAccepted(!!data.legalAcceptedAt);
 
@@ -247,14 +252,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setError(null);
                 }
             } else {
-                const resolvedRole = normalizeRole(claims.role);
+                const resolvedRole = roleIsValid(claimRole) ? claimRole : '';
                 const hasValidRole = roleIsValid(resolvedRole);
-                const resolvedIsAdmin = Boolean(claims.admin || claims.isAdmin || roleIsAdmin(resolvedRole));
                 const newProfile = {
                     uid: currentUser.uid,
                     email: (currentUser.email || '').toLowerCase(),
                     displayName: currentUser.displayName || "New User",
-                    ...(hasValidRole ? { role: resolvedRole, isAdmin: resolvedIsAdmin, status: 'active' } : { status: 'role_required', isAdmin: false }),
+                    ...(hasValidRole ? { role: resolvedRole, isAdmin: claimIsAdmin, status: 'active' } : { status: 'role_required', isAdmin: false }),
                     createdAt: serverTimestamp()
                 };
 
@@ -262,7 +266,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                 setUser({ ...currentUser, ...newProfile } as SovereignUser);
                 setRole(hasValidRole ? resolvedRole : null);
-                setIsAdmin(hasValidRole ? resolvedIsAdmin : false);
+                setIsAdmin(hasValidRole ? claimIsAdmin : false);
                 setStatus(hasValidRole ? 'active' : 'role_required');
                 setPermissions({});
                 setPropertyId(null);
