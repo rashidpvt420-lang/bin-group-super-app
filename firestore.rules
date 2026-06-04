@@ -54,15 +54,6 @@ service cloud.firestore {
       );
     }
 
-    function brokerOwns(data) {
-      return signedIn() && (
-        data.brokerId == request.auth.uid ||
-        data.brokerUid == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid
-      );
-    }
-
     function emailOwns(data) {
       return emailMatches(data.email) ||
         emailMatches(data.ownerEmail) ||
