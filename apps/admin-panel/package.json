@@ -12,8 +12,6 @@
     "@mui/icons-material": "^5.14.0",
     "@mui/material": "^5.14.0",
     "@types/papaparse": "^5.5.2",
-    "ajv": "^8.20.0",
-    "ajv-keywords": "^5.1.0",
     "axios": "^1.4.0",
     "firebase": "10.14.1",
     "framer-motion": "^10.12.0",
@@ -65,5 +63,15 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "axios-mock-adapter": "^2.1.0"
+  },
+  "overrides": {
+    "react-scripts": {
+      "ajv": "^6.12.6",
+      "ajv-keywords": "^3.5.2"
+    },
+    "schema-utils": {
+      "ajv": "^6.12.6",
+      "ajv-keywords": "^3.5.2"
+    }
   }
 }
