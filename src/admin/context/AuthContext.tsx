@@ -26,6 +26,17 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
+const normalizeRole = (value: unknown) => String(value || '').trim().toLowerCase();
+const claimRoleFrom = (claims: Record<string, any>) => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
+const claimsAreAdmin = (claims: Record<string, any>) => {
+    const claimRole = claimRoleFrom(claims);
+    return claims.admin === true ||
+        claims.isAdmin === true ||
+        claims.ceo === true ||
+        claims.manager === true ||
+        ADMIN_ROLES.has(claimRole);
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -83,35 +94,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 const claims = idTokenResult.claims || {};
                 const profile = userDoc.exists() ? userDoc.data() : null;
-
-                const role = String(profile?.role || claims.role || "").toLowerCase();
-
-                const isAdmin =
-                    claims.admin === true ||
-                    claims.isAdmin === true ||
-                    claims.ceo === true ||
-                    claims.manager === true ||
-                    role === "admin" ||
-                    role === "super_admin" ||
-                    role === "ceo" ||
-                    role === "manager" ||
-                    ADMIN_ROLES.has(role);
+                const role = claimRoleFrom(claims);
+                const isAdmin = claimsAreAdmin(claims);
 
                 if (!isAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
                 }
 
-                // Successful Admin Resolution
-                setUser({ ...usr, ...profile, role, claims });
+                setUser({ ...usr, ...profile, role, claims, isAdmin: true });
                 setIsAuthenticated(true);
                 setError(null);
 
-                // Audit Log (Once per session)
                 if (!sessionStorage.getItem(`login_audit_${usr.uid}`)) {
                     sessionStorage.setItem(`login_audit_${usr.uid}`, 'true');
                     addDoc(collection(db, 'audit_logs'), {
                         actorId: usr.uid,
-                        actorRole: role,
+                        actorRole: role || 'admin',
                         targetType: 'system',
                         targetId: 'admin-panel',
                         action: 'login',
@@ -120,7 +118,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }).catch(e => console.error("Audit log failed", e));
                 }
 
-                // Optional FCM Sync
                 (async () => {
                     try {
                         const supported = await isSupported();
@@ -149,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (err.message === "AUTH_SYNC_TIMEOUT") {
                     setError("Admin session check timed out. Please retry.");
                 } else if (err.message === "ADMIN_ACCESS_DENIED") {
-                    setError("This account does not have admin access.");
+                    setError("This account does not have verified admin claims.");
                     await signOut(auth);
                 } else {
                     setError("Admin login failed. Please try again.");
@@ -179,7 +176,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            // The onAuthStateChanged handshake above performs role validation and audit logging.
         } catch (err: any) {
             console.error('🛡️ [AUTH] Admin login failed:', err);
             const message = err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found'
