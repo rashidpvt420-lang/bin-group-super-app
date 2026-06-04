@@ -165,11 +165,8 @@ service cloud.firestore {
           'pushPermission',
           'deviceInfo',
           'onboardingLastSeenAt',
- fix/security-rbac-rules-hardening
-
           'dutyStatus',
           'onDuty',
- main
           'updatedAt'
         ]) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
