@@ -39,12 +39,22 @@ const stripeReturnsToOwnerActivation =
   stripePayment.includes('session_id={CHECKOUT_SESSION_ID}') &&
   app.includes('<Route path="/owner/*"');
 
+ stabilize-fast-startup
+const workflowDispatchOnly =
+  workflow.includes('workflow_dispatch:') &&
+  !workflow.includes('\n  push:') &&
+  !workflow.includes('\n  pull_request:') &&
+  !workflow.includes('\n  schedule:');
+
+const deployJobHasManualGate = workflow.includes("if: github.event_name == 'workflow_dispatch'");
+
 const deployIsManualOnly =
   workflow.includes('workflow_dispatch:') &&
   !workflow.includes('branches:') &&
   !workflow.includes('pull_request:');
 
 const deployJobIsManualGated = workflow.includes("if: github.event_name == 'workflow_dispatch'");
+main
 
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
@@ -53,8 +63,13 @@ assert(firebaseJson.includes('"target": "app"'), 'Firebase public hosting must u
 assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must use explicit admin target.');
 
 assert(workflow.includes('Validate production build'), 'Workflow must validate production build.');
+stabilize-fast-startup
+assert(workflow.includes('Deploy Firebase production stack'), 'Workflow must include manual production deployment job.');
+assert(workflowDispatchOnly || deployJobHasManualGate, 'Production deploy must be manual-only.');
+
 assert(workflow.includes('Deploy Firebase production stack'), 'Workflow must include production deployment job.');
 assert(deployIsManualOnly || deployJobIsManualGated, 'Production deploy must be manual-only.');
+main
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
