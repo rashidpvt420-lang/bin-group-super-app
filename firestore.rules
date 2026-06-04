@@ -143,13 +143,61 @@ service cloud.firestore {
 
     function safeUserBootstrapCreate(data, userId) {
       return signedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'photoURL',
+          'phoneNumber',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'lastLoginAt',
+          'platform',
+          'isStandalone',
+          'userAgent',
+          'fcmTokens',
+          'notificationPreferences',
+          'language',
+          'preferences'
+        ]) &&
         (!('uid' in data) || data.uid == request.auth.uid) &&
         (!('email' in data) || data.email == request.auth.token.email) &&
-        (!('isAdmin' in data) || data.isAdmin == false);
+        (!('status' in data) || data.status == 'role_required');
     }
 
     function safeUserSelfUpdate(userId) {
-      return signedIn() && request.auth.uid == userId;
+      return signedIn() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'photoURL',
+          'phoneNumber',
+          'legalAcceptedAt',
+          'legalVersion',
+          'updatedAt',
+          'lastLoginAt',
+          'platform',
+          'isStandalone',
+          'userAgent',
+          'fcmTokens',
+          'notificationPreferences',
+          'language',
+          'preferences'
+        ]) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid) &&
+        (!('email' in request.resource.data) || request.resource.data.email == resource.data.email) &&
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
+        (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.userRole) &&
+        (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.primaryRole) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
+        (!('admin' in request.resource.data) || request.resource.data.admin == resource.data.admin) &&
+        (!('superAdmin' in request.resource.data) || request.resource.data.superAdmin == resource.data.superAdmin) &&
+        (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.super_admin) &&
+        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
+        (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.onboardingComplete) &&
+        (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.propertyId) &&
+        (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.unitId);
     }
 
     function safeOwnerProfileCreate(data, ownerId) {
@@ -167,13 +215,33 @@ service cloud.firestore {
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified);
     }
 
+    function ownsOnboardingProof(data) {
+      return signedIn() && (
+        data.ownerUid == request.auth.uid ||
+        data.ownerId == request.auth.uid ||
+        data.userId == request.auth.uid ||
+        data.createdByUid == request.auth.uid ||
+        data.email == request.auth.token.email ||
+        data.ownerEmail == request.auth.token.email
+      );
+    }
+
+    function safeOnboardingProofCreate(data) {
+      return ownsOnboardingProof(data) &&
+        (!('verified' in data) || data.verified == false) &&
+        (!('approved' in data) || data.approved == false) &&
+        (!('adminApproved' in data) || data.adminApproved == false) &&
+        (!('paymentVerified' in data) || data.paymentVerified == false);
+    }
+
     match /users/{userId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == userId) || emailOwns(resource.data);
       allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
       allow update: if isAdmin() || safeUserSelfUpdate(userId);
       allow delete: if isAdmin();
       match /{document=**} {
-        allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+        allow write: if isAdmin();
       }
     }
 
@@ -291,7 +359,9 @@ service cloud.firestore {
     }
 
     match /onboarding-proof/{proofId} {
-      allow read, write: if signedIn();
+      allow read: if isAdmin() || ownsOnboardingProof(resource.data);
+      allow create: if safeOnboardingProofCreate(request.resource.data);
+      allow update, delete: if isAdmin();
     }
 
     match /{document=**} {
