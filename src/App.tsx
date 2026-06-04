@@ -1,28 +1,29 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
-import LandingPage from './pages/LandingPage';
-import OwnerLandingPage from './pages/OwnerLandingPage';
-import LoginPage from './pages/LoginPage';
-import RoleGatewayPage from './pages/RoleGatewayPage';
-import InvoiceVerificationPage from './pages/public/InvoiceVerificationPage';
-import CertificateVerificationPage from './pages/public/CertificateVerificationPage';
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
-import PropertyOnboardingPage from './pages/PropertyOnboardingPage';
-import InvoiceDetailsPage from './pages/InvoiceDetailsPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
-import TenantInvitePage from './pages/TenantInvitePage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import BinGroupHeader from './components/SovereignHeader';
-import { AuthProvider, useRole, LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
-import IOSPwaGuardian from './components/IOSPwaGuardian';
-import { NavigationControl } from './components/navigation/NavigationControl';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
+import IOSPwaGuardian from './components/IOSPwaGuardian';
+
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const OwnerLandingPage = React.lazy(() => import('./pages/OwnerLandingPage'));
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const RoleGatewayPage = React.lazy(() => import('./pages/RoleGatewayPage'));
+const PropertyOnboardingPage = React.lazy(() => import('./pages/PropertyOnboardingPage'));
+const InvoiceVerificationPage = React.lazy(() => import('./pages/public/InvoiceVerificationPage'));
+const CertificateVerificationPage = React.lazy(() => import('./pages/public/CertificateVerificationPage'));
+const InvoiceDetailsPage = React.lazy(() => import('./pages/InvoiceDetailsPage'));
+const TenantInvitePage = React.lazy(() => import('./pages/TenantInvitePage'));
+
+const AuthenticatedShell = React.lazy(() => import('./components/AuthenticatedShell'));
+const ProtectedRoute = React.lazy(() => import('./components/ProtectedRoute'));
 
 const FinancialDashboardPage = React.lazy(() => import('./pages/FinancialDashboardPage'));
 const HealthScorePage = React.lazy(() => import('./pages/HealthScorePage'));
@@ -113,7 +114,7 @@ function LoadingScreen() {
         timeElapsed: Date.now() - (window.__BIN_GROUPS_BOOT__?.startedAt || Date.now()),
         pathname: window.location.pathname
       });
-    }, 5000);
+    }, 12000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -162,196 +163,93 @@ function LoadingScreen() {
   );
 }
 
-function PushNotificationBootstrap() {
-  const { user, role } = useRole();
+type AuthOptions = {
+  showChrome?: boolean;
+  publicAuth?: boolean;
+};
 
-  React.useEffect(() => {
-    let detach: undefined | (() => void);
-    let cancelled = false;
-
-    if (!user?.uid) return undefined;
-
-    import('./services/pushNotificationService')
-      .then(({ attachForegroundPushListener, registerPushNotifications, shouldRequestPushForRole }) => {
-        if (cancelled || !shouldRequestPushForRole(role)) return;
-
-        registerPushNotifications(user.uid, role)
-          .then((result) => {
-            if (!result.enabled) {
-              const reason = 'reason' in result ? result.reason : 'unknown';
-              console.warn('[Push] Registration skipped:', reason);
-            }
-          })
-          .catch((error) => console.warn('[Push] Registration failed:', error));
-
-        attachForegroundPushListener().then((unsubscribe) => {
-          if (cancelled && typeof unsubscribe === 'function') unsubscribe();
-          else detach = typeof unsubscribe === 'function' ? unsubscribe : undefined;
-        });
-      })
-      .catch((error) => console.warn('[Push] Bootstrap import failed:', error));
-
-    return () => {
-      cancelled = true;
-      if (detach) detach();
-    };
-  }, [user?.uid, role]);
-
-  return null;
-}
-
-const PUBLIC_ROUTE_PATHS = new Set([
-  '/', '/owner-landing', '/v1', '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support', '/feedback', '/pilot-feedback',
-  '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
-  '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security', '/contact',
-  '/services', '/request-demo', '/videos', '/demo-videos', '/tenant-invite', '/company',
-]);
-
-const PUBLIC_ROUTE_PREFIXES = ['/onboarding', '/verify', '/invoices'];
-
-function isPublicRoute(pathname: string) {
-  return PUBLIC_ROUTE_PATHS.has(pathname) || PUBLIC_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
-function RoleRedirector({ children }: { children: React.ReactNode }) {
-  const { user, role, loading } = useRole();
-  const location = useLocation();
-  const publicRoute = isPublicRoute(location.pathname);
-
-  if (loading && !publicRoute) return <LoadingScreen />;
-
-  const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
-  if (user && !loading && isAuthEntryPage) {
-    const normalizedRole = (role || '').toLowerCase();
-    if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
-    if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
-    if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
-    if (ADMIN_STAFF_ROLES.includes(normalizedRole)) return <Navigate to="/admin/dashboard" replace />;
-    if (normalizedRole === 'owner') return <Navigate to="/owner/dashboard" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-function AppContent() {
-  const { loading: roleLoading, error: roleError, user, role } = useRole();
-  const { t } = useLanguage();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const publicRoute = isPublicRoute(location.pathname);
-  const isAdminRoute = location.pathname.startsWith('/admin');
-
-  if (roleLoading && !publicRoute) return <LoadingScreen />;
-
-  if (roleError && !user && !publicRoute) {
-    return (
-      <Box sx={{ height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#FFFFFF', p: 4, textAlign: 'center', overflowY: 'auto' }}>
-        <Typography variant="h4" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>{t('common.identity_fault')}</Typography>
-        <Typography variant="body1" sx={{ color: '#667085', mb: 4, maxWidth: 600 }}>
-          {t('common.role_error_prefix')} {roleError}
-        </Typography>
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#C9A646', color: '#111827', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
-      </Box>
-    );
-  }
-
+function withAuth(children: React.ReactNode, options: AuthOptions = {}) {
   return (
-    <RoleRedirector>
-      <PushNotificationBootstrap />
-      <React.Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<PublicMarketingPage page="home" />} />
-          <Route path="/owner-landing" element={<OwnerLandingPage />} />
-          <Route path="/v1" element={<LandingPage />} />
-          <Route path="/gateway" element={<RoleGatewayPage />} />
-          <Route path="/analytics/reporting" element={<ProtectedRoute allowedRoles={['admin', 'owner']}><ReportingDashboard /></ProtectedRoute>} />
-          <Route path="/analytics/executive" element={<ProtectedRoute allowedRoles={['admin', 'owner']}><ExecutiveReportingPage /></ProtectedRoute>} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/terms-of-service" element={<TermsPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/support" element={<SupportPage />} />
-          <Route path="/feedback" element={<PilotFeedbackPage />} />
-          <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
-          <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
-          <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
-          <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
-          <Route path="/brokers" element={<PublicMarketingPage page="brokers" />} />
-          <Route path="/property-management" element={<PublicMarketingPage page="property-management" />} />
-          <Route path="/maintenance" element={<PublicMarketingPage page="maintenance" />} />
-          <Route path="/ai-design-studio" element={<Navigate to="/request-demo?demo=ai-design" replace />} />
-          <Route path="/majlis-care" element={<PublicMarketingPage page="majlis-care" />} />
-          <Route path="/stadiums" element={<PublicMarketingPage page="stadiums" />} />
-          <Route path="/hotels" element={<PublicMarketingPage page="hotels" />} />
-          <Route path="/malls" element={<PublicMarketingPage page="malls" />} />
-          <Route path="/hospitals" element={<PublicMarketingPage page="hospitals" />} />
-          <Route path="/government-properties" element={<PublicMarketingPage page="government-properties" />} />
-          <Route path="/security" element={<PublicMarketingPage page="security" />} />
-          <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
-          <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
-          <Route path="/request-demo" element={<DemoVideosPage />} />
-          <Route path="/videos" element={<DemoVideosPage />} />
-          <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-          <Route path="/company" element={<Navigate to="/" replace />} />
-          <Route path="/onboarding/*" element={<PropertyOnboardingPage />} />
-          <Route path="/government/:id" element={<ProtectedRoute allowedRoles={['owner', 'admin']}><GovernmentPropertyPage /></ProtectedRoute>} />
-          <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
-          <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
-          <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
-          <Route path="/calendar" element={<ProtectedRoute allowedRoles={['owner', 'admin', 'technician']}><MaintenanceCalendarPage /></ProtectedRoute>} />
-          <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
-          <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
-          <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute allowedRoles={NOTIFICATION_ROLES}><NotificationInboxPage /></ProtectedRoute>} />
-          <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignStudioPage /></ProtectedRoute>} />
-          <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignRequestDetailPage /></ProtectedRoute>} />
-          <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
-          <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantApp /></ProtectedRoute>} />
-          <Route path="/technician/*" element={<ProtectedRoute allowedRoles={['technician']}><TechnicianApp /></ProtectedRoute>} />
-          <Route path="/tech/*" element={<Navigate to="/technician/dashboard" replace />} />
-          <Route path="/broker/*" element={<ProtectedRoute allowedRoles={['broker']}><BrokerApp /></ProtectedRoute>} />
-          <Route path="/owner/*" element={<ProtectedRoute allowedRoles={['owner', 'ceo']}><OwnerApp /></ProtectedRoute>} />
-          <Route path="/auditor/*" element={<ProtectedRoute allowedRoles={['auditor']}><AuditorPortalPage /></ProtectedRoute>} />
-          <Route path="/admin/*" element={<ProtectedRoute allowedRoles={ADMIN_STAFF_ROLES}><AdminTerminal /></ProtectedRoute>} />
-          <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
-          <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
-          <Route path="/tenant-invite" element={<TenantInvitePage />} />
-          <Route path="/home" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </React.Suspense>
-      {!location.pathname.startsWith('/onboarding') && !publicRoute && !isAdminRoute && ['owner', 'tenant'].includes((role || '').toLowerCase()) && (
-        <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
-      )}
-      <IOSPwaGuardian />
-      {!isAdminRoute && <NavigationControl />}
-    </RoleRedirector>
+    <AuthenticatedShell
+      showChrome={options.showChrome ?? true}
+      publicAuth={options.publicAuth ?? false}
+      loadingFallback={<LoadingScreen />}
+    >
+      {children}
+    </AuthenticatedShell>
   );
 }
 
-const HEADERLESS_ROUTES = new Set([
-  '/', '/owners', '/tenants', '/technicians', '/brokers', '/property-management', '/maintenance',
-  '/majlis-care', '/stadiums', '/hotels', '/malls', '/hospitals', '/government-properties', '/security',
-  '/services', '/contact', '/request-demo', '/videos', '/demo-videos', '/company', '/ai-design-studio',
-  '/login', '/gateway', '/terms-of-service', '/privacy-policy', '/terms', '/privacy', '/support', '/feedback', '/pilot-feedback',
-  '/owner-landing', '/v1', '/tenant-invite',
-]);
+function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
+  return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
+}
 
-function HeaderSlot() {
-  const location = useLocation();
-  const pathname = location.pathname;
-  const hideHeader = HEADERLESS_ROUTES.has(pathname)
-    || pathname.startsWith('/onboarding')
-    || pathname.startsWith('/verify')
-    || pathname.startsWith('/invoices')
-    || pathname.startsWith('/tenant')
-    || pathname.startsWith('/owner')
-    || pathname.startsWith('/technician')
-    || pathname.startsWith('/admin')
-    || pathname.startsWith('/broker');
-
-  return hideHeader ? null : <BinGroupHeader />;
+function AppContent() {
+  return (
+    <React.Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/" element={<PublicMarketingPage page="home" />} />
+        <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/terms-of-service" element={<TermsPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/feedback" element={<PilotFeedbackPage />} />
+        <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
+        <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
+        <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
+        <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
+        <Route path="/brokers" element={<PublicMarketingPage page="brokers" />} />
+        <Route path="/property-management" element={<PublicMarketingPage page="property-management" />} />
+        <Route path="/maintenance" element={<PublicMarketingPage page="maintenance" />} />
+        <Route path="/ai-design-studio" element={<Navigate to="/request-demo?demo=ai-design" replace />} />
+        <Route path="/majlis-care" element={<PublicMarketingPage page="majlis-care" />} />
+        <Route path="/stadiums" element={<PublicMarketingPage page="stadiums" />} />
+        <Route path="/hotels" element={<PublicMarketingPage page="hotels" />} />
+        <Route path="/malls" element={<PublicMarketingPage page="malls" />} />
+        <Route path="/hospitals" element={<PublicMarketingPage page="hospitals" />} />
+        <Route path="/government-properties" element={<PublicMarketingPage page="government-properties" />} />
+        <Route path="/security" element={<PublicMarketingPage page="security" />} />
+        <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
+        <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
+        <Route path="/request-demo" element={<DemoVideosPage />} />
+        <Route path="/videos" element={<DemoVideosPage />} />
+        <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
+        <Route path="/company" element={<Navigate to="/" replace />} />
+        <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
+        <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
+        <Route path="/financials" element={protectedRoute(['owner'], <FinancialDashboardPage />)} />
+        <Route path="/calendar" element={protectedRoute(['owner', 'admin', 'technician'], <MaintenanceCalendarPage />)} />
+        <Route path="/properties/:id/health" element={protectedRoute(['owner'], <HealthScorePage />)} />
+        <Route path="/analytics/reporting" element={protectedRoute(['admin', 'owner'], <ReportingDashboard />)} />
+        <Route path="/analytics/executive" element={protectedRoute(['admin', 'owner'], <ExecutiveReportingPage />)} />
+        <Route path="/analytics/turnover" element={protectedRoute(['owner'], <TurnoverEnginePage />)} />
+        <Route path="/properties/:propertyId/units" element={protectedRoute(['owner'], <PropertyUnitsPage />)} />
+        <Route path="/notifications" element={protectedRoute(NOTIFICATION_ROLES, <NotificationInboxPage />)} />
+        <Route path="/design-studio" element={protectedRoute(['owner', 'tenant'], <DesignStudioPage />)} />
+        <Route path="/design-studio/request/:id" element={protectedRoute(['owner', 'tenant'], <DesignRequestDetailPage />)} />
+        <Route path="/invoices/:id" element={withAuth(<InvoiceDetailsPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/tenant/*" element={protectedRoute(['tenant'], <TenantApp />)} />
+        <Route path="/technician/*" element={protectedRoute(['technician'], <TechnicianApp />)} />
+        <Route path="/tech/*" element={<Navigate to="/technician/dashboard" replace />} />
+        <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
+        <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
+        <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
+        <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
+        <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
+        <Route path="/tenant-invite" element={<TenantInvitePage />} />
+        <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </React.Suspense>
+  );
 }
 
 export default function App() {
@@ -359,14 +257,9 @@ export default function App() {
     <Router>
       <LanguageProvider>
         <CustomThemeProvider>
-          <AuthProvider>
-            <AIProvider>
-              <CssBaseline />
-              <HeaderSlot />
-              <AppContent />
-              <SovereignAlertHandler />
-            </AIProvider>
-          </AuthProvider>
+          <CssBaseline />
+          <AppContent />
+          <IOSPwaGuardian />
         </CustomThemeProvider>
       </LanguageProvider>
     </Router>
