@@ -7,11 +7,7 @@ import { createTheme, alpha } from '@mui/material/styles';
  */
 export const binThemeTokens = {
   black: '#111827',
-theme-token-compat
-  graphite: '#F3F4F6',
-
   graphite: '#1F2937',
-main
   canvas: '#FFFFFF',
   softCanvas: '#F8F9FB',
   card: '#FFFFFF',
