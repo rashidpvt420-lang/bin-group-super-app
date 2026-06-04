@@ -5,7 +5,6 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*",
     "functions"
   ],
   "scripts": {
@@ -13,8 +12,8 @@
     "build": "vite build",
     "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
     "build:shared": "npm run build --workspace=@bin/shared",
-    "build:admin": "npm run build --workspace=home-os-admin-panel",
-    "build:owner": "npm run build --workspace=home-os-owner-app",
+    "build:admin": "npm --prefix apps/admin-panel install --legacy-peer-deps && npm --prefix apps/admin-panel run build",
+    "build:owner": "npm --prefix apps/owner-app install --legacy-peer-deps && npm --prefix apps/owner-app run build",
     "build:functions": "npm run build --workspace=functions",
     "lint": "eslint src --ext .ts,.tsx",
     "preview": "vite preview",
