@@ -73,14 +73,7 @@ service cloud.firestore {
       );
     }
 
-    function brokerOwns(data) {
-      return signedIn() && (
-        data.brokerId == request.auth.uid ||
-        data.brokerUid == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid
-      );
-    }
+ stabilize-fast-startup
 
     function brokerOwns(data) {
       return signedIn() && (
@@ -91,6 +84,16 @@ service cloud.firestore {
       );
     }
 
+    function brokerOwns(data) {
+      return signedIn() && (
+        data.brokerId == request.auth.uid ||
+        data.brokerUid == request.auth.uid ||
+        data.userId == request.auth.uid ||
+        data.createdByUid == request.auth.uid
+      );
+    }
+
+ main
     function emailOwns(data) {
       return emailMatches(data.email) || emailMatches(data.ownerEmail) || emailMatches(data.tenantEmail) || emailMatches(data.recipientEmail) || emailMatches(data.contactEmail);
     }
