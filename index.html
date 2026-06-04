@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="BIN_BUILD_ID" content="2026-06-04-FAST-STARTUP-STABILITY-001" />
+    <meta name="BIN_BUILD_ID" content="2026-06-04-FAST-STARTUP-STABILITY-002" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>BIN GROUP | UAE Property Operations OS</title>
@@ -115,7 +115,7 @@
         var lang = localStorage.getItem('bin_language') || 'en';
         document.documentElement.lang = lang;
         document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-        window.__BIN_GROUPS_BOOT__ = Object.assign({}, window.__BIN_GROUPS_BOOT__, { startedAt: Date.now(), staticReady: true });
+        window.__BIN_GROUPS_BOOT__ = Object.assign({}, window.__BIN_GROUPS_BOOT__, { startedAt: Date.now(), staticReady: true, mainBundleFailed: false });
       })();
     </script>
     <div id="bin-boot-loader">
@@ -129,16 +129,26 @@
       (function() {
         var loader = document.getElementById('bin-boot-loader');
         var fallback = document.getElementById('bin-boot-fallback');
-        var fallbackTimer = window.setTimeout(function(){ if (fallback) fallback.style.display = 'block'; }, 2500);
-        var releaseTimer = window.setTimeout(function(){ if (loader) loader.classList.add('bin-boot-hidden'); }, 6500);
+        var fallbackTimer = window.setTimeout(function(){
+          if (fallback) fallback.style.display = 'block';
+        }, 12000);
+
+        window._BIN_MAIN_BUNDLE_FAILED = function(){
+          window.__BIN_GROUPS_BOOT__ = Object.assign({}, window.__BIN_GROUPS_BOOT__, { mainBundleFailed: true });
+          window.clearTimeout(fallbackTimer);
+          if (fallback) {
+            fallback.style.display = 'block';
+            fallback.textContent = 'The main application bundle failed to load. Check your connection, clear cache, then reload.';
+          }
+        };
+
         window._BIN_MOUNT_SUCCESS = function(){
           window.clearTimeout(fallbackTimer);
-          window.clearTimeout(releaseTimer);
           if (loader) loader.classList.add('bin-boot-hidden');
           window.setTimeout(function(){ if (loader && loader.parentNode) loader.parentNode.removeChild(loader); }, 260);
         };
       })();
     </script>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx" onerror="window._BIN_MAIN_BUNDLE_FAILED && window._BIN_MAIN_BUNDLE_FAILED()"></script>
   </body>
 </html>
