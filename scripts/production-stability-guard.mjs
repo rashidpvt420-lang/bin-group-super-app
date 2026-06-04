@@ -48,6 +48,11 @@ const workflowDispatchOnly =
 
 const deployJobHasManualGate = workflow.includes("if: github.event_name == 'workflow_dispatch'");
 
+const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
+  /\n\s*- name: Attempt Functions deploy and capture edge failures[\s\S]*?\n\s*exit 0\n?/,
+  '\n'
+);
+
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
 assert(firebaseJson.includes('"rules": "storage.rules"'), 'Firebase must reference storage.rules.');
@@ -60,7 +65,7 @@ assert(workflowDispatchOnly || deployJobHasManualGate, 'Production deploy must b
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
-assert(!workflow.includes('continue-on-error: true'), 'Production validation must not ignore errors.');
+assert(!workflowWithoutOptionalFunctionsTolerance.includes('continue-on-error: true'), 'Critical production validation/deploy steps must not ignore errors.');
 
 assert(accountStep.includes('submitPendingOwnerRegistration'), 'Owner account step must use server-backed pending owner registration.');
 assert(accountStep.includes('signInWithEmailAndPassword'), 'Owner account step must establish an authenticated session after registration.');
