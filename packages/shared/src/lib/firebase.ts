@@ -93,44 +93,33 @@ type BinFirebaseConfig = {
   appId: string;
 };
 
-const readRequiredEnv = (name: string): string => {
-  const metaEnv =
-    typeof import.meta !== 'undefined'
-      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-      : undefined;
+type EnvBag = Record<string, string | undefined>;
 
-  const processEnv =
-    typeof process !== 'undefined'
-      ? process.env?.[name]
-      : undefined;
-
-  const value = metaEnv?.[name] ?? processEnv;
-
-  if (!value || String(value).includes('REPLACE_ME')) {
-    return '';
-  }
-
-  return String(value);
+const readProcessEnv = (name: string): string => {
+  const processLike = globalThis as unknown as { process?: { env?: EnvBag } };
+  const value = processLike.process?.env?.[name];
+  if (!value || value.includes('REPLACE_ME')) return '';
+  return value;
 };
 
 const firebaseConfig: BinFirebaseConfig = {
   apiKey:
-    readRequiredEnv('VITE_FIREBASE_API_KEY') ||
+    readProcessEnv('VITE_FIREBASE_API_KEY') ||
     'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
   authDomain:
-    readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') ||
+    readProcessEnv('VITE_FIREBASE_AUTH_DOMAIN') ||
     'bin-group-57c60.firebaseapp.com',
   projectId:
-    readRequiredEnv('VITE_FIREBASE_PROJECT_ID') ||
+    readProcessEnv('VITE_FIREBASE_PROJECT_ID') ||
     'bin-group-57c60',
   storageBucket:
-    readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') ||
+    readProcessEnv('VITE_FIREBASE_STORAGE_BUCKET') ||
     'bin-group-57c60.firebasestorage.app',
   messagingSenderId:
-    readRequiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') ||
+    readProcessEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') ||
     '123413252227',
   appId:
-    readRequiredEnv('VITE_FIREBASE_APP_ID') ||
+    readProcessEnv('VITE_FIREBASE_APP_ID') ||
     '1:123413252227:web:285cb53bc26626d699f3b6',
 };
 
@@ -138,26 +127,48 @@ const firebaseApp: FirebaseApp =
   getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 const getSafeMessaging = (): Messaging | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
+  if (typeof window === 'undefined') return null;
   try {
     return getMessaging(firebaseApp);
   } catch (error) {
-    console.warn('[Firebase] Messaging unavailable in this environment:', error);
+    console.warn('[BIN SHARED] Firebase Messaging unavailable:', error);
     return null;
   }
 };
 
-export const app = firebaseApp;
-export const db: Firestore = getFirestore(firebaseApp);
-export const auth: Auth = getAuth(firebaseApp);
-export const storage: FirebaseStorage = getStorage(firebaseApp);
-export const functions: Functions = getFunctions(firebaseApp);
-export const messaging: Messaging | null = getSafeMessaging();
+const auth: Auth = getAuth(firebaseApp);
+const db: Firestore = getFirestore(firebaseApp);
+const storage: FirebaseStorage = getStorage(firebaseApp);
+const functions: Functions = getFunctions(firebaseApp, 'europe-west3');
+const messaging: Messaging | null = getSafeMessaging();
+
+if (typeof window !== 'undefined') {
+  const hostname = window.location.hostname;
+  const shouldUseEmulators = hostname === 'localhost' || hostname === '127.0.0.1';
+  if (shouldUseEmulators && !window.localStorage.getItem('bin_emulators_connected')) {
+    try {
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      connectFirestoreEmulator(db, '127.0.0.1', 8080);
+      connectStorageEmulator(storage, '127.0.0.1', 9199);
+      connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+      window.localStorage.setItem('bin_emulators_connected', 'true');
+    } catch (error) {
+      console.warn('[BIN SHARED] Emulator connection skipped:', error);
+    }
+  }
+}
 
 export {
+  firebaseApp as app,
+  auth,
+  db,
+  storage,
+  functions,
+  messaging,
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -198,14 +209,6 @@ export {
   getDownloadURL,
   deleteObject,
   httpsCallable,
-  getMessaging,
-  getToken,
-  isSupported,
-  onMessage,
-  connectAuthEmulator,
-  connectFirestoreEmulator,
-  connectStorageEmulator,
-  connectFunctionsEmulator,
 };
 
 export type {
@@ -224,4 +227,4 @@ export type {
   Unsubscribe,
 };
 
-export default app;
+export default firebaseApp;
