@@ -7,20 +7,11 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function userRecordExists() {
-      return isAuth() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
-    }
-
-    function userRecord() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
-    }
-
     function hasAnyRole(roles) {
       return isAuth() && (
         request.auth.token.role in roles ||
         request.auth.token.userRole in roles ||
-        request.auth.token.primaryRole in roles ||
-        (userRecordExists() && userRecord().role in roles)
+        request.auth.token.primaryRole in roles
       );
     }
 
@@ -30,8 +21,7 @@ service firebase.storage {
         request.auth.token.isAdmin == true ||
         request.auth.token.ceo == true ||
         request.auth.token.manager == true ||
-        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER']) ||
-        (userRecordExists() && (userRecord().isAdmin == true || userRecord().admin == true))
+        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER'])
       );
     }
 
