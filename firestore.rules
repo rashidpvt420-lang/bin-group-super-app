@@ -5,16 +5,27 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userPath() {
-      return /databases/$(database)/documents/users/$(request.auth.uid);
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.isAdmin == true ||
+        request.auth.token.ceo == true ||
+        request.auth.token.manager == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.role == 'ceo' ||
+        request.auth.token.role == 'manager' ||
+        request.auth.token.role == 'operations_admin' ||
+        request.auth.token.role == 'finance_admin' ||
+        request.auth.token.role == 'hr_admin' ||
+        request.auth.token.role == 'support_admin' ||
+        request.auth.token.userRole == 'admin' ||
+        request.auth.token.primaryRole == 'admin'
+      );
     }
 
-    function hasUserDoc() {
-      return signedIn() && exists(userPath());
-    }
-
-    function userDoc() {
-      return get(userPath()).data;
+    function hasPermission(permission) {
+      return isAdmin();
     }
 
     function authEmail() {
@@ -23,127 +34,6 @@ service cloud.firestore {
 
     function emailMatches(value) {
       return signedIn() && authEmail() != null && value != null && value == authEmail();
-    }
-
-    function adminRoles() {
-      return [
-        'admin', 'super_admin', 'ceo', 'manager',
-        'operations_admin', 'finance_admin', 'hr_admin', 'support_admin',
-        'hr_manager', 'hr_staff', 'finance_staff', 'account_manager',
-        'dispatcher', 'operations_manager'
-      ];
-    }
-
-    function publicSelfAssignRoles() {
-      return ['owner', 'tenant', 'technician', 'broker'];
-    }
-
-    function hasRole(roles) {
-      return signedIn() && (
-        request.auth.token.role in roles ||
-        request.auth.token.userRole in roles ||
-        request.auth.token.primaryRole in roles ||
-        (hasUserDoc() && userDoc().role in roles)
-      );
-    }
-
-    function isAdmin() {
-      return signedIn() && (
-        request.auth.token.admin == true ||
-        request.auth.token.isAdmin == true ||
-        request.auth.token.ceo == true ||
-        request.auth.token.manager == true ||
-        request.auth.token.operations_admin == true ||
-        request.auth.token.finance_admin == true ||
-        request.auth.token.hr_admin == true ||
-        request.auth.token.support_admin == true ||
-        request.auth.token.role in adminRoles() ||
-        request.auth.token.userRole in adminRoles() ||
-        request.auth.token.primaryRole in adminRoles() ||
-        (hasUserDoc() && userDoc().role in adminRoles())
-      );
-    }
-
-    function hasPermission(permission) {
-      return hasUserDoc() && userDoc().permissions[permission] == true;
-    }
-
-    function safeUserBootstrapCreate(data, userId) {
-      return signedIn() && request.auth.uid == userId &&
-        data.keys().hasOnly([
-          'uid','email','displayName','photoURL','role','status','isAdmin','onboardingComplete',
-          'roleSelectedAt','roleMissingDetectedAt','createdAt','updatedAt','lastLoginAt'
-        ]) &&
-        (!('uid' in data) || data.uid == request.auth.uid) &&
-        (!('email' in data) || data.email == request.auth.token.email) &&
-        (!('isAdmin' in data) || data.isAdmin == false) &&
-        (!('permissions' in data)) &&
-        (
-          (
-            data.status == 'role_required' &&
-            !('role' in data)
-          ) ||
-          (
-            data.role in publicSelfAssignRoles() &&
-            data.status in ['active','onboarding','pending_approval','role_required']
-          )
-        );
-    }
-
-    function safeUserSelfUpdate(userId) {
-      return signedIn() && request.auth.uid == userId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'uid','email','displayName','photoURL','role','status','isAdmin','onboardingComplete',
-          'roleSelectedAt','roleMissingDetectedAt','updatedAt','lastLoginAt',
-          'fcmTokens','pushEnabled','pushUpdatedAt','pushPlatform','pushRole','language','legalAcceptedAt'
-        ]) &&
-        (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
-        (!('email' in request.resource.data) || request.resource.data.email == resource.data.email || request.resource.data.email == request.auth.token.email) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || request.resource.data.isAdmin == resource.data.isAdmin) &&
-        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
-        (
-          (
-            resource.data.status == 'role_required' &&
-            request.resource.data.role in publicSelfAssignRoles() &&
-            request.resource.data.status in ['active','onboarding','pending_approval']
-          ) ||
-          (
-            resource.data.role in publicSelfAssignRoles() &&
-            request.resource.data.role == resource.data.role &&
-            (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
-          )
-        );
-    }
-
-    function safeOwnerProfileCreate(data, ownerId) {
-      return signedIn() && request.auth.uid == ownerId &&
-        data.keys().hasOnly([
-          'uid','email','displayName','name','phone','mobile','photoURL','language',
-          'billingContact','notificationPreferences','fcmTokens','pushEnabled','pushUpdatedAt',
-          'pushPlatform','pushRole','updatedAt','createdAt','lastLoginAt','pdplCompliance','gpsConsent',
-          'onboardingComplete','role','status'
-        ]) &&
-        (!('uid' in data) || data.uid == request.auth.uid) &&
-        (!('role' in data) || data.role == 'owner') &&
-        (!('status' in data) || !(data.status in ['ACTIVE','active'])) &&
-        (!('dashboardUnlocked' in data)) &&
-        (!('paymentVerified' in data)) &&
-        (!('permissions' in data));
-    }
-
-    function safeOwnerProfileUpdate() {
-      return signedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'uid','email','displayName','name','phone','mobile','photoURL','language',
-          'billingContact','notificationPreferences','fcmTokens','pushEnabled','pushUpdatedAt',
-          'pushPlatform','pushRole','updatedAt','lastLoginAt','pdplCompliance','gpsConsent','onboardingComplete'
-        ]) &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
-        (!('activeContractId' in request.resource.data) || request.resource.data.activeContractId == resource.data.activeContractId) &&
-        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.dashboardUnlocked) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
-        (!('adminNotes' in request.resource.data) || request.resource.data.adminNotes == resource.data.adminNotes) &&
-        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions);
     }
 
     function isOwnerId(ownerId) {
@@ -183,15 +73,6 @@ service cloud.firestore {
       );
     }
 
-    function brokerOwns(data) {
-      return signedIn() && (
-        data.brokerId == request.auth.uid ||
-        data.brokerUid == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid
-      );
-    }
-
     function emailOwns(data) {
       return emailMatches(data.email) || emailMatches(data.ownerEmail) || emailMatches(data.tenantEmail) || emailMatches(data.recipientEmail) || emailMatches(data.contactEmail);
     }
@@ -201,29 +82,7 @@ service cloud.firestore {
     }
 
     function participantCanRead(data) {
-      return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data);
-    }
-
-    function maintenanceTicketPath(ticketId) {
-      return /databases/$(database)/documents/maintenanceTickets/$(ticketId);
-    }
-
-    function canAccessMaintenanceTicket(ticketId) {
-      return signedIn() && exists(maintenanceTicketPath(ticketId)) && (
-        isAdmin() ||
-        hasPermission('canDispatchJobs') ||
-        participantCanRead(get(maintenanceTicketPath(ticketId)).data)
-      );
-    }
-
-    function safeTicketMessageCreate(ticketId) {
-      return canAccessMaintenanceTicket(ticketId) && (
-        !('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid
-      ) && (
-        !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid
-      ) && (
-        !('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid
-      );
+      return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data);
     }
 
     function ownerDraftCreate(data) {
@@ -270,15 +129,50 @@ service cloud.firestore {
         ]);
     }
 
+    function canAccessMaintenanceTicket(ticketId) {
+      return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) &&
+        participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
+    }
+
+    function safeTicketMessageCreate(ticketId) {
+      return canAccessMaintenanceTicket(ticketId) &&
+        (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
+        (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
+        (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+    }
+
+    function safeUserBootstrapCreate(data, userId) {
+      return signedIn() && request.auth.uid == userId &&
+        (!('uid' in data) || data.uid == request.auth.uid) &&
+        (!('email' in data) || data.email == request.auth.token.email) &&
+        (!('isAdmin' in data) || data.isAdmin == false);
+    }
+
+    function safeUserSelfUpdate(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function safeOwnerProfileCreate(data, ownerId) {
+      return signedIn() && request.auth.uid == ownerId &&
+        (!('role' in data) || data.role == 'owner') &&
+        (!('status' in data) || !(data.status in ['ACTIVE','active'])) &&
+        (!('dashboardUnlocked' in data)) &&
+        (!('paymentVerified' in data));
+    }
+
+    function safeOwnerProfileUpdate() {
+      return signedIn() &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
+        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.dashboardUnlocked) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified);
+    }
+
     match /users/{userId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == userId) || emailOwns(resource.data);
       allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
       allow update: if isAdmin() || safeUserSelfUpdate(userId);
       allow delete: if isAdmin();
-      match /fcmTokens/{tokenId} {
-        allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
-      }
-      match /deviceReadiness/{readinessId} {
+      match /{document=**} {
         allow read, write: if isAdmin() || (signedIn() && request.auth.uid == userId);
       }
     }
@@ -292,13 +186,13 @@ service cloud.firestore {
 
     match /tenants/{tenantId} {
       allow read: if isAdmin() || participantCanRead(resource.data) || (signedIn() && request.auth.uid == tenantId);
-      allow create, update, delete: if isAdmin() || hasPermission('canManageTenants');
+      allow create, update, delete: if isAdmin();
     }
 
     match /technicians/{techId} {
       allow read: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId);
       allow create, delete: if isAdmin() || hasPermission('canManageTechnicians');
-      allow update: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentLocation','lastLocation','locationUpdatedAt','activeTicketId','isTracking','isOnDuty','onDuty','dutyStatus','shiftStartedAt','shiftEndedAt','lastSeenAt','updatedAt']));
+      allow update: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId);
     }
 
     match /properties/{propertyId} {
@@ -308,26 +202,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /properties_pending/{propertyId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data);
-      allow create, update, delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
     match /units/{unitId} {
       allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data);
       allow write: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /propertyPassports/{passportId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
-      allow create, update: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /quotes/{quoteId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data);
-      allow update, delete: if isAdmin() || hasPermission('canManageContracts');
     }
 
     match /contracts/{contractId} {
@@ -349,22 +226,17 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || hasPermission('canManageContracts');
     }
 
-    match /invoices/{invoiceId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || hasPermission('canViewPayments');
-      allow write: if isAdmin() || hasPermission('canManageContracts') || hasPermission('canVerifyPayments');
-    }
-
     match /tickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'])) || (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','techNotes','technicianNotes','materialsUsed','actualCost','completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes','tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt','waitingPartsAt','escalatedAt','completedPendingApprovalAt','beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos','technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus']));
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data);
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || (tenantOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rating','feedback','tenantApproved','rejectionReason','closedAt','updatedAt'])) || (techOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','techNotes','technicianNotes','materialsUsed','actualCost','completedAt','beforePhotoUrl','afterPhotoUrl','signatureUrl','notes','tenantApprovalRequired','updatedAt','startedAt','arrivedAt','onTheWayAt','waitingPartsAt','escalatedAt','completedPendingApprovalAt','beforePhotos','afterPhotos','evidencePhotos','proofPhotos','completionPhotos','technicianLocation','technicianLocationUpdatedAt','trackingStatus','dispatchStatus','assignedTechnicianId','technicianId','acceptedAt','assignedTechnicianName','assignedTechnicianPhone','assignedTechnicianAvatar','technicianSpecialty']));
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data);
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -374,40 +246,10 @@ service cloud.firestore {
       }
     }
 
-    match /workOrders/{workOrderId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create, update: if isAdmin() || hasPermission('canDispatchJobs') || techOwns(resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /addons/{addonId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin() || hasPermission('canManageContracts');
-    }
-
     match /documents/{documentId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canManageProperties');
       allow create: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(request.resource.data);
       allow update, delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /notifications/{notifId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
-      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
-      allow delete: if isAdmin();
-    }
-
-    match /auditLogs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
-      allow update, delete: if isAdmin();
-    }
-
-    match /audit_logs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
-      allow update, delete: if isAdmin();
     }
 
     match /intake_submissions/{intakeId} {
@@ -422,179 +264,34 @@ service cloud.firestore {
       allow write: if isAdmin() || hasPermission('canManageCompanyProfile');
     }
 
-    match /leases/{leaseId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canManageTenants');
-      allow write: if isAdmin() || hasPermission('canManageTenants');
-    }
-
-    match /tenant_ledger/{ledgerId} {
-      allow read: if participantCanRead(resource.data);
-      allow write: if isAdmin();
-    }
-
-    match /occupancies/{occupancyId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if isAdmin() || owns(request.resource.data);
-      allow update, delete: if isAdmin() || owns(resource.data);
-    }
-
-    match /tenant_invitations/{inviteId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerUid == request.auth.uid || resource.data.tenantUid == request.auth.uid || resource.data.tenantEmail == request.auth.token.email));
-      allow write: if isAdmin() || (signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerUid == request.auth.uid));
-    }
-
-    match /tenantInvitations/{inviteId} {
-      allow read: if isAdmin() || ownerCanRead(resource.data) || emailMatches(resource.data.tenantEmail);
-      allow write: if isAdmin() || owns(request.resource.data);
-    }
-
-    match /propertyReporters/{reporterId} {
-      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.reporterUid == request.auth.uid) || emailMatches(resource.data.reporterEmail);
-      allow create: if isAdmin() || owns(request.resource.data);
-      allow update: if isAdmin() || owns(resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /design_requests/{requestId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if participantCanRead(request.resource.data) && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus in ['NOT_STARTED','PENDING']);
-      allow update: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /design_quotes/{quoteId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if participantCanRead(request.resource.data);
-      allow update, delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /design_concepts/{conceptId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if participantCanRead(request.resource.data);
-      allow update, delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /design_approvals/{approvalId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if participantCanRead(request.resource.data);
-      allow update, delete: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(resource.data);
-    }
-
-    match /design_payments/{paymentId} {
-      allow read: if participantCanRead(resource.data);
-      allow create: if paymentDraftCreate(request.resource.data);
-      allow update, delete: if isAdmin() || hasPermission('canManageContracts');
-    }
-
     match /brokerReferrals/{referralId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
       allow update, delete: if isAdmin();
     }
 
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid));
+      allow read: if isAdmin() || brokerOwns(resource.data);
       allow write: if isAdmin();
     }
 
     match /commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid));
+      allow read: if isAdmin() || brokerOwns(resource.data);
       allow write: if isAdmin();
     }
 
-    match /gatePasses/{passId} {
-      allow read: if isAdmin() || tenantOwns(resource.data);
-      allow create: if isAdmin() || tenantOwns(request.resource.data);
-      allow update, delete: if isAdmin() || tenantOwns(resource.data);
+    match /leases/{leaseId} {
+      allow read: if participantCanRead(resource.data) || isAdmin();
+      allow write: if isAdmin();
     }
 
-    match /amenityBookings/{bookingId} {
-      allow read: if isAdmin() || tenantOwns(resource.data);
-      allow create: if isAdmin() || tenantOwns(request.resource.data);
-      allow update, delete: if isAdmin() || tenantOwns(resource.data);
+    match /invoices/{invoiceId} {
+      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || isAdmin();
+      allow write: if isAdmin();
     }
 
-    match /hrProfiles/{profileId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && request.auth.uid == profileId);
-      allow write: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /attendanceLogs/{logId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
-    }
-
-    match /hrRequests/{requestId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /salaryBenchmarks/{benchmarkId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff');
-      allow write: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /salaryHistory/{historyId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if isAdmin() || hasPermission('canManageStaff');
-      allow update, delete: if isAdmin();
-    }
-
-    match /staffRequests/{requestId} {
-      allow read: if isAdmin()
-        || hasPermission('canManageStaff')
-        || (signedIn() && resource.data.uid == request.auth.uid)
-        || (signedIn() && resource.data.userId == request.auth.uid)
-        || (signedIn() && resource.data.technicianId == request.auth.uid);
-
-      allow create: if signedIn() && (
-        isAdmin()
-        || hasPermission('canManageStaff')
-        || request.resource.data.uid == request.auth.uid
-        || request.resource.data.userId == request.auth.uid
-        || request.resource.data.technicianId == request.auth.uid
-      );
-
-      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /staffAgreements/{staffId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && request.auth.uid == staffId);
-      allow create: if isAdmin() || hasPermission('canManageStaff');
-
-      allow update: if isAdmin()
-        || hasPermission('canManageStaff')
-        || (
-          signedIn()
-          && request.auth.uid == staffId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status',
-            'acceptedAt',
-            'acceptedBy',
-            'acceptanceMethod',
-            'updatedAt'
-          ])
-        );
-
-      allow delete: if isAdmin();
-    }
-
-    match /staffMoodCheckins/{checkinId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /hrAiConversations/{conversationId} {
-      allow read: if isAdmin() || hasPermission('canManageStaff') || (signedIn() && resource.data.uid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAdmin() || hasPermission('canManageStaff');
-    }
-
-    match /binGptEngineerCommands/{commandId} {
-      allow read, write: if isAdmin();
+    match /onboarding-proof/{proofId} {
+      allow read, write: if signedIn();
     }
 
     match /{document=**} {
