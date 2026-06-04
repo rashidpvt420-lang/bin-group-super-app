@@ -57,11 +57,14 @@ jobs:
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
-      - name: Build public hosting app
+      - name: Build unified public and admin app
         run: npm run build
 
-      - name: Build admin panel
-        run: npm run build --workspace=home-os-admin-panel
+      - name: Prepare legacy admin hosting target from unified app
+        run: |
+          rm -rf apps/admin-panel/build
+          mkdir -p apps/admin-panel
+          cp -R dist apps/admin-panel/build
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
@@ -114,11 +117,14 @@ jobs:
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
-      - name: Build public hosting app
+      - name: Build unified public and admin app
         run: npm run build
 
-      - name: Build admin panel
-        run: npm run build --workspace=home-os-admin-panel
+      - name: Prepare legacy admin hosting target from unified app
+        run: |
+          rm -rf apps/admin-panel/build
+          mkdir -p apps/admin-panel
+          cp -R dist apps/admin-panel/build
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
