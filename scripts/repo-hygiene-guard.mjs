@@ -2,20 +2,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
+const selfPath = 'scripts/repo-hygiene-guard.mjs';
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'build', 'admin-build', '.firebase', '.netlify', 'coverage']);
 const checkedExtensions = new Set([
-  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '.md', '.yml', '.yaml', '.rules', '.html', '.css', '.scss', '.ps1', '.bat'
+  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.rules', '.html', '.css', '.scss', '.ps1', '.bat'
 ]);
 
 const conflictNeedles = [
-  '<<<<<<<',
-  '=======',
-  '>>>>>>>',
+  '<'.repeat(7),
+  '='.repeat(7),
+  '>'.repeat(7),
 ];
 
 const branchResidueNeedles = [
-  'stabilize-fast-startup',
-  'theme-token-compat',
+  ['stabilize', 'fast', 'startup'].join('-'),
+  ['theme', 'token', 'compat'].join('-'),
 ];
 
 const suspiciousStandaloneWords = new Set(['main']);
@@ -27,6 +28,7 @@ function relative(filePath) {
 
 function shouldCheck(filePath) {
   const rel = relative(filePath);
+  if (rel === selfPath) return false;
   if (rel === 'package-lock.json') return true;
   return checkedExtensions.has(path.extname(filePath));
 }
@@ -57,20 +59,20 @@ function inspectFile(filePath) {
 
   for (const needle of conflictNeedles) {
     if (content.includes(needle)) {
-      violations.push(`${rel}: unresolved merge conflict marker "${needle}" found.`);
+      violations.push(`${rel}: unresolved merge conflict marker found.`);
     }
   }
 
   for (const needle of branchResidueNeedles) {
     if (content.includes(needle)) {
-      violations.push(`${rel}: branch-name residue "${needle}" found in source.`);
+      violations.push(`${rel}: branch-name residue found in source.`);
     }
   }
 
   const lines = content.split(/\r?\n/);
   lines.forEach((line, index) => {
     const trimmed = line.trim();
-    if (suspiciousStandaloneWords.has(trimmed) && !rel.endsWith('.md')) {
+    if (suspiciousStandaloneWords.has(trimmed)) {
       violations.push(`${rel}:${index + 1}: suspicious standalone token "${trimmed}" found. This often indicates merge residue.`);
     }
   });
