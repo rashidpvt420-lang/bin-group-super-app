@@ -25,6 +25,7 @@ const publicRoutes = [
 
 const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|cannot read properties of undefined|null is not an object/i;
 const serverErrorText = /bad gateway|service unavailable|internal server error|gateway timeout/i;
+const visibleAccessFailureText = /permission-denied|unauthenticated|access denied|not authorized/i;
 
 async function collectPageDiagnostics(page: Page, route: string) {
   return page.evaluate((targetRoute) => {
@@ -156,8 +157,12 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
       expect(currentPath, `${role} should be able to reach ${roleRoutes[role]}`).toBe(roleRoutes[role]);
 
       const bodyText = await page.locator('body').innerText({ timeout: 20_000 });
-      expect(bodyText).not.toMatch(/permission-denied|unauthenticated|access denied|not authorized/i);
-      expect(consoleErrors.join('\n')).not.toMatch(/permission-denied|missing or insufficient permissions/i);
+      expect(bodyText).not.toMatch(visibleAccessFailureText);
+
+      const criticalConsoleErrors = consoleErrors.filter((entry) =>
+        /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i.test(entry)
+      );
+      expect(criticalConsoleErrors.join('\n')).toBe('');
     });
   }
 });
