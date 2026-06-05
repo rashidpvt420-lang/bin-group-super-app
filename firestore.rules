@@ -2,475 +2,82 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-
-    function isAdmin() {
-      return signedIn() && (
-        request.auth.token.admin == true ||
-        request.auth.token.isAdmin == true ||
-        request.auth.token.ceo == true ||
-        request.auth.token.manager == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.token.role == 'super_admin' ||
-        request.auth.token.role == 'ceo' ||
-        request.auth.token.role == 'manager' ||
-        request.auth.token.role == 'operations_admin' ||
-        request.auth.token.role == 'finance_admin' ||
-        request.auth.token.role == 'hr_admin' ||
-        request.auth.token.role == 'support_admin' ||
-        request.auth.token.userRole == 'admin' ||
-        request.auth.token.primaryRole == 'admin'
-      );
-    }
-
-    function hasPermission(permission) {
-      return isAdmin() || (signedIn() && request.auth.token.permissions[permission] == true);
-    }
-
     function authEmail() { return signedIn() ? request.auth.token.email : null; }
     function emailMatches(value) { return signedIn() && authEmail() != null && value != null && value == authEmail(); }
+    function currentUserExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function currentUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function currentRole() { return currentUserExists() ? currentUserData().role : null; }
+    function hasRole(roles) { return signedIn() && (request.auth.token.role in roles || request.auth.token.userRole in roles || request.auth.token.primaryRole in roles || currentRole() in roles); }
+    function isAdmin() { return signedIn() && (request.auth.token.admin == true || request.auth.token.isAdmin == true || request.auth.token.ceo == true || request.auth.token.manager == true || hasRole(['admin','super_admin','ceo','manager','operations_admin','finance_admin','hr_admin','support_admin'])); }
+    function isHr() { return isAdmin() || hasRole(['hr_admin','hr_manager','hr_staff']); }
+    function isFinance() { return isAdmin() || hasRole(['finance_admin','finance_staff','account_manager']); }
+    function isOps() { return isAdmin() || hasRole(['operations_admin','operations_manager','dispatcher']); }
+    function hasPermission(permission) { return isAdmin() || (signedIn() && request.auth.token.permissions[permission] == true); }
     function isOwnerId(ownerId) { return signedIn() && ownerId != null && ownerId == request.auth.uid; }
-    function isOwner(ownerId) { return isOwnerId(ownerId); }
     function isTenantId(tenantId) { return signedIn() && tenantId != null && tenantId == request.auth.uid; }
-    function isTechnicianId(techId) { return signedIn() && techId != null && techId == request.auth.uid; }
+    function isStaffId(staffId) { return signedIn() && staffId != null && staffId == request.auth.uid; }
+    function owns(data) { return isOwnerId(data.ownerId) || isOwnerId(data.ownerUid) || isOwnerId(data.authUid) || isOwnerId(data.userId) || isOwnerId(data.createdBy) || isOwnerId(data.createdByUid); }
+    function tenantOwns(data) { return isTenantId(data.tenantId) || isTenantId(data.tenantUid) || isTenantId(data.authUid) || isTenantId(data.userId) || isTenantId(data.createdByUid); }
+    function staffOwns(data) { return isStaffId(data.uid) || isStaffId(data.userId) || isStaffId(data.technicianId) || isStaffId(data.staffId) || emailOwns(data); }
+    function techOwns(data) { return staffOwns(data) || isStaffId(data.assignedTechnicianId) || isStaffId(data.technicianId) || isStaffId(data.techId); }
+    function brokerOwns(data) { return signedIn() && (data.brokerId == request.auth.uid || data.brokerUid == request.auth.uid || data.userId == request.auth.uid || data.createdByUid == request.auth.uid); }
+    function emailOwns(data) { return emailMatches(data.email) || emailMatches(data.ownerEmail) || emailMatches(data.tenantEmail) || emailMatches(data.technicianEmail) || emailMatches(data.staffEmail) || emailMatches(data.brokerEmail) || emailMatches(data.recipientEmail) || emailMatches(data.contactEmail); }
+    function participantCanRead(data) { return isAdmin() || owns(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data) || emailOwns(data); }
+    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN','open','emergency_submitted']; }
+    function ownerDraftCreate(data) { return signedIn() && owns(data) && (!('status' in data) || data.status in ['draft','quote_generated','contract_selected','payment_pending','pending_admin_approval','pending_approval']) && (!('paymentVerified' in data) || data.paymentVerified == false) && (!('adminApproved' in data) || data.adminApproved == false) && (!('approved' in data) || data.approved == false) && (!('contractActivated' in data) || data.contractActivated == false) && (!('unlocksDashboard' in data) || data.unlocksDashboard == false); }
+    function paymentDraftCreate(data) { return signedIn() && (owns(data) || tenantOwns(data) || data.payerId == request.auth.uid || data.userId == request.auth.uid) && (!('status' in data) || data.status in ['draft','payment_pending','pending','PENDING_PAYMENT','PENDING_ADMIN_PAYMENT_VERIFICATION']) && (!('paymentVerified' in data) || data.paymentVerified == false); }
+    function safeUserBootstrapCreate(data, userId) { return signedIn() && request.auth.uid == userId && request.resource.data.keys().hasOnly(['uid','email','displayName','photoURL','phoneNumber','status','createdAt','updatedAt','lastLoginAt','platform','isStandalone','userAgent','fcmTokens','notificationPreferences','language','preferences']) && (!('uid' in data) || data.uid == request.auth.uid) && (!('email' in data) || data.email == request.auth.token.email) && (!('status' in data) || data.status == 'role_required'); }
+    function safeUserSelfUpdate(userId) { return signedIn() && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','photoURL','phone','phoneNumber','mobile','preferredLanguage','language','lang','legalAcceptedAt','legalAcceptedAtClient','pdplCompliance','gpsConsent','legalAcceptedVersion','termsAcceptedAt','termsVersion','privacyAcceptedAt','notificationPreferences','fcmTokens','platform','isStandalone','userAgent','lastLoginAt','lastSeenAt','pushEnabled','pushPermission','deviceInfo','onboardingLastSeenAt','dutyStatus','onDuty','updatedAt']) && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) && (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.userRole) && (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.primaryRole) && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) && (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions); }
+    function staffCreate(data) { return signedIn() && staffOwns(data) && (!('status' in data) || data.status in ['pending_hr_review','pending_finance_review','submitted']) && (!('paperless' in data) || data.paperless == true); }
 
-    function owns(data) {
-      return isOwnerId(data.ownerId) || isOwnerId(data.ownerUid) || isOwnerId(data.authUid) || isOwnerId(data.userId) || isOwnerId(data.createdBy) || isOwnerId(data.createdByUid);
-    }
+    match /users/{userId} { allow read: if isAdmin() || isHr() || isFinance() || isOps() || request.auth.uid == userId || emailOwns(resource.data); allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId); allow update: if isAdmin() || safeUserSelfUpdate(userId); allow delete: if isAdmin(); match /{document=**} { allow read: if isAdmin() || isHr() || request.auth.uid == userId; allow write: if isAdmin() || isHr(); } }
+    match /owners/{id} { allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data); allow create: if isAdmin() || ownerDraftCreate(request.resource.data); allow update: if isAdmin() || owns(resource.data); allow delete: if isAdmin(); }
+    match /tenants/{id} { allow read: if isAdmin() || participantCanRead(resource.data) || request.auth.uid == id; allow write: if isAdmin(); }
+    match /technicians/{id} { allow read: if isAdmin() || isHr() || isOps() || request.auth.uid == id || emailOwns(resource.data); allow create, update: if isAdmin() || isHr() || isOps() || request.auth.uid == id; allow delete: if isAdmin(); }
+    match /properties/{id} { allow read: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(resource.data); allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data); allow update: if isAdmin() || hasPermission('canManageProperties') || owns(resource.data); allow delete: if isAdmin(); }
+    match /units/{id} { allow read: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(resource.data); allow write: if isAdmin() || hasPermission('canManageProperties'); }
+    match /contracts/{id} { allow read: if participantCanRead(resource.data) || hasPermission('canManageContracts'); allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data); allow update: if isAdmin() || hasPermission('canManageContracts') || owns(resource.data); allow delete: if isAdmin(); }
+    match /payments/{id} { allow read: if participantCanRead(resource.data) || resource.data.payerId == request.auth.uid || hasPermission('canManageContracts'); allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data); allow update, delete: if isAdmin() || hasPermission('canManageContracts'); }
+    match /payment_transactions/{id} { allow read: if participantCanRead(resource.data) || resource.data.payerId == request.auth.uid || hasPermission('canManageContracts'); allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data); allow update, delete: if isAdmin() || hasPermission('canManageContracts'); }
+    match /tickets/{id} { allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs'); allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data); allow update: if isAdmin() || hasPermission('canDispatchJobs') || participantCanRead(resource.data); allow delete: if isAdmin(); }
+    match /maintenanceTickets/{id} { allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs'); allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data); allow update: if isAdmin() || hasPermission('canDispatchJobs') || participantCanRead(resource.data); allow delete: if isAdmin(); match /messages/{messageId} { allow read, create: if signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(id)); allow update: if false; allow delete: if isAdmin(); } }
 
-    function tenantOwns(data) {
-      return isTenantId(data.tenantId) || isTenantId(data.tenantUid) || isTenantId(data.authUid) || isTenantId(data.userId) || isTenantId(data.createdByUid);
-    }
+    match /staffRequests/{id} { allow read: if isHr() || isFinance() || isOps() || staffOwns(resource.data); allow create: if isHr() || isFinance() || isOps() || staffCreate(request.resource.data); allow update: if isHr() || isFinance() || isOps(); allow delete: if isHr() || isAdmin(); }
+    match /staffDocuments/{id} { allow read: if isHr() || isFinance() || staffOwns(resource.data); allow create: if isHr() || staffCreate(request.resource.data); allow update, delete: if isHr(); }
+    match /staffPayslips/{id} { allow read: if isHr() || isFinance() || staffOwns(resource.data); allow write: if isHr() || isFinance(); }
+    match /hrProfiles/{id} { allow read: if isHr() || isFinance() || isOps() || request.auth.uid == id || staffOwns(resource.data); allow write: if isHr(); }
+    match /attendanceLogs/{id} { allow read: if isHr() || isFinance() || isOps() || staffOwns(resource.data); allow create: if isHr() || isOps() || staffCreate(request.resource.data); allow update, delete: if isHr() || isOps(); }
+    match /overtimeRequests/{id} { allow read: if isHr() || isFinance() || isOps() || staffOwns(resource.data); allow create: if isHr() || isOps() || staffCreate(request.resource.data); allow update, delete: if isHr() || isFinance() || isOps(); }
+    match /staffAssets/{id} { allow read: if isHr() || isOps() || staffOwns(resource.data); allow write: if isHr() || isOps(); }
+    match /staffLetters/{id} { allow read: if isHr() || staffOwns(resource.data); allow write: if isHr(); }
+    match /staffTraining/{id} { allow read: if isHr() || isOps() || staffOwns(resource.data); allow write: if isHr() || isOps(); }
+    match /staffAgreements/{id} { allow read: if isHr() || request.auth.uid == id || staffOwns(resource.data); allow create: if isHr(); allow update: if isHr() || (request.auth.uid == id && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','acceptedAt','acceptedBy','acceptanceMethod','updatedAt']) && request.resource.data.status == 'accepted'); allow delete: if isHr(); }
+    match /salaryHistory/{id} { allow read, write: if isHr() || isFinance(); }
+    match /staffMoodCheckins/{id} { allow read: if isHr() || staffOwns(resource.data); allow create: if isHr() || request.resource.data.uid == request.auth.uid; allow update, delete: if isHr(); }
+    match /hrAiConversations/{id} { allow read: if isHr() || staffOwns(resource.data); allow create: if isHr() || request.resource.data.uid == request.auth.uid; allow update, delete: if isHr(); }
+    match /staffComplianceAlerts/{id} { allow read: if isHr() || isFinance() || staffOwns(resource.data); allow write: if isHr() || isFinance(); }
 
-    function techOwns(data) {
-      return isTechnicianId(data.assignedTechnicianId) || isTechnicianId(data.technicianId) || isTechnicianId(data.techId);
-    }
+    match /documents/{id} { allow read: if participantCanRead(resource.data) || hasPermission('canManageProperties'); allow create: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(request.resource.data); allow update, delete: if isAdmin() || hasPermission('canManageProperties'); }
+    match /intake_submissions/{id} { allow read: if isAdmin() || owns(resource.data); allow create: if signedIn(); allow update: if isAdmin() || owns(resource.data); allow delete: if isAdmin(); }
+    match /settings/{id} { allow read: if id == 'companyProfile' || isAdmin(); allow write: if isAdmin() || hasPermission('canManageCompanyProfile'); }
+    match /systemLogs/{id} { allow read: if isAdmin() || isHr() || (signedIn() && resource.data.type == 'TENANT_NOTICE'); allow create: if isAdmin() || isHr(); allow update, delete: if isAdmin(); }
+    match /auditLogs/{id} { allow read: if isAdmin() || isHr(); allow create: if signedIn(); allow update, delete: if isAdmin(); }
+    match /audit_logs/{id} { allow read: if isAdmin() || isHr(); allow create: if signedIn(); allow update, delete: if isAdmin(); }
+    match /notifications/{id} { allow read: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid; allow create: if signedIn(); allow update: if isAdmin() || resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid; allow delete: if isAdmin(); }
 
-    function brokerOwns(data) {
-      return signedIn() && (
-        data.brokerId == request.auth.uid ||
-        data.brokerUid == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid
-      );
-    }
-
-
-
-    function emailOwns(data) {
-      return emailMatches(data.email) ||
-        emailMatches(data.ownerEmail) ||
-        emailMatches(data.tenantEmail) ||
-        emailMatches(data.technicianEmail) ||
-        emailMatches(data.staffEmail) ||
-        emailMatches(data.brokerEmail) ||
-        emailMatches(data.recipientEmail) ||
-        emailMatches(data.contactEmail);
-    }
-
-    function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
-    function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || emailOwns(data)); }
-    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
-    function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
-
-    function ownerDraftCreate(data) {
-      return signedIn() && owns(data) &&
-        (!('status' in data) || data.status in ['draft', 'quote_generated', 'contract_selected', 'payment_pending', 'pending_admin_approval', 'pending_approval']) &&
-        (!('paymentVerified' in data) || data.paymentVerified == false) &&
-        (!('adminApproved' in data) || data.adminApproved == false) &&
-        (!('approved' in data) || data.approved == false) &&
-        (!('contractActivated' in data) || data.contractActivated == false) &&
-        (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
-    }
-
-    function paymentDraftCreate(data) {
-      return signedIn() && (owns(data) || tenantOwns(data) || data.payerId == request.auth.uid || data.userId == request.auth.uid) &&
-        (!('status' in data) || data.status in ['draft', 'payment_pending', 'pending', 'PENDING_PAYMENT', 'PENDING_ADMIN_PAYMENT_VERIFICATION']) &&
-        (!('paymentVerified' in data) || data.paymentVerified == false) &&
-        (!('approved' in data) || data.approved == false) &&
-        (!('contractActivated' in data) || data.contractActivated == false) &&
-        (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
-    }
-
-    function safeOwnerContractUpdate() {
-      return signedIn() && owns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
-        (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
-    }
-
-    function safeTenantEvidenceUpdate() {
-      return signedIn() && tenantOwns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photos', 'primaryPhotoUrl', 'tenantPhotos', 'evidenceStatus', 'evidenceUploadedAt', 'evidenceUploadError', 'updatedAt']) &&
-        (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']);
-    }
-
-    function safeTechnicianTicketUpdate() {
-      return signedIn() && techOwns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status',
-          'updatedAt',
-          'technicianNotes',
-          'techNotes',
-          'workNotes',
-          'startedAt',
-          'completedAt',
-          'arrivedAt',
-          'beforePhotos',
-          'afterPhotos',
-          'proofPhotos',
-          'completionPhotos',
-          'evidenceStatus',
-          'resolutionSummary',
-          'materialsUsed'
-        ]) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.assignedTechnicianId) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.technicianId) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.techId) &&
-        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.priority) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'COMPLETED', 'RESOLVED', 'assigned', 'in_progress', 'arrived', 'completed', 'resolved']);
-    }
-
-    function safeOpenMissionClaim() {
-      return openMissionPoolRead(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == request.auth.uid) &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress']);
-    }
-
-    function canAccessMaintenanceTicket(ticketId) {
-      return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
-    }
-
-    function safeTicketMessageCreate(ticketId) {
-      return canAccessMaintenanceTicket(ticketId) &&
-        (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
-        (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
-        (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
-    }
-
-    function safeUserBootstrapCreate(data, userId) {
-      return signedIn() && request.auth.uid == userId &&
-        request.resource.data.keys().hasOnly([
-          'uid',
-          'email',
-          'displayName',
-          'photoURL',
-          'phoneNumber',
-          'status',
-          'createdAt',
-          'updatedAt',
-          'lastLoginAt',
-          'platform',
-          'isStandalone',
-          'userAgent',
-          'fcmTokens',
-          'notificationPreferences',
-          'language',
-          'preferences'
-        ]) &&
-        (!('uid' in data) || data.uid == request.auth.uid) &&
-        (!('email' in data) || data.email == request.auth.token.email) &&
-        (!('status' in data) || data.status == 'role_required');
-    }
-
-    function safeUserSelfUpdate(userId) {
-      return signedIn() && request.auth.uid == userId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName',
-          'photoURL',
-          'phone',
-          'phoneNumber',
-          'mobile',
-          'preferredLanguage',
-          'language',
-          'lang',
-          'legalAcceptedAt',
-          'legalAcceptedAtClient',
-          'pdplCompliance',
-          'gpsConsent',
-          'legalAcceptedVersion',
-          'termsAcceptedAt',
-          'termsVersion',
-          'privacyAcceptedAt',
-          'notificationPreferences',
-          'fcmTokens',
-          'platform',
-          'isStandalone',
-          'userAgent',
-          'lastLoginAt',
-          'lastSeenAt',
-          'pushEnabled',
-          'pushPermission',
-          'deviceInfo',
-          'onboardingLastSeenAt',
-          'dutyStatus',
-          'onDuty',
-          'updatedAt'
-        ]) &&
-        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
-        (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.userRole) &&
-        (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.primaryRole) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
-        (!('admin' in request.resource.data) || request.resource.data.admin == resource.data.admin) &&
-        (!('superAdmin' in request.resource.data) || request.resource.data.superAdmin == resource.data.superAdmin) &&
-        (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.super_admin) &&
-        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
-        (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.onboardingComplete) &&
-        (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.propertyId) &&
-        (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.unitId);
-    }
-
-    function safeOwnerProfileCreate(data, ownerId) {
-      return signedIn() && request.auth.uid == ownerId &&
-        (!('role' in data) || data.role == 'owner') &&
-        (!('status' in data) || !(data.status in ['ACTIVE','active'])) &&
-        (!('dashboardUnlocked' in data)) &&
-        (!('paymentVerified' in data));
-    }
-
-    function safeOwnerProfileUpdate() {
-      return signedIn() &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
-        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.dashboardUnlocked) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified);
-    }
-
-    function ownsOnboardingProof(data) {
-      return signedIn() && (
-        data.ownerUid == request.auth.uid ||
-        data.ownerId == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid ||
-        data.email == request.auth.token.email ||
-        data.ownerEmail == request.auth.token.email
-      );
-    }
-
-    function safeOnboardingProofCreate(data) {
-      return ownsOnboardingProof(data) &&
-        (!('verified' in data) || data.verified == false) &&
-        (!('approved' in data) || data.approved == false) &&
-        (!('adminApproved' in data) || data.adminApproved == false) &&
-        (!('paymentVerified' in data) || data.paymentVerified == false);
-    }
-
-    match /users/{userId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId) || emailOwns(resource.data);
-      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
-      allow update: if isAdmin() || safeUserSelfUpdate(userId);
-      allow delete: if isAdmin();
-      match /{document=**} {
-        allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
-        allow create: if isAdmin();
-        allow update: if isAdmin();
-        allow delete: if isAdmin();
-      }
-    }
-
-    match /owners/{ownerId} {
-      allow read: if isOwner(ownerId) || emailOwns(resource.data) || isAdmin() || hasPermission('canManageTenants');
-      allow create: if isAdmin() || hasPermission('canManageTenants') || safeOwnerProfileCreate(request.resource.data, ownerId);
-      allow update: if isAdmin() || hasPermission('canManageTenants') || (isOwner(ownerId) && safeOwnerProfileUpdate());
-      allow delete: if isAdmin() || hasPermission('canManageTenants');
-    }
-
-    match /tenants/{tenantId} {
-      allow read: if isAdmin() || participantCanRead(resource.data) || (signedIn() && request.auth.uid == tenantId);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /technicians/{techId} {
-      allow read: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId) || emailOwns(resource.data);
-      allow create: if isAdmin() || hasPermission('canManageTechnicians');
-      allow update: if isAdmin() || hasPermission('canManageTechnicians') || (signedIn() && request.auth.uid == techId);
-      allow delete: if isAdmin() || hasPermission('canManageTechnicians');
-    }
-
-    match /properties/{propertyId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
-      allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || request.resource.data.status != 'active'));
-      allow delete: if isAdmin();
-    }
-
-    match /units/{unitId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || hasPermission('canManageProperties');
-      allow update: if isAdmin() || hasPermission('canManageProperties');
-      allow delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /contracts/{contractId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate();
-      allow delete: if isAdmin();
-    }
-
-    match /payments/{paymentId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts');
-      allow delete: if isAdmin() || hasPermission('canManageContracts');
-    }
-
-    match /payment_transactions/{paymentId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts');
-      allow delete: if isAdmin() || hasPermission('canManageContracts');
-    }
-
-    match /tickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
-      allow delete: if isAdmin();
-    }
-
-    match /maintenanceTickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
-      allow delete: if isAdmin();
-      match /messages/{messageId} {
-        allow read: if canAccessMaintenanceTicket(ticketId);
-        allow create: if safeTicketMessageCreate(ticketId);
-        allow update: if false;
-        allow delete: if isAdmin();
-      }
-    }
-
-    match /documents/{documentId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageProperties');
-      allow create: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageProperties');
-      allow delete: if isAdmin() || hasPermission('canManageProperties');
-    }
-
-    match /intake_submissions/{intakeId} {
-      allow read: if isAdmin() || ownerCanRead(resource.data);
-      allow create: if signedIn() && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email);
-      allow update: if isAdmin() || ownerCanRead(resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /settings/{settingId} {
-      allow read: if settingId == 'companyProfile' || isAdmin();
-      allow create: if isAdmin() || hasPermission('canManageCompanyProfile');
-      allow update: if isAdmin() || hasPermission('canManageCompanyProfile');
-      allow delete: if isAdmin() || hasPermission('canManageCompanyProfile');
-    }
-
-    match /systemLogs/{logId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.type == 'TENANT_NOTICE');
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /staff_roster/{staffId} {
-      allow read: if isAdmin() || staffCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /hr_staff/{staffId} {
-      allow read: if isAdmin() || staffCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /attendance/{attendanceId} {
-      allow read: if isAdmin() || staffCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /technician_certifications/{certificationId} {
-      allow read: if isAdmin() || staffCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /certifications/{certificationId} {
-      allow read: if isAdmin() || staffCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /brokerLeads/{leadId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || brokerOwns(request.resource.data);
-      allow update: if isAdmin() || brokerOwns(resource.data);
-      allow delete: if isAdmin() || brokerOwns(resource.data);
-    }
-
-    match /referrals/{referralId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || brokerOwns(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /brokerReferrals/{referralId} {
-      allow read: if isAdmin() || brokerOwns(resource.data);
-      allow create: if brokerOwns(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /commissions/{commissionId} {
-      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /leases/{leaseId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /invoices/{invoiceId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /onboarding-proof/{proofId} {
-      allow read: if isAdmin() || ownsOnboardingProof(resource.data);
-      allow create: if safeOnboardingProofCreate(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /{document=**} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
+    match /staff_roster/{id} { allow read: if isAdmin() || isHr() || staffOwns(resource.data); allow write: if isAdmin() || isHr(); }
+    match /hr_staff/{id} { allow read: if isAdmin() || isHr() || staffOwns(resource.data); allow write: if isAdmin() || isHr(); }
+    match /attendance/{id} { allow read: if isAdmin() || isHr() || staffOwns(resource.data); allow write: if isAdmin() || isHr(); }
+    match /technician_certifications/{id} { allow read: if isAdmin() || isHr() || staffOwns(resource.data); allow write: if isAdmin() || isHr(); }
+    match /certifications/{id} { allow read: if isAdmin() || isHr() || staffOwns(resource.data); allow write: if isAdmin() || isHr(); }
+    match /brokerLeads/{id} { allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data); allow create: if isAdmin() || brokerOwns(request.resource.data); allow update: if isAdmin() || brokerOwns(resource.data); allow delete: if isAdmin() || brokerOwns(resource.data); }
+    match /referrals/{id} { allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data); allow create: if isAdmin() || brokerOwns(request.resource.data); allow update, delete: if isAdmin(); }
+    match /brokerReferrals/{id} { allow read: if isAdmin() || brokerOwns(resource.data); allow create: if brokerOwns(request.resource.data); allow update, delete: if isAdmin(); }
+    match /broker_commissions/{id} { allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data); allow write: if isAdmin(); }
+    match /commissions/{id} { allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data); allow write: if isAdmin(); }
+    match /leases/{id} { allow read: if participantCanRead(resource.data) || isAdmin(); allow write: if isAdmin(); }
+    match /invoices/{id} { allow read: if participantCanRead(resource.data) || resource.data.payerId == request.auth.uid || isAdmin(); allow write: if isAdmin(); }
+    match /onboarding-proof/{id} { allow read: if isAdmin() || owns(resource.data) || emailOwns(resource.data); allow create: if signedIn(); allow update, delete: if isAdmin(); }
+    match /{document=**} { allow read, write: if isAdmin(); }
   }
 }
