@@ -1,5 +1,6 @@
 // owner-app/src/pages/InvoiceDetailsPage.tsx
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { 
     Container, Paper, Typography, Box, Table, TableBody, 
     TableCell, TableContainer, TableHead, TableRow, Divider,
@@ -227,7 +228,7 @@ export default function InvoiceDetailsPage() {
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(total)} AED</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>VAT (5%)</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{t('common.vat_5')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(vat)} AED</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />

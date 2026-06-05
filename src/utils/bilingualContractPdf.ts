@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { registerArabicFont, getArabicFontName } from './arabicPdfFont';
 
 type ContractPdfInput = {
   artifact: {
@@ -28,7 +29,9 @@ function writeLTR(doc: jsPDF, value: string, x: number, y: number, options: Reco
 }
 
 function writeRTL(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
+  doc.setFont(getArabicFontName(doc), 'normal');
   doc.text(normalizeArabic(doc, value || '-'), x, y, { align: 'right', ...options } as any);
+  doc.setFont('helvetica', 'normal');
 }
 
 function wrappedLTR(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
@@ -76,6 +79,8 @@ function savePdfMobileSafe(doc: jsPDF, filename: string) {
 
 export function generateBilingualContractPdf(input: ContractPdfInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  // Register Arabic font immediately so all RTL text renders with Cairo glyphs
+  registerArabicFont(doc);
   const provider = input.providerName || 'BIN GROUP PROPERTY MANAGEMENT LLC';
   const timestamp = new Date(input.artifact.timestamp).toLocaleString();
 
@@ -156,7 +161,8 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   doc.rect(15, 214, 180, 40);
 
   doc.setFontSize(8);
-  writeLTR(doc, 'This bilingual PDF is generated from the BIN GROUP digital acceptance record. English and Arabic sections are provided for operational clarity.', 105, 284, { align: 'center' });
+  writeLTR(doc, 'This bilingual PDF is generated from the BIN GROUP digital acceptance record. English and Arabic sections are provided for operational clarity.', 105, 281, { align: 'center' });
+  writeRTL(doc, 'تم إنشاء هذه الوثيقة ثنائية اللغة من سجل القبول الرقمي لمجموعة بن. القسمان الإنجليزي والعربي مقدمان للوضوح التشغيلي.', 195, 287);
 
   return savePdfMobileSafe(doc, `BIN_GROUP_Contract_${input.artifact.institutionalHash}.pdf`);
 }

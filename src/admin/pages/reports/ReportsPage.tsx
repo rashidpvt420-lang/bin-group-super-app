@@ -25,6 +25,7 @@ import {
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { registerArabicFont } from '../../../utils/arabicPdfFont';
 import { apiClient } from '../../services/api';
 import { db, collection, query, getDocs, orderBy, limit } from '@/lib/firebase';
 
@@ -113,6 +114,7 @@ export default function ReportsPage() {
       }
 
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        registerArabicFont(doc);
       const pageWidth = doc.internal.pageSize.getWidth();
       const generatedAt = new Date().toLocaleString();
 

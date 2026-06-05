@@ -54,6 +54,8 @@ service cloud.firestore {
       );
     }
 
+
+
     function emailOwns(data) {
       return emailMatches(data.email) ||
         emailMatches(data.ownerEmail) ||

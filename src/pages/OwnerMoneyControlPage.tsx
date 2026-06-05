@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { Container, Typography, Box, Paper, Grid, Stack, Button, Divider, alpha, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { DollarSign, ArrowUpRight, ArrowDownRight, FileText, Download, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { db, collection, query, where, getDocs, orderBy, limit } from '../lib/firebase';
@@ -118,7 +119,7 @@ export default function OwnerMoneyControlPage() {
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>DATE</TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>DESCRIPTION</TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} align="right">AMOUNT (AED)</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} align="right">{t('common.amount_aed').toUpperCase()}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>

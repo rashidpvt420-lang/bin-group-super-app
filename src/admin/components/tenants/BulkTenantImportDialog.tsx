@@ -22,6 +22,7 @@ import { db, auth, functions } from '@/lib/firebase';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { registerArabicFont } from '../../../utils/arabicPdfFont';
 
 interface BulkTenantImportDialogProps {
     open: boolean;
@@ -346,6 +347,7 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
+        registerArabicFont(doc);
         doc.setFontSize(18);
         doc.text("BIN GROUP - Tenant Import Summary", 14, 22);
         doc.setFontSize(12);

@@ -3,6 +3,7 @@ import { Button, CircularProgress } from '@mui/material';
 import { FileText } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { registerArabicFont } from '../utils/arabicPdfFont';
 import { formatAED } from '../utils/formatters';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
@@ -27,6 +28,7 @@ const OwnerReportGenerator: React.FC<OwnerReportGeneratorProps> = ({
         setLoading(true);
         try {
             const doc = new jsPDF();
+        registerArabicFont(doc);
             
             // Header
             doc.setFontSize(22);

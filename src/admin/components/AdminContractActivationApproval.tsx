@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Alert,
   Button,
@@ -210,7 +211,7 @@ export default function AdminContractActivationApproval() {
               This action unlocks the owner dashboard and activates the selected contract.
             </Alert>
             <TextField label="BANK REFERENCE / TX ID" fullWidth value={referenceId} onChange={(event) => setReferenceId(event.target.value)} />
-            <TextField label="CONFIRMED AMOUNT (AED)" type="number" fullWidth value={amountReceived || selectedAmount} onChange={(event) => setAmountReceived(Number(event.target.value))} />
+            <TextField label={t('common.confirmed_amount_aed').toUpperCase()} type="number" fullWidth value={amountReceived || selectedAmount} onChange={(event) => setAmountReceived(Number(event.target.value))} />
             <TextField label="INTERNAL AUDIT NOTES" multiline rows={3} fullWidth value={notes} onChange={(event) => setNotes(event.target.value)} />
           </Stack>
         </DialogContent>

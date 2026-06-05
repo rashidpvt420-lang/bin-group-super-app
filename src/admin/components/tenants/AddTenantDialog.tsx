@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 import { 
     Dialog, DialogTitle, DialogContent, DialogActions, 
     Button, Grid, TextField, Stack, FormControl, 
@@ -94,7 +95,7 @@ export default function AddTenantDialog({ open, onClose, properties, units, onSu
                                 InputProps={{ style: { color: '#FFF' } }} 
                             />
                             <TextField 
-                                label="Email Address" 
+                                label={t('common.email_address')} 
                                 type="email"
                                 fullWidth 
                                 value={formData.email} 
@@ -103,7 +104,7 @@ export default function AddTenantDialog({ open, onClose, properties, units, onSu
                                 InputProps={{ style: { color: '#FFF' } }} 
                             />
                             <TextField 
-                                label="Phone Number" 
+                                label={t('common.phone_number')} 
                                 fullWidth 
                                 value={formData.phoneNumber} 
                                 onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
@@ -118,7 +119,7 @@ export default function AddTenantDialog({ open, onClose, properties, units, onSu
                                 <InputLabel sx={{ color: 'rgba(255,255,255,0.4)' }}>Property Assignment</InputLabel>
                                 <Select 
                                     value={formData.propertyId} 
-                                    label="Property Assignment" 
+                                    label={t('common.property_assignment')} 
                                     onChange={(e) => setFormData({...formData, propertyId: e.target.value, unitId: ''})}
                                     sx={{ color: '#FFF' }}
                                 >
@@ -130,7 +131,7 @@ export default function AddTenantDialog({ open, onClose, properties, units, onSu
                                 <InputLabel sx={{ color: 'rgba(255,255,255,0.4)' }}>Unit Assignment</InputLabel>
                                 <Select 
                                     value={formData.unitId} 
-                                    label="Unit Assignment" 
+                                    label={t('common.unit_assignment')} 
                                     onChange={(e) => setFormData({...formData, unitId: e.target.value})}
                                     sx={{ color: '#FFF' }}
                                 >

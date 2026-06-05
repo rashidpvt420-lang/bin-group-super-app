@@ -19,6 +19,7 @@ import { db, collection, query, where, getDocs, orderBy, limit } from '../lib/fi
 import { formatAED } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { registerArabicFont } from '../utils/arabicPdfFont';
 
 const ExecutiveReportingPage: React.FC = () => {
     const { t, tx, isRTL } = useLanguage();
@@ -59,6 +60,7 @@ const ExecutiveReportingPage: React.FC = () => {
 
     const exportExecutiveSummary = () => {
         const doc = new jsPDF();
+        registerArabicFont(doc);
         doc.setFillColor(11, 11, 12);
         doc.rect(0, 0, 210, 50, 'F');
         doc.setTextColor(198, 167, 94);
