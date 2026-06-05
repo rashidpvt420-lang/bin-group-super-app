@@ -17,6 +17,7 @@ const OwnerLandingPage = React.lazy(() => import('./pages/OwnerLandingPage'));
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
 const RoleGatewayPage = React.lazy(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = React.lazy(() => import('./pages/PropertyOnboardingPage'));
+const CompanyProfilePage = React.lazy(() => import('./pages/public/CompanyProfilePage'));
 const InvoiceVerificationPage = React.lazy(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = React.lazy(() => import('./pages/public/CertificateVerificationPage'));
 const InvoiceDetailsPage = React.lazy(() => import('./pages/InvoiceDetailsPage'));
@@ -219,7 +220,10 @@ function AppContent() {
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<Navigate to="/" replace />} />
+        <Route path="/company" element={<CompanyProfilePage />} />
+        <Route path="/company-profile" element={<CompanyProfilePage />} />
+        <Route path="/about" element={<CompanyProfilePage />} />
+        <Route path="/about-us" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
