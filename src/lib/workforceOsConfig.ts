@@ -29,8 +29,8 @@ export const WORKFORCE_OS_REQUEST_TYPES = [
 
 export const WORKFORCE_OS_POSITIONING = {
   title: 'BIN GROUP Workforce OS',
-  subtitle: 'AI-powered, multilingual ESS for blue-collar maintenance and facilities management teams.',
-  safeFirstMoverClaim: 'One of the UAE\'s first AI-driven, multilingual Blue-Collar ESS platforms embedded directly into live facilities management and property maintenance operations.',
+  subtitle: 'UAE-focused, multilingual, paperless staff self-service for maintenance and property management field teams.',
+  safeFirstMoverClaim: 'A field-operational HR self-service model built for UAE maintenance and property management teams, connecting staff requests, compliance documents, attendance context, payroll-ready records, tools/PPE, safety cases, and live service operations in one controlled workflow.',
   promise: 'No paperwork, no hidden overtime confusion, no missing document trail: every staff request, payroll query, safety case, compliance renewal, and field-work issue enters one controlled HR/Admin review chain.',
   workerEditableBoundary: 'Workers can submit requests, language preference, evidence, property/job references, and notes. Workers must not directly edit role, salary, payroll approval, WPS status, overtime approval, certification approval, or admin permissions.',
 };
