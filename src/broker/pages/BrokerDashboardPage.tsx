@@ -75,8 +75,15 @@ export default function BrokerDashboardPage() {
                 const recentSnap = await getDocs(recentQ);
                 setRecentLeads(recentSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-            } catch (err) {
-                console.error("Dashboard fetch error:", err);
+            } catch (err: any) {
+                const isPermissionDenied = err?.code === 'permission-denied' || 
+                                           err?.message?.includes('permission-denied') || 
+                                           err?.message?.includes('insufficient permissions');
+                if (isPermissionDenied) {
+                    console.warn("Dashboard fetch restricted (permission-denied). Failing silently with empty state.");
+                } else {
+                    console.error("Dashboard fetch error:", err);
+                }
             } finally {
                 setLoading(false);
             }

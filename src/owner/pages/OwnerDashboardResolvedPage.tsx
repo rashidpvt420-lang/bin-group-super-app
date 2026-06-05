@@ -290,7 +290,14 @@ export default function OwnerDashboardResolvedPage() {
           setLoadingExtras(false);
         }
       } catch (err: any) {
-        console.error('[OwnerDashboardResolved] load failed:', err);
+        const isPermissionDenied = err?.code === 'permission-denied' || 
+                                   err?.message?.includes('permission-denied') || 
+                                   err?.message?.includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn('[OwnerDashboardResolved] load failed: permission-denied. Failing silently with empty state.');
+        } else {
+          console.error('[OwnerDashboardResolved] load failed:', err);
+        }
         if (alive) {
           setLoadError(err?.message || 'Dashboard identity resolution failed.');
           setResolution((prev) => ({ ...prev, state: prev.state === 'active' ? 'active' : 'pending' }));
