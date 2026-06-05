@@ -44,6 +44,8 @@ const ADMIN_STAFF_ROLES = [
   'operations_manager',
 ];
 
+const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin'];
+
 function PushNotificationBootstrap() {
   const { user, role } = useRole();
 
@@ -87,6 +89,9 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
+  const shouldRenderGlobalHeader = showChrome && !isRolePortalRoute;
+  const shouldRenderFloatingNavigation = showChrome && !isRolePortalRoute && !isAdminRoute;
 
   if (roleLoading && !publicAuth) {
     return <>{loadingFallback}</>;
@@ -117,12 +122,12 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   return (
     <>
       <PushNotificationBootstrap />
-      {showChrome && <BinGroupHeader />}
+      {shouldRenderGlobalHeader && <BinGroupHeader />}
       {children}
       {showChrome && !isAdminRoute && ['owner', 'tenant'].includes((role || '').toLowerCase()) && (
         <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
       )}
-      {showChrome && !isAdminRoute && <NavigationControl />}
+      {shouldRenderFloatingNavigation && <NavigationControl />}
       <SovereignAlertHandler />
     </>
   );
