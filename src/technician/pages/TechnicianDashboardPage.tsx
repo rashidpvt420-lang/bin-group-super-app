@@ -66,12 +66,25 @@ import {
     normalizeTechnicianProfile,
 } from '../utils/normalizeTechnicianProfile';
 
+const ui = {
+    canvas: '#FFFFFF',
+    soft: '#F8F9FB',
+    platinum: '#F7F7F4',
+    ink: '#111827',
+    muted: '#667085',
+    line: '#E5E7EB',
+    gold: binThemeTokens.gold,
+    green: '#059669',
+    red: '#DC2626',
+    blue: '#2563EB',
+};
+
 const statusTone = (status: string) => {
     const value = String(status || '').toLowerCase();
-    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready') || value.includes('available')) return '#10b981';
-    if (value.includes('pending') || value.includes('break') || value.includes('review')) return binThemeTokens.gold;
-    if (value.includes('off') || value.includes('expired') || value.includes('blocked') || value.includes('missing')) return '#ef4444';
-    return '#94a3b8';
+    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready') || value.includes('available') || value.includes('healthy')) return ui.green;
+    if (value.includes('pending') || value.includes('break') || value.includes('review')) return ui.gold;
+    if (value.includes('off') || value.includes('expired') || value.includes('blocked') || value.includes('missing') || value.includes('risk')) return ui.red;
+    return ui.muted;
 };
 
 const formatTime = (value: any) => {
@@ -106,27 +119,44 @@ const readDocByUid = async (collectionName: string, uid?: string | null): Promis
     }
 };
 
-function MetricCard({ icon, label, value, tone = binThemeTokens.gold, helper }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string; helper?: string }) {
+function SectionCard({ children, sx = {} }: { children: React.ReactNode; sx?: object }) {
     return (
-        <Paper sx={{ p: { xs: 2.5, md: 3.5 }, height: '100%', bgcolor: alpha(tone, 0.06), border: `1px solid ${alpha(tone, 0.22)}`, borderRadius: 5, minWidth: 0, overflowWrap: 'anywhere' }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-                <Box sx={{ color: tone, display: 'flex' }}>{icon}</Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 950, letterSpacing: 1 }}>{label}</Typography>
+        <Paper sx={{ p: { xs: 2.5, md: 3.5 }, height: '100%', bgcolor: ui.canvas, border: `1px solid ${ui.line}`, borderRadius: 3, boxShadow: '0 12px 30px rgba(17,24,39,0.07)', ...sx }}>
+            {children}
+        </Paper>
+    );
+}
+
+function MetricCard({ icon, label, value, tone = ui.gold, helper }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string; helper?: string }) {
+    return (
+        <Paper sx={{ p: { xs: 2, md: 2.5 }, height: '100%', bgcolor: '#FFFFFF', border: `1px solid ${alpha(tone, 0.28)}`, borderRadius: 2.5, minWidth: 0, boxShadow: '0 10px 24px rgba(17,24,39,0.055)' }}>
+            <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
+                <Box sx={{ width: 34, height: 34, borderRadius: 1.5, bgcolor: alpha(tone, 0.10), color: tone, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{icon}</Box>
+                <Typography variant="caption" sx={{ color: ui.ink, fontWeight: 950, letterSpacing: 0.4, textTransform: 'uppercase' }}>{label}</Typography>
             </Stack>
-            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{value}</Typography>
-            {helper && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', mt: 0.7, display: 'block' }}>{helper}</Typography>}
+            <Typography variant="h4" fontWeight="950" sx={{ color: ui.ink, lineHeight: 1 }}>{value}</Typography>
+            {helper && <Typography variant="caption" sx={{ color: ui.muted, mt: 0.8, display: 'block', fontWeight: 700 }}>{helper}</Typography>}
         </Paper>
     );
 }
 
 function DetailRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
     return (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(92px, auto)', gap: 2, alignItems: 'start', py: 1, minWidth: 0 }}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900, textTransform: 'uppercase', overflowWrap: 'anywhere' }}>{label}</Typography>
-            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 850, textAlign: 'right', minWidth: 0, maxWidth: { xs: 170, sm: 260, md: 320 }, overflowWrap: 'anywhere', lineHeight: 1.35, display: 'flex', gap: 0.6, alignItems: 'center', justifyContent: 'flex-end' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '145px minmax(0, 1fr)' }, gap: { xs: 0.3, sm: 1.5 }, alignItems: 'start', py: 1.05, minWidth: 0, borderBottom: `1px solid ${alpha(ui.line, 0.75)}` }}>
+            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</Typography>
+            <Typography variant="body2" sx={{ color: ui.ink, fontWeight: 850, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45, display: 'flex', gap: 0.7, alignItems: 'center' }}>
                 {icon}{value || 'Pending sync'}
             </Typography>
         </Box>
+    );
+}
+
+function TitleRow({ icon, title }: { icon: React.ReactNode; title: string }) {
+    return (
+        <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2.5 }}>
+            <Box sx={{ color: ui.gold, display: 'flex' }}>{icon}</Box>
+            <Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>{title}</Typography>
+        </Stack>
     );
 }
 
@@ -142,7 +172,6 @@ export default function TechnicianDashboardPage() {
     const [certRows, setCertRows] = useState<any[]>([]);
     const [recentCompleted, setRecentCompleted] = useState<any[]>([]);
     const [profileReadWarnings, setProfileReadWarnings] = useState<string[]>([]);
-
     const [stats, setStats] = useState({ assigned: 0, emergency: 0, inProgress: 0, completedToday: 0, completedMonth: 0, slaRisk: 0, quality: 0 });
     const [missionPool, setMissionPool] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
@@ -150,40 +179,31 @@ export default function TechnicianDashboardPage() {
     useEffect(() => {
         if (!user?.uid) return;
         setDutyStatus(user.dutyStatus || 'OFF');
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-        const unsubAssigned = onSnapshotSplitIn(
-            collection(db, 'maintenanceTickets'),
-            { field: 'assignedTechnicianId', value: user.uid },
-            'status',
-            ALL_TECHNICIAN_ACTIVE_STATUSES,
-            (jobs: SnapshotDoc[]) => {
-                let assigned = 0;
-                let emergency = 0;
-                let inProgress = 0;
-                let slaRisk = 0;
-                jobs.forEach((data: SnapshotDoc) => {
-                    assigned += 1;
-                    const status = String(data.status || '');
-                    if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(status)) inProgress += 1;
-                    if (String(data.priority || '').toLowerCase() === 'emergency') emergency += 1;
-                    if (data.slaBreached === true || String(data.slaStatus || '').toLowerCase().includes('risk')) slaRisk += 1;
-                });
-                setActiveJobs(jobs);
-                setStats((prev) => ({ ...prev, assigned, emergency, inProgress, slaRisk }));
-                setLoading(false);
-            },
-        );
+        const unsubAssigned = onSnapshotSplitIn(collection(db, 'maintenanceTickets'), { field: 'assignedTechnicianId', value: user.uid }, 'status', ALL_TECHNICIAN_ACTIVE_STATUSES, (jobs: SnapshotDoc[]) => {
+            let assigned = 0;
+            let emergency = 0;
+            let inProgress = 0;
+            let slaRisk = 0;
+            jobs.forEach((data: SnapshotDoc) => {
+                assigned += 1;
+                const status = String(data.status || '');
+                if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(status)) inProgress += 1;
+                if (String(data.priority || '').toLowerCase() === 'emergency') emergency += 1;
+                if (data.slaBreached === true || String(data.slaStatus || '').toLowerCase().includes('risk')) slaRisk += 1;
+            });
+            setActiveJobs(jobs);
+            setStats((prev) => ({ ...prev, assigned, emergency, inProgress, slaRisk }));
+            setLoading(false);
+        });
 
         const qPool = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', null), where('status', 'in', ['OPEN', 'emergency_submitted']), orderBy('createdAt', 'desc'), limit(5));
         const unsubPool = onSnapshot(qPool, (snap) => setMissionPool(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (error) => console.warn('[TechnicianDashboard] mission pool unavailable:', error));
-
         const qCompleted = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', user.uid), where('status', 'in', ['completed', 'CLOSED', 'COMPLETED']), where('completedAt', '>=', today));
         const unsubCompleted = onSnapshot(qCompleted, (snap) => setStats((prev) => ({ ...prev, completedToday: snap.size })), (error) => console.warn('[TechnicianDashboard] completed today unavailable:', error));
-
         const qMonthCompleted = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', user.uid), where('status', 'in', ['completed', 'CLOSED', 'COMPLETED']), where('completedAt', '>=', monthStart), limit(25));
         const unsubMonthCompleted = onSnapshot(qMonthCompleted, (snap) => {
             const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -193,12 +213,7 @@ export default function TechnicianDashboardPage() {
             setStats((prev) => ({ ...prev, completedMonth: snap.size, quality }));
         }, (error) => console.warn('[TechnicianDashboard] completed month unavailable:', error));
 
-        return () => {
-            unsubAssigned();
-            unsubPool();
-            unsubCompleted();
-            unsubMonthCompleted();
-        };
+        return () => { unsubAssigned(); unsubPool(); unsubCompleted(); unsubMonthCompleted(); };
     }, [user]);
 
     useEffect(() => {
@@ -206,46 +221,23 @@ export default function TechnicianDashboardPage() {
             if (!user?.uid) return;
             const warnings: string[] = [];
             const emailValue = normalizeEmail(user.email);
-
             const userProfile = await readDocByUid('users', user.uid);
             if (!userProfile) warnings.push('Main user profile could not be read.');
-
             const technicianByUid = await readDocByUid('technicians', user.uid);
             const technicianByEmail = !technicianByUid && emailValue ? await readRows('technicians', 'email', emailValue, 1) : [];
             const technicianProfile = technicianByUid || technicianByEmail[0] || null;
-
-            const staffRosterRows = uniqueRows([
-                ...(await readRows('staff_roster', 'uid', user.uid, 4)),
-                ...(await readRows('staff_roster', 'email', emailValue, 4)),
-            ]);
-
-            const hrStaffRows = uniqueRows([
-                ...(await readRows('hr_staff', 'uid', user.uid, 4)),
-                ...(await readRows('hr_staff', 'email', emailValue, 4)),
-            ]);
-
-            const attendanceRows = uniqueRows([
-                ...(await readRows('attendance', 'uid', user.uid, 6)),
-                ...(await readRows('attendance', 'technicianId', user.uid, 6)),
-            ]);
-
+            const staffRosterRows = uniqueRows([...(await readRows('staff_roster', 'uid', user.uid, 4)), ...(await readRows('staff_roster', 'email', emailValue, 4))]);
+            const hrStaffRows = uniqueRows([...(await readRows('hr_staff', 'uid', user.uid, 4)), ...(await readRows('hr_staff', 'email', emailValue, 4))]);
+            const attendanceRows = uniqueRows([...(await readRows('attendance', 'uid', user.uid, 6)), ...(await readRows('attendance', 'technicianId', user.uid, 6))]);
             const certs = uniqueRows([
                 ...(await readRows('technician_certifications', 'technicianId', user.uid, 8)),
                 ...(await readRows('certifications', 'technicianId', user.uid, 8)),
                 ...(((technicianProfile as any)?.certifications || (userProfile as any)?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
             ]);
-
-            setProfileSources({
-                technician: technicianProfile,
-                staffRoster: staffRosterRows[0] || null,
-                hrStaff: hrStaffRows[0] || null,
-                user: userProfile,
-                attendance: attendanceRows[0] || null,
-            });
+            setProfileSources({ technician: technicianProfile, staffRoster: staffRosterRows[0] || null, hrStaff: hrStaffRows[0] || null, user: userProfile, attendance: attendanceRows[0] || null });
             setCertRows(certs);
             setProfileReadWarnings(warnings);
         };
-
         loadStaffData();
     }, [user]);
 
@@ -270,7 +262,6 @@ export default function TechnicianDashboardPage() {
     const syncWarnings = [...profileReadWarnings, ...profile.missingFields.map(formatMissingTechnicianField)];
     const openActionItems = [visaExpiry, idExpiry, medicalExpiry, passportExpiry].filter((value) => value === 'Pending sync').length + syncWarnings.length;
     const isOnDuty = dutyStatus === 'WORKING' || profile.dutyStatus === 'available';
-
     const vehicleLabel = profile.vehicleAssigned ? profile.vehicleNumber || 'Assigned' : 'Pending sync';
     const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Pending sync';
     const ppeLabel = profile.ppeIssued ? 'Issued' : 'Pending sync';
@@ -306,132 +297,72 @@ export default function TechnicianDashboardPage() {
     };
 
     if (loading) return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Operator Stream...'}</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2, color: ui.ink }}>
+            <CircularProgress sx={{ color: ui.gold }} />
+            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Operator Stream...'}</Typography>
         </Box>
     );
 
     return (
-        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: 10, md: 0 }, pb: { xs: 16, md: 6 }, minWidth: 0 }}>
-            <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 8, md: 6 }, minWidth: 0, bgcolor: ui.canvas, color: ui.ink }}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2.5 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
-                    <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mt: 1, fontSize: { xs: '2.25rem', md: '3rem' }, overflowWrap: 'anywhere' }}>Technical Command Dashboard</Typography>
-                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1, maxWidth: 760 }}>Staff profile, duty status, dispatch performance, SLA health, compliance, tools, certificates, and live mission control in one terminal.</Typography>
+                    <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
+                    <Typography variant="h3" fontWeight="950" sx={{ mt: 1, color: ui.ink, fontSize: { xs: '2.05rem', md: '2.8rem' }, letterSpacing: '-0.045em' }}>Technical Command Dashboard</Typography>
+                    <Typography variant="body1" sx={{ color: ui.muted, mt: 1, maxWidth: 760, fontWeight: 700 }}>Staff profile, duty status, dispatch performance, SLA health, compliance, tools, certificates, and live mission control in one terminal.</Typography>
                 </Box>
-                <Avatar sx={{ width: 72, height: 72, bgcolor: alpha(binThemeTokens.gold, 0.12), border: `2px solid ${alpha(binThemeTokens.gold, 0.55)}`, color: binThemeTokens.gold, fontWeight: 950, fontSize: 28 }}>{String(technicianName).charAt(0) || 'T'}</Avatar>
+                <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(ui.gold, 0.12), border: `2px solid ${alpha(ui.gold, 0.55)}`, color: ui.gold, fontWeight: 950, fontSize: 26, borderRadius: 2 }}>{String(technicianName).charAt(0) || 'T'}</Avatar>
             </Box>
 
-            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, bgcolor: 'rgba(15, 23, 42, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 6, minWidth: 0 }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2.5} alignItems="center" sx={{ minWidth: 0 }}>
-                        <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.12), borderRadius: 4, color: binThemeTokens.gold }}><BadgeCheck size={34} /></Box>
+            <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
+                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                        <Box sx={{ p: 1.5, bgcolor: alpha(ui.gold, 0.13), borderRadius: 2, color: ui.gold }}><BadgeCheck size={30} /></Box>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, letterSpacing: 1.3 }}>TECHNICIAN IDENTITY</Typography>
-                            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{technicianName}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', overflowWrap: 'anywhere' }}>{trade} • {employeeId}</Typography>
+                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>TECHNICIAN IDENTITY</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{technicianName}</Typography>
+                            <Typography variant="body2" sx={{ color: ui.muted, overflowWrap: 'anywhere', fontWeight: 700 }}>{trade} • {employeeId}</Typography>
                         </Box>
                     </Stack>
-                    <Stack direction="row" spacing={1.2} flexWrap="wrap" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} useFlexGap>
-                        <Chip label={String(dutyStatus).replace('_', ' ')} sx={{ bgcolor: alpha(statusTone(dutyStatus), 0.14), color: statusTone(dutyStatus), fontWeight: 950 }} />
-                        <Chip label={`Sync: ${profile.syncStatus}`} sx={{ bgcolor: alpha(statusTone(profile.syncStatus), 0.14), color: statusTone(profile.syncStatus), fontWeight: 950 }} />
-                        <Chip label={`SLA: ${slaDisplay}`} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950 }} />
-                        <Chip label={`Quality: ${qualityDisplay}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} />
+                    <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} useFlexGap>
+                        {[String(dutyStatus).replace('_', ' '), `Sync: ${profile.syncStatus}`, `SLA: ${slaDisplay}`, `Quality: ${qualityDisplay}`].map((item) => <Chip key={item} label={item} sx={{ bgcolor: '#FFFFFF', color: statusTone(item), border: `1px solid ${alpha(statusTone(item), 0.35)}`, fontWeight: 950 }} />)}
                     </Stack>
                 </Stack>
-            </Paper>
+            </SectionCard>
 
-            <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                <Grid item xs={6} md={3}><MetricCard icon={<Activity size={22} />} label="Active Jobs" value={stats.assigned} tone="#3b82f6" helper="Assigned live tickets" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<Zap size={22} />} label="Emergency" value={stats.emergency} tone="#ef4444" helper="Priority response" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<CheckCircle2 size={22} />} label="Closed Today" value={stats.completedToday} tone="#10b981" helper="Completed jobs" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<Clock size={22} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? '#ef4444' : '#10b981'} helper="Requires attention" /></Grid>
+            <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
+                <Grid item xs={6} md={3}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>
+                <Grid item xs={6} md={3}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
+                <Grid item xs={6} md={3}><MetricCard icon={<CheckCircle2 size={20} />} label="Closed Today" value={stats.completedToday} tone={ui.green} helper="Completed jobs" /></Grid>
+                <Grid item xs={6} md={3}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
             </Grid>
 
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} lg={5}>
-                    <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}><User color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Staff Control Profile</Typography></Stack>
-                        <Grid container spacing={1.5}>
-                            <Grid item xs={12} sm={6}><DetailRow label="Full name" value={technicianName} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Employee ID" value={employeeId} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Email" value={email} icon={<Mail size={13} />} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Trade" value={trade} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Supervisor" value={supervisor} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Shift" value={shift} /></Grid>
-                            <Grid item xs={12} sm={6}><DetailRow label="Base zone" value={baseLocation} /></Grid>
-                        </Grid>
-                    </Paper>
-                </Grid>
-
-                <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}><Briefcase color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Duty & Attendance</Typography></Stack>
-                        <DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} />
-                        <DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} />
-                        <DetailRow label="Roster status" value={textOrPending(raw.rosterStatus, raw.attendanceStatus, raw.status)} />
-                        <DetailRow label="Monthly completions" value={stats.completedMonth} />
-                        <DetailRow label="Leave balance" value={textOrPending(raw.leaveBalance, raw.annualLeaveBalance)} />
-                        <Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.05), borderColor: binThemeTokens.gold } }}>HR & REQUESTS</Button>
-                    </Paper>
-                </Grid>
-
-                <Grid item xs={12} lg={3}>
-                    <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}><CalendarDays color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Contract & Actions</Typography></Stack>
-                        <DetailRow label="Contract type" value={contractType} />
-                        <DetailRow label="Joining date" value={joiningDate} />
-                        <DetailRow label="Open action items" value={openActionItems} />
-                        <DetailRow label="Profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs review'} />
-                    </Paper>
-                </Grid>
+            <Grid container spacing={3} sx={{ mb: 3.5 }}>
+                <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><Grid container spacing={1.5}><Grid item xs={12} sm={6}><DetailRow label="Full name" value={technicianName} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Employee ID" value={employeeId} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Email" value={email} icon={<Mail size={13} />} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Trade" value={trade} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Supervisor" value={supervisor} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Shift" value={shift} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Base zone" value={baseLocation} /></Grid></Grid></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={textOrPending(raw.rosterStatus, raw.attendanceStatus, raw.status)} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={textOrPending(raw.leaveBalance, raw.annualLeaveBalance)} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={3}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs review'} /></SectionCard></Grid>
             </Grid>
 
-            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, bgcolor: 'rgba(15, 23, 42, 0.65)', border: `1px solid ${isOnDuty ? alpha(binThemeTokens.gold, 0.4) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6, textAlign: isRTL ? 'right' : 'left' }}>
+            <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
                 <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={12} md={6}>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={3} alignItems="center">
-                            <Box sx={{ p: 2, bgcolor: isOnDuty ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.05)', borderRadius: 4, color: isOnDuty ? binThemeTokens.gold : 'rgba(255,255,255,0.3)' }}>{dutyStatus === 'BREAK' ? <Coffee size={32} /> : <Power size={32} />}</Box>
-                            <Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: isOnDuty ? '#FFF' : 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>{String(dutyStatus).replace('_', ' ')}</Typography></Box>
-                        </Stack>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>
-                            {dutyStatus === 'OFF' ? <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 4 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(dutyStatus === 'WORKING' ? 'BREAK' : 'WORKING')} disabled={updating} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, px: 4, borderRadius: 4 }}>{dutyStatus === 'WORKING' ? 'STANDBY / BREAK' : 'RESUME OPS'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF')} disabled={updating} sx={{ fontWeight: 950, px: 3, borderRadius: 4 }}>END SHIFT</Button></>}
-                        </Stack>
-                    </Grid>
+                    <Grid item xs={12} md={6}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{dutyStatus === 'BREAK' ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{String(dutyStatus).replace('_', ' ')}</Typography></Box></Stack></Grid>
+                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{dutyStatus === 'OFF' ? <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(dutyStatus === 'WORKING' ? 'BREAK' : 'WORKING')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{dutyStatus === 'WORKING' ? 'STANDBY / BREAK' : 'RESUME OPS'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
                 </Grid>
-            </Paper>
+            </SectionCard>
 
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} lg={7}>
-                    <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}><Stack direction="row" spacing={1.5} alignItems="center"><Target size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Active Mission Feed</Typography></Stack><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>
-                        {activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>No active missions assigned. Keep duty status active to receive dispatches.</Typography> : <Stack spacing={2}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4, cursor: 'pointer', minWidth: 0, '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: alpha(binThemeTokens.gold, 0.3) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" color="rgba(255,255,255,0.45)">{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: alpha(job.priority === 'emergency' ? '#ef4444' : '#3b82f6', 0.12), color: job.priority === 'emergency' ? '#ef4444' : '#93c5fd', fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color="rgba(255,255,255,0.3)" style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} lg={5}>
-                    <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
-                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><Award size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Performance Command</Typography></Stack>
-                        <DetailRow label="Completed this month" value={stats.completedMonth} /><DetailRow label="Quality score" value={qualityDisplay} /><DetailRow label="SLA health" value={slaDisplay} /><DetailRow label="Open SLA risks" value={stats.slaRisk} />
-                        <Box sx={{ mt: 2 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>MONTHLY OPS PROGRESS</Typography><LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: 'rgba(255,255,255,0.06)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} /></Box>
-                        <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', my: 2.5 }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>RECENT COMPLETIONS</Typography>
-                        <Stack spacing={1.2} sx={{ mt: 1.5 }}>{recentCompleted.length === 0 ? <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>No completed records synced yet.</Typography> : recentCompleted.slice(0, 3).map((job: any) => <Typography key={job.id} variant="body2" sx={{ color: '#FFF', overflowWrap: 'anywhere' }}>✓ {job.propertyName || job.category || job.id} — {formatUiDate(job.completedAt)}</Typography>)}</Stack>
-                    </Paper>
-                </Grid>
+            <Grid container spacing={3} sx={{ mb: 3.5 }}>
+                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>No active missions assigned. Keep duty status active to receive dispatches.</Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
+                <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<Award size={20} />} title="Performance Command" /><DetailRow label="Completed this month" value={stats.completedMonth} /><DetailRow label="Quality score" value={qualityDisplay} /><DetailRow label="SLA health" value={slaDisplay} /><DetailRow label="Open SLA risks" value={stats.slaRisk} /><Box sx={{ mt: 2 }}><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900 }}>MONTHLY OPS PROGRESS</Typography><LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: ui.gold } }} /></Box><Divider sx={{ my: 2.5 }} />{recentCompleted.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted }}>No completed jobs recorded this month.</Typography> : <Stack spacing={1}>{recentCompleted.slice(0, 3).map((job) => <Typography key={job.id} variant="body2" sx={{ color: ui.ink, fontWeight: 750 }}>• {String(job.category || 'Completed job')}</Typography>)}</Stack>}</SectionCard></Grid>
             </Grid>
 
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><FileText size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Compliance Documents</Typography></Stack><DetailRow label="Visa expiry" value={visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></Paper></Grid>
-                <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', bgcolor: 'rgba(22, 22, 24, 0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}><Hammer size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Skills, Tools & Assets</Typography></Stack><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={profile.skillLevel} /><DetailRow label="Vehicle" value={vehicleLabel} icon={<Car size={13} />} /><DetailRow label="Tool kit" value={toolKitLabel} /><DetailRow label="Certifications" value={certificationLabel} /><DetailRow label="Dispatch readiness" value={formatDispatchReadiness(profile.dispatchReadiness)} /></Paper></Grid>
+            <Grid container spacing={3} sx={{ mb: 3.5 }}>
+                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<FileText size={20} />} title="Compliance Documents" /><DetailRow label="Visa expiry" value={visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></SectionCard></Grid>
+                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<Hammer size={20} />} title="Skills, Tools & Assets" /><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={profile.skillLevel} /><DetailRow label="Vehicle" value={vehicleLabel} icon={<Car size={13} />} /><DetailRow label="Tool kit" value={toolKitLabel} /><DetailRow label="Certifications" value={certificationLabel} /><DetailRow label="Dispatch readiness" value={formatDispatchReadiness(profile.dispatchReadiness)} /></SectionCard></Grid>
             </Grid>
 
-            {profile.syncStatus !== 'synced' && <Paper sx={{ p: 3, mb: 4, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.24)}`, borderRadius: 4 }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#f59e0b" /><Typography variant="subtitle1" fontWeight="950" color="#FFF">Sync Warnings</Typography></Stack>{syncWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#facc15', overflowWrap: 'anywhere' }}>• {warning}</Typography>)}</Paper>}
+            {profile.syncStatus !== 'synced' && <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#D97706" /><Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>Sync Warnings</Typography></Stack>{syncWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• {warning}</Typography>)}</SectionCard>}
 
-            {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 3 }}><Navigation size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><Paper sx={{ p: 4, bgcolor: job.priority === 'emergency' ? alpha('#ef4444', 0.08) : 'rgba(22, 22, 24, 0.7)', border: `1px solid ${job.priority === 'emergency' ? alpha('#ef4444', 0.3) : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, minWidth: 0, '&:hover': { transform: 'translateY(-2px)', borderColor: job.priority === 'emergency' ? alpha('#ef4444', 0.5) : binThemeTokens.gold } }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? '#ef4444' : binThemeTokens.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color="#ef4444" />}</Stack><Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ mb: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}>CLAIM MISSION</Button></Paper></Grid>)}</Grid></Box>}
+            {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 2 }}><Navigation size={20} color={ui.gold} /><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><SectionCard sx={{ bgcolor: job.priority === 'emergency' ? alpha(ui.red, 0.055) : ui.canvas, border: `1px solid ${job.priority === 'emergency' ? alpha(ui.red, 0.25) : ui.line}` }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? ui.red : ui.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color={ui.red} />}</Stack><Typography variant="body2" sx={{ color: ui.muted, mb: 2, fontWeight: 700 }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950 }}>CLAIM MISSION</Button></SectionCard></Grid>)}</Grid></Box>}
         </Box>
     );
 }
