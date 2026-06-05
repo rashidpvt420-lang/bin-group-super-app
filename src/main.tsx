@@ -5,6 +5,7 @@ import SovereignErrorBoundary from './components/SovereignErrorBoundary';
 import { setupSovereignAlertInterceptor } from './components/SovereignAlertHandler';
 import './admin-mobile-hardening.css';
 import './styles/onboardingReadable.css';
+import './ess-white-platinum.css';
 
 setupSovereignAlertInterceptor();
 
