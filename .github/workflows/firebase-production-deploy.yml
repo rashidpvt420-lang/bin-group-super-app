@@ -1,8 +1,6 @@
 name: Firebase Production Deploy
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -92,7 +90,7 @@ jobs:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
