@@ -20,12 +20,9 @@ import {
   Camera,
   CheckCircle2,
   FileCheck2,
-  FileText,
-  Home,
   Languages,
   MapPin,
   MessageCircle,
-  Navigation,
   PauseCircle,
   PlayCircle,
   RotateCcw,
@@ -50,10 +47,10 @@ const palette = {
   goldDark: '#9A7A24',
   green: '#10B981',
   red: '#EF4444',
-  blue: '#0EA5E9',
   white: '#FFFFFF',
 };
 
+type Lang = 'en' | 'ar';
 type DemoScene = {
   id: string;
   title: string;
@@ -62,208 +59,81 @@ type DemoScene = {
   icon: React.ReactNode;
   bullets: string[];
   route: string;
+  photo: string;
+  label: string;
 };
 
-const scenes: Record<'en' | 'ar', DemoScene[]> = {
+const scenes: Record<Lang, DemoScene[]> = {
   en: [
-    { id: 'owner', title: 'Owner App', subtitle: 'Quote, contract, payment plan, and active dashboard.', metric: '15% mobilization', icon: <Building2 size={22} />, bullets: ['Property intake', 'Contract scope', 'Owner dashboard'], route: ONBOARDING_URL },
-    { id: 'tenant', title: 'Tenant Photo Request', subtitle: 'Service request with category, unit, priority, and image proof.', metric: 'SOS ready', icon: <Users size={22} />, bullets: ['Photo issue', 'Priority', 'Status tracking'], route: '/tenants' },
-    { id: 'technician', title: 'Technician Dispatch', subtitle: 'Job card, route context, SLA timer, and field checklist.', metric: 'Field proof', icon: <Wrench size={22} />, bullets: ['Job card', 'Route', 'Completion proof'], route: '/technicians' },
-    { id: 'gps', title: 'GPS Route Map', subtitle: 'Nearest verified technician routed to the property.', metric: 'Live route', icon: <MapPin size={22} />, bullets: ['ETA', 'Route line', 'SLA active'], route: '/technicians' },
-    { id: 'evidence', title: 'Before / After Evidence', subtitle: 'Visual proof before payment release or service closeout.', metric: 'Proof chain', icon: <Camera size={22} />, bullets: ['Before', 'After', 'Tenant approval'], route: '/owners' },
-    { id: 'documents', title: 'Contracts & Reports', subtitle: 'PDF contract, invoice, report, and property history.', metric: 'Audit ready', icon: <FileCheck2 size={22} />, bullets: ['Contract PDF', 'Invoice hash', 'Service report'], route: '/owners' },
-    { id: 'broker', title: 'Broker Pipeline', subtitle: 'Owner lead, property record, and commission tracking.', metric: '5–8%', icon: <Briefcase size={22} />, bullets: ['Lead', 'Pipeline', 'Commission'], route: '/brokers' },
-    { id: 'design', title: 'AI Design Studio', subtitle: 'Interior and exterior concept options before owner approval.', metric: 'AI preview', icon: <Sparkles size={22} />, bullets: ['Interior', 'Exterior', 'Approval'], route: '/request-demo?demo=design' },
+    { id: 'owner', title: 'Owner App', subtitle: 'Quote, contract, payment plan, and active dashboard.', metric: '15% mobilization', icon: <Building2 size={22} />, bullets: ['Property intake', 'Contract scope', 'Owner dashboard'], route: ONBOARDING_URL, label: 'OWNER DASHBOARD', photo: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'tenant', title: 'Tenant Photo Request', subtitle: 'Service request with category, unit, priority, and image proof.', metric: 'SOS ready', icon: <Users size={22} />, bullets: ['Photo issue', 'Priority', 'Status tracking'], route: '/tenants', label: 'TENANT REQUEST', photo: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'technician', title: 'Technician Dispatch', subtitle: 'Job card, route context, SLA timer, and field checklist.', metric: 'Field proof', icon: <Wrench size={22} />, bullets: ['Job card', 'Route', 'Completion proof'], route: '/technicians', label: 'TECHNICIAN DISPATCH', photo: 'https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'gps', title: 'GPS Route Map', subtitle: 'Nearest verified technician routed to the property.', metric: 'Live route', icon: <MapPin size={22} />, bullets: ['ETA', 'Route line', 'SLA active'], route: '/technicians', label: 'GPS OPERATIONS', photo: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'evidence', title: 'Before / After Evidence', subtitle: 'Visual proof before payment release or service closeout.', metric: 'Proof chain', icon: <Camera size={22} />, bullets: ['Before', 'After', 'Tenant approval'], route: '/owners', label: 'BEFORE / AFTER', photo: 'https://images.unsplash.com/photo-1581579185169-528a7f5a906a?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'documents', title: 'Contracts & Reports', subtitle: 'PDF contract, invoice, report, and property history.', metric: 'Audit ready', icon: <FileCheck2 size={22} />, bullets: ['Contract PDF', 'Invoice hash', 'Service report'], route: '/owners', label: 'AUDIT DOCUMENTS', photo: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'broker', title: 'Broker Pipeline', subtitle: 'Owner lead, property record, and commission tracking.', metric: '5–8%', icon: <Briefcase size={22} />, bullets: ['Lead', 'Pipeline', 'Commission'], route: '/brokers', label: 'BROKER PIPELINE', photo: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'design', title: 'AI Design Studio', subtitle: 'Interior and exterior concept options before owner approval.', metric: 'AI preview', icon: <Sparkles size={22} />, bullets: ['Interior', 'Exterior', 'Approval'], route: '/request-demo?demo=design', label: 'AI DESIGN PREVIEW', photo: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80' },
   ],
   ar: [
-    { id: 'owner', title: 'تطبيق المالك', subtitle: 'عرض سعر، عقد، خطة دفع، ولوحة متابعة.', metric: '15٪ تفعيل', icon: <Building2 size={22} />, bullets: ['تفاصيل العقار', 'نطاق العقد', 'لوحة المالك'], route: ONBOARDING_URL },
-    { id: 'tenant', title: 'طلب مستأجر بصورة', subtitle: 'طلب خدمة مع التصنيف والوحدة والأولوية والصورة.', metric: 'طلب جاهز', icon: <Users size={22} />, bullets: ['صورة العطل', 'الأولوية', 'تتبع الحالة'], route: '/tenants' },
-    { id: 'technician', title: 'إرسال الفني', subtitle: 'بطاقة عمل ومسار ومؤقت SLA وقائمة إثبات.', metric: 'إثبات ميداني', icon: <Wrench size={22} />, bullets: ['بطاقة عمل', 'مسار', 'إثبات الإغلاق'], route: '/technicians' },
-    { id: 'gps', title: 'خريطة GPS', subtitle: 'أقرب فني موثق يتم توجيهه إلى العقار.', metric: 'مسار مباشر', icon: <MapPin size={22} />, bullets: ['وقت الوصول', 'خط المسار', 'SLA نشط'], route: '/technicians' },
-    { id: 'evidence', title: 'إثبات قبل وبعد', subtitle: 'إثبات بصري قبل إغلاق الخدمة أو اعتماد الدفع.', metric: 'سلسلة إثبات', icon: <Camera size={22} />, bullets: ['قبل', 'بعد', 'موافقة المستأجر'], route: '/owners' },
-    { id: 'documents', title: 'العقود والتقارير', subtitle: 'عقد PDF وفاتورة وتقرير وسجل العقار.', metric: 'جاهز للتدقيق', icon: <FileCheck2 size={22} />, bullets: ['عقد PDF', 'تجزئة فاتورة', 'تقرير خدمة'], route: '/owners' },
-    { id: 'broker', title: 'مسار الوسيط', subtitle: 'إحالة مالك وسجل عقار وتتبع عمولة.', metric: '5–8٪', icon: <Briefcase size={22} />, bullets: ['إحالة', 'مسار', 'عمولة'], route: '/brokers' },
-    { id: 'design', title: 'استوديو التصميم الذكي', subtitle: 'خيارات تصميم داخلي وخارجي قبل موافقة المالك.', metric: 'معاينة ذكية', icon: <Sparkles size={22} />, bullets: ['داخلي', 'خارجي', 'موافقة'], route: '/request-demo?demo=design' },
+    { id: 'owner', title: 'تطبيق المالك', subtitle: 'عرض سعر، عقد، خطة دفع، ولوحة متابعة.', metric: '15٪ تفعيل', icon: <Building2 size={22} />, bullets: ['تفاصيل العقار', 'نطاق العقد', 'لوحة المالك'], route: ONBOARDING_URL, label: 'لوحة المالك', photo: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'tenant', title: 'طلب مستأجر بصورة', subtitle: 'طلب خدمة مع التصنيف والوحدة والأولوية والصورة.', metric: 'طلب جاهز', icon: <Users size={22} />, bullets: ['صورة العطل', 'الأولوية', 'تتبع الحالة'], route: '/tenants', label: 'طلب المستأجر', photo: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'technician', title: 'إرسال الفني', subtitle: 'بطاقة عمل ومسار ومؤقت SLA وقائمة إثبات.', metric: 'إثبات ميداني', icon: <Wrench size={22} />, bullets: ['بطاقة عمل', 'مسار', 'إثبات الإغلاق'], route: '/technicians', label: 'إرسال الفني', photo: 'https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'gps', title: 'خريطة GPS', subtitle: 'أقرب فني موثق يتم توجيهه إلى العقار.', metric: 'مسار مباشر', icon: <MapPin size={22} />, bullets: ['وقت الوصول', 'خط المسار', 'SLA نشط'], route: '/technicians', label: 'عمليات GPS', photo: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'evidence', title: 'إثبات قبل وبعد', subtitle: 'إثبات بصري قبل إغلاق الخدمة أو اعتماد الدفع.', metric: 'سلسلة إثبات', icon: <Camera size={22} />, bullets: ['قبل', 'بعد', 'موافقة المستأجر'], route: '/owners', label: 'إثبات قبل وبعد', photo: 'https://images.unsplash.com/photo-1581579185169-528a7f5a906a?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'documents', title: 'العقود والتقارير', subtitle: 'عقد PDF وفاتورة وتقرير وسجل العقار.', metric: 'جاهز للتدقيق', icon: <FileCheck2 size={22} />, bullets: ['عقد PDF', 'تجزئة فاتورة', 'تقرير خدمة'], route: '/owners', label: 'مستندات التدقيق', photo: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'broker', title: 'مسار الوسيط', subtitle: 'إحالة مالك وسجل عقار وتتبع عمولة.', metric: '5–8٪', icon: <Briefcase size={22} />, bullets: ['إحالة', 'مسار', 'عمولة'], route: '/brokers', label: 'مسار الوسيط', photo: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1200&q=80' },
+    { id: 'design', title: 'استوديو التصميم الذكي', subtitle: 'خيارات تصميم داخلي وخارجي قبل موافقة المالك.', metric: 'معاينة ذكية', icon: <Sparkles size={22} />, bullets: ['داخلي', 'خارجي', 'موافقة'], route: '/request-demo?demo=design', label: 'معاينة التصميم', photo: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80' },
   ],
 };
 
 const copy = {
   en: {
-    brand: 'BIN GROUP',
-    company: 'Company',
-    quote: 'Get Quote',
-    request: 'Request Contract',
-    chip: 'PROFESSIONAL MISSION DEMO',
+    brand: 'BIN GROUP', company: 'Company', quote: 'Get Quote', request: 'Request Contract', chip: 'PROFESSIONAL MISSION DEMO',
     title: 'A serious visual demo for property owners.',
-    subtitle: 'Show the complete service chain with clean operational panels: owner dashboard, tenant request, technician GPS, before/after proof, reports, broker flow, and AI design.',
-    play: 'Play Demo Reel',
-    pause: 'Pause',
-    replay: 'Replay',
-    openFlow: 'Open This Flow',
-    playing: 'Playing now',
-    reel: 'Operational visual reel',
-    proof: 'What the owner can verify',
-    proofItems: ['Quote-to-contract owner flow', 'Tenant photo request', 'Technician GPS dispatch', 'Before/after service proof', 'PDF contract and reports', 'Broker and AI design workflow'],
-    whatsapp: 'WhatsApp BIN GROUP',
+    subtitle: 'Show the complete service chain with real photo-backed operational panels: owner dashboard, tenant request, technician GPS, before/after proof, reports, broker flow, and AI design.',
+    play: 'Play Demo Reel', pause: 'Pause', replay: 'Replay', openFlow: 'Open This Flow', playing: 'Playing now', reel: 'Operational photo reel', proof: 'What the owner can verify',
+    proofItems: ['Quote-to-contract owner flow', 'Tenant photo request', 'Technician GPS dispatch', 'Before/after service proof', 'PDF contract and reports', 'Broker and AI design workflow'], whatsapp: 'WhatsApp BIN GROUP',
   },
   ar: {
-    brand: 'BIN GROUP',
-    company: 'الشركة',
-    quote: 'احصل على عرض سعر',
-    request: 'اطلب عقداً',
-    chip: 'عرض احترافي مرئي',
+    brand: 'BIN GROUP', company: 'الشركة', quote: 'احصل على عرض سعر', request: 'اطلب عقداً', chip: 'عرض احترافي مرئي',
     title: 'عرض مرئي جاد لملاك العقارات.',
-    subtitle: 'إظهار سلسلة الخدمة كاملة بلوحات تشغيل نظيفة: لوحة المالك، طلب المستأجر، GPS الفني، إثبات قبل وبعد، التقارير، الوسيط، والتصميم الذكي.',
-    play: 'تشغيل العرض',
-    pause: 'إيقاف',
-    replay: 'إعادة',
-    openFlow: 'افتح هذا المسار',
-    playing: 'يعمل الآن',
-    reel: 'عرض مرئي للعمليات',
-    proof: 'ما يستطيع المالك التحقق منه',
-    proofItems: ['مسار عرض السعر والعقد', 'طلب مستأجر بصورة', 'إرسال فني عبر GPS', 'إثبات خدمة قبل وبعد', 'عقد وتقارير PDF', 'مسار الوسيط والتصميم الذكي'],
-    whatsapp: 'تواصل عبر واتساب',
+    subtitle: 'إظهار سلسلة الخدمة كاملة بلوحات تشغيل بصور واقعية: لوحة المالك، طلب المستأجر، GPS الفني، إثبات قبل وبعد، التقارير، الوسيط، والتصميم الذكي.',
+    play: 'تشغيل العرض', pause: 'إيقاف', replay: 'إعادة', openFlow: 'افتح هذا المسار', playing: 'يعمل الآن', reel: 'عرض صور العمليات', proof: 'ما يستطيع المالك التحقق منه',
+    proofItems: ['مسار عرض السعر والعقد', 'طلب مستأجر بصورة', 'إرسال فني عبر GPS', 'إثبات خدمة قبل وبعد', 'عقد وتقارير PDF', 'مسار الوسيط والتصميم الذكي'], whatsapp: 'تواصل عبر واتساب',
   },
 };
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+function DemoVisual({ scene }: { scene: DemoScene }) {
   return (
-    <Box sx={{ p: 1.35, borderRadius: 2, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 8px 18px rgba(17,24,39,0.05)' }}>
-      <Typography fontSize={11} color={palette.muted} fontWeight={850} noWrap>{label}</Typography>
-      <Typography fontSize={{ xs: 20, md: 26 }} color={palette.ink} fontWeight={950} lineHeight={1.1}>{value}</Typography>
-    </Box>
-  );
-}
-
-function WorkflowRow({ label, done = true }: { label: string; done?: boolean }) {
-  return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-      <CheckCircle2 size={18} color={done ? '#047857' : palette.goldDark} />
-      <Typography fontSize={{ xs: 13, md: 15 }} fontWeight={850} color={palette.ink} noWrap>{label}</Typography>
-    </Stack>
-  );
-}
-
-function DemoVisual({ id }: { id: string }) {
-  const shell = {
-    minHeight: { xs: 238, md: 340 },
-    borderRadius: 2.4,
-    border: `1px solid ${palette.border}`,
-    bgcolor: '#FFFFFF',
-    overflow: 'hidden',
-    position: 'relative',
-  } as const;
-
-  if (id === 'gps' || id === 'technician') {
-    return (
-      <Box sx={{ ...shell, bgcolor: '#EEF6FF' }}>
-        <Box sx={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(90deg, rgba(17,24,39,.06) 0 1px, transparent 1px 36px), repeating-linear-gradient(0deg, rgba(17,24,39,.05) 0 1px, transparent 1px 36px)' }} />
-        <Box sx={{ position: 'absolute', left: '13%', top: '64%', width: '72%', height: 7, borderRadius: 99, bgcolor: palette.gold, transform: 'rotate(-12deg)', boxShadow: `0 0 0 7px ${alpha(palette.gold, .15)}` }} />
-        <MapPin size={42} color={palette.red} style={{ position: 'absolute', left: '9%', top: '53%' }} />
-        <Navigation size={48} color={palette.goldDark} style={{ position: 'absolute', right: '12%', top: '25%' }} />
-        <Paper sx={{ position: 'absolute', left: 14, top: 14, p: 1.15, borderRadius: 2, boxShadow: '0 8px 18px rgba(17,24,39,.08)' }}>
-          <Typography fontSize={14} fontWeight={950} color={palette.ink}>ETA 18 MIN</Typography>
-          <Typography fontSize={11} fontWeight={850} color="#047857">SLA ACTIVE</Typography>
-        </Paper>
-        <Paper sx={{ position: 'absolute', right: 14, bottom: 14, p: 1.15, borderRadius: 2, boxShadow: '0 8px 18px rgba(17,24,39,.08)' }}>
-          <Typography fontSize={14} fontWeight={950} color={palette.ink}>Technician #04</Typography>
-          <Typography fontSize={11} fontWeight={850} color={palette.muted}>Verified route</Typography>
-        </Paper>
+    <Box sx={{ borderRadius: 3, overflow: 'hidden', border: `1px solid ${palette.border}`, bgcolor: '#FFFFFF', boxShadow: '0 12px 32px rgba(17,24,39,0.08)' }}>
+      <Box
+        sx={{
+          height: { xs: 250, sm: 320, md: 390 },
+          position: 'relative',
+          backgroundImage: `linear-gradient(180deg, rgba(17,24,39,0.10), rgba(17,24,39,0.68)), url("${scene.photo}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <Chip label={scene.label} sx={{ position: 'absolute', top: 16, left: 16, bgcolor: 'rgba(255,255,255,0.92)', color: palette.goldDark, fontWeight: 950 }} />
+        <Chip label={scene.metric} sx={{ position: 'absolute', top: 16, right: 16, bgcolor: 'rgba(255,255,255,0.92)', color: palette.ink, fontWeight: 950 }} />
+        <Box sx={{ position: 'absolute', left: 18, right: 18, bottom: 18, color: '#FFFFFF' }}>
+          <Typography sx={{ fontSize: { xs: 28, md: 40 }, fontWeight: 950, lineHeight: 1.02, textShadow: '0 6px 18px rgba(0,0,0,0.32)' }}>{scene.title}</Typography>
+          <Typography sx={{ mt: 1, maxWidth: 650, fontSize: { xs: 15, md: 18 }, fontWeight: 750, color: 'rgba(255,255,255,0.88)' }}>{scene.subtitle}</Typography>
+        </Box>
       </Box>
-    );
-  }
-
-  if (id === 'evidence' || id === 'tenant') {
-    return (
-      <Grid container spacing={1.2} sx={{ minHeight: { xs: 238, md: 340 } }}>
-        <Grid item xs={6}>
-          <Box sx={{ height: '100%', minHeight: { xs: 238, md: 340 }, borderRadius: 2.4, bgcolor: '#E5E7EB', border: `1px solid ${palette.border}`, position: 'relative', overflow: 'hidden' }}>
-            <Box sx={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 42%, rgba(102,112,133,.34), transparent 27%)' }} />
-            <Camera size={46} color="#475467" style={{ position: 'absolute', left: '50%', top: '43%', transform: 'translate(-50%,-50%)' }} />
-            <Chip label="BEFORE" sx={{ position: 'absolute', left: 12, bottom: 12, bgcolor: '#fff', color: '#475467', fontWeight: 950 }} />
-          </Box>
+      <Box sx={{ p: { xs: 1.75, md: 2.25 }, bgcolor: '#FFFFFF' }}>
+        <Grid container spacing={1}>
+          {scene.bullets.map((bullet) => (
+            <Grid item xs={12} sm={4} key={bullet}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CheckCircle2 size={17} color={palette.goldDark} />
+                <Typography fontWeight={900} color={palette.ink} sx={{ fontSize: 15 }}>{bullet}</Typography>
+              </Stack>
+            </Grid>
+          ))}
         </Grid>
-        <Grid item xs={6}>
-          <Box sx={{ height: '100%', minHeight: { xs: 238, md: 340 }, borderRadius: 2.4, bgcolor: '#DCFCE7', border: `1px solid ${palette.border}`, position: 'relative', overflow: 'hidden' }}>
-            <Box sx={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 42%, rgba(16,185,129,.26), transparent 30%)' }} />
-            <CheckCircle2 size={58} color="#047857" style={{ position: 'absolute', left: '50%', top: '43%', transform: 'translate(-50%,-50%)' }} />
-            <Chip label="AFTER" sx={{ position: 'absolute', left: 12, bottom: 12, bgcolor: '#fff', color: '#047857', fontWeight: 950 }} />
-          </Box>
-        </Grid>
-      </Grid>
-    );
-  }
-
-  if (id === 'design') {
-    return (
-      <Grid container spacing={1.2} sx={{ minHeight: { xs: 238, md: 340 } }}>
-        <Grid item xs={6}>
-          <Box sx={{ height: '100%', minHeight: { xs: 238, md: 340 }, borderRadius: 2.4, bgcolor: '#FAF3DF', border: `1px solid ${palette.border}`, position: 'relative' }}>
-            <Home size={70} color={palette.goldDark} style={{ position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }} />
-            <Chip label="INTERIOR" sx={{ position: 'absolute', left: 12, bottom: 12, bgcolor: '#fff', color: palette.goldDark, fontWeight: 950 }} />
-          </Box>
-        </Grid>
-        <Grid item xs={6}>
-          <Box sx={{ height: '100%', minHeight: { xs: 238, md: 340 }, borderRadius: 2.4, bgcolor: '#EAF6FF', border: `1px solid ${palette.border}`, position: 'relative' }}>
-            <Building2 size={70} color={palette.blue} style={{ position: 'absolute', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }} />
-            <Chip label="EXTERIOR" sx={{ position: 'absolute', left: 12, bottom: 12, bgcolor: '#fff', color: '#0369A1', fontWeight: 950 }} />
-          </Box>
-        </Grid>
-      </Grid>
-    );
-  }
-
-  if (id === 'documents') {
-    return (
-      <Box sx={{ ...shell, p: { xs: 1.25, md: 1.75 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1.1 }}>
-        {['SIGNED CONTRACT.pdf', 'INVOICE HASH VERIFIED', 'SERVICE REPORT.pdf'].map((row, index) => (
-          <Paper key={row} sx={{ p: 1.35, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1.25, boxShadow: '0 8px 18px rgba(17,24,39,.06)' }}>
-            <Box sx={{ width: 42, height: 42, borderRadius: 2, bgcolor: alpha(index === 1 ? palette.green : palette.gold, .14), display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-              <FileText size={22} color={index === 1 ? '#047857' : palette.goldDark} />
-            </Box>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography noWrap fontSize={{ xs: 13, md: 15 }} fontWeight={950}>{row}</Typography>
-              <Typography noWrap fontSize={11} color={palette.muted}>Owner-ready audit record</Typography>
-            </Box>
-            <CheckCircle2 size={20} color={index === 1 ? '#047857' : palette.goldDark} />
-          </Paper>
-        ))}
       </Box>
-    );
-  }
-
-  if (id === 'broker') {
-    return (
-      <Grid container spacing={1.2} sx={{ minHeight: { xs: 238, md: 340 } }}>
-        {['Owner Lead', 'Property Record', 'Quote Accepted', 'Commission 5–8%'].map((row, index) => (
-          <Grid item xs={6} key={row}>
-            <Box sx={{ height: '100%', minHeight: { xs: 113, md: 164 }, borderRadius: 2.4, bgcolor: index === 3 ? '#ECFDF5' : '#FFFFFF', border: `1px solid ${palette.border}`, p: 1.4, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <Briefcase size={28} color={index === 3 ? '#047857' : palette.goldDark} />
-              <Box>
-                <Typography fontSize={{ xs: 14, md: 17 }} fontWeight={950}>{row}</Typography>
-                <Typography fontSize={11} color={palette.muted}>Partner pipeline</Typography>
-              </Box>
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
-    );
-  }
-
-  return (
-    <Box sx={{ ...shell, p: { xs: 1.25, md: 1.75 } }}>
-      <Grid container spacing={1.1}>
-        <Grid item xs={4}><MetricTile label="Health" value="92%" /></Grid>
-        <Grid item xs={4}><MetricTile label="Contract" value="86K" /></Grid>
-        <Grid item xs={4}><MetricTile label="SLA" value="98%" /></Grid>
-      </Grid>
-      <Paper sx={{ mt: 1.2, p: { xs: 1.25, md: 1.6 }, borderRadius: 2.2, boxShadow: '0 8px 18px rgba(17,24,39,.06)' }}>
-        <Stack spacing={1.05}>
-          <WorkflowRow label="Property intake completed" />
-          <WorkflowRow label="Quote and 15% mobilization" />
-          <WorkflowRow label="Dashboard opens after payment" done />
-        </Stack>
-      </Paper>
     </Box>
   );
 }
@@ -274,10 +144,7 @@ function SceneCard({ scene, active, onClick }: { scene: DemoScene; active: boole
       <CardContent sx={{ p: 2 }}>
         <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
           <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{scene.icon}</Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography noWrap fontWeight={950} color={palette.ink}>{scene.title}</Typography>
-            <Typography noWrap fontSize={12} color={palette.muted}>{scene.metric}</Typography>
-          </Box>
+          <Box sx={{ minWidth: 0 }}><Typography noWrap fontWeight={950} color={palette.ink}>{scene.title}</Typography><Typography noWrap fontSize={12} color={palette.muted}>{scene.metric}</Typography></Box>
         </Stack>
         <Typography fontSize={13} color={palette.muted} sx={{ lineHeight: 1.55 }}>{scene.subtitle}</Typography>
       </CardContent>
@@ -288,7 +155,7 @@ function SceneCard({ scene, active, onClick }: { scene: DemoScene; active: boole
 export default function DemoVideosPage() {
   const [params] = useSearchParams();
   const { lang, setLang, isRTL } = useLanguage();
-  const language = lang === 'ar' ? 'ar' : 'en';
+  const language: Lang = lang === 'ar' ? 'ar' : 'en';
   const c = copy[language];
   const list = scenes[language];
   const selected = params.get('demo') || 'owner';
@@ -307,7 +174,7 @@ export default function DemoVideosPage() {
         setActiveId(list[next].id);
         return next;
       });
-    }, 2800);
+    }, 3200);
     return () => window.clearInterval(timer);
   }, [playing, list]);
 
@@ -323,10 +190,7 @@ export default function DemoVideosPage() {
       <Box sx={{ position: 'sticky', top: 0, zIndex: 30, bgcolor: 'rgba(255,255,255,0.96)', borderBottom: `1px solid ${palette.border}`, backdropFilter: 'blur(14px)' }}>
         <Container maxWidth="xl" sx={{ py: 1, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
           <Button component="a" href="/" sx={{ color: palette.ink, p: 0, minWidth: 0, mr: isRTL ? 0 : 'auto', ml: isRTL ? 'auto' : 0 }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center">
-              <Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.5 }} />
-              <Typography fontWeight={950}>{c.brand}</Typography>
-            </Stack>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.5 }} /><Typography fontWeight={950}>{c.brand}</Typography></Stack>
           </Button>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1 }}>
             <Button component="a" href="/" startIcon={<ArrowLeft size={16} />} sx={{ color: palette.ink, fontWeight: 900 }}>{c.company}</Button>
@@ -350,38 +214,13 @@ export default function DemoVideosPage() {
           </Grid>
 
           <Grid item xs={12} md={7}>
-            <Paper id="demo-reel" sx={{ p: { xs: 1.25, md: 2.4 }, borderRadius: { xs: 2.5, md: 3.5 }, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 18px 48px rgba(17,24,39,0.10)', overflow: 'visible' }}>
+            <Paper id="demo-reel" sx={{ p: { xs: 1.25, md: 2.4 }, borderRadius: { xs: 2.5, md: 3.5 }, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 18px 48px rgba(17,24,39,0.10)' }}>
               <Stack spacing={1.75}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ gap: 1, flexWrap: 'wrap' }}>
                   <Chip label={c.reel} sx={{ bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950 }} />
                   <Chip label={playing ? c.playing : active.metric} sx={{ bgcolor: playing ? alpha(palette.green, 0.12) : '#F3F4F6', color: playing ? '#047857' : palette.ink, fontWeight: 950 }} />
                 </Stack>
-
-                <Box sx={{ borderRadius: { xs: 2, md: 3 }, overflow: 'hidden', bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 10px 26px rgba(17,24,39,0.06)' }}>
-                  <Box sx={{ p: { xs: 1.25, md: 2 }, bgcolor: '#F8F9FB', borderBottom: `1px solid ${palette.border}` }}>
-                    <DemoVisual id={active.id} />
-                  </Box>
-                  <Box sx={{ p: { xs: 1.75, md: 2.4 }, bgcolor: '#FFFFFF' }}>
-                    <Stack direction="row" spacing={1.2} alignItems="flex-start" sx={{ mb: 1.2 }}>
-                      <Box sx={{ width: 42, height: 42, borderRadius: 2.2, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{active.icon}</Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="h5" fontWeight={950} color={palette.ink} sx={{ fontSize: { xs: 23, md: 30 }, lineHeight: 1.1 }}>{active.title}</Typography>
-                        <Typography color={palette.muted} fontWeight={750} sx={{ fontSize: { xs: 14, md: 17 }, lineHeight: 1.45 }}>{active.subtitle}</Typography>
-                      </Box>
-                    </Stack>
-                    <Grid container spacing={0.75}>
-                      {active.bullets.map((bullet) => (
-                        <Grid item xs={12} sm={4} key={bullet}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <CheckCircle2 size={16} color={palette.goldDark} />
-                            <Typography fontWeight={850} color={palette.ink} sx={{ fontSize: 15 }}>{bullet}</Typography>
-                          </Stack>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                </Box>
-
+                <DemoVisual scene={active} />
                 <LinearProgress variant="determinate" value={playing ? progress : 0} sx={{ height: 7, borderRadius: 99, bgcolor: '#EEF2F6', '& .MuiLinearProgress-bar': { bgcolor: palette.gold } }} />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.2}>
                   <Button variant="contained" startIcon={playing ? <PauseCircle size={18} /> : <PlayCircle size={18} />} onClick={() => setPlaying(!playing)} sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{playing ? c.pause : c.play}</Button>
@@ -395,27 +234,12 @@ export default function DemoVideosPage() {
 
         <Box sx={{ mt: 5 }}>
           <Typography variant="h3" fontWeight={950} sx={{ color: palette.ink, mb: 2 }}>{c.reel}</Typography>
-          <Grid container spacing={2}>
-            {list.map((scene, index) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={scene.id}>
-                <SceneCard scene={scene} active={scene.id === active.id} onClick={() => selectScene(scene.id, index)} />
-              </Grid>
-            ))}
-          </Grid>
+          <Grid container spacing={2}>{list.map((scene, index) => <Grid item xs={12} sm={6} md={4} lg={3} key={scene.id}><SceneCard scene={scene} active={scene.id === active.id} onClick={() => selectScene(scene.id, index)} /></Grid>)}</Grid>
         </Box>
 
         <Paper sx={{ mt: 5, p: { xs: 2.5, md: 4 }, borderRadius: 3.5, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 14px 38px rgba(17,24,39,0.07)' }}>
           <Typography variant="h4" fontWeight={950} sx={{ color: palette.ink, mb: 2 }}><ShieldCheck color={palette.goldDark} /> {c.proof}</Typography>
-          <Grid container spacing={1.5}>
-            {c.proofItems.map((item) => (
-              <Grid item xs={12} sm={6} md={4} key={item}>
-                <Stack direction="row" spacing={1.2} alignItems="center">
-                  <CheckCircle2 size={17} color={palette.goldDark} />
-                  <Typography color={palette.ink} fontWeight={850}>{item}</Typography>
-                </Stack>
-              </Grid>
-            ))}
-          </Grid>
+          <Grid container spacing={1.5}>{c.proofItems.map((item) => <Grid item xs={12} sm={6} md={4} key={item}><Stack direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={17} color={palette.goldDark} /><Typography color={palette.ink} fontWeight={850}>{item}</Typography></Stack></Grid>)}</Grid>
         </Paper>
       </Container>
     </Box>
