@@ -1,4 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
+import { config as loadDotenv } from 'dotenv';
+import { existsSync } from 'fs';
+
+// Auto-load .env.e2e for local runs (contains E2E_*_EMAIL/PASSWORD credentials).
+// In CI, these vars come from GitHub Secrets and take precedence.
+if (existsSync('.env.e2e')) {
+  loadDotenv({ path: '.env.e2e', override: false });
+}
+
+
 
 const hasExplicitBaseURL = Boolean(process.env.E2E_BASE_URL);
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:4173';

@@ -19,7 +19,11 @@ async function clickFirstVisible(page: Page, selectors: string[], timeout = 1500
 
 async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: string[], value: string) {
   await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => undefined);
-  await page.waitForSelector('input, textarea, [contenteditable="true"]', { timeout: 45_000 });
+  // Wait for a VISIBLE non-hidden input (exclude type=file and hidden inputs)
+  await page.waitForFunction(() => {
+    const inputs = Array.from(document.querySelectorAll('input:not([type="file"]):not([type="hidden"]), textarea'));
+    return inputs.some((el: any) => el.offsetParent !== null || (el.offsetWidth > 0 && el.offsetHeight > 0));
+  }, { timeout: 45_000 });
 
   for (const label of labels) {
     const target = page.getByLabel(label).first();
