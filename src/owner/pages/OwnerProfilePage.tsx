@@ -5,6 +5,7 @@ import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc,
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -124,24 +125,27 @@ export default function OwnerProfilePage() {
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
+  const profilePhoto = pickProfilePhoto(profileData, user);
+  const profileCover = pickProfileCover(profileData, user);
+
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Manage identity, billing contact, notification preference, and account recovery.', 'إدارة الهوية، جهة اتصال الفوترة، تفضيلات الإشعارات، واسترداد الحساب.')}</Typography>
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-      <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+      <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
         <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-          <Avatar sx={{ width: 104, height: 104, bgcolor: binThemeTokens.gold, color: '#000' }}>{displayName?.charAt(0) || <User size={42} />}</Avatar>
+          <Avatar src={profilePhoto || undefined} sx={{ width: 104, height: 104, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>{displayName?.charAt(0) || <User size={42} />}</Avatar>
           <Box sx={{ width: '100%', textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' } }}>
             <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Owner', 'المالك')}</Typography>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
-            {companyName && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}><Building2 size={16} /><Typography variant="body2">{companyName}</Typography></Stack>}
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+            {companyName && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Building2 size={16} /><Typography variant="body2">{companyName}</Typography></Stack>}
           </Box>
         </Stack>
 
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 4 }} />
+        <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 4 }} />
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Mobile Number', 'رقم الهاتف المتحرك')} value={phone} onChange={(e) => setPhone(e.target.value)} sx={inputSx} /></Grid>
