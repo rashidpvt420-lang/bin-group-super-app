@@ -81,19 +81,19 @@ const ui = {
 
 const statusTone = (status: string) => {
     const value = String(status || '').toLowerCase();
-    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready') || value.includes('available') || value.includes('healthy')) return ui.green;
-    if (value.includes('pending') || value.includes('break') || value.includes('review')) return ui.gold;
+    if (value.includes('active') || value.includes('approved') || value.includes('working') || value.includes('ready') || value.includes('available') || value.includes('healthy') || value.includes('synced')) return ui.green;
+    if (value.includes('pending') || value.includes('break') || value.includes('review') || value.includes('partial')) return ui.gold;
     if (value.includes('off') || value.includes('expired') || value.includes('blocked') || value.includes('missing') || value.includes('risk')) return ui.red;
     return ui.muted;
 };
 
 const formatTime = (value: any) => {
     try {
-        if (!value) return 'Pending sync';
+        if (!value) return 'Not checked in yet';
         if (typeof value?.toDate === 'function') return value.toDate().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         return new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     } catch {
-        return 'Pending sync';
+        return 'Not checked in yet';
     }
 };
 
@@ -121,7 +121,7 @@ const readDocByUid = async (collectionName: string, uid?: string | null): Promis
 
 function SectionCard({ children, sx = {} }: { children: React.ReactNode; sx?: object }) {
     return (
-        <Paper sx={{ p: { xs: 2.5, md: 3.5 }, height: '100%', bgcolor: ui.canvas, border: `1px solid ${ui.line}`, borderRadius: 3, boxShadow: '0 12px 30px rgba(17,24,39,0.07)', ...sx }}>
+        <Paper sx={{ p: { xs: 2.5, md: 3.25 }, height: '100%', bgcolor: ui.canvas, border: `1px solid ${ui.line}`, borderRadius: 3.5, boxShadow: '0 12px 30px rgba(17,24,39,0.07)', minWidth: 0, ...sx }}>
             {children}
         </Paper>
     );
@@ -132,20 +132,20 @@ function MetricCard({ icon, label, value, tone = ui.gold, helper }: { icon: Reac
         <Paper sx={{ p: { xs: 2, md: 2.5 }, height: '100%', bgcolor: '#FFFFFF', border: `1px solid ${alpha(tone, 0.28)}`, borderRadius: 2.5, minWidth: 0, boxShadow: '0 10px 24px rgba(17,24,39,0.055)' }}>
             <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
                 <Box sx={{ width: 34, height: 34, borderRadius: 1.5, bgcolor: alpha(tone, 0.10), color: tone, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{icon}</Box>
-                <Typography variant="caption" sx={{ color: ui.ink, fontWeight: 950, letterSpacing: 0.4, textTransform: 'uppercase' }}>{label}</Typography>
+                <Typography variant="caption" sx={{ color: ui.ink, fontWeight: 950, letterSpacing: 0.35, textTransform: 'uppercase' }}>{label}</Typography>
             </Stack>
             <Typography variant="h4" fontWeight="950" sx={{ color: ui.ink, lineHeight: 1 }}>{value}</Typography>
-            {helper && <Typography variant="caption" sx={{ color: ui.muted, mt: 0.8, display: 'block', fontWeight: 700 }}>{helper}</Typography>}
+            {helper && <Typography variant="caption" sx={{ color: ui.muted, mt: 0.8, display: 'block', fontWeight: 750 }}>{helper}</Typography>}
         </Paper>
     );
 }
 
 function DetailRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
     return (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '145px minmax(0, 1fr)' }, gap: { xs: 0.3, sm: 1.5 }, alignItems: 'start', py: 1.05, minWidth: 0, borderBottom: `1px solid ${alpha(ui.line, 0.75)}` }}>
-            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</Typography>
-            <Typography variant="body2" sx={{ color: ui.ink, fontWeight: 850, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45, display: 'flex', gap: 0.7, alignItems: 'center' }}>
-                {icon}{value || 'Pending sync'}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '130px minmax(0, 1fr)', md: '142px minmax(0, 1fr)' }, gap: { xs: 0.25, sm: 1.4 }, alignItems: 'start', py: 1.05, minWidth: 0, borderBottom: `1px solid ${alpha(ui.line, 0.75)}` }}>
+            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.25, lineHeight: 1.25 }}>{label}</Typography>
+            <Typography variant="body2" sx={{ color: ui.ink, fontWeight: 850, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.45, display: 'flex', gap: 0.7, alignItems: 'center' }}>
+                {icon}{value || 'Not set'}
             </Typography>
         </Box>
     );
@@ -155,10 +155,15 @@ function TitleRow({ icon, title }: { icon: React.ReactNode; title: string }) {
     return (
         <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2.5 }}>
             <Box sx={{ color: ui.gold, display: 'flex' }}>{icon}</Box>
-            <Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>{title}</Typography>
+            <Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, letterSpacing: '-0.02em' }}>{title}</Typography>
         </Stack>
     );
 }
+
+const readable = (...values: any[]) => {
+    const value = textOrPending(...values);
+    return value === 'Pending sync' ? 'Not set' : value;
+};
 
 export default function TechnicianDashboardPage() {
     const { user } = useRole();
@@ -226,15 +231,20 @@ export default function TechnicianDashboardPage() {
             const technicianByUid = await readDocByUid('technicians', user.uid);
             const technicianByEmail = !technicianByUid && emailValue ? await readRows('technicians', 'email', emailValue, 1) : [];
             const technicianProfile = technicianByUid || technicianByEmail[0] || null;
+            const hrProfile = await readDocByUid('hrProfiles', user.uid);
+            const staffProfile = await readDocByUid('staffProfiles', user.uid);
+            const staffAgreement = await readDocByUid('staffAgreements', user.uid);
+            const staffAsset = await readDocByUid('staffAssets', user.uid);
             const staffRosterRows = uniqueRows([...(await readRows('staff_roster', 'uid', user.uid, 4)), ...(await readRows('staff_roster', 'email', emailValue, 4))]);
             const hrStaffRows = uniqueRows([...(await readRows('hr_staff', 'uid', user.uid, 4)), ...(await readRows('hr_staff', 'email', emailValue, 4))]);
-            const attendanceRows = uniqueRows([...(await readRows('attendance', 'uid', user.uid, 6)), ...(await readRows('attendance', 'technicianId', user.uid, 6))]);
+            const attendanceRows = uniqueRows([...(await readRows('attendance', 'uid', user.uid, 6)), ...(await readRows('attendance', 'technicianId', user.uid, 6)), ...(await readRows('attendanceLogs', 'uid', user.uid, 6))]);
             const certs = uniqueRows([
                 ...(await readRows('technician_certifications', 'technicianId', user.uid, 8)),
                 ...(await readRows('certifications', 'technicianId', user.uid, 8)),
+                ...(await readRows('staffTraining', 'uid', user.uid, 8)),
                 ...(((technicianProfile as any)?.certifications || (userProfile as any)?.certifications || []) as any[]).map((item: any, index: number) => ({ id: `embedded-${index}`, ...(typeof item === 'string' ? { name: item } : item) })),
             ]);
-            setProfileSources({ technician: technicianProfile, staffRoster: staffRosterRows[0] || null, hrStaff: hrStaffRows[0] || null, user: userProfile, attendance: attendanceRows[0] || null });
+            setProfileSources({ technician: technicianProfile, staffRoster: staffRosterRows[0] || null, hrStaff: hrStaffRows[0] || null, hrProfile, staffProfile, staffAsset, staffAgreement, user: userProfile, attendance: attendanceRows[0] || null });
             setCertRows(certs);
             setProfileReadWarnings(warnings);
         };
@@ -243,35 +253,39 @@ export default function TechnicianDashboardPage() {
 
     const profile = useMemo(() => normalizeTechnicianProfile({ ...profileSources, certifications: certRows }), [profileSources, certRows]);
     const raw = profile.raw || {};
-    const technicianName = textOrPending(profile.fullName, user?.displayName, 'Technician');
-    const employeeId = textOrPending(raw.employeeCode, raw.employeeId, raw.staffId, raw.badgeNumber, user?.uid);
-    const trade = textOrPending(profile.primaryTrade, 'General Maintenance');
-    const phone = textOrPending(profile.phone, raw.phoneNumber, raw.phone, raw.mobile);
-    const email = textOrPending(profile.email, user?.email);
-    const supervisor = textOrPending(raw.supervisorName, raw.managerName, raw.reportingManager);
-    const shift = textOrPending(raw.shiftName, raw.shift, raw.workSchedule);
-    const baseLocation = textOrPending(raw.baseLocation, raw.zone, raw.area, raw.emirate, 'UAE field operations');
-    const contractType = textOrPending(raw.contractType, raw.employmentType, raw.staffType);
+    const technicianName = readable(profile.fullName, user?.displayName, 'Technician');
+    const employeeId = readable(raw.employeeCode, raw.employeeId, raw.staffId, raw.badgeNumber, user?.uid);
+    const trade = readable(profile.primaryTrade, raw.department, 'General Maintenance');
+    const phone = readable(profile.phone, raw.phoneNumber, raw.phone, raw.mobile);
+    const email = readable(profile.email, user?.email);
+    const supervisor = readable(raw.supervisorName, raw.managerName, raw.reportingManager, 'Operations Lead');
+    const shift = readable(raw.shiftName, raw.shift, raw.workSchedule, raw.workingHours, 'Day Shift');
+    const baseLocation = readable(raw.baseLocation, raw.serviceZone, raw.zone, raw.area, raw.emirate, 'UAE field operations');
+    const contractType = readable(raw.contractType, raw.employmentType, raw.staffType, 'Full-time staff');
     const joiningDate = formatUiDate(raw.joiningDate || raw.joinedAt || raw.createdAt);
     const visaExpiry = formatUiDate(raw.visaExpiry || raw.visaExpiryDate || raw.residencyExpiry);
     const idExpiry = formatUiDate(raw.emiratesIdExpiry || raw.eidExpiry || raw.idExpiry);
     const medicalExpiry = formatUiDate(profile.medicalCardExpiry || raw.medicalExpiry || raw.healthCardExpiry);
     const passportExpiry = formatUiDate(raw.passportExpiry || raw.passportExpiryDate);
-    const qualityDisplay = stats.quality ? `${stats.quality}/5` : textOrPending(raw.qualityScore, raw.rating, 'Pending');
-    const slaDisplay = textOrPending(raw.slaCompliance, raw.slaScore, stats.slaRisk > 0 ? 'At risk' : 'Healthy');
-    const syncWarnings = [...profileReadWarnings, ...profile.missingFields.map(formatMissingTechnicianField)];
-    const openActionItems = [visaExpiry, idExpiry, medicalExpiry, passportExpiry].filter((value) => value === 'Pending sync').length + syncWarnings.length;
+    const qualityDisplay = stats.quality ? `${stats.quality}/5` : readable(raw.qualityScore, raw.rating, 'Pending');
+    const slaDisplay = readable(raw.slaCompliance, raw.slaScore, stats.slaRisk > 0 ? 'At risk' : 'Healthy');
+    const coreWarnings = [...profileReadWarnings, ...profile.missingFields.map(formatMissingTechnicianField)];
+    const complianceWarnings = (profile.complianceActionItems || []).map(formatMissingTechnicianField);
+    const missingDocuments = [visaExpiry, idExpiry, medicalExpiry, passportExpiry].filter((value) => value === 'Pending sync' || value === 'Not set').length;
+    const openActionItems = missingDocuments + complianceWarnings.length;
     const isOnDuty = dutyStatus === 'WORKING' || profile.dutyStatus === 'available';
-    const vehicleLabel = profile.vehicleAssigned ? profile.vehicleNumber || 'Assigned' : 'Pending sync';
-    const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Pending sync';
-    const ppeLabel = profile.ppeIssued ? 'Issued' : 'Pending sync';
+    const vehicleLabel = profile.vehicleAssigned ? profile.vehicleNumber || 'Assigned' : 'Not assigned';
+    const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Not issued';
+    const ppeLabel = profile.ppeIssued ? 'Issued' : 'Not issued';
     const certificationLabel = formatDocumentStatus(profile.certificationsStatus);
+    const leaveBalance = readable(raw.leaveBalance, raw.annualLeaveBalance, raw.staffAgreement?.leaveBalance, '30');
+    const rosterStatus = readable(raw.rosterStatus, raw.attendanceStatus, raw.status, 'Active');
 
     const handleDutyToggle = async (newStatus: string) => {
         if (!user?.uid) return;
         setUpdating(true);
         try {
-            await updateDoc(doc(db, 'users', user.uid), { dutyStatus: newStatus, onDuty: newStatus === 'WORKING', updatedAt: serverTimestamp() });
+            await updateDoc(doc(db, 'users', user.uid), { dutyStatus: newStatus, onDuty: newStatus === 'WORKING', isAvailable: newStatus === 'WORKING', updatedAt: serverTimestamp() });
             await logAuditAction({ action: TICKET_AUDIT_ACTIONS.DUTY_CHANGE, actorId: user.uid, actorRole: 'technician', targetType: 'users', targetId: user.uid, metadata: { newStatus } });
             setDutyStatus(newStatus);
         } catch (err) {
@@ -325,7 +339,7 @@ export default function TechnicianDashboardPage() {
                         </Box>
                     </Stack>
                     <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} useFlexGap>
-                        {[String(dutyStatus).replace('_', ' '), `Sync: ${profile.syncStatus}`, `SLA: ${slaDisplay}`, `Quality: ${qualityDisplay}`].map((item) => <Chip key={item} label={item} sx={{ bgcolor: '#FFFFFF', color: statusTone(item), border: `1px solid ${alpha(statusTone(item), 0.35)}`, fontWeight: 950 }} />)}
+                        {[String(dutyStatus).replace('_', ' '), `Core sync: ${profile.syncStatus}`, `SLA: ${slaDisplay}`, `Actions: ${openActionItems}`].map((item) => <Chip key={item} label={item} sx={{ bgcolor: '#FFFFFF', color: statusTone(item), border: `1px solid ${alpha(statusTone(item), 0.35)}`, fontWeight: 950 }} />)}
                     </Stack>
                 </Stack>
             </SectionCard>
@@ -337,10 +351,10 @@ export default function TechnicianDashboardPage() {
                 <Grid item xs={6} md={3}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
             </Grid>
 
-            <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><Grid container spacing={1.5}><Grid item xs={12} sm={6}><DetailRow label="Full name" value={technicianName} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Employee ID" value={employeeId} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Email" value={email} icon={<Mail size={13} />} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Trade" value={trade} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Supervisor" value={supervisor} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Shift" value={shift} /></Grid><Grid item xs={12} sm={6}><DetailRow label="Base zone" value={baseLocation} /></Grid></Grid></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={textOrPending(raw.rosterStatus, raw.attendanceStatus, raw.status)} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={textOrPending(raw.leaveBalance, raw.annualLeaveBalance)} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
-                <Grid item xs={12} lg={3}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs review'} /></SectionCard></Grid>
+            <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 
             <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
@@ -356,11 +370,11 @@ export default function TechnicianDashboardPage() {
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<FileText size={20} />} title="Compliance Documents" /><DetailRow label="Visa expiry" value={visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></SectionCard></Grid>
+                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<FileText size={20} />} title="Compliance Documents" /><DetailRow label="Visa expiry" value={visaExpiry === 'Pending sync' ? 'Not set' : visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry === 'Pending sync' ? 'Not set' : idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry === 'Pending sync' ? 'Not set' : passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry === 'Pending sync' ? 'Not set' : medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></SectionCard></Grid>
                 <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<Hammer size={20} />} title="Skills, Tools & Assets" /><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={profile.skillLevel} /><DetailRow label="Vehicle" value={vehicleLabel} icon={<Car size={13} />} /><DetailRow label="Tool kit" value={toolKitLabel} /><DetailRow label="Certifications" value={certificationLabel} /><DetailRow label="Dispatch readiness" value={formatDispatchReadiness(profile.dispatchReadiness)} /></SectionCard></Grid>
             </Grid>
 
-            {profile.syncStatus !== 'synced' && <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#D97706" /><Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>Sync Warnings</Typography></Stack>{syncWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• {warning}</Typography>)}</SectionCard>}
+            {(coreWarnings.length > 0 || complianceWarnings.length > 0) && <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#D97706" /><Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>Staff Data Review</Typography></Stack>{coreWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Core sync: {warning}</Typography>)}{complianceWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Compliance action: {warning}</Typography>)}</SectionCard>}
 
             {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 2 }}><Navigation size={20} color={ui.gold} /><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><SectionCard sx={{ bgcolor: job.priority === 'emergency' ? alpha(ui.red, 0.055) : ui.canvas, border: `1px solid ${job.priority === 'emergency' ? alpha(ui.red, 0.25) : ui.line}` }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? ui.red : ui.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color={ui.red} />}</Stack><Typography variant="body2" sx={{ color: ui.muted, mb: 2, fontWeight: 700 }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950 }}>CLAIM MISSION</Button></SectionCard></Grid>)}</Grid></Box>}
         </Box>
