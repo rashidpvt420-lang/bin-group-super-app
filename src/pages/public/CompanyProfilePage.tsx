@@ -1,112 +1,196 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Button, Card, CardContent, Chip, Container, Dialog, Grid, IconButton, LinearProgress, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Briefcase, Building2, CheckCircle2, FileText, Home, Mail, MapPin, MessageSquare, Phone, PlayCircle, Shield, Sparkles, Users, Video, Wrench, X, Zap } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Box, Button, Card, CardContent, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Building2, Briefcase, CheckCircle2, FileText, Mail, MapPin, MessageSquare, Phone, ShieldCheck, Sparkles, Users, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'owner@bin-group.com' };
-type DemoId = 'owner' | 'tenant' | 'technician' | 'broker' | 'gps' | 'documents' | 'ai-design';
-type Demo = { id: DemoId; title: string; length: string; route: string; icon: React.ReactNode; summary: string; bullets: string[] };
-
-function demoIcon(id: DemoId) {
-  if (id === 'owner') return <Building2 size={28} />;
-  if (id === 'tenant') return <Users size={28} />;
-  if (id === 'technician') return <Wrench size={28} />;
-  if (id === 'broker') return <Briefcase size={28} />;
-  if (id === 'gps') return <MapPin size={28} />;
-  if (id === 'documents') return <Video size={28} />;
-  return <Sparkles size={28} />;
-}
 
 function getCopy(lang: 'en' | 'ar') {
   const ar = lang === 'ar';
-  const demos: Demo[] = [
-    { id: 'owner', title: ar ? 'معاينة ملف المالك' : 'Owner Profile Demo', length: 'LIVE', route: '/owners', icon: demoIcon('owner'), summary: ar ? 'يعرض ما سيراه المالك: العقارات، العقد، الدفعة، الطلبات، التقارير، وجواز العقار.' : 'Shows what an owner sees: properties, contract, payment, requests, reports and property passport.', bullets: ar ? ['محفظة العقارات', 'العقد والدفع', 'طلبات الخدمة', 'التقارير'] : ['Property portfolio', 'Contract & payment', 'Service requests', 'Reports'] },
-    { id: 'tenant', title: ar ? 'معاينة ملف المستأجر' : 'Tenant Profile Demo', length: 'LIVE', route: '/tenants', icon: demoIcon('tenant'), summary: ar ? 'يعرض طلب الصيانة، الصور، الأولوية، حالة الفني، وتأكيد الإنجاز.' : 'Shows maintenance request, photos, priority, technician status and completion confirmation.', bullets: ar ? ['طلب صيانة', 'رفع صور', 'تتبع الفني', 'تأكيد الإنجاز'] : ['Request', 'Photo upload', 'Technician tracking', 'Completion'] },
-    { id: 'technician', title: ar ? 'معاينة ملف الفني' : 'Technician Profile Demo', length: 'LIVE', route: '/technicians', icon: demoIcon('technician'), summary: ar ? 'يعرض بطاقة المهمة، الموقع، المتطلبات، صور قبل وبعد، وإغلاق المهمة.' : 'Shows job card, location, requirements, before/after photos and job closure.', bullets: ar ? ['بطاقة مهمة', 'GPS', 'إثبات', 'إغلاق'] : ['Job card', 'GPS', 'Proof', 'Closure'] },
-    { id: 'broker', title: ar ? 'معاينة ملف الوسيط' : 'Broker Profile Demo', length: 'LIVE', route: '/brokers', icon: demoIcon('broker'), summary: ar ? 'يعرض إحالات الملاك، فرص العقارات، حالة الخط، والعمولة.' : 'Shows owner referrals, property opportunities, pipeline status and commission.', bullets: ar ? ['إحالات', 'فرص', 'خط مبيعات', 'عمولة'] : ['Referrals', 'Opportunities', 'Pipeline', 'Commission'] },
-    { id: 'gps', title: ar ? 'معاينة إرسال GPS' : 'GPS Dispatch Demo', length: 'LIVE', route: '/request-demo', icon: demoIcon('gps'), summary: ar ? 'يعرض ربط العقار بأقرب فني وتحديد المسار وحالة الوصول.' : 'Shows property-to-technician matching, route and arrival status.', bullets: ar ? ['موقع العقار', 'أقرب فني', 'المسار', 'الوصول'] : ['Property location', 'Nearest tech', 'Route', 'Arrival'] },
-    { id: 'documents', title: ar ? 'معاينة المستندات والتقارير' : 'Documents & Reports Demo', length: 'LIVE', route: '/request-demo', icon: demoIcon('documents'), summary: ar ? 'يعرض العقد، الفاتورة، إثبات الخدمة، وتقرير المالك.' : 'Shows contract, invoice, service proof and owner report.', bullets: ar ? ['عقد', 'فاتورة', 'إثبات خدمة', 'تقرير'] : ['Contract', 'Invoice', 'Service proof', 'Report'] },
-    { id: 'ai-design', title: ar ? 'معاينة استوديو التصميم AI' : 'AI Design Studio Demo', length: 'LIVE', route: '/ai-design-studio', icon: demoIcon('ai-design'), summary: ar ? 'يعرض فكرة تصميم، نطاق عمل، مواد، ومسار موافقة.' : 'Shows design concept, work scope, materials and approval path.', bullets: ar ? ['تصميم', 'نطاق', 'مواد', 'موافقة'] : ['Design', 'Scope', 'Materials', 'Approval'] },
-  ];
   return {
-    ar, demos,
-    title: ar ? 'BIN GROUP - الإمارات للصيانة العامة وإدارة العقارات' : 'BIN GROUP - UAE General Maintenance & Property Management',
-    subtitle: ar ? 'نظام إماراتي موحد للصيانة وإدارة العقارات، عقود الملاك، طلبات المستأجرين، إرسال الفنيين، إثبات قبل وبعد، ومعاينات حقيقية لما يوجد داخل كل ملف.' : 'UAE-first property care OS with real previews of what each profile contains: owners, tenants, technicians, brokers, GPS, reports and AI design.',
-    request: ar ? 'طلب عقد' : 'Request Contract', play: ar ? 'افتح المعاينة' : 'Open Preview', demosLabel: ar ? 'المعاينات' : 'Previews',
-    licenseTitle: ar ? 'الرخصة / نموذج التشغيل' : 'Company License / Operating Model',
-    license: ar ? 'All Kind Building Projects Contracting - L.L.C - S.P.C | نموذج تشغيل موحد للعناية بالعقارات في الإمارات' : 'All Kind Building Projects Contracting - L.L.C - S.P.C | UAE first unified property care operating model',
-    about: ar ? 'BIN GROUP تربط التسعير والعقود ودفعة التفعيل 15% وطلبات المستأجرين وإرسال الفنيين عبر GPS وإثبات الخدمة وجواز العقار في منصة واحدة.' : 'BIN GROUP connects quotes, contracts, 15% mobilization, tenant requests, technician GPS dispatch, service proof and property passport records in one platform.',
-    pricing: ar ? [['عقود الصيانة', 'تسعيرة مخصصة'], ['إدارة العقارات', 'نموذج 5%'], ['دفعة التفعيل', '15% مقدماً'], ['خطط الدفع', 'شهري / ربع سنوي / سنوي']] : [['Maintenance Contracts', 'Custom Quote'], ['Property Management', '5% model'], ['Mobilization', '15% upfront'], ['Payment Plans', 'Monthly / Quarterly / Annual']],
-    solveTitle: ar ? 'نظام تشغيل واحد لسلسلة العناية بالعقار' : 'One operating system for the property-care chain',
-    solveText: ar ? 'بدلاً من الاتصالات المتفرقة والمتابعات اليدوية، يحصل المالك والمستأجر والفني والوسيط على مسار رقمي واضح.' : 'Instead of scattered calls and manual follow-up, owners, tenants, technicians and brokers get one clear digital operating flow.',
-    servicesTitle: ar ? 'ماذا تقدم BIN GROUP' : 'What BIN GROUP offers',
-    services: ar ? ['عقود صيانة مخصصة', 'إدارة العقارات', 'تشغيل الفنيين', 'جواز العقار الرقمي'] : ['Custom maintenance contracts', 'Property management', 'Technician operations', 'Digital property passport'],
-    demoTitle: ar ? 'معاينة حقيقية لما يوجد داخل الملفات' : 'Real preview of what is inside each profile',
-    demoText: ar ? 'اضغط على أي بطاقة لعرض واجهة مصغرة توضّح ما سيراه كل مستخدم داخل التطبيق.' : 'Click any card to view a mini interface showing what each user will see inside the app.',
-    nowShowing: ar ? 'المعاينة الحالية' : 'Current Preview', close: ar ? 'إغلاق' : 'Close', openPage: ar ? 'افتح الصفحة الحقيقية' : 'Open Real Page', preview: ar ? 'معاينة' : 'Preview',
-    missionTitle: ar ? 'المهمة' : 'Mission', mission: ar ? 'رفع معيار الصيانة العامة وإدارة العقارات في الإمارات بنظام رقمي واضح وموثوق.' : 'Raise the UAE standard for general maintenance and property management with a clear trusted digital system.',
-    contact: ar ? 'تواصل مع BIN GROUP' : 'Contact BIN GROUP',
+    ar,
+    title: ar ? 'BIN GROUP - الصيانة العامة وإدارة العقارات' : 'BIN GROUP - General Maintenance & Property Management',
+    subtitle: ar
+      ? 'شركة إماراتية بجذور من مدينة العين منذ عام 2010، تعمل اليوم بنموذج شركة مرخصة لخدمات الصيانة وإدارة العقارات والتشغيل الرقمي.'
+      : 'A UAE maintenance and property management company rooted in Al Ain since 2010, now operating through a licensed LLC model with digital property-care operations.',
+    badge1: ar ? 'جذور من العين منذ 2010' : 'Rooted in Al Ain since 2010',
+    badge2: ar ? 'شركة مرخصة في الإمارات' : 'Licensed UAE Company',
+    badge3: ar ? 'صيانة + إدارة عقارات' : 'Maintenance + Property Management',
+    request: ar ? 'طلب عقد أو عرض سعر' : 'Request Contract or Quote',
+    whatsapp: ar ? 'تواصل عبر واتساب' : 'WhatsApp BIN GROUP',
+    licenceTitle: ar ? 'الرخصة ونموذج التشغيل' : 'Licence & Operating Model',
+    licence: ar
+      ? 'All Kind Building Projects Contracting - L.L.C - S.P.C | يتم عرض رقم الرخصة التجارية وجهة الإصدار وتاريخ الانتهاء داخل التطبيق عند التفعيل النهائي.'
+      : 'All Kind Building Projects Contracting - L.L.C - S.P.C | Trade licence number, issuing authority, and expiry date should be displayed in the app before final public launch.',
+    aboutTitle: ar ? 'من نحن' : 'About the Company',
+    about: ar
+      ? 'بدأت BIN GROUP كعمل محلي صغير في مدينة العين عام 2010، يقدم خدمات عملية في الصيانة ومتابعة احتياجات العقارات اليومية. واليوم تطورت الشركة إلى مرحلة شركة مرخصة ومنظمة، تجمع بين الخبرة الميدانية والخدمة المهنية والسجلات الرقمية الواضحة. نعمل لخدمة الملاك والمستأجرين والعقارات السكنية والتجارية بطريقة أكثر شفافية وتنظيماً.'
+      : 'BIN GROUP began as a small local maintenance operation in Al Ain in 2010, supporting practical property-care needs in the local market. Today, the company has moved into a licensed and structured LLC phase, combining field experience, professional service standards, and clear digital records. We support owners, tenants, and residential or commercial properties with a more transparent and organised service model.',
+    servicesTitle: ar ? 'خدماتنا' : 'Our Services',
+    services: ar
+      ? [
+          ['عقود الصيانة', 'عقود صيانة مخصصة للفيلات والشقق والمباني والفنادق والمدارس والعيادات والمكاتب والمحافظ العقارية.'],
+          ['إدارة العقارات', 'تنسيق الملاك والمستأجرين، متابعة الشكاوى، سجلات الحالة، الإشراف على المقاولين، وتقارير العقار.'],
+          ['تشغيل الفنيين', 'بطاقات مهام، موقع، ملاحظات سلامة، إثبات قبل وبعد، وسجل إنجاز واضح داخل التطبيق.'],
+          ['جواز العقار الرقمي', 'سجل رقمي لكل عقار يشمل العقود والطلبات والفواتير والتقارير والصيانة والتحديثات.'],
+        ]
+      : [
+          ['Maintenance Contracts', 'Custom maintenance contracts for villas, apartments, buildings, hotels, schools, clinics, offices, and property portfolios.'],
+          ['Property Management', 'Owner and tenant coordination, complaint follow-up, condition records, contractor supervision, and property reporting.'],
+          ['Technician Operations', 'Job cards, location context, safety notes, before-and-after proof, and clear completion records inside the app.'],
+          ['Digital Property Passport', 'A digital record for each property covering contracts, requests, invoices, reports, maintenance activity, and updates.'],
+        ],
+    innovationTitle: ar ? 'الابتكار والعمليات بدون أوراق' : 'Innovation & Paperless Operations',
+    innovation: ar
+      ? 'تعمل BIN GROUP على تطوير نظام خدمة ذاتية للموظفين مصمم لفرق الصيانة وإدارة العقارات في الإمارات. يساعد النظام الموظفين على طلب الإجازات، رفع المستندات، متابعة الحضور، مراجعة المهام، طلب خطابات الموارد البشرية، تتبع مستندات الامتثال، رفع ملاحظات السلامة، وطلب الأدوات ومعدات الوقاية بدون معاملات ورقية.'
+      : 'BIN GROUP is developing a staff self-service system designed for UAE maintenance and property management field teams. The system helps employees request leave, upload documents, review attendance context, track assigned jobs, request HR letters, manage compliance documents, report safety issues, and request tools or PPE without manual paperwork.',
+    proofTitle: ar ? 'كيف نبني الثقة' : 'How We Build Trust',
+    proof: ar
+      ? ['عرض بيانات الشركة والرخصة بوضوح', 'نطاق خدمة واضح بدون مبالغات', 'صور قبل وبعد وتقارير قابلة للمراجعة', 'تواصل مباشر عبر الهاتف والواتساب والبريد الإلكتروني', 'دعم ثنائي اللغة مع واجهة عربية RTL']
+      : ['Clear company and licence information', 'Defined service scope without exaggeration', 'Before-and-after proof and reviewable reports', 'Direct phone, WhatsApp, and email contact', 'Bilingual English/Arabic support with RTL Arabic layout'],
+    missionTitle: ar ? 'المهمة' : 'Mission',
+    mission: ar
+      ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تقلل الضغط التشغيلي، وتوفر متابعة واضحة ومهنية من خلال السجلات الرقمية والمساءلة الميدانية.'
+      : 'To deliver dependable maintenance and property management services that protect clients’ properties, reduce operational stress, and improve daily property care through clear communication, digital records, and accountable field execution.',
+    contactTitle: ar ? 'تواصل معنا' : 'Contact Us',
+    location: ar ? 'العين، الإمارات العربية المتحدة' : 'Al Ain, United Arab Emirates',
+    footer: ar ? 'عناية موثوقة بالعقارات، بجذور من مدينة العين.' : 'Trusted maintenance and property care, rooted in Al Ain.',
   };
 }
 
-function DataCard({ label, value }: { label: string; value: string }) {
-  return <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,.045)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 900 }}>{label}</Typography><Typography variant="h6" fontWeight={950} sx={{ color: '#fff', mt: .5 }}>{value}</Typography></Paper>;
-}
-
-function ListRow({ icon, title, sub, status }: { icon: React.ReactNode; title: string; sub: string; status: string }) {
-  return <Paper sx={{ p: 1.7, bgcolor: '#020617', border: '1px solid rgba(255,255,255,.08)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ color: binThemeTokens.gold, display: 'flex' }}>{icon}</Box><Box sx={{ flex: 1 }}><Typography fontWeight={950}>{title}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)' }}>{sub}</Typography></Box><Chip size="small" label={status} sx={{ bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 900 }} /></Stack></Paper>;
-}
-
-function ProfilePreview({ id, ar }: { id: DemoId; ar: boolean }) {
-  if (id === 'owner') return <Stack spacing={2}><Grid container spacing={2}><Grid item xs={6}><DataCard label={ar ? 'العقارات' : 'Properties'} value="12" /></Grid><Grid item xs={6}><DataCard label={ar ? 'قيمة العقود' : 'Contract Value'} value="AED 248K" /></Grid><Grid item xs={6}><DataCard label={ar ? 'حالة الدفع' : 'Payment'} value={ar ? '15% مدفوع' : '15% Paid'} /></Grid><Grid item xs={6}><DataCard label={ar ? 'الطلبات المفتوحة' : 'Open Tickets'} value="7" /></Grid></Grid><ListRow icon={<Home size={20} />} title={ar ? 'برج سكني - العين' : 'Residential Tower - Al Ain'} sub={ar ? 'صيانة + إدارة عقار' : 'Maintenance + Property Management'} status={ar ? 'نشط' : 'Active'} /><ListRow icon={<FileText size={20} />} title={ar ? 'عقد المالك' : 'Owner Contract'} sub={ar ? 'خطة ربع سنوية، SLA مميز' : 'Quarterly plan, Premium SLA'} status={ar ? 'جاهز' : 'Ready'} /></Stack>;
-  if (id === 'tenant') return <Stack spacing={2}><ListRow icon={<Wrench size={20} />} title={ar ? 'تسريب مياه في الحمام' : 'Bathroom water leak'} sub={ar ? 'صورة مرفوعة، أولوية عالية' : 'Photo uploaded, high priority'} status={ar ? 'تم الإرسال' : 'Submitted'} /><ListRow icon={<MapPin size={20} />} title={ar ? 'الفني في الطريق' : 'Technician en route'} sub={ar ? 'الوصول المتوقع 18 دقيقة' : 'ETA 18 minutes'} status="GPS" /><ListRow icon={<CheckCircle2 size={20} />} title={ar ? 'تأكيد الإنجاز' : 'Completion confirmation'} sub={ar ? 'المستأجر يؤكد بعد الإصلاح' : 'Tenant verifies after repair'} status={ar ? 'معلق' : 'Pending'} /></Stack>;
-  if (id === 'technician') return <Stack spacing={2}><Grid container spacing={2}><Grid item xs={6}><DataCard label={ar ? 'مهام اليوم' : 'Jobs Today'} value="9" /></Grid><Grid item xs={6}><DataCard label="SLA" value="96%" /></Grid></Grid><ListRow icon={<Wrench size={20} />} title={ar ? 'AC لا يبرد' : 'AC not cooling'} sub={ar ? 'الوحدة 1204، أولوية عالية' : 'Unit 1204, high priority'} status={ar ? 'مهمة' : 'Job'} /><ListRow icon={<CheckCircle2 size={20} />} title={ar ? 'صور قبل وبعد مطلوبة' : 'Before/after proof required'} sub={ar ? 'لا يمكن الإغلاق بدون إثبات' : 'Cannot close without proof'} status={ar ? 'إلزامي' : 'Required'} /></Stack>;
-  if (id === 'broker') return <Stack spacing={2}><Grid container spacing={2}><Grid item xs={6}><DataCard label={ar ? 'الإحالات' : 'Referrals'} value="18" /></Grid><Grid item xs={6}><DataCard label={ar ? 'عمولة متوقعة' : 'Projected Commission'} value="AED 42K" /></Grid></Grid><ListRow icon={<Briefcase size={20} />} title={ar ? 'مالك جديد - 4 بنايات' : 'New owner - 4 buildings'} sub={ar ? 'مرحلة التسعير' : 'Quote stage'} status={ar ? 'نشط' : 'Active'} /><ListRow icon={<FileText size={20} />} title={ar ? 'أثر العمولة' : 'Commission trail'} sub={ar ? 'محفوظ للمراجعة المالية' : 'Saved for finance review'} status={ar ? 'جاهز' : 'Ready'} /></Stack>;
-  if (id === 'gps') return <Stack spacing={2}><Box sx={{ height: 210, borderRadius: 4, bgcolor: 'radial-gradient(circle at 35% 35%, rgba(198,167,94,.35), transparent 8%), radial-gradient(circle at 70% 65%, rgba(59,130,246,.25), transparent 10%), #020617', border: '1px solid rgba(255,255,255,.08)', position: 'relative' }}><Chip label={ar ? 'العقار' : 'Property'} sx={{ position: 'absolute', top: 35, left: 55, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} /><Chip label={ar ? 'أقرب فني' : 'Nearest Tech'} sx={{ position: 'absolute', bottom: 45, right: 45, bgcolor: '#3b82f6', color: '#fff', fontWeight: 950 }} /></Box><ListRow icon={<MapPin size={20} />} title={ar ? 'مطابقة حسب الموقع والتخصص' : 'Matched by location and trade'} sub={ar ? 'كهرباء، 3.2 كم' : 'Electrical, 3.2 km'} status={ar ? 'تم' : 'Matched'} /></Stack>;
-  if (id === 'documents') return <Stack spacing={2}><ListRow icon={<FileText size={20} />} title={ar ? 'عقد صيانة PDF' : 'Maintenance Contract PDF'} sub={ar ? 'توقيع وتاريخ وخطة دفع' : 'Signature, date and payment plan'} status="PDF" /><ListRow icon={<Shield size={20} />} title={ar ? 'إثبات خدمة' : 'Service Proof'} sub={ar ? 'صور قبل وبعد + سجل فني' : 'Before/after photos + technician log'} status={ar ? 'موثق' : 'Verified'} /><ListRow icon={<CheckCircle2 size={20} />} title={ar ? 'تقرير المالك' : 'Owner Report'} sub={ar ? 'قابل للتصدير والمشاركة' : 'Exportable and shareable'} status={ar ? 'جاهز' : 'Ready'} /></Stack>;
-  return <Stack spacing={2}><Box sx={{ height: 210, borderRadius: 4, bgcolor: 'linear-gradient(135deg, rgba(198,167,94,.22), rgba(59,130,246,.18)), #020617', border: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Typography variant="h4" fontWeight={950}>{ar ? 'قبل / بعد AI' : 'AI Before / After'}</Typography></Box><ListRow icon={<Sparkles size={20} />} title={ar ? 'اقتراح تصميم داخلي' : 'Interior concept'} sub={ar ? 'ألوان، مواد، نطاق عمل' : 'Colors, materials, work scope'} status="AI" /><ListRow icon={<FileText size={20} />} title={ar ? 'مسار تسعير' : 'Quote path'} sub={ar ? 'تحويل الفكرة إلى نطاق قابل للتنفيذ' : 'Turn idea into execution scope'} status={ar ? 'جاهز' : 'Ready'} /></Stack>;
-}
-
-function DemoDialog({ open, onClose, demo, copy, isRTL }: { open: boolean; onClose: () => void; demo: Demo; copy: ReturnType<typeof getCopy>; isRTL: boolean }) {
-  const navigate = useNavigate();
-  return <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', borderRadius: 5, border: `1px solid ${alpha(binThemeTokens.gold, .35)}`, direction: isRTL ? 'rtl' : 'ltr' } }}>
-    <Box sx={{ p: { xs: 2.5, md: 4 } }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Chip label={copy.nowShowing} sx={{ bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 950 }} /><IconButton onClick={onClose} sx={{ color: '#fff' }}><X /></IconButton></Stack>
-      <Paper sx={{ p: { xs: 2.5, md: 4 }, bgcolor: '#050816', border: '1px solid rgba(255,255,255,.08)', borderRadius: 5 }}>
-        <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems="stretch">
-          <Box sx={{ flex: .9, p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.08)' }}><Box sx={{ color: binThemeTokens.gold, mb: 2 }}>{demo.icon}</Box><Typography variant="h3" fontWeight={950}>{demo.title}</Typography><Typography sx={{ color: 'rgba(255,255,255,.65)', mt: 1.5, lineHeight: 1.75 }}>{demo.summary}</Typography><LinearProgress variant="determinate" value={100} sx={{ mt: 3, height: 8, borderRadius: 8, bgcolor: 'rgba(255,255,255,.08)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} /></Box>
-          <Box sx={{ flex: 1.25 }}><ProfilePreview id={demo.id} ar={copy.ar} /></Box>
-        </Stack>
-      </Paper>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 3 }}><Button variant="contained" onClick={() => navigate(demo.route)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{copy.openPage}</Button><Button variant="outlined" onClick={onClose} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.2)', fontWeight: 950 }}>{copy.close}</Button></Stack>
-    </Box>
-  </Dialog>;
+function TrustChip({ label }: { label: string }) {
+  return <Chip label={label} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.14), color: binThemeTokens.gold, fontWeight: 950 }} />;
 }
 
 export default function CompanyProfilePage() {
   const navigate = useNavigate();
   const { lang, isRTL } = useLanguage();
   const copy = useMemo(() => getCopy(lang), [lang]);
-  const [activeDemoId, setActiveDemoId] = useState<DemoId>('owner');
-  const [open, setOpen] = useState(false);
-  const activeDemo = copy.demos.find((d) => d.id === activeDemoId) || copy.demos[0];
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
   const textAlign = isRTL ? 'right' : 'left';
-  const openDemo = (id: DemoId) => { setActiveDemoId(id); setOpen(true); };
+  const icons = [<Wrench key="wrench" />, <Briefcase key="briefcase" />, <Users key="users" />, <FileText key="file" />];
 
-  return <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#fff', direction: isRTL ? 'rtl' : 'ltr' }}>
-    <Box sx={{ position: 'relative', borderBottom: '1px solid rgba(255,255,255,.06)' }}><Box sx={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at top right, rgba(198,167,94,.22), transparent 35%)' }} /><Container maxWidth="lg" sx={{ position: 'relative', py: { xs: 9, md: 15 } }}><Grid container spacing={6} alignItems="center"><Grid item xs={12} md={7}><Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'}><Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}><Chip label={copy.ar ? 'نظام سيادي للعناية بالعقارات' : 'UAE SOVEREIGN PROPERTY CARE OS'} sx={{ bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 950 }} /><Chip label={copy.ar ? 'معاينات حقيقية' : 'REAL PROFILE PREVIEWS'} sx={{ bgcolor: 'rgba(59,130,246,.15)', color: '#93c5fd', fontWeight: 950 }} /></Stack><Typography variant="h1" fontWeight={950} sx={{ fontSize: { xs: '2.4rem', md: '4.2rem' }, lineHeight: .95, textAlign }}>{copy.title}</Typography><Typography variant="h5" sx={{ color: 'rgba(255,255,255,.72)', fontWeight: 800, maxWidth: 760, lineHeight: 1.55, textAlign }}>{copy.subtitle}</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.6 }}>{copy.request}</Button><Button variant="outlined" startIcon={<PlayCircle size={18} />} onClick={() => openDemo('owner')} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.22)', fontWeight: 950, px: 4, py: 1.6 }}>{copy.play}</Button><Button variant="outlined" onClick={() => document.getElementById('demo-videos')?.scrollIntoView({ behavior: 'smooth' })} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, .65), fontWeight: 950, px: 4, py: 1.6 }}>{copy.demosLabel}</Button></Stack></Stack></Grid><Grid item xs={12} md={5}><Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,.72)', border: `1px solid ${alpha(binThemeTokens.gold, .2)}`, borderRadius: 6 }}><Stack spacing={2.5} alignItems={isRTL ? 'flex-end' : 'flex-start'}><Shield color={binThemeTokens.gold} size={38} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 950 }}>{copy.licenseTitle}</Typography><Typography sx={{ color: '#fff', fontWeight: 950, textAlign }}>{copy.license}</Typography><Typography sx={{ color: 'rgba(255,255,255,.65)', lineHeight: 1.8, fontWeight: 700, textAlign }}>{copy.about}</Typography></Stack></Paper></Grid></Grid></Container></Box>
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: '#111827', direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid #E8E3D7', background: 'linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%)' }}>
+        <Container maxWidth="lg" sx={{ py: { xs: 7, md: 12 } }}>
+          <Grid container spacing={5} alignItems="center">
+            <Grid item xs={12} md={7}>
+              <Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
+                  <TrustChip label={copy.badge1} />
+                  <TrustChip label={copy.badge2} />
+                  <TrustChip label={copy.badge3} />
+                </Stack>
+                <Typography variant="h1" fontWeight={950} sx={{ fontSize: { xs: '2.35rem', md: '4rem' }, lineHeight: 1, textAlign }}>{copy.title}</Typography>
+                <Typography variant="h5" sx={{ color: '#667085', fontWeight: 750, lineHeight: 1.6, textAlign, maxWidth: 820 }}>{copy.subtitle}</Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>{copy.request}</Button>
+                  <Button variant="outlined" startIcon={<MessageSquare size={18} />} onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ color: '#111827', borderColor: '#D6C99F', fontWeight: 950, px: 4, py: 1.5 }}>{copy.whatsapp}</Button>
+                </Stack>
+              </Stack>
+            </Grid>
+            <Grid item xs={12} md={5}>
+              <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,.82)', border: '1px solid #E8E3D7', boxShadow: '0 24px 70px rgba(17,24,39,.08)' }}>
+                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                  <ShieldCheck color={binThemeTokens.gold} size={42} />
+                  <Typography variant="caption" sx={{ color: '#667085', fontWeight: 950 }}>{copy.licenceTitle}</Typography>
+                  <Typography sx={{ fontWeight: 850, lineHeight: 1.8, textAlign }}>{copy.licence}</Typography>
+                </Stack>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
 
-    <Container maxWidth="lg" sx={{ py: 9 }}><Grid container spacing={3}>{copy.pricing.map((p) => <Grid item xs={12} md={3} key={p[0]}><Card sx={{ height: '100%', bgcolor: 'rgba(255,255,255,.025)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 5 }}><CardContent sx={{ p: 3, textAlign }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 950 }}>{p[0]}</Typography><Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.gold, mt: 1 }}>{p[1]}</Typography></CardContent></Card></Grid>)}</Grid></Container>
-    <Box sx={{ py: 9, borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)', bgcolor: 'rgba(255,255,255,.012)' }}><Container maxWidth="lg"><Typography variant="h3" fontWeight={950} sx={{ textAlign, mb: 2 }}>{copy.solveTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.68)', fontWeight: 700, lineHeight: 1.9, textAlign }}>{copy.solveText}</Typography></Container></Box>
-    <Container maxWidth="lg" sx={{ py: 9 }}><Typography variant="h2" fontWeight={950} sx={{ textAlign: 'center', mb: 5 }}>{copy.servicesTitle}</Typography><Grid container spacing={3}>{copy.services.map((s, i) => <Grid item xs={12} md={3} key={s}><Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 5, textAlign: 'center' }}><Box sx={{ color: binThemeTokens.gold, mb: 2 }}>{[<Wrench />, <Briefcase />, <Users />, <Shield />][i]}</Box><Typography fontWeight={950}>{s}</Typography></Paper></Grid>)}</Grid></Container>
+      <Container maxWidth="lg" sx={{ py: 8 }}>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={7}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: '1px solid #E8E3D7', boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
+              <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Building2 color={binThemeTokens.gold} size={36} />
+                <Typography variant="h3" fontWeight={950} sx={{ textAlign }}>{copy.aboutTitle}</Typography>
+                <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.95, textAlign }}>{copy.about}</Typography>
+              </Stack>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, height: '100%', borderRadius: 6, border: '1px solid #E8E3D7', boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
+              <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Sparkles color={binThemeTokens.gold} size={36} />
+                <Typography variant="h4" fontWeight={950} sx={{ textAlign }}>{copy.missionTitle}</Typography>
+                <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.9, textAlign }}>{copy.mission}</Typography>
+              </Stack>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
 
-    <Box id="demo-videos" sx={{ py: 12, background: 'radial-gradient(circle at 20% 20%, rgba(198,167,94,.12), transparent 34%), rgba(2,6,23,.96)' }}><Container maxWidth="lg"><Box sx={{ textAlign: 'center', mb: 8 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy.ar ? 'معاينات الملفات' : 'Profile Previews'}</Typography><Typography variant="h2" fontWeight={950} sx={{ mt: 1 }}>{copy.demoTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.58)', mt: 1.5, maxWidth: 780, mx: 'auto', lineHeight: 1.8 }}>{copy.demoText}</Typography></Box><Grid container spacing={4}><Grid item xs={12} md={6}><Paper sx={{ height: '100%', minHeight: 500, p: { xs: 3, md: 5 }, borderRadius: 7, bgcolor: 'rgba(15,23,42,.82)', border: `1px solid ${alpha(binThemeTokens.gold, .32)}` }}><Stack spacing={4} sx={{ height: '100%' }}><Stack direction="row" justifyContent="space-between"><Chip label={copy.ar ? 'معاينة الملف' : 'Profile Preview'} sx={{ bgcolor: alpha(binThemeTokens.gold, .14), color: binThemeTokens.gold, fontWeight: 950 }} /><Chip label={activeDemo.length} sx={{ bgcolor: 'rgba(255,255,255,.08)', color: '#fff', fontWeight: 900 }} /></Stack><Box onClick={() => openDemo(activeDemo.id)} sx={{ cursor: 'pointer', p: 3, borderRadius: 6, bgcolor: '#020617', border: '1px solid rgba(255,255,255,.08)', '&:hover': { borderColor: alpha(binThemeTokens.gold, .7) } }}><ProfilePreview id={activeDemo.id} ar={copy.ar} /></Box><Grid container spacing={1.5}>{activeDemo.bullets.map((b) => <Grid item xs={12} sm={6} key={b}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.5, borderRadius: 3, bgcolor: 'rgba(255,255,255,.035)', flexDirection: isRTL ? 'row-reverse' : 'row' }}><CheckCircle2 size={16} color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: '#fff', fontWeight: 850 }}>{b}</Typography></Box></Grid>)}</Grid><Button variant="contained" startIcon={<PlayCircle size={18} />} onClick={() => openDemo(activeDemo.id)} sx={{ mt: 'auto', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.6 }}>{copy.play}</Button></Stack></Paper></Grid><Grid item xs={12} md={6}><Grid container spacing={2}>{copy.demos.map((d) => <Grid item xs={12} sm={6} key={d.id}><Card onClick={() => openDemo(d.id)} sx={{ cursor: 'pointer', height: '100%', bgcolor: d.id === activeDemo.id ? alpha(binThemeTokens.gold, .12) : 'rgba(15,23,42,.72)', border: d.id === activeDemo.id ? `1px solid ${alpha(binThemeTokens.gold, .68)}` : '1px solid rgba(255,255,255,.06)', borderRadius: 5, '&:hover': { transform: 'translateY(-3px)', borderColor: alpha(binThemeTokens.gold, .55) } }}><CardContent sx={{ p: 3, textAlign }}><Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}><Box sx={{ color: binThemeTokens.gold }}>{d.icon}</Box><Chip size="small" label={d.length} sx={{ bgcolor: 'rgba(255,255,255,.07)', color: 'rgba(255,255,255,.75)', fontWeight: 900 }} /></Stack><Typography variant="h6" fontWeight={950}>{d.title}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', lineHeight: 1.65, mt: 1 }}>{d.summary}</Typography><Button size="small" startIcon={<PlayCircle size={15} />} sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 2, px: 0 }}>{copy.preview}</Button></CardContent></Card></Grid>)}</Grid></Grid></Grid></Container></Box>
+      <Box sx={{ py: 8, bgcolor: '#F8F9FB', borderTop: '1px solid #E8E3D7', borderBottom: '1px solid #E8E3D7' }}>
+        <Container maxWidth="lg">
+          <Typography variant="h2" fontWeight={950} sx={{ textAlign: 'center', mb: 5 }}>{copy.servicesTitle}</Typography>
+          <Grid container spacing={3}>
+            {copy.services.map((service, index) => (
+              <Grid item xs={12} md={3} key={service[0]}>
+                <Card sx={{ height: '100%', borderRadius: 5, border: '1px solid #E8E3D7', boxShadow: '0 16px 40px rgba(17,24,39,.05)' }}>
+                  <CardContent sx={{ p: 3, textAlign }}>
+                    <Box sx={{ color: binThemeTokens.gold, mb: 2 }}>{icons[index]}</Box>
+                    <Typography variant="h6" fontWeight={950}>{service[0]}</Typography>
+                    <Typography variant="body2" sx={{ color: '#667085', lineHeight: 1.75, mt: 1 }}>{service[1]}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
 
-    <Container maxWidth="lg" sx={{ py: 10 }}><Grid container spacing={4}><Grid item xs={12} md={6}><Paper sx={{ p: 5, bgcolor: 'rgba(255,255,255,.025)', borderRadius: 6 }}><Typography variant="h4" fontWeight={950}>{copy.missionTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.62)', fontWeight: 700, lineHeight: 1.8, mt: 2 }}>{copy.mission}</Typography></Paper></Grid><Grid item xs={12} md={6}><Paper sx={{ p: 5, bgcolor: 'rgba(255,255,255,.025)', borderRadius: 6 }}><Typography variant="h4" fontWeight={950}>{copy.contact}</Typography><Stack spacing={2} sx={{ mt: 3 }}><Typography>{CONTACT.whatsapp}</Typography><Typography>{CONTACT.phone}</Typography><Typography>{CONTACT.email}</Typography><Button variant="contained" onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{copy.ar ? 'واتساب BIN GROUP' : 'WhatsApp BIN GROUP'}</Button></Stack></Paper></Grid></Grid></Container>
-    <Box sx={{ py: 8, bgcolor: '#000', textAlign: 'center' }}><Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.gold }}>BIN GROUP</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)' }}>{copy.ar ? 'معاينات حقيقية للملفات | صنع في الإمارات' : 'Real profile previews | Made in UAE'}</Typography></Box>
-    <DemoDialog open={open} onClose={() => setOpen(false)} demo={activeDemo} copy={copy} isRTL={isRTL} />
-  </Box>;
+      <Container maxWidth="lg" sx={{ py: 8 }}>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={7}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: '1px solid #E8E3D7', boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
+              <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Typography variant="h3" fontWeight={950} sx={{ textAlign }}>{copy.innovationTitle}</Typography>
+                <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.95, textAlign }}>{copy.innovation}</Typography>
+              </Stack>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, height: '100%', borderRadius: 6, border: '1px solid #E8E3D7', boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
+              <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Typography variant="h4" fontWeight={950} sx={{ textAlign }}>{copy.proofTitle}</Typography>
+                {copy.proof.map((item) => (
+                  <Stack key={item} direction={isRTL ? 'row-reverse' : 'row'} spacing={1.3} alignItems="center" sx={{ width: '100%' }}>
+                    <CheckCircle2 size={18} color={binThemeTokens.gold} />
+                    <Typography sx={{ color: '#475467', fontWeight: 800, textAlign }}>{item}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
+
+      <Container maxWidth="lg" sx={{ pb: 9 }}>
+        <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, bgcolor: '#111827', color: '#fff' }}>
+          <Grid container spacing={4} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Typography variant="h3" fontWeight={950} sx={{ color: binThemeTokens.gold, textAlign }}>{copy.contactTitle}</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.7)', fontWeight: 800, mt: 1, textAlign }}>{copy.footer}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Phone size={18} color={binThemeTokens.gold} /><Typography>{CONTACT.phone}</Typography></Stack>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MessageSquare size={18} color={binThemeTokens.gold} /><Typography>{CONTACT.whatsapp}</Typography></Stack>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Mail size={18} color={binThemeTokens.gold} /><Typography>{CONTACT.email}</Typography></Stack>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MapPin size={18} color={binThemeTokens.gold} /><Typography>{copy.location}</Typography></Stack>
+              </Stack>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Container>
+    </Box>
+  );
 }
