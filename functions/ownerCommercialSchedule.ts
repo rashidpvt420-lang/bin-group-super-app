@@ -4,34 +4,17 @@ import { OWNER_CONTRACT_TERM_MONTHS } from "./ownerContractTerm";
 const MOBILIZATION_PERCENT = 15;
 const DEFAULT_CURRENCY = "AED";
 const BIN_GROUP_ADMIN_STAMP = "BIN GROUP APPROVED";
-
 const LEGAL_EXCLUSION_EN = "Anything not expressly listed in the covered items is excluded and requires a separate written quotation and BIN GROUP admin approval before execution.";
 const LEGAL_EXCLUSION_AR = "أي بند غير مذكور صراحة ضمن البنود المشمولة يعتبر مستثنى ويتطلب عرض سعر كتابي منفصل وموافقة إدارية من BIN GROUP قبل التنفيذ.";
 
-interface ApprovalScheduleInput {
-  requestData: Record<string, any>;
-  payment: Record<string, any>;
-  contractData: Record<string, any>;
-  intakeData: Record<string, any>;
-  amountReceived: number;
-  annualContractValue: number;
-  mobilizationAmount: number;
-  remainingBalance: number;
-  paymentPlan: string;
-  paymentReferenceId: string;
-  termFields: Record<string, any>;
-  approvedAt: FirebaseFirestore.Timestamp;
-  approvedAtIso: string;
-  now: FirebaseFirestore.FieldValue;
-  adminUid: string;
-}
+type AnyRecord = Record<string, any>;
 
-interface ApprovalPatchResult {
-  contractPatch: Record<string, any>;
-  paymentPatch: Record<string, any>;
-  auditMetadata: Record<string, any>;
-  commercialSchedule: Record<string, any>;
-}
+type ApprovalPatchResult = {
+  contractPatch: AnyRecord;
+  paymentPatch: AnyRecord;
+  auditMetadata: AnyRecord;
+  commercialSchedule: AnyRecord;
+};
 
 const scopeDefaults = {
   maintenance: {
@@ -90,7 +73,7 @@ function cleanPlainValue(value: any): any {
   if (value instanceof Date) return value;
   if (Array.isArray(value)) return value.map(cleanPlainValue);
   if (typeof value === "object") {
-    const output: Record<string, any> = {};
+    const output: AnyRecord = {};
     Object.entries(value).forEach(([key, entry]) => {
       if (typeof entry !== "function") output[key] = cleanPlainValue(entry);
     });
@@ -99,20 +82,20 @@ function cleanPlainValue(value: any): any {
   return value;
 }
 
-function firstPositiveNumber(...values: unknown[]): number {
-  for (const value of values) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > 0) return numeric;
-  }
-  return 0;
-}
-
 function firstText(...values: unknown[]): string {
   for (const value of values) {
     const text = String(value ?? "").trim();
     if (text) return text;
   }
   return "";
+}
+
+function firstPositiveNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  }
+  return 0;
 }
 
 function asArray(value: any): any[] {
@@ -138,115 +121,103 @@ function normalizeContractType(rawValue: unknown): string {
   return "Maintenance Only";
 }
 
-function defaultsFor(contractType: string): { coveredItems: string[]; notCoveredItems: string[] } {
+function defaultsFor(contractType: string) {
   if (contractType === "Property Management Only") return scopeDefaults.propertyManagement;
   if (contractType === "Maintenance + Property Management") return scopeDefaults.hybrid;
   return scopeDefaults.maintenance;
 }
 
-function selectedPlanOf(contractData: Record<string, any>, intakeData: Record<string, any>, payment: Record<string, any>): Record<string, any> {
-  return cleanPlainValue(
-    contractData.commercialSchedule?.selectedPlan ||
-    contractData.selectedPlan ||
-    contractData.servicePlan ||
-    contractData.pricing?.selectedPlan ||
-    intakeData.selectedPlan ||
-    intakeData.servicePlan ||
-    payment.selectedPlan ||
-    {
-      id: firstText(contractData.planType, contractData.contractType, payment.planType, "institutional"),
-      name: firstText(contractData.packageName, intakeData.servicePlan?.name, "Institutional Package"),
-    }
-  );
+function coerceTimestamp(value: any): admin.firestore.Timestamp {
+  if (value instanceof admin.firestore.Timestamp) return value;
+  if (value instanceof Date) return admin.firestore.Timestamp.fromDate(value);
+  if (typeof value?.toDate === "function") return admin.firestore.Timestamp.fromDate(value.toDate());
+  return admin.firestore.Timestamp.now();
 }
 
-function selectedAddOnsOf(contractData: Record<string, any>, intakeData: Record<string, any>, payment: Record<string, any>): any[] {
-  return cleanPlainValue(
-    contractData.commercialSchedule?.selectedAddOns ||
-    contractData.selectedAddOns ||
-    contractData.addOns ||
-    contractData.addons ||
-    contractData.serviceDetails?.selectedAddOns ||
-    intakeData.selectedAddOns ||
-    intakeData.addOns ||
-    payment.selectedAddOns ||
-    []
-  );
+function normalizeInput(input: AnyRecord): AnyRecord {
+  const contractData = input.contractData || input.contract || input;
+  const payment = input.payment || input.paymentData || input;
+  const intakeData = input.intakeData || input.intake || {};
+  const annualContractValue = firstPositiveNumber(input.annualContractValue, contractData.annualContractValue, contractData.annualValue, contractData.quoteTotal, payment.annualContractValue);
+  const mobilizationAmount = firstPositiveNumber(input.mobilizationAmount, input.amountReceived, input.amount, payment.mobilizationAmount, payment.amount, annualContractValue > 0 ? annualContractValue * 0.15 : 0);
+  const amountReceived = firstPositiveNumber(input.amountReceived, input.amount, payment.amount, mobilizationAmount);
+  const remainingBalance = Math.max(firstPositiveNumber(input.remainingBalance, annualContractValue - amountReceived), 0);
+  const approvedAt = coerceTimestamp(input.approvedAt || input.approvedTimestamp);
+  const now = input.now || admin.firestore.FieldValue.serverTimestamp();
+  return {
+    requestData: input.requestData || input.request || {},
+    payment,
+    contractData,
+    intakeData,
+    amountReceived,
+    annualContractValue,
+    mobilizationAmount,
+    remainingBalance,
+    paymentPlan: firstText(input.paymentPlan, payment.paymentPlan, contractData.paymentPlan, "manual"),
+    paymentReferenceId: firstText(input.paymentReferenceId, input.paymentId, payment.paymentReferenceId, payment.paymentId, payment.id, input.contractId, contractData.contractId),
+    termFields: input.termFields || {},
+    approvedAt,
+    approvedAtIso: firstText(input.approvedAtIso, approvedAt.toDate().toISOString()),
+    now,
+    adminUid: firstText(input.adminUid, input.approvedBy, input.adminId, "admin"),
+  };
 }
 
-function buildPropertyDetails(contractData: Record<string, any>, intakeData: Record<string, any>, payment: Record<string, any>): Record<string, any>[] {
-  const properties = asArray(
-    contractData.commercialSchedule?.propertyDetails ||
-    contractData.propertyDetails ||
-    contractData.properties ||
-    contractData.propertyList ||
-    contractData.assets ||
-    intakeData.propertyDetails ||
-    intakeData.properties ||
-    payment.propertyDetails
-  );
+function selectedPlanOf(contractData: AnyRecord, intakeData: AnyRecord, payment: AnyRecord): AnyRecord {
+  return cleanPlainValue(contractData.commercialSchedule?.selectedPlan || contractData.selectedPlan || contractData.servicePlan || intakeData.selectedPlan || payment.selectedPlan || {
+    id: firstText(contractData.planType, contractData.contractType, payment.planType, "institutional"),
+    name: firstText(contractData.packageName, intakeData.servicePlan?.name, "Institutional Package"),
+  });
+}
 
+function buildPropertyDetails(contractData: AnyRecord, intakeData: AnyRecord, payment: AnyRecord): AnyRecord[] {
+  const properties = asArray(contractData.commercialSchedule?.propertyDetails || contractData.propertyDetails || contractData.properties || intakeData.propertyDetails || intakeData.properties || payment.propertyDetails);
   if (properties.length) {
     return properties.map((property, index) => cleanPlainValue({
       propertyName: firstText(property?.propertyName, property?.name, property?.title, property?.address, contractData.propertyName, `Property ${index + 1}`),
-      propertyType: firstText(property?.propertyType, property?.type, property?.sector, contractData.propertyType, contractData.sector),
-      emirate: firstText(property?.emirate, property?.geo?.emirate, property?.location?.emirate, contractData.emirate),
+      propertyType: firstText(property?.propertyType, property?.type, contractData.propertyType, contractData.sector),
+      emirate: firstText(property?.emirate, property?.geo?.emirate, contractData.emirate, "UAE"),
       city: firstText(property?.city, property?.geo?.city, property?.area, contractData.city),
       area: firstText(property?.area, property?.geo?.area, contractData.area),
       fullAddress: firstText(property?.fullAddress, property?.addressLine, property?.address, property?.geo?.address, contractData.address, contractData.location),
-      unitCount: firstPositiveNumber(property?.unitCount, property?.units, property?.totalUnits, property?.apartments, contractData.unitCount, contractData.totalUnits),
+      unitCount: firstPositiveNumber(property?.unitCount, property?.units, property?.totalUnits, contractData.unitCount, contractData.totalUnits),
       floorCount: firstPositiveNumber(property?.floorCount, property?.floors, contractData.floorCount, contractData.floors),
       liftCount: firstPositiveNumber(property?.liftCount, property?.lifts, contractData.liftCount, contractData.lifts),
       gps: property?.gps || property?.geo || property?.location || property?.coordinates || null,
-      mapReference: firstText(property?.mapReference, property?.googleMapsUrl, property?.googlePlaceId, property?.geo?.placeId, contractData.mapReference, contractData.googlePlaceId),
     }));
   }
-
   return [cleanPlainValue({
-    propertyName: firstText(contractData.propertyName, contractData.companyProfile?.name, payment.propertyName, "Portfolio"),
+    propertyName: firstText(contractData.propertyName, payment.propertyName, "Portfolio"),
     propertyType: firstText(contractData.propertyType, contractData.sector, "Institutional Portfolio"),
-    emirate: firstText(contractData.emirate, contractData.propertyLocation?.emirate, "UAE"),
-    city: firstText(contractData.city, contractData.propertyLocation?.city),
-    area: firstText(contractData.area, contractData.propertyLocation?.area),
-    fullAddress: firstText(contractData.fullAddress, contractData.address, contractData.location, contractData.propertyLocation?.address),
-    unitCount: firstPositiveNumber(contractData.unitCount, contractData.totalUnits, contractData.serviceDetails?.totalUnits, contractData.portfolioSummary?.totalUnits),
+    emirate: firstText(contractData.emirate, "UAE"),
+    city: firstText(contractData.city, contractData.area),
+    area: firstText(contractData.area),
+    fullAddress: firstText(contractData.fullAddress, contractData.address, contractData.location),
+    unitCount: firstPositiveNumber(contractData.unitCount, contractData.totalUnits),
     floorCount: firstPositiveNumber(contractData.floorCount, contractData.floors),
     liftCount: firstPositiveNumber(contractData.liftCount, contractData.lifts),
-    gps: contractData.gps || contractData.geo || contractData.propertyLocation?.gps || null,
-    mapReference: firstText(contractData.mapReference, contractData.googleMapsUrl, contractData.googlePlaceId, contractData.propertyLocation?.mapReference),
+    gps: contractData.gps || contractData.geo || null,
   })];
 }
 
-function buildPropertyLocation(propertyDetails: Record<string, any>[], contractData: Record<string, any>, intakeData: Record<string, any>, payment: Record<string, any>): Record<string, any> {
-  const firstProperty = propertyDetails[0] || {};
-  return cleanPlainValue(
-    contractData.commercialSchedule?.propertyLocation ||
-    contractData.propertyLocation ||
-    contractData.geo ||
-    contractData.locationDetails ||
-    intakeData.propertyLocation ||
-    payment.propertyLocation ||
-    {
-      emirate: firstText(firstProperty.emirate, contractData.emirate, "UAE"),
-      city: firstText(firstProperty.city, contractData.city),
-      area: firstText(firstProperty.area, contractData.area),
-      fullAddress: firstText(firstProperty.fullAddress, contractData.address, contractData.location),
-      gps: firstProperty.gps || contractData.gps || contractData.geo || null,
-      mapReference: firstText(firstProperty.mapReference, contractData.mapReference, contractData.googleMapsUrl, contractData.googlePlaceId),
-    }
-  );
-}
+export function buildOwnerCommercialApprovalPatch(rawInput: AnyRecord): ApprovalPatchResult {
+  const input = normalizeInput(rawInput || {});
+  const selectedPlan = selectedPlanOf(input.contractData, input.intakeData, input.payment);
+  const selectedContractType = normalizeContractType(input.requestData.selectedContractType || input.contractData.commercialSchedule?.selectedContractType || input.contractData.selectedContractType || input.contractData.contractType || input.contractData.managementScope || input.contractData.planType || selectedPlan.type || selectedPlan.name || input.intakeData.contractType || input.intakeData.servicePlan?.id);
+  const defaults = defaultsFor(selectedContractType);
+  const selectedAddOns = cleanPlainValue(input.contractData.commercialSchedule?.selectedAddOns || input.contractData.selectedAddOns || input.contractData.addOns || input.intakeData.selectedAddOns || input.payment.selectedAddOns || []);
+  const propertyDetails = buildPropertyDetails(input.contractData, input.intakeData, input.payment);
+  const propertyLocation = cleanPlainValue(input.contractData.commercialSchedule?.propertyLocation || input.contractData.propertyLocation || input.contractData.geo || input.intakeData.propertyLocation || input.payment.propertyLocation || propertyDetails[0] || {});
+  const coveredItems = labelsOf(input.requestData.coveredItems || input.contractData.commercialSchedule?.coveredItems || input.contractData.coveredItems || input.contractData.coverage || selectedPlan.features || selectedPlan.coverage || defaults.coveredItems);
+  const notCoveredItems = labelsOf(input.requestData.notCoveredItems || input.contractData.commercialSchedule?.notCoveredItems || input.contractData.notCoveredItems || input.contractData.exclusions || selectedPlan.exclusions || defaults.notCoveredItems);
+  const excludedItems = Array.from(new Set([...labelsOf(input.requestData.excludedItems || input.contractData.excludedItems || []), ...notCoveredItems, LEGAL_EXCLUSION_EN, LEGAL_EXCLUSION_AR]));
+  const ownerSelectedAt = input.contractData.ownerSelectedAt || input.contractData.selectedAt || input.contractData.createdAt || input.termFields.effectiveFrom || input.approvedAt;
+  const ownerSignedAt = input.contractData.ownerSignature?.signedAt || input.contractData.ownerSignedAt || input.contractData.signedAt || input.termFields.effectiveFrom || input.approvedAt;
 
-function buildOwnerSnapshot(input: ApprovalScheduleInput, selectedPlan: Record<string, any>, selectedContractType: string, selectedAddOns: any[], propertyDetails: Record<string, any>[], propertyLocation: Record<string, any>): Record<string, any> {
-  const ownerSignedAt = input.contractData.ownerSignature?.signedAt || input.contractData.ownerSignedAt || input.contractData.signedAt || input.termFields.effectiveFrom;
-  const ownerSelectedAt = input.contractData.ownerSelectedAt || input.contractData.selectedAt || input.contractData.createdAt || ownerSignedAt;
-  return cleanPlainValue({
+  const ownerSelectedScopeSnapshot = cleanPlainValue(input.contractData.ownerSelectedScopeSnapshot || {
     selectedPlan,
     selectedContractType,
     selectedAddOns,
-    tenantServices: input.contractData.tenantServices || input.intakeData.tenantServices || input.payment.tenantServices || [],
-    moveInServices: input.contractData.moveInServices || input.intakeData.moveInServices || input.payment.moveInServices || [],
-    moveOutServices: input.contractData.moveOutServices || input.intakeData.moveOutServices || input.payment.moveOutServices || [],
     propertyDetails,
     propertyLocation,
     annualContractValue: input.annualContractValue,
@@ -257,45 +228,14 @@ function buildOwnerSnapshot(input: ApprovalScheduleInput, selectedPlan: Record<s
     ownerSignedAt,
     lockedAgainstOwnerMutation: true,
   });
-}
-
-export function buildOwnerCommercialApprovalPatch(input: ApprovalScheduleInput): ApprovalPatchResult {
-  const selectedPlan = selectedPlanOf(input.contractData, input.intakeData, input.payment);
-  const selectedContractType = normalizeContractType(
-    input.requestData.selectedContractType ||
-    input.contractData.commercialSchedule?.selectedContractType ||
-    input.contractData.selectedContractType ||
-    input.contractData.contractType ||
-    input.contractData.managementScope ||
-    input.contractData.planType ||
-    selectedPlan.type ||
-    selectedPlan.name ||
-    input.intakeData.contractType ||
-    input.intakeData.servicePlan?.id
-  );
-  const defaults = defaultsFor(selectedContractType);
-  const selectedAddOns = selectedAddOnsOf(input.contractData, input.intakeData, input.payment);
-  const propertyDetails = buildPropertyDetails(input.contractData, input.intakeData, input.payment);
-  const propertyLocation = buildPropertyLocation(propertyDetails, input.contractData, input.intakeData, input.payment);
-  const coveredItems = labelsOf(input.requestData.coveredItems || input.contractData.commercialSchedule?.coveredItems || input.contractData.coveredItems || input.contractData.coverage || input.contractData.inclusions || selectedPlan.features || selectedPlan.coverage || defaults.coveredItems);
-  const notCoveredItems = labelsOf(input.requestData.notCoveredItems || input.contractData.commercialSchedule?.notCoveredItems || input.contractData.notCoveredItems || input.contractData.exclusions || selectedPlan.exclusions || defaults.notCoveredItems);
-  const excludedItems = Array.from(new Set([
-    ...labelsOf(input.requestData.excludedItems || input.contractData.commercialSchedule?.excludedItems || input.contractData.excludedItems || []),
-    ...notCoveredItems,
-    LEGAL_EXCLUSION_EN,
-    LEGAL_EXCLUSION_AR,
-  ]));
-  const ownerSelectedAt = input.contractData.ownerSelectedAt || input.contractData.selectedAt || input.contractData.createdAt || input.termFields.effectiveFrom;
-  const ownerSignedAt = input.contractData.ownerSignature?.signedAt || input.contractData.ownerSignedAt || input.contractData.signedAt || input.termFields.effectiveFrom;
-  const ownerSelectedScopeSnapshot = input.contractData.ownerSelectedScopeSnapshot || buildOwnerSnapshot(input, selectedPlan, selectedContractType, selectedAddOns, propertyDetails, propertyLocation);
 
   const commercialSchedule = cleanPlainValue({
     selectedPlan,
     selectedContractType,
     selectedAddOns,
-    tenantServices: input.contractData.commercialSchedule?.tenantServices || input.contractData.tenantServices || input.intakeData.tenantServices || input.payment.tenantServices || [],
-    moveInServices: input.contractData.commercialSchedule?.moveInServices || input.contractData.moveInServices || input.intakeData.moveInServices || input.payment.moveInServices || [],
-    moveOutServices: input.contractData.commercialSchedule?.moveOutServices || input.contractData.moveOutServices || input.intakeData.moveOutServices || input.payment.moveOutServices || [],
+    tenantServices: input.contractData.tenantServices || input.intakeData.tenantServices || input.payment.tenantServices || [],
+    moveInServices: input.contractData.moveInServices || input.intakeData.moveInServices || input.payment.moveInServices || [],
+    moveOutServices: input.contractData.moveOutServices || input.intakeData.moveOutServices || input.payment.moveOutServices || [],
     propertyDetails,
     propertyLocation,
     coveredItems,
