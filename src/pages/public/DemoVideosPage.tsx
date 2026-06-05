@@ -46,8 +46,14 @@ const palette = {
   gold: '#C9A646',
   goldDark: '#9A7A24',
   green: '#10B981',
-  red: '#EF4444',
   white: '#FFFFFF',
+};
+
+const radius = {
+  page: 2.25,
+  card: 1.75,
+  button: 1.6,
+  badge: 1.2,
 };
 
 type Lang = 'en' | 'ar';
@@ -105,24 +111,26 @@ const copy = {
 
 function DemoVisual({ scene }: { scene: DemoScene }) {
   return (
-    <Box sx={{ borderRadius: 3, overflow: 'hidden', border: `1px solid ${palette.border}`, bgcolor: '#FFFFFF', boxShadow: '0 12px 32px rgba(17,24,39,0.08)' }}>
+    <Box sx={{ borderRadius: radius.card, overflow: 'hidden', border: `1px solid ${palette.border}`, bgcolor: '#FFFFFF', boxShadow: '0 10px 24px rgba(17,24,39,0.075)' }}>
       <Box
         sx={{
-          height: { xs: 250, sm: 320, md: 390 },
+          minHeight: { xs: 230, sm: 300, md: 360 },
           position: 'relative',
-          backgroundImage: `linear-gradient(180deg, rgba(17,24,39,0.10), rgba(17,24,39,0.68)), url("${scene.photo}")`,
+          backgroundColor: '#202633',
+          backgroundImage: `linear-gradient(180deg, rgba(17,24,39,0.02), rgba(17,24,39,0.52)), url("${scene.photo}")`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
       >
-        <Chip label={scene.label} sx={{ position: 'absolute', top: 16, left: 16, bgcolor: 'rgba(255,255,255,0.92)', color: palette.goldDark, fontWeight: 950 }} />
-        <Chip label={scene.metric} sx={{ position: 'absolute', top: 16, right: 16, bgcolor: 'rgba(255,255,255,0.92)', color: palette.ink, fontWeight: 950 }} />
+        <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(17,24,39,.62) 0%, rgba(17,24,39,.28) 48%, rgba(17,24,39,.08) 100%)' }} />
+        <Chip label={scene.label} sx={{ position: 'absolute', top: 14, left: 14, borderRadius: radius.badge, bgcolor: 'rgba(255,255,255,0.94)', color: palette.goldDark, fontWeight: 950 }} />
+        <Chip label={scene.metric} sx={{ position: 'absolute', top: 14, right: 14, borderRadius: radius.badge, bgcolor: 'rgba(255,255,255,0.94)', color: palette.ink, fontWeight: 950 }} />
         <Box sx={{ position: 'absolute', left: 18, right: 18, bottom: 18, color: '#FFFFFF' }}>
           <Typography sx={{ fontSize: { xs: 28, md: 40 }, fontWeight: 950, lineHeight: 1.02, textShadow: '0 6px 18px rgba(0,0,0,0.32)' }}>{scene.title}</Typography>
-          <Typography sx={{ mt: 1, maxWidth: 650, fontSize: { xs: 15, md: 18 }, fontWeight: 750, color: 'rgba(255,255,255,0.88)' }}>{scene.subtitle}</Typography>
+          <Typography sx={{ mt: 1, maxWidth: 650, fontSize: { xs: 15, md: 18 }, fontWeight: 750, color: 'rgba(255,255,255,0.90)' }}>{scene.subtitle}</Typography>
         </Box>
       </Box>
-      <Box sx={{ p: { xs: 1.75, md: 2.25 }, bgcolor: '#FFFFFF' }}>
+      <Box sx={{ p: { xs: 1.55, md: 2.05 }, bgcolor: '#FFFFFF' }}>
         <Grid container spacing={1}>
           {scene.bullets.map((bullet) => (
             <Grid item xs={12} sm={4} key={bullet}>
@@ -140,10 +148,10 @@ function DemoVisual({ scene }: { scene: DemoScene }) {
 
 function SceneCard({ scene, active, onClick }: { scene: DemoScene; active: boolean; onClick: () => void }) {
   return (
-    <Card onClick={onClick} sx={{ cursor: 'pointer', height: '100%', borderRadius: 2.5, bgcolor: '#FFFFFF', border: active ? `2px solid ${palette.gold}` : `1px solid ${palette.border}`, boxShadow: active ? '0 18px 42px rgba(201,166,70,0.18)' : '0 10px 28px rgba(17,24,39,0.06)', transition: '0.2s ease', '&:hover': { transform: 'translateY(-3px)' } }}>
+    <Card onClick={onClick} sx={{ cursor: 'pointer', height: '100%', borderRadius: radius.card, bgcolor: '#FFFFFF', border: active ? `2px solid ${palette.gold}` : `1px solid ${palette.border}`, boxShadow: active ? '0 14px 32px rgba(201,166,70,0.16)' : '0 8px 20px rgba(17,24,39,0.05)', transition: '0.2s ease', '&:hover': { transform: 'translateY(-3px)' } }}>
       <CardContent sx={{ p: 2 }}>
         <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{scene.icon}</Box>
+          <Box sx={{ width: 36, height: 36, borderRadius: 1.5, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{scene.icon}</Box>
           <Box sx={{ minWidth: 0 }}><Typography noWrap fontWeight={950} color={palette.ink}>{scene.title}</Typography><Typography noWrap fontSize={12} color={palette.muted}>{scene.metric}</Typography></Box>
         </Stack>
         <Typography fontSize={13} color={palette.muted} sx={{ lineHeight: 1.55 }}>{scene.subtitle}</Typography>
@@ -185,47 +193,54 @@ export default function DemoVideosPage() {
     document.getElementById('demo-reel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  const buttonSx = {
+    borderRadius: radius.button,
+    minHeight: 48,
+    fontWeight: 950,
+    textTransform: 'none',
+  };
+
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: palette.ink, direction: isRTL ? 'rtl' : 'ltr', background: 'radial-gradient(circle at 92% 4%, rgba(201,166,70,0.10), transparent 28rem), linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%)' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: palette.ink, direction: isRTL ? 'rtl' : 'ltr', background: 'linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%)' }}>
       <Box sx={{ position: 'sticky', top: 0, zIndex: 30, bgcolor: 'rgba(255,255,255,0.96)', borderBottom: `1px solid ${palette.border}`, backdropFilter: 'blur(14px)' }}>
         <Container maxWidth="xl" sx={{ py: 1, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
           <Button component="a" href="/" sx={{ color: palette.ink, p: 0, minWidth: 0, mr: isRTL ? 0 : 'auto', ml: isRTL ? 'auto' : 0 }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.5 }} /><Typography fontWeight={950}>{c.brand}</Typography></Stack>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.2 }} /><Typography fontWeight={950}>{c.brand}</Typography></Stack>
           </Button>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1 }}>
             <Button component="a" href="/" startIcon={<ArrowLeft size={16} />} sx={{ color: palette.ink, fontWeight: 900 }}>{c.company}</Button>
             <Button type="button" onClick={() => setLang(language === 'en' ? 'ar' : 'en')} startIcon={<Languages size={16} />} sx={{ color: palette.goldDark, fontWeight: 950 }}>{language === 'en' ? 'العربية' : 'EN'}</Button>
-            <Button component="a" href={QUOTE_URL} variant="outlined" sx={{ color: palette.goldDark, borderColor: palette.gold, fontWeight: 950, borderRadius: 999 }}>{c.quote}</Button>
-            <Button component="a" href={ONBOARDING_URL} variant="contained" sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{c.request}</Button>
+            <Button component="a" href={QUOTE_URL} variant="outlined" sx={{ ...buttonSx, color: palette.goldDark, borderColor: palette.gold }}>{c.quote}</Button>
+            <Button component="a" href={ONBOARDING_URL} variant="contained" sx={{ ...buttonSx, bgcolor: palette.gold, color: palette.ink }}>{c.request}</Button>
           </Stack>
         </Container>
       </Box>
 
-      <Container maxWidth="xl" sx={{ py: { xs: 3, md: 7 } }}>
-        <Grid container spacing={{ xs: 3, md: 4.5 }} alignItems="center">
+      <Container maxWidth="xl" sx={{ py: { xs: 2.5, md: 6.5 } }}>
+        <Grid container spacing={{ xs: 2.5, md: 4.5 }} alignItems="center">
           <Grid item xs={12} md={5}>
-            <Chip label={c.chip} sx={{ bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950, letterSpacing: 1, mb: 2.5 }} />
-            <Typography variant="h1" sx={{ fontSize: { xs: 34, md: 64 }, lineHeight: 1, fontWeight: 950, letterSpacing: -2, mb: 2.5, color: palette.ink }}>{c.title}</Typography>
-            <Typography variant="h6" sx={{ color: palette.muted, lineHeight: 1.72, fontWeight: 750, mb: 3 }}>{c.subtitle}</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-              <Button variant="contained" startIcon={<PlayCircle size={18} />} onClick={() => setPlaying(true)} sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, py: 1.35, borderRadius: 999 }}>{c.play}</Button>
-              <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ borderColor: palette.gold, color: palette.goldDark, fontWeight: 950, py: 1.35, borderRadius: 999 }}>{c.whatsapp}</Button>
+            <Chip label={c.chip} sx={{ borderRadius: radius.badge, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950, letterSpacing: 1, mb: 2 }} />
+            <Typography variant="h1" sx={{ fontSize: { xs: 32, md: 64 }, lineHeight: 1.03, fontWeight: 950, letterSpacing: { xs: -1.5, md: -2 }, mb: 2, color: palette.ink }}>{c.title}</Typography>
+            <Typography variant="h6" sx={{ color: palette.muted, lineHeight: 1.6, fontWeight: 750, mb: 2.5 }}>{c.subtitle}</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.2}>
+              <Button variant="contained" startIcon={<PlayCircle size={18} />} onClick={() => setPlaying(true)} sx={{ ...buttonSx, bgcolor: palette.gold, color: palette.ink, py: 1.25 }}>{c.play}</Button>
+              <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<MessageCircle size={17} />} sx={{ ...buttonSx, borderColor: palette.gold, color: palette.goldDark, py: 1.25 }}>{c.whatsapp}</Button>
             </Stack>
           </Grid>
 
           <Grid item xs={12} md={7}>
-            <Paper id="demo-reel" sx={{ p: { xs: 1.25, md: 2.4 }, borderRadius: { xs: 2.5, md: 3.5 }, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 18px 48px rgba(17,24,39,0.10)' }}>
-              <Stack spacing={1.75}>
+            <Paper id="demo-reel" sx={{ p: { xs: 1.15, md: 2 }, borderRadius: radius.page, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 14px 34px rgba(17,24,39,0.085)' }}>
+              <Stack spacing={1.45}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ gap: 1, flexWrap: 'wrap' }}>
-                  <Chip label={c.reel} sx={{ bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950 }} />
-                  <Chip label={playing ? c.playing : active.metric} sx={{ bgcolor: playing ? alpha(palette.green, 0.12) : '#F3F4F6', color: playing ? '#047857' : palette.ink, fontWeight: 950 }} />
+                  <Chip label={c.reel} sx={{ borderRadius: radius.badge, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950 }} />
+                  <Chip label={playing ? c.playing : active.metric} sx={{ borderRadius: radius.badge, bgcolor: playing ? alpha(palette.green, 0.12) : '#F3F4F6', color: playing ? '#047857' : palette.ink, fontWeight: 950 }} />
                 </Stack>
                 <DemoVisual scene={active} />
-                <LinearProgress variant="determinate" value={playing ? progress : 0} sx={{ height: 7, borderRadius: 99, bgcolor: '#EEF2F6', '& .MuiLinearProgress-bar': { bgcolor: palette.gold } }} />
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.2}>
-                  <Button variant="contained" startIcon={playing ? <PauseCircle size={18} /> : <PlayCircle size={18} />} onClick={() => setPlaying(!playing)} sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{playing ? c.pause : c.play}</Button>
-                  <Button variant="outlined" startIcon={<RotateCcw size={18} />} onClick={() => { setFrameIndex(0); setActiveId(list[0].id); setPlaying(true); }} sx={{ borderColor: '#D0D5DD', color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{c.replay}</Button>
-                  <Button component="a" href={active.route} variant="outlined" sx={{ borderColor: palette.gold, color: palette.goldDark, fontWeight: 950, borderRadius: 999 }}>{c.openFlow}</Button>
+                <LinearProgress variant="determinate" value={playing ? progress : 0} sx={{ height: 7, borderRadius: radius.badge, bgcolor: '#EEF2F6', '& .MuiLinearProgress-bar': { bgcolor: palette.gold } }} />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.1}>
+                  <Button variant="contained" startIcon={playing ? <PauseCircle size={18} /> : <PlayCircle size={18} />} onClick={() => setPlaying(!playing)} sx={{ ...buttonSx, bgcolor: palette.gold, color: palette.ink }}>{playing ? c.pause : c.play}</Button>
+                  <Button variant="outlined" startIcon={<RotateCcw size={18} />} onClick={() => { setFrameIndex(0); setActiveId(list[0].id); setPlaying(true); }} sx={{ ...buttonSx, borderColor: '#D0D5DD', color: palette.ink }}>{c.replay}</Button>
+                  <Button component="a" href={active.route} variant="outlined" sx={{ ...buttonSx, borderColor: palette.gold, color: palette.goldDark }}>{c.openFlow}</Button>
                 </Stack>
               </Stack>
             </Paper>
@@ -237,7 +252,7 @@ export default function DemoVideosPage() {
           <Grid container spacing={2}>{list.map((scene, index) => <Grid item xs={12} sm={6} md={4} lg={3} key={scene.id}><SceneCard scene={scene} active={scene.id === active.id} onClick={() => selectScene(scene.id, index)} /></Grid>)}</Grid>
         </Box>
 
-        <Paper sx={{ mt: 5, p: { xs: 2.5, md: 4 }, borderRadius: 3.5, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 14px 38px rgba(17,24,39,0.07)' }}>
+        <Paper sx={{ mt: 5, p: { xs: 2.4, md: 3.5 }, borderRadius: radius.page, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 12px 28px rgba(17,24,39,0.06)' }}>
           <Typography variant="h4" fontWeight={950} sx={{ color: palette.ink, mb: 2 }}><ShieldCheck color={palette.goldDark} /> {c.proof}</Typography>
           <Grid container spacing={1.5}>{c.proofItems.map((item) => <Grid item xs={12} sm={6} md={4} key={item}><Stack direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={17} color={palette.goldDark} /><Typography color={palette.ink} fontWeight={850}>{item}</Typography></Stack></Grid>)}</Grid>
         </Paper>
