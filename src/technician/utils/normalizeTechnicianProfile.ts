@@ -11,7 +11,7 @@ export const normalizeTechnicianStatus = (value: unknown) => {
 
 const normalizeSkillLevel = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return 'Pending sync';
+  if (!raw) return 'Standard field technician';
   if (raw.includes('master')) return 'Master';
   if (raw.includes('supervisor') || raw.includes('lead')) return 'Supervisor';
   if (raw.includes('specialist') || raw.includes('senior') || raw.includes('expert')) return 'Specialist';
@@ -32,43 +32,55 @@ const normalizeDutyStatus = (value: unknown) => {
 const boolValue = (...values: unknown[]) => {
   const value = firstPresent(...values);
   const raw = String(value ?? '').trim().toLowerCase();
-  return value === true || ['true', 'yes', 'issued', 'assigned', 'valid', 'active', 'available'].includes(raw);
+  return value === true || ['true', 'yes', 'issued', 'assigned', 'valid', 'active', 'available', 'complete', 'completed'].includes(raw);
 };
 
 const textValue = (...values: unknown[]) => String(firstPresent(...values) ?? '').trim();
 
-const requiredFields = [
-  'primaryTrade',
-  'skillLevel',
+const coreSyncFields = ['fullName', 'primaryTrade', 'dutyStatus'];
+
+const complianceActionFields = [
   'vehicleAssigned',
   'toolKitIssued',
   'ppeIssued',
   'medicalCardStatus',
   'drivingLicenseStatus',
   'certificationsStatus',
-  'dutyStatus',
 ];
 
-const hasRequiredValue = (profile: Record<string, any>, field: string) => {
+const hasCoreValue = (profile: Record<string, any>, field: string) => {
+  const value = profile[field];
+  return present(value) && value !== 'Pending sync' && value !== 'offline';
+};
+
+const hasComplianceValue = (profile: Record<string, any>, field: string) => {
   const value = profile[field];
   if (field === 'vehicleAssigned' || field === 'toolKitIssued' || field === 'ppeIssued') return value === true;
   if (field.endsWith('Status')) return normalizeTechnicianStatus(value) === 'valid';
-  return present(value) && value !== 'Pending sync' && value !== 'offline';
+  return present(value) && value !== 'Pending sync';
 };
 
 export function normalizeTechnicianProfile(sources: {
   technician?: Record<string, any> | null;
   staffRoster?: Record<string, any> | null;
   hrStaff?: Record<string, any> | null;
+  hrProfile?: Record<string, any> | null;
+  staffProfile?: Record<string, any> | null;
+  staffAsset?: Record<string, any> | null;
+  staffAgreement?: Record<string, any> | null;
   user?: Record<string, any> | null;
   attendance?: Record<string, any> | null;
   certifications?: unknown[];
 }) {
   const merged = {
     ...(sources.attendance || {}),
+    ...(sources.staffAgreement || {}),
     ...(sources.user || {}),
+    ...(sources.hrProfile || {}),
     ...(sources.hrStaff || {}),
+    ...(sources.staffProfile || {}),
     ...(sources.staffRoster || {}),
+    ...(sources.staffAsset || {}),
     ...(sources.technician || {}),
   } as Record<string, any>;
 
@@ -76,22 +88,23 @@ export function normalizeTechnicianProfile(sources: {
   const certificationRows = Array.isArray(sources.certifications) ? sources.certifications : [];
   const allCertifications = [...embeddedCertifications, ...certificationRows];
   const certificationsStatus = allCertifications.length > 0 ? 'valid' : normalizeTechnicianStatus(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus));
-  const dutyStatus = normalizeDutyStatus(firstPresent(merged.dutyStatus, merged.rosterStatus, merged.attendanceStatus, merged.status));
-  const onDuty = boolValue(merged.onDuty, merged.isOnDuty, dutyStatus === 'available');
+  const dutyStatus = normalizeDutyStatus(firstPresent(merged.dutyStatus, merged.rosterStatus, merged.attendanceStatus, merged.status, merged.isAvailable === true ? 'available' : undefined));
+  const onDuty = boolValue(merged.onDuty, merged.isOnDuty, merged.isAvailable, dutyStatus === 'available');
+  const primaryTrade = textValue(merged.primaryTrade, merged.trade, merged.specialization, merged.skill, merged.department, 'General Maintenance');
 
   const normalized = {
     uid: textValue(merged.uid, merged.userId, merged.technicianId, merged.id),
     fullName: textValue(merged.fullName, merged.displayName, merged.name, merged.employeeName, 'Technician'),
-    email: textValue(merged.email),
+    email: textValue(merged.email, merged.employeeEmail),
     phone: textValue(merged.phoneNumber, merged.phone, merged.mobile),
     role: 'technician',
     status: String(firstPresent(merged.status, 'active')).toLowerCase(),
-    primaryTrade: textValue(merged.primaryTrade, merged.trade, merged.specialization, merged.skill, merged.department, 'General Maintenance'),
-    skillLevel: normalizeSkillLevel(firstPresent(merged.skillLevel, merged.grade, merged.rank, merged.level)),
+    primaryTrade,
+    skillLevel: normalizeSkillLevel(firstPresent(merged.skillLevel, merged.grade, merged.rank, merged.level, 'Standard field technician')),
     vehicleAssigned: boolValue(merged.vehicleAssigned, merged.assignedVehicle, merged.vehicleNumber, merged.vehicleStatus),
     vehicleNumber: textValue(merged.vehicleNumber, merged.assignedVehicle, merged.vehiclePlate),
     toolKitIssued: boolValue(merged.toolKitIssued, merged.toolsIssued, merged.toolKitStatus),
-    ppeIssued: boolValue(merged.ppeIssued, merged.ppeStatus),
+    ppeIssued: boolValue(merged.ppeIssued, merged.ppeStatus, merged.ppeIssuedAt),
     medicalCardStatus: normalizeTechnicianStatus(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus, merged.medicalExpiry, merged.healthCardExpiry)),
     medicalCardExpiry: firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry) || null,
     drivingLicenseStatus: normalizeTechnicianStatus(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus, merged.drivingLicenseExpiry, merged.licenseExpiry)),
@@ -104,11 +117,13 @@ export function normalizeTechnicianProfile(sources: {
     lastSyncedAt: firstPresent(merged.lastSyncedAt, merged.updatedAt, merged.createdAt) || null,
     syncStatus: 'missing',
     missingFields: [] as string[],
+    complianceActionItems: [] as string[],
     raw: merged,
   };
 
-  normalized.missingFields = requiredFields.filter((field) => !hasRequiredValue(normalized, field));
-  normalized.syncStatus = normalized.missingFields.length === 0 ? 'synced' : normalized.missingFields.length < requiredFields.length ? 'partial' : 'missing';
+  normalized.missingFields = coreSyncFields.filter((field) => !hasCoreValue(normalized, field));
+  normalized.complianceActionItems = complianceActionFields.filter((field) => !hasComplianceValue(normalized, field));
+  normalized.syncStatus = normalized.missingFields.length === 0 ? 'synced' : normalized.missingFields.length < coreSyncFields.length ? 'partial' : 'missing';
   return normalized;
 }
 
@@ -126,13 +141,13 @@ export const formatDispatchReadiness = (status: string) => {
 };
 
 export const formatMissingTechnicianField = (field: string) => ({
+  fullName: 'Full legal name is missing.',
   primaryTrade: 'Primary trade is missing.',
-  skillLevel: 'Skill level is missing.',
+  dutyStatus: 'Duty status is missing.',
   vehicleAssigned: 'Vehicle assignment is missing.',
   toolKitIssued: 'Tool kit status is missing.',
   ppeIssued: 'PPE issue status is missing.',
   medicalCardStatus: 'Medical card status is missing or not valid.',
   drivingLicenseStatus: 'Driving license status is missing or not valid.',
   certificationsStatus: 'Certifications are missing.',
-  dutyStatus: 'Duty status is missing.',
 }[field] || `${field} is missing.`);
