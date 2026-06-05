@@ -15,7 +15,7 @@ import TechnicianChatPage from './pages/TechnicianChatPage';
 import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
-import TechnicianHRPage from './pages/TechnicianHRPage';
+import TechnicianHRPage from './pages/TechnicianHRPageV2';
 
 const shell = {
     ink: '#111827',
