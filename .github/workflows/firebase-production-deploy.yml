@@ -96,6 +96,45 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Deployment secrets preflight
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          GCP_PROJECT_ID_SECRET: ${{ secrets.GCP_PROJECT_ID }}
+          VITE_GOOGLE_MAPS_API_KEY_SECRET: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_APP_CHECK_SITE_KEY_SECRET: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          require_secret() {
+            local key="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::Missing required GitHub secret: $key"
+              missing=1
+            else
+              echo "Found required GitHub secret: $key"
+            fi
+          }
+          optional_secret() {
+            local key="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::warning::Optional GitHub secret is empty: $key"
+            else
+              echo "Found optional GitHub secret: $key"
+            fi
+          }
+          require_secret "GCP_WORKLOAD_IDENTITY_PROVIDER" "${WIF_PROVIDER}"
+          require_secret "GCP_SERVICE_ACCOUNT" "${GCP_SERVICE_ACCOUNT}"
+          optional_secret "GCP_PROJECT_ID" "${GCP_PROJECT_ID_SECRET}"
+          optional_secret "VITE_GOOGLE_MAPS_API_KEY" "${VITE_GOOGLE_MAPS_API_KEY_SECRET}"
+          optional_secret "VITE_APP_CHECK_SITE_KEY" "${VITE_APP_CHECK_SITE_KEY_SECRET}"
+          if [ "$missing" -ne 0 ]; then
+            echo "Deployment cannot continue until required GitHub secrets are configured."
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud by Workload Identity Federation
         uses: google-github-actions/auth@v2
         with:
