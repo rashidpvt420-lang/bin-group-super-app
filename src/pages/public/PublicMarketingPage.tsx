@@ -26,6 +26,7 @@ type PublicMarketingPageProps = { page?: PublicMarketingPageKey };
 type CopyShape = typeof copy.en;
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
+const COMPANY_URL = '/company';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
 const DEMO_URL = '/request-demo';
@@ -57,6 +58,7 @@ const copy = {
   en: {
     brand: 'BIN GROUP',
     language: 'العربية',
+    company: 'Company Profile',
     chip: 'UAE PROPERTY CARE HOME OS',
     title: 'One Operating System for Property Care, Management, and Proof.',
     desc: 'BIN GROUP gives serious UAE property owners a unified Home OS: property details, instant quote, contract selection, 15% mobilization, tenant registry, rent ledger waterfall, 5% management fee logic, technician dispatch, SLA timers, before-and-after proof, owner reports, and permanent property passport history.',
@@ -90,6 +92,7 @@ const copy = {
   ar: {
     brand: 'مجموعة بن',
     language: 'EN',
+    company: 'نبذة الشركة',
     chip: 'نظام تشغيل العناية بالعقار في الإمارات',
     title: 'نظام تشغيل واحد للعناية بالعقار وإدارته وإثبات الخدمة.',
     desc: 'مجموعة بن تمنح ملاك العقارات في الإمارات نظام Home OS موحد: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، سجل المستأجرين، دفتر الإيجارات، منطق رسوم الإدارة 5٪، إرسال الفنيين، مؤقتات SLA، إثبات قبل وبعد، تقارير المالك، وسجل جواز العقار الدائم.',
@@ -181,6 +184,7 @@ function Nav({ c, nextLang, setLang }: { c: CopyShape; nextLang: 'en' | 'ar'; se
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
           <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton href={DEMO_URL} icon={<PlayCircle size={17} />}>{c.demo}</ActionButton>
@@ -222,6 +226,7 @@ function Hero({ c }: { c: CopyShape }) {
             <Typography variant="h6" sx={{ color: muted, lineHeight: 1.62, fontWeight: 750, maxWidth: 920 }}>{c.desc}</Typography>
             <Stack direction="row" spacing={1.5} sx={{ mt: 4, flexWrap: 'wrap', gap: 1.5 }}>
               <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+              <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
               <ActionButton href={QUOTE_URL} icon={<WalletCards size={17} />}>{c.quote}</ActionButton>
               <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
@@ -349,6 +354,7 @@ function Inquiry({ c }: { c: CopyShape }) {
         </Grid>
         <Grid item xs={12} md={4}>
           <Stack spacing={1.3}>
+            <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
             <ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton>
             <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
           </Stack>
