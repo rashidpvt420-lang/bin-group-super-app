@@ -130,3 +130,7 @@ qa-verify-all.js
 test-results/
 test_output.txt
 playwright-report/
+
+# Local E2E credentials
+.env.e2e
+.env.e2e.local
