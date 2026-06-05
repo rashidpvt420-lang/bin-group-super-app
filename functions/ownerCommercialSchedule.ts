@@ -14,6 +14,7 @@ type ApprovalPatchResult = {
   paymentPatch: AnyRecord;
   auditMetadata: AnyRecord;
   commercialSchedule: AnyRecord;
+  [key: string]: any;
 };
 
 const scopeDefaults = {
@@ -65,12 +66,18 @@ const scopeDefaults = {
   },
 };
 
+function isFirestoreFieldValue(value: any): boolean {
+  const ctorName = String(value?.constructor?.name || "");
+  return Boolean(value && typeof value === "object" && (ctorName.includes("FieldValue") || typeof value.isEqual === "function"));
+}
+
 function cleanPlainValue(value: any): any {
   if (value === undefined) return null;
   if (value === null) return null;
   if (value instanceof admin.firestore.GeoPoint) return value;
   if (value instanceof admin.firestore.Timestamp) return value;
   if (value instanceof Date) return value;
+  if (isFirestoreFieldValue(value)) return value;
   if (Array.isArray(value)) return value.map(cleanPlainValue);
   if (typeof value === "object") {
     const output: AnyRecord = {};
@@ -101,7 +108,7 @@ function firstPositiveNumber(...values: unknown[]): number {
 function asArray(value: any): any[] {
   if (Array.isArray(value)) return value;
   if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
-  if (value && typeof value === "object") return Object.values(value);
+  if (value && typeof value === "object" && !isFirestoreFieldValue(value)) return Object.values(value);
   return [];
 }
 
@@ -365,5 +372,5 @@ export function buildOwnerCommercialApprovalPatch(rawInput: AnyRecord): Approval
     contractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
   });
 
-  return { contractPatch, paymentPatch, auditMetadata, commercialSchedule };
+  return { ...contractPatch, contractPatch, paymentPatch, auditMetadata, commercialSchedule };
 }
