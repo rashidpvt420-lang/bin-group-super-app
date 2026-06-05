@@ -58,6 +58,7 @@ function mergeUnique(groups: Record<string, ContractActivation[]>) {
 }
 
 export default function AdminContractActivationApproval() {
+    const { t } = useLanguage();
   const [items, setItems] = useState<ContractActivation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ContractActivation | null>(null);

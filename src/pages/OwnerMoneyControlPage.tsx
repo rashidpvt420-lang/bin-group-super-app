@@ -7,6 +7,7 @@ import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 export default function OwnerMoneyControlPage() {
+    const { t } = useLanguage();
     const { user } = useRole();
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
