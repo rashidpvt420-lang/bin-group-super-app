@@ -14,6 +14,7 @@ body,
   --bin-gold: #C9A646;
   --bin-gold-hover: #B8932F;
   --bin-platinum: #E5E4E2;
+  --bin-platinum-soft: #F7F7F4;
   --bin-platinum-dark: #BFC1C2;
   --bin-text-main: #111827;
   --bin-text-muted: #6B7280;
@@ -23,9 +24,9 @@ body,
   --bin-radius-panel: 18px;
   --bin-radius-card: 16px;
   --bin-radius-button: 14px;
-  --bin-dark-panel: rgba(15, 23, 42, 0.82);
-  --bin-dark-panel-solid: #101722;
-  --bin-dark-border: rgba(255, 255, 255, 0.12);
+  --bin-dark-panel: #FFFFFF;
+  --bin-dark-panel-solid: #FFFFFF;
+  --bin-dark-border: #E5E7EB;
 }
 
 * {
@@ -37,8 +38,8 @@ body,
 .sovereign-screen,
 .sovereign-page {
   min-height: 100vh;
-  background: var(--bin-bg-primary);
-  color: var(--bin-text-main);
+  background: var(--bin-bg-primary) !important;
+  color: var(--bin-text-main) !important;
   position: relative;
   overflow: hidden;
 }
@@ -55,7 +56,7 @@ body,
   justify-content: center;
   pointer-events: none;
   z-index: 0;
-  color: rgba(17, 24, 39, 0.04);
+  color: rgba(17, 24, 39, 0.035);
   font-size: clamp(2.5rem, 8vw, 8rem);
   font-weight: 900;
   letter-spacing: 0.16em;
@@ -120,7 +121,6 @@ body,
   word-break: normal;
 }
 
-/* Emergency production UI hardening: prevents the admin shell from collapsing text into one-letter columns. */
 body:has(a[href^="/admin/"]) {
   background: #FFFFFF !important;
 }
@@ -161,7 +161,6 @@ body:has(a[href^="/admin/"]) {
   background: rgba(201, 166, 70, 0.12) !important;
 }
 
-/* Login/partner portal white platinum override. */
 form .MuiOutlinedInput-root {
   background: #FFFFFF !important;
 }
@@ -174,7 +173,6 @@ form .MuiInputLabel-root {
   color: #667085 !important;
 }
 
-/* BIN GROUP professional geometry guard: remove oval/circular production panels everywhere. */
 .MuiPaper-root,
 .MuiCard-root {
   border-radius: var(--bin-radius-panel) !important;
@@ -236,18 +234,107 @@ form .MuiInputLabel-shrink {
   color: var(--bin-gold-hover) !important;
 }
 
-/* Keep dark authenticated dashboards professional without circular card shapes. */
-.MuiPaper-root[style*="rgba(15, 23, 42"],
-.MuiPaper-root[style*="rgba(22, 22, 24"],
-.MuiCard-root[style*="rgba(22, 22, 24"] {
-  border-radius: var(--bin-radius-panel) !important;
+/* White & Platinum enforcement for authenticated dashboards that still use dark inline sx. */
+body:has([data-testid="TechnicianIcon"]),
+body:has(a[href*="technician"]),
+body:has(a[href*="/technician"]),
+body:has(button[aria-label*="Profile"]),
+body:has(button[aria-label*="profile"]) {
+  background: #FFFFFF !important;
+  color: #111827 !important;
 }
 
-/* Floating mobile command controls: clearer rectangular buttons instead of pills. */
-.MuiButtonBase-root[aria-label],
+body:has([data-testid="TechnicianIcon"]) .MuiBox-root,
+body:has(a[href*="technician"]) .MuiBox-root,
+body:has(a[href*="/technician"]) .MuiBox-root {
+  color: #111827 !important;
+}
+
+/* Override common dark inline backgrounds visible in technician/login/admin shells. */
+[style*="#020617"],
+[style*="#030712"],
+[style*="#050816"],
+[style*="#050712"],
+[style*="#080B16"],
+[style*="#090B12"],
+[style*="#0B1020"],
+[style*="#0f172a"],
+[style*="#111827"],
+[style*="rgb(2, 6, 23)"],
+[style*="rgb(3, 7, 18)"],
+[style*="rgb(5, 8, 22)"],
+[style*="rgba(2, 6, 23"],
+[style*="rgba(3, 7, 18"],
+[style*="rgba(15, 23, 42"],
+[style*="rgba(22, 22, 24"] {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  background-image: linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%) !important;
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08) !important;
+}
+
+/* Keep dark overlays from washing out text after white conversion. */
+[style*="radial-gradient"],
+[style*="linear-gradient"] {
+  color: inherit;
+}
+
+/* Convert dashboard typography from white/gray-on-black to readable ink. */
+.MuiTypography-root[style*="color: rgb(255"],
+.MuiTypography-root[style*="color:#fff"],
+.MuiTypography-root[style*="color: #fff"],
+.MuiTypography-root[style*="color: white"],
+[style*="color: rgb(255, 255, 255)"],
+[style*="color:#FFFFFF"],
+[style*="color: #FFFFFF"],
+[style*="color:#fff"],
+[style*="color: #fff"] {
+  color: #111827 !important;
+}
+
+[style*="color: rgb(156, 163, 175)"],
+[style*="color: rgb(148, 163, 184)"],
+[style*="color:#94A3B8"],
+[style*="color: #94A3B8"],
+[style*="color:#9CA3AF"],
+[style*="color: #9CA3AF"] {
+  color: #667085 !important;
+}
+
+/* Rebuild floating command rail buttons as clear white/platinum buttons. */
 .MuiFab-root,
-button[class*="MuiIconButton"] {
+button[class*="MuiIconButton"],
+.MuiIconButton-root {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border: 1px solid rgba(201, 166, 70, 0.34) !important;
   border-radius: 14px !important;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.10) !important;
+}
+
+.MuiFab-root svg,
+.MuiIconButton-root svg,
+.MuiButtonBase-root svg {
+  color: currentColor;
+}
+
+/* Status chips retain semantic color but on white cards. */
+.MuiChip-root,
+[role="status"],
+[data-status] {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(201, 166, 70, 0.28) !important;
+}
+
+/* Login/partner portal should be white, not black. */
+form,
+form .MuiPaper-root,
+form .MuiCard-root {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
 }
 
 /* Defensive override for inline sx-generated giant oval cards. */
