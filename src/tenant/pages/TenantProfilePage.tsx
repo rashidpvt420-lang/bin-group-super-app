@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { db, auth, collection, query, where, getDocs, doc, getDoc, setDoc, updateProfile, sendPasswordResetEmail, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { User, Phone, Mail, Save, KeyRound } from 'lucide-react';
+import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 
 const inputSx = {
     '& .MuiOutlinedInput-root': { color: '#FFF', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 },
@@ -121,6 +122,9 @@ export default function TenantProfilePage() {
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
+    const profilePhoto = pickProfilePhoto(profileData, user);
+    const profileCover = pickProfileCover(profileData, user);
+
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>
@@ -129,25 +133,25 @@ export default function TenantProfilePage() {
 
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-            <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+            <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-                    <Avatar sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000' }}>
+                    <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>
                         {displayName?.charAt(0) || user?.displayName?.charAt(0) || <User size={40} />}
                     </Avatar>
                     <Box sx={{ textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' }, width: '100%' }}>
                         <Typography variant="h5" fontWeight="900" color="#FFF">{displayName || label('Resident', 'المقيم')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
                             <Mail size={16} />
                             <Typography variant="body2">{user?.email}</Typography>
                         </Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
                             <Phone size={16} />
                             <Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography>
                         </Stack>
                     </Box>
                 </Stack>
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 3 }} />
+                <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 3 }} />
                 <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{label('Editable Details', 'البيانات القابلة للتعديل')}</Typography>
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Full Name', 'الاسم الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
