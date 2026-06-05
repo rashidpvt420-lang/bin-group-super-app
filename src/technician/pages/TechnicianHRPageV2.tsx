@@ -22,17 +22,26 @@ const quickPrompts = [
   'Kailangan ko po ng payslip',
 ];
 
+const requestTitle = (value: string) => String(value || 'hr_support').replace(/_/g, ' ');
+
 export default function TechnicianHRPageV2() {
   const { user } = useRole();
   const [message, setMessage] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [registryError, setRegistryError] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
     const q = query(collection(db, 'staffRequests'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snap) => setRequests(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
+    return onSnapshot(q, (snap) => {
+      setRegistryError('');
+      setRequests(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn('AI HR request registry realtime failed:', error);
+      setRegistryError('Live registry sync is not available yet. Newly created cases will still appear instantly on this screen.');
+    });
   }, [user?.uid]);
 
   const identity = () => ({
@@ -48,10 +57,12 @@ export default function TechnicianHRPageV2() {
     setLoading(true);
     try {
       const result = classifyBlueCollarEssIntent(text);
+      const optimisticId = `local-${Date.now()}`;
+      const now = new Date().toISOString();
       const base = {
         ...identity(),
         requestType: result.requestType,
-        requestLabel: result.requestType.replace(/_/g, ' '),
+        requestLabel: requestTitle(result.requestType),
         category: result.category,
         priority: result.priority,
         reason: text.trim(),
@@ -68,13 +79,16 @@ export default function TechnicianHRPageV2() {
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date().toISOString().split('T')[0],
         hours: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
-      await addDoc(collection(db, 'staffRequests'), base);
-      await addDoc(collection(db, 'hrAiConversations'), { ...base, question: text.trim(), answer: result.answer });
+      const localCase = { id: optimisticId, ...base, createdAtLocal: now, optimistic: true };
+      setRequests((prev) => [localCase, ...prev.filter((item) => item.id !== optimisticId)]);
+      await addDoc(collection(db, 'staffRequests'), { ...base, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      await addDoc(collection(db, 'hrAiConversations'), { ...base, question: text.trim(), answer: result.answer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       setAnswer(`${result.answer} · ${result.language.toUpperCase()} · ${Math.round(result.confidence * 100)}% confidence · ${result.recommendedNextAction}`);
       setMessage('');
+    } catch (error: any) {
+      console.error('AI HR case creation failed:', error);
+      setAnswer(`Case could not be saved: ${error?.message || 'Permission or network issue'}`);
     } finally {
       setLoading(false);
     }
@@ -99,7 +113,7 @@ export default function TechnicianHRPageV2() {
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">People AI Intent Router</Typography></Stack>
             <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language" sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
             <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'CREATE AI HR CASE'}</Button>
-            {answer && <Alert severity="success" sx={{ mt: 2 }}>{answer}</Alert>}
+            {answer && <Alert severity={answer.startsWith('Case could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
           </Paper>
         </Grid>
         <Grid item xs={12} md={5}>
@@ -117,7 +131,8 @@ export default function TechnicianHRPageV2() {
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>AI HR Request Registry</Typography>
-        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR cases yet.</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{String(req.requestLabel || req.requestType).replace(/_/g, ' ')}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{req.detectedLanguage && `Language: ${req.detectedLanguage} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        {registryError && <Alert severity="warning" sx={{ mb: 2 }}>{registryError}</Alert>}
+        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR cases yet.</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
     </Box>
   );
