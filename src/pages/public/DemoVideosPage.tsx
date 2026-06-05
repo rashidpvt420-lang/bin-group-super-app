@@ -19,8 +19,8 @@ const sceneAssets: Record<string, string> = {
   technician: '/demo/gps.svg',
   gps: '/demo/gps.svg',
   evidence: '/demo/evidence.svg',
-  documents: '/demo/owner-dashboard.svg',
-  broker: '/demo/owner-dashboard.svg',
+  documents: '/demo/documents.svg',
+  broker: '/demo/broker.svg',
   design: '/demo/design.svg',
 };
 
@@ -68,10 +68,10 @@ const copy = {
 
 function SceneCard({ scene, active, onClick }: { scene: any; active: boolean; onClick: () => void }) {
   return (
-    <Card onClick={onClick} sx={{ cursor: 'pointer', height: '100%', borderRadius: 4, bgcolor: '#FFFFFF', border: active ? `2px solid ${palette.gold}` : `1px solid ${palette.border}`, boxShadow: active ? '0 18px 42px rgba(201,166,70,0.18)' : '0 10px 28px rgba(17,24,39,0.06)', transition: '0.2s ease', '&:hover': { transform: 'translateY(-3px)' } }}>
+    <Card onClick={onClick} sx={{ cursor: 'pointer', height: '100%', borderRadius: 3, bgcolor: '#FFFFFF', border: active ? `2px solid ${palette.gold}` : `1px solid ${palette.border}`, boxShadow: active ? '0 18px 42px rgba(201,166,70,0.18)' : '0 10px 28px rgba(17,24,39,0.06)', transition: '0.2s ease', '&:hover': { transform: 'translateY(-3px)' } }}>
       <CardContent sx={{ p: 2 }}>
         <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: 2.5, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center' }}>{scene.icon}</Box>
+          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center' }}>{scene.icon}</Box>
           <Box sx={{ minWidth: 0 }}><Typography noWrap fontWeight={950} color={palette.ink}>{scene.title}</Typography><Typography noWrap fontSize={12} color={palette.muted}>{scene.metric}</Typography></Box>
         </Stack>
         <Typography fontSize={13} color={palette.muted} sx={{ lineHeight: 1.55 }}>{scene.subtitle}</Typography>
@@ -113,8 +113,8 @@ export default function DemoVideosPage() {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: palette.ink, direction: isRTL ? 'rtl' : 'ltr', background: 'radial-gradient(circle at 92% 4%, rgba(201,166,70,0.12), transparent 28rem), linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%)' }}>
-      <Box sx={{ position: 'sticky', top: 0, zIndex: 30, bgcolor: 'rgba(255,255,255,0.94)', borderBottom: `1px solid ${palette.border}`, backdropFilter: 'blur(14px)' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: palette.ink, direction: isRTL ? 'rtl' : 'ltr', background: 'radial-gradient(circle at 92% 4%, rgba(201,166,70,0.10), transparent 28rem), linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%)' }}>
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 30, bgcolor: 'rgba(255,255,255,0.96)', borderBottom: `1px solid ${palette.border}`, backdropFilter: 'blur(14px)' }}>
         <Container maxWidth="xl" sx={{ py: 1, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
           <Button component="a" href="/" sx={{ color: palette.ink, p: 0, minWidth: 0, mr: isRTL ? 0 : 'auto', ml: isRTL ? 'auto' : 0 }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.5 }} /><Typography fontWeight={950}>{c.brand}</Typography></Stack>
@@ -128,11 +128,11 @@ export default function DemoVideosPage() {
         </Container>
       </Box>
 
-      <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 7 } }}>
+      <Container maxWidth="xl" sx={{ py: { xs: 3, md: 7 } }}>
         <Grid container spacing={{ xs: 3, md: 4.5 }} alignItems="center">
           <Grid item xs={12} md={5}>
             <Chip label={c.chip} sx={{ bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950, letterSpacing: 1, mb: 2.5 }} />
-            <Typography variant="h1" sx={{ fontSize: { xs: 36, md: 64 }, lineHeight: 0.98, fontWeight: 950, letterSpacing: -2, mb: 2.5, color: palette.ink }}>{c.title}</Typography>
+            <Typography variant="h1" sx={{ fontSize: { xs: 34, md: 64 }, lineHeight: 1, fontWeight: 950, letterSpacing: -2, mb: 2.5, color: palette.ink }}>{c.title}</Typography>
             <Typography variant="h6" sx={{ color: palette.muted, lineHeight: 1.72, fontWeight: 750, mb: 3 }}>{c.subtitle}</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <Button variant="contained" startIcon={<PlayCircle size={18} />} onClick={() => setPlaying(true)} sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, py: 1.35, borderRadius: 999 }}>{c.play}</Button>
@@ -141,26 +141,28 @@ export default function DemoVideosPage() {
           </Grid>
 
           <Grid item xs={12} md={7}>
-            <Paper id="demo-reel" sx={{ p: { xs: 1.5, md: 2.4 }, borderRadius: { xs: 4, md: 6 }, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 22px 64px rgba(17,24,39,0.10)', overflow: 'hidden' }}>
-              <Stack spacing={2}>
+            <Paper id="demo-reel" sx={{ p: { xs: 1.25, md: 2.4 }, borderRadius: { xs: 2.5, md: 3.5 }, bgcolor: '#FFFFFF', border: `1px solid ${alpha(palette.gold, 0.24)}`, boxShadow: '0 18px 48px rgba(17,24,39,0.10)', overflow: 'visible' }}>
+              <Stack spacing={1.75}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ gap: 1, flexWrap: 'wrap' }}>
                   <Chip label={c.reel} sx={{ bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, fontWeight: 950 }} />
                   <Chip label={playing ? c.playing : active.metric} sx={{ bgcolor: playing ? alpha(palette.green, 0.12) : '#F3F4F6', color: playing ? '#047857' : palette.ink, fontWeight: 950 }} />
                 </Stack>
 
-                <Box sx={{ borderRadius: { xs: 3.5, md: 5 }, overflow: 'hidden', bgcolor: palette.soft, border: `1px solid ${palette.border}` }}>
-                  <Box component="img" src={sceneAssets[active.id]} alt={`${active.title} demo scene`} loading="eager" sx={{ display: 'block', width: '100%', height: { xs: 230, sm: 330, md: 420 }, objectFit: 'cover', bgcolor: palette.soft }} />
-                  <Box sx={{ p: { xs: 2, md: 2.6 }, bgcolor: '#FFFFFF' }}>
+                <Box sx={{ borderRadius: { xs: 2, md: 3 }, overflow: 'hidden', bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 10px 26px rgba(17,24,39,0.06)' }}>
+                  <Box sx={{ width: '100%', bgcolor: '#F8F9FB', p: { xs: 0.5, md: 1 }, borderBottom: `1px solid ${palette.border}` }}>
+                    <Box component="img" src={sceneAssets[active.id]} alt={`${active.title} demo scene`} loading="eager" sx={{ display: 'block', width: '100%', aspectRatio: '16 / 9', height: 'auto', maxHeight: { xs: 270, sm: 360, md: 430 }, objectFit: 'contain', bgcolor: '#F8F9FB', borderRadius: { xs: 1.5, md: 2 } }} />
+                  </Box>
+                  <Box sx={{ p: { xs: 1.75, md: 2.4 }, bgcolor: '#FFFFFF' }}>
                     <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1.2 }}>
-                      <Box sx={{ width: 44, height: 44, borderRadius: 3, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{active.icon}</Box>
-                      <Box sx={{ minWidth: 0 }}><Typography variant="h5" fontWeight={950} color={palette.ink}>{active.title}</Typography><Typography color={palette.muted} fontWeight={750}>{active.subtitle}</Typography></Box>
+                      <Box sx={{ width: 42, height: 42, borderRadius: 2.2, bgcolor: alpha(palette.gold, 0.14), color: palette.goldDark, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{active.icon}</Box>
+                      <Box sx={{ minWidth: 0 }}><Typography variant="h5" fontWeight={950} color={palette.ink} sx={{ fontSize: { xs: 24, md: 30 } }}>{active.title}</Typography><Typography color={palette.muted} fontWeight={750} sx={{ fontSize: { xs: 15, md: 17 }, lineHeight: 1.45 }}>{active.subtitle}</Typography></Box>
                     </Stack>
-                    <Grid container spacing={1}>{active.bullets.map((bullet: string) => <Grid item xs={12} sm={4} key={bullet}><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={16} color={palette.goldDark} /><Typography fontWeight={850} color={palette.ink}>{bullet}</Typography></Stack></Grid>)}</Grid>
+                    <Grid container spacing={0.75}>{active.bullets.map((bullet: string) => <Grid item xs={12} sm={4} key={bullet}><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={16} color={palette.goldDark} /><Typography fontWeight={850} color={palette.ink} sx={{ fontSize: 15 }}>{bullet}</Typography></Stack></Grid>)}</Grid>
                   </Box>
                 </Box>
 
                 <LinearProgress variant="determinate" value={playing ? progress : 0} sx={{ height: 7, borderRadius: 99, bgcolor: '#EEF2F6', '& .MuiLinearProgress-bar': { bgcolor: palette.gold } }} />
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.4}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.2}>
                   <Button variant="contained" startIcon={playing ? <PauseCircle size={18} /> : <PlayCircle size={18} />} onClick={() => setPlaying(!playing)} sx={{ bgcolor: palette.gold, color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{playing ? c.pause : c.play}</Button>
                   <Button variant="outlined" startIcon={<RotateCcw size={18} />} onClick={() => { setFrameIndex(0); setActiveId(list[0].id); setPlaying(true); }} sx={{ borderColor: '#D0D5DD', color: palette.ink, fontWeight: 950, borderRadius: 999 }}>{c.replay}</Button>
                   <Button component="a" href={active.route} variant="outlined" sx={{ borderColor: palette.gold, color: palette.goldDark, fontWeight: 950, borderRadius: 999 }}>{c.openFlow}</Button>
@@ -175,7 +177,7 @@ export default function DemoVideosPage() {
           <Grid container spacing={2}>{list.map((scene, index) => <Grid item xs={12} sm={6} md={4} lg={3} key={scene.id}><SceneCard scene={scene} active={scene.id === active.id} onClick={() => selectScene(scene.id, index)} /></Grid>)}</Grid>
         </Box>
 
-        <Paper sx={{ mt: 5, p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 14px 38px rgba(17,24,39,0.07)' }}>
+        <Paper sx={{ mt: 5, p: { xs: 2.5, md: 4 }, borderRadius: 3.5, bgcolor: '#FFFFFF', border: `1px solid ${palette.border}`, boxShadow: '0 14px 38px rgba(17,24,39,0.07)' }}>
           <Typography variant="h4" fontWeight={950} sx={{ color: palette.ink, mb: 2 }}><ShieldCheck color={palette.goldDark} /> {c.proof}</Typography>
           <Grid container spacing={1.5}>{c.proofItems.map((item) => <Grid item xs={12} sm={6} md={4} key={item}><Stack direction="row" spacing={1.2} alignItems="center"><CheckCircle2 size={17} color={palette.goldDark} /><Typography color={palette.ink} fontWeight={850}>{item}</Typography></Stack></Grid>)}</Grid>
         </Paper>
