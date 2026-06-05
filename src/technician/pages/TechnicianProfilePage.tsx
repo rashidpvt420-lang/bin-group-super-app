@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Grid, Stack, Avatar, CircularProgress, Chip, TextField, Button, Switch, FormControlLabel, Divider, Alert } from '@mui/material';
+import { Box, Typography, Paper, Grid, Stack, Avatar, CircularProgress, Chip, TextField, Button, Switch, FormControlLabel, Divider, Alert, alpha } from '@mui/material';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { db, auth, doc, setDoc, getDoc, updateProfile, sendPasswordResetEmail, serverTimestamp } from '../../lib/firebase';
@@ -10,9 +10,31 @@ import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
 const inputSx = {
-    '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', borderRadius: 2 },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.5)' },
+    '& .MuiOutlinedInput-root': {
+        bgcolor: 'rgba(2,6,23,0.72)',
+        color: '#FFF',
+        borderRadius: 3,
+        '& fieldset': { borderColor: 'rgba(198,167,94,0.45)' },
+        '&:hover fieldset': { borderColor: 'rgba(198,167,94,0.75)' },
+        '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
+    },
+    '& .MuiInputBase-input': {
+        color: '#FFF !important',
+        fontWeight: 850,
+        WebkitTextFillColor: '#FFF',
+    },
+    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.72)', fontWeight: 850 },
+    '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.gold },
 };
+
+const statusChipSx = (tone: string) => ({
+    bgcolor: `${alpha(tone, 0.18)} !important`,
+    color: `${tone} !important`,
+    border: `1px solid ${alpha(tone, 0.42)}`,
+    fontWeight: 950,
+    minWidth: 96,
+    '& .MuiChip-label': { px: 1.25, color: `${tone} !important` },
+});
 
 export default function TechnicianProfilePage() {
     const { user } = useRole();
@@ -82,6 +104,7 @@ export default function TechnicianProfilePage() {
                 serviceZone: serviceZone.trim(),
                 emergencyContact: { name: emergencyName.trim(), phone: emergencyPhone.trim() },
                 isAvailable,
+                status: techData?.status || 'active',
                 language: lang,
                 updatedAt: serverTimestamp(),
             };
@@ -118,49 +141,52 @@ export default function TechnicianProfilePage() {
 
     const score = techData?.qualityScore || techData?.rating || label('Pending', 'قيد الانتظار');
     const sla = techData?.slaCompliance || techData?.slaScore || label('Pending', 'قيد الانتظار');
-    const status = (techData?.status || 'pending').toString();
+    const status = (techData?.status || 'active').toString();
+    const statusLower = status.toLowerCase();
     const localizedStatus = lang === 'ar'
-        ? status.toLowerCase() === 'active' ? 'نشط' : status.toLowerCase() === 'pending' ? 'قيد الانتظار' : status.toLowerCase() === 'suspended' ? 'موقوف' : status
+        ? statusLower === 'active' ? 'نشط' : statusLower === 'pending' ? 'قيد الانتظار' : statusLower === 'suspended' ? 'موقوف' : status
         : status.toUpperCase();
     const profilePhoto = pickProfilePhoto(techData, user);
     const profileCover = pickProfileCover(techData, user);
+    const statusTone = statusLower === 'active' ? '#10b981' : statusLower === 'suspended' ? '#ef4444' : binThemeTokens.gold;
+    const dispatchTone = isAvailable ? '#10b981' : 'rgba(255,255,255,0.72)';
 
     return (
-        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Technician Profile', 'ملف الفني')}</Typography>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: isRTL ? 0 : 8, sm: isRTL ? 0 : 10, md: 0 }, pl: { xs: isRTL ? 8 : 0, sm: isRTL ? 10 : 0, md: 0 }, pb: { xs: 14, md: 4 } }}>
+            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 4, textAlign: isRTL ? 'right' : 'left', fontSize: { xs: '2.2rem', sm: '2.6rem' } }}>{label('Technician Profile', 'ملف الفني')}</Typography>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-            <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-                    <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>
+            <Paper sx={{ p: { xs: 3, sm: 4 }, mb: 4, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, position: 'relative', overflow: 'hidden', ...profileCoverSx(profileCover), '&:before': { content: '""', position: 'absolute', inset: 0, bgcolor: 'rgba(2,6,23,0.58)', backdropFilter: 'blur(1px)' }, '& > *': { position: 'relative', zIndex: 1 } }}>
+                <Stack direction="column" spacing={3} alignItems="center" sx={{ mb: 4 }}>
+                    <Avatar src={profilePhoto || undefined} sx={{ width: 108, height: 108, bgcolor: binThemeTokens.gold, color: '#000', border: `4px solid ${binThemeTokens.gold}`, boxShadow: '0 18px 42px rgba(0,0,0,0.45)' }}>
                         {displayName?.charAt(0) || <User size={40} />}
                     </Avatar>
-                    <Box sx={{ textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' } }}>
-                        <Typography variant="h5" fontWeight="900" color="#FFF">{displayName || label('Technician', 'الفني')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
-                            <Mail size={16} /><Typography variant="body2">{techData?.email || user?.email}</Typography>
+                    <Box sx={{ textAlign: 'center', maxWidth: '100%' }}>
+                        <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{displayName || label('Technician', 'الفني')}</Typography>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)', overflowWrap: 'anywhere' }}>
+                            <Mail size={16} /><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{techData?.email || user?.email}</Typography>
                         </Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}>
                             <Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography>
                         </Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}>
                             <Wrench size={16} /><Typography variant="body2">{trade || label('General Maintenance', 'صيانة عامة')}</Typography>
                         </Stack>
-                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
+                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
                     </Box>
                 </Stack>
 
                 <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">{label('ACCOUNT STATUS', 'حالة الحساب')}</Typography><Box sx={{ mt: 1 }}><Chip label={localizedStatus} color={status === 'active' ? 'success' : 'warning'} size="small" sx={{ fontWeight: 900 }} /></Box></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: binThemeTokens.gold }}><Star size={18} fill={binThemeTokens.gold} /><Typography variant="body1" fontWeight="900" color="#FFF">{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">{label('SLA COMPLIANCE', 'الالتزام بزمن الخدمة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: '#4ade80' }}><Clock size={18} /><Typography variant="body1" fontWeight="900" color="#FFF">{typeof sla === 'number' ? `${sla}%` : sla}</Typography></Stack></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={isAvailable ? label('AVAILABLE', 'متاح') : label('OFF DUTY', 'خارج الدوام')} color={isAvailable ? 'success' : 'default'} size="small" sx={{ fontWeight: 900 }} /></Box></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('ACCOUNT STATUS', 'حالة الحساب')}</Typography><Box sx={{ mt: 1 }}><Chip label={localizedStatus} size="small" sx={statusChipSx(statusTone)} /></Box></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: binThemeTokens.gold }}><Star size={18} fill={binThemeTokens.gold} /><Typography variant="body1" fontWeight="950" color="#FFF">{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('SLA COMPLIANCE', 'الالتزام بزمن الخدمة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: '#4ade80' }}><Clock size={18} /><Typography variant="body1" fontWeight="950" color="#FFF">{typeof sla === 'number' ? `${sla}%` : sla}</Typography></Stack></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={isAvailable ? label('AVAILABLE', 'متاح') : label('OFF DUTY', 'خارج الدوام')} size="small" sx={statusChipSx(dispatchTone)} /></Box></Grid>
                 </Grid>
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', my: 4 }} />
+                <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)', my: 4 }} />
 
                 <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{label('Edit Details', 'تعديل البيانات')}</Typography>
-                <Grid container spacing={3} sx={{ mb: 4 }}>
+                <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Full Name', 'الاسم الكامل')} value={displayName} onChange={e => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Phone Number', 'رقم الهاتف')} value={phone} onChange={e => setPhone(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Primary Trade', 'التخصص الرئيسي')} value={trade} onChange={e => setTrade(e.target.value)} sx={inputSx} /></Grid>
