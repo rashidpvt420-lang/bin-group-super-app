@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 import {
     Box, Typography, Paper, Grid, TextField, Button, Select, MenuItem,
     InputLabel, FormControl, Stepper, Step, StepLabel, Divider,
@@ -421,10 +422,10 @@ export default function AddPropertyPage() {
                                 )}
 
                                 <Box sx={{ mt: 4 }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700, display: 'block', mb: 2 }}>SERVICE LEVEL AGREEMENT (SLA)</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700, display: 'block', mb: 2 }}>{t('common.sla_label').toUpperCase()}</Typography>
                                     <FormControl fullWidth sx={inputSx}>
                                         <Select value={slaTier} onChange={e => setSlaTier(e.target.value)}>
-                                            <MenuItem value="SLA_BASIC">Basic Support (48h Response)</MenuItem>
+                                            <MenuItem value="SLA_BASIC">{t('common.sla_basic')}</MenuItem>
                                             <MenuItem value="SLA_STANDARD">Standard Enterprise (24h Response)</MenuItem>
                                             <MenuItem value="SLA_GOLD">Gold Premium (4h Response)</MenuItem>
                                             <MenuItem value="SLA_PLATINUM">Platinum Sovereign (2h Response)</MenuItem>

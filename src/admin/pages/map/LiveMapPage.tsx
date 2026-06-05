@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { jsPDF } from 'jspdf';
+import { registerArabicFont } from '../../../utils/arabicPdfFont';
 import {
   Box,
   Button,
@@ -85,6 +86,7 @@ function ticketLabel(ticket: any) {
 
 function generateGatePassPdf(ticket: any, tech: any) {
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+        registerArabicFont(pdf);
   const safeTechName = tech.name || tech.displayName || 'Technician';
   const filename = `BIN_GROUP_GatePass_${ticket.id}_${safeTechName}`.replace(/[^a-zA-Z0-9._-]/g, '_');
 

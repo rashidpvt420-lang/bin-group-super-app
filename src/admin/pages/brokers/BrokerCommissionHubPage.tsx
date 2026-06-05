@@ -1,5 +1,6 @@
 import { alpha } from '@mui/material/styles';
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 import { Container, Typography, Box, Paper, Grid, Stack, Button, Divider, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { Users, FileText, CheckCircle2, XCircle, Clock, DollarSign, ArrowUpRight, Search } from 'lucide-react';
 import { db, collection, query, getDocs, orderBy, limit, doc, updateDoc, serverTimestamp } from '@/lib/firebase';
@@ -133,7 +134,7 @@ export default function BrokerCommissionHubPage() {
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>BROKER</TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>REF / CONTRACT</TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>STATUS</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="right">AMOUNT (AED)</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="right">{t('common.amount_aed').toUpperCase()}</TableCell>
                                 <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="center">ACTIONS</TableCell>
                             </TableRow>
                         </TableHead>

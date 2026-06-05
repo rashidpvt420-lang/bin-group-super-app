@@ -204,7 +204,7 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
                   <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>CATEGORY</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PRIORITY</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>COST (AED)</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{t('common.cost_aed').toUpperCase()}</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>SLA</TableCell>
                 </TableRow>
               </TableHead>

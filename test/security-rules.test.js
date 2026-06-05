@@ -82,4 +82,55 @@ describe('Firestore Security Rules', () => {
     const techADb = testEnv.authenticatedContext('tech_a').firestore();
     await assertSucceeds(getDoc(doc(techADb, 'maintenanceTickets/ticket_2')));
   });
+
+  it('ticket update narrowing: Technician cannot reassign ticket to another technician', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_3'), {
+      assignedTechnicianId: 'tech_a',
+      status: 'ASSIGNED',
+      priority: 'NORMAL',
+      paymentVerified: false,
+    });
+
+    const techADb = testEnv.authenticatedContext('tech_a').firestore();
+    // Should FAIL: technician trying to self-reassign to a different technician
+    await assertFails(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
+      assignedTechnicianId: 'tech_evil',
+      updatedAt: new Date().toISOString(),
+    }));
+    // Should FAIL: technician trying to escalate their own priority
+    await assertFails(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
+      priority: 'URGENT',
+      updatedAt: new Date().toISOString(),
+    }));
+    // Should SUCCEED: technician updating only allowed status fields
+    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
+      status: 'IN_PROGRESS',
+      updatedAt: new Date().toISOString(),
+    }));
+  });
+
+  it('ticket update narrowing: Tenant cannot directly change ticket status', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_4'), {
+      tenantId: 'tenant_a',
+      status: 'OPEN',
+      priority: 'NORMAL',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    // Should FAIL: tenant trying to update status directly (not an allowed evidence field)
+    await assertFails(updateDoc(doc(tenantADb, 'maintenanceTickets/ticket_4'), {
+      status: 'CLOSED',
+      updatedAt: new Date().toISOString(),
+    }));
+    // Should SUCCEED: tenant uploading evidence photos (allowed by safeTenantEvidenceUpdate)
+    await assertSucceeds(updateDoc(doc(tenantADb, 'maintenanceTickets/ticket_4'), {
+      evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+      photos: ['https://storage.example.com/photo1.jpg'],
+      updatedAt: new Date().toISOString(),
+    }));
+  });
 });

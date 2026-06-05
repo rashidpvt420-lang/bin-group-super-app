@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { registerArabicFont } from '../utils/arabicPdfFont';
 import { 
     Box, Container, Typography, Grid, Paper, Stack, alpha, 
     CircularProgress, Divider, Card, CardContent, Button, Chip,
@@ -92,6 +93,7 @@ const ReportingDashboard: React.FC = () => {
     const exportToPdf = () => {
         if (!stats) return;
         const doc = new jsPDF();
+        registerArabicFont(doc);
         doc.setFillColor(11, 11, 12);
         doc.rect(0, 0, 210, 40, 'F');
         doc.setTextColor(198, 167, 94);

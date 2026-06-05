@@ -72,6 +72,7 @@ import {
   isSupported,
   type Messaging,
 } from 'firebase/messaging';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
@@ -89,14 +90,28 @@ const firebaseConfig = {
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// TEMPORARY PRODUCTION FIX:
-// Firebase App Check is disabled in the browser runtime until the reCAPTCHA/App Check
-// provider is verified for bin-groups.com. The previous runtime initialized App Check
-// when env flags drifted, which caused appCheck/recaptcha-error, broke Firebase Auth
-// token refresh, and made Google Maps fail with InvalidAppCheckTokenMapError.
+// Firebase App Check — enabled only when VITE_APP_CHECK_SITE_KEY and
+// VITE_ENABLE_FIREBASE_APPCHECK=true are set. Safe to run without them in dev.
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
-const appCheckExplicitlyEnabled = false;
-export const appCheck = null;
+const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+let appCheckInitialized = false;
+export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
+
+if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined') {
+  try {
+    // Enable debug token in non-production environments for local testing
+    if (import.meta.env.DEV) {
+      (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckInitialized = true;
+  } catch (appCheckError) {
+    console.warn('[Firebase] App Check initialization failed — continuing without enforcement:', appCheckError);
+  }
+}
 
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
@@ -117,7 +132,7 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
   appCheckExplicitlyEnabled,
-  appCheckInitialized: false,
+  appCheckInitialized,
   host: typeof window !== 'undefined' ? window.location.host : 'server',
 });
 

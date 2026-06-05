@@ -15,6 +15,7 @@ import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { registerArabicFont } from '../../utils/arabicPdfFont';
 import { binThemeTokens } from '../theme/adminTheme';
 import AdminPageFrame from '../components/AdminPageFrame';
 
@@ -89,6 +90,7 @@ export default function ProductionControlCenter() {
 
     const handleExport = () => {
         const doc = new jsPDF();
+        registerArabicFont(doc);
         doc.setFontSize(22);
         doc.text("BIN GROUP - MISSION CONTROL REPORT", 14, 22);
         doc.setFontSize(10);

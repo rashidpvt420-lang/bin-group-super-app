@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, CreditCard, Shield, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, db, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
+import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -188,6 +188,9 @@ export default function OwnerDashboardResolvedPage() {
   const [loadingExtras, setLoadingExtras] = useState(true);
   const [tenantCount, setTenantCount] = useState(0);
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
+  const [pendingPayments, setPendingPayments] = useState(0);
+  // Ref to hold real-time unsubscribe callbacks
+  const liveUnsubs = useRef<Array<() => void>>([]);
 
   useEffect(() => {
     let alive = true;
@@ -308,6 +311,64 @@ export default function OwnerDashboardResolvedPage() {
     load();
     return () => { alive = false; };
   }, [user?.uid, user?.email]);
+
+  // ── Real-time counters: open tickets + pending payments ──────────────────
+  // Fires after the owner resolution completes to layer live updates on top
+  // of the initial one-time load, without re-running the full resolver.
+  useEffect(() => {
+    // Clean up any previous listeners before attaching new ones
+    liveUnsubs.current.forEach((unsub) => unsub());
+    liveUnsubs.current = [];
+
+    const authUid = user?.uid;
+    if (!authUid || resolution.state !== 'active') return;
+
+    const isPermDenied = (err: any) =>
+      err?.code === 'permission-denied' || String(err?.message || '').includes('permission-denied');
+
+    // Live open-ticket count
+    try {
+      const ticketQuery = query(
+        collection(db, 'maintenanceTickets'),
+        where('ownerId', '==', authUid),
+        where('status', 'in', ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED'])
+      );
+      const unsubTickets = onSnapshot(
+        ticketQuery,
+        (snap) => { setTickets(snap.size); },
+        (err) => {
+          if (!isPermDenied(err)) console.warn('[OwnerDashboard] Live ticket count error:', err);
+        }
+      );
+      liveUnsubs.current.push(unsubTickets);
+    } catch (e) {
+      console.warn('[OwnerDashboard] Could not attach live ticket listener:', e);
+    }
+
+    // Live pending-payment count
+    try {
+      const payQuery = query(
+        collection(db, 'payment_transactions'),
+        where('ownerId', '==', authUid),
+        where('paymentVerified', '==', false)
+      );
+      const unsubPay = onSnapshot(
+        payQuery,
+        (snap) => { setPendingPayments(snap.size); },
+        (err) => {
+          if (!isPermDenied(err)) console.warn('[OwnerDashboard] Live payment count error:', err);
+        }
+      );
+      liveUnsubs.current.push(unsubPay);
+    } catch (e) {
+      console.warn('[OwnerDashboard] Could not attach live payment listener:', e);
+    }
+
+    return () => {
+      liveUnsubs.current.forEach((unsub) => unsub());
+      liveUnsubs.current = [];
+    };
+  }, [user?.uid, resolution.state]);
 
   const stats = useMemo(() => {
     const units = properties.reduce((sum, p) => sum + propertyUnits(p), 0);

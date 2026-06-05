@@ -11,6 +11,7 @@ import { useLanguage } from '@bin/shared';
 import { formatAED } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { registerArabicFont } from '../utils/arabicPdfFont';
 
 interface Props {
     propertyData: any;
@@ -50,6 +51,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
 
     const generateContractPDF = (artifact: any) => {
         const doc = new jsPDF();
+        registerArabicFont(doc);
         const contractInfo = getContractContent();
         
         doc.setFontSize(22);

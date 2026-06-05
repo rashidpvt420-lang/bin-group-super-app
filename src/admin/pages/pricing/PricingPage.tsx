@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 import {
     Container,
     Paper,
@@ -191,7 +192,7 @@ export default function PricingPage() {
                                     <TextField fullWidth label="Unit Size (Sq. Ft.)" type="number" value={calcData.sqft} onChange={e => setCalcData({ ...calcData, sqft: +e.target.value })} />
                                 </Grid>
                                 <Grid item xs={12}>
-                                    <TextField fullWidth label="Annual Rent (AED)" type="number" value={calcData.annualRent} onChange={e => setCalcData({ ...calcData, annualRent: +e.target.value })} />
+                                    <TextField fullWidth label={t('common.annual_rent_aed')} type="number" value={calcData.annualRent} onChange={e => setCalcData({ ...calcData, annualRent: +e.target.value })} />
                                 </Grid>
                                 <Grid item xs={6}>
                                     <TextField fullWidth label="Building Age (Years)" type="number" value={calcData.buildingAge} onChange={e => setCalcData({ ...calcData, buildingAge: +e.target.value })} />

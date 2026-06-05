@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import {
     Box, Typography, Paper, Grid, TextField, MenuItem,
     Button, Stack, CircularProgress, Alert, FormControl,
@@ -230,7 +231,7 @@ export default function OwnerComplaintPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth disabled={!units.length}>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Unit (Optional)</InputLabel>
+                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('common.unit_optional')}</InputLabel>
                                     <Select
                                         value={selectedUnitId}
                                         label="Unit (Optional)"
@@ -293,7 +294,7 @@ export default function OwnerComplaintPage() {
                                         sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
                                     >
                                         <MenuItem value="normal">Normal (Standard 24h)</MenuItem>
-                                        <MenuItem value="urgent">Urgent (Priority 4h)</MenuItem>
+                                        <MenuItem value="urgent">{t('common.urgent_priority')}</MenuItem>
                                         <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>EMERGENCY (Safety 1h)</MenuItem>
                                     </Select>
                                 </FormControl>
