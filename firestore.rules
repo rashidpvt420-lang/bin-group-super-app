@@ -104,6 +104,42 @@ service cloud.firestore {
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']);
     }
 
+    function safeTechnicianTicketUpdate() {
+      return signedIn() && techOwns(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt',
+          'technicianNotes',
+          'techNotes',
+          'workNotes',
+          'startedAt',
+          'completedAt',
+          'arrivedAt',
+          'beforePhotos',
+          'afterPhotos',
+          'proofPhotos',
+          'completionPhotos',
+          'evidenceStatus',
+          'resolutionSummary',
+          'materialsUsed'
+        ]) &&
+        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.assignedTechnicianId) &&
+        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.technicianId) &&
+        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.techId) &&
+        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.priority) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'COMPLETED', 'RESOLVED', 'assigned', 'in_progress', 'arrived', 'completed', 'resolved']);
+    }
+
+    function safeOpenMissionClaim() {
+      return openMissionPoolRead(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
+        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
+        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
+        (!('techId' in request.resource.data) || request.resource.data.techId == request.auth.uid) &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress']);
+    }
+
     function canAccessMaintenanceTicket(ticketId) {
       return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
     }
@@ -294,14 +330,14 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data);
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || tenantOwns(resource.data) || techOwns(resource.data) || (openMissionPoolRead(resource.data) && request.resource.data.assignedTechnicianId == request.auth.uid);
+      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
