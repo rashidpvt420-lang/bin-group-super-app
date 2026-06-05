@@ -21,8 +21,12 @@ service firebase.storage {
         request.auth.token.isAdmin == true ||
         request.auth.token.ceo == true ||
         request.auth.token.manager == true ||
-        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER'])
+        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'hr_manager', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER'])
       );
+    }
+
+    function isHrRole() {
+      return isAdmin() || hasAnyRole(['hr_admin', 'hr_manager', 'hr_staff', 'finance_admin', 'finance_staff', 'account_manager']);
     }
 
     function isAuditor() {
@@ -174,6 +178,18 @@ service firebase.storage {
     match /tenants/{tenantId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
       allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) && isDocumentUpload(15);
+    }
+
+    match /staffDocuments/{staffId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
+      allow write: if isAuth() && (request.auth.uid == staffId || isHrRole()) && isDocumentUpload(15);
+      allow delete: if isHrRole();
+    }
+
+    match /hrDocuments/{staffId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
+      allow write: if isHrRole() && isDocumentUpload(25);
+      allow delete: if isHrRole();
     }
 
     match /contracts/{contractId}/{allPaths=**} {
