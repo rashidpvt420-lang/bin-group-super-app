@@ -111,7 +111,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 </Toolbar>
             </AppBar>
 
-            <Container maxWidth="md" sx={{ py: { xs: 3.5, md: 6 }, position: 'relative', zIndex: 1 }}>
+            <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 6 }, px: { xs: 2, sm: 3, md: 5 }, position: 'relative', zIndex: 1 }}>
                 {!isDashboard && (
                     <Breadcrumbs
                         separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: shell.muted }} />}
@@ -135,7 +135,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         })}
                     </Breadcrumbs>
                 )}
-                <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>
+                <Box sx={{ animation: 'fadeIn 0.5s ease-out', maxWidth: isDashboard ? 1280 : 980, mx: 'auto' }}>
                     {children}
                 </Box>
             </Container>
