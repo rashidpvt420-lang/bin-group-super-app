@@ -20,13 +20,19 @@ function snapshotToRows(snap: QuerySnapshot<DocumentData>): SnapshotDoc[] {
  * Execute a Firestore query with a split `in` filter when values exceed the
  * Firestore 10-value limit. Results from concurrent listeners are merged and
  * deduplicated by document ID.
+ *
+ * Production dashboards must never let an optional listener become an uncaught
+ * Firestore console error. Live smoke tests intentionally fail on uncaught
+ * permission-denied errors, so listener degradation is routed through a warning
+ * and an optional caller error handler.
  */
 export function onSnapshotSplitIn(
     baseQuery: CollectionReference<DocumentData>,
     equalityFilter: EqualityFilter,
     inField: string,
     values: string[],
-    callback: (mergedDocs: SnapshotDoc[]) => void
+    callback: (mergedDocs: SnapshotDoc[]) => void,
+    onError?: (error: unknown) => void
 ): Unsubscribe {
     const uniqueValues = Array.from(new Set(values.filter(Boolean)));
     const chunks: string[][] = [];
@@ -42,6 +48,15 @@ export function onSnapshotSplitIn(
 
     const resultsMap = new Map<number, SnapshotDoc[]>();
 
+    const emitMergedRows = () => {
+        const uniqueDocsMap = new Map<string, SnapshotDoc>();
+        Array.from(resultsMap.values())
+            .flat()
+            .forEach((row) => uniqueDocsMap.set(row.id, row));
+
+        callback(Array.from(uniqueDocsMap.values()));
+    };
+
     const unsubscribers = chunks.map((chunk, index) => {
         const q = query(
             baseQuery,
@@ -49,16 +64,19 @@ export function onSnapshotSplitIn(
             where(inField, 'in', chunk)
         );
 
-        return onSnapshot(q, (snap: QuerySnapshot<DocumentData>) => {
-            resultsMap.set(index, snapshotToRows(snap));
-
-            const uniqueDocsMap = new Map<string, SnapshotDoc>();
-            Array.from(resultsMap.values())
-                .flat()
-                .forEach((row) => uniqueDocsMap.set(row.id, row));
-
-            callback(Array.from(uniqueDocsMap.values()));
-        });
+        return onSnapshot(
+            q,
+            (snap: QuerySnapshot<DocumentData>) => {
+                resultsMap.set(index, snapshotToRows(snap));
+                emitMergedRows();
+            },
+            (error) => {
+                resultsMap.set(index, []);
+                console.warn('[Firestore listener degraded]', error);
+                onError?.(error);
+                emitMergedRows();
+            }
+        );
     });
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
