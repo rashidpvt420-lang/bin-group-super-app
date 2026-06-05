@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { db, auth, doc, setDoc, getDoc, updateProfile, sendPasswordResetEmail, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { User, Phone, Mail, Wrench, Star, Clock, Save, KeyRound, MapPin } from 'lucide-react';
+import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -121,29 +122,31 @@ export default function TechnicianProfilePage() {
     const localizedStatus = lang === 'ar'
         ? status.toLowerCase() === 'active' ? 'نشط' : status.toLowerCase() === 'pending' ? 'قيد الانتظار' : status.toLowerCase() === 'suspended' ? 'موقوف' : status
         : status.toUpperCase();
+    const profilePhoto = pickProfilePhoto(techData, user);
+    const profileCover = pickProfileCover(techData, user);
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Technician Profile', 'ملف الفني')}</Typography>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-            <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+            <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-                    <Avatar sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000' }}>
+                    <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>
                         {displayName?.charAt(0) || <User size={40} />}
                     </Avatar>
                     <Box sx={{ textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' } }}>
                         <Typography variant="h5" fontWeight="900" color="#FFF">{displayName || label('Technician', 'الفني')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
                             <Mail size={16} /><Typography variant="body2">{techData?.email || user?.email}</Typography>
                         </Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
                             <Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography>
                         </Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}>
                             <Wrench size={16} /><Typography variant="body2">{trade || label('General Maintenance', 'صيانة عامة')}</Typography>
                         </Stack>
-                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'text.secondary' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
+                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
                     </Box>
                 </Stack>
 
@@ -154,7 +157,7 @@ export default function TechnicianProfilePage() {
                     <Grid item xs={6} md={3}><Typography variant="caption" color="textSecondary">{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={isAvailable ? label('AVAILABLE', 'متاح') : label('OFF DUTY', 'خارج الدوام')} color={isAvailable ? 'success' : 'default'} size="small" sx={{ fontWeight: 900 }} /></Box></Grid>
                 </Grid>
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', my: 4 }} />
+                <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', my: 4 }} />
 
                 <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{label('Edit Details', 'تعديل البيانات')}</Typography>
                 <Grid container spacing={3} sx={{ mb: 4 }}>
