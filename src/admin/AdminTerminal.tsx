@@ -76,25 +76,22 @@ function AdminLayout() {
     };
     
     return (
-        <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
+        <Box className="admin-shell" sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#FFFFFF', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.03} compact />
             <Navigation />
             <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                        {label('admin.shell.breadcrumb_admin', 'ADMIN / ', 'المسؤول / ')}<Box component="span" sx={{ color: '#DAA520' }}>{label('admin.shell.command_uae', 'COMMAND · UAE 🇦🇪', 'التحكم · الإمارات 🇦🇪')}</Box>
+                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1100, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Typography variant="overline" sx={{ color: '#667085', fontWeight: 900, letterSpacing: 2 }}>
+                        {label('admin.shell.breadcrumb_admin', 'ADMIN / ', 'المسؤول / ')}<Box component="span" sx={{ color: '#B8932F' }}>{label('admin.shell.command_uae', 'COMMAND · UAE 🇦🇪', 'التحكم · الإمارات 🇦🇪')}</Box>
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                        <LanguageSwitcher />
-                        <Button onClick={handleLogout} sx={{ color: '#ef4444', fontWeight: 900 }}>{label('nav.logout', 'LOGOUT', 'تسجيل الخروج')}</Button>
-                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexDirection: isRTL ? 'row-reverse' : 'row' }} />
                 </Box>
-                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: 'rgba(2, 6, 23, 0.88)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
+                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#F8F9FB', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
                         <Outlet />
                     </Box>
-                    <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)' }}>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+                    <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF' }}>
+                        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>
                             {label('admin.footer', '© 2026 BIN GROUP SOVEREIGN · COMMAND CENTER · MADE IN UAE 🇦🇪', '© 2026 بن جروب السيادي · مركز القيادة · صنع في الإمارات 🇦🇪')}
                         </Typography>
                     </Box>

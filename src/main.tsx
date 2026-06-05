@@ -6,6 +6,7 @@ import { setupSovereignAlertInterceptor } from './components/SovereignAlertHandl
 import './admin-mobile-hardening.css';
 import './styles/onboardingReadable.css';
 import './ess-white-platinum.css';
+import './styles/whitePlatinumAuthenticated.css';
 
 setupSovereignAlertInterceptor();
 

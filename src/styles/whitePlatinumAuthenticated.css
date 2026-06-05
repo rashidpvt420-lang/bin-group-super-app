@@ -1,0 +1,96 @@
+.authenticated-shell,
+.admin-shell,
+.technician-shell,
+.owner-shell,
+.tenant-shell,
+.broker-shell {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiPaper-root,
+.admin-shell .MuiPaper-root,
+.technician-shell .MuiPaper-root {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 14px 34px rgba(17,24,39,.08) !important;
+}
+
+.authenticated-shell .MuiTypography-root,
+.admin-shell .MuiTypography-root,
+.technician-shell .MuiTypography-root {
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiTypography-body1,
+.authenticated-shell .MuiTypography-body2,
+.admin-shell .MuiTypography-body1,
+.admin-shell .MuiTypography-body2,
+.technician-shell .MuiTypography-body1,
+.technician-shell .MuiTypography-body2 {
+  color: #667085 !important;
+}
+
+.authenticated-shell input,
+.admin-shell input,
+.technician-shell input,
+.authenticated-shell textarea,
+.admin-shell textarea,
+.technician-shell textarea {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+/* Global Portal (Dialog, Menu, Popover) Overrides for White & Platinum */
+body .MuiDialog-paper,
+body .MuiMenu-paper,
+body .MuiPopover-paper,
+body .MuiAutocomplete-paper {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 14px 34px rgba(17,24,39,.08) !important;
+}
+
+body .MuiDialog-root .MuiTypography-root,
+body .MuiMenu-root .MuiTypography-root,
+body .MuiPopover-root .MuiTypography-root,
+body .MuiAutocomplete-root .MuiTypography-root {
+  color: #111827 !important;
+}
+
+body .MuiDialog-root .MuiTypography-body1,
+body .MuiDialog-root .MuiTypography-body2,
+body .MuiMenu-root .MuiTypography-body1,
+body .MuiMenu-root .MuiTypography-body2,
+body .MuiPopover-root .MuiTypography-body1,
+body .MuiPopover-root .MuiTypography-body2 {
+  color: #667085 !important;
+}
+
+body .MuiDialog-root input,
+body .MuiDialog-root textarea,
+body .MuiMenu-root input,
+body .MuiPopover-root input,
+body .MuiAutocomplete-root input {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+body .MuiDialog-root .MuiListItemText-primary,
+body .MuiMenu-root .MuiListItemText-primary,
+body .MuiPopover-root .MuiListItemText-primary {
+  color: #111827 !important;
+}
+
+body .MuiDialog-root .MuiListItemText-secondary,
+body .MuiMenu-root .MuiListItemText-secondary,
+body .MuiPopover-root .MuiListItemText-secondary {
+  color: #667085 !important;
+}
+
+/* Alert inside Dialog */
+body .MuiDialog-root .MuiAlert-message .MuiTypography-root {
+  color: inherit !important;
+}

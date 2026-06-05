@@ -238,18 +238,19 @@ export default function DashboardPage() {
             onClick={() => kpi.path && navigate(kpi.path)}
             sx={{
                 p: 2,
-                bgcolor: 'rgba(15,23,42,0.72)',
-                border: `1px solid ${alpha(kpi.color, 0.22)}`,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #E5E7EB',
                 borderRadius: 4,
                 cursor: kpi.path ? 'pointer' : 'default',
                 minHeight: 128,
                 transition: 'all 0.2s ease',
-                '&:hover': kpi.path ? { transform: 'translateY(-2px)', borderColor: kpi.color, bgcolor: alpha(kpi.color, 0.06) } : {}
+                boxShadow: '0 4px 12px rgba(17,24,39,0.03)',
+                '&:hover': kpi.path ? { transform: 'translateY(-2px)', borderColor: kpi.color, boxShadow: '0 10px 20px rgba(17,24,39,0.06)' } : {}
             }}
         >
             <Box sx={{ color: kpi.color, mb: 1 }}>{kpi.icon}</Box>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, textTransform: 'uppercase' }}>{kpi.label}</Typography>
-            <Typography variant="h5" sx={{ mt: 0.5, color: '#fff', fontWeight: 950 }}>{kpi.value}</Typography>
+            <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900, textTransform: 'uppercase' }}>{kpi.label}</Typography>
+            <Typography variant="h5" sx={{ mt: 0.5, color: '#111827', fontWeight: 950 }}>{kpi.value}</Typography>
         </Paper>
     );
 
@@ -258,41 +259,41 @@ export default function DashboardPage() {
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell>OWNER</TableCell>
-                        <TableCell>PROPERTY</TableCell>
-                        <TableCell>PAYMENT</TableCell>
-                        <TableCell>STATE</TableCell>
-                        <TableCell align="right">ACTION</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>OWNER</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>PROPERTY</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>PAYMENT</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>STATE</TableCell>
+                        <TableCell align="right" sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>ACTION</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {items.map((owner) => (
                         <TableRow key={owner.id} hover>
-                            <TableCell>
-                                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{owner.ownerName}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{owner.ownerEmail || owner.ownerMobile || owner.id}</Typography>
-                                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.32)' }}>{safeDate(owner.submittedAt)}</Typography>
+                            <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="body2" sx={{ color: '#111827', fontWeight: 900 }}>{owner.ownerName}</Typography>
+                                <Typography variant="caption" sx={{ color: '#667085' }}>{owner.ownerEmail || owner.ownerMobile || owner.id}</Typography>
+                                <Typography variant="caption" sx={{ display: 'block', color: '#98A2B3' }}>{safeDate(owner.submittedAt)}</Typography>
                             </TableCell>
-                            <TableCell>
-                                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 800 }}>{owner.firstProperty}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', display: 'flex', alignItems: 'center', gap: 0.5 }}><MapPin size={12} /> {owner.gpsLabel}</Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{owner.propertyCount} asset(s) • {owner.planName}</Typography>
+                            <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="body2" sx={{ color: '#111827', fontWeight: 800 }}>{owner.firstProperty}</Typography>
+                                <Typography variant="caption" sx={{ color: '#667085', display: 'flex', alignItems: 'center', gap: 0.5 }}><MapPin size={12} /> {owner.gpsLabel}</Typography>
+                                <Typography variant="caption" sx={{ color: '#B8932F' }}>{owner.propertyCount} asset(s) • {owner.planName}</Typography>
                             </TableCell>
-                            <TableCell>
-                                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 800 }}>{owner.paymentMethod}</Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{money(owner.mobilizationAmount)}</Typography>
+                            <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="body2" sx={{ color: '#111827', fontWeight: 800 }}>{owner.paymentMethod}</Typography>
+                                <Typography variant="caption" sx={{ color: '#B8932F' }}>{money(owner.mobilizationAmount)}</Typography>
                             </TableCell>
-                            <TableCell>
-                                <Chip label={owner.adminReviewState || owner.paymentStatus || owner.status} size="small" sx={{ fontSize: '0.6rem', fontWeight: 900, color: binThemeTokens.gold, borderColor: binThemeTokens.gold }} variant="outlined" />
+                            <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                                <Chip label={owner.adminReviewState || owner.paymentStatus || owner.status} size="small" sx={{ fontSize: '0.6rem', fontWeight: 900, color: '#B8932F', borderColor: '#B8932F', bgcolor: '#FFF9E8' }} variant="outlined" />
                             </TableCell>
-                            <TableCell align="right">
-                                <IconButton onClick={() => navigate('/admin/vault')}><Eye size={18} color={binThemeTokens.gold} /></IconButton>
+                            <TableCell align="right" sx={{ borderBottom: '1px solid #E5E7EB' }}>
+                                <IconButton onClick={() => navigate('/admin/vault')}><Eye size={18} color="#B8932F" /></IconButton>
                             </TableCell>
                         </TableRow>
                     ))}
                     {!items.length && !loading && (
                         <TableRow>
-                            <TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.28)', fontWeight: 900 }}>
+                            <TableCell colSpan={5} align="center" sx={{ py: 6, color: '#98A2B3', fontWeight: 900 }}>
                                 {empty}
                             </TableCell>
                         </TableRow>
@@ -311,7 +312,7 @@ export default function DashboardPage() {
         >
             <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Box sx={{ mb: 6 }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block', letterSpacing: 2 }}>
+                    <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 900, mb: 2, display: 'block', letterSpacing: 2 }}>
                         OPERATIONS COMMAND CENTER
                     </Typography>
                     <Grid container spacing={2}>
@@ -328,12 +329,13 @@ export default function DashboardPage() {
                                         flexDirection: 'column',
                                         gap: 1.5,
                                         py: 3,
-                                        bgcolor: 'rgba(255,255,255,0.02)',
-                                        borderColor: 'rgba(255,255,255,0.06)',
-                                        color: 'rgba(255,255,255,0.72)',
+                                        bgcolor: '#FFFFFF',
+                                        borderColor: '#E5E7EB',
+                                        color: '#111827',
                                         borderRadius: 4,
+                                        boxShadow: '0 4px 12px rgba(17,24,39,0.02)',
                                         '& .MuiButton-startIcon': { m: 0, color: btn.color },
-                                        '&:hover': { bgcolor: alpha(btn.color, 0.06), borderColor: alpha(btn.color, 0.35), color: '#FFF', transform: 'translateY(-2px)' },
+                                        '&:hover': { bgcolor: alpha(btn.color, 0.05), borderColor: alpha(btn.color, 0.35), color: '#111827', transform: 'translateY(-2px)', boxShadow: '0 8px 18px rgba(17,24,39,0.05)' },
                                         fontSize: '0.65rem',
                                         fontWeight: 950,
                                         textAlign: 'center',
@@ -349,35 +351,35 @@ export default function DashboardPage() {
 
                 {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
 
-                <Paper sx={{ mb: 4, p: 3, borderRadius: 5, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}` }}>
+                <Paper sx={{ mb: 4, p: 3, borderRadius: 5, bgcolor: '#FFF9E8', border: '1px solid rgba(184,147,47,0.22)' }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
                         <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>OWNER PIPELINE LIVE</Typography>
-                            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>
+                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2 }}>OWNER PIPELINE LIVE</Typography>
+                            <Typography variant="h5" sx={{ color: '#111827', fontWeight: 950, mt: 0.5 }}>
                                 {pendingOwners.length} pending • {approvedOwners.length} approved/signature • {rejectedOwners.length} rejected/clarification
                             </Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 0.5 }}>
+                            <Typography variant="body2" sx={{ color: '#667085', mt: 0.5 }}>
                                 Pending, approved and rejected owner submissions stay visible in separate pipeline views. Approved owners are traceable from Owner Registry, Property Passport and Contracts.
                             </Typography>
                         </Box>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                            <Button variant="contained" onClick={() => navigate('/admin/vault')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4 }}>
+                            <Button variant="contained" onClick={() => navigate('/admin/vault')} sx={{ bgcolor: '#B8932F', color: '#FFFFFF', '&:hover': { bgcolor: '#A08027' }, fontWeight: 950, px: 4 }}>
                                 OPEN VERIFICATION INBOX
                             </Button>
-                            <Button variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, px: 4 }}>
+                            <Button variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#B8932F', color: '#B8932F', '&:hover': { borderColor: '#A08027', color: '#A08027' }, fontWeight: 950, px: 4 }}>
                                 OWNER REGISTRY
                             </Button>
                         </Stack>
                     </Stack>
                 </Paper>
 
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>
+                <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 900, mb: 2, display: 'block' }}>
                     PORTFOLIO KPIs
                 </Typography>
                 <Grid container spacing={2} sx={{ mb: 5 }}>
                     {loading && !ownerSubmissions.length ? Array.from({ length: 10 }).map((_, index) => (
                         <Grid item xs={12} sm={6} md={3} lg={2.4} key={index}>
-                            <Paper sx={{ p: 2, bgcolor: 'rgba(15,23,42,0.72)', borderRadius: 4, minHeight: 128 }}>
+                            <Paper sx={{ p: 2, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 4, minHeight: 128 }}>
                                 <Skeleton variant="circular" width={24} height={24} sx={{ mb: 1 }} />
                                 <Skeleton variant="text" width="70%" />
                                 <Skeleton variant="text" width="45%" height={36} />
@@ -390,41 +392,41 @@ export default function DashboardPage() {
 
                 <Grid container spacing={4}>
                     <Grid item xs={12} lg={8}>
-                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.06)', mb: 4 }}>
-                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                    <Shield color={binThemeTokens.gold} /> PENDING OWNER VERIFICATION
+                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
+                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
+                                    <Shield color="#B8932F" /> PENDING OWNER VERIFICATION
                                 </Typography>
-                                <Chip label={`${pendingOwners.length} AWAITING`} sx={{ fontWeight: 950, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }} />
+                                <Chip label={`${pendingOwners.length} AWAITING`} sx={{ fontWeight: 950, bgcolor: '#FFF9E8', color: '#8A6A10' }} />
                             </Box>
                             {renderSubmissionRows(pendingOwners, 'No pending owner submissions. Approved/rejected records are shown below and in Owner Registry.')}
                         </Paper>
 
-                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15,23,42,0.5)', border: '1px solid rgba(16,185,129,0.18)', mb: 4 }}>
-                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
+                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
                                     <UserCheck color="#10b981" /> APPROVED / AWAITING SIGNATURE
                                 </Typography>
-                                <Chip label={`${approvedOwners.length} APPROVED`} sx={{ fontWeight: 950, bgcolor: alpha('#10b981', 0.12), color: '#10b981' }} />
+                                <Chip label={`${approvedOwners.length} APPROVED`} sx={{ fontWeight: 950, bgcolor: 'rgba(16,185,129,0.08)', color: '#10b981' }} />
                             </Box>
                             {renderSubmissionRows(approvedOwners, 'No approved owner records currently visible.')}
                         </Paper>
 
-                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15,23,42,0.5)', border: '1px solid rgba(239,68,68,0.18)' }}>
-                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB' }}>
+                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
                                     <XCircle color="#ef4444" /> REJECTED / CLARIFICATION
                                 </Typography>
-                                <Chip label={`${rejectedOwners.length} REJECTED`} sx={{ fontWeight: 950, bgcolor: alpha('#ef4444', 0.12), color: '#ef4444' }} />
+                                <Chip label={`${rejectedOwners.length} REJECTED`} sx={{ fontWeight: 950, bgcolor: 'rgba(239,68,68,0.08)', color: '#ef4444' }} />
                             </Box>
                             {renderSubmissionRows(rejectedOwners, 'No rejected or clarification records currently visible.')}
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={4}>
-                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.06)', mb: 4 }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <Activity color={binThemeTokens.gold} /> ADMIN ACTION FLOW
+                        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
+                                <Activity color="#B8932F" /> ADMIN ACTION FLOW
                             </Typography>
                             <Stack spacing={2}>
                                 {[
@@ -435,26 +437,26 @@ export default function DashboardPage() {
                                     'Track approved owner in Owner Registry + Property Passport'
                                 ].map((step, index) => (
                                     <Box key={step} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                        <Chip label={index + 1} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} />
-                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{step}</Typography>
+                                        <Chip label={index + 1} size="small" sx={{ bgcolor: '#FFF9E8', color: '#8A6A10', fontWeight: 950 }} />
+                                        <Typography variant="body2" sx={{ color: '#667085', fontWeight: 800 }}>{step}</Typography>
                                     </Box>
                                 ))}
                             </Stack>
                             <Stack spacing={1.5} sx={{ mt: 4 }}>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/vault')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>REVIEW VERIFICATION INBOX</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>OPEN OWNER REGISTRY</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/properties/passport')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>OPEN PROPERTY PASSPORTS</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/contracts')} sx={{ borderColor: '#8b5cf6', color: '#8b5cf6', fontWeight: 950 }}>OPEN CONTRACTS</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/vault')} sx={{ borderColor: '#B8932F', color: '#B8932F', '&:hover': { borderColor: '#A08027', color: '#A08027' }, fontWeight: 950 }}>REVIEW VERIFICATION INBOX</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#10b981', color: '#10b981', '&:hover': { borderColor: '#059669', color: '#059669' }, fontWeight: 950 }}>OPEN OWNER REGISTRY</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/properties/passport')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', '&:hover': { borderColor: '#2563eb', color: '#2563eb' }, fontWeight: 950 }}>OPEN PROPERTY PASSPORTS</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/contracts')} sx={{ borderColor: '#8b5cf6', color: '#8b5cf6', '&:hover': { borderColor: '#7c3aed', color: '#7c3aed' }, fontWeight: 950 }}>OPEN CONTRACTS</Button>
                             </Stack>
                         </Paper>
                     </Grid>
                 </Grid>
 
-                <Paper sx={{ p: 4, mt: 8, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 8 }}>
+                <Paper sx={{ p: 4, mt: 8, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 8 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center">
                         <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>COMMAND SUPPORT TERMINAL</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 700, mt: 1, fontWeight: 700, lineHeight: 1.6 }}>
+                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 4 }}>COMMAND SUPPORT TERMINAL</Typography>
+                            <Typography variant="body2" sx={{ color: '#667085', mt: 1, fontWeight: 700, lineHeight: 1.6 }}>
                                 Dashboard is now split into pending, approved, and rejected lanes so approved owners do not disappear. Use the quick links to inspect owner, passport, contract and payment records.
                             </Typography>
                         </Box>

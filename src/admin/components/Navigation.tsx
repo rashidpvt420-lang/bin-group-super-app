@@ -61,30 +61,30 @@ const Navigation = () => {
                 '& .MuiDrawer-paper': { 
                     width: drawerWidth, 
                     boxSizing: 'border-box',
-                    bgcolor: '#020617',
-                    borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
-                    borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
+                    bgcolor: '#FFFFFF',
+                    borderRight: isRTL ? 'none' : '1px solid #E5E7EB',
+                    borderLeft: isRTL ? '1px solid #E5E7EB' : 'none',
                     overflowX: 'hidden',
                     transition: 'width 0.22s',
                 },
             }}
         >
             <Box sx={{ p: compact ? 2 : 4, textAlign: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.gold, letterSpacing: compact ? 0 : 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#B8932F', letterSpacing: compact ? 0 : 2 }}>
                     {compact ? 'BG' : label('brand.bin_group', 'BIN GROUP', 'بن جروب')}
                 </Typography>
                 {!compact && (
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', letterSpacing: 4, fontWeight: 900 }}>
+                    <Typography variant="caption" sx={{ color: '#667085', letterSpacing: 4, fontWeight: 900 }}>
                         {label('admin.shell.sovereign_admin', 'SOVEREIGN ADMIN', 'المسؤول السيادي')}
                     </Typography>
                 )}
             </Box>
             
-            <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
+            <Divider sx={{ borderColor: '#E5E7EB' }} />
             
             <List sx={{ px: compact ? 1 : 2, pt: 2 }}>
                 {!compact && (
-                    <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                    <Typography variant="overline" sx={{ px: 2, color: '#667085', fontWeight: 950, letterSpacing: 1 }}>
                         {label('admin.shell.command_core', 'COMMAND CORE', 'نواة القيادة')}
                     </Typography>
                 )}
@@ -97,19 +97,20 @@ const Navigation = () => {
                             borderRadius: 2, mb: 0.5,
                             justifyContent: compact ? 'center' : 'flex-start',
                             px: compact ? 1.5 : 2,
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold }, '& .MuiListItemIcon-root': { color: binThemeTokens.gold } }
+                            color: '#111827',
+                            '&.active': { bgcolor: alpha('#B8932F', 0.1), '& .MuiTypography-root': { color: '#B8932F' }, '& .MuiListItemIcon-root': { color: '#B8932F' } }
                         }}
                         title={compact ? item.text : undefined}
                     >
-                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
-                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }} />}
+                        <ListItemIcon sx={{ color: '#667085', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
+                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left', color: 'inherit' }} />}
                     </ListItem>
                 ))}
             </List>
 
             <List sx={{ px: compact ? 1 : 2, mt: 2 }}>
                 {!compact && (
-                    <Typography variant="overline" sx={{ px: 2, color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>
+                    <Typography variant="overline" sx={{ px: 2, color: '#667085', fontWeight: 950, letterSpacing: 1 }}>
                         {label('admin.shell.operations', 'OPERATIONS', 'العمليات')}
                     </Typography>
                 )}
@@ -122,12 +123,13 @@ const Navigation = () => {
                             borderRadius: 2, mb: 0.5,
                             justifyContent: compact ? 'center' : 'flex-start',
                             px: compact ? 1.5 : 2,
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold }, '& .MuiListItemIcon-root': { color: binThemeTokens.gold } }
+                            color: '#111827',
+                            '&.active': { bgcolor: alpha('#B8932F', 0.1), '& .MuiTypography-root': { color: '#B8932F' }, '& .MuiListItemIcon-root': { color: '#B8932F' } }
                         }}
                         title={compact ? item.text : undefined}
                     >
-                        <ListItemIcon sx={{ color: item.color || 'rgba(255,255,255,0.4)', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
-                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left' }} />}
+                        <ListItemIcon sx={{ color: '#667085', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
+                        {!compact && <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.8rem', textAlign: isRTL ? 'right' : 'left', color: 'inherit' }} />}
                     </ListItem>
                 ))}
             </List>
