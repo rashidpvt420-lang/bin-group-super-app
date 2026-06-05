@@ -18,6 +18,7 @@ interface AddTenantDialogProps {
 }
 
 export default function AddTenantDialog({ open, onClose, properties, units, onSuccess }: AddTenantDialogProps) {
+    const { t } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     

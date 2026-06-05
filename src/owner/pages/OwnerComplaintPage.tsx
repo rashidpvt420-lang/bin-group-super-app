@@ -29,6 +29,7 @@ const CATEGORIES = [
 ];
 
 export default function OwnerComplaintPage() {
+    const { t } = useLanguage();
     const { user } = useRole();
     const navigate = useNavigate();
 

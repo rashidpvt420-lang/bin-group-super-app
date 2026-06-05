@@ -27,6 +27,7 @@ const PROPERTY_TYPES = [
 const STEPS = ['Property Details', 'Owner Information', 'Contract & Pricing', 'Units & Access', 'Review & Send'];
 
 export default function AddPropertyPage() {
+    const { t } = useLanguage();
     const { user } = useRole();
     const navigate = useNavigate();
     const [step, setStep] = useState(0);

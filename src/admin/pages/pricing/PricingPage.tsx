@@ -40,6 +40,7 @@ interface PricingResult {
 }
 
 export default function PricingPage() {
+    const { t } = useLanguage();
     const [tabValue, setTabValue] = useState(0);
     const [calcData, setCalcData] = useState({
         sqft: 1200,

@@ -14,6 +14,7 @@ import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 
 export default function InvoiceDetailsPage() {
+    const { t } = useLanguage();
     const { id } = useParams();
     const { user } = useRole();
     const [invoice, setInvoice] = useState<any>(null);

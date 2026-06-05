@@ -7,6 +7,7 @@ import { db, collection, query, getDocs, orderBy, limit, doc, updateDoc, serverT
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function BrokerCommissionHubPage() {
+    const { t } = useLanguage();
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState<string | null>(null);
