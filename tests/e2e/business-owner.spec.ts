@@ -8,7 +8,7 @@ import { test, expect, Page } from '@playwright/test';
 async function clickFirstVisible(page: Page, selectors: string[], timeout = 15000) {
   for (const selector of selectors) {
     const target = page.locator(selector).first();
-    if (await target.isVisible({ timeout: 1500 }).catch(() => false)) {
+    if (await target.isVisible({ timeout: 2500 }).catch(() => false)) {
       await expect(target).toBeEnabled({ timeout });
       await target.click();
       return;
@@ -18,9 +18,12 @@ async function clickFirstVisible(page: Page, selectors: string[], timeout = 1500
 }
 
 async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: string[], value: string) {
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => undefined);
+  await page.waitForSelector('input, textarea, [contenteditable="true"]', { timeout: 45_000 });
+
   for (const label of labels) {
     const target = page.getByLabel(label).first();
-    if (await target.isVisible({ timeout: 1000 }).catch(() => false)) {
+    if (await target.isVisible({ timeout: 2500 }).catch(() => false)) {
       await target.fill(value);
       return;
     }
@@ -28,13 +31,27 @@ async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: st
 
   for (const selector of selectors) {
     const target = page.locator(selector).first();
-    if (await target.isVisible({ timeout: 1000 }).catch(() => false)) {
+    if (await target.isVisible({ timeout: 2500 }).catch(() => false)) {
       await target.fill(value);
       return;
     }
   }
 
-  throw new Error(`Unable to fill ${value}; labels=${labels.map(String).join(', ')} selectors=${selectors.join(', ')}`);
+  const diagnostics = await page.evaluate(() => ({
+    href: window.location.href,
+    title: document.title,
+    bodyPreview: document.body?.innerText?.slice(0, 700),
+    inputs: Array.from(document.querySelectorAll('input, textarea')).map((input: any) => ({
+      type: input.type,
+      name: input.name,
+      id: input.id,
+      placeholder: input.placeholder,
+      ariaLabel: input.getAttribute('aria-label'),
+      visible: !!(input.offsetWidth || input.offsetHeight || input.getClientRects().length),
+    })),
+  }));
+
+  throw new Error(`Unable to fill ${value}; labels=${labels.map(String).join(', ')} selectors=${selectors.join(', ')} diagnostics=${JSON.stringify(diagnostics)}`);
 }
 
 test.describe('Owner Business Workflow', () => {
@@ -82,28 +99,29 @@ test.describe('Owner Business Workflow', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/.*onboarding.*/);
     await expect(page.locator('body')).not.toContainText(/SOVEREIGN CONNECTION TIMEOUT|permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+    await page.waitForSelector('input, textarea', { timeout: 45_000 });
 
-    await fillByLabelOrSelector(page, [/Company \/ Owner name/i, /Owner name/i, /Company/i], ['input[type="text"] >> nth=0'], 'E2E Owner Corp');
-    await fillByLabelOrSelector(page, [/Trade license/i, /Emirates ID/i], ['input[type="text"] >> nth=1'], 'TL-E2E-100');
-    await fillByLabelOrSelector(page, [/Contact name/i], ['input[type="text"] >> nth=2'], 'E2E Contact');
-    await fillByLabelOrSelector(page, [/Contact phone/i, /Phone/i], ['input[type="text"] >> nth=3'], '+971501112224');
-    await fillByLabelOrSelector(page, [/Contact email/i, /Email/i], ['input[type="email"]', 'input[type="text"] >> nth=4'], email);
+    await fillByLabelOrSelector(page, [/Company \/ Owner name/i, /Owner name/i, /Company/i], ['input[type="text"] >> nth=0', 'input >> nth=0'], 'E2E Owner Corp');
+    await fillByLabelOrSelector(page, [/Trade license/i, /Emirates ID/i], ['input[type="text"] >> nth=1', 'input >> nth=1'], 'TL-E2E-100');
+    await fillByLabelOrSelector(page, [/Contact name/i], ['input[type="text"] >> nth=2', 'input >> nth=2'], 'E2E Contact');
+    await fillByLabelOrSelector(page, [/Contact phone/i, /Phone/i], ['input[type="text"] >> nth=3', 'input[type="tel"]', 'input >> nth=3'], '+971501112224');
+    await fillByLabelOrSelector(page, [/Contact email/i, /Email/i], ['input[type="email"]', 'input[type="text"] >> nth=4', 'input >> nth=4'], email);
 
     await clickFirstVisible(page, ['button:has-text("Continue to Asset Profile")', 'button:has-text("Continue")']);
     await expect(page.locator('body')).toContainText(/Asset Profile|Asset type/i, { timeout: 15000 });
 
     await clickFirstVisible(page, ['text=Villa', 'text=/Villa/i']);
-    await fillByLabelOrSelector(page, [/Units/i, /Wudu areas/i], ['input[type="number"] >> nth=0'], '1');
-    await fillByLabelOrSelector(page, [/Floors/i], ['input[type="number"] >> nth=1'], '2');
-    await fillByLabelOrSelector(page, [/Sq Ft/i, /sqft/i], ['input[type="number"] >> nth=2'], '3500');
-    await fillByLabelOrSelector(page, [/Age/i], ['input[type="number"] >> nth=3'], '2');
+    await fillByLabelOrSelector(page, [/Units/i, /Wudu areas/i], ['input[type="number"] >> nth=0', 'input >> nth=0'], '1');
+    await fillByLabelOrSelector(page, [/Floors/i], ['input[type="number"] >> nth=1', 'input >> nth=1'], '2');
+    await fillByLabelOrSelector(page, [/Sq Ft/i, /sqft/i], ['input[type="number"] >> nth=2', 'input >> nth=2'], '3500');
+    await fillByLabelOrSelector(page, [/Age/i], ['input[type="number"] >> nth=3', 'input >> nth=3'], '2');
 
     await clickFirstVisible(page, ['button:has-text("Continue")']);
     await expect(page.locator('body')).toContainText(/Property Location|Property Address/i, { timeout: 15000 });
 
-    await fillByLabelOrSelector(page, [/Address/i, /Property Address/i], ['[data-testid="property-address-input"]', 'input[name="address"]'], 'E2E Villa 45, Marina, Dubai');
-    await fillByLabelOrSelector(page, [/Latitude/i], ['[data-testid="property-latitude-input"]', 'input[name="latitude"]'], '25.2048');
-    await fillByLabelOrSelector(page, [/Longitude/i], ['[data-testid="property-longitude-input"]', 'input[name="longitude"]'], '55.2708');
+    await fillByLabelOrSelector(page, [/Address/i, /Property Address/i], ['[data-testid="property-address-input"]', 'input[name="address"]', 'input >> nth=0'], 'E2E Villa 45, Marina, Dubai');
+    await fillByLabelOrSelector(page, [/Latitude/i], ['[data-testid="property-latitude-input"]', 'input[name="latitude"]', 'input >> nth=1'], '25.2048');
+    await fillByLabelOrSelector(page, [/Longitude/i], ['[data-testid="property-longitude-input"]', 'input[name="longitude"]', 'input >> nth=2'], '55.2708');
     await clickFirstVisible(page, ['button:has-text("Save Coordinates")', 'button:has-text("Continue")']);
     if (await page.locator('text=Property Location').isVisible({ timeout: 1000 }).catch(() => false)) {
       await clickFirstVisible(page, ['button:has-text("Continue")']);
