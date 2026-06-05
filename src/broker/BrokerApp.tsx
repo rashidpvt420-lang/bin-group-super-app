@@ -52,19 +52,19 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#fff', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
       <BrandWatermark opacity={0.035} compact />
-      <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(2,6,23,0.86)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.07)', zIndex: 1200 }}>
+      <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-            <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: binThemeTokens.gold, borderRadius: 2, color: '#000', cursor: 'pointer', display: 'flex' }}>
+            <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#B8932F', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
               <Briefcase size={20} />
             </Box>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-              <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>
+              <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>
                 {label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900 }}>
+              <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>
                 {label('broker.portal.subtitle', 'PARTNER PORTAL · MADE IN UAE 🇦🇪', 'بوابة الشركاء · صنع في الإمارات 🇦🇪')}
               </Typography>
             </Box>
@@ -73,25 +73,17 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
             <IconButton
               onClick={() => navigate('/broker/referrals')}
-              sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.08) }}
+              sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }}
               title={label('nav.ai_studio', 'AI Studio requests are available after an owner or tenant contract is linked', 'طلبات الاستوديو متاحة بعد ربط عقد مالك أو مستأجر')}
             >
               <Paintbrush size={18} />
             </IconButton>
-            <IconButton id="broker-lang-toggle" onClick={toggleLanguage} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 3, px: 1.5 }}>
-              <Globe size={18} />
-              <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950 }}>{lang === 'en' ? 'AR' : 'EN'}</Typography>
-            </IconButton>
             <NotificationBell />
             <Box onClick={() => navigate('/broker/profile')} sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1 }}>
-              <Avatar sx={{ width: 36, height: 36, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
+              <Avatar sx={{ width: 36, height: 36, bgcolor: alpha('#B8932F', 0.12), color: '#B8932F', border: '1px solid rgba(184,147,47,0.3)' }}>
                 {user?.displayName?.charAt(0) || 'B'}
               </Avatar>
             </Box>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.1)', mx: 1 }} />
-            <Button onClick={handleLogout} startIcon={<ArrowLeft size={16} />} sx={{ color: '#ef4444', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>
-              {label('nav.logout', 'Logout', 'تسجيل الخروج')}
-            </Button>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -101,7 +93,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
-              <Button id={`broker-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} startIcon={item.icon} sx={{ color: active ? '#000' : 'rgba(255,255,255,0.62)', bgcolor: active ? binThemeTokens.gold : 'rgba(255,255,255,0.03)', fontWeight: 950, borderRadius: 3, px: 2.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>
+              <Button id={`broker-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} startIcon={item.icon} sx={{ color: active ? '#FFFFFF' : '#667085', bgcolor: active ? '#B8932F' : '#F3F4F6', fontWeight: 950, borderRadius: 3, px: 2.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 }, '&:hover': { bgcolor: active ? '#A08027' : '#E5E7EB' } }}>
                 {item.label}
               </Button>
             );
@@ -110,17 +102,17 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         {children}
       </Container>
 
-      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
+      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
+        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>
           {label('broker.footer', '© 2026 BIN GROUP SOVEREIGN · BROKER TERMINAL · MADE IN UAE 🇦🇪', '© 2026 BIN GROUP SOVEREIGN · محطة الوسطاء · صنع في الإمارات 🇦🇪')}
         </Typography>
       </Box>
 
-      <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'rgba(2,6,23,0.94)', borderTop: '1px solid rgba(255,255,255,0.08)', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
         {menuItems.map((item) => {
           const active = location.pathname.startsWith(item.path);
           return (
-            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? binThemeTokens.gold : 'rgba(255,255,255,0.45)', flexDirection: 'column', gap: 0.4 }}>
+            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? '#B8932F' : '#667085', flexDirection: 'column', gap: 0.4 }}>
               {item.icon}
               <Typography variant="caption" sx={{ fontSize: '0.58rem', fontWeight: 900 }}>{item.label}</Typography>
             </IconButton>

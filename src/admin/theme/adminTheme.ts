@@ -62,7 +62,7 @@ export const adminTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: 14,
           textTransform: 'none',
           fontWeight: 900,
           padding: '10px 20px',

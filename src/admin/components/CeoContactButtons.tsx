@@ -24,7 +24,7 @@ export default function CeoContactButtons({ compact = false }: { compact?: boole
                 size={compact ? 'small' : 'medium'}
                 variant="outlined"
                 startIcon={<Mail size={16} />}
-                sx={{ color: binThemeTokens.textPrimary, borderColor: 'rgba(255,255,255,0.18)', fontWeight: 900, textTransform: 'none' }}
+                sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.border || '#E5E7EB', fontWeight: 900, textTransform: 'none' }}
             >
                 Email CEO Office
             </Button>

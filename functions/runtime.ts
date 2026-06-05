@@ -394,15 +394,50 @@ export const approveOwnerPayment = onCall({ cors: true }, async (request) => {
     const termStart = asDate(contractData.ownerSignedAt) || asDate(contractData.signedAt) || new Date();
     const termFields = termFieldsFromStart(termStart);
     const authEmail = normalizeEmail(request.auth?.token?.email);
-    const commercialPatch = buildOwnerCommercialApprovalPatch({
-        contractId,
-        annualContractValue: contractAnnualValue(contractData),
-        mobilizationAmount: amount,
-        paymentPlan: String(contractData.paymentPlan || contractData.paymentSchedule?.paymentPlan || 'manual'),
-        ownerEmail: resolveContractOwnerEmail(contractData),
-        approvedBy: request.auth?.uid || 'admin',
-        approvedAt: now,
+    const intakeId = String(paymentData.intakeId || contractData.intakeId || "").trim();
+    let intakeData: Record<string, any> = {};
+    if (intakeId) {
+        const intakeSnap = await runtimeDb.collection("intake_submissions").doc(intakeId).get();
+        if (intakeSnap.exists) {
+            intakeData = intakeSnap.data() || {};
+        }
+    } else if (ownerId) {
+        const intakeQuery = await runtimeDb.collection("intake_submissions")
+            .where("ownerUid", "==", ownerId)
+            .limit(1)
+            .get();
+        if (!intakeQuery.empty) {
+            intakeData = intakeQuery.docs[0].data() || {};
+        }
+    }
+
+    const amountReceived = amount;
+    const annualContractValue = contractAnnualValue(contractData);
+    const mobilizationAmount = amount;
+    const remainingBalance = Math.max(annualContractValue - amountReceived, 0);
+    const paymentPlan = String(contractData.paymentPlan || contractData.paymentSchedule?.paymentPlan || 'manual');
+    const paymentReferenceId = String(paymentData.reference || paymentData.paymentReferenceId || paymentId).trim();
+    const approvedAtDate = new Date();
+    const approvedAt = admin.firestore.Timestamp.fromDate(approvedAtDate);
+
+    const approvalPatch = buildOwnerCommercialApprovalPatch({
+        requestData: request.data || {},
+        payment: paymentData,
+        contractData,
+        intakeData,
+        amountReceived,
+        annualContractValue,
+        mobilizationAmount,
+        remainingBalance,
+        paymentPlan,
+        paymentReferenceId,
+        termFields,
+        approvedAt,
+        approvedAtIso: approvedAtDate.toISOString(),
+        now,
+        adminUid: request.auth?.uid || "admin",
     });
+    const commercialPatch = approvalPatch.contractPatch;
 
     await runtimeDb.runTransaction(async (transaction) => {
         transaction.set(paymentRef, {

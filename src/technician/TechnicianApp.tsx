@@ -37,7 +37,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
+        <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.025} compact />
             <AppBar
                 position="sticky"

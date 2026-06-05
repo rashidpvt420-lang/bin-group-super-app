@@ -60,18 +60,18 @@ export default function AuditShieldPage() {
         <Paper sx={{ 
             p: 3, 
             borderRadius: 5, 
-            bgcolor: 'rgba(255,255,255,0.01)', 
-            border: '1px solid rgba(255,255,255,0.05)',
+            bgcolor: '#FFFFFF', 
+            border: '1px solid #E5E7EB',
             display: 'flex',
             alignItems: 'center',
             gap: 2
         }}>
-            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: alpha(color, 0.1), color }}>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: alpha(color || '#B8932F', 0.1), color: color || '#B8932F' }}>
                 <Icon size={24} />
             </Box>
             <Box>
-                <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{label}</Typography>
-                <Typography variant="h4" fontWeight="950" color="#FFF">{value}</Typography>
+                <Typography variant="overline" sx={{ color: '#667085', fontWeight: 900, display: 'block', lineHeight: 1 }}>{label}</Typography>
+                <Typography variant="h4" fontWeight="950" sx={{ color: '#111827' }}>{value}</Typography>
             </Box>
         </Paper>
     );
@@ -90,7 +90,7 @@ export default function AuditShieldPage() {
 
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={4}>
-                        <StatCard label="Evidence Blocks" value={stats.total} icon={Terminal} color={binThemeTokens.gold} />
+                        <StatCard label="Evidence Blocks" value={stats.total} icon={Terminal} color={binThemeTokens.gold || '#B8932F'} />
                     </Grid>
                     <Grid item xs={12} md={4}>
                         <StatCard label="Verified Hashes" value={stats.verified} icon={Fingerprint} color="#10b981" />
@@ -100,55 +100,55 @@ export default function AuditShieldPage() {
                     </Grid>
                 </Grid>
 
-                <Paper sx={{ p: 2, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
+                <Paper sx={{ p: 2, borderRadius: 4, bgcolor: '#FFF9E8', border: '1px solid rgba(184,147,47,0.28)' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Stack direction="row" spacing={2} alignItems="center">
-                            <Shield color={binThemeTokens.gold} size={20} />
-                            <Typography variant="body2" fontWeight="950" color="#FFF">SOVEREIGN FORENSIC PROTOCOL ACTIVE</Typography>
+                            <Shield color={binThemeTokens.gold || '#B8932F'} size={20} />
+                            <Typography variant="body2" fontWeight="950" sx={{ color: '#111827' }}>SOVEREIGN FORENSIC PROTOCOL ACTIVE</Typography>
                         </Stack>
                         <Stack direction="row" spacing={2}>
-                            <Button variant="outlined" startIcon={<RefreshCw size={16} />} onClick={() => comingSoon('Re-hash ledger requires connected hash-verification backend.')} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.1)', fontWeight: 900 }}>RE-HASH LEDGER</Button>
-                            <Button variant="contained" startIcon={<Download size={16} />} onClick={() => comingSoon('Evidence bundle export requires storage packaging and signing backend.')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>EXPORT BUNDLE</Button>
+                            <Button variant="outlined" startIcon={<RefreshCw size={16} />} onClick={() => comingSoon('Re-hash ledger requires connected hash-verification backend.')} sx={{ color: '#111827', borderColor: '#E5E7EB', bgcolor: '#F9FAFB', '&:hover': { bgcolor: '#F3F4F6' }, fontWeight: 900 }}>RE-HASH LEDGER</Button>
+                            <Button variant="contained" startIcon={<Download size={16} />} onClick={() => comingSoon('Evidence bundle export requires storage packaging and signing backend.')} sx={{ bgcolor: '#B8932F', color: '#FFFFFF', '&:hover': { bgcolor: '#A08027' }, fontWeight: 950 }}>EXPORT BUNDLE</Button>
                         </Stack>
                     </Stack>
                 </Paper>
 
-                <TableContainer component={Paper} sx={{ borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
+                <TableContainer component={Paper} sx={{ borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', overflowX: 'auto' }}>
                     <Table sx={{ minWidth: 1000 }}>
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>BLOCK ID</TableCell>
-                                <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>ACTION</TableCell>
-                                <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>ACTOR IDENTITY</TableCell>
-                                <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>FORENSIC HASH (SHA-256)</TableCell>
-                                <TableCell sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>TIMESTAMP</TableCell>
-                                <TableCell align="right" sx={{ bgcolor: '#020617', color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>INTEGRITY</TableCell>
+                                <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>BLOCK ID</TableCell>
+                                <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>ACTION</TableCell>
+                                <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>ACTOR IDENTITY</TableCell>
+                                <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>FORENSIC HASH (SHA-256)</TableCell>
+                                <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>TIMESTAMP</TableCell>
+                                <TableCell align="right" sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>INTEGRITY</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {logs.map((row) => (
                                 <TableRow key={row.id} hover>
-                                    <TableCell sx={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                    <TableCell sx={{ fontFamily: 'monospace', color: '#667085', fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>
                                         {row.id.slice(0, 12).toUpperCase()}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
                                         <Chip 
                                             label={String(row.action || 'SYSTEM').toUpperCase()} 
                                             size="small" 
                                             sx={{ 
-                                                bgcolor: alpha(binThemeTokens.gold, 0.1), 
-                                                color: binThemeTokens.gold, 
+                                                bgcolor: '#FFF9E8', 
+                                                color: '#8A6A10', 
                                                 fontWeight: 950, fontSize: '0.6rem' 
                                             }} 
                                         />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
                                         <Stack direction="row" spacing={1} alignItems="center">
-                                            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: binThemeTokens.gold }} />
-                                            <Typography variant="body2" fontWeight="800" color="#FFF">{String(row.actorRole || 'CORE').toUpperCase()}</Typography>
+                                            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#B8932F' }} />
+                                            <Typography variant="body2" fontWeight="800" sx={{ color: '#111827' }}>{String(row.actorRole || 'CORE').toUpperCase()}</Typography>
                                         </Stack>
                                     </TableCell>
-                                    <TableCell sx={{ fontFamily: 'monospace', color: 'rgba(255,255,255,0.2)', fontSize: '0.65rem' }}>
+                                    <TableCell sx={{ fontFamily: 'monospace', color: '#667085', fontSize: '0.65rem', borderBottom: '1px solid #E5E7EB' }}>
                                         {row.forensicHash ? (
                                             <Stack direction="row" spacing={1} alignItems="center">
                                                 <Lock size={12} color="#10b981" />
@@ -156,16 +156,16 @@ export default function AuditShieldPage() {
                                             </Stack>
                                         ) : 'HASH_PENDING'}
                                     </TableCell>
-                                    <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', fontWeight: 700 }}>
+                                    <TableCell sx={{ color: '#667085', fontSize: '0.75rem', fontWeight: 700, borderBottom: '1px solid #E5E7EB' }}>
                                         {row.timestamp}
                                     </TableCell>
-                                    <TableCell align="right">
+                                    <TableCell align="right" sx={{ borderBottom: '1px solid #E5E7EB' }}>
                                         <Chip 
                                             label={row.forensicHash ? 'VERIFIED' : 'PENDING'} 
                                             size="small" 
                                             sx={{ 
-                                                bgcolor: row.forensicHash ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', 
-                                                color: row.forensicHash ? '#10b981' : 'rgba(255,255,255,0.3)', 
+                                                bgcolor: row.forensicHash ? '#FFF9E8' : '#F3F4F6', 
+                                                color: row.forensicHash ? '#8A6A10' : '#98A2B3', 
                                                 fontWeight: 950, fontSize: '0.6rem'
                                             }} 
                                         />

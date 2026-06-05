@@ -90,8 +90,8 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
-  const shouldRenderGlobalHeader = showChrome && !isRolePortalRoute;
-  const shouldRenderFloatingNavigation = showChrome && !isRolePortalRoute && !isAdminRoute;
+  const shouldRenderGlobalHeader = showChrome;
+  const shouldRenderFloatingNavigation = showChrome && !isAdminRoute;
 
   if (roleLoading && !publicAuth) {
     return <>{loadingFallback}</>;

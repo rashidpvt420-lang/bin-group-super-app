@@ -102,11 +102,16 @@ const BinGroupHeader: React.FC = () => {
                         {lang === 'en' ? 'AR' : 'EN'}
                     </Button>
 
-                    {role && !isCompanyRoute && (
-                        <Box sx={{ px: 1.5, py: 0.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.75rem', fontWeight: 900, display: { xs: 'none', md: 'block' } }}>
-                            {role.toUpperCase()}
-                        </Box>
-                    )}
+                    {role && !isCompanyRoute && (() => {
+                        const isAdminRoute = location.pathname.startsWith('/admin');
+                        const isRoleAdmin = role.toLowerCase() === 'admin' || role.toLowerCase() === 'super_admin';
+                        if (isRoleAdmin && !isAdminRoute) return null;
+                        return (
+                            <Box sx={{ px: 1.5, py: 0.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontSize: '0.75rem', fontWeight: 900, display: { xs: 'none', md: 'block' } }}>
+                                {role.toUpperCase()}
+                            </Box>
+                        );
+                    })()}
 
                     {user && !isCompanyRoute && (
                         <IconButton onClick={() => navigate('/notifications')} sx={{ color: binThemeTokens.gold }}>

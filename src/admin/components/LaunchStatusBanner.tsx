@@ -22,19 +22,19 @@ export default function LaunchStatusBanner({
       sx={{
         mb: 3,
         borderRadius: 4,
-        bgcolor: alpha(binThemeTokens.gold, 0.08),
-        border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`,
-        color: '#f8e7b2',
-        '& .MuiAlert-icon': { color: binThemeTokens.gold },
+        bgcolor: '#FFF9E8',
+        border: '1px solid rgba(184,147,47,0.28)',
+        color: '#111827',
+        '& .MuiAlert-icon': { color: binThemeTokens.gold || '#B8932F' },
       }}
     >
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
         <Box>
-          <Typography variant="subtitle2" sx={{ fontWeight: 950, color: '#fff' }}>{title}</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{message}</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 950, color: '#111827' }}>{title}</Typography>
+          <Typography variant="body2" sx={{ color: '#667085' }}>{message}</Typography>
         </Box>
         {actionLabel && onAction && (
-          <Button size="small" variant="outlined" onClick={onAction} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, whiteSpace: 'nowrap' }}>
+          <Button size="small" variant="outlined" onClick={onAction} sx={{ borderColor: binThemeTokens.gold || '#B8932F', color: binThemeTokens.gold || '#B8932F', fontWeight: 900, whiteSpace: 'nowrap' }}>
             {actionLabel}
           </Button>
         )}

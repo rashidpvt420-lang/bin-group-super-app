@@ -84,7 +84,7 @@ export const binGroupTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: 14,
           textTransform: 'none',
           fontWeight: 900,
           padding: '12px 24px',

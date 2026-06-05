@@ -76,12 +76,6 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
-                        <IconButton onClick={toggleLanguage} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3, px: 2 }}>
-                            <Globe size={18} color={binThemeTokens.gold} />
-                            <Typography variant="caption" sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, fontWeight: 950, color: binThemeTokens.gold }}>
-                                {lang === 'en' ? 'AR' : 'EN'}
-                            </Typography>
-                        </IconButton>
                         <NotificationBell />
                         <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
                             <User size={18} />
