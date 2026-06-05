@@ -47,6 +47,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "assignedTechnicianId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "completedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "maintenanceTickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedTechnicianId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
@@ -63,6 +72,30 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "brokerLeads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "brokerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "referrals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "brokerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "broker_commissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "brokerId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
