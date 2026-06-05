@@ -76,17 +76,17 @@ function AdminLayout() {
     };
     
     return (
-        <Box className="admin-shell" sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#FFFFFF', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
+        <Box className="admin-shell" sx={{ display: 'flex', minHeight: '100vh', width: '100%', bgcolor: '#FFFFFF', overflow: 'visible', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.03} compact />
             <Navigation />
-            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1100, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'visible', position: 'relative', zIndex: 1 }}>
+                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1100, flexDirection: isRTL ? 'row-reverse' : 'row', position: 'sticky', top: 0 }}>
                     <Typography variant="overline" sx={{ color: '#667085', fontWeight: 900, letterSpacing: 2 }}>
                         {label('admin.shell.breadcrumb_admin', 'ADMIN / ', 'المسؤول / ')}<Box component="span" sx={{ color: '#B8932F' }}>{label('admin.shell.command_uae', 'COMMAND · UAE 🇦🇪', 'التحكم · الإمارات 🇦🇪')}</Box>
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexDirection: isRTL ? 'row-reverse' : 'row' }} />
                 </Box>
-                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#F8F9FB', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
+                <Box component="main" sx={{ flexGrow: 1, overflow: 'visible', p: 0, bgcolor: '#F8F9FB', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
                         <Outlet />
                     </Box>
