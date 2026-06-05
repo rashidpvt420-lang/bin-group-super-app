@@ -87,8 +87,15 @@ export default function TenantDashboardPage() {
           setPropertyData(nextProperty);
           setContractData(nextContract);
         }
-      } catch (err) {
-        console.error('[TenantDashboard] residence fetch failed:', err);
+      } catch (err: any) {
+        const isPermissionDenied = err?.code === 'permission-denied' || 
+                                   err?.message?.includes('permission-denied') || 
+                                   err?.message?.includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn('[TenantDashboard] residence fetch failed: permission-denied. Failing silently with empty state.');
+        } else {
+          console.error('[TenantDashboard] residence fetch failed:', err);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

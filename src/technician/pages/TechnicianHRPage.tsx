@@ -76,8 +76,15 @@ export default function TechnicianHRPage() {
             const q = query(collection(db, 'staffRequests'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'));
             const reqSnap = await getDocs(q);
             setRequests(reqSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-            console.error('Failed to load technician HR profile:', err);
+        } catch (err: any) {
+            const isPermissionDenied = err?.code === 'permission-denied' || 
+                                       err?.message?.includes('permission-denied') || 
+                                       err?.message?.includes('insufficient permissions');
+            if (isPermissionDenied) {
+                console.warn('Failed to load technician HR profile: permission-denied. Failing silently with empty state.');
+            } else {
+                console.error('Failed to load technician HR profile:', err);
+            }
         } finally {
             setLoading(false);
         }

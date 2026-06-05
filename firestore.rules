@@ -54,6 +54,8 @@ service cloud.firestore {
       );
     }
 
+
+
     function emailOwns(data) {
       return emailMatches(data.email) ||
         emailMatches(data.ownerEmail) ||
@@ -150,6 +152,9 @@ service cloud.firestore {
           'language',
           'lang',
           'legalAcceptedAt',
+          'legalAcceptedAtClient',
+          'pdplCompliance',
+          'gpsConsent',
           'legalAcceptedVersion',
           'termsAcceptedAt',
           'termsVersion',

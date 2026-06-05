@@ -54,7 +54,14 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         gpsConsent: true,
         updatedAt: serverTimestamp()
       }, { merge: true }).catch((error) => {
-        console.warn('Legal agreement background sync failed:', error);
+        const isPermissionDenied = error?.code === 'permission-denied' || 
+                                   error?.message?.includes('permission-denied') || 
+                                   error?.message?.includes('insufficient permissions');
+        if (isPermissionDenied) {
+          console.warn('Legal consent background update skipped (restricted).');
+        } else {
+          console.warn('Legal agreement background sync failed:', error);
+        }
       });
     }
 

@@ -61,8 +61,15 @@ export default function OwnerTicketsPage() {
         const unsub = onSnapshot(q, (snap) => {
             setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
-        }, (err) => {
-            console.error('[OwnerTickets]', err);
+        }, (err: any) => {
+            const isPermissionDenied = err?.code === 'permission-denied' || 
+                                       err?.message?.includes('permission-denied') || 
+                                       err?.message?.includes('insufficient permissions');
+            if (isPermissionDenied) {
+                console.warn('[OwnerTickets] query restricted (permission-denied). Failing silently with empty list.');
+            } else {
+                console.error('[OwnerTickets]', err);
+            }
             setLoading(false);
         });
 
