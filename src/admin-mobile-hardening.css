@@ -20,6 +20,12 @@ body,
   --bin-border-soft: #E5E7EB;
   --bin-shadow-card: 0 12px 32px rgba(17, 24, 39, 0.08);
   --bin-shadow-hover: 0 18px 45px rgba(17, 24, 39, 0.12);
+  --bin-radius-panel: 18px;
+  --bin-radius-card: 16px;
+  --bin-radius-button: 14px;
+  --bin-dark-panel: rgba(15, 23, 42, 0.82);
+  --bin-dark-panel-solid: #101722;
+  --bin-dark-border: rgba(255, 255, 255, 0.12);
 }
 
 * {
@@ -85,7 +91,7 @@ body,
 .MuiButton-containedPrimary {
   background: linear-gradient(135deg, var(--bin-gold), var(--bin-platinum));
   color: var(--bin-text-main);
-  border-radius: 999px;
+  border-radius: var(--bin-radius-button);
   box-shadow: 0 10px 24px rgba(201, 166, 70, 0.28);
 }
 
@@ -95,7 +101,7 @@ body,
   color: var(--bin-gold-hover);
   background: rgba(201, 166, 70, 0.10);
   border: 1px solid rgba(201, 166, 70, 0.35);
-  border-radius: 999px;
+  border-radius: var(--bin-radius-button);
   font-weight: 800;
 }
 
@@ -168,10 +174,107 @@ form .MuiInputLabel-root {
   color: #667085 !important;
 }
 
+/* BIN GROUP professional geometry guard: remove oval/circular production panels everywhere. */
+.MuiPaper-root,
+.MuiCard-root {
+  border-radius: var(--bin-radius-panel) !important;
+}
+
+.MuiButton-root {
+  border-radius: var(--bin-radius-button) !important;
+  min-height: 44px;
+  text-transform: none !important;
+  font-weight: 850 !important;
+  line-height: 1.15 !important;
+}
+
+.MuiButton-contained,
+.MuiButton-containedPrimary {
+  background: linear-gradient(135deg, var(--bin-gold), #E7D38B) !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 24px rgba(201, 166, 70, 0.24) !important;
+}
+
+.MuiButton-outlined {
+  border-color: rgba(201, 166, 70, 0.46) !important;
+}
+
+.MuiChip-root {
+  border-radius: 12px !important;
+  max-width: 100%;
+}
+
+.MuiAvatar-root {
+  border-radius: 14px !important;
+}
+
+.MuiInputBase-root,
+.MuiOutlinedInput-root {
+  border-radius: 14px !important;
+}
+
+.MuiOutlinedInput-notchedOutline {
+  border-color: rgba(201, 166, 70, 0.38) !important;
+}
+
+form .MuiTextField-root {
+  margin-bottom: 6px;
+}
+
+form .MuiInputBase-root {
+  min-height: 58px;
+  background: #FFFFFF !important;
+}
+
+form .MuiInputLabel-root {
+  background: transparent !important;
+  padding: 0 4px;
+  font-weight: 800 !important;
+}
+
+form .MuiInputLabel-shrink {
+  color: var(--bin-gold-hover) !important;
+}
+
+/* Keep dark authenticated dashboards professional without circular card shapes. */
+.MuiPaper-root[style*="rgba(15, 23, 42"],
+.MuiPaper-root[style*="rgba(22, 22, 24"],
+.MuiCard-root[style*="rgba(22, 22, 24"] {
+  border-radius: var(--bin-radius-panel) !important;
+}
+
+/* Floating mobile command controls: clearer rectangular buttons instead of pills. */
+.MuiButtonBase-root[aria-label],
+.MuiFab-root,
+button[class*="MuiIconButton"] {
+  border-radius: 14px !important;
+}
+
+/* Defensive override for inline sx-generated giant oval cards. */
+[style*="border-radius: 50%"],
+[style*="border-radius: 999px"],
+[style*="borderRadius: 999"],
+[style*="border-radius: 9999px"] {
+  border-radius: var(--bin-radius-panel) !important;
+}
+
 @media (max-width: 900px) {
   body,
   #root {
     min-width: 0 !important;
+  }
+
+  .MuiPaper-root,
+  .MuiCard-root {
+    border-radius: 16px !important;
+  }
+
+  .MuiButton-root {
+    border-radius: 14px !important;
+  }
+
+  .MuiChip-root {
+    border-radius: 11px !important;
   }
 
   .MuiDrawer-paper {
@@ -213,7 +316,7 @@ form .MuiInputLabel-root {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: calc(100vw - 210px) !important;
+    max-width: calc(100vw - 130px) !important;
     letter-spacing: 0.04em !important;
   }
 
