@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Bot, HeartPulse, Plus } from 'lucide-react';
+import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, onSnapshot, query, serverTimestamp, where } from '../../lib/firebase';
+import { addDoc, collection, db, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
 
@@ -22,7 +22,21 @@ const quickPrompts = [
   'Kailangan ko po ng payslip',
 ];
 
+const documentTypes = [
+  ['emirates_id', 'Emirates ID'],
+  ['passport', 'Passport'],
+  ['residency_visa', 'Residency Visa'],
+  ['medical_certificate', 'Medical / Sick Certificate'],
+  ['insurance_card', 'Insurance Card'],
+  ['labour_card', 'Labour Card'],
+  ['trade_certificate', 'Trade Certificate'],
+  ['driving_license', 'Driving Licence'],
+  ['signed_acknowledgement', 'Signed Acknowledgement'],
+  ['hr_support_file', 'HR Support File'],
+];
+
 const requestTitle = (value: string) => String(value || 'hr_support').replace(/_/g, ' ');
+const safeFileName = (value: string) => String(value || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
 const sortByNewest = (items: any[]) => [...items].sort((a, b) => {
   const aTime = a.createdAt?.toMillis?.() || Date.parse(a.createdAtLocal || '') || 0;
   const bTime = b.createdAt?.toMillis?.() || Date.parse(b.createdAtLocal || '') || 0;
@@ -36,6 +50,10 @@ export default function TechnicianHRPageV2() {
   const [loading, setLoading] = useState(false);
   const [registryError, setRegistryError] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentType, setDocumentType] = useState('emirates_id');
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -49,9 +67,20 @@ export default function TechnicianHRPageV2() {
     });
   }, [user?.uid]);
 
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const q = query(collection(db, 'staffDocuments'), where('uid', '==', user.uid));
+    return onSnapshot(q, (snap) => {
+      setDocuments(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
+    }, (error) => {
+      console.warn('Staff document vault realtime failed:', error);
+    });
+  }, [user?.uid]);
+
   const identity = () => ({
     uid: user?.uid,
     technicianId: user?.uid,
+    userId: user?.uid,
     email: user?.email || '',
     displayName: user?.displayName || 'Staff Member',
     role: user?.role || 'technician',
@@ -99,6 +128,58 @@ export default function TechnicianHRPageV2() {
     }
   };
 
+  const uploadStaffDocument = async (file: File | null) => {
+    if (!user?.uid || !file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadMessage('File is too large. Maximum allowed size is 15MB.');
+      return;
+    }
+    setUploading(true);
+    setUploadMessage('');
+    try {
+      const label = documentTypes.find(([value]) => value === documentType)?.[1] || documentType;
+      const path = `staffDocuments/${user.uid}/${documentType}/${Date.now()}-${safeFileName(file.name)}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file, { contentType: file.type || 'application/octet-stream' });
+      const fileUrl = await getDownloadURL(fileRef);
+      const common = {
+        ...identity(),
+        documentType,
+        documentLabel: label,
+        documentFileName: file.name,
+        documentFileUrl: fileUrl,
+        fileName: file.name,
+        filePath: path,
+        fileUrl,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        paperless: true,
+        status: 'pending_hr_review',
+        source: 'paperless_staff_document_vault',
+      };
+      await addDoc(collection(db, 'staffDocuments'), { ...common, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      await addDoc(collection(db, 'staffRequests'), {
+        ...common,
+        requestType: 'document_update',
+        requestLabel: `Document Upload: ${label}`,
+        category: 'documents',
+        priority: documentType === 'medical_certificate' ? 'high' : 'normal',
+        reason: `Uploaded ${label}: ${file.name}`,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
+        hours: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setUploadMessage('Document uploaded and sent to HR for review.');
+    } catch (error: any) {
+      console.error('Staff document upload failed:', error);
+      setUploadMessage(`Upload failed: ${error?.message || 'Permission or network issue'}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const mood = async (value: string) => {
     if (!user?.uid) return;
     const riskScore = value === 'urgent' ? 100 : value === 'angry' ? 85 : value === 'stressed' ? 70 : value === 'sick' ? 65 : 30;
@@ -133,6 +214,22 @@ export default function TechnicianHRPageV2() {
           </Paper>
         </Grid>
       </Grid>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Staff Document Upload Vault</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+          <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}>
+            {documentTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+          </TextField>
+          <Button component="label" variant="contained" disabled={uploading} startIcon={uploading ? <CircularProgress size={18} sx={{ color: '#000' }} /> : <CloudUpload size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+            {uploading ? 'UPLOADING...' : 'UPLOAD DOCUMENT'}
+            <input hidden type="file" accept="application/pdf,image/*" onChange={(e) => uploadStaffDocument(e.target.files?.[0] || null)} />
+          </Button>
+        </Stack>
+        {uploadMessage && <Alert severity={uploadMessage.startsWith('Upload failed') || uploadMessage.startsWith('File is too') ? 'error' : 'success'} sx={{ mt: 2 }}>{uploadMessage}</Alert>}
+        {documents.length > 0 && <Stack spacing={1.2} sx={{ mt: 3 }}>{documents.slice(0, 8).map((doc) => <Paper key={doc.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><FileText color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{doc.documentLabel || requestTitle(doc.documentType)}</Typography><Typography variant="caption" color="textSecondary">{doc.fileName}</Typography></Box></Stack><Chip label={String(doc.status || 'pending_hr_review').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+      </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Quick Training Tests</Typography>
