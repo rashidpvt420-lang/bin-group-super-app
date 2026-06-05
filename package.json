@@ -23,6 +23,7 @@
     "test:rules": "npm run normalize:rules && firebase emulators:exec --only firestore --project bin-group-57c60 \"node --test test/security-rules.test.js\"",
     "test:rules:node": "npm run normalize:rules && node --test test/security-rules.test.js",
     "test:stability": "npm run normalize:rules && node scripts/production-stability-guard.mjs",
+    "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
     "test:repo-hygiene": "node scripts/repo-hygiene-guard.mjs",
     "test:launch-clearance": "node scripts/verify-launch-clearance.mjs",
     "test:e2e": "playwright install --with-deps chromium && playwright test",
