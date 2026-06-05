@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Bot, HeartPulse, Plus } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, onSnapshot, orderBy, query, serverTimestamp, where } from '../../lib/firebase';
+import { addDoc, collection, db, onSnapshot, query, serverTimestamp, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
 
@@ -23,6 +23,11 @@ const quickPrompts = [
 ];
 
 const requestTitle = (value: string) => String(value || 'hr_support').replace(/_/g, ' ');
+const sortByNewest = (items: any[]) => [...items].sort((a, b) => {
+  const aTime = a.createdAt?.toMillis?.() || Date.parse(a.createdAtLocal || '') || 0;
+  const bTime = b.createdAt?.toMillis?.() || Date.parse(b.createdAtLocal || '') || 0;
+  return bTime - aTime;
+});
 
 export default function TechnicianHRPageV2() {
   const { user } = useRole();
@@ -34,10 +39,10 @@ export default function TechnicianHRPageV2() {
 
   useEffect(() => {
     if (!user?.uid) return undefined;
-    const q = query(collection(db, 'staffRequests'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'staffRequests'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
       setRegistryError('');
-      setRequests(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      setRequests(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
     }, (error) => {
       console.warn('AI HR request registry realtime failed:', error);
       setRegistryError('Live registry sync is not available yet. Newly created cases will still appear instantly on this screen.');
@@ -81,7 +86,7 @@ export default function TechnicianHRPageV2() {
         hours: 0,
       };
       const localCase = { id: optimisticId, ...base, createdAtLocal: now, optimistic: true };
-      setRequests((prev) => [localCase, ...prev.filter((item) => item.id !== optimisticId)]);
+      setRequests((prev) => sortByNewest([localCase, ...prev.filter((item) => item.id !== optimisticId)]));
       await addDoc(collection(db, 'staffRequests'), { ...base, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       await addDoc(collection(db, 'hrAiConversations'), { ...base, question: text.trim(), answer: result.answer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       setAnswer(`${result.answer} · ${result.language.toUpperCase()} · ${Math.round(result.confidence * 100)}% confidence · ${result.recommendedNextAction}`);
@@ -97,8 +102,13 @@ export default function TechnicianHRPageV2() {
   const mood = async (value: string) => {
     if (!user?.uid) return;
     const riskScore = value === 'urgent' ? 100 : value === 'angry' ? 85 : value === 'stressed' ? 70 : value === 'sick' ? 65 : 30;
-    await addDoc(collection(db, 'staffMoodCheckins'), { ...identity(), mood: value, riskScore, source: 'paperless_staff_portal', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    if (riskScore >= 70) await createAiCase(`Wellbeing support needed: ${value}`);
+    try {
+      await addDoc(collection(db, 'staffMoodCheckins'), { ...identity(), mood: value, riskScore, source: 'paperless_staff_portal', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      if (riskScore >= 70) await createAiCase(`Wellbeing support needed: ${value}`);
+    } catch (error: any) {
+      console.error('Mood check-in failed:', error);
+      setAnswer(`Mood check-in could not be saved: ${error?.message || 'Permission or network issue'}`);
+    }
   };
 
   return (
@@ -113,7 +123,7 @@ export default function TechnicianHRPageV2() {
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">People AI Intent Router</Typography></Stack>
             <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language" sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
             <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'CREATE AI HR CASE'}</Button>
-            {answer && <Alert severity={answer.startsWith('Case could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
+            {answer && <Alert severity={answer.includes('could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
           </Paper>
         </Grid>
         <Grid item xs={12} md={5}>

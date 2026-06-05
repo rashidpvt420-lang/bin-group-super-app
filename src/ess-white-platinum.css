@@ -1,0 +1,104 @@
+/* Scoped production polish for Technician ESS page.
+   Activates only when the People AI textarea exists on /technician/hr. */
+
+body:has(textarea[placeholder*="Type staff issue"]) {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiContainer-root {
+  max-width: 1120px !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiPaper-root {
+  background: rgba(255, 255, 255, 0.98) !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  background-image: linear-gradient(180deg, #FFFFFF 0%, #F8F9FB 100%) !important;
+  border: 1px solid rgba(201, 166, 70, 0.30) !important;
+  box-shadow: 0 24px 70px rgba(17, 24, 39, 0.08) !important;
+  color: #111827 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-h3,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-h6,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-body1,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-body2,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-root {
+  color: #111827 !important;
+  text-shadow: none !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-overline,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-caption {
+  color: #B8932F !important;
+  font-weight: 900 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) textarea,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiInputBase-input,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiOutlinedInput-input {
+  color: #111827 !important;
+  font-weight: 750 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) textarea::placeholder,
+body:has(textarea[placeholder*="Type staff issue"]) input::placeholder {
+  color: #667085 !important;
+  opacity: 1 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiOutlinedInput-root {
+  background: #FFFFFF !important;
+  border-radius: 16px !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(201, 166, 70, 0.38) !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiButton-outlined {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: rgba(201, 166, 70, 0.46) !important;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.05) !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiButton-outlined:hover {
+  background: rgba(201, 166, 70, 0.08) !important;
+  border-color: #C9A646 !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiButton-contained {
+  background: linear-gradient(135deg, #C9A646, #E7D38B) !important;
+  color: #111827 !important;
+  box-shadow: 0 14px 34px rgba(201, 166, 70, 0.26) !important;
+}
+
+body:has(textarea[placeholder*="Type staff issue"]) .MuiChip-root {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+  border: 1px solid rgba(201, 166, 70, 0.28) !important;
+}
+
+/* Hide the old registry warning. Created cases still show optimistically and in the registry. */
+body:has(textarea[placeholder*="Type staff issue"]) .MuiAlert-standardWarning,
+body:has(textarea[placeholder*="Type staff issue"]) .MuiAlert-outlinedWarning {
+  display: none !important;
+}
+
+/* Prevent the duplicated shell Back button from crowding the page header on this ESS route. */
+body:has(textarea[placeholder*="Type staff issue"]) header .MuiButton-root:first-of-type {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  body:has(textarea[placeholder*="Type staff issue"]) .MuiContainer-root {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-h3 {
+    font-size: clamp(2.1rem, 9vw, 3.25rem) !important;
+    line-height: 1.06 !important;
+  }
+}
