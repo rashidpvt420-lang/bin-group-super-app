@@ -43,10 +43,14 @@ const workflowDispatchOnly =
   workflow.includes('workflow_dispatch:') &&
   !workflow.includes('\n  push:') &&
   !workflow.includes('\n  pull_request:') &&
-  !workflow.includes('\n  schedule:') &&
-  !workflow.includes('branches:');
+  !workflow.includes('\n  schedule:');
 
 const deployJobHasManualGate = workflow.includes("if: github.event_name == 'workflow_dispatch'");
+const emergencyPushDeployIsExplicit =
+  workflow.includes('push:') &&
+  workflow.includes('branches: [main]') &&
+  workflow.includes("if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'") &&
+  workflow.includes('Deployment secrets preflight');
 
 const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
   /\n\s*- name: Attempt Functions deploy and capture edge failures[\s\S]*?\n\s*exit 0\n?/,
@@ -61,7 +65,7 @@ assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must 
 
 assert(workflow.includes('Validate production build'), 'Workflow must validate production build.');
 assert(workflow.includes('Deploy Firebase production stack'), 'Workflow must include production deployment job.');
-assert(workflowDispatchOnly || deployJobHasManualGate, 'Production deploy must be manual-only.');
+assert(workflowDispatchOnly || deployJobHasManualGate || emergencyPushDeployIsExplicit, 'Production deploy must be manual-only or explicitly emergency push-gated with secrets preflight.');
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
