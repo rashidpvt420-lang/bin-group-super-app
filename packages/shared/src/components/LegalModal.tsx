@@ -11,7 +11,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { db } from '../lib/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface LegalModalProps {
   userId: string;
@@ -32,20 +32,36 @@ export function LegalModal({ userId, onAccepted }: LegalModalProps) {
     }
   };
 
-  const handleAgree = async () => {
+  const handleAgree = () => {
+    if (loading) return;
     setLoading(true);
+    const acceptedAt = new Date().toISOString();
+
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        legalAcceptedAt: serverTimestamp(),
-        pdplCompliance: true,
-        gpsConsent: true
-      });
-      onAccepted();
+      localStorage.setItem('bin_legal_terms_accepted_v7_1', acceptedAt);
+      localStorage.setItem(`bin_legal_terms_accepted_v7_1_${userId || 'guest'}`, acceptedAt);
+      localStorage.setItem('bin_pdpl_consent', 'true');
+      localStorage.setItem('bin_gps_consent', 'true');
     } catch (error) {
-      console.error("Legal Agreement Update Failed:", error);
-    } finally {
-      setLoading(false);
+      console.warn('Local legal consent save failed:', error);
     }
+
+    if (userId) {
+      setDoc(doc(db, 'users', userId), {
+        legalAcceptedAt: serverTimestamp(),
+        legalAcceptedAtClient: acceptedAt,
+        pdplCompliance: true,
+        gpsConsent: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch((error) => {
+        console.warn('Legal agreement background sync failed:', error);
+      });
+    }
+
+    window.setTimeout(() => {
+      onAccepted();
+      setLoading(false);
+    }, 50);
   };
 
   return (
