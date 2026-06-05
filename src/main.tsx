@@ -4,6 +4,8 @@ import App from './App';
 import SovereignErrorBoundary from './components/SovereignErrorBoundary';
 import { setupSovereignAlertInterceptor } from './components/SovereignAlertHandler';
 import './admin-mobile-hardening.css';
+import './styles/onboardingReadable.css';
+import './ess-white-platinum.css';
 
 setupSovereignAlertInterceptor();
 
@@ -66,10 +68,6 @@ function applyGlobalScrollRepair() {
   }
 }
 
-/**
- * [BOOT-SIGNAL]
- * Signals to the HTML-layer watchdog that React has successfully initialized.
- */
 function BootSignal() {
   React.useEffect(() => {
     applyGlobalScrollRepair();
@@ -102,7 +100,6 @@ function BootSignal() {
   return null;
 }
 
-// 🏁 [BIN-METRICS] Start Performance Timer
 const BOOT_START = Date.now();
 
 const mountApp = () => {

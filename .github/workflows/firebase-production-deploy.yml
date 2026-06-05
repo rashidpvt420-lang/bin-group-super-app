@@ -1,8 +1,6 @@
 name: Firebase Production Deploy
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -92,7 +90,7 @@ jobs:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -209,7 +207,21 @@ jobs:
         run: npm run build --workspace=functions
 
       - name: Deploy critical production stack
-        run: npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            echo "Firebase critical deploy attempt ${attempt}/3"
+            if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force; then
+              echo "Firebase critical deploy succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Firebase deploy failed. Retrying in 30 seconds..."
+              sleep 30
+            fi
+          done
+          echo "::error::Firebase critical deploy failed after 3 attempts. Review Firebase service availability and IAM permissions."
+          exit 1
 
       - name: Attempt Functions deploy and capture edge failures
         continue-on-error: true
