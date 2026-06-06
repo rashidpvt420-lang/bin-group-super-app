@@ -7,6 +7,7 @@ import './admin-mobile-hardening.css';
 import './styles/onboardingReadable.css';
 import './ess-white-platinum.css';
 import './styles/whitePlatinumAuthenticated.css';
+import './styles/publicMarketingCleanup.css';
 
 setupSovereignAlertInterceptor();
 
@@ -123,7 +124,7 @@ const mountApp = () => {
             </React.StrictMode>
         );
         const bootTime = Date.now() - BOOT_START;
-        console.log(`💎 [BOOT] Sovereign Core active in ${bootTime}ms`);
+        console.log(`[BOOT] Sovereign Core active in ${bootTime}ms`);
     } catch (err) {
         console.error('[BIN-SYSTEM] Critical Mount Error:', err);
     }
