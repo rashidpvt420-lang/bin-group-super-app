@@ -1611,6 +1611,14 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         throw new HttpsError("permission-denied", "This invitation was sent to a different email address.");
     }
 
+    let ownerId = "";
+    if (invite && invite.propertyId) {
+        const propDoc = await db.collection("properties").doc(String(invite.propertyId)).get();
+        if (propDoc.exists) {
+            ownerId = String(propDoc.data()?.ownerId || "");
+        }
+    }
+
     const batch = db.batch();
 
     // Update User
@@ -1619,6 +1627,7 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         status: "active",
         displayName: invite.tenantName,
         propertyId: invite.propertyId,
+        ownerId: ownerId,
         unitId: invite.unitId,
         tenantInvitationId: inviteDoc.id,
         acceptedAt: admin.firestore.FieldValue.serverTimestamp(),

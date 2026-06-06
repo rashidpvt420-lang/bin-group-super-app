@@ -133,4 +133,68 @@ describe('Firestore Security Rules', () => {
       updatedAt: new Date().toISOString(),
     }));
   });
+
+  it('gatePasses isolation: Tenant can manage own gatePasses, others blocked', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'gatePasses/pass_1'), { tenantUid: 'tenant_a', visitorName: 'Visitor 1' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant A should be able to read/create/delete their own
+    await assertSucceeds(getDoc(doc(tenantADb, 'gatePasses/pass_1')));
+    await assertSucceeds(setDoc(doc(tenantADb, 'gatePasses/pass_new'), { tenantUid: 'tenant_a', visitorName: 'Visitor New' }));
+    
+    // Tenant B should fail to read or delete Tenant A's gatePasses
+    await assertFails(getDoc(doc(tenantBDb, 'gatePasses/pass_1')));
+  });
+
+  it('amenityBookings isolation: Tenant can manage own bookings, others blocked', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'amenityBookings/booking_1'), { tenantUid: 'tenant_a', amenityName: 'Pool' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    await assertSucceeds(getDoc(doc(tenantADb, 'amenityBookings/booking_1')));
+    await assertFails(getDoc(doc(tenantBDb, 'amenityBookings/booking_1')));
+  });
+
+  it('tenant property access: Tenant can read assigned property doc', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    
+    // Setup property
+    await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
+    // Setup tenant user doc with propertyId
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', ownerId: 'owner_a' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant A (assigned to prop_a) should succeed
+    await assertSucceeds(getDoc(doc(tenantADb, 'properties/prop_a')));
+    // Tenant B (not assigned to prop_a) should fail
+    await assertFails(getDoc(doc(tenantBDb, 'properties/prop_a')));
+  });
+
+  it('owner tenant profile access: Owner can read assigned tenants', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    // Setup property owned by owner_a
+    await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
+    // Setup tenant user doc assigned to prop_a
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', ownerId: 'owner_a' });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
+    const ownerBDb = testEnv.authenticatedContext('owner_b').firestore();
+
+    // Owner A (owns prop_a) should be able to read Tenant A's user doc
+    await assertSucceeds(getDoc(doc(ownerADb, 'users/tenant_a')));
+    // Owner B (does not own prop_a) should fail
+    await assertFails(getDoc(doc(ownerBDb, 'users/tenant_a')));
+  });
 });

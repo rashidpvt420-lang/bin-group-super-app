@@ -143,7 +143,14 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
 
       const consoleErrors: string[] = [];
       page.on('console', (msg) => {
+        console.log(`[BROWSER CONSOLE ${msg.type()}]: ${msg.text()}`);
         if (msg.type() === 'error') consoleErrors.push(msg.text());
+      });
+      page.on('pageerror', (err) => {
+        console.log(`[BROWSER PAGEERROR]: ${err.message}`);
+      });
+      page.on('requestfailed', (request) => {
+        console.log(`[BROWSER REQUESTFAILED]: ${request.url()} - ${request.failure()?.errorText}`);
       });
 
       await login(page, email!, password!);
