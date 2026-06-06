@@ -101,12 +101,12 @@ const envAppCheckKey = process.env.VITE_APP_CHECK_SITE_KEY || '';
 const envAppCheckEnabled = process.env.VITE_ENABLE_FIREBASE_APPCHECK || '';
 const VAPID_HARDCODED_DEFAULT = 'BAx9XuLU';
 
-warn(
+assert(
   envVapidKey && !envVapidKey.startsWith(VAPID_HARDCODED_DEFAULT),
   'VITE_FIREBASE_VAPID_KEY is missing or uses the hardcoded default. Push notifications will not work in production. ' +
   'Get from: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair.'
 );
-warn(
+assert(
   Boolean(envMapsKey && envMapsKey !== 'REPLACE_WITH_MAPS_KEY'),
   'VITE_GOOGLE_MAPS_API_KEY is not set. GPS dispatch and embedded maps will not function in production. ' +
   'Get from: console.cloud.google.com → APIs & Services → Credentials.'
@@ -116,7 +116,7 @@ warn(
   'VITE_APP_CHECK_SITE_KEY is not set. Firebase APIs are unprotected against abuse. ' +
   'Get from: Google reCAPTCHA Admin Console → Create reCAPTCHA v3 site.'
 );
-warn(
+assert(
   envAppCheckEnabled === 'true',
   'VITE_ENABLE_FIREBASE_APPCHECK is not set to "true". App Check enforcement is disabled in this environment.'
 );

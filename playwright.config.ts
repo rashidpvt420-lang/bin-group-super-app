@@ -11,7 +11,7 @@ if (existsSync('.env.e2e')) {
 
 
 const hasExplicitBaseURL = Boolean(process.env.E2E_BASE_URL);
-const baseURL = process.env.E2E_BASE_URL || 'http://localhost:4173';
+const baseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:4173';
 const ciMode = Boolean(process.env.CI);
 
 const projects = ciMode
@@ -30,7 +30,7 @@ export default defineConfig({
   webServer: hasExplicitBaseURL
     ? undefined
     : {
-        command: 'npm run preview -- --host localhost --port 4173 --strictPort',
+        command: 'npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,
