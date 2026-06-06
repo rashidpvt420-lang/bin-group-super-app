@@ -113,11 +113,7 @@ const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase
 async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>) {
     const token = authContext?.token || {};
     const tokenRole = normalizeRole(token.role || token.userRole || token.primaryRole);
-    if (token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole)) return true;
-    const userDoc = await db.collection("users").doc(authContext.uid).get();
-    const userData = userDoc.data() || {};
-    const firestoreRole = normalizeRole(userData.role || userData.userRole || userData.primaryRole);
-    return userData.isAdmin === true || userData.admin === true || userData.superAdmin === true || userData.super_admin === true || allowedRoles.has(firestoreRole);
+    return token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole);
 }
 
 function assertPlainObject(value: any, label: string) {

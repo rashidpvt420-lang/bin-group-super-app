@@ -6,7 +6,7 @@ import {
     ChevronRight, Briefcase, Plus, ShieldCheck, 
     Clock, ArrowUpRight, MessageSquare 
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, limit, orderBy } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit, orderBy } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -28,67 +28,68 @@ export default function BrokerDashboardPage() {
     });
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            if (!user?.uid) return;
-            try {
-                // Fetch Stats
-                const leadsQ = query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid));
-                const leadsSnap = await getDocs(leadsQ);
+        if (!user?.uid) return;
+
+        let unsubLeads: () => void;
+        let unsubRef: () => void;
+        let unsubCom: () => void;
+        let unsubRecent: () => void;
+
+        try {
+            const leadsQ = query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid));
+            unsubLeads = onSnapshot(leadsQ, (snap) => {
                 let lTotal = 0, lActive = 0;
-                leadsSnap.docs.forEach(d => {
+                snap.docs.forEach(d => {
                     lTotal++;
                     if (['new', 'contacted', 'viewing', 'negotiation'].includes(d.data().status)) lActive++;
                 });
+                setStats(prev => ({ ...prev, leadsTotal: lTotal, leadsActive: lActive }));
+            });
 
-                const refQ = query(collection(db, 'referrals'), where('brokerId', '==', user.uid));
-                const refSnap = await getDocs(refQ);
+            const refQ = query(collection(db, 'referrals'), where('brokerId', '==', user.uid));
+            unsubRef = onSnapshot(refQ, (snap) => {
                 let rPend = 0, rAppr = 0;
-                refSnap.docs.forEach(d => {
+                snap.docs.forEach(d => {
                     const status = d.data().status;
                     if (['submitted', 'under_review'].includes(status)) rPend++;
                     if (status === 'approved') rAppr++;
                 });
+                setStats(prev => ({ ...prev, referralsPending: rPend, referralsApproved: rAppr }));
+            });
 
-                const comQ = query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid));
-                const comSnap = await getDocs(comQ);
+            const comQ = query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid));
+            unsubCom = onSnapshot(comQ, (snap) => {
                 let cPend = 0, cPaid = 0;
-                comSnap.docs.forEach(d => {
+                snap.docs.forEach(d => {
                     const status = String(d.data().status || '').toLowerCase();
                     const amount = d.data().amount || 0;
                     if (status === 'pending') cPend += amount;
                     if (status === 'paid') cPaid += amount;
                 });
+                setStats(prev => ({ ...prev, commissionPending: cPend, commissionPaid: cPaid }));
+            });
 
-                setStats({
-                    leadsTotal: lTotal, leadsActive: lActive,
-                    referralsPending: rPend, referralsApproved: rAppr,
-                    commissionPending: cPend, commissionPaid: cPaid
-                });
-
-                // Fetch Recent Activity
-                const recentQ = query(
-                    collection(db, 'brokerLeads'), 
-                    where('brokerId', '==', user.uid),
-                    orderBy('createdAt', 'desc'),
-                    limit(5)
-                );
-                const recentSnap = await getDocs(recentQ);
-                setRecentLeads(recentSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-            } catch (err: any) {
-                const isPermissionDenied = err?.code === 'permission-denied' || 
-                                           err?.message?.includes('permission-denied') || 
-                                           err?.message?.includes('insufficient permissions');
-                if (isPermissionDenied) {
-                    console.warn("Dashboard fetch restricted (permission-denied). Failing silently with empty state.");
-                } else {
-                    console.error("Dashboard fetch error:", err);
-                }
-            } finally {
+            const recentQ = query(
+                collection(db, 'brokerLeads'), 
+                where('brokerId', '==', user.uid),
+                orderBy('createdAt', 'desc'),
+                limit(5)
+            );
+            unsubRecent = onSnapshot(recentQ, (snap) => {
+                setRecentLeads(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 setLoading(false);
-            }
+            });
+        } catch (err: any) {
+            console.error("Dashboard fetch error:", err);
+            setLoading(false);
+        }
+
+        return () => {
+            if (unsubLeads) unsubLeads();
+            if (unsubRef) unsubRef();
+            if (unsubCom) unsubCom();
+            if (unsubRecent) unsubRecent();
         };
-        fetchDashboardData();
     }, [user]);
 
     const statCards = [
@@ -135,6 +136,7 @@ export default function BrokerDashboardPage() {
                 <Button 
                     variant="contained" 
                     startIcon={<MessageSquare size={18} />}
+                    onClick={() => { window.location.href = 'mailto:support@bin-groups.com'; }}
                     sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, px: 3, py: 1.5, borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.2) } }}
                 >
                     CONTACT SUPPORT

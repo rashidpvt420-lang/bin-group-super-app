@@ -51,6 +51,8 @@ import {
     serverTimestamp,
     updateDoc,
     where,
+    functions,
+    httpsCallable
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -298,12 +300,8 @@ export default function TechnicianDashboardPage() {
     const handleAcceptJob = async (jobId: string) => {
         if (!user?.uid) return;
         try {
-            await runTransaction(db, async (transaction: any) => {
-                const jobRef = doc(db, 'maintenanceTickets', jobId);
-                transaction.update(jobRef, { assignedTechnicianId: user.uid, assignedTechnicianName: user.displayName || technicianName || 'Technician', status: TICKET_STATUS.ACCEPTED, acceptedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-                const auditRef = doc(collection(db, 'audit_logs'));
-                transaction.set(auditRef, { action: TICKET_AUDIT_ACTIONS.JOB_ACCEPTED, targetType: 'maintenanceTickets', targetId: jobId, actorId: user.uid, actorRole: 'technician', createdAt: serverTimestamp() });
-            });
+            const acceptFn = httpsCallable(functions, 'acceptTechnicianTicket');
+            await acceptFn({ ticketId: jobId });
             navigate(`/technician/job/${jobId}`);
         } catch (err) {
             console.error('Failed to accept job', err);
