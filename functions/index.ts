@@ -7,6 +7,11 @@ import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
 import { extractTitleDeedData } from "./ocrEngine";
+import {
+    parseFirebaseStoragePath,
+    assertOcrCallerRole,
+    verifyStorageObjectOwnership,
+} from "./ocrSecurityGuards";
 import { generateContractPDF, generatePayslipPDF } from "./pdfEngine";
 export { deliverNotificationPush } from "./notificationDelivery";
 
@@ -1097,15 +1102,50 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
 // ─── INFRASTRUCTURE CALLABLES ──────────────────────────────────────────────
 
 export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
+    // ── Auth + Role: delegated to assertOcrCallerRole ─────────────────────
+    // Adapts Firestore lookup to the injected GetUserRoleFn interface.
+    const { isAdmin } = await assertOcrCallerRole(
+        request.auth ? { uid: request.auth.uid, token: request.auth.token as Record<string, unknown> } : null,
+        async (uid) => {
+            const doc = await db.collection("users").doc(uid).get();
+            return (doc.data() || {}) as Record<string, unknown>;
+        }
+    );
+
     const { fileUrl } = request.data;
-    if (!fileUrl) throw new HttpsError("invalid-argument", "Missing document stream.");
+    if (!fileUrl || typeof fileUrl !== "string" || fileUrl.trim() === "") {
+        throw new HttpsError("invalid-argument", "Missing or invalid document stream.");
+    }
+    const normalizedUrl = fileUrl.trim();
+
+    // ── Per-object ownership check (owners only; admins bypass) ──────────
+    if (!isAdmin) {
+        let storagePath: string;
+        try {
+            storagePath = parseFirebaseStoragePath(normalizedUrl);
+        } catch {
+            throw new HttpsError("invalid-argument", "Could not resolve Storage object path from the provided URL.");
+        }
+
+        // Adapts firebase-admin getMetadata() to the injected GetFileMetaFn interface.
+        await verifyStorageObjectOwnership(
+            storagePath,
+            request.auth!.uid,
+            async (path) => {
+                const bucket = admin.storage().bucket();
+                const [metadata] = await bucket.file(path).getMetadata();
+                return metadata as Record<string, unknown>;
+            }
+        );
+    }
+
     try {
-        const extractedData = await extractTitleDeedData(fileUrl);
+        const extractedData = await extractTitleDeedData(normalizedUrl);
         await logAudit({
-            actorId: request.auth.uid, actorRole: "user",
+            actorId: request.auth!.uid, actorRole: isAdmin ? "admin" : "owner",
             action: "OCR_SCAN", targetType: "properties", targetId: "temp",
-            metadata: { fileUrl }
+            // fileUrl intentionally omitted from audit metadata to prevent SSRF URL logging
+            metadata: { mimeSource: "firebase-storage", ownershipVerified: !isAdmin }
         });
         return { status: "SUCCESS", data: extractedData };
     } catch (err: any) {
