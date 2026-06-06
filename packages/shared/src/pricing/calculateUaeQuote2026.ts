@@ -95,7 +95,7 @@ const VALID_SLA_TIERS = new Set(['standard', 'premium', 'elite']);
 const VALID_PAYMENT_PLANS = new Set(['annual', 'quarterly', 'monthly']);
 const MAJLIS_ASSET_IDS = new Set(['government_majlis', 'private_majlis', 'majlis']);
 
-const BASE_CONTRACT_READY_SURCHARGE = 0.03;
+const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
@@ -203,7 +203,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
 }
 
 function planSurcharge(paymentPlan: QuoteInput['paymentPlan']): number {
-  return paymentPlan === 'monthly' ? MONTHLY_BILLING_SURCHARGE : BASE_CONTRACT_READY_SURCHARGE;
+  if (paymentPlan === 'monthly') return MONTHLY_BILLING_SURCHARGE;
+  if (paymentPlan === 'quarterly') return QUARTERLY_BILLING_SURCHARGE;
+  return 0;
 }
 
 function slaMultiplier(slaTier: QuoteInput['slaTier']): number {
@@ -215,8 +217,10 @@ function slaMultiplier(slaTier: QuoteInput['slaTier']): number {
 function addPaymentExplanation(paymentPlan: QuoteInput['paymentPlan'], pricingExplanation: string[]) {
   if (paymentPlan === 'monthly') {
     pricingExplanation.push('MONTHLY billing facility applied; monthly total is higher than annual/quarterly.');
+  } else if (paymentPlan === 'quarterly') {
+    pricingExplanation.push('QUARTERLY scheduled-payment facility applied while keeping the annual SLA active.');
   } else {
-    pricingExplanation.push('Contract-ready annual value applied consistently for annual and quarterly plans.');
+    pricingExplanation.push('ANNUAL best-value settlement applied with full-year contract activation.');
   }
 }
 
