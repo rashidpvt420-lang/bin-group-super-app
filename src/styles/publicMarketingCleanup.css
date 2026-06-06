@@ -1,4 +1,1 @@
-[data-page="home"] > .MuiBox-root > .MuiBox-root:not(:first-of-type) a[href="/company"],
-[data-page="home"] > .MuiBox-root > .MuiContainer-root a[href="/company"] {
-  display: none !important;
-}
+/* Disabled: duplicate CTAs must be handled in React markup, not global selectors. */
