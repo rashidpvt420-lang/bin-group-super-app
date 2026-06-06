@@ -37,7 +37,7 @@ const palette = {
 };
 
 const LoginPage: React.FC = () => {
-    const { t, tx, isRTL } = useLanguage();
+    const { t, tx, isRTL, lang, setLang } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
     const { role, isAdmin, loading: roleLoading, refreshRole } = useRole();
@@ -172,7 +172,7 @@ const LoginPage: React.FC = () => {
             direction: isRTL ? 'rtl' : 'ltr',
             backgroundImage: 'radial-gradient(circle at 18% 10%, rgba(201,166,70,0.08), transparent 30%), radial-gradient(circle at 82% 90%, rgba(229,228,226,0.55), transparent 34%)',
         }}>
-            <Box sx={{ display: 'flex', justifyContent: isRTL ? 'flex-end' : 'flex-start', mb: { xs: 2, md: 3 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: { xs: 2, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button
                     startIcon={!isRTL ? <ArrowLeft size={17} /> : undefined}
                     endIcon={isRTL ? <ArrowLeft size={17} style={{ transform: 'rotate(180deg)' }} /> : undefined}
@@ -188,6 +188,12 @@ const LoginPage: React.FC = () => {
                     }}
                 >
                     {t('login.change_role')}
+                </Button>
+                <Button 
+                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+                    sx={{ color: palette.ink, fontWeight: 950, bgcolor: 'rgba(255,255,255,0.8)', px: 2, borderRadius: 2, border: `1px solid ${alpha(palette.gold, 0.36)}` }}
+                >
+                    {isRTL ? 'EN' : 'AR'}
                 </Button>
             </Box>
 

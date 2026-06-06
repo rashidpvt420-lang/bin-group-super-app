@@ -7,7 +7,8 @@ import createCache from '@emotion/cache';
 import { prefixer } from 'stylis';
 import rtlPlugin from 'stylis-plugin-rtl';
 
-const cacheRtl = createCache({ key: 'muirtl', stylisPlugins: [prefixer, rtlPlugin] });
+const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
+const cacheRtl = createCache({ key: 'muirtl', stylisPlugins: [prefixer, safeRtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr' });
 
 type ThemeMode = 'light' | 'dark';
@@ -65,3 +66,4 @@ export function useCustomTheme() {
     if (context === undefined) throw new Error("useCustomTheme must be used within a CustomThemeProvider");
     return context;
 }
+

@@ -24,7 +24,7 @@ const roleHome: Record<string, string> = {
 
 const RoleGatewayPage: React.FC = () => {
     const navigate = useNavigate();
-    const { t, tx, isRTL } = useLanguage();
+    const { t, tx, isRTL, lang, setLang } = useLanguage();
     const { user, role, isAdmin, refreshRole } = useRole();
     const [savingRole, setSavingRole] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
@@ -126,11 +126,22 @@ const RoleGatewayPage: React.FC = () => {
             position: 'relative',
             overflow: 'hidden'
         }}>
-            <Box sx={{ p: 4, position: 'absolute', top: 0, left: isRTL ? 'auto' : 0, right: isRTL ? 0 : 'auto', zIndex: 10 }}>
+            <Box sx={{ p: 4, position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', zIndex: 10, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Chip 
                     icon={<ArrowLeft size={16} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} 
                     label="BACK TO HOME" 
                     onClick={() => navigate('/')}
+                    sx={{ 
+                        bgcolor: 'rgba(255,255,255,0.05)', 
+                        color: '#FFF', 
+                        fontWeight: 900, 
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.2)' }
+                    }} 
+                />
+                <Chip 
+                    label={isRTL ? 'EN' : 'AR'}
+                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
                     sx={{ 
                         bgcolor: 'rgba(255,255,255,0.05)', 
                         color: '#FFF', 

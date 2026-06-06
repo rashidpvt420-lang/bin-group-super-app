@@ -1,8 +1,9 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Bot, Building2, Camera, FileText, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
+import { Bot, Building2, Camera, FileText, Globe, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import BrandWatermark from '../../components/BrandWatermark';
 
 type PublicMarketingPageKey =
   | 'home'
@@ -41,18 +42,7 @@ const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
 const radius = { outer: 3, card: 2.25, button: 2 };
 
-const watermarkSx = {
-  position: 'fixed',
-  top: '50%',
-  left: '50%',
-  width: { xs: '78vw', md: '44vw' },
-  maxWidth: 620,
-  transform: 'translate(-50%, -50%)',
-  opacity: 0.055,
-  filter: 'grayscale(1) sepia(1) saturate(1.35)',
-  pointerEvents: 'none',
-  zIndex: 0,
-};
+
 
 const copy = {
   en: {
@@ -128,8 +118,8 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
   const c = lang === 'ar' ? copy.ar : copy.en;
 
   return (
-    <Box dir={isRTL ? 'rtl' : 'ltr'} data-page={page} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflowX: 'hidden' }}>
-      <Box component="img" src="/logo.png" alt="" aria-hidden="true" sx={watermarkSx} />
+    <Box sx={{ minHeight: '100vh', bgcolor: canvas, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>
+      <BrandWatermark opacity={0.035} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Nav c={c} />
         <Hero c={c} />
@@ -145,11 +135,12 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
   );
 }
 
-function ActionButton({ href, children, contained = false, icon }: { href: string; children: React.ReactNode; contained?: boolean; icon?: React.ReactNode }) {
+function ActionButton({ children, href, icon, contained = false, onClick }: { children: React.ReactNode; href?: string; icon?: React.ReactNode; contained?: boolean; onClick?: () => void }) {
   return (
     <Button
-      component="a"
+      component={href ? "a" : "button"}
       href={href}
+      onClick={onClick}
       startIcon={icon}
       sx={{
         minHeight: 48,
@@ -171,6 +162,7 @@ function ActionButton({ href, children, contained = false, icon }: { href: strin
 }
 
 function Nav({ c }: { c: CopyShape }) {
+  const { lang, setLang, isRTL } = useLanguage();
   return (
     <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${line}` }}>
       <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -181,10 +173,11 @@ function Nav({ c }: { c: CopyShape }) {
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
           <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
-          <ActionButton href={DEMO_URL} icon={<PlayCircle size={17} />}>{c.demo}</ActionButton>
+          <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
+            {lang === 'ar' ? 'EN' : 'AR'}
+          </ActionButton>
         </Stack>
       </Container>
     </Box>
@@ -221,8 +214,8 @@ function Hero({ c }: { c: CopyShape }) {
             <Typography variant="h1" sx={{ fontSize: { xs: 38, md: 72 }, lineHeight: 1.02, fontWeight: 950, mb: 3, color: ink, letterSpacing: '-0.055em' }}>{c.title}</Typography>
             <Typography variant="h6" sx={{ color: muted, lineHeight: 1.62, fontWeight: 750, maxWidth: 920 }}>{c.desc}</Typography>
             <Stack direction="row" spacing={1.5} sx={{ mt: 4, flexWrap: 'wrap', gap: 1.5 }}>
-              <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
-              <ActionButton href={QUOTE_URL} icon={<WalletCards size={17} />}>{c.quote}</ActionButton>
+              <ActionButton href={COMPANY_URL} contained icon={<Building2 size={17} />}>{c.company}</ActionButton>
+              <ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton>
               <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
             <Typography variant="caption" sx={{ mt: 3, display: 'block', color: muted, fontWeight: 900 }}>{c.flow}</Typography>
