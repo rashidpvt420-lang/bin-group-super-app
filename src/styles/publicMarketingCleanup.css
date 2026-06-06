@@ -1,0 +1,4 @@
+[data-page="home"] > .MuiBox-root > .MuiBox-root:not(:first-of-type) a[href="/company"],
+[data-page="home"] > .MuiBox-root > .MuiContainer-root a[href="/company"] {
+  display: none !important;
+}
