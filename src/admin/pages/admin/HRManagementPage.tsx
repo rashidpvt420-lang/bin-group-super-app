@@ -378,13 +378,18 @@ export default function HRManagementPage() {
             }
             await auth.currentUser.getIdToken(true);
             const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
+            const basicSalary = Number(s.basicSalary || s.salaryPackage?.basicSalary || s.salary || 0);
+            const allowances = Number(s.allowances || s.salaryPackage?.allowances || 0);
+            if (!basicSalary && !allowances) {
+                throw new Error("Salary data is Not Configured for this staff member.");
+            }
             const result: any = await genFn({
                 staffId: s.id,
                 staffName: s.displayName || s.fullName || 'Staff Member',
                 staffEmail: s.email,
                 payPeriod: PAYROLL_PERIOD,
-                basicSalary: s.basicSalary || s.salaryPackage?.basicSalary || s.salary || 12000,
-                allowances: s.allowances || s.salaryPackage?.allowances || 3000,
+                basicSalary,
+                allowances,
                 overtime: s.pendingOvertimePay || 0,
                 deductions: s.deductions || 0
             });

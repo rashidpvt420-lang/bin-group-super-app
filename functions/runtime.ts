@@ -59,13 +59,7 @@ async function assertAdmin(auth: any) {
     const token = auth.token || {};
     const tokenRole = normalizeRole(token.role || token.userRole || token.primaryRole);
     const tokenIsAdmin = token.admin === true || token.isAdmin === true || token.superAdmin === true || token.super_admin === true || ["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"].includes(tokenRole);
-    if (tokenIsAdmin) return;
-
-    const userDoc = await runtimeDb.collection("users").doc(auth.uid).get();
-    const userData = userDoc.data() || {};
-    const firestoreRole = normalizeRole(userData.role || userData.userRole || userData.primaryRole);
-    const userIsAdmin = userData.isAdmin === true || userData.admin === true || userData.superAdmin === true || userData.super_admin === true || ["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"].includes(firestoreRole);
-    if (!userIsAdmin) throw new HttpsError("permission-denied", "Only admins can approve or reject payments.");
+    if (!tokenIsAdmin) throw new HttpsError("permission-denied", "Only admins can perform this action.");
 }
 
 function requirePaymentId(data: any) {

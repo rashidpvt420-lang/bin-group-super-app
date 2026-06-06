@@ -33,10 +33,6 @@ async function assertAdmin(auth: any) {
   const t = auth.token || {};
   const tr = s(t.role || t.userRole || t.primaryRole).toLowerCase();
   if (t.admin === true || t.isAdmin === true || t.superAdmin === true || t.super_admin === true || adminRoles.has(tr)) return;
-  const snap = await db.collection("users").doc(auth.uid).get();
-  const u = snap.data() || {};
-  const ur = s(u.role || u.userRole || u.primaryRole).toLowerCase();
-  if (u.admin === true || u.isAdmin === true || u.superAdmin === true || u.super_admin === true || adminRoles.has(ur)) return;
   throw new HttpsError("permission-denied", "Admin access required.");
 }
 
