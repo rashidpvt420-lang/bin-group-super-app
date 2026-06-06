@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Bot, Building2, Camera, FileText, Languages, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
+import { Bot, Building2, Camera, FileText, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
@@ -29,7 +29,7 @@ const WHATSAPP_URL = 'https://wa.me/971552423233';
 const COMPANY_URL = '/company';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
-const DEMO_URL = '/request-demo';
+const DEMO_URL = '/company#demo';
 const LOGIN_URL = '/login';
 
 const ink = '#111827';
@@ -45,11 +45,11 @@ const watermarkSx = {
   position: 'fixed',
   top: '50%',
   left: '50%',
-  width: { xs: '68vw', md: '42vw' },
-  maxWidth: 560,
+  width: { xs: '78vw', md: '44vw' },
+  maxWidth: 620,
   transform: 'translate(-50%, -50%)',
-  opacity: 0.028,
-  filter: 'grayscale(1) sepia(1) saturate(1.45)',
+  opacity: 0.055,
+  filter: 'grayscale(1) sepia(1) saturate(1.35)',
   pointerEvents: 'none',
   zIndex: 0,
 };
@@ -57,7 +57,6 @@ const watermarkSx = {
 const copy = {
   en: {
     brand: 'BIN GROUP',
-    language: 'العربية',
     company: 'Company Profile',
     chip: 'UAE PROPERTY CARE HOME OS',
     title: 'One Operating System for Property Care, Management, and Proof.',
@@ -91,7 +90,6 @@ const copy = {
   },
   ar: {
     brand: 'مجموعة بن',
-    language: 'EN',
     company: 'نبذة الشركة',
     chip: 'نظام تشغيل العناية بالعقار في الإمارات',
     title: 'نظام تشغيل واحد للعناية بالعقار وإدارته وإثبات الخدمة.',
@@ -126,15 +124,14 @@ const copy = {
 };
 
 export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPageProps) {
-  const { lang, setLang, isRTL } = useLanguage();
+  const { lang, isRTL } = useLanguage();
   const c = lang === 'ar' ? copy.ar : copy.en;
-  const nextLang = lang === 'en' ? 'ar' : 'en';
 
   return (
     <Box dir={isRTL ? 'rtl' : 'ltr'} data-page={page} sx={{ minHeight: '100vh', bgcolor: canvas, color: ink, position: 'relative', overflowX: 'hidden' }}>
       <Box component="img" src="/logo.png" alt="" aria-hidden="true" sx={watermarkSx} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
-        <Nav c={c} nextLang={nextLang} setLang={setLang} />
+        <Nav c={c} />
         <Hero c={c} />
         <Container maxWidth="xl" sx={{ pb: 8 }}>
           <Trust />
@@ -173,7 +170,7 @@ function ActionButton({ href, children, contained = false, icon }: { href: strin
   );
 }
 
-function Nav({ c, nextLang, setLang }: { c: CopyShape; nextLang: 'en' | 'ar'; setLang: (lang: 'en' | 'ar') => void }) {
+function Nav({ c }: { c: CopyShape }) {
   return (
     <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${line}` }}>
       <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -188,7 +185,6 @@ function Nav({ c, nextLang, setLang }: { c: CopyShape; nextLang: 'en' | 'ar'; se
           <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton href={DEMO_URL} icon={<PlayCircle size={17} />}>{c.demo}</ActionButton>
-          <Button onClick={() => setLang(nextLang)} sx={{ minWidth: 72, minHeight: 48, borderRadius: radius.button, color: '#111', background: `linear-gradient(135deg, ${goldLight}, ${gold})`, fontWeight: 950, boxShadow: `0 12px 28px ${alpha(gold, 0.22)}` }}><Languages size={16} />&nbsp;{c.language}</Button>
         </Stack>
       </Container>
     </Box>
@@ -226,7 +222,6 @@ function Hero({ c }: { c: CopyShape }) {
             <Typography variant="h6" sx={{ color: muted, lineHeight: 1.62, fontWeight: 750, maxWidth: 920 }}>{c.desc}</Typography>
             <Stack direction="row" spacing={1.5} sx={{ mt: 4, flexWrap: 'wrap', gap: 1.5 }}>
               <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
-              <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
               <ActionButton href={QUOTE_URL} icon={<WalletCards size={17} />}>{c.quote}</ActionButton>
               <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
@@ -354,7 +349,6 @@ function Inquiry({ c }: { c: CopyShape }) {
         </Grid>
         <Grid item xs={12} md={4}>
           <Stack spacing={1.3}>
-            <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
             <ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton>
             <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
           </Stack>
