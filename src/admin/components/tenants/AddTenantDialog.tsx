@@ -48,11 +48,13 @@ export default function AddTenantDialog({ open, onClose, properties, units, onSu
             // but usually we want Firebase to generate the UID.
             // For administrative "Add", we often create a 'tenantInvites' doc.
             
+            const property = properties.find(p => p.id === formData.propertyId);
             const newTenant = {
                 displayName: formData.displayName,
                 email: formData.email.toLowerCase().trim(),
                 phoneNumber: formData.phoneNumber,
                 propertyId: formData.propertyId,
+                ownerId: property?.ownerId || '',
                 unitId: formData.unitId,
                 role: 'tenant',
                 status: 'pending_invite',

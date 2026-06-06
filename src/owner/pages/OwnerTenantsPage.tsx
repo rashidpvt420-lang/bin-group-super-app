@@ -34,7 +34,7 @@ export default function OwnerTenantsPage() {
             }
 
             // 2. Get tenants linked to these properties
-            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('propertyId', 'in', propIds));
+            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
             onSnapshot(tenantQ, (tenantSnap) => {
                 const allTenants = tenantSnap.docs.map(d => {
                     const data = d.data();
