@@ -20,10 +20,12 @@ import {
   Users,
   WalletCards,
   Wrench,
+  Globe,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
+import BrandWatermark from '../../components/BrandWatermark';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'Ceo@bin-groups.com' };
 const ink = '#111827';
@@ -34,18 +36,7 @@ const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
 const radius = { section: 3, card: 2.25, button: 2 };
 
-const watermarkSx = {
-  position: 'fixed',
-  top: '50%',
-  left: '50%',
-  width: { xs: '82vw', md: '44vw' },
-  maxWidth: 680,
-  transform: 'translate(-50%, -50%)',
-  opacity: 0.055,
-  filter: 'grayscale(1) sepia(1) saturate(1.25)',
-  pointerEvents: 'none',
-  zIndex: 0,
-};
+
 
 function getCopy(lang: 'en' | 'ar') {
   const ar = lang === 'ar';
@@ -153,7 +144,7 @@ function NavButton({ children, onClick, contained = false, icon }: { children: R
 
 export default function CompanyProfilePage() {
   const navigate = useNavigate();
-  const { lang, isRTL } = useLanguage();
+  const { lang, setLang, isRTL } = useLanguage();
   const copy = useMemo(() => getCopy(lang), [lang]);
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
   const textAlign = isRTL ? 'right' : 'left';
@@ -162,7 +153,7 @@ export default function CompanyProfilePage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>
-      <Box component="img" src="/logo.png" alt="" aria-hidden="true" sx={watermarkSx} />
+      <BrandWatermark opacity={0.035} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(18px)', borderBottom: `1px solid ${line}` }}>
           <Container maxWidth="lg" sx={{ py: 1.2, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -174,8 +165,8 @@ export default function CompanyProfilePage() {
             </Button>
             <NavButton onClick={() => navigate('/')} icon={<Home size={17} />}>{copy.navHome}</NavButton>
             <NavButton onClick={() => navigate('/onboarding')} contained>{copy.navStart}</NavButton>
-            <NavButton onClick={() => navigate('/onboarding?intent=quote')} icon={<WalletCards size={17} />}>{copy.navQuote}</NavButton>
             <NavButton onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} icon={<PlayCircle size={17} />}>{copy.navDemo}</NavButton>
+            <NavButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>{lang === 'ar' ? 'EN' : 'AR'}</NavButton>
           </Container>
         </Box>
 

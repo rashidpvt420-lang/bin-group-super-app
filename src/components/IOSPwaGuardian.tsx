@@ -4,34 +4,7 @@ import { Share, PlusSquare, Bell, X } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
-function LanguageToggle() {
-    const { lang, toggleLanguage, isRTL } = useLanguage();
 
-    return (
-        <Button
-            type="button"
-            size="small"
-            variant="contained"
-            onClick={toggleLanguage}
-            sx={{
-                position: 'fixed',
-                top: { xs: 12, sm: 16 },
-                right: isRTL ? 'auto' : { xs: 12, sm: 16 },
-                left: isRTL ? { xs: 12, sm: 16 } : 'auto',
-                zIndex: 10000,
-                minWidth: 64,
-                borderRadius: 999,
-                bgcolor: binThemeTokens.gold,
-                color: '#000',
-                fontWeight: 950,
-                boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
-                '&:hover': { bgcolor: '#D9BC73' }
-            }}
-        >
-            {lang === 'ar' ? 'EN' : 'AR'}
-        </Button>
-    );
-}
 
 export default function IOSPwaGuardian() {
     const [isVisible, setIsVisible] = useState(false);
@@ -49,7 +22,6 @@ export default function IOSPwaGuardian() {
 
     return (
         <>
-            <LanguageToggle />
             {isVisible && (
                 <Paper sx={{ 
                     position: 'fixed', 

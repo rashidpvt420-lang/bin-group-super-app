@@ -59,7 +59,8 @@ import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
 import BrandWatermark from '../components/BrandWatermark';
 import { adminTheme } from './theme/adminTheme';
 
-const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
+const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
+const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, safeRtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
 
 function AdminLayout() {

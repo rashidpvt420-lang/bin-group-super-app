@@ -4,6 +4,27 @@ import { join, extname } from 'node:path';
 const failures = [];
 const warnings = [];
 
+function loadDotEnvFile(path) {
+  if (!existsSync(path)) return;
+  const text = readFileSync(path, 'utf8');
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const index = line.indexOf('=');
+    const key = line.slice(0, index).trim();
+    let value = line.slice(index + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+for (const envFile of ['.env', '.env.local', '.env.production', '.env.production.local']) {
+  loadDotEnvFile(envFile);
+}
+
+
 function read(path) {
   if (!existsSync(path)) {
     failures.push(`Missing required file: ${path}`);
@@ -135,3 +156,4 @@ if (failures.length) {
 }
 
 console.log('Production runtime audit passed.');
+

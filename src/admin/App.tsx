@@ -54,7 +54,8 @@ import AdminDutyCommandPage from './pages/technicians/AdminDutyCommandPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import { adminTheme, binThemeTokens } from './theme/adminTheme';
 
-const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
+const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
+const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, safeRtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
 
 function AppContent() {
@@ -221,3 +222,4 @@ function AdminThemeProviderWrapper() {
         </CacheProvider>
     );
 }
+

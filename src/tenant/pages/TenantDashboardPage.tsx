@@ -148,6 +148,23 @@ export default function TenantDashboardPage() {
           <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, fontWeight: 950 }}>{user?.displayName?.charAt(0) || 'R'}</Avatar>
         </Box>
 
+        <Button
+          variant="contained"
+          onClick={() => navigate('/tenant/request')}
+          data-testid="tenant-new-request"
+          sx={{
+            alignSelf: isRTL ? 'flex-end' : 'flex-start',
+            bgcolor: binThemeTokens.gold,
+            color: '#000',
+            borderRadius: 4,
+            fontWeight: 950,
+            px: 4,
+            py: 1.5,
+          }}
+        >
+          New Request
+        </Button>
+
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3 }}>
             <Box>
@@ -165,7 +182,7 @@ export default function TenantDashboardPage() {
         </Paper>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showMaintenance ? '/tenant/request' : '/tenant/request?category=management')} startIcon={<Wrench size={24} />} sx={{ height: 96, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 5, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? (t('dash.new_request') || 'New Complaint / Request') : 'Management Request'}</Button></Grid>
+          <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showMaintenance ? '/tenant/request' : '/tenant/request?category=management')} startIcon={<Wrench size={24} />} sx={{ height: 96, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 5, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? 'New Request' : 'Management Request'}</Button></Grid>
           <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/emergency')} startIcon={<AlertTriangle size={24} />} sx={{ height: 96, borderColor: '#ef4444', color: '#ef4444', borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? (t('dash.emergency_dispatch') || 'Emergency Dispatch') : 'Escalate to Management'}</Button></Grid>
           <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/design-studio')} startIcon={<Paintbrush size={24} />} sx={{ height: 96, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{t('nav.ai_studio') || 'AI Design Studio'}</Button></Grid>
         </Grid>
@@ -225,3 +242,4 @@ export default function TenantDashboardPage() {
     </Box>
   );
 }
+

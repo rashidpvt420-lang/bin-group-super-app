@@ -134,3 +134,6 @@ playwright-report/
 # Local E2E credentials
 .env.e2e
 .env.e2e.local
+
+.env.local
+.env.production.local
