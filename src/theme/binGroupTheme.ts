@@ -1,4 +1,5 @@
 import { createTheme, alpha } from '@mui/material/styles';
+import { ThemeOptions } from '@mui/material/styles';
 
 /**
  * BIN GROUP Sovereign Identity System
@@ -34,7 +35,7 @@ export const binThemeTokens = {
   goldGradient: 'linear-gradient(135deg, #C9A646, #E5E4E2)',
 };
 
-export const binGroupTheme = createTheme({
+const themeConfig: ThemeOptions = {
   palette: {
     mode: 'light',
     primary: {
@@ -57,6 +58,12 @@ export const binGroupTheme = createTheme({
       primary: binThemeTokens.textPrimary,
       secondary: binThemeTokens.textSecondary,
     },
+    error: {
+      main: binThemeTokens.danger,
+    },
+    warning: {
+      main: binThemeTokens.warning,
+    },
     divider: binThemeTokens.border,
   },
   typography: {
@@ -69,6 +76,8 @@ export const binGroupTheme = createTheme({
     h6: { fontWeight: 700, color: binThemeTokens.textPrimary },
     subtitle1: { color: binThemeTokens.textSecondary },
     subtitle2: { color: binThemeTokens.textSecondary },
+    body1: { color: binThemeTokens.textPrimary },
+    body2: { color: binThemeTokens.textSecondary },
   },
   shape: {
     borderRadius: 22,
@@ -152,5 +161,42 @@ export const binGroupTheme = createTheme({
         },
       },
     },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiInputBase-input': { color: binThemeTokens.textPrimary },
+          '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary },
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: binThemeTokens.card,
+            '& fieldset': { borderColor: binThemeTokens.border },
+            '&:hover fieldset': { borderColor: alpha(binThemeTokens.gold, 0.45) },
+            '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
+          },
+          '& .MuiFormHelperText-root': { color: binThemeTokens.textSecondary },
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        root: {
+          color: binThemeTokens.textPrimary,
+          backgroundColor: binThemeTokens.card,
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.border },
+          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha(binThemeTokens.gold, 0.45) },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.gold },
+          '& .MuiSvgIcon-root': { color: binThemeTokens.goldHover },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: binThemeTokens.textSecondary,
+          '&.Mui-focused': { color: binThemeTokens.goldHover },
+        },
+      },
+    },
   },
-});
+};
+
+export const binGroupTheme = createTheme(themeConfig);
