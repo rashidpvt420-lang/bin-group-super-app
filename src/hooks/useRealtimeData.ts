@@ -6,6 +6,13 @@
 import { useEffect, useState } from 'react';
 import { realtimeService } from '../lib/firebaseRealtimeService';
 
+type RealtimeErrorPayload = { error: string };
+type RealtimeListPayload<T = any> = T[] | RealtimeErrorPayload;
+type RealtimePayload<T = any> = T | RealtimeErrorPayload;
+
+const hasRealtimeError = (data: unknown): data is RealtimeErrorPayload =>
+  Boolean(data && typeof data === 'object' && 'error' in data);
+
 export function useOwnerProperties(ownerId: string) {
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,12 +24,12 @@ export function useOwnerProperties(ownerId: string) {
     setLoading(true);
     const unsubscribe = realtimeService.subscribeToOwnerProperties(
       ownerId,
-      (data) => {
-        if (data && !data.error) {
+      (data: RealtimeListPayload) => {
+        if (!hasRealtimeError(data)) {
           setProperties(Array.isArray(data) ? data : []);
           setError(null);
         } else {
-          setError(data?.error || 'Unknown error');
+          setError(data.error || 'Unknown error');
         }
         setLoading(false);
       }
@@ -45,12 +52,12 @@ export function useTenantTickets(tenantId: string) {
     setLoading(true);
     const unsubscribe = realtimeService.subscribeToTenantTickets(
       tenantId,
-      (data) => {
-        if (data && !data.error) {
+      (data: RealtimeListPayload) => {
+        if (!hasRealtimeError(data)) {
           setTickets(Array.isArray(data) ? data : []);
           setError(null);
         } else {
-          setError(data?.error || 'Unknown error');
+          setError(data.error || 'Unknown error');
         }
         setLoading(false);
       }
@@ -71,14 +78,14 @@ export function useTechnicianTickets(technicianId: string) {
     if (!technicianId) return;
 
     setLoading(true);
-    const unsubscribe = realtimeService.subscribeTechnicianTickets(
+    const unsubscribe = realtimeService.subscribeToTechnicianTickets(
       technicianId,
-      (data) => {
-        if (data && !data.error) {
+      (data: RealtimeListPayload) => {
+        if (!hasRealtimeError(data)) {
           setTickets(Array.isArray(data) ? data : []);
           setError(null);
         } else {
-          setError(data?.error || 'Unknown error');
+          setError(data.error || 'Unknown error');
         }
         setLoading(false);
       }
@@ -101,12 +108,12 @@ export function useBrokerReferrals(brokerId: string) {
     setLoading(true);
     const unsubscribe = realtimeService.subscribeToBrokerReferrals(
       brokerId,
-      (data) => {
-        if (data && !data.error) {
+      (data: RealtimeListPayload) => {
+        if (!hasRealtimeError(data)) {
           setReferrals(Array.isArray(data) ? data : []);
           setError(null);
         } else {
-          setError(data?.error || 'Unknown error');
+          setError(data.error || 'Unknown error');
         }
         setLoading(false);
       }
@@ -129,12 +136,12 @@ export function useTechnicianLocation(technicianId: string) {
     setLoading(true);
     const unsubscribe = realtimeService.subscribeToTechnicianLocation(
       technicianId,
-      (data) => {
-        if (data && !data.error) {
+      (data: RealtimePayload) => {
+        if (!hasRealtimeError(data)) {
           setLocation(data);
           setError(null);
         } else {
-          setError(data?.error || 'Unknown error');
+          setError(data.error || 'Unknown error');
         }
         setLoading(false);
       }
