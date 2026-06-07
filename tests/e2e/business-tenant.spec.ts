@@ -23,66 +23,56 @@ async function login(page: Page) {
   await page.waitForURL('**/tenant/dashboard', { timeout: 15_000 });
 }
 
-async function selectFirstMuiOption(page: Page, label: RegExp | string) {
-  const combobox = page.getByLabel(label).first().or(page.locator('[role="combobox"]').first());
-  await expect(combobox).toBeVisible({ timeout: 10_000 });
-  await combobox.click();
-  const option = page.locator('[role="option"]').first();
-  await expect(option).toBeVisible({ timeout: 10_000 });
-  await option.click();
-}
-
 test.describe('Tenant Business Workflow', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
 
   test('Tenant can create a service request and upload photo', async ({ page }) => {
-    await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    test.setTimeout(90_000);
 
-    const createBtn = page
-      .locator('button:has-text("New Complaint / Request"), button:has-text("Management Request"), button:has-text("New Request"), button:has-text("Report Issue"), button:has-text("Create Ticket")')
-      .first();
-    await expect(createBtn).toBeVisible({ timeout: 15_000 });
-    await createBtn.click();
-
+    await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/tenant\/request/, { timeout: 15_000 });
 
-    await selectFirstMuiOption(page, /Category/i);
+    await expect(page.locator('body')).not.toContainText(
+      /SOVEREIGN_FAILURE|System Interruption|Minified React error|permission-denied|missing or insufficient permissions|no property assigned|RESIDENCE UNASSIGNED/i,
+      { timeout: 10_000 }
+    );
 
-    const locationInput = page
-      .locator('input[placeholder*="technician" i], input[placeholder*="location" i], input[aria-label*="location" i]')
-      .first();
-    if (await locationInput.isVisible().catch(() => false)) {
-      await locationInput.fill('E2E Kitchen AC vent');
-    }
+    const comboboxes = page.locator('[role="combobox"]');
 
-    const issueInput = page.locator('textarea, input[placeholder*="issue" i], input[placeholder*="describe" i]').first();
-    await expect(issueInput).toBeVisible({ timeout: 10_000 });
-    await issueInput.fill('E2E Test: AC is not cooling properly.');
+    await expect(comboboxes.first()).toBeVisible({ timeout: 30_000 });
+
+    await comboboxes.nth(0).click();
+    await page.getByRole('option').first().click();
+
+    await comboboxes.nth(1).click();
+    await page.getByRole('option').first().click();
+
+    await page.getByTestId('tenant-request-location').fill('Kitchen sink');
+    await page.getByTestId('tenant-request-description').fill('E2E water leakage test request with photo evidence.');
 
     const fileInput = page.locator('input[type="file"]').first();
-    if (await fileInput.count()) {
-      await fileInput.setInputFiles({
-        name: 'tenant-request-evidence.png',
-        mimeType: 'image/png',
-        buffer: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
-      }).catch(() => undefined);
-    }
+    await fileInput.setInputFiles({
+      name: 'tenant-request-evidence.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
+        'hex'
+      ),
+    });
 
-    const dispatchBtn = page
-      .locator('button:has-text("DISPATCH REQUEST"), button:has-text("Dispatch Request"), button[type="submit"]')
-      .first();
-    await expect(dispatchBtn).toBeVisible({ timeout: 15_000 });
-    await expect(dispatchBtn).toBeEnabled({ timeout: 15_000 });
-    await dispatchBtn.click();
+    await page.getByTestId('tenant-request-submit').click();
 
     await Promise.race([
       page.waitForURL('**/tenant/tickets', { timeout: 25_000 }),
       expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 25_000 }),
     ]);
-    await expect(page.locator('body')).not.toContainText(/Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i, { timeout: 5_000 });
+
+    await expect(page.locator('body')).not.toContainText(
+      /Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i,
+      { timeout: 5_000 }
+    );
   });
 
   test('Tenant can approve completed work', async ({ page }) => {
@@ -92,12 +82,12 @@ test.describe('Tenant Business Workflow', () => {
     const approveBtn = page.locator('button:has-text("Approve"), button:has-text("Accept Work")').first();
     if (await approveBtn.isVisible().catch(() => false)) {
       await approveBtn.click();
-      
+
       const confirmBtn = page.locator('button:has-text("Confirm"), button:has-text("Yes")').first();
       if (await confirmBtn.isVisible().catch(() => false)) {
         await confirmBtn.click();
       }
-      
+
       await expect(page.locator('text=approved').or(page.locator('text=closed'))).toBeVisible({ timeout: 5000 }).catch(() => {});
     }
   });

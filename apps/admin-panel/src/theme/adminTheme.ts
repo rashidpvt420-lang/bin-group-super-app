@@ -1,29 +1,13 @@
 import { createTheme, alpha } from '@mui/material/styles';
+import { binThemeTokens, binGroupTheme } from '../../../../src/theme/binGroupTheme';
 
 /**
  * BIN-GROUP Sovereign Identity System (V1.18)
  * Admin Panel Optimized - Dark Mode + Institutional Gold
  */
-export const binThemeTokens = {
-  black: '#0B0B0C',
-  graphite: '#161618',
-  gold: '#C6A75E',
-  goldLight: '#E6C77A',
-  champagne: '#F2E2B6',
-  darkBlue: '#0F172A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A1A1AA',
-  textTertiary: '#71717A',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  active: '#C6A75E',
-  border: 'rgba(198,167,94,0.15)',
-  panel: 'rgba(22, 22, 24, 0.9)',
-  tray: 'rgba(22, 22, 24, 0.6)',
-  goldGradient: 'linear-gradient(135deg, #C6A75E, #E6C77A)'
-};
+export { binThemeTokens };
 
-export const adminTheme = createTheme({
+export const adminTheme = createTheme(binGroupTheme, {
   palette: {
     mode: 'dark',
     primary: {

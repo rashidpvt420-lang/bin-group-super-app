@@ -31,7 +31,7 @@ const readRequiredEnv = (name: string): string => {
 
 // Safe fallback ONLY for production bin-group-57c60 config if env is missing
 const firebaseConfig: BinFirebaseConfig = {
-    apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || "AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s",
+    apiKey: readRequiredEnv('VITE_FIREBASE_API_KEY') || "",
     authDomain: readRequiredEnv('VITE_FIREBASE_AUTH_DOMAIN') || "bin-group-57c60.firebaseapp.com",
     projectId: readRequiredEnv('VITE_FIREBASE_PROJECT_ID') || "bin-group-57c60",
     storageBucket: readRequiredEnv('VITE_FIREBASE_STORAGE_BUCKET') || "bin-group-57c60.firebasestorage.app",

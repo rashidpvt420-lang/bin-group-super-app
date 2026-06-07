@@ -1733,30 +1733,6 @@ const translations: Record<Language, Record<string, string>> = {
     },
 };
 
-function humanizeTranslationKey(key: string): string {
-  return String(key || '')
-    .split('.')
-    .pop()
-    ?.replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase()) || String(key || '');
-}
-
-function coerceTranslationString(value: unknown, key: string): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value == null) return humanizeTranslationKey(key);
-  return humanizeTranslationKey(key);
-}
-
-function interpolateTranslation(value: string, variables?: Record<string, any>): string {
-  if (!variables) return value;
-  return Object.entries(variables).reduce((text, [name, raw]) => {
-    const safeValue = raw == null ? '' : String(raw);
-    return text.replace(new RegExp(`{{\\s*${name}\\s*}}`, 'g'), safeValue);
-  }, value);
-}
-
-
 function applyVariables(value: string, variables?: Record<string, any>) {
   if (!variables) return value;
   return Object.entries(variables).reduce(
@@ -1827,4 +1803,3 @@ export function useLanguage() {
 }
 
 export default LanguageContext;
-
