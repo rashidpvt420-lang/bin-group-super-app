@@ -103,6 +103,186 @@ function complianceWarnings(data: FirebaseFirestore.DocumentData) {
         .map((item) => `${item.label}: ${item.days! < 0 ? `${Math.abs(item.days!)} days expired` : `${item.days} days left`}`);
 }
 
+
+function normalizedKey(value: unknown) {
+    return safeText(value).toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function isApprovedHrStatus(value: unknown) {
+    return ["approved", "hr_approved", "approved_by_hr", "accepted"].includes(normalizedKey(value));
+}
+
+function isNewHireRequest(data: FirebaseFirestore.DocumentData) {
+    const candidates = [
+        data.requestType,
+        data.type,
+        data.category,
+        data.requestLabel,
+        data.hrAction,
+    ].map(normalizedKey);
+
+    return candidates.some((value) =>
+        value === "new_hire" ||
+        value === "newhire" ||
+        value === "new_staff" ||
+        value === "staff_onboarding" ||
+        value.includes("new_hire") ||
+        value.includes("new_staff")
+    );
+}
+
+function readNumber(value: unknown, fallback = 0) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function currentPayrollPeriod() {
+    return new Date().toISOString().slice(0, 7);
+}
+
+async function provisionApprovedNewHire(requestId: string, data: FirebaseFirestore.DocumentData, reviewer: string) {
+    const staffUid = safeText(
+        data.uid ||
+        data.userId ||
+        data.staffUid ||
+        data.technicianId ||
+        data.targetUid ||
+        data.newHireUid ||
+        data.newStaffUid
+    );
+
+    if (!staffUid) {
+        await writeHrAudit("HR_NEW_HIRE_PROVISION_SKIPPED", requestId, {
+            reason: "missing_staff_uid",
+            reviewedBy: reviewer,
+        });
+        return;
+    }
+
+    const period = safeText(data.payrollPeriod, currentPayrollPeriod());
+    const role = normalizeRole(data.role || data.staffRole || data.position || "technician") || "technician";
+    const displayName = safeText(data.displayName || data.fullName || data.name || data.employeeName, "New staff member");
+    const email = safeText(data.email || data.workEmail);
+    const phone = safeText(data.phone || data.mobile || data.whatsapp);
+    const trade = safeText(data.trade || data.primaryTrade || data.specialization, "General Maintenance");
+
+    const baseSalary = readNumber(data.baseSalary || data.basicSalary || data.salary);
+    const bonus = readNumber(data.bonus || data.joiningBonus || data.overtimeBonus);
+    const absenceDeduction = readNumber(data.absenceDeduction || data.absences || data.absencePenalty);
+    const grossSalary = baseSalary + bonus;
+    const netSalary = grossSalary - absenceDeduction;
+
+    const payrollRecordId = staffUid + "_" + period;
+
+    const userRef = db.collection("users").doc(staffUid);
+    const technicianRef = db.collection("technicians").doc(staffUid);
+    const readinessRef = technicianRef.collection("deviceReadiness").doc("onboarding");
+    const payrollRef = db.collection("payroll").doc(payrollRecordId);
+
+    const batch = db.batch();
+
+    batch.set(userRef, {
+        uid: staffUid,
+        userId: staffUid,
+        displayName,
+        fullName: displayName,
+        email: email || null,
+        phone: phone || null,
+        role,
+        staffRole: role,
+        hrStatus: "active",
+        onboardingStatus: "provisioned",
+        isInstitutionalActive: true,
+        provisionedFromRequestId: requestId,
+        updatedAt: serverTimestamp(),
+        createdAt: data.createdAt || serverTimestamp(),
+    }, { merge: true });
+
+    batch.set(technicianRef, {
+        uid: staffUid,
+        userId: staffUid,
+        technicianId: staffUid,
+        displayName,
+        fullName: displayName,
+        email: email || null,
+        phone: phone || null,
+        role: "technician",
+        staffRole: role,
+        trade,
+        skillTags: Array.isArray(data.skillTags) ? data.skillTags : [trade],
+        status: "ONBOARDING",
+        availability: "pending_device_readiness",
+        hrStatus: "active",
+        payrollStatus: "pending_finance_review",
+        source: "hr_new_hire_provisioning",
+        provisionedFromRequestId: requestId,
+        updatedAt: serverTimestamp(),
+        createdAt: data.createdAt || serverTimestamp(),
+    }, { merge: true });
+
+    batch.set(readinessRef, {
+        technicianId: staffUid,
+        userId: staffUid,
+        gps: false,
+        push: false,
+        camera: false,
+        storage: false,
+        appLogin: false,
+        safetyBriefing: false,
+        ppeIssued: false,
+        toolsIssued: false,
+        status: "pending",
+        source: "hr_new_hire_provisioning",
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+    }, { merge: true });
+
+    batch.set(payrollRef, {
+        staffId: staffUid,
+        techId: staffUid,
+        uid: staffUid,
+        displayName,
+        email: email || null,
+        month: period,
+        payPeriod: period,
+        baseSalary,
+        bonus,
+        absenceDeduction,
+        grossSalary,
+        netSalary,
+        formula: "baseSalary + bonus - absenceDeduction",
+        status: "pending_finance_review",
+        source: "hr_new_hire_provisioning",
+        provisionedFromRequestId: requestId,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+    }, { merge: true });
+
+    batch.update(db.collection("staffRequests").doc(requestId), {
+        provisionedUid: staffUid,
+        provisionedAt: serverTimestamp(),
+        payrollRecordId,
+        updatedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    await queueUserNotification(staffUid, "BIN GROUP onboarding activated", "Your staff profile, technician record, device readiness checklist, and payroll setup are now initialized.", {
+        type: "hr_new_hire_provisioned",
+        requestId,
+        payrollRecordId,
+        url: "/technician/hr",
+    });
+
+    await writeHrAudit("HR_NEW_HIRE_PROVISIONED", requestId, {
+        staffUid,
+        role,
+        payrollPeriod: period,
+        payrollRecordId,
+        reviewedBy: reviewer,
+    });
+}
+
 export const onStaffRequestCreated = onDocumentCreated("staffRequests/{requestId}", async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -159,6 +339,10 @@ export const onStaffRequestReviewed = onDocumentUpdated("staffRequests/{requestI
             status: after.status,
             url: "/technician/hr",
         });
+    }
+
+    if (isApprovedHrStatus(after.status) && isNewHireRequest(after)) {
+        await provisionApprovedNewHire(requestId, after, reviewer);
     }
 
     await writeHrAudit("HR_REQUEST_STATUS_CHANGED", requestId, {

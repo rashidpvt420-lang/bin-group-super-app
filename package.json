@@ -37,7 +37,8 @@
     "test:e2e:launch-audit": "npm run test:e2e:env && playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
     "test:e2e:launch-audit:live": "node scripts/run-live-launch-audit.mjs",
     "test:e2e:business": "playwright install --with-deps chromium && playwright test tests/e2e/business-owner.spec.ts tests/e2e/business-tenant.spec.ts tests/e2e/business-technician.spec.ts tests/e2e/business-admin.spec.ts tests/e2e/business-broker.spec.ts tests/e2e/business-global.spec.ts --project=chromium-desktop",
-    "seed:e2e": "node scripts/seed-e2e-accounts.js"
+    "seed:e2e": "node scripts/seed-e2e-accounts.js",
+    "payroll:generate-payslips": "node scripts/payroll-generate-payslips.mjs"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
