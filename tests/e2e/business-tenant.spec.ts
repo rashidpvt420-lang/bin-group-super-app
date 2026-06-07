@@ -17,9 +17,11 @@ function requireLaunchCredentials() {
 async function login(page: Page) {
   requireLaunchCredentials();
   
-  // Inject App Check debug token before the page loads
-  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || 'a7ea9b47-3cb4-4bf7-acbe-47bc58565076';
-  await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
+  // Inject App Check debug token before the page loads only when provided.
+  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+  if (appCheckToken) {
+    await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
+  }
 
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
