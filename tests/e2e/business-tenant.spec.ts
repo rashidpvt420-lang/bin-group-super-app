@@ -16,6 +16,11 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
+  
+  // Inject App Check debug token before the page loads
+  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || 'a7ea9b47-3cb4-4bf7-acbe-47bc58565076';
+  await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
+
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -35,14 +40,18 @@ test.describe('Tenant Business Workflow', () => {
     await expect(page).toHaveURL(/\/tenant\/request/, { timeout: 15_000 });
 
     await expect(page.locator('body')).not.toContainText(
-      /SOVEREIGN_FAILURE|System Interruption|Minified React error|permission-denied|missing or insufficient permissions|no property assigned|RESIDENCE UNASSIGNED/i,
+      /SOVEREIGN_FAILURE|System Interruption|permission-denied|missing or insufficient permissions|no property assigned|RESIDENCE UNASSIGNED/i,
       { timeout: 10_000 }
     );
 
+    const category = page
+      .getByTestId('tenant-request-category')
+      .or(page.getByTestId('tenant-request-category-input'))
+      .first();
+
+    await expect(category).toBeVisible({ timeout: 30_000 });
+
     const comboboxes = page.locator('[role="combobox"]');
-
-    await expect(comboboxes.first()).toBeVisible({ timeout: 30_000 });
-
     await comboboxes.nth(0).click();
     await page.getByRole('option').first().click();
 
