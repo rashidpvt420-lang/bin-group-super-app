@@ -79,7 +79,7 @@ export default function OwnerUnitsPage() {
     if (loading) return (
         <Box sx={{ height: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('owner.units.syncLedger', 'Synchronizing Ledger...', 'مزامنة السجل...')}</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('owner.units.syncLedger', 'Synchronizing Ledger...')}</Typography>
         </Box>
     );
 
@@ -88,8 +88,8 @@ export default function OwnerUnitsPage() {
             {/* Header */}
             <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 3 }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.units.sovAssetMgmt', 'SOVEREIGN ASSET MANAGEMENT', 'إدارة الأصول السيادية')}</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.units.unitLedger', 'Unit Ledger', 'سجل الوحدات')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.units.sovAssetMgmt', 'SOVEREIGN ASSET MANAGEMENT')}</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.units.unitLedger', 'Unit Ledger')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <TextField 
@@ -129,18 +129,18 @@ export default function OwnerUnitsPage() {
             {filtered.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
                     <Layout size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{tx('owner.units.noMatch', 'NO MATCHING UNITS FOUND', 'لم يتم العثور على وحدات مطابقة')}</Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{tx('owner.units.noMatch', 'NO MATCHING UNITS FOUND')}</Typography>
                 </Paper>
             ) : (
                 <TableContainer component={Paper} sx={{ bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
                     <Table>
                         <TableHead>
                             <TableRow sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colUnit', 'UNIT / LOCATION', 'الوحدة / الموقع')}</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colTenant', 'TENANT / STATUS', 'المستأجر / الحالة')}</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colRent', 'RENTAL VALUATION', 'التقييم الإيجاري')}</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colPayment', 'PAYMENT CYCLE', 'دورة الدفع')}</TableCell>
-                                <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colActions', 'ACTIONS', 'الإجراءات')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colUnit', 'UNIT / LOCATION')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colTenant', 'TENANT / STATUS')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colRent', 'RENTAL VALUATION')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colPayment', 'PAYMENT CYCLE')}</TableCell>
+                                <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem', letterSpacing: 1 }}>{tx('owner.units.colActions', 'ACTIONS')}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -203,15 +203,15 @@ export default function OwnerUnitsPage() {
                 <Grid container spacing={4} alignItems="center">
                     <Grid item xs={12} md={8}>
                         <Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <AlertCircle size={16} /> {tx('owner.units.sovLedgerIntegrity', 'SOVEREIGN LEDGER INTEGRITY', 'نزاهة السجل السيادي')}
+                            <AlertCircle size={16} /> {tx('owner.units.sovLedgerIntegrity', 'SOVEREIGN LEDGER INTEGRITY')}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
-                            {tx('owner.units.ledgerNotice', 'Unit data is synchronized directly from property passports. If rent values or tenant names appear inconsistent, please trigger a Governance Audit via the Admin terminal or contact your BIN GROUP specialist.', 'تتم مزامنة بيانات الوحدة مباشرة من جوازات السفر الخاصة بالعقار. إذا كانت قيم الإيجار أو أسماء المستأجرين تبدو غير متسقة، يرجى تشغيل تدقيق حوكمة عبر وحدة تحكم الإدارة أو الاتصال بأخصائي BIN GROUP.')}
+                            {tx('owner.units.ledgerNotice', 'Unit data is synchronized directly from property passports. If rent values or tenant names appear inconsistent, please trigger a Governance Audit via the Admin terminal or contact your BIN GROUP specialist.')}
                         </Typography>
                     </Grid>
                     <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
                         <Button variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 3, borderRadius: 3 }}>
-                            {tx('owner.units.downloadLedger', 'Download Ledger (PDF)', 'تنزيل السجل (PDF)')}
+                            {tx('owner.units.downloadLedger', 'Download Ledger (PDF)')}
                         </Button>
                     </Grid>
                 </Grid>

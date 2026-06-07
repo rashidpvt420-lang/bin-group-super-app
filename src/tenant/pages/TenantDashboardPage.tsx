@@ -124,12 +124,12 @@ export default function TenantDashboardPage() {
   const showLedger = contractProfile.showRentLedger && propertyProfile.tenantContractRequired;
 
   const serviceButtons = useMemo(() => [
-    { label: tx('service.deep_cleaning', 'Deep Cleaning', 'تنظيف عميق'), icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning', visible: true },
-    { label: tx('service.moving', 'Moving & Packing', 'نقل وتغليف'), icon: <Truck size={20} />, route: '/tenant/request?category=moving', visible: true },
-    { label: showMaintenance ? tx('nav.maintenance', 'Maintenance', 'الصيانة') : tx('service.contactMgmt', 'Contact Management', 'التواصل مع الإدارة'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management', visible: true },
-    { label: tx('nav.ai_studio', 'AI Design Studio', 'استوديو التصميم بالذكاء الاصطناعي'), icon: <Paintbrush size={20} />, route: '/tenant/design-studio', visible: true },
-    { label: tx('service.gatePass', 'Gate Pass', 'تصريح الدخول'), icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass', visible: showManagement },
-    { label: tx('service.amenities', 'Amenities', 'المرافق'), icon: <Dumbbell size={20} />, route: '/tenant/amenities', visible: showManagement },
+    { label: tx('service.deep_cleaning', 'Deep Cleaning'), icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning', visible: true },
+    { label: tx('service.moving', 'Moving & Packing'), icon: <Truck size={20} />, route: '/tenant/request?category=moving', visible: true },
+    { label: showMaintenance ? tx('nav.maintenance', 'Maintenance') : tx('service.contactMgmt', 'Contact Management'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management', visible: true },
+    { label: tx('nav.ai_studio', 'AI Design Studio'), icon: <Paintbrush size={20} />, route: '/tenant/design-studio', visible: true },
+    { label: tx('service.gatePass', 'Gate Pass'), icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass', visible: showManagement },
+    { label: tx('service.amenities', 'Amenities'), icon: <Dumbbell size={20} />, route: '/tenant/amenities', visible: showManagement },
   ].filter((button) => button.visible), [showMaintenance, showManagement, tx]);
 
   if (loading) {
@@ -141,8 +141,8 @@ export default function TenantDashboardPage() {
       <Stack spacing={4}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('dash.terminal.tenant', 'TENANT DASHBOARD', 'لوحة تحكم المستأجر')}</Typography>
-            <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, mt: 1 }}>{tx('dash.hello', 'Hello', 'مرحباً')}, {user?.displayName?.split(' ')[0] || tx('dash.resident', 'Resident', 'مقيم')}</Typography>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('dash.terminal.tenant', 'TENANT DASHBOARD')}</Typography>
+            <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, mt: 1 }}>{tx('dash.hello', 'Hello')}, {user?.displayName?.split(' ')[0] || tx('dash.resident', 'Resident')}</Typography>
             <Typography sx={{ color: 'rgba(255,255,255,0.48)', mt: 1 }}>{contractProfile.tenantSummary}</Typography>
           </Box>
           <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, fontWeight: 950 }}>{user?.displayName?.charAt(0) || 'R'}</Avatar>
@@ -162,7 +162,7 @@ export default function TenantDashboardPage() {
             py: 1.5,
           }}
         >
-          {tx('dash.newRequestBtn', 'New Request', 'طلب جديد')}
+          {tx('dash.newRequestBtn', 'New Request')}
         </Button>
 
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
@@ -174,10 +174,10 @@ export default function TenantDashboardPage() {
             <Chip label={contractMode.replace(/_/g, ' ')} sx={{ bgcolor: alpha(showMaintenance ? '#10b981' : '#3b82f6', 0.12), color: showMaintenance ? '#10b981' : '#93c5fd', fontWeight: 950 }} />
           </Stack>
           <Grid container spacing={2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.propType', 'PROPERTY TYPE', 'نوع العقار')}</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{propertyProfile.propertyClass.replace(/_/g, ' ')}</Typography></Box></Grid>
-            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.leaseRent', 'LEASE / RENT', 'الإيجار / العقد')}</Typography><Typography sx={{ color: showLedger ? '#10b981' : '#f59e0b', fontWeight: 950 }}>{showLedger ? tx('dash.visible', 'Visible', 'مرئي') : tx('dash.notIncluded', 'Not Included', 'غير مشمول')}</Typography></Box></Grid>
-            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.maintenance', 'MAINTENANCE', 'الصيانة')}</Typography><Typography sx={{ color: showMaintenance ? '#10b981' : '#f59e0b', fontWeight: 950 }}>{showMaintenance ? tx('dash.enabled', 'Enabled', 'مفعل') : tx('dash.mgmtRouted', 'Management Routed', 'موجه للإدارة')}</Typography></Box></Grid>
-            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.unitArea', 'UNIT / AREA', 'الوحدة / المساحة')}</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{unitData?.unitNumber || unitData?.unitId || tx('dash.propAccess', 'Property Access', 'وصول العقار')}</Typography></Box></Grid>
+            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.propType', 'PROPERTY TYPE')}</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{propertyProfile.propertyClass.replace(/_/g, ' ')}</Typography></Box></Grid>
+            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.leaseRent', 'LEASE / RENT')}</Typography><Typography sx={{ color: showLedger ? '#10b981' : '#f59e0b', fontWeight: 950 }}>{showLedger ? tx('dash.visible', 'Visible') : tx('dash.notIncluded', 'Not Included')}</Typography></Box></Grid>
+            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.maintenance', 'MAINTENANCE')}</Typography><Typography sx={{ color: showMaintenance ? '#10b981' : '#f59e0b', fontWeight: 950 }}>{showMaintenance ? tx('dash.enabled', 'Enabled') : tx('dash.mgmtRouted', 'Management Routed')}</Typography></Box></Grid>
+            <Grid item xs={12} md={3}><Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 950 }}>{tx('dash.unitArea', 'UNIT / AREA')}</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{unitData?.unitNumber || unitData?.unitId || tx('dash.propAccess', 'Property Access')}</Typography></Box></Grid>
           </Grid>
         </Paper>
 

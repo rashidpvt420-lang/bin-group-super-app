@@ -82,7 +82,7 @@ export default function OwnerTicketsPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>
-                {tx('owner.tickets.loading', 'Loading Tickets…', 'جاري تحميل التذاكر...')}
+                {tx('owner.tickets.loading', 'Loading Tickets…')}
             </Typography>
         </Box>
     );
@@ -92,10 +92,10 @@ export default function OwnerTicketsPage() {
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
-                        {tx('owner.tickets.propOps', 'PROPERTY OPERATIONS', 'عمليات العقار')}
+                        {tx('owner.tickets.propOps', 'PROPERTY OPERATIONS')}
                     </Typography>
                     <Typography variant="h4" fontWeight="950" color="#FFF">
-                        {tx('owner.tickets.maintTickets', 'Maintenance Tickets', 'تذاكر الصيانة')}
+                        {tx('owner.tickets.maintTickets', 'Maintenance Tickets')}
                     </Typography>
                 </Box>
                 <Button
@@ -105,7 +105,7 @@ export default function OwnerTicketsPage() {
                     onClick={() => navigate('/owner/complaint')}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5, px: 3 }}
                 >
-                    {tx('owner.tickets.newComplaint', 'NEW COMPLAINT', 'شكوى جديدة')}
+                    {tx('owner.tickets.newComplaint', 'NEW COMPLAINT')}
                 </Button>
             </Stack>
 
@@ -136,7 +136,7 @@ export default function OwnerTicketsPage() {
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start">
                                 <Box sx={{ flex: 1, minWidth: 0, mr: isRTL ? 0 : 2, ml: isRTL ? 2 : 0, textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
-                                        {ticket.description || tx('owner.tickets.noDesc', 'No Description', 'لا يوجد وصف')}
+                                        {ticket.description || tx('owner.tickets.noDesc', 'No Description')}
                                     </Typography>
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.3)', flexWrap: 'wrap' }}>
                                         <Typography variant="caption" fontWeight="800">
@@ -153,7 +153,7 @@ export default function OwnerTicketsPage() {
                                         {ticket.unitNumber && (
                                             <>
                                                 <Typography variant="caption">•</Typography>
-                                                <Typography variant="caption" fontWeight="800">{tx('owner.tickets.unitLabel', 'Unit', 'الوحدة')} {ticket.unitNumber}</Typography>
+                                                <Typography variant="caption" fontWeight="800">{tx('owner.tickets.unitLabel', 'Unit')} {ticket.unitNumber}</Typography>
                                             </>
                                         )}
                                     </Stack>
@@ -179,7 +179,7 @@ export default function OwnerTicketsPage() {
                                             <Chip
                                                 size="small"
                                                 icon={<Navigation size={11} />}
-                                                label={tx('owner.tickets.track', 'Track', 'تتبع')}
+                                                label={tx('owner.tickets.track', 'Track')}
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/owner/ticket/${ticket.id}`); }}
                                                 sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(sCfg.color, 0.15), color: sCfg.color, height: 22, cursor: 'pointer', '& .MuiChip-icon': { color: sCfg.color } }}
                                             />
@@ -217,7 +217,7 @@ export default function OwnerTicketsPage() {
                     <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 8 }}>
                         <FileText size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
                         <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>
-                            {tx('owner.tickets.noTickets', 'NO MAINTENANCE TICKETS', 'لا توجد تذاكر صيانة')}
+                            {tx('owner.tickets.noTickets', 'NO MAINTENANCE TICKETS')}
                         </Typography>
                         <Button
                             variant="outlined"
@@ -226,7 +226,7 @@ export default function OwnerTicketsPage() {
                             onClick={() => navigate('/owner/complaint')}
                             sx={{ mt: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderRadius: 3 }}
                         >
-                            {tx('owner.tickets.fileFirst', 'File First Complaint', 'تقديم أول شكوى')}
+                            {tx('owner.tickets.fileFirst', 'File First Complaint')}
                         </Button>
                     </Paper>
                 )}
