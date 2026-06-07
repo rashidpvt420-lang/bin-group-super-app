@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, type Rea
 
 import {
     db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp,
-    onAuthStateChanged, arrayUnion
+    onAuthStateChanged
 } from "../lib/firebase";
 import type { User } from "../lib/firebase";
 import { registerPushNotifications } from "../services/pushNotificationService";
@@ -91,10 +91,17 @@ const ADMIN_ROLES = new Set([
 const normalizeRole = (value: unknown): string => String(value || '').trim().toLowerCase();
 const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
 const roleIsValid = (value: unknown): boolean => VALID_PORTAL_ROLES.has(normalizeRole(value));
-const claimRoleFrom = (claims: Record<string, any>): string => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
-const claimsAreAdmin = (claims: Record<string, any>): boolean => {
+
+const claimRoleFrom = (claims: Record<string, unknown>): string => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
+const claimsGrantAdmin = (claims: Record<string, unknown>): boolean => {
     const claimRole = claimRoleFrom(claims);
-    return claims.admin === true || claims.isAdmin === true || claims.ceo === true || claims.manager === true || roleIsAdmin(claimRole);
+    return Boolean(
+        claims.admin === true ||
+        claims.isAdmin === true ||
+        claims.ceo === true ||
+        claims.manager === true ||
+        roleIsAdmin(claimRole)
+    );
 };
 
 const markGlobalAuthReady = () => {
@@ -141,7 +148,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
             const claims = tokenResult.claims || {};
             const claimRole = claimRoleFrom(claims);
-            const claimIsAdmin = claimsAreAdmin(claims);
+            const claimIsAdmin = claimsGrantAdmin(claims);
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
 
@@ -169,30 +176,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
             if (snap && snap.exists()) {
                 const data = snap.data();
-                let finalRole = roleIsValid(claimRole) ? claimRole : normalizeRole(data.role);
-                let finalIsAdmin = claimIsAdmin;
+                const firestoreRole = normalizeRole(data.role);
+                const finalRole = roleIsValid(claimRole) ? claimRole : firestoreRole;
+                const finalIsAdmin = claimIsAdmin;
 
                 try {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
                     const grantRef = doc(db, "pending_admin_grants", grantEmailKey);
                     const grantSnap = await getDoc(grantRef);
 
-                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && claimIsAdmin) {
-                        finalRole = claimRole || 'admin';
-                        finalIsAdmin = true;
-
-                        await updateDoc(userDocRef, {
-                            role: finalRole,
-                            isAdmin: true,
-                            updatedAt: serverTimestamp(),
-                            repairLogs: arrayUnion({ action: 'ADMIN_GRANT_APPLIED_FROM_VERIFIED_CLAIMS', timestamp: new Date().toISOString() })
-                        });
-
-                        await updateDoc(grantRef, {
-                            status: 'consumed',
-                            consumedAt: serverTimestamp(),
-                            consumedByUid: currentUser.uid
-                        });
+                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && !claimIsAdmin) {
+                        console.warn("[AUTH] Pending admin grant exists, but no immutable admin custom claim is present. Admin access withheld.");
                     }
                 } catch (grantErr) {
                     console.warn("[REPAIR] Grant check bypassed:", grantErr);
@@ -242,7 +236,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
-                setPermissions(claimIsAdmin ? (claims.permissions || data.permissions || {}) : (data.permissions || {}));
+                setPermissions(claimIsAdmin ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
                 setLegalAccepted(!!data.legalAcceptedAt);
 
@@ -252,20 +246,19 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setError(null);
                 }
             } else {
-                const resolvedRole = roleIsValid(claimRole) ? claimRole : '';
-                const hasValidRole = roleIsValid(resolvedRole);
+                const hasValidRole = roleIsValid(claimRole);
                 const newProfile = {
                     uid: currentUser.uid,
                     email: (currentUser.email || '').toLowerCase(),
                     displayName: currentUser.displayName || "New User",
-                    ...(hasValidRole ? { role: resolvedRole, isAdmin: claimIsAdmin, status: 'active' } : { status: 'role_required', isAdmin: false }),
+                    ...(hasValidRole ? { role: claimRole, isAdmin: claimIsAdmin, status: 'active' } : { status: 'role_required' }),
                     createdAt: serverTimestamp()
                 };
 
                 await setDoc(userDocRef, newProfile, { merge: true });
 
                 setUser({ ...currentUser, ...newProfile } as SovereignUser);
-                setRole(hasValidRole ? resolvedRole : null);
+                setRole(hasValidRole ? claimRole : null);
                 setIsAdmin(hasValidRole ? claimIsAdmin : false);
                 setStatus(hasValidRole ? 'active' : 'role_required');
                 setPermissions({});
@@ -283,7 +276,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const hasPermission = (permission: SovereignPermission): boolean => {
-        if (isAdmin || roleIsAdmin(role)) return true;
+        if (isAdmin) return true;
         return !!permissions[permission];
     };
 
