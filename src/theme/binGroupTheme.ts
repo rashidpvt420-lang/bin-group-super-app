@@ -1,5 +1,5 @@
 import { createTheme, alpha } from '@mui/material/styles';
-import { ThemeOptions } from '@mui/material/styles';
+import type { ThemeOptions } from '@mui/material/styles';
 
 /**
  * BIN GROUP Sovereign Identity System
