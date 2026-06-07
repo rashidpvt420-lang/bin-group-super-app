@@ -366,21 +366,21 @@ firebase emulators:exec --only firestore --project bin-group-57c60 \
 
 ### Firebase Rules Audit Checklist
 
-- [ ] users/{uid} isolation verified
-- [ ] fcmTokens privacy enforced
-- [ ] deviceReadiness push/gps protected
-- [ ] technicians profile role-gated
-- [ ] technicians GPS dispatcher-accessible only
-- [ ] maintenanceTickets multi-role matrix verified
-- [ ] staffRequests HR hierarchy enforced
-- [ ] staffMoodCheckins privacy enforced
-- [ ] hrAiConversations role-gated
-- [ ] Storage maintenanceTickets/{id}/tenant/* protected
-- [ ] Storage maintenanceTickets/{id}/completionPhotos/* protected
-- [ ] All deny paths verified (✗ cases tested)
-- [ ] Emulator tests: 47/47 passing
+- [x] users/{uid} isolation verified
+- [x] fcmTokens privacy enforced
+- [x] deviceReadiness push/gps protected
+- [x] technicians profile role-gated
+- [x] technicians GPS dispatcher-accessible only
+- [x] maintenanceTickets multi-role matrix verified
+- [x] staffRequests HR hierarchy enforced
+- [x] staffMoodCheckins privacy enforced
+- [x] hrAiConversations role-gated
+- [x] Storage maintenanceTickets/{id}/tenant/* protected
+- [x] Storage maintenanceTickets/{id}/completionPhotos/* protected
+- [x] All deny paths verified (✗ cases tested)
+- [x] Emulator tests: 47/47 passing
 
-**Result:** [ ] PASS (All 47 tests) / [ ] FAIL (See failures)
+**Result:** [x] PASS (All 47 tests) / [ ] FAIL (See failures)
 
 ---
 
