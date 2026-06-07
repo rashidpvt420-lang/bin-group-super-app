@@ -1,0 +1,117 @@
+{
+  "common": {
+    "app_name": "بيـن جروب",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجاح",
+    "cancel": "إلغاء",
+    "submit": "إرسال",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "view": "عرض",
+    "back": "رجوع",
+    "logout": "تسجيل الخروج",
+    "auth_sync": "جاري مصادقة هوية بيـن جروب...",
+    "identity_fault": "خطأ نظام الهوية",
+    "role_error_prefix": "فشل التحقق من الدور:",
+    "reload_sys": "إعادة تحميل النظام",
+    "sys_init_fault": "خطأ في تهيئة النظام"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "signup": "إنشاء حساب",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "forgot_password": "هل نسيت كلمة المرور؟",
+    "remember_me": "تذكرني",
+    "login_error": "فشل تسجيل الدخول. يرجى التحقق من بيانات اعتمادك.",
+    "signup_error": "فشل التسجيل. يرجى المحاولة مرة أخرى."
+  },
+  "owner": {
+    "dashboard": "لوحة تحكم المالك",
+    "portfolio": "محفظة العقارات",
+    "financials": "الشؤون المالية",
+    "tenants": "المستأجرون",
+    "maintenance": "الصيانة",
+    "revenue": "الإيرادات",
+    "expenses": "النفقات",
+    "net_income": "الدخل الصافي",
+    "total_properties": "إجمالي العقارات",
+    "active_tenants": "المستأجرون النشطون",
+    "pending_maintenance": "الصيانة المعلقة"
+  },
+  "tenant": {
+    "dashboard": "لوحة تحكم المستأجر",
+    "sos": "SOS / الطوارئ",
+    "maintenance": "طلبات الصيانة",
+    "payments": "الدفعات",
+    "documents": "المستندات",
+    "communication": "التواصل",
+    "my_issues": "مشاكلي",
+    "issue_history": "سجل المشاكل",
+    "submit_request": "تقديم طلب صيانة"
+  },
+  "technician": {
+    "dashboard": "لوحة تحكم الفني",
+    "tickets": "التذاكر المخصصة",
+    "location": "الموقع الحي",
+    "gps": "تتبع GPS",
+    "camera": "الكاميرا",
+    "evidence": "صور الأدلة",
+    "work_log": "سجل العمل",
+    "start_work": "بدء العمل",
+    "complete_work": "إنهاء العمل",
+    "upload_photos": "تحميل الصور"
+  },
+  "broker": {
+    "dashboard": "لوحة تحكم الوسيط",
+    "referrals": "الإحالات",
+    "commission": "العمولة",
+    "clients": "العملاء",
+    "performance": "الأداء",
+    "pending_commission": "العمولة المعلقة",
+    "paid_commission": "العمولة المدفوعة",
+    "total_referrals": "إجمالي الإحالات"
+  },
+  "admin": {
+    "dashboard": "لوحة تحكم المسؤول",
+    "users": "المستخدمون",
+    "reports": "التقارير",
+    "settings": "الإعدادات",
+    "system": "النظام",
+    "staff": "إدارة الموظفين",
+    "payroll": "كشوف الرواتب",
+    "hr": "إدارة الموارد البشرية",
+    "compliance": "الامتثال"
+  },
+  "ticket": {
+    "new": "تذكرة جديدة",
+    "open": "مفتوح",
+    "assigned": "مخصص",
+    "in_progress": "قيد التقدم",
+    "completed": "مكتمل",
+    "closed": "مغلق",
+    "category": "الفئة",
+    "priority": "الأولوية",
+    "description": "الوصف",
+    "location": "الموقع",
+    "notes": "ملاحظات"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "administry": "الإدارة",
+    "logout": "تسجيل الخروج"
+  },
+  "landing": {
+    "footer": {
+      "built_for_uae": "مبني لدولة الإمارات"
+    }
+  },
+  "footer": {
+    "privacy": "سياسة الخصوصية"
+  },
+  "dash": {
+    "command_subtitle": "جاري بدء مركز القيادة..."
+  }
+}

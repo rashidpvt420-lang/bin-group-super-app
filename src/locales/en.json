@@ -1,0 +1,117 @@
+{
+  "common": {
+    "app_name": "BIN GROUP",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "back": "Back",
+    "logout": "Logout",
+    "auth_sync": "Authenticating BIN-Groups Identity...",
+    "identity_fault": "Identity System Error",
+    "role_error_prefix": "Role verification failed:",
+    "reload_sys": "Reload System",
+    "sys_init_fault": "System Initialization Error"
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "forgot_password": "Forgot Password?",
+    "remember_me": "Remember me",
+    "login_error": "Login failed. Please check your credentials.",
+    "signup_error": "Sign up failed. Please try again."
+  },
+  "owner": {
+    "dashboard": "Owner Dashboard",
+    "portfolio": "Property Portfolio",
+    "financials": "Financials",
+    "tenants": "Tenants",
+    "maintenance": "Maintenance",
+    "revenue": "Revenue",
+    "expenses": "Expenses",
+    "net_income": "Net Income",
+    "total_properties": "Total Properties",
+    "active_tenants": "Active Tenants",
+    "pending_maintenance": "Pending Maintenance"
+  },
+  "tenant": {
+    "dashboard": "Tenant Dashboard",
+    "sos": "SOS / Emergency",
+    "maintenance": "Maintenance Requests",
+    "payments": "Payments",
+    "documents": "Documents",
+    "communication": "Communication",
+    "my_issues": "My Issues",
+    "issue_history": "Issue History",
+    "submit_request": "Submit Maintenance Request"
+  },
+  "technician": {
+    "dashboard": "Technician Dashboard",
+    "tickets": "Assigned Tickets",
+    "location": "Live Location",
+    "gps": "GPS Tracking",
+    "camera": "Camera",
+    "evidence": "Photo Evidence",
+    "work_log": "Work Log",
+    "start_work": "Start Work",
+    "complete_work": "Complete Work",
+    "upload_photos": "Upload Photos"
+  },
+  "broker": {
+    "dashboard": "Broker Dashboard",
+    "referrals": "Referrals",
+    "commission": "Commission",
+    "clients": "Clients",
+    "performance": "Performance",
+    "pending_commission": "Pending Commission",
+    "paid_commission": "Paid Commission",
+    "total_referrals": "Total Referrals"
+  },
+  "admin": {
+    "dashboard": "Admin Dashboard",
+    "users": "Users",
+    "reports": "Reports",
+    "settings": "Settings",
+    "system": "System",
+    "staff": "Staff Management",
+    "payroll": "Payroll",
+    "hr": "HR Management",
+    "compliance": "Compliance"
+  },
+  "ticket": {
+    "new": "New Ticket",
+    "open": "Open",
+    "assigned": "Assigned",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "closed": "Closed",
+    "category": "Category",
+    "priority": "Priority",
+    "description": "Description",
+    "location": "Location",
+    "notes": "Notes"
+  },
+  "nav": {
+    "home": "Home",
+    "administry": "Administration",
+    "logout": "Logout"
+  },
+  "landing": {
+    "footer": {
+      "built_for_uae": "Built for UAE"
+    }
+  },
+  "footer": {
+    "privacy": "Privacy Policy"
+  },
+  "dash": {
+    "command_subtitle": "Booting Command Center..."
+  }
+}
