@@ -13,7 +13,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  getDocs
 } from './firebase';
 
 export interface Ticket {
