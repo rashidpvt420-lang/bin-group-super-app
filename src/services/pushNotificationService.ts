@@ -1,12 +1,10 @@
-import { doc, getSafeMessaging, getToken, onMessage, setDoc, auth, updateDoc, arrayUnion, serverTimestamp } from '../lib/firebase';
+import { doc, getSafeMessaging, getToken, onMessage, setDoc, updateDoc, arrayUnion, serverTimestamp } from '../lib/firebase';
 import { db } from '../lib/firebase';
 
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
   return metaEnv?.[key] || '';
 };
-
-const DEFAULT_WEB_PUSH_VAPID_KEY = 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ';
 
 const PUSH_ENABLED_ROLES = new Set([
   'tenant',
@@ -31,8 +29,7 @@ const PUSH_ENABLED_ROLES = new Set([
 
 const getVapidKey = () =>
   readEnv('VITE_FIREBASE_VAPID_KEY') ||
-  readEnv('REACT_APP_FIREBASE_VAPID_KEY') ||
-  DEFAULT_WEB_PUSH_VAPID_KEY;
+  readEnv('REACT_APP_FIREBASE_VAPID_KEY');
 
 type PushReadiness = {
   platform: 'web' | 'android-web' | 'ios-pwa' | 'ios-browser' | 'unknown';
