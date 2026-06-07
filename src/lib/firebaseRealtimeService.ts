@@ -4,8 +4,12 @@
  * Provides bidirectional real-time updates for all dashboards
  */
 
-import { db, collection, query, where, orderBy, limit, onSnapshot, Timestamp, Unsubscribe } from './firebase';
-import { DocumentData } from 'firebase/firestore';
+import { db, collection, query, where, orderBy, limit, onSnapshot, Timestamp } from './firebase';
+import type { Unsubscribe } from './firebase';
+
+type RealtimeErrorPayload = { error: string };
+type RealtimeListPayload<T = any> = T[] | RealtimeErrorPayload;
+type RealtimePayload<T = any> = T | RealtimeErrorPayload;
 
 interface RealtimeSubscription {
   unsubscribe: Unsubscribe;
@@ -19,7 +23,7 @@ class FirebaseRealtimeService {
   /**
    * OWNER DASHBOARD: Real-time property & tenant updates
    */
-  subscribeToOwnerProperties(ownerId: string, callback: (data: any[]) => void): () => void {
+  subscribeToOwnerProperties(ownerId: string, callback: (data: RealtimeListPayload) => void): () => void {
     const ref = `owner_properties_${ownerId}`;
     this.addListener(ref, callback);
 
@@ -48,7 +52,7 @@ class FirebaseRealtimeService {
   /**
    * TENANT DASHBOARD: Real-time tickets & maintenance requests
    */
-  subscribeToTenantTickets(tenantId: string, callback: (data: any[]) => void): () => void {
+  subscribeToTenantTickets(tenantId: string, callback: (data: RealtimeListPayload) => void): () => void {
     const ref = `tenant_tickets_${tenantId}`;
     this.addListener(ref, callback);
 
@@ -79,7 +83,7 @@ class FirebaseRealtimeService {
   /**
    * TECHNICIAN DASHBOARD: Real-time GPS & ticket assignments
    */
-  subscribeToTechnicianTickets(technicianId: string, callback: (data: any[]) => void): () => void {
+  subscribeToTechnicianTickets(technicianId: string, callback: (data: RealtimeListPayload) => void): () => void {
     const ref = `technician_tickets_${technicianId}`;
     this.addListener(ref, callback);
 
@@ -110,7 +114,7 @@ class FirebaseRealtimeService {
   /**
    * BROKER DASHBOARD: Real-time referrals & commissions
    */
-  subscribeToBrokerReferrals(brokerId: string, callback: (data: any[]) => void): () => void {
+  subscribeToBrokerReferrals(brokerId: string, callback: (data: RealtimeListPayload) => void): () => void {
     const ref = `broker_referrals_${brokerId}`;
     this.addListener(ref, callback);
 
@@ -141,7 +145,7 @@ class FirebaseRealtimeService {
   /**
    * ADMIN DASHBOARD: Global system metrics & user activity
    */
-  subscribeToAdminMetrics(callback: (data: any) => void): () => void {
+  subscribeToAdminMetrics(callback: (data: RealtimePayload) => void): () => void {
     const ref = 'admin_system_metrics';
     this.addListener(ref, callback);
 
@@ -164,7 +168,7 @@ class FirebaseRealtimeService {
   /**
    * TECHNICIAN GPS: Real-time location tracking
    */
-  subscribeToTechnicianLocation(technicianId: string, callback: (data: any) => void): () => void {
+  subscribeToTechnicianLocation(technicianId: string, callback: (data: RealtimePayload) => void): () => void {
     const ref = `technician_location_${technicianId}`;
     this.addListener(ref, callback);
 
