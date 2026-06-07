@@ -26,6 +26,18 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
+const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+const claimsGrantAdmin = (claims: Record<string, unknown>) => {
+    const role = claimRoleFrom(claims);
+    return Boolean(
+        claims.admin === true ||
+        claims.isAdmin === true ||
+        claims.ceo === true ||
+        claims.manager === true ||
+        ADMIN_ROLES.has(role)
+    );
+};
+
 export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -83,26 +95,15 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
 
                 const claims = idTokenResult.claims || {};
                 const profile = userDoc.exists() ? userDoc.data() : null;
-
-                const role = String(profile?.role || claims.role || "").toLowerCase();
-
-                const isAdmin =
-                    claims.admin === true ||
-                    claims.isAdmin === true ||
-                    claims.ceo === true ||
-                    claims.manager === true ||
-                    role === "admin" ||
-                    role === "super_admin" ||
-                    role === "ceo" ||
-                    role === "manager" ||
-                    ADMIN_ROLES.has(role);
+                const role = claimRoleFrom(claims);
+                const isAdmin = claimsGrantAdmin(claims);
 
                 if (!isAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
                 }
 
-                // Successful Admin Resolution
-                setUser({ ...usr, ...profile, role, claims });
+                // Successful Admin Resolution. Admin authority comes only from immutable custom claims.
+                setUser({ ...usr, ...profile, role, isAdmin: true, claims });
                 setIsAuthenticated(true);
                 setError(null);
 
