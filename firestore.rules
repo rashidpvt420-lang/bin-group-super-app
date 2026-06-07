@@ -71,8 +71,6 @@ service cloud.firestore {
       );
     }
 
-
-
     function emailOwns(data) {
       return emailMatches(data.email) ||
         emailMatches(data.ownerEmail) ||
@@ -155,7 +153,7 @@ service cloud.firestore {
         (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.techId) &&
         (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.priority) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'COMPLETED', 'RESOLVED', 'assigned', 'in_progress', 'arrived', 'completed', 'resolved']);
+        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'COMPLETED', 'RESOLVED', 'assigned', 'in_progress', 'arrived', 'completed']);
     }
 
     function safeOpenMissionClaim() {
@@ -324,9 +322,9 @@ service cloud.firestore {
 
     match /properties/{propertyId} {
       allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||
-                  (signedIn() && !(request.auth.uid in [resource.data.get('ownerId', ''), resource.data.get('ownerUid', '')]) && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId == propertyId);
+                  (signedIn() && !(request.auth.uid in [resource.data.get('ownerId', ''), resource.data.get('ownerUid', '')]) && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
       allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || request.resource.data.status != 'active'));
+      allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
       allow delete: if isAdmin();
     }
 
@@ -486,7 +484,7 @@ service cloud.firestore {
     match /staffAgreements/{agreementId} {
       allow read: if isHr() || staffCanRead(resource.data) || (signedIn() && request.auth.uid == agreementId);
       allow create: if isHr();
-      allow update: if isHr() || (signedIn() && request.auth.uid == agreementId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','acceptedAt','acceptedBy','acceptanceMethod','updatedAt']) && request.resource.data.status == 'accepted');
+      allow update: if isHr() || (signedIn() && request.auth.uid == agreementId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','acceptedAt','acceptedBy','acceptanceDate']));
       allow delete: if isHr();
     }
 
@@ -626,7 +624,7 @@ service cloud.firestore {
     match /amenityBookings/{bookingId} {
       allow read: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
       allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow update: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'cancellationReason']));
       allow delete: if isAdmin();
     }
 
@@ -653,7 +651,7 @@ service cloud.firestore {
     match /turnover-quotes/{quoteId} {
       allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if isAdmin();
-      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.status in ['APPROVED', 'REJECTED'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.status in ['APPROVED', 'REJECTED'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
@@ -696,8 +694,8 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid));
       allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.createdByUid == request.auth.uid);
       allow update: if isAdmin() || (signedIn() && (
-        (resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerId', 'ownerId', 'ownerUid', 'ownerAction', 'updatedAt', 'ownerActionAt'])) ||
-        ((resource.data.userId == request.auth.uid || resource.data.payerId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'paymentId', 'paymentStatus', 'executionStatus', 'adminHandoffStatus', 'engineerHandoffStatus', 'executionScope', 'updatedAt', 'paymentRequestedAt']))
+        (resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt'])) ||
+        ((resource.data.userId == request.auth.uid || resource.data.payerId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt']))
       ));
       allow delete: if isAdmin();
     }
