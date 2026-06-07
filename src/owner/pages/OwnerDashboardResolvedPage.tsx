@@ -176,7 +176,7 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
 
 export default function OwnerDashboardResolvedPage() {
   const { user, refreshRole } = useRole();
-  const { t, isRTL } = useLanguage();
+  const { tx, isRTL } = useLanguage();
   const navigate = useNavigate();
   const [resolution, setResolution] = useState<OwnerResolution>({ state: 'loading', profile: null, contract: null, ownerIds: [], emails: [] });
   const [properties, setProperties] = useState<any[]>([]);
@@ -445,12 +445,12 @@ export default function OwnerDashboardResolvedPage() {
       <Box sx={{ minHeight: '70vh', display: 'grid', placeItems: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
         <Paper sx={{ p: { xs: 3, md: 6 }, maxWidth: 720, bgcolor: 'rgba(22,22,24,.82)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 6, textAlign: 'center' }}>
           <Shield size={58} color={binThemeTokens.gold} style={{ margin: '0 auto 20px' }} />
-          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? 'Owner profile not linked yet' : 'Activation still requires verified approval'}</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || 'Your profile was found, but verified activation flags are not complete yet.'}</Typography>
+          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? tx('dash.owner.noLink', 'Owner profile not linked yet', 'لم يتم ربط ملف المالك بعد') : tx('dash.owner.needsApproval', 'Activation still requires verified approval', 'التفعيل لا يزال يتطلب موافقة موثقة')}</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || tx('dash.owner.reasonDefault', 'Your profile was found, but verified activation flags are not complete yet.', 'تم العثور على ملفك الشخصي، لكن علامات التفعيل الموثقة لم تكتمل بعد.')}</Typography>
           {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Review Contracts</Button>
-            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Refresh Identity</Button>
+            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.reviewContracts', 'Review Contracts', 'مراجعة العقود')}</Button>
+            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.refreshIdentity', 'Refresh Identity', 'تحديث الهوية')}</Button>
           </Stack>
         </Paper>
       </Box>
@@ -465,10 +465,10 @@ export default function OwnerDashboardResolvedPage() {
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
-    { label: 'Annual Contract Value', value: annual ? `AED ${annual.toLocaleString()}` : 'Pending', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
-    { label: '15% Mobilization', value: mobilization ? `AED ${mobilization.toLocaleString()}` : 'Pending', icon: <Shield size={20} />, color: '#10b981' },
-    { label: t('dash.kpi.portfolio') || 'Asset Portfolio', value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
-    { label: t('dash.kpi.ops_load') || 'Open Maintenance Tasks', value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
+    { label: tx('dash.kpi.contractValue', 'Annual Contract Value', 'قيمة العقد السنوي'), value: annual ? `AED ${annual.toLocaleString()}` : tx('dash.kpi.pending', 'Pending', 'قيد الانتظار'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: tx('dash.kpi.mobilization', '15% Mobilization', '١٥٪ رسوم التعبئة'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending', 'قيد الانتظار'), icon: <Shield size={20} />, color: '#10b981' },
+    { label: tx('dash.kpi.portfolio', 'Asset Portfolio', 'محفظة الأصول'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
+    { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks', 'مهام الصيانة المفتوحة'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
   ];
 
   return (
@@ -476,18 +476,18 @@ export default function OwnerDashboardResolvedPage() {
       {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN OWNER TERMINAL</Typography>
-          <Typography variant="h3" fontWeight={950} sx={{ color: '#fff', mt: 1 }}>Dashboard Active</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL', 'محطة المالك السيادية')}</Typography>
+          <Typography variant="h3" fontWeight={950} sx={{ color: '#fff', mt: 1 }}>{tx('dash.owner.active', 'Dashboard Active', 'لوحة القيادة نشطة')}</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>{tx('dash.owner.desc', 'Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.', 'وضع العقد ونوع العقار ودليل سند الملكية وسجل المستأجرين وعمليات الصيانة يتم حلها معًا.')}</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
           {contract.contractUrl && (
-            <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Download Agreement</Button>
+            <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.dlAgreement', 'Download Agreement', 'تنزيل الاتفاقية')}</Button>
           )}
-          <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Contracts</Button>
-          <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Property Passport</Button>
-          <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>Complaints</Button>
-          <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Add Person</Button>
+          <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.contracts', 'Contracts', 'العقود')}</Button>
+          <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.propPassport', 'Property Passport', 'جواز سفر العقار')}</Button>
+          <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>{tx('dash.owner.complaints', 'Complaints', 'الشكاوى')}</Button>
+          <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.addPerson', 'Add Person', 'إضافة شخص')}</Button>
         </Stack>
       </Box>
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot, doc, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
@@ -39,6 +40,7 @@ const STATUS_COLOR: Record<string, string> = {
 export default function TechnicianJobsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
+    const { tx, isRTL } = useLanguage();
 
     const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
     const [poolJobs, setPoolJobs] = useState<any[]>([]);
@@ -144,9 +146,9 @@ export default function TechnicianJobsPage() {
                     </Stack>
                 </Stack>
 
-                {isLive && (
+                    {isLive && (
                     <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold }}>
-                        GPS tracking ACTIVE — sharing location with requester
+                        {tx('tech.jobs.gps_active', 'GPS tracking ACTIVE — sharing location with requester')}
                     </Alert>
                 )}
 
@@ -154,13 +156,13 @@ export default function TechnicianJobsPage() {
 
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="textSecondary">REQUESTER</Typography>
+                        <Typography variant="caption" color="textSecondary">{tx('tech.jobs.requester', 'REQUESTER')}</Typography>
                         <Typography variant="body1" fontWeight="900" color="#FFF">
                             {String(job.tenantName || job.ownerName || 'N/A')}
                         </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="textSecondary">PRIORITY</Typography>
+                        <Typography variant="caption" color="textSecondary">{tx('tech.jobs.priority', 'PRIORITY')}</Typography>
                         <Typography variant="body1" fontWeight="900" sx={{ color: String(job.priority).toLowerCase() === 'emergency' ? '#ef4444' : '#FFF', textTransform: 'uppercase' }}>
                             {String(job.priority || 'normal')}
                         </Typography>
@@ -173,30 +175,30 @@ export default function TechnicianJobsPage() {
                     endIcon={<ArrowRight size={18} />}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}
                 >
-                    OPEN JOB CARD
+                    {tx('tech.jobs.open_job', 'OPEN JOB CARD')}
                 </Button>
             </Paper>
         );
     };
 
     return (
-        <Box>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                My Jobs
+                {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 5 }}>
-                Active assignments and open pool jobs.
+                {tx('tech.jobs.subtitle', 'Active assignments and open pool jobs.')}
             </Typography>
 
             {acceptError && <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>{acceptError}</Alert>}
 
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
-                ACTIVE ASSIGNMENTS ({assignedJobs.length})
+                {tx('tech.jobs.active_assignments', 'ACTIVE ASSIGNMENTS')} ({assignedJobs.length})
             </Typography>
 
             {assignedJobs.length === 0 ? (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)', mb: 5 }}>
-                    <Typography color="textSecondary" fontWeight="900">NO ACTIVE ASSIGNMENTS</Typography>
+                    <Typography color="textSecondary" fontWeight="900">{tx('tech.jobs.no_active', 'NO ACTIVE ASSIGNMENTS')}</Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3} sx={{ mb: 6 }}>
@@ -205,12 +207,12 @@ export default function TechnicianJobsPage() {
             )}
 
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
-                OPEN JOB POOL ({poolJobs.length})
+                {tx('tech.jobs.job_pool', 'OPEN JOB POOL')} ({poolJobs.length})
             </Typography>
 
             {poolJobs.length === 0 ? (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.08)' }}>
-                    <Typography color="textSecondary" fontWeight="900">NO OPEN JOBS IN POOL</Typography>
+                    <Typography color="textSecondary" fontWeight="900">{tx('tech.jobs.no_pool', 'NO OPEN JOBS IN POOL')}</Typography>
                 </Paper>
             ) : (
                 <Stack spacing={2}>
@@ -267,7 +269,7 @@ export default function TechnicianJobsPage() {
                                         flexShrink: 0
                                     }}
                                 >
-                                    {accepting === job.id ? 'ACCEPTING…' : 'ACCEPT JOB'}
+                                    {accepting === job.id ? tx('tech.jobs.accepting', 'ACCEPTING…') : tx('tech.jobs.accept', 'ACCEPT JOB')}
                                 </Button>
                             </Stack>
                         </Paper>

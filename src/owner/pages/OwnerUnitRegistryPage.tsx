@@ -3,6 +3,7 @@ import { Box, Chip, CircularProgress, Grid, InputAdornment, Paper, Stack, Table,
 import { CheckCircle2, Layout, Search } from 'lucide-react';
 import { collection, db, getDocs, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type PropertyDoc = { id: string; propertyName?: string; name?: string; ownerEmail?: string; ownerId?: string; ownerUid?: string };
@@ -25,6 +26,7 @@ function statusColor(status: string) {
 
 export default function OwnerUnitRegistryPage() {
   const { user } = useRole();
+  const { tx, isRTL } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [units, setUnits] = useState<UnitDoc[]>([]);
   const [search, setSearch] = useState('');
@@ -82,14 +84,14 @@ export default function OwnerUnitRegistryPage() {
   if (loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
   return (
-    <Box>
+    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3} sx={{ mb: 4 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>OWNER UNIT REGISTRY</Typography>
-          <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>Unit Ledger</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>All units linked to your approved properties.</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('owner.units.registry_overline', 'OWNER UNIT REGISTRY')}</Typography>
+          <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.units.registry_title', 'Unit Ledger')}</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{tx('owner.units.subtitle', 'All units linked to your approved properties.')}</Typography>
         </Box>
-        <TextField size="small" placeholder="Search unit, tenant, property..." value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment> }} sx={{ minWidth: 320 }} />
+        <TextField size="small" placeholder={tx('owner.units.search_placeholder', 'Search unit, tenant, property...')} value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment> }} sx={{ minWidth: 320 }} />
       </Stack>
 
       <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -106,19 +108,19 @@ export default function OwnerUnitRegistryPage() {
       {filtered.length === 0 ? (
         <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.45)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
           <Layout size={42} color="rgba(255,255,255,0.12)" />
-          <Typography sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, mt: 2 }}>NO UNITS FOUND</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, mt: 2 }}>{tx('owner.units.no_units', 'NO UNITS FOUND')}</Typography>
         </Paper>
       ) : (
         <TableContainer component={Paper} sx={{ bgcolor: 'rgba(15,23,42,0.45)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
           <Table>
-            <TableHead><TableRow><TableCell>UNIT</TableCell><TableCell>OCCUPANCY</TableCell><TableCell>RENT</TableCell><TableCell>MAINTENANCE</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>{tx('owner.units.unit_col', 'UNIT')}</TableCell><TableCell>{tx('owner.units.occupancy_col', 'OCCUPANCY')}</TableCell><TableCell>{tx('owner.units.rent_col', 'RENT')}</TableCell><TableCell>{tx('owner.units.maintenance_col', 'MAINTENANCE')}</TableCell></TableRow></TableHead>
             <TableBody>
               {filtered.map((unit) => {
                 const status = statusOf(unit);
                 return (
                   <TableRow key={unit.id} hover>
                     <TableCell><Typography fontWeight="950" sx={{ color: '#FFF', fontFamily: 'monospace' }}>{unit.unitNumber || '—'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)' }}>{unit.propertyName} · Floor {unit.floor || unit.floorNumber || '—'}</Typography></TableCell>
-                    <TableCell><Chip label={status} size="small" sx={{ color: statusColor(status), bgcolor: alpha(statusColor(status), 0.1), fontWeight: 950 }} /> <Typography variant="caption" sx={{ color: unit.tenantName ? '#FFF' : 'rgba(255,255,255,0.35)', ml: 1 }}>{unit.tenantName || unit.tenantEmail || 'Unassigned'}</Typography></TableCell>
+                    <TableCell><Chip label={status} size="small" sx={{ color: statusColor(status), bgcolor: alpha(statusColor(status), 0.1), fontWeight: 950 }} /> <Typography variant="caption" sx={{ color: unit.tenantName ? '#FFF' : 'rgba(255,255,255,0.35)', ml: 1 }}>{unit.tenantName || unit.tenantEmail || tx('owner.units.unassigned', 'Unassigned')}</Typography></TableCell>
                     <TableCell><Typography sx={{ color: unit.rentAmount || unit.annualRent ? '#10b981' : 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{unit.rentAmount || unit.annualRent ? `AED ${Number(unit.rentAmount || unit.annualRent).toLocaleString()}` : '—'}</Typography></TableCell>
                     <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#10b981' : '#f59e0b'} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
                   </TableRow>

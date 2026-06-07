@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, alpha, Divider } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, alpha, Divider, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
     Users, Building, Wallet, FileUp, TrendingUp, 
     ChevronRight, Briefcase, Plus, ShieldCheck, 
-    Clock, ArrowUpRight, MessageSquare 
+    Clock, ArrowUpRight, MessageSquare, PlusCircle, Send, FileText, DollarSign
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot, limit, orderBy } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -14,8 +14,8 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 
 export default function BrokerDashboardPage() {
     const { user } = useRole();
+    const { tx } = useLanguage();
     const navigate = useNavigate();
-    const { t, isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [recentLeads, setRecentLeads] = useState<any[]>([]);
     const [stats, setStats] = useState({
@@ -92,45 +92,24 @@ export default function BrokerDashboardPage() {
         };
     }, [user]);
 
-    const statCards = [
-        { 
-            label: 'ACTIVE LEADS', 
-            value: stats.leadsActive, 
-            icon: <Users size={24} />, 
-            color: '#3b82f6', 
-            path: '/broker/leads',
-            desc: 'Leads currently in pipeline'
-        },
-        { 
-            label: 'PENDING REFERRALS', 
-            value: stats.referralsPending, 
-            icon: <Building size={24} />, 
-            color: binThemeTokens.gold, 
-            path: '/broker/referrals',
-            desc: 'Submissions under review'
-        },
-        { 
-            label: 'PENDING PAYOUT', 
-            value: `AED ${stats.commissionPending.toLocaleString()}`, 
-            icon: <Wallet size={24} />, 
-            color: '#f59e0b', 
-            path: '/broker/commissions',
-            desc: 'Earned, awaiting clearance'
-        },
-        { 
-            label: 'LIFETIME PAID', 
-            value: `AED ${stats.commissionPaid.toLocaleString()}`, 
-            icon: <TrendingUp size={24} />, 
-            color: '#10b981', 
-            path: '/broker/commissions',
-            desc: 'Total successfully settled'
-        }
-    ];
+    const statCards = useMemo(() => [
+        { label: tx('broker.dash.active_leads', 'Active Leads'), value: stats.leadsActive, desc: tx('broker.dash.leads_desc', 'Clients in pipeline'), icon: <Users size={22} />, color: '#10b981', path: '/broker/leads' },
+        { label: tx('broker.dash.pending_referrals', 'Pending Referrals'), value: stats.referralsPending, desc: tx('broker.dash.referrals_desc', 'Submissions under review'), icon: <Briefcase size={22} />, color: binThemeTokens.gold, path: '/broker/referrals' },
+        { label: tx('broker.dash.pending_payout', 'Pending Payout'), value: `AED ${stats.commissionPending.toLocaleString()}`, desc: tx('broker.dash.payout_desc', 'Earned, awaiting settlement'), icon: <DollarSign size={22} />, color: '#f59e0b', path: '/broker/commissions' },
+        { label: tx('broker.dash.lifetime_paid', 'Lifetime Paid'), value: `AED ${stats.commissionPaid.toLocaleString()}`, desc: tx('broker.dash.lifetime_desc', 'Total successful settlements'), icon: <TrendingUp size={22} />, color: '#3b82f6', path: '/broker/commissions' },
+    ], [stats, tx]);
+
+    const quickCommands = useMemo(() => [
+        { label: tx('broker.dash.add_lead', 'Add New Lead'), path: '/broker/leads/new', icon: <PlusCircle size={18} />, color: '#10b981' },
+        { label: tx('broker.dash.submit_referral', 'Submit Referral'), path: '/broker/referrals/new', icon: <Send size={18} />, color: binThemeTokens.gold },
+        { label: tx('broker.dash.view_payouts', 'View Payouts'), path: '/broker/payouts', icon: <DollarSign size={18} />, color: '#f59e0b' },
+        { label: tx('broker.dash.doc_vault', 'Document Vault'), path: '/broker/vault', icon: <FileText size={18} />, color: '#6366f1' },
+    ], [tx]);
 
     return (
         <BrokerPageFrame
-            title={`${t('dash.hello') || 'Hello'}, ${user?.displayName?.split(' ')[0] || 'Partner'}`}
-            subtitle={`Broker Code: BIN-${user?.uid.substring(0,6).toUpperCase()}`}
+            title={`${tx('dash.hello', 'Hello')}, ${user?.displayName?.split(' ')[0] || 'Partner'}`}
+            subtitle={`${tx('broker.dash.broker_code', 'Broker Code')}: BIN-${user?.uid.substring(0,6).toUpperCase()}`}
             loading={loading}
             actions={
                 <Button 
@@ -139,12 +118,11 @@ export default function BrokerDashboardPage() {
                     onClick={() => { window.location.href = 'mailto:support@bin-groups.com'; }}
                     sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, px: 3, py: 1.5, borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.2) } }}
                 >
-                    CONTACT SUPPORT
+                    {tx('broker.dash.contact_support', 'CONTACT SUPPORT')}
                 </Button>
             }
         >
             <Grid container spacing={3}>
-                {/* ─── STAT CARDS ────────────────────────────────────────────────── */}
                 {statCards.map((card, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
                         <Paper 
@@ -181,23 +159,17 @@ export default function BrokerDashboardPage() {
                     </Grid>
                 ))}
 
-                {/* ─── QUICK ACTIONS ─────────────────────────────────────────────── */}
                 <Grid item xs={12} lg={8}>
                     <Paper sx={{ p: 4, borderRadius: 8, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
                         <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <ArrowUpRight size={20} color={binThemeTokens.gold} /> RAPID COMMANDS
+                            <ArrowUpRight size={20} color={binThemeTokens.gold} /> {tx('broker.dash.rapid_commands', 'RAPID COMMANDS')}
                         </Typography>
                         <Grid container spacing={3}>
-                            {[
-                                { label: 'ADD NEW LEAD', icon: <Users />, path: '/broker/leads', color: binThemeTokens.gold, primary: true },
-                                { label: 'SUBMIT REFERRAL', icon: <Building />, path: '/broker/referrals', color: '#FFF' },
-                                { label: 'VIEW PAYOUTS', icon: <Wallet />, path: '/broker/commissions', color: '#FFF' },
-                                { label: 'DOCUMENT VAULT', icon: <FileUp />, path: '/broker/documents', color: '#FFF' },
-                            ].map((action, idx) => (
+                            {quickCommands.map((action, idx) => (
                                 <Grid item xs={12} sm={6} key={idx}>
                                     <Button 
                                         fullWidth 
-                                        variant={action.primary ? "contained" : "outlined"}
+                                        variant="outlined"
                                         onClick={() => navigate(action.path)}
                                         startIcon={React.cloneElement(action.icon as React.ReactElement, { size: 18 })}
                                         sx={{ 
@@ -205,12 +177,11 @@ export default function BrokerDashboardPage() {
                                             borderRadius: 4, 
                                             fontWeight: 950, 
                                             fontSize: '0.85rem',
-                                            bgcolor: action.primary ? binThemeTokens.gold : 'transparent',
-                                            color: action.primary ? '#000' : '#FFF',
-                                            borderColor: action.primary ? binThemeTokens.gold : 'rgba(255,255,255,0.1)',
+                                            color: '#FFF',
+                                            borderColor: 'rgba(255,255,255,0.1)',
                                             '&:hover': {
-                                                bgcolor: action.primary ? alpha(binThemeTokens.gold, 0.8) : 'rgba(255,255,255,0.05)',
-                                                borderColor: action.primary ? binThemeTokens.gold : '#FFF'
+                                                bgcolor: 'rgba(255,255,255,0.05)',
+                                                borderColor: '#FFF'
                                             }
                                         }}
                                     >
@@ -226,18 +197,19 @@ export default function BrokerDashboardPage() {
                                     <ShieldCheck color={binThemeTokens.gold} />
                                 </Box>
                                 <Box>
-                                    <Typography variant="body1" fontWeight="950" color="#FFF">SOVEREIGN COMPLIANCE</Typography>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Your RERA certification is verified. You are eligible for automated commission payouts.</Typography>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('broker.dash.sovereign_compliance', 'SOVEREIGN COMPLIANCE')}</Typography>
+                                    <Alert severity="success" sx={{ bgcolor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16,185,129,0.15)', color: '#10b981', borderRadius: 3 }}>
+                                        {tx('broker.dash.rera_verified', 'RERA certificate verified. You are eligible for automated commission payouts.')}
+                                    </Alert>
                                 </Box>
                             </Stack>
                         </Box>
                     </Paper>
                 </Grid>
 
-                {/* ─── RECENT ACTIVITY ───────────────────────────────────────────── */}
                 <Grid item xs={12} lg={4}>
                     <Paper sx={{ p: 4, borderRadius: 8, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                        <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4 }}>RECENT ACTIVITY</Typography>
+                        <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4 }}>{tx('broker.dash.recent_activity', 'RECENT ACTIVITY')}</Typography>
                         <Stack spacing={3}>
                             {recentLeads.map((lead, idx) => (
                                 <Box key={lead.id}>
@@ -253,7 +225,7 @@ export default function BrokerDashboardPage() {
                                 </Box>
                             ))}
                             {recentLeads.length === 0 && (
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>No recent activity found.</Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>{tx('broker.dash.no_activity', 'No recent activity found.')}</Typography>
                             )}
                         </Stack>
                         <Button 
@@ -261,7 +233,7 @@ export default function BrokerDashboardPage() {
                             onClick={() => navigate('/broker/leads')}
                             sx={{ mt: 4, color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.75rem' }}
                         >
-                            VIEW FULL PIPELINE
+                            {tx('broker.dash.view_pipeline', 'VIEW FULL PIPELINE')}
                         </Button>
                     </Paper>
                 </Grid>
