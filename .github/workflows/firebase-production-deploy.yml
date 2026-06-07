@@ -36,6 +36,15 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Use Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify Java runtime
+        run: java -version
+
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
