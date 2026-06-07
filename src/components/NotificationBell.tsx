@@ -19,7 +19,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
 };
 
 export function NotificationBell() {
-    const { user } = useRole();
+    const { user, enableNotifications } = useRole();
     const [notifications, setNotifications] = useState<BinNotification[]>([]);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [loading, setLoading] = useState(true);
@@ -33,6 +33,14 @@ export function NotificationBell() {
         });
         return () => unsub();
     }, [user?.uid]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('Notification' in window)) {
+            setPushEnabled(false);
+            return;
+        }
+        setPushEnabled(Notification.permission === 'granted');
+    }, []);
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -93,6 +101,39 @@ export function NotificationBell() {
                         </Button>
                     )}
                 </Box>
+
+                {!pushEnabled && (
+                    <Box sx={{ px: 3, py: 2, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Button
+                            fullWidth
+                            size="small"
+                            variant="contained"
+                            onClick={handleEnablePushAlerts}
+                            disabled={pushBusy}
+                            sx={{
+                                bgcolor: '#C6A75E',
+                                color: '#0f172a',
+                                fontWeight: 900,
+                                '&:hover': { bgcolor: '#d8ba6a' }
+                            }}
+                        >
+                            {pushBusy ? 'ENABLING PUSH ALERTS...' : 'ENABLE PUSH ALERTS'}
+                        </Button>
+                        {pushMessage && (
+                            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.55)' }}>
+                                {pushMessage}
+                            </Typography>
+                        )}
+                    </Box>
+                )}
+
+                {pushEnabled && pushMessage && (
+                    <Box sx={{ px: 3, py: 1.5, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Typography variant="caption" sx={{ color: '#4ade80', fontWeight: 700 }}>
+                            {pushMessage}
+                        </Typography>
+                    </Box>
+                )}
 
                 {/* Body */}
                 <Box sx={{ overflowY: 'auto', flex: 1 }}>
