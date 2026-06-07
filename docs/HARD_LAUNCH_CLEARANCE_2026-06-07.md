@@ -1341,4 +1341,25 @@ git push origin fix/hard-launch-clearance-2026-06-07
 **Document Version:** 1.0  
 **Last Updated:** 2026-06-07 06:00 UTC  
 **Next Review:** Upon completion of all workstreams
+Workstream 7 — Notification System Verification: PASS
+Evidence:
+- NotificationBell has explicit ENABLE PUSH ALERTS flow.
+- enableNotifications is wired through RoleContext.
+- FCM registration path stores tokens under users/{uid}/fcmTokens.
+- TypeScript passed.
+- Build passed.
+- Functions build passed.
+- Firestore rules tests passed.
+- GitHub CI passed on commit 6a8b74f.
 
+Workstream 8 — HR Module Verification: PASS
+Evidence:
+- Approved NEW_HIRE requests trigger provisionApprovedNewHire.
+- users/{uid}, technicians/{uid}, deviceReadiness/onboarding, and payroll records are initialized.
+- payroll:generate-payslips script added.
+- scripts/payroll-generate-payslips.mjs added.
+- TypeScript passed.
+- Build passed.
+- Functions build passed.
+- Firestore rules tests passed.
+- GitHub CI passed on commit 7efc654.
