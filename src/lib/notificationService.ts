@@ -38,9 +38,14 @@ class BinGroupNotificationService {
         }
       }
 
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      if (!vapidKey) {
+        throw new Error('VITE_FIREBASE_VAPID_KEY not configured for production');
+      }
+
       // Get FCM token
       this.tokenCache = await getToken(this.messaging, {
-        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY || 'YOUR_VAPID_KEY'
+        vapidKey: vapidKey
       });
 
       console.log('[Notifications] FCM initialized successfully');
