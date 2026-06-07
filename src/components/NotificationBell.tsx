@@ -23,6 +23,9 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<BinNotification[]>([]);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [loading, setLoading] = useState(true);
+    const [pushBusy, setPushBusy] = useState(false);
+    const [pushEnabled, setPushEnabled] = useState(false);
+    const [pushMessage, setPushMessage] = useState('');
     const open = Boolean(anchorEl);
 
     useEffect(() => {
@@ -54,6 +57,30 @@ export function NotificationBell() {
     const handleMarkAllRead = async () => {
         const unread = notifications.filter(n => !n.read);
         await Promise.all(unread.map(n => markNotificationRead(n.id!)));
+    };
+
+    const handleEnablePushAlerts = async () => {
+        if (!user?.uid) {
+            setPushMessage('Sign in to enable push alerts.');
+            return;
+        }
+
+        setPushBusy(true);
+        setPushMessage('');
+
+        try {
+            const enabled = await enableNotifications();
+            setPushEnabled(enabled);
+            setPushMessage(enabled
+                ? 'Push alerts enabled on this device.'
+                : 'Push alerts could not be enabled. Check browser permissions or device support.'
+            );
+        } catch (err) {
+            console.warn('[NotificationBell] Push enable failed.', err);
+            setPushMessage('Push alerts could not be enabled.');
+        } finally {
+            setPushBusy(false);
+        }
     };
 
     const isRinging = unreadCount > 0;
@@ -101,6 +128,8 @@ export function NotificationBell() {
                         </Button>
                     )}
                 </Box>
+
+
 
                 {!pushEnabled && (
                     <Box sx={{ px: 3, py: 2, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
