@@ -11,7 +11,7 @@ const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
 const cacheRtl = createCache({ key: 'muirtl', stylisPlugins: [prefixer, safeRtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr' });
 
-type ThemeMode = 'light';
+type ThemeMode = 'light' | 'dark';
 interface ThemeContextType { mode: ThemeMode; toggleTheme: () => void; }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
