@@ -158,7 +158,7 @@ const normalizePendingOwner = (id: string, data: any): OwnerSubmission => {
 };
 
 export default function DashboardPage() {
-    const { isRTL } = useLanguage();
+    const { isRTL, tx } = useLanguage();
     const navigate = useNavigate();
     const [lastSync, setLastSync] = useState<Date>(new Date());
     const [loading, setLoading] = useState(true);
@@ -205,31 +205,31 @@ export default function DashboardPage() {
     const pendingDocumentCount = useMemo(() => pendingOwners.filter((item) => normalized(item.adminReviewState).includes('DOCUMENT') || normalized(item.paymentStatus) === 'VERIFIED').length, [pendingOwners]);
 
     const kpis: DashboardKpi[] = [
-        { label: 'Pending Owner Verification', value: pendingOwners.length, icon: <Shield size={18} />, color: binThemeTokens.gold, path: '/admin/vault' },
-        { label: 'Approved / Awaiting Signature', value: approvedOwners.length, icon: <UserCheck size={18} />, color: '#10b981', path: '/admin/owners' },
-        { label: 'Rejected / Clarification', value: rejectedOwners.length, icon: <XCircle size={18} />, color: '#ef4444', path: '/admin/vault' },
-        { label: 'Payment Verifications', value: pendingPaymentCount, icon: <CreditCard size={18} />, color: '#10b981', path: '/admin/vault' },
-        { label: 'Document Reviews', value: pendingDocumentCount, icon: <FileText size={18} />, color: '#3b82f6', path: '/admin/vault' },
-        { label: 'Active Properties', value: activeProperties, icon: <Building2 size={18} />, color: '#8b5cf6', path: '/admin/properties/passport' },
-        { label: 'Contracts', value: activeContracts, icon: <ClipboardList size={18} />, color: '#10b981', path: '/admin/contracts' },
-        { label: 'Open Missions', value: openTickets, icon: <Wrench size={18} />, color: '#f59e0b', path: '/admin/tickets' },
-        { label: 'Tenants', value: activeTenants, icon: <Users size={18} />, color: '#10b981', path: '/admin/tenants' },
-        { label: 'Admin Status', value: 'ONLINE', icon: <CheckCircle2 size={18} />, color: '#10b981' }
+        { label: tx('admin.dash.pending_verification', 'Pending Owner Verification'), value: pendingOwners.length, icon: <Shield size={18} />, color: binThemeTokens.gold, path: '/admin/vault' },
+        { label: tx('admin.dash.approved_awaiting', 'Approved / Awaiting Signature'), value: approvedOwners.length, icon: <UserCheck size={18} />, color: '#10b981', path: '/admin/owners' },
+        { label: tx('admin.dash.rejected', 'Rejected / Clarification'), value: rejectedOwners.length, icon: <XCircle size={18} />, color: '#ef4444', path: '/admin/vault' },
+        { label: tx('admin.dash.payment_verifications', 'Payment Verifications'), value: pendingPaymentCount, icon: <CreditCard size={18} />, color: '#10b981', path: '/admin/vault' },
+        { label: tx('admin.dash.doc_reviews', 'Document Reviews'), value: pendingDocumentCount, icon: <FileText size={18} />, color: '#3b82f6', path: '/admin/vault' },
+        { label: tx('admin.dash.active_properties', 'Active Properties'), value: activeProperties, icon: <Building2 size={18} />, color: '#8b5cf6', path: '/admin/properties/passport' },
+        { label: tx('admin.dash.contracts', 'Contracts'), value: activeContracts, icon: <ClipboardList size={18} />, color: '#10b981', path: '/admin/contracts' },
+        { label: tx('admin.dash.open_missions', 'Open Missions'), value: openTickets, icon: <Wrench size={18} />, color: '#f59e0b', path: '/admin/tickets' },
+        { label: tx('admin.dash.tenants', 'Tenants'), value: activeTenants, icon: <Users size={18} />, color: '#10b981', path: '/admin/tenants' },
+        { label: tx('admin.dash.admin_status', 'Admin Status'), value: 'ONLINE', icon: <CheckCircle2 size={18} />, color: '#10b981' }
     ];
 
     const operations = [
-        { label: 'Add Property', icon: <Building2 size={18} />, path: '/admin/onboard-property', color: binThemeTokens.gold },
-        { label: 'Add Owner', icon: <UserPlus size={18} />, path: '/admin/owners', color: '#3b82f6' },
-        { label: 'Add Tenant', icon: <UserPlus size={18} />, path: '/admin/tenants', color: '#10b981' },
-        { label: 'Bulk Import', icon: <Upload size={18} />, path: '/admin/bulk-import', color: '#8b5cf6' },
-        { label: 'Add Tech', icon: <Wrench size={18} />, path: '/admin/technicians', color: '#f97316' },
-        { label: 'Create Contract', icon: <FileText size={18} />, path: '/admin/contracts', color: binThemeTokens.gold },
-        { label: 'Verify Payment', icon: <CreditCard size={18} />, path: '/admin/vault', color: '#10b981' },
-        { label: 'Owner Verification', icon: <Shield size={18} />, path: '/admin/vault', color: binThemeTokens.gold },
-        { label: 'Property Passport', icon: <ClipboardList size={18} />, path: '/admin/properties/passport', color: '#3b82f6' },
-        { label: 'Pricing Matrix', icon: <Zap size={18} />, path: '/admin/pricing', color: '#f59e0b' },
-        { label: 'Owner Registry', icon: <Users size={18} />, path: '/admin/owners', color: '#8b5cf6' },
-        { label: 'Permissions', icon: <Lock size={18} />, path: '/admin/permissions', color: '#ef4444' }
+        { label: tx('admin.dash.add_property', 'Add Property'), icon: <Building2 size={18} />, path: '/admin/onboard-property', color: binThemeTokens.gold },
+        { label: tx('admin.dash.add_owner', 'Add Owner'), icon: <UserPlus size={18} />, path: '/admin/owners', color: '#3b82f6' },
+        { label: tx('admin.dash.add_tenant', 'Add Tenant'), icon: <UserPlus size={18} />, path: '/admin/tenants', color: '#10b981' },
+        { label: tx('admin.dash.bulk_import', 'Bulk Import'), icon: <Upload size={18} />, path: '/admin/bulk-import', color: '#8b5cf6' },
+        { label: tx('admin.dash.add_tech', 'Add Tech'), icon: <Wrench size={18} />, path: '/admin/technicians', color: '#f97316' },
+        { label: tx('admin.dash.create_contract', 'Create Contract'), icon: <FileText size={18} />, path: '/admin/contracts', color: binThemeTokens.gold },
+        { label: tx('admin.dash.verify_payment', 'Verify Payment'), icon: <CreditCard size={18} />, path: '/admin/vault', color: '#10b981' },
+        { label: tx('admin.dash.owner_verification', 'Owner Verification'), icon: <Shield size={18} />, path: '/admin/vault', color: binThemeTokens.gold },
+        { label: tx('admin.dash.property_passport', 'Property Passport'), icon: <ClipboardList size={18} />, path: '/admin/properties/passport', color: '#3b82f6' },
+        { label: tx('admin.dash.pricing_matrix', 'Pricing Matrix'), icon: <Zap size={18} />, path: '/admin/pricing', color: '#f59e0b' },
+        { label: tx('admin.dash.owner_registry', 'Owner Registry'), icon: <Users size={18} />, path: '/admin/owners', color: '#8b5cf6' },
+        { label: tx('admin.dash.permissions', 'Permissions'), icon: <Lock size={18} />, path: '/admin/permissions', color: '#ef4444' }
     ];
 
     const renderKpi = (kpi: DashboardKpi) => (
@@ -259,11 +259,11 @@ export default function DashboardPage() {
             <Table size="small">
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>OWNER</TableCell>
-                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>PROPERTY</TableCell>
-                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>PAYMENT</TableCell>
-                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>STATE</TableCell>
-                        <TableCell align="right" sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>ACTION</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>{tx('admin.dash.owner_col', 'OWNER')}</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>{tx('admin.dash.property_col', 'PROPERTY')}</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>{tx('admin.dash.payment_col', 'PAYMENT')}</TableCell>
+                        <TableCell sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>{tx('admin.dash.state_col', 'STATE')}</TableCell>
+                        <TableCell align="right" sx={{ bgcolor: '#F8F9FB', color: '#475467', fontWeight: 900, fontSize: '0.7rem', borderBottom: '1px solid #E5E7EB' }}>{tx('admin.dash.action_col', 'ACTION')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -305,15 +305,15 @@ export default function DashboardPage() {
 
     return (
         <AdminPageFrame
-            title="BIN GROUP ADMIN COMMAND CENTER"
-            subtitle="Owner approvals, property passports, contracts, payments, tenants, technicians and live operations. Made in UAE 🇦🇪"
+            title={tx('admin.dash.command_center', 'BIN GROUP ADMIN COMMAND CENTER')}
+            subtitle={tx('admin.dash.subtitle', 'Owner approvals, property passports, contracts, payments, tenants, technicians and live operations.')}
             lastUpdated={lastSync}
             onRefresh={() => window.location.reload()}
         >
             <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Box sx={{ mb: 6 }}>
                     <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 900, mb: 2, display: 'block', letterSpacing: 2 }}>
-                        OPERATIONS COMMAND CENTER
+                        {tx('admin.dash.ops_command', 'OPERATIONS COMMAND CENTER')}
                     </Typography>
                     <Grid container spacing={2}>
                         {operations.map((btn) => (
@@ -354,27 +354,27 @@ export default function DashboardPage() {
                 <Paper sx={{ mb: 4, p: 3, borderRadius: 5, bgcolor: '#FFF9E8', border: '1px solid rgba(184,147,47,0.22)' }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
                         <Box>
-                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2 }}>OWNER PIPELINE LIVE</Typography>
+                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2 }}>{tx('admin.dash.owner_pipeline', 'OWNER PIPELINE LIVE')}</Typography>
                             <Typography variant="h5" sx={{ color: '#111827', fontWeight: 950, mt: 0.5 }}>
-                                {pendingOwners.length} pending • {approvedOwners.length} approved/signature • {rejectedOwners.length} rejected/clarification
+                                {pendingOwners.length} {tx('status.pending', 'pending')} • {approvedOwners.length} {tx('admin.dash.approved_awaiting', 'approved/signature')} • {rejectedOwners.length} {tx('admin.dash.rejected', 'rejected/clarification')}
                             </Typography>
                             <Typography variant="body2" sx={{ color: '#667085', mt: 0.5 }}>
-                                Pending, approved and rejected owner submissions stay visible in separate pipeline views. Approved owners are traceable from Owner Registry, Property Passport and Contracts.
+                                {tx('admin.dash.support_desc', 'Dashboard is now split into pending, approved, and rejected lanes. Use the quick links to inspect owner, passport, contract and payment records.')}
                             </Typography>
                         </Box>
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                             <Button variant="contained" onClick={() => navigate('/admin/vault')} sx={{ bgcolor: '#B8932F', color: '#FFFFFF', '&:hover': { bgcolor: '#A08027' }, fontWeight: 950, px: 4 }}>
-                                OPEN VERIFICATION INBOX
+                                {tx('admin.dash.open_verification', 'OPEN VERIFICATION INBOX')}
                             </Button>
                             <Button variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#B8932F', color: '#B8932F', '&:hover': { borderColor: '#A08027', color: '#A08027' }, fontWeight: 950, px: 4 }}>
-                                OWNER REGISTRY
+                                {tx('admin.dash.owner_registry', 'OWNER REGISTRY')}
                             </Button>
                         </Stack>
                     </Stack>
                 </Paper>
 
                 <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 900, mb: 2, display: 'block' }}>
-                    PORTFOLIO KPIs
+                    {tx('admin.dash.portfolio_kpis', 'PORTFOLIO KPIs')}
                 </Typography>
                 <Grid container spacing={2} sx={{ mb: 5 }}>
                     {loading && !ownerSubmissions.length ? Array.from({ length: 10 }).map((_, index) => (
@@ -395,46 +395,46 @@ export default function DashboardPage() {
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <Shield color="#B8932F" /> PENDING OWNER VERIFICATION
+                                    <Shield color="#B8932F" /> {tx('admin.dash.pending_verification', 'PENDING OWNER VERIFICATION')}
                                 </Typography>
                                 <Chip label={`${pendingOwners.length} AWAITING`} sx={{ fontWeight: 950, bgcolor: '#FFF9E8', color: '#8A6A10' }} />
                             </Box>
-                            {renderSubmissionRows(pendingOwners, 'No pending owner submissions. Approved/rejected records are shown below and in Owner Registry.')}
+                            {renderSubmissionRows(pendingOwners, tx('admin.dash.no_pending', 'No pending owner submissions. Approved/rejected records are shown below and in Owner Registry.'))}
                         </Paper>
 
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <UserCheck color="#10b981" /> APPROVED / AWAITING SIGNATURE
+                                    <UserCheck color="#10b981" /> {tx('admin.dash.approved_awaiting', 'APPROVED / AWAITING SIGNATURE')}
                                 </Typography>
                                 <Chip label={`${approvedOwners.length} APPROVED`} sx={{ fontWeight: 950, bgcolor: 'rgba(16,185,129,0.08)', color: '#10b981' }} />
                             </Box>
-                            {renderSubmissionRows(approvedOwners, 'No approved owner records currently visible.')}
+                            {renderSubmissionRows(approvedOwners, tx('admin.dash.no_approved', 'No approved owner records currently visible.'))}
                         </Paper>
 
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB' }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <XCircle color="#ef4444" /> REJECTED / CLARIFICATION
+                                    <XCircle color="#ef4444" /> {tx('admin.dash.rejected', 'REJECTED / CLARIFICATION')}
                                 </Typography>
                                 <Chip label={`${rejectedOwners.length} REJECTED`} sx={{ fontWeight: 950, bgcolor: 'rgba(239,68,68,0.08)', color: '#ef4444' }} />
                             </Box>
-                            {renderSubmissionRows(rejectedOwners, 'No rejected or clarification records currently visible.')}
+                            {renderSubmissionRows(rejectedOwners, tx('admin.dash.no_rejected', 'No rejected or clarification records currently visible.'))}
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                <Activity color="#B8932F" /> ADMIN ACTION FLOW
+                                <Activity color="#B8932F" /> {tx('admin.dash.admin_action_flow', 'ADMIN ACTION FLOW')}
                             </Typography>
                             <Stack spacing={2}>
                                 {[
-                                    'Open owner verification record',
-                                    'Confirm 15% payment / cheque evidence',
-                                    'Verify documents and property GPS',
-                                    'Approve owner and email contract',
-                                    'Track approved owner in Owner Registry + Property Passport'
+                                    tx('admin.dash.step1', 'Open owner verification record'),
+                                    tx('admin.dash.step2', 'Confirm 15% payment / cheque evidence'),
+                                    tx('admin.dash.step3', 'Verify documents and property GPS'),
+                                    tx('admin.dash.step4', 'Approve owner and email contract'),
+                                    tx('admin.dash.step5', 'Track approved owner in Owner Registry + Property Passport')
                                 ].map((step, index) => (
                                     <Box key={step} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                                         <Chip label={index + 1} size="small" sx={{ bgcolor: '#FFF9E8', color: '#8A6A10', fontWeight: 950 }} />
@@ -443,10 +443,10 @@ export default function DashboardPage() {
                                 ))}
                             </Stack>
                             <Stack spacing={1.5} sx={{ mt: 4 }}>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/vault')} sx={{ borderColor: '#B8932F', color: '#B8932F', '&:hover': { borderColor: '#A08027', color: '#A08027' }, fontWeight: 950 }}>REVIEW VERIFICATION INBOX</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#10b981', color: '#10b981', '&:hover': { borderColor: '#059669', color: '#059669' }, fontWeight: 950 }}>OPEN OWNER REGISTRY</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/properties/passport')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', '&:hover': { borderColor: '#2563eb', color: '#2563eb' }, fontWeight: 950 }}>OPEN PROPERTY PASSPORTS</Button>
-                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/contracts')} sx={{ borderColor: '#8b5cf6', color: '#8b5cf6', '&:hover': { borderColor: '#7c3aed', color: '#7c3aed' }, fontWeight: 950 }}>OPEN CONTRACTS</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/vault')} sx={{ borderColor: '#B8932F', color: '#B8932F', '&:hover': { borderColor: '#A08027', color: '#A08027' }, fontWeight: 950 }}>{tx('admin.dash.review_inbox', 'REVIEW VERIFICATION INBOX')}</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/owners')} sx={{ borderColor: '#10b981', color: '#10b981', '&:hover': { borderColor: '#059669', color: '#059669' }, fontWeight: 950 }}>{tx('admin.dash.open_owner_registry', 'OPEN OWNER REGISTRY')}</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/properties/passport')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', '&:hover': { borderColor: '#2563eb', color: '#2563eb' }, fontWeight: 950 }}>{tx('admin.dash.open_passports', 'OPEN PROPERTY PASSPORTS')}</Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/admin/contracts')} sx={{ borderColor: '#8b5cf6', color: '#8b5cf6', '&:hover': { borderColor: '#7c3aed', color: '#7c3aed' }, fontWeight: 950 }}>{tx('admin.dash.open_contracts', 'OPEN CONTRACTS')}</Button>
                             </Stack>
                         </Paper>
                     </Grid>
@@ -455,9 +455,9 @@ export default function DashboardPage() {
                 <Paper sx={{ p: 4, mt: 8, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 8 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center">
                         <Box>
-                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 4 }}>COMMAND SUPPORT TERMINAL</Typography>
+                            <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 4 }}>{tx('admin.dash.command_support', 'COMMAND SUPPORT TERMINAL')}</Typography>
                             <Typography variant="body2" sx={{ color: '#667085', mt: 1, fontWeight: 700, lineHeight: 1.6 }}>
-                                Dashboard is now split into pending, approved, and rejected lanes so approved owners do not disappear. Use the quick links to inspect owner, passport, contract and payment records.
+                                {tx('admin.dash.support_desc', 'Dashboard is now split into pending, approved, and rejected lanes. Use the quick links to inspect owner, passport, contract and payment records.')}
                             </Typography>
                         </Box>
                         <CeoContactButtons compact />
