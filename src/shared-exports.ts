@@ -13,6 +13,7 @@ export * from './theme/binGroupTheme';
 export * from './components/SovereignAIChat';
 export * from './context/AIContext';
 export * from './lib/notificationService';
+export * from './services/notificationService';
 export * from './utils/DesignStudioPricingEngine';
 export * from './context/LanguageContext';
 export { RoleProvider as AuthProvider, useRole } from './context/RoleContext';
