@@ -24,10 +24,18 @@ const ADMIN_ROLES = new Set([
     'finance_admin',
     'hr_admin',
     'support_admin',
+    'hr_manager',
+    'hr_staff',
+    'finance_staff',
+    'account_manager',
+    'dispatcher',
+    'operations_manager',
 ]);
 
 const normalizeRole = (value: unknown) => String(value || '').trim().toLowerCase();
 const claimRoleFrom = (claims: Record<string, any>) => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
+const profileRoleFrom = (profile: Record<string, any> | null | undefined) => normalizeRole(profile?.role || profile?.userRole || profile?.primaryRole);
+const profileStatusFrom = (profile: Record<string, any> | null | undefined) => normalizeRole(profile?.status || 'active');
 const claimsAreAdmin = (claims: Record<string, any>) => {
     const claimRole = claimRoleFrom(claims);
     return claims.admin === true ||
@@ -35,6 +43,13 @@ const claimsAreAdmin = (claims: Record<string, any>) => {
         claims.ceo === true ||
         claims.manager === true ||
         ADMIN_ROLES.has(claimRole);
+};
+const profileIsAdmin = (profile: Record<string, any> | null | undefined) => {
+    if (!profile) return false;
+    const profileRole = profileRoleFrom(profile);
+    const status = profileStatusFrom(profile);
+    const activeStatus = !status || ['active', 'approved', 'verified'].includes(status);
+    return activeStatus && (profile.isAdmin === true || profile.adminApproved === true || ADMIN_ROLES.has(profileRole));
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -94,8 +109,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 const claims = idTokenResult.claims || {};
                 const profile = userDoc.exists() ? userDoc.data() : null;
-                const role = claimRoleFrom(claims);
-                const isAdmin = claimsAreAdmin(claims);
+                const claimRole = claimRoleFrom(claims);
+                const firestoreRole = profileRoleFrom(profile);
+                const role = claimRole || firestoreRole || 'admin';
+                const isAdmin = claimsAreAdmin(claims) || profileIsAdmin(profile);
 
                 if (!isAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
@@ -146,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (err.message === "AUTH_SYNC_TIMEOUT") {
                     setError("Admin session check timed out. Please retry.");
                 } else if (err.message === "ADMIN_ACCESS_DENIED") {
-                    setError("This account does not have verified admin claims.");
+                    setError("This account does not have verified admin access.");
                     await signOut(auth);
                 } else {
                     setError("Admin login failed. Please try again.");
