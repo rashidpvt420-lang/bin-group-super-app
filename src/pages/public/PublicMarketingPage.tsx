@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Bot, Building2, Camera, FileText, Globe, LogIn, MessageCircle, PlayCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
+import { Bot, Building2, Camera, FileText, Globe, LogIn, MessageCircle, ShieldCheck, WalletCards, Workflow } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrandWatermark from '../../components/BrandWatermark';
@@ -30,7 +30,6 @@ const WHATSAPP_URL = 'https://wa.me/971552423233';
 const COMPANY_URL = '/company';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
-const DEMO_URL = '/company#demo';
 const LOGIN_URL = '/login';
 
 const ink = '#111827';
@@ -54,7 +53,6 @@ const copy = {
     primary: 'Start Property Details',
     quote: 'Get Instant Quote',
     login: 'Portal Login',
-    demo: 'Watch Demo',
     whatsapp: 'WhatsApp BIN GROUP',
     flow: 'Owner journey: details → quote → contract → service tracking → verified payout record',
     proofTitle: 'A complete agentic PropTech ecosystem',
@@ -87,7 +85,6 @@ const copy = {
     primary: 'ابدأ تفاصيل العقار',
     quote: 'احصل على عرض سعر فوري',
     login: 'دخول البوابة',
-    demo: 'شاهد العرض',
     whatsapp: 'تواصل عبر واتساب',
     flow: 'رحلة المالك: تفاصيل ← عرض سعر ← عقد ← تتبع الخدمة ← سجل دفع موثق',
     proofTitle: 'منظومة PropTech ذكية ومتكاملة',
@@ -162,7 +159,7 @@ function ActionButton({ children, href, icon, contained = false, onClick }: { ch
 }
 
 function Nav({ c }: { c: CopyShape }) {
-  const { lang, setLang, isRTL } = useLanguage();
+  const { lang, setLang } = useLanguage();
   return (
     <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${line}` }}>
       <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -173,6 +170,7 @@ function Nav({ c }: { c: CopyShape }) {
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
           <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
@@ -214,8 +212,8 @@ function Hero({ c }: { c: CopyShape }) {
             <Typography variant="h1" sx={{ fontSize: { xs: 38, md: 72 }, lineHeight: 1.02, fontWeight: 950, mb: 3, color: ink, letterSpacing: '-0.055em' }}>{c.title}</Typography>
             <Typography variant="h6" sx={{ color: muted, lineHeight: 1.62, fontWeight: 750, maxWidth: 920 }}>{c.desc}</Typography>
             <Stack direction="row" spacing={1.5} sx={{ mt: 4, flexWrap: 'wrap', gap: 1.5 }}>
-              <ActionButton href={COMPANY_URL} contained icon={<Building2 size={17} />}>{c.company}</ActionButton>
-              <ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton>
+              <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+              <ActionButton href={QUOTE_URL}>{c.quote}</ActionButton>
               <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
             </Stack>
             <Typography variant="caption" sx={{ mt: 3, display: 'block', color: muted, fontWeight: 900 }}>{c.flow}</Typography>
