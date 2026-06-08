@@ -76,16 +76,21 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return metaEnv?.[key] || '';
+  const value = metaEnv?.[key] || '';
+  return value.includes('REPLACE_ME') ? '' : value;
 };
 
+// Firebase Web App config is public client configuration, not a service-account
+// secret. Keep environment variables preferred, but provide stable BIN GROUP
+// project fallbacks so Codespaces/local builds do not boot with empty Firebase
+// values and trigger auth/invalid-api-key.
 const firebaseConfig = {
-  apiKey: readEnv('VITE_FIREBASE_API_KEY') || '',
-  authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN') || '',
-  projectId: readEnv('VITE_FIREBASE_PROJECT_ID') || '',
-  storageBucket: readEnv('VITE_FIREBASE_STORAGE_BUCKET') || '',
-  messagingSenderId: readEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || '',
-  appId: readEnv('VITE_FIREBASE_APP_ID') || '',
+  apiKey: readEnv('VITE_FIREBASE_API_KEY') || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
+  authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN') || 'bin-group-57c60.firebaseapp.com',
+  projectId: readEnv('VITE_FIREBASE_PROJECT_ID') || 'bin-group-57c60',
+  storageBucket: readEnv('VITE_FIREBASE_STORAGE_BUCKET') || 'bin-group-57c60.firebasestorage.app',
+  messagingSenderId: readEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || '123413252227',
+  appId: readEnv('VITE_FIREBASE_APP_ID') || '1:123413252227:web:285cb53bc26626d699f3b6',
 };
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
