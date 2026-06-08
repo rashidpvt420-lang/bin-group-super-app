@@ -122,9 +122,6 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
         <Hero c={c} />
         <Container maxWidth="xl" sx={{ pb: 8 }}>
           <Trust />
-          <Proof c={c} />
-          <Pricing c={c} />
-          <Coverage c={c} />
           <Inquiry c={c} />
         </Container>
       </Box>
