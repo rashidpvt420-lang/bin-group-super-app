@@ -10,56 +10,63 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useLanguage } from '@bin/shared';
-import Navigation from './components/Navigation';
-import BulkImporter from './components/BulkImporter';
-import AdminPaymentApproval from './components/AdminPaymentApproval';
-import AdminContractActivationApproval from './components/AdminContractActivationApproval';
-import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
-import PilotCommandCenter from './components/pilot/PilotCommandCenter';
-import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
 import { safeText } from './utils/safeFormatters';
-import DashboardPage from './pages/dashboard/DashboardPage';
-import OwnersPage from './pages/owners/OwnerManagementPage';
-import TenantsPage from './pages/tenants/TenantsManagementPage';
-import TicketsPage from './pages/tickets/TicketsManagementPage';
-import TechniciansPage from './pages/technicians/TechniciansManagementPage';
-import SettingsPage from './pages/settings/SettingsPage';
-import ReportsPage from './pages/reports/ReportsPage';
-import SOSFeedPage from './pages/sos/SOSFeedPage';
-import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
-import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
-import DocumentOSPage from './pages/documents/DocumentOSPage';
-import AuditShieldPage from './pages/admin/AuditShieldPage';
-import ProfitabilityPage from './pages/admin/ProfitabilityPage';
-import CompliancePage from './pages/admin/CompliancePage';
-import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
-import AuditLogPage from './pages/AuditLogPage';
-import PayrollManagementPage from './pages/financials/PayrollManagementPage';
-import TransactionsPage from './pages/financials/TransactionsPage';
-import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
-import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
-import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
-import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
-import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
-import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
-import HRManagementPage from './pages/admin/HRManagementPage';
-import PropertyPassportPage from './pages/properties/PropertyPassportPage';
-import BuildingRegistryPage from './pages/properties/BuildingRegistryPage';
-import ProductionControlCenter from './pages/ProductionControlCenter';
-import LiveMapPage from './pages/map/LiveMapPage';
-import PricingMatrixPage from './pages/admin/PricingMatrixPage';
-import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
-import SovereignControlPage from './pages/admin/SovereignControlPage';
-import SmartBuildingMonitorPage from './pages/dashboard/SmartBuildingMonitorPage';
-import AdminContractsPage from './pages/contracts/AdminContractsPage';
-import AdminPermissionsPage from './pages/admin/AdminPermissionsPage';
-import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
 import BrandWatermark from '../components/BrandWatermark';
 import { adminTheme } from './theme/adminTheme';
+
+const Navigation = React.lazy(() => import('./components/Navigation'));
+const BulkImporter = React.lazy(() => import('./components/BulkImporter'));
+const AdminPaymentApproval = React.lazy(() => import('./components/AdminPaymentApproval'));
+const AdminContractActivationApproval = React.lazy(() => import('./components/AdminContractActivationApproval'));
+const InstitutionalReportsPanel = React.lazy(() => import('./components/reports/InstitutionalReportsPanel'));
+const PilotCommandCenter = React.lazy(() => import('./components/pilot/PilotCommandCenter'));
+const PublicLaunchOpsPanel = React.lazy(() => import('./components/ops/PublicLaunchOpsPanel'));
+const DashboardPage = React.lazy(() => import('./pages/dashboard/DashboardPage'));
+const OwnersPage = React.lazy(() => import('./pages/owners/OwnerManagementPage'));
+const TenantsPage = React.lazy(() => import('./pages/tenants/TenantsManagementPage'));
+const TicketsPage = React.lazy(() => import('./pages/tickets/TicketsManagementPage'));
+const TechniciansPage = React.lazy(() => import('./pages/technicians/TechniciansManagementPage'));
+const SettingsPage = React.lazy(() => import('./pages/settings/SettingsPage'));
+const ReportsPage = React.lazy(() => import('./pages/reports/ReportsPage'));
+const SOSFeedPage = React.lazy(() => import('./pages/sos/SOSFeedPage'));
+const OwnerDetailsPage = React.lazy(() => import('./pages/owners/OwnerDetailsPage'));
+const InstitutionalDocumentVaultPage = React.lazy(() => import('./pages/documents/InstitutionalDocumentVaultPage'));
+const DocumentOSPage = React.lazy(() => import('./pages/documents/DocumentOSPage'));
+const AuditShieldPage = React.lazy(() => import('./pages/admin/AuditShieldPage'));
+const ProfitabilityPage = React.lazy(() => import('./pages/admin/ProfitabilityPage'));
+const CompliancePage = React.lazy(() => import('./pages/admin/CompliancePage'));
+const BrokerManagementPage = React.lazy(() => import('./pages/brokers/BrokerManagementPage'));
+const AuditLogPage = React.lazy(() => import('./pages/AuditLogPage'));
+const PayrollManagementPage = React.lazy(() => import('./pages/financials/PayrollManagementPage'));
+const TransactionsPage = React.lazy(() => import('./pages/financials/TransactionsPage'));
+const ProfitabilityDashboardPage = React.lazy(() => import('./pages/financials/ProfitabilityDashboardPage'));
+const IntakeVaultPage = React.lazy(() => import('./pages/admin/IntakeVaultPage').then((module) => ({ default: module.IntakeVaultPage })));
+const OrphanWarRoomPage = React.lazy(() => import('./pages/admin/OrphanWarRoomPage'));
+const PropertyOnboardingPage = React.lazy(() => import('./pages/admin/PropertyOnboardingPage'));
+const DesignStudioAdminPage = React.lazy(() => import('./pages/admin/DesignStudioAdminPage'));
+const BinGptEngineerPage = React.lazy(() => import('./pages/admin/BinGptEngineerPage'));
+const HRManagementPage = React.lazy(() => import('./pages/admin/HRManagementPage'));
+const PropertyPassportPage = React.lazy(() => import('./pages/properties/PropertyPassportPage'));
+const BuildingRegistryPage = React.lazy(() => import('./pages/properties/BuildingRegistryPage'));
+const ProductionControlCenter = React.lazy(() => import('./pages/ProductionControlCenter'));
+const LiveMapPage = React.lazy(() => import('./pages/map/LiveMapPage'));
+const PricingMatrixPage = React.lazy(() => import('./pages/admin/PricingMatrixPage'));
+const TechnicianDutyMonitorPage = React.lazy(() => import('./pages/technicians/TechnicianDutyMonitorPage'));
+const SovereignControlPage = React.lazy(() => import('./pages/admin/SovereignControlPage'));
+const SmartBuildingMonitorPage = React.lazy(() => import('./pages/dashboard/SmartBuildingMonitorPage'));
+const AdminContractsPage = React.lazy(() => import('./pages/contracts/AdminContractsPage'));
+const AdminPermissionsPage = React.lazy(() => import('./pages/admin/AdminPermissionsPage'));
+const CompanyProfileAdminPage = React.lazy(() => import('./pages/admin/CompanyProfileAdminPage'));
 
 const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
 const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, safeRtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
+
+const AdminModuleFallback = () => (
+    <Box sx={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#F8F9FB' }}>
+        <CircularProgress sx={{ color: '#B8932F' }} />
+    </Box>
+);
 
 function AdminLayout() {
     const { isRTL, lang, tx } = useLanguage();
@@ -152,57 +159,59 @@ function AdminContent() {
     }
 
     return (
-        <Routes>
-            <Route element={<AdminLayout />}>
-                <Route index element={<Navigate to="dashboard" replace />} />
-                <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="smart-building" element={<SmartBuildingMonitorPage />} />
-                <Route path="sovereign-control" element={<SovereignControlPage />} />
-                <Route path="financials" element={<ProfitabilityDashboardPage />} />
-                <Route path="financials/payroll" element={<PayrollManagementPage />} />
-                <Route path="transactions" element={<TransactionsPage />} />
-                <Route path="document-os" element={<DocumentOSPage />} />
-                <Route path="document-vault" element={<InstitutionalDocumentVaultPage />} />
-                <Route path="vault" element={<IntakeVaultPage />} />
-                <Route path="audit-shield" element={<AuditShieldPage />} />
-                <Route path="design-studio" element={<DesignStudioAdminPage />} />
-                <Route path="ai-studio" element={<DesignStudioAdminPage />} />
-                <Route path="bingpt-engineer" element={<BinGptEngineerPage />} />
-                <Route path="orphans" element={<OrphanWarRoomPage />} />
-                <Route path="manual-approvals" element={<AdminContractActivationApproval />} />
-                <Route path="control-center" element={<ProductionControlCenter />} />
-                <Route path="pricing-matrix" element={<PricingMatrixPage />} />
-                <Route path="pricing" element={<PricingMatrixPage />} />
-                <Route path="owners" element={<OwnersPage />} />
-                <Route path="owners/:id" element={<OwnerDetailsPage />} />
-                <Route path="tenants" element={<TenantsPage />} />
-                <Route path="broker" element={<BrokerManagementPage />} />
-                <Route path="properties/passport" element={<PropertyPassportPage />} />
-                <Route path="properties/registry" element={<BuildingRegistryPage />} />
-                <Route path="technicians" element={<TechniciansPage />} />
-                <Route path="technicians/map" element={<LiveMapPage />} />
-                <Route path="ops/technicians" element={<TechnicianDutyMonitorPage />} />
-                <Route path="duty-command" element={<TechnicianDutyMonitorPage />} />
-                <Route path="tickets" element={<TicketsPage />} />
-                <Route path="sos" element={<SOSFeedPage />} />
-                <Route path="hr" element={<HRManagementPage />} />
-                <Route path="bulk-import" element={<BulkImporter />} />
-                <Route path="profitability" element={<ProfitabilityPage />} />
-                <Route path="compliance" element={<CompliancePage />} />
-                <Route path="pilot" element={<PilotCommandCenter />} />
-                <Route path="ops/public" element={<PublicLaunchOpsPanel />} />
-                <Route path="reports/institutional" element={<InstitutionalReportsPanel />} />
-                <Route path="audit" element={<AuditLogPage />} />
-                <Route path="reports" element={<ReportsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="payment-approval" element={<AdminPaymentApproval />} />
-                <Route path="onboard-property" element={<PropertyOnboardingPage />} />
-                <Route path="contracts" element={<AdminContractsPage />} />
-                <Route path="permissions" element={<AdminPermissionsPage />} />
-                <Route path="company-profile" element={<CompanyProfileAdminPage />} />
-                <Route path="*" element={<Navigate to="dashboard" replace />} />
-            </Route>
-        </Routes>
+        <React.Suspense fallback={<AdminModuleFallback />}>
+            <Routes>
+                <Route element={<AdminLayout />}>
+                    <Route index element={<Navigate to="dashboard" replace />} />
+                    <Route path="dashboard" element={<DashboardPage />} />
+                    <Route path="smart-building" element={<SmartBuildingMonitorPage />} />
+                    <Route path="sovereign-control" element={<SovereignControlPage />} />
+                    <Route path="financials" element={<ProfitabilityDashboardPage />} />
+                    <Route path="financials/payroll" element={<PayrollManagementPage />} />
+                    <Route path="transactions" element={<TransactionsPage />} />
+                    <Route path="document-os" element={<DocumentOSPage />} />
+                    <Route path="document-vault" element={<InstitutionalDocumentVaultPage />} />
+                    <Route path="vault" element={<IntakeVaultPage />} />
+                    <Route path="audit-shield" element={<AuditShieldPage />} />
+                    <Route path="design-studio" element={<DesignStudioAdminPage />} />
+                    <Route path="ai-studio" element={<DesignStudioAdminPage />} />
+                    <Route path="bingpt-engineer" element={<BinGptEngineerPage />} />
+                    <Route path="orphans" element={<OrphanWarRoomPage />} />
+                    <Route path="manual-approvals" element={<AdminContractActivationApproval />} />
+                    <Route path="control-center" element={<ProductionControlCenter />} />
+                    <Route path="pricing-matrix" element={<PricingMatrixPage />} />
+                    <Route path="pricing" element={<PricingMatrixPage />} />
+                    <Route path="owners" element={<OwnersPage />} />
+                    <Route path="owners/:id" element={<OwnerDetailsPage />} />
+                    <Route path="tenants" element={<TenantsPage />} />
+                    <Route path="broker" element={<BrokerManagementPage />} />
+                    <Route path="properties/passport" element={<PropertyPassportPage />} />
+                    <Route path="properties/registry" element={<BuildingRegistryPage />} />
+                    <Route path="technicians" element={<TechniciansPage />} />
+                    <Route path="technicians/map" element={<LiveMapPage />} />
+                    <Route path="ops/technicians" element={<TechnicianDutyMonitorPage />} />
+                    <Route path="duty-command" element={<TechnicianDutyMonitorPage />} />
+                    <Route path="tickets" element={<TicketsPage />} />
+                    <Route path="sos" element={<SOSFeedPage />} />
+                    <Route path="hr" element={<HRManagementPage />} />
+                    <Route path="bulk-import" element={<BulkImporter />} />
+                    <Route path="profitability" element={<ProfitabilityPage />} />
+                    <Route path="compliance" element={<CompliancePage />} />
+                    <Route path="pilot" element={<PilotCommandCenter />} />
+                    <Route path="ops/public" element={<PublicLaunchOpsPanel />} />
+                    <Route path="reports/institutional" element={<InstitutionalReportsPanel />} />
+                    <Route path="audit" element={<AuditLogPage />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="payment-approval" element={<AdminPaymentApproval />} />
+                    <Route path="onboard-property" element={<PropertyOnboardingPage />} />
+                    <Route path="contracts" element={<AdminContractsPage />} />
+                    <Route path="permissions" element={<AdminPermissionsPage />} />
+                    <Route path="company-profile" element={<CompanyProfileAdminPage />} />
+                    <Route path="*" element={<Navigate to="dashboard" replace />} />
+                </Route>
+            </Routes>
+        </React.Suspense>
     );
 }
 
