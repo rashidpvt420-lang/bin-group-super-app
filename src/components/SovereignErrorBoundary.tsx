@@ -7,6 +7,70 @@ const Typography = ({ variant, sx, children }: any) => {
   return <div style={style as any}>{children}</div>;
 };
 
+const deleteIndexedDb = async () => {
+  if (typeof indexedDB === 'undefined') return;
+
+  const deleteByName = (name: string) => new Promise<void>((resolve) => {
+    try {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => resolve();
+      request.onblocked = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+
+  try {
+    const databases = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : [];
+    const names = databases
+      .map((db) => db.name)
+      .filter((name): name is string => Boolean(name))
+      .filter((name) => /firebase|bin|firestore|fcm/i.test(name));
+
+    await Promise.all(names.map(deleteByName));
+  } catch {
+    await Promise.all([
+      deleteByName('firebaseLocalStorageDb'),
+      deleteByName('firestore/[DEFAULT]/bin-group-57c60/main'),
+    ]);
+  }
+};
+
+export const resetBinClientState = async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister().catch(() => undefined)));
+    }
+  } catch {
+    // non-blocking reset path
+  }
+
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key).catch(() => false)));
+    }
+  } catch {
+    // non-blocking reset path
+  }
+
+  try {
+    const preferredLanguage = localStorage.getItem('bin_language');
+    localStorage.clear();
+    sessionStorage.clear();
+    if (preferredLanguage) localStorage.setItem('bin_language', preferredLanguage);
+  } catch {
+    // non-blocking reset path
+  }
+
+  await deleteIndexedDb();
+
+  const target = `/login?intendedRole=admin&fresh=${Date.now()}`;
+  window.location.replace(target);
+};
+
 interface Props {
   children?: ReactNode;
 }
@@ -92,9 +156,9 @@ class SovereignErrorBoundary extends Component<Props, State> {
 
           <button 
             className="error-boundary-btn"
-            onClick={() => window.location.assign('/')}
+            onClick={() => void resetBinClientState()}
           >
-            REBOOT SYSTEM
+            RESET SESSION & LOGIN
           </button>
         </div>
       );
