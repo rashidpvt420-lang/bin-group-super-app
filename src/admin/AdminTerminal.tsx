@@ -17,7 +17,6 @@ import AdminContractActivationApproval from './components/AdminContractActivatio
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
-import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { safeText } from './utils/safeFormatters';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import OwnersPage from './pages/owners/OwnerManagementPage';
@@ -52,7 +51,6 @@ import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import SovereignControlPage from './pages/admin/SovereignControlPage';
 import SmartBuildingMonitorPage from './pages/dashboard/SmartBuildingMonitorPage';
-import AddPropertyPage from './pages/properties/AddPropertyPage';
 import AdminContractsPage from './pages/contracts/AdminContractsPage';
 import AdminPermissionsPage from './pages/admin/AdminPermissionsPage';
 import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
@@ -75,6 +73,8 @@ function AdminLayout() {
             window.location.href = '/login';
         }
     };
+
+    void handleLogout;
     
     return (
         <Box className="admin-shell" sx={{ display: 'flex', minHeight: '100vh', width: '100%', bgcolor: '#FFFFFF', overflow: 'visible', direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
@@ -103,7 +103,7 @@ function AdminLayout() {
 }
 
 function AdminContent() {
-    const { loading, error } = useAuth();
+    const { loading, error, isAuthenticated } = useAuth();
     const { lang, tx } = useLanguage();
     const [showTimeout, setShowTimeout] = React.useState(false);
 
@@ -142,9 +142,13 @@ function AdminContent() {
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center' }}>
                 <Typography variant="h5" sx={{ color: '#ef4444', fontWeight: 900, mb: 2 }}>{lang === 'ar' ? 'تم رفض دخول المسؤول' : 'ADMIN ACCESS DENIED'}</Typography>
                 <Typography variant="body1" sx={{ color: '#fff', mb: 4 }}>{safeText(error)}</Typography>
-                <Button variant="contained" sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }} onClick={() => window.location.href = '/login'}>{tx('nav.login', 'RETURN TO LOGIN')}</Button>
+                <Button variant="contained" sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }} onClick={() => window.location.href = '/login?intendedRole=admin'}>{tx('nav.login', 'RETURN TO LOGIN')}</Button>
             </Box>
         );
+    }
+
+    if (!isAuthenticated) {
+        return <Navigate to="/login?intendedRole=admin" replace />;
     }
 
     return (
