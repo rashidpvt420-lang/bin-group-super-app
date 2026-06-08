@@ -46,6 +46,7 @@ import { useLanguage } from '../../../context/LanguageContext';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
+import SafeIcon, { renderSafeIcon } from '../../../components/SafeIcon';
 
 type OwnerSubmission = {
     id: string;
@@ -68,9 +69,16 @@ type OwnerSubmission = {
 type DashboardKpi = {
     label: string;
     value: number | string;
-    icon: React.ReactNode;
+    icon: unknown;
     color: string;
     path?: string;
+};
+
+type OperationButton = {
+    label: string;
+    icon: unknown;
+    path: string;
+    color: string;
 };
 
 const money = (value: any) => `AED ${Number(value || 0).toLocaleString()}`;
@@ -205,31 +213,31 @@ export default function DashboardPage() {
     const pendingDocumentCount = useMemo(() => pendingOwners.filter((item) => normalized(item.adminReviewState).includes('DOCUMENT') || normalized(item.paymentStatus) === 'VERIFIED').length, [pendingOwners]);
 
     const kpis: DashboardKpi[] = [
-        { label: tx('admin.dash.pending_verification', 'Pending Owner Verification'), value: pendingOwners.length, icon: <Shield size={18} />, color: binThemeTokens.gold, path: '/admin/vault' },
-        { label: tx('admin.dash.approved_awaiting', 'Approved / Awaiting Signature'), value: approvedOwners.length, icon: <UserCheck size={18} />, color: '#10b981', path: '/admin/owners' },
-        { label: tx('admin.dash.rejected', 'Rejected / Clarification'), value: rejectedOwners.length, icon: <XCircle size={18} />, color: '#ef4444', path: '/admin/vault' },
-        { label: tx('admin.dash.payment_verifications', 'Payment Verifications'), value: pendingPaymentCount, icon: <CreditCard size={18} />, color: '#10b981', path: '/admin/vault' },
-        { label: tx('admin.dash.doc_reviews', 'Document Reviews'), value: pendingDocumentCount, icon: <FileText size={18} />, color: '#3b82f6', path: '/admin/vault' },
-        { label: tx('admin.dash.active_properties', 'Active Properties'), value: activeProperties, icon: <Building2 size={18} />, color: '#8b5cf6', path: '/admin/properties/passport' },
-        { label: tx('admin.dash.contracts', 'Contracts'), value: activeContracts, icon: <ClipboardList size={18} />, color: '#10b981', path: '/admin/contracts' },
-        { label: tx('admin.dash.open_missions', 'Open Missions'), value: openTickets, icon: <Wrench size={18} />, color: '#f59e0b', path: '/admin/tickets' },
-        { label: tx('admin.dash.tenants', 'Tenants'), value: activeTenants, icon: <Users size={18} />, color: '#10b981', path: '/admin/tenants' },
-        { label: tx('admin.dash.admin_status', 'Admin Status'), value: 'ONLINE', icon: <CheckCircle2 size={18} />, color: '#10b981' }
+        { label: tx('admin.dash.pending_verification', 'Pending Owner Verification'), value: pendingOwners.length, icon: Shield, color: binThemeTokens.gold, path: '/admin/vault' },
+        { label: tx('admin.dash.approved_awaiting', 'Approved / Awaiting Signature'), value: approvedOwners.length, icon: UserCheck, color: '#10b981', path: '/admin/owners' },
+        { label: tx('admin.dash.rejected', 'Rejected / Clarification'), value: rejectedOwners.length, icon: XCircle, color: '#ef4444', path: '/admin/vault' },
+        { label: tx('admin.dash.payment_verifications', 'Payment Verifications'), value: pendingPaymentCount, icon: CreditCard, color: '#10b981', path: '/admin/vault' },
+        { label: tx('admin.dash.doc_reviews', 'Document Reviews'), value: pendingDocumentCount, icon: FileText, color: '#3b82f6', path: '/admin/vault' },
+        { label: tx('admin.dash.active_properties', 'Active Properties'), value: activeProperties, icon: Building2, color: '#8b5cf6', path: '/admin/properties/passport' },
+        { label: tx('admin.dash.contracts', 'Contracts'), value: activeContracts, icon: ClipboardList, color: '#10b981', path: '/admin/contracts' },
+        { label: tx('admin.dash.open_missions', 'Open Missions'), value: openTickets, icon: Wrench, color: '#f59e0b', path: '/admin/tickets' },
+        { label: tx('admin.dash.tenants', 'Tenants'), value: activeTenants, icon: Users, color: '#10b981', path: '/admin/tenants' },
+        { label: tx('admin.dash.admin_status', 'Admin Status'), value: 'ONLINE', icon: CheckCircle2, color: '#10b981' }
     ];
 
-    const operations = [
-        { label: tx('admin.dash.add_property', 'Add Property'), icon: <Building2 size={18} />, path: '/admin/onboard-property', color: binThemeTokens.gold },
-        { label: tx('admin.dash.add_owner', 'Add Owner'), icon: <UserPlus size={18} />, path: '/admin/owners', color: '#3b82f6' },
-        { label: tx('admin.dash.add_tenant', 'Add Tenant'), icon: <UserPlus size={18} />, path: '/admin/tenants', color: '#10b981' },
-        { label: tx('admin.dash.bulk_import', 'Bulk Import'), icon: <Upload size={18} />, path: '/admin/bulk-import', color: '#8b5cf6' },
-        { label: tx('admin.dash.add_tech', 'Add Tech'), icon: <Wrench size={18} />, path: '/admin/technicians', color: '#f97316' },
-        { label: tx('admin.dash.create_contract', 'Create Contract'), icon: <FileText size={18} />, path: '/admin/contracts', color: binThemeTokens.gold },
-        { label: tx('admin.dash.verify_payment', 'Verify Payment'), icon: <CreditCard size={18} />, path: '/admin/vault', color: '#10b981' },
-        { label: tx('admin.dash.owner_verification', 'Owner Verification'), icon: <Shield size={18} />, path: '/admin/vault', color: binThemeTokens.gold },
-        { label: tx('admin.dash.property_passport', 'Property Passport'), icon: <ClipboardList size={18} />, path: '/admin/properties/passport', color: '#3b82f6' },
-        { label: tx('admin.dash.pricing_matrix', 'Pricing Matrix'), icon: <Zap size={18} />, path: '/admin/pricing', color: '#f59e0b' },
-        { label: tx('admin.dash.owner_registry', 'Owner Registry'), icon: <Users size={18} />, path: '/admin/owners', color: '#8b5cf6' },
-        { label: tx('admin.dash.permissions', 'Permissions'), icon: <Lock size={18} />, path: '/admin/permissions', color: '#ef4444' }
+    const operations: OperationButton[] = [
+        { label: tx('admin.dash.add_property', 'Add Property'), icon: Building2, path: '/admin/onboard-property', color: binThemeTokens.gold },
+        { label: tx('admin.dash.add_owner', 'Add Owner'), icon: UserPlus, path: '/admin/owners', color: '#3b82f6' },
+        { label: tx('admin.dash.add_tenant', 'Add Tenant'), icon: UserPlus, path: '/admin/tenants', color: '#10b981' },
+        { label: tx('admin.dash.bulk_import', 'Bulk Import'), icon: Upload, path: '/admin/bulk-import', color: '#8b5cf6' },
+        { label: tx('admin.dash.add_tech', 'Add Tech'), icon: Wrench, path: '/admin/technicians', color: '#f97316' },
+        { label: tx('admin.dash.create_contract', 'Create Contract'), icon: FileText, path: '/admin/contracts', color: binThemeTokens.gold },
+        { label: tx('admin.dash.verify_payment', 'Verify Payment'), icon: CreditCard, path: '/admin/vault', color: '#10b981' },
+        { label: tx('admin.dash.owner_verification', 'Owner Verification'), icon: Shield, path: '/admin/vault', color: binThemeTokens.gold },
+        { label: tx('admin.dash.property_passport', 'Property Passport'), icon: ClipboardList, path: '/admin/properties/passport', color: '#3b82f6' },
+        { label: tx('admin.dash.pricing_matrix', 'Pricing Matrix'), icon: Zap, path: '/admin/pricing', color: '#f59e0b' },
+        { label: tx('admin.dash.owner_registry', 'Owner Registry'), icon: Users, path: '/admin/owners', color: '#8b5cf6' },
+        { label: tx('admin.dash.permissions', 'Permissions'), icon: Lock, path: '/admin/permissions', color: '#ef4444' }
     ];
 
     const renderKpi = (kpi: DashboardKpi) => (
@@ -248,7 +256,7 @@ export default function DashboardPage() {
                 '&:hover': kpi.path ? { transform: 'translateY(-2px)', borderColor: kpi.color, boxShadow: '0 10px 20px rgba(17,24,39,0.06)' } : {}
             }}
         >
-            <Box sx={{ color: kpi.color, mb: 1 }}>{kpi.icon}</Box>
+            <Box sx={{ color: kpi.color, mb: 1 }}>{renderSafeIcon(kpi.icon, { size: 18, color: kpi.color })}</Box>
             <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900, textTransform: 'uppercase' }}>{kpi.label}</Typography>
             <Typography variant="h5" sx={{ mt: 0.5, color: '#111827', fontWeight: 950 }}>{kpi.value}</Typography>
         </Paper>
@@ -276,7 +284,7 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="body2" sx={{ color: '#111827', fontWeight: 800 }}>{owner.firstProperty}</Typography>
-                                <Typography variant="caption" sx={{ color: '#667085', display: 'flex', alignItems: 'center', gap: 0.5 }}><MapPin size={12} /> {owner.gpsLabel}</Typography>
+                                <Typography variant="caption" sx={{ color: '#667085', display: 'flex', alignItems: 'center', gap: 0.5 }}><SafeIcon icon={MapPin} size={12} /> {owner.gpsLabel}</Typography>
                                 <Typography variant="caption" sx={{ color: '#B8932F' }}>{owner.propertyCount} asset(s) • {owner.planName}</Typography>
                             </TableCell>
                             <TableCell sx={{ borderBottom: '1px solid #E5E7EB' }}>
@@ -287,7 +295,7 @@ export default function DashboardPage() {
                                 <Chip label={owner.adminReviewState || owner.paymentStatus || owner.status} size="small" sx={{ fontSize: '0.6rem', fontWeight: 900, color: '#B8932F', borderColor: '#B8932F', bgcolor: '#FFF9E8' }} variant="outlined" />
                             </TableCell>
                             <TableCell align="right" sx={{ borderBottom: '1px solid #E5E7EB' }}>
-                                <IconButton onClick={() => navigate('/admin/vault')}><Eye size={18} color="#B8932F" /></IconButton>
+                                <IconButton onClick={() => navigate('/admin/vault')}>{renderSafeIcon(Eye, { size: 18, color: '#B8932F' })}</IconButton>
                             </TableCell>
                         </TableRow>
                     ))}
@@ -322,7 +330,7 @@ export default function DashboardPage() {
                                     fullWidth
                                     variant="outlined"
                                     onClick={() => navigate(btn.path)}
-                                    startIcon={btn.icon}
+                                    startIcon={renderSafeIcon(btn.icon, { size: 18, color: btn.color })}
                                     sx={{
                                         height: '100%',
                                         minHeight: 118,
@@ -342,7 +350,7 @@ export default function DashboardPage() {
                                         lineHeight: 1.2
                                     }}
                                 >
-                                    {btn.label.toUpperCase()}
+                                    {String(btn.label || '').toUpperCase()}
                                 </Button>
                             </Grid>
                         ))}
@@ -395,7 +403,7 @@ export default function DashboardPage() {
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <Shield color="#B8932F" /> {tx('admin.dash.pending_verification', 'PENDING OWNER VERIFICATION')}
+                                    <SafeIcon icon={Shield} color="#B8932F" /> {tx('admin.dash.pending_verification', 'PENDING OWNER VERIFICATION')}
                                 </Typography>
                                 <Chip label={`${pendingOwners.length} AWAITING`} sx={{ fontWeight: 950, bgcolor: '#FFF9E8', color: '#8A6A10' }} />
                             </Box>
@@ -405,7 +413,7 @@ export default function DashboardPage() {
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <UserCheck color="#10b981" /> {tx('admin.dash.approved_awaiting', 'APPROVED / AWAITING SIGNATURE')}
+                                    <SafeIcon icon={UserCheck} color="#10b981" /> {tx('admin.dash.approved_awaiting', 'APPROVED / AWAITING SIGNATURE')}
                                 </Typography>
                                 <Chip label={`${approvedOwners.length} APPROVED`} sx={{ fontWeight: 950, bgcolor: 'rgba(16,185,129,0.08)', color: '#10b981' }} />
                             </Box>
@@ -415,7 +423,7 @@ export default function DashboardPage() {
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB' }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                    <XCircle color="#ef4444" /> {tx('admin.dash.rejected', 'REJECTED / CLARIFICATION')}
+                                    <SafeIcon icon={XCircle} color="#ef4444" /> {tx('admin.dash.rejected', 'REJECTED / CLARIFICATION')}
                                 </Typography>
                                 <Chip label={`${rejectedOwners.length} REJECTED`} sx={{ fontWeight: 950, bgcolor: 'rgba(239,68,68,0.08)', color: '#ef4444' }} />
                             </Box>
@@ -426,7 +434,7 @@ export default function DashboardPage() {
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5, color: '#111827' }}>
-                                <Activity color="#B8932F" /> {tx('admin.dash.admin_action_flow', 'ADMIN ACTION FLOW')}
+                                <SafeIcon icon={Activity} color="#B8932F" /> {tx('admin.dash.admin_action_flow', 'ADMIN ACTION FLOW')}
                             </Typography>
                             <Stack spacing={2}>
                                 {[
