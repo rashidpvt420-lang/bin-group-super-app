@@ -23,6 +23,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, signInWithPopup } from '../lib/firebase';
 import { GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
+import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -174,8 +175,8 @@ const LoginPage: React.FC = () => {
         }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: { xs: 2, md: 3 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button
-                    startIcon={!isRTL ? <ArrowLeft size={17} /> : undefined}
-                    endIcon={isRTL ? <ArrowLeft size={17} style={{ transform: 'rotate(180deg)' }} /> : undefined}
+                    startIcon={!isRTL ? renderSafeIcon(ArrowLeft, { size: 17 }) : undefined}
+                    endIcon={isRTL ? renderSafeIcon(ArrowLeft, { size: 17, style: { transform: 'rotate(180deg)' } }) : undefined}
                     onClick={() => navigate('/gateway')}
                     sx={{
                         color: palette.ink,
@@ -189,7 +190,7 @@ const LoginPage: React.FC = () => {
                 >
                     {t('login.change_role')}
                 </Button>
-                <Button 
+                <Button
                     onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
                     sx={{ color: palette.ink, fontWeight: 950, bgcolor: 'rgba(255,255,255,0.8)', px: 2, borderRadius: 2, border: `1px solid ${alpha(palette.gold, 0.36)}` }}
                 >
@@ -232,7 +233,7 @@ const LoginPage: React.FC = () => {
                                     autoFocus
                                     type="email"
                                     name="email"
-                                    InputProps={{ startAdornment: <InputAdornment position="start"><Mail size={20} color={palette.gold} /></InputAdornment> }}
+                                    InputProps={{ startAdornment: <InputAdornment position="start"><SafeIcon icon={Mail} size={20} color={palette.gold} /></InputAdornment> }}
                                     sx={{
                                         '& .MuiInputBase-root': { bgcolor: '#FFFFFF', minHeight: 58, borderRadius: 2 },
                                         '& .MuiInputBase-input': { color: palette.ink, fontWeight: 800 },
@@ -250,8 +251,8 @@ const LoginPage: React.FC = () => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     InputProps={{
-                                        startAdornment: <InputAdornment position="start"><Key size={20} color={palette.gold} /></InputAdornment>,
-                                        endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: palette.ink }}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</IconButton></InputAdornment>,
+                                        startAdornment: <InputAdornment position="start"><SafeIcon icon={Key} size={20} color={palette.gold} /></InputAdornment>,
+                                        endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: palette.ink }}><SafeIcon icon={showPassword ? EyeOff : Eye} size={20} /></IconButton></InputAdornment>,
                                     }}
                                     sx={{
                                         '& .MuiInputBase-root': { bgcolor: '#FFFFFF', minHeight: 58, borderRadius: 2 },
@@ -268,7 +269,7 @@ const LoginPage: React.FC = () => {
                                     {localLoading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
                                 </Button>
                                 <Divider sx={{ my: 0.5 }}><Typography variant="caption" sx={{ color: palette.muted, px: 2, fontWeight: 900 }}>OR INSTITUTIONAL SSO</Typography></Divider>
-                                <Button fullWidth variant="outlined" onClick={handleGoogleLogin} disabled={localLoading} startIcon={<UserCircle size={20} />} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
+                                <Button fullWidth variant="outlined" onClick={handleGoogleLogin} disabled={localLoading} startIcon={renderSafeIcon(UserCircle, { size: 20 })} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
                                     {t('login.google')}
                                 </Button>
                             </Stack>
@@ -277,9 +278,9 @@ const LoginPage: React.FC = () => {
                 </Card>
 
                 <Grid container spacing={2.5} sx={{ mt: 4 }}>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Shield size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>ISO 27001</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><TrendingUp size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>INST-GRADE</Typography></Box></Grid>
-                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><Building size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>UAE-SOV</Typography></Box></Grid>
+                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Shield} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>ISO 27001</Typography></Box></Grid>
+                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={TrendingUp} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>INST-GRADE</Typography></Box></Grid>
+                    <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Building} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>UAE-SOV</Typography></Box></Grid>
                 </Grid>
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 4, color: palette.muted, letterSpacing: 0.8, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>
             </Container>
