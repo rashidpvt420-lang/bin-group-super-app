@@ -27,7 +27,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import BrandWatermark from '../../components/BrandWatermark';
 
-const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'Ceo@bin-groups.com' };
+const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'ceo@bin-groups.com' };
 const ink = '#111827';
 const muted = '#667085';
 const line = '#E8E3D7';
@@ -80,23 +80,25 @@ function getCopy(lang: 'en' | 'ar') {
         ],
     demoTitle: ar ? 'عرض BIN GROUP التشغيلي' : 'BIN GROUP Mission Demo Reel',
     demoSubtitle: ar
-      ? 'عرض جاد يشرح رحلة المالك والمستأجر والفني من الطلب إلى الإثبات والتقرير.'
-      : 'A serious operating demo showing the owner, tenant, technician, GPS route, evidence chain, reports, broker flow, and AI design workflow.',
+      ? 'عرض مرئي يثبت رحلة المالك والمستأجر والفني والوسيط من الطلب إلى الإرسال عبر GPS، إثبات قبل وبعد، العقد، الدفع، والتقرير.'
+      : 'A visual proof reel showing owner, tenant, technician, broker, GPS dispatch, before-and-after evidence, contract, payment, and reporting flows.',
     demoScenes: ar
       ? [
           ['تطبيق المالك', 'عرض السعر، العقد، خطة الدفع، لوحة التحكم.'],
           ['طلب المستأجر', 'طلب خدمة مع صورة، أولوية، وتتبع الحالة.'],
-          ['مسار الفني GPS', 'توجيه أقرب فني موثق إلى العقار.'],
+          ['إرسال الفني عبر GPS', 'توجيه أقرب فني موثق إلى العقار.'],
           ['إثبات قبل وبعد', 'صور قبل وبعد قبل إغلاق الخدمة أو تحرير الدفع.'],
-          ['العقود والتقارير', 'عقد PDF، فاتورة، تقرير، وسجل العقار.'],
+          ['العقد / الدفع / التقرير', 'عقد PDF، فاتورة، خطة دفع، تقرير، وسجل العقار.'],
+          ['تدفق الوسيط', 'تسجيل الإحالة، تسليم المالك، ووضوح العمولة.'],
           ['استوديو التصميم AI', 'خيارات داخلية وخارجية قبل موافقة المالك.'],
         ]
       : [
           ['Owner App', 'Quote, contract, payment plan, and active dashboard.'],
           ['Tenant Photo Request', 'Service request with image, priority, and status tracking.'],
-          ['GPS Route Map', 'Nearest verified technician routed to the property.'],
+          ['Technician GPS Dispatch', 'Nearest verified technician routed to the property.'],
           ['Before / After Evidence', 'Visual proof before closeout or payment release.'],
-          ['Contracts & Reports', 'PDF contract, invoice, report, and property history.'],
+          ['Contract / Payment / Report Flow', 'PDF contract, invoice, payment plan, report, and property history.'],
+          ['Broker Flow', 'Referral registration, owner handover, and commission visibility.'],
           ['AI Design Studio', 'Interior and exterior concept options before owner approval.'],
         ],
     innovationTitle: ar ? 'الابتكار والعمليات بدون أوراق' : 'Innovation & Paperless Operations',
@@ -149,7 +151,7 @@ export default function CompanyProfilePage() {
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
   const textAlign = isRTL ? 'right' : 'left';
   const icons = [<Wrench key="wrench" />, <Briefcase key="briefcase" />, <Users key="users" />, <FileText key="file" />];
-  const demoIcons = [<Building2 key="owner" />, <Camera key="tenant" />, <Navigation key="gps" />, <ClipboardCheck key="evidence" />, <FileText key="docs" />, <Sparkles key="ai" />];
+  const demoIcons = [<Building2 key="owner" />, <Camera key="tenant" />, <Navigation key="gps" />, <ClipboardCheck key="evidence" />, <WalletCards key="finance" />, <Briefcase key="broker" />, <Sparkles key="ai" />];
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>

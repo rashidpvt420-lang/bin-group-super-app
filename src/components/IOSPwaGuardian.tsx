@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button, Paper, Stack, alpha, IconButton } from '@mui/material';
 import { Share, PlusSquare, Bell, X } from 'lucide-react';
-import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 
