@@ -1,4 +1,4 @@
-/**
+﻿/**
  * business-tenant.spec.ts
  * Deep E2E business flow for the Tenant role.
  * Verifies: Creating a service request, uploading photo, and approving work.
@@ -16,18 +16,31 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
-  
-  // Inject App Check debug token before the page loads only when provided.
+
   const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
   if (appCheckToken) {
     await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
   }
 
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.context().clearCookies();
+
+  await page.goto('/login?intendedRole=tenant&refresh=' + Date.now(), { waitUntil: 'domcontentloaded' });
+
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  await page.goto('/login?intendedRole=tenant&refresh=' + Date.now(), { waitUntil: 'domcontentloaded' });
+
+  await expect(page.locator('body')).not.toContainText(/CONTINUE AS ADMIN|SOVEREIGN_FAILURE|System Interruption/i, { timeout: 10_000 });
+
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/tenant/dashboard', { timeout: 15_000 });
+
+  await expect(page.locator('body')).not.toContainText(/Network|SOVEREIGN_FAILURE|System Interruption|Minified React error/i, { timeout: 10_000 });
+  await page.waitForURL('**/tenant/dashboard', { timeout: 20_000 });
 }
 
 test.describe('Tenant Business Workflow', () => {
@@ -46,25 +59,19 @@ test.describe('Tenant Business Workflow', () => {
       { timeout: 10_000 }
     );
 
-    const category = page
-      .getByTestId('tenant-request-category')
-      .or(page.getByTestId('tenant-request-category-input'))
-      .first();
-
+    const category = page.getByTestId('tenant-request-category').or(page.getByTestId('tenant-request-category-input')).first();
     await expect(category).toBeVisible({ timeout: 30_000 });
-
-    const comboboxes = page.locator('[role="combobox"]');
-    await comboboxes.nth(0).click();
+    await category.click();
     await page.getByRole('option').first().click();
 
-    await comboboxes.nth(1).click();
+    const priority = page.getByTestId('tenant-request-priority').or(page.getByTestId('tenant-request-priority-input')).first();
+    await expect(priority).toBeVisible({ timeout: 10_000 });
+    await priority.click();
     await page.getByRole('option').first().click();
+    await page.getByTestId('tenant-request-location').locator('input, textarea').first().fill('Kitchen sink');
+    await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill('E2E water leakage test request with photo evidence.');
 
-    await page.getByTestId('tenant-request-location').fill('Kitchen sink');
-    await page.getByTestId('tenant-request-description').fill('E2E water leakage test request with photo evidence.');
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles({
+    await page.locator('input[type="file"]').first().setInputFiles({
       name: 'tenant-request-evidence.png',
       mimeType: 'image/png',
       buffer: Buffer.from(
@@ -103,3 +110,6 @@ test.describe('Tenant Business Workflow', () => {
     }
   });
 });
+
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Grid, Stack, Button, TextField, 
     Select, MenuItem, FormControl, InputLabel, CircularProgress,
@@ -17,6 +17,11 @@ const sanitizeStorageFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/
 export default function TenantRequestPage() {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
+
+    const tt = (key: string, fallback: string): string => {
+        const value = t(key);
+        return typeof value === 'string' && value.trim() ? value : fallback;
+    };
     const navigate = useNavigate();
     
     const [category, setCategory] = useState('');
@@ -143,7 +148,7 @@ export default function TenantRequestPage() {
         } : null;
 
         if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
-            alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
+            alert('Please confirm exact service location before submitting. Property GPS location is missing â€” contact management.');
             return;
         }
 
@@ -236,8 +241,8 @@ export default function TenantRequestPage() {
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('dash.tenant.serviceLabel') || 'SOVEREIGN SERVICE'}</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1 }}>{t('dash.tenant.newRequest') || 'New Maintenance Request'}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tt('dash.tenant.serviceLabel', 'SOVEREIGN SERVICE')}</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1 }}>{tt('dash.tenant.newRequest', 'New Maintenance Request')}</Typography>
                 </Box>
             </Stack>
 
@@ -248,10 +253,10 @@ export default function TenantRequestPage() {
                             <AlertCircle color="#ef4444" size={24} />
                             <Box>
                                 <Typography variant="body1" fontWeight="950" color="#ef4444">
-                                    {t('dash.tenant.dispatchSuspended') || 'MAINTENANCE DISPATCH SUSPENDED'}
+                                    {tt('dash.tenant.dispatchSuspended', 'MAINTENANCE DISPATCH SUSPENDED')}
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
-                                    {t('dash.tenant.dispatchSuspendedDesc') || 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.'}
+                                    {tt('dash.tenant.dispatchSuspendedDesc', 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.')}
                                 </Typography>
                             </Box>
                         </Stack>
@@ -262,27 +267,27 @@ export default function TenantRequestPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{t('dash.tenant.category') || 'Category'}</InputLabel>
-                                    <Select value={category} label={t('dash.tenant.category') || 'Category'} onChange={(e) => setCategory(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
-                                        <MenuItem value="AC">{t('dash.tenant.catAc') || 'AC / Cooling'}</MenuItem>
-                                        <MenuItem value="electrical">{t('dash.tenant.catElec') || 'Electrical / Power'}</MenuItem>
-                                        <MenuItem value="plumbing">{t('dash.tenant.catPlumb') || 'Plumbing / Water'}</MenuItem>
-                                        <MenuItem value="civil">{t('dash.tenant.catHandy') || 'Handyman / Carpentry'}</MenuItem>
-                                        <MenuItem value="cleaning">{t('dash.tenant.catClean') || 'Deep Cleaning'}</MenuItem>
-                                        <MenuItem value="pest control">{t('dash.tenant.catPest') || 'Pest Control'}</MenuItem>
-                                        <MenuItem value="elevator">{t('dash.tenant.catElev') || 'Elevator Issue'}</MenuItem>
-                                        <MenuItem value="security">{t('dash.tenant.catSec') || 'Security / CCTV'}</MenuItem>
-                                        <MenuItem value="other">{t('dash.tenant.catOther') || 'Other Maintenance'}</MenuItem>
+                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{tt('dash.tenant.category', 'Category')}</InputLabel>
+                                    <Select data-testid="tenant-request-category" inputProps={{ 'data-testid': 'tenant-request-category-input' }} value={category} label={tt('dash.tenant.category', 'Category')} onChange={(e) => setCategory(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                        <MenuItem value="AC">{tt('dash.tenant.catAc', 'AC / Cooling')}</MenuItem>
+                                        <MenuItem value="electrical">{tt('dash.tenant.catElec', 'Electrical / Power')}</MenuItem>
+                                        <MenuItem value="plumbing">{tt('dash.tenant.catPlumb', 'Plumbing / Water')}</MenuItem>
+                                        <MenuItem value="civil">{tt('dash.tenant.catHandy', 'Handyman / Carpentry')}</MenuItem>
+                                        <MenuItem value="cleaning">{tt('dash.tenant.catClean', 'Deep Cleaning')}</MenuItem>
+                                        <MenuItem value="pest control">{tt('dash.tenant.catPest', 'Pest Control')}</MenuItem>
+                                        <MenuItem value="elevator">{tt('dash.tenant.catElev', 'Elevator Issue')}</MenuItem>
+                                        <MenuItem value="security">{tt('dash.tenant.catSec', 'Security / CCTV')}</MenuItem>
+                                        <MenuItem value="other">{tt('dash.tenant.catOther', 'Other Maintenance')}</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{t('dash.tenant.priority') || 'Priority'}</InputLabel>
-                                    <Select value={priority} label={t('dash.tenant.priority') || 'Priority'} onChange={(e) => setPriority(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
-                                        <MenuItem value="normal">{t('dash.tenant.prioNormal') || 'Normal (Standard 24h)'}</MenuItem>
-                                        <MenuItem value="urgent">{t('dash.tenant.prioUrgent') || 'Urgent (Priority 4h)'}</MenuItem>
-                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{t('dash.tenant.prioEmerg') || 'EMERGENCY (Safety/SOS 1h)'}</MenuItem>
+                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{tt('dash.tenant.priority', 'Priority')}</InputLabel>
+                                    <Select data-testid="tenant-request-priority" inputProps={{ 'data-testid': 'tenant-request-priority-input' }} value={priority} label={tt('dash.tenant.priority', 'Priority')} onChange={(e) => setPriority(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                        <MenuItem value="normal">{tt('dash.tenant.prioNormal', 'Normal (Standard 24h)')}</MenuItem>
+                                        <MenuItem value="urgent">{tt('dash.tenant.prioUrgent', 'Urgent (Priority 4h)')}</MenuItem>
+                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{tt('dash.tenant.prioEmerg', 'EMERGENCY (Safety/SOS 1h)')}</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
@@ -290,21 +295,23 @@ export default function TenantRequestPage() {
 
                         <TextField 
                             fullWidth 
-                            label={t('dash.tenant.specificLocation') || "Specific Location (e.g. Master Bedroom, Kitchen Sink)"} 
+                            label={tt('dash.tenant.specificLocation', 'Specific Location (e.g. Master Bedroom, Kitchen Sink)')}
+                            data-testid="tenant-request-location" 
                             value={specificLocation} 
                             onChange={(e) => setSpecificLocation(e.target.value)} 
-                            placeholder={t('dash.tenant.specificLocationHint') || "Helps our technician find the issue faster"}
+                            placeholder={tt('dash.tenant.specificLocationHint', 'Helps our technician find the issue faster')}
                             disabled={isOwnerSuspended}
                             sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
                         />
 
                         <TextField 
                             fullWidth multiline rows={5} 
-                            label={t('dash.tenant.issueDesc') || "Issue Description"} 
+                            label={tt('dash.tenant.issueDesc', 'Issue Description')}
+                            data-testid="tenant-request-description" 
                             value={description} 
                             onChange={(e) => setDescription(e.target.value)} 
                             required 
-                            placeholder={t('dash.tenant.issueDescHint') || "Please describe the issue in detail..."}
+                            placeholder={tt('dash.tenant.issueDescHint', 'Please describe the issue in detail...')}
                             disabled={isOwnerSuspended}
                             sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
                         />
@@ -312,7 +319,7 @@ export default function TenantRequestPage() {
                         {/* Photo Upload Section */}
                         <Box>
                             <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Camera size={18} /> {t('dash.tenant.attachPhotos') || 'ATTACH PHOTOS'}
+                                <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}
                             </Typography>
                             {uploadingPhotos && (
                                 <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -353,7 +360,7 @@ export default function TenantRequestPage() {
                                         >
                                             <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
                                                 <Camera size={24} />
-                                                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 900 }}>{t('dash.tenant.addPhoto') || 'ADD'}</Typography>
+                                                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 900 }}>{tt('dash.tenant.addPhoto', 'ADD')}</Typography>
                                             </Box>
                                             <input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} />
                                         </Button>
@@ -366,17 +373,18 @@ export default function TenantRequestPage() {
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="flex-start" sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                 <AlertCircle size={20} color={binThemeTokens.gold} />
                                 <Box>
-                                    <Typography variant="caption" fontWeight="950" sx={{ color: binThemeTokens.gold, display: 'block' }}>{t('dash.tenant.slaCompliance') || 'SLA COMPLIANCE'}</Typography>
+                                    <Typography variant="caption" fontWeight="950" sx={{ color: binThemeTokens.gold, display: 'block' }}>{tt('dash.tenant.slaCompliance', 'SLA COMPLIANCE')}</Typography>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                                        {t('dash.tenant.slaDesc') || 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.'} 
-                                        {priority === 'emergency' && (t('dash.tenant.slaDescEmerg') || " EMERGENCY requests trigger immediate dispatch.")}
+                                        {tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} 
+                                        {priority === 'emergency' && (tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.'))}
                                     </Typography>
                                 </Box>
                             </Stack>
                         </Box>
 
                         <Button 
-                            type="submit" 
+                            type="submit"
+                                data-testid="tenant-request-submit" 
                             variant="contained" 
                             size="large" 
                             disabled={submitting || uploadingPhotos || isOwnerSuspended || photos.length === 0} 
@@ -391,7 +399,7 @@ export default function TenantRequestPage() {
                                 '&:hover': { bgcolor: '#b4954e' }
                             }}
                         >
-                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : (t('dash.tenant.dispatchRequest') || 'DISPATCH REQUEST')}
+                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : (tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST'))}
                         </Button>
                     </Stack>
                 </form>
@@ -399,3 +407,4 @@ export default function TenantRequestPage() {
         </Box>
     );
 }
+
