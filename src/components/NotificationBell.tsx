@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box, Badge, IconButton, Paper, Typography, Stack, Chip,
     Divider, CircularProgress, Tooltip, Popover, Button
@@ -6,16 +6,19 @@ import {
 import { Bell, BellRing, CheckCheck, Zap, Wrench, MessageSquare, AlertTriangle, Check, X } from 'lucide-react';
 import { useRole } from '../context/RoleContext';
 import { subscribeToNotifications, markNotificationRead, type BinNotification } from '../services/notificationService';
+import SafeIcon from './SafeIcon';
 
-const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
-    TICKET_CREATED:     { icon: <Wrench size={14} />,       color: '#C6A75E' },
-    TICKET_ASSIGNED:    { icon: <Wrench size={14} />,       color: '#60a5fa' },
-    STATUS_UPDATE:      { icon: <Zap size={14} />,          color: '#4ade80' },
-    COMPLETION_REQUEST: { icon: <Check size={14} />,        color: '#4ade80' },
-    TENANT_APPROVED:    { icon: <CheckCheck size={14} />,   color: '#4ade80' },
-    TENANT_REJECTED:    { icon: <X size={14} />,            color: '#ef4444' },
-    EMERGENCY_SOS:      { icon: <AlertTriangle size={14} />,color: '#ef4444' },
-    CHAT_MESSAGE:       { icon: <MessageSquare size={14} />,color: '#a78bfa' },
+type NotificationTypeConfig = { icon: React.ElementType; color: string };
+
+const TYPE_CONFIG: Record<string, NotificationTypeConfig> = {
+    TICKET_CREATED:     { icon: Wrench,        color: '#C6A75E' },
+    TICKET_ASSIGNED:    { icon: Wrench,        color: '#60a5fa' },
+    STATUS_UPDATE:      { icon: Zap,           color: '#4ade80' },
+    COMPLETION_REQUEST: { icon: Check,         color: '#4ade80' },
+    TENANT_APPROVED:    { icon: CheckCheck,    color: '#4ade80' },
+    TENANT_REJECTED:    { icon: X,             color: '#ef4444' },
+    EMERGENCY_SOS:      { icon: AlertTriangle, color: '#ef4444' },
+    CHAT_MESSAGE:       { icon: MessageSquare, color: '#a78bfa' },
 };
 
 export function NotificationBell() {
@@ -29,7 +32,12 @@ export function NotificationBell() {
     const open = Boolean(anchorEl);
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.uid) {
+            setNotifications([]);
+            setLoading(false);
+            return undefined;
+        }
+        setLoading(true);
         const unsub = subscribeToNotifications(user.uid, (notifs) => {
             setNotifications(notifs);
             setLoading(false);
@@ -91,8 +99,8 @@ export function NotificationBell() {
                 <IconButton onClick={handleOpen} sx={{ color: '#FFF', position: 'relative' }}>
                     <Badge badgeContent={unreadCount} color="error" max={99}>
                         {isRinging
-                            ? <BellRing size={22} color="#C6A75E" />
-                            : <Bell size={22} color="rgba(255,255,255,0.5)" />
+                            ? <SafeIcon icon={BellRing} size={22} color="#C6A75E" />
+                            : <SafeIcon icon={Bell} size={22} color="rgba(255,255,255,0.5)" />
                         }
                     </Badge>
                 </IconButton>
@@ -117,7 +125,6 @@ export function NotificationBell() {
                     }
                 }}
             >
-                {/* Header */}
                 <Box sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <Typography variant="overline" sx={{ color: '#C6A75E', fontWeight: 900, letterSpacing: 2 }}>
                         NOTIFICATIONS
@@ -128,8 +135,6 @@ export function NotificationBell() {
                         </Button>
                     )}
                 </Box>
-
-
 
                 {!pushEnabled && (
                     <Box sx={{ px: 3, py: 2, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -164,7 +169,6 @@ export function NotificationBell() {
                     </Box>
                 )}
 
-                {/* Body */}
                 <Box sx={{ overflowY: 'auto', flex: 1 }}>
                     {loading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -172,7 +176,7 @@ export function NotificationBell() {
                         </Box>
                     ) : notifications.length === 0 ? (
                         <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <Bell size={32} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 8px auto' }} />
+                            <SafeIcon icon={Bell} size={32} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 8px auto' }} />
                             <Typography variant="body2" color="textSecondary">No notifications yet</Typography>
                         </Box>
                     ) : (
@@ -198,7 +202,7 @@ export function NotificationBell() {
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             flexShrink: 0, color: cfg.color, mt: 0.3
                                         }}>
-                                            {cfg.icon}
+                                            <SafeIcon icon={cfg.icon} size={14} color={cfg.color} />
                                         </Box>
                                         <Box sx={{ flex: 1, minWidth: 0 }}>
                                             <Stack direction="row" justifyContent="space-between" alignItems="center">
