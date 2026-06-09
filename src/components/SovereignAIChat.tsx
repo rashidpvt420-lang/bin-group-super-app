@@ -1,15 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Box, IconButton, Typography, Paper, TextField, InputAdornment,
-  Drawer, SwipeableDrawer, useMediaQuery, useTheme, Button,
-  Stack, Avatar, Chip, alpha, CircularProgress, Fab
+  Avatar,
+  Box,
+  Chip,
+  CircularProgress,
+  Drawer,
+  Fab,
+  IconButton,
+  InputAdornment,
+  Paper,
+  Stack,
+  SwipeableDrawer,
+  TextField,
+  Typography,
+  alpha,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
-import { Send, X, ShieldCheck, Sparkles, User, Bot, Grip } from 'lucide-react';
+import { Bot, Grip, Send, ShieldCheck, Sparkles, User, X } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
+import { generateSovereignAIResponse, type SovereignRole } from '../utils/propertyTruthIntelligence';
 
 export interface SovereignAIChatProps {
-  role: 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'unknown';
+  role: SovereignRole;
   onNavigate?: (path: string) => void;
 }
 
@@ -20,11 +34,12 @@ interface Message {
   timestamp: Date;
 }
 
+type Prompt = { label: string; action: 'SUMMARIZE' | 'NAVIGATE' | 'MESSAGE'; payload: string };
+type FabPosition = { x: number; y: number };
+
 const CHAT_POSITION_KEY = 'bin_sovereign_ai_chat_position_v1';
 const FAB_SIZE = 56;
 const EDGE_PADDING = 14;
-
-type FabPosition = { x: number; y: number };
 
 const getDefaultFabPosition = (): FabPosition => {
   if (typeof window === 'undefined') return { x: 30, y: 30 };
@@ -42,54 +57,54 @@ const clampFabPosition = (position: FabPosition): FabPosition => {
   };
 };
 
-const roleData = {
+const roleData: Record<SovereignRole, { greeting: string; prompts: Prompt[] }> = {
   owner: {
-    greeting: "Welcome to your Institutional Portfolio. How may I assist with your asset yields or pending approvals?",
+    greeting: 'Welcome to BIN Property Truth Infrastructure. I can inspect your Property Passport, Maintenance Credit Score, AI Autopilot, proof gaps, and SLA risk.',
     prompts: [
-      { label: "Summarize Page", action: "SUMMARIZE", payload: "Analyze current page context." },
-      { label: "Pending Approvals", action: "NAVIGATE", payload: "/dashboard" },
-      { label: "Executive Report", action: "NAVIGATE", payload: "/analytics/executive" },
-      { label: "Explain BPI Score", action: "MESSAGE", payload: "Can you explain the Building Performance Index (BPI)?" }
-    ]
+      { label: 'Truth Ledger', action: 'MESSAGE', payload: 'Show my Property Truth Ledger' },
+      { label: 'Maintenance Score', action: 'MESSAGE', payload: 'Explain the Maintenance Credit Score' },
+      { label: 'Autopilot Mode', action: 'MESSAGE', payload: 'Explain AI Property Autopilot and Owner Silent Mode' },
+      { label: 'Summarize Page', action: 'SUMMARIZE', payload: 'Analyze current page context.' },
+    ],
   },
   tenant: {
-    greeting: "Welcome to your Residency Node. Do you need to report an issue or track an active dispatch?",
+    greeting: 'Residency node active. I can help submit issues with proof, track SLA status, and explain tenant verification.',
     prompts: [
-      { label: "Check My Status", action: "SUMMARIZE", payload: "Summarize my active services." },
-      { label: "Report Issue", action: "NAVIGATE", payload: "/tenant" },
-      { label: "Move-Out Process", action: "MESSAGE", payload: "What is the move-out protocol?" }
-    ]
+      { label: 'Report Issue', action: 'NAVIGATE', payload: '/tenant' },
+      { label: 'Evidence Rules', action: 'MESSAGE', payload: 'What proof is needed for a maintenance dispute?' },
+      { label: 'Check Status', action: 'SUMMARIZE', payload: 'Summarize my active services.' },
+    ],
   },
   technician: {
-    greeting: "Service Node Active. Ready for mission briefing or troubleshooting assistance.",
+    greeting: 'Service node active. I can explain GPS check-in, No-Photo No-Close rules, SLA priority, and repeat-defect escalation.',
     prompts: [
-      { label: "Mission Summary", action: "SUMMARIZE", payload: "Analyze my current assignment." },
-      { label: "View Missions", action: "NAVIGATE", payload: "/tech" },
-      { label: "SLA Guidelines", action: "MESSAGE", payload: "What are the SLA guidelines?" }
-    ]
+      { label: 'Mission Summary', action: 'SUMMARIZE', payload: 'Analyze my current assignment.' },
+      { label: 'Proof Protocol', action: 'MESSAGE', payload: 'Explain No-Photo No-GPS No-Close' },
+      { label: 'Repeat Defect', action: 'MESSAGE', payload: 'What is Repair Memory?' },
+    ],
   },
   broker: {
-    greeting: "Sovereign Brokerage Network online. Do you need pipeline summaries or commission updates?",
+    greeting: 'Broker network online. I can explain verified maintenance history, Property Passport, and owner handover evidence.',
     prompts: [
-      { label: "Pipeline Summary", action: "SUMMARIZE", payload: "Summarize my live leads." },
-      { label: "Submit Lead", action: "NAVIGATE", payload: "/broker" },
-      { label: "Commission Status", action: "MESSAGE", payload: "When are commissions disbursed?" }
-    ]
+      { label: 'Property Passport', action: 'MESSAGE', payload: 'Explain BIN Verified Property Passport for brokers' },
+      { label: 'Trust Score', action: 'MESSAGE', payload: 'Explain Maintenance Credit Score for resale and rental confidence' },
+      { label: 'Pipeline Summary', action: 'SUMMARIZE', payload: 'Summarize my live leads.' },
+    ],
   },
   admin: {
-    greeting: "Command Center AI ready. Monitoring approval queues and system integrity.",
+    greeting: 'Command Center AI ready. I can inspect SLA breaches, orphan records, proof gaps, repeat defects, and public-launch risk.',
     prompts: [
-      { label: "War Room Summary", action: "SUMMARIZE", payload: "Summarize current bottlenecks." },
-      { label: "Orphan War Room", action: "NAVIGATE", payload: "/admin/orphans" },
-      { label: "SLA Breaches", action: "NAVIGATE", payload: "/reports" }
-    ]
+      { label: 'War Room Summary', action: 'SUMMARIZE', payload: 'Summarize current bottlenecks.' },
+      { label: 'Truth Ledger', action: 'MESSAGE', payload: 'Show Property Truth Ledger risk' },
+      { label: 'Launch Risk', action: 'MESSAGE', payload: 'Is the AI-powered layer working?' },
+    ],
   },
   unknown: {
-    greeting: "Sovereign Systems online. How may I assist you today?",
+    greeting: 'BIN GROUP AI online. Ask about Property Truth Ledger, Property Black Box, Property Autopilot, Maintenance Credit Score, or Property Passport.',
     prompts: [
-      { label: "Platform Overview", action: "MESSAGE", payload: "Tell me about BIN GROUP." }
-    ]
-  }
+      { label: 'Platform Overview', action: 'MESSAGE', payload: 'Tell me about BIN GROUP Property Truth Infrastructure.' },
+    ],
+  },
 };
 
 export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNavigate }) => {
@@ -103,7 +118,6 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ dragging: false, moved: false, pointerId: -1, offsetX: 0, offsetY: 0, startX: 0, startY: 0 });
-
   const activeRole = roleData[role] || roleData.unknown;
 
   useEffect(() => {
@@ -116,11 +130,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
 
     const handleResize = () => setFabPosition((current) => {
       const next = clampFabPosition(current);
-      try {
-        localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next));
-      } catch {
-        /* localStorage can be unavailable in private or restricted browser sessions. */
-      }
+      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
 
@@ -128,35 +138,100 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Persist session chat history
   useEffect(() => {
-    const saved = sessionStorage.getItem(`bin_chat_history_${role}`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+    try {
+      const saved = sessionStorage.getItem(`bin_chat_history_${role}`);
+      if (saved) setMessages(JSON.parse(saved).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+    } catch {
+      setMessages([]);
     }
   }, [role]);
 
   useEffect(() => {
     if (messages.length > 0) {
-      sessionStorage.setItem(`bin_chat_history_${role}`, JSON.stringify(messages));
+      try { sessionStorage.setItem(`bin_chat_history_${role}`, JSON.stringify(messages)); } catch { /* restricted storage */ }
     }
   }, [messages, role]);
 
   useEffect(() => {
     if (messages.length === 0 && open) {
-      setMessages([{
-        id: 'initial',
-        type: 'ai',
-        text: activeRole.greeting,
-        timestamp: new Date()
-      }]);
+      setMessages([{ id: 'initial', type: 'ai', text: activeRole.greeting, timestamp: new Date() }]);
     }
-  }, [open, role]);
+  }, [open, role, activeRole.greeting, messages.length]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const generateSummary = (): string => {
+    if (!pageContext) return 'No live dashboard context is visible yet. Open a specific dashboard module so I can read operational signals.';
+
+    const normalizedRole = role.toLowerCase();
+    if (normalizedRole === 'owner') {
+      const propCount = pageContext.properties?.length || 0;
+      const bpi = pageContext.bpiAverage || 0;
+      const risk = pageContext.riskAssets?.length || 0;
+      return `Institutional scan: ${propCount} asset nodes, BPI ${bpi}%, high-risk assets ${risk}.`;
+    }
+    if (normalizedRole === 'tenant') {
+      const active = pageContext.activeTickets?.length || 0;
+      const latest = pageContext.activeTickets?.[0];
+      return active > 0
+        ? `Residency alert: ${active} active mission(s). Latest request: ${latest?.description || 'maintenance request'} - ${String(latest?.status || 'open').replace('_', ' ')}.`
+        : 'Residency status: no active maintenance dispatches found.';
+    }
+    if (normalizedRole === 'technician') {
+      const active = pageContext.activeDispatches?.length || 0;
+      const mission = pageContext.activeDispatches?.[0];
+      return active > 0
+        ? `Mission briefing: ${active} active assignment(s). Primary mission: ${mission?.description || 'service request'} at ${mission?.propertyName || 'assigned property'}.`
+        : 'Duty status: no active assignments locked to your UID.';
+    }
+    if (normalizedRole === 'broker') {
+      const leadCount = pageContext.leads?.length || 0;
+      const pendingPay = pageContext.stats?.pending || 0;
+      return `Pipeline scan: ${leadCount} referral nodes active. Pending commission float: AED ${Number(pendingPay).toLocaleString()}.`;
+    }
+    if (normalizedRole === 'admin') {
+      const onboards = pageContext.pendingOnboardings?.length || 0;
+      const orphans = pageContext.orphans?.length || 0;
+      const tickets = pageContext.stats?.openTickets || 0;
+      return `Command audit: ${onboards} pending intakes, ${orphans} orphan records, ${tickets} active missions.`;
+    }
+    return 'Summary protocol active, but context parameters are unmapped for this role.';
+  };
+
+  const handleSend = async (text: string, isAutoSummary = false) => {
+    if (!text.trim()) return;
+    const userMsg: Message = { id: Date.now().toString(), type: 'user', text, timestamp: new Date() };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
+    window.setTimeout(() => {
+      const aiText = generateSovereignAIResponse({
+        role,
+        text,
+        pageContext,
+        isAutoSummary,
+        fallbackSummary: isAutoSummary ? generateSummary() : undefined,
+      });
+      const aiMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', text: aiText, timestamp: new Date() };
+      setMessages((prev) => [...prev, aiMsg]);
+      setLoading(false);
+    }, 650);
+  };
+
+  const handlePrompt = (prompt: Prompt) => {
+    if (prompt.action === 'NAVIGATE' && onNavigate) {
+      onNavigate(prompt.payload);
+      setOpen(false);
+    } else if (prompt.action === 'MESSAGE') {
+      handleSend(prompt.payload);
+    } else if (prompt.action === 'SUMMARIZE') {
+      handleSend(prompt.label, true);
+    }
+  };
 
   const handleFabPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     dragRef.current = {
@@ -174,152 +249,36 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   const handleFabPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag.dragging || drag.pointerId !== event.pointerId) return;
-
-    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
-      drag.moved = true;
-    }
-
+    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
     setFabPosition(clampFabPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY }));
   };
 
   const finishFabDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag.dragging || drag.pointerId !== event.pointerId) return;
-
     dragRef.current = { ...drag, dragging: false };
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      /* Pointer capture can already be released by the browser on cancel/up edge cases. */
-    }
-
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
     setFabPosition((current) => {
       const next = clampFabPosition(current);
-      try {
-        localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next));
-      } catch {
-        /* localStorage can be unavailable in private or restricted browser sessions. */
-      }
+      try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
-
     if (!drag.moved) setOpen(true);
-  };
-
-  const generateSummary = (): string => {
-    if (!pageContext) return "I cannot see any operational data on this page. Please navigate to a specific dashboard or module.";
-
-    const r = role.toLowerCase();
-    
-    if (r === 'owner') {
-      const propCount = pageContext.properties?.length || 0;
-      const bpi = pageContext.bpiAverage || 0;
-      const risk = pageContext.riskAssets?.length || 0;
-      return `Institutional Scan Complete: I detected ${propCount} asset nodes in your portfolio. The Building Performance Index (BPI) is currently at ${bpi}%. You have ${risk} assets flagged as HIGH RISK.`;
-    }
-
-    if (r === 'tenant') {
-      const active = pageContext.activeTickets?.length || 0;
-      const latest = pageContext.activeTickets?.[0];
-      if (active > 0) {
-        return `Residency Alert: You have ${active} mission(s) active. Your latest request for "${latest.description}" is currently ${latest.status.replace('_', ' ')}. If you need to change the timing, use the navigation prompt below.`;
-      }
-      return "Residency Status: No active maintenance dispatches found. Your residency node is operating within optimal parameters. If you have a new issue, I can guide you to the SOS reporting page.";
-    }
-
-    if (r === 'technician') {
-      const active = pageContext.activeDispatches?.length || 0;
-      const mission = pageContext.activeDispatches?.[0];
-      if (active > 0) {
-        return `Mission Briefing: You have ${active} active assignment(s). Primary mission: ${mission.description} at ${mission.propertyName}. Current status is ${mission.status}. Ensure GPS check-in upon arrival.`;
-      }
-      return "Duty Status: Monitoring mission pool. No active assignments locked to your UID.";
-    }
-
-    if (r === 'broker') {
-      const leadCount = pageContext.leads?.length || 0;
-      const pendingPay = pageContext.stats?.pending || 0;
-      return `Pipeline Scan: ${leadCount} referral nodes active. Your current treasury float for pending commissions is AED ${pendingPay.toLocaleString()}.`;
-    }
-
-    if (r === 'admin') {
-      const onboards = pageContext.pendingOnboardings?.length || 0;
-      const orphans = pageContext.orphans?.length || 0;
-      const tickets = pageContext.stats?.openTickets || 0;
-      return `Command Audit: Approval queue contains ${onboards} intake submissions. I detected ${orphans} relational orphans in the War Room. Total active missions: ${tickets}.`;
-    }
-
-    return "Summary protocol active, but context parameters are unmapped for this role.";
-  };
-
-  const handleSend = async (text: string, isAutoSummary = false) => {
-    if (!text.trim()) return;
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      text,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setLoading(true);
-
-    setTimeout(() => {
-      let aiText = "I am processing your institutional request. Currently, I can guide you through the platform and explain core concepts like BPI and SLA protocols.";
-      
-      if (isAutoSummary) {
-        aiText = generateSummary();
-      } else if (text.toLowerCase().includes('bpi')) {
-        aiText = "The Building Performance Index (BPI) is our proprietary real-time health score for assets. It analyzes age, maintenance frequency, and SOS history to predict integrity decay.";
-      } else if (text.toLowerCase().includes('sla')) {
-        aiText = "Our Service Level Agreements (SLA) prioritize safety. Emergency faults (AC, Flood, Fire) require a 4-hour response, while standard MEP issues are resolved within 24-48 hours.";
-      } else if (text.toLowerCase().includes('move-out')) {
-        aiText = "To move out, ensure all service tickets are closed and final clearance certificates are uploaded to the document vault. Your owner will then trigger the 'Vacate Node' protocol.";
-      }
-
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        text: aiText,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiMsg]);
-      setLoading(false);
-    }, 1000);
-  };
-
-  const handlePrompt = (prompt: any) => {
-    if (prompt.action === 'NAVIGATE' && onNavigate) {
-      onNavigate(prompt.payload);
-      setOpen(false);
-    } else if (prompt.action === 'MESSAGE') {
-      handleSend(prompt.payload);
-    } else if (prompt.action === 'SUMMARIZE') {
-      handleSend(prompt.label, true);
-    }
   };
 
   const renderContent = () => (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#0B0B0C', color: '#FFF' }}>
-      {/* Header */}
       <Box sx={{ p: 3, borderBottom: '1px solid rgba(198,167,94,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, #000, #111)' }}>
         <Stack direction="row" spacing={2} alignItems="center">
-          <Avatar sx={{ bgcolor: binThemeTokens.gold, width: 40, height: 40 }}>
-            <Sparkles color="#000" size={24} />
-          </Avatar>
+          <Avatar sx={{ bgcolor: binThemeTokens.gold, width: 40, height: 40 }}><Sparkles color="#000" size={24} /></Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>SOVEREIGN AI</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>EXECUTIVE ASSISTANT</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>PROPERTY TRUTH ASSISTANT</Typography>
           </Box>
         </Stack>
-        <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
-          <X size={20} />
-        </IconButton>
+        <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
       </Box>
 
-      {/* Messages */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
         {messages.map((msg) => (
           <Box key={msg.id} sx={{ alignSelf: msg.type === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
@@ -327,79 +286,35 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
               <Avatar sx={{ width: 28, height: 28, bgcolor: msg.type === 'user' ? '#333' : binThemeTokens.gold, mt: 0.5 }}>
                 {msg.type === 'user' ? <User size={16} color="#FFF" /> : <Bot size={16} color="#000" />}
               </Avatar>
-              <Paper sx={{ 
-                p: 2, 
-                bgcolor: msg.type === 'user' ? 'rgba(255,255,255,0.05)' : 'rgba(198,167,94,0.05)',
-                border: `1px solid ${msg.type === 'user' ? 'rgba(255,255,255,0.1)' : 'rgba(198,167,94,0.2)'}`,
-                borderRadius: msg.type === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px'
-              }}>
-                <Typography variant="body2" sx={{ lineHeight: 1.6, color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>
-                  {msg.text}
-                </Typography>
-                <Typography variant="caption" sx={{ mt: 1, display: 'block', opacity: 0.3, textAlign: msg.type === 'user' ? 'right' : 'left' }}>
-                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Typography>
+              <Paper sx={{ p: 2, bgcolor: msg.type === 'user' ? 'rgba(255,255,255,0.05)' : 'rgba(198,167,94,0.05)', border: `1px solid ${msg.type === 'user' ? 'rgba(255,255,255,0.1)' : 'rgba(198,167,94,0.2)'}`, borderRadius: msg.type === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px' }}>
+                <Typography variant="body2" sx={{ lineHeight: 1.6, whiteSpace: 'pre-line', color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>{msg.text}</Typography>
+                <Typography variant="caption" sx={{ mt: 1, display: 'block', opacity: 0.3, textAlign: msg.type === 'user' ? 'right' : 'left' }}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Typography>
               </Paper>
             </Stack>
           </Box>
         ))}
-        {loading && (
-          <Box sx={{ alignSelf: 'flex-start', ml: 5 }}>
-            <CircularProgress size={20} sx={{ color: binThemeTokens.gold }} />
-          </Box>
-        )}
+        {loading && <Box sx={{ alignSelf: 'flex-start', ml: 5 }}><CircularProgress size={20} sx={{ color: binThemeTokens.gold }} /></Box>}
         <div ref={chatEndRef} />
       </Box>
 
-      {/* Footer / Input */}
       <Box sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        {/* Suggested Prompts */}
         <Box sx={{ mb: 2, display: 'flex', gap: 1, overflowX: 'auto', pb: 1, '&::-webkit-scrollbar': { display: 'none' } }}>
-          {activeRole.prompts.map((p, i) => (
-            <Chip 
-              key={i} 
-              label={p.label} 
-              onClick={() => handlePrompt(p)}
-              sx={{ 
-                bgcolor: 'rgba(255,255,255,0.02)', 
-                border: '1px solid rgba(198,167,94,0.3)',
-                color: binThemeTokens.gold,
-                fontWeight: 700,
-                fontSize: '0.7rem',
-                '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1) }
-              }} 
-            />
+          {activeRole.prompts.map((prompt) => (
+            <Chip key={prompt.label} label={prompt.label} onClick={() => handlePrompt(prompt)} sx={{ bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(198,167,94,0.3)', color: binThemeTokens.gold, fontWeight: 700, fontSize: '0.7rem', '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1) } }} />
           ))}
         </Box>
-
         <TextField
           fullWidth
-          placeholder="Send a secure message..."
+          placeholder="Ask about Property Truth, Autopilot, SLA, Passport..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend(input)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
           autoComplete="off"
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              bgcolor: 'rgba(255,255,255,0.03)',
-              borderRadius: 3,
-              '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-              '&:hover fieldset': { borderColor: binThemeTokens.gold },
-            }
-          }}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={() => handleSend(input)} sx={{ color: binThemeTokens.gold }}>
-                  <Send size={18} />
-                </IconButton>
-              </InputAdornment>
-            )
-          }}
+          sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
+          InputProps={{ endAdornment: <InputAdornment position="end"><IconButton onClick={() => handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
         <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontWeight: 900 }}>
-          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} />
-          SOVEREIGN ENCRYPTED SESSION
+          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> PROPERTY TRUTH SESSION
         </Typography>
       </Box>
     </Box>
@@ -419,49 +334,17 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
             setOpen(true);
           }
         }}
-        sx={{
-          position: 'fixed',
-          left: fabPosition.x,
-          top: fabPosition.y,
-          width: FAB_SIZE,
-          height: FAB_SIZE,
-          bgcolor: binThemeTokens.gold,
-          color: '#000',
-          boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`,
-          '&:hover': { bgcolor: binThemeTokens.goldLight, transform: dragRef.current.dragging ? 'none' : 'scale(1.05)' },
-          zIndex: 2500,
-          touchAction: 'none',
-          cursor: dragRef.current.dragging ? 'grabbing' : 'grab',
-          transition: dragRef.current.dragging ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease'
-        }}
+        sx={{ position: 'fixed', left: fabPosition.x, top: fabPosition.y, width: FAB_SIZE, height: FAB_SIZE, bgcolor: binThemeTokens.gold, color: '#000', boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: binThemeTokens.goldLight, transform: dragRef.current.dragging ? 'none' : 'scale(1.05)' }, zIndex: 2500, touchAction: 'none', cursor: dragRef.current.dragging ? 'grabbing' : 'grab', transition: dragRef.current.dragging ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease' }}
       >
-        <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}>
-          <Sparkles size={22} />
-          <Grip size={11} />
-        </Stack>
+        <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}><Sparkles size={22} /><Grip size={11} /></Stack>
       </Fab>
 
       {isMobile ? (
-        <SwipeableDrawer
-          anchor="bottom"
-          open={open}
-          onClose={() => setOpen(false)}
-          onOpen={() => setOpen(true)}
-          PaperProps={{
-            sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' }
-          }}
-        >
+        <SwipeableDrawer anchor="bottom" open={open} onClose={() => setOpen(false)} onOpen={() => setOpen(true)} PaperProps={{ sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' } }}>
           {renderContent()}
         </SwipeableDrawer>
       ) : (
-        <Drawer
-          anchor="right"
-          open={open}
-          onClose={() => setOpen(false)}
-          PaperProps={{
-            sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' }
-          }}
-        >
+        <Drawer anchor="right" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' } }}>
           {renderContent()}
         </Drawer>
       )}
