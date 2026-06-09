@@ -189,7 +189,7 @@ function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={<PublicMarketingPage page="home" />} />
+        <Route path="/" element={<CompanyProfilePage />} />
         <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
