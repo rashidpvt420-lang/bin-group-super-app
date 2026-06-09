@@ -267,22 +267,43 @@ export const adminVerifyOwnerPayment = onCall({ cors: true }, async (request) =>
     const now = admin.firestore.FieldValue.serverTimestamp();
     const baseDate = asDate(contractData.ownerSignedAt || contractData.createdAt || payment.createdAt) || new Date();
     const termFields = termFieldsFromStart(baseDate);
+    const adminUid = request.auth?.uid || "admin";
+    const amountReceived = firstPositiveNumber(payment.amount, payment.amountReceived, contractMoneyValue(contractData));
+    const annualContractValue = contractAnnualValue(contractData);
+    const mobilizationAmount = contractMoneyValue(contractData);
+    const paymentVerified = contractPaymentIsVerified({ ...contractData, paymentVerified: true, paymentStatus: "VERIFIED" });
 
-    const contractPatch = buildOwnerCommercialApprovalPatch(termFields, now, true);
+    const commercialApproval = buildOwnerCommercialApprovalPatch({
+        payment,
+        contractData,
+        contractId,
+        paymentId,
+        termFields,
+        now,
+        approvedAt: baseDate,
+        approvedBy: adminUid,
+        adminUid,
+        amountReceived,
+        annualContractValue,
+        mobilizationAmount,
+        paymentReferenceId: payment.reference || payment.paymentReferenceId || payment.paymentId || paymentId,
+        paymentPlan: payment.paymentPlan || contractData.paymentPlan || contractData.paymentSchedule?.paymentPlan || "manual",
+    });
 
     const batch = runtimeDb.batch();
     batch.set(paymentRef, {
+        ...(commercialApproval.paymentPatch || {}),
         status: "VERIFIED",
         verificationState: "ADMIN_VERIFIED",
         paymentVerified: true,
-        verifiedBy: request.auth?.uid || "admin",
+        verifiedBy: adminUid,
         verifiedAt: now,
         updatedAt: now,
     }, { merge: true });
-    batch.set(contractRef, contractPatch, { merge: true });
+    batch.set(contractRef, commercialApproval.contractPatch || commercialApproval, { merge: true });
 
     if (ownerUid) {
-        const ownerPatch = ownerLifecyclePatch(contractId, ownerEmail, termFields, now, true);
+        const ownerPatch = ownerLifecyclePatch(contractId, ownerEmail, termFields, now, paymentVerified);
         batch.set(runtimeDb.collection("owners").doc(ownerUid), ownerPatch, { merge: true });
         batch.set(runtimeDb.collection("users").doc(ownerUid), {
             role: "owner",
