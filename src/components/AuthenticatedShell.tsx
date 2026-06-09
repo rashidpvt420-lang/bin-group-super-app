@@ -44,6 +44,14 @@ const ADMIN_STAFF_ROLES = [
   'operations_manager',
 ];
 
+const AI_ENABLED_ROLES = [
+  'owner',
+  'tenant',
+  'technician',
+  'broker',
+  ...ADMIN_STAFF_ROLES,
+];
+
 const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin'];
 
 function PushNotificationBootstrap() {
@@ -90,8 +98,10 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
+  const normalizedRole = (role || '').toLowerCase();
   const shouldRenderGlobalHeader = showChrome;
   const shouldRenderFloatingNavigation = showChrome && !isAdminRoute;
+  const shouldRenderSovereignAI = showChrome && isRolePortalRoute && AI_ENABLED_ROLES.includes(normalizedRole);
 
   if (roleLoading && !publicAuth) {
     return <>{loadingFallback}</>;
@@ -111,7 +121,6 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
 
   const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
   if (user && !roleLoading && isAuthEntryPage) {
-    const normalizedRole = (role || '').toLowerCase();
     if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
@@ -124,8 +133,8 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
       <PushNotificationBootstrap />
       {shouldRenderGlobalHeader && <BinGroupHeader />}
       {children}
-      {showChrome && !isAdminRoute && ['owner', 'tenant'].includes((role || '').toLowerCase()) && (
-        <SovereignAIChat role={(role || 'unknown').toLowerCase() as any} onNavigate={navigate} />
+      {shouldRenderSovereignAI && (
+        <SovereignAIChat role={normalizedRole as any} onNavigate={navigate} />
       )}
       {shouldRenderFloatingNavigation && <NavigationControl />}
       <SovereignAlertHandler />
