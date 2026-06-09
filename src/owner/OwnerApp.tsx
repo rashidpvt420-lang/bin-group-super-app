@@ -4,12 +4,13 @@ import {
     Box, AppBar, Toolbar, Typography, Container, IconButton,
     Breadcrumbs, Link as MuiLink, alpha, Stack, Button
 } from '@mui/material';
-import { ArrowLeft, Globe, LayoutDashboard, Paintbrush, UserCircle } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 import BrandWatermark from '../components/BrandWatermark';
+import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
@@ -39,6 +40,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
+    void toggleLanguage;
+
     return (
         <Box sx={{
             minHeight: '100vh',
@@ -63,11 +66,11 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         {location.pathname !== '/owner' && location.pathname !== '/owner/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}>
-                                <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
+                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                             </IconButton>
                         )}
                         <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                            <LayoutDashboard size={22} />
+                            <SafeIcon icon={LayoutDashboard} size={22} />
                         </IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
@@ -83,12 +86,12 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.property_passport', 'Property Passport', 'جواز العقار')}
                         </Button>
-                        <Button onClick={() => navigate('/owner/design-studio')} startIcon={<Paintbrush size={17} />} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
+                        <Button onClick={() => navigate('/owner/design-studio')} startIcon={renderSafeIcon(Paintbrush, { size: 17 })} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {t('nav.ai_studio') || 'AI Studio'}
                         </Button>
                         <NotificationBell />
                         <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}>
-                            <UserCircle size={18} />
+                            <SafeIcon icon={UserCircle} size={18} />
                         </IconButton>
                     </Stack>
                 </Toolbar>
