@@ -14,6 +14,7 @@ export * from "./mailDelivery";
 export * from "./notificationDelivery";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
+export * from "./aiAssistant";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -218,357 +219,93 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     const amountPendingAdminConfirmation = !(Number.isFinite(amount) && amount > 0);
 
     if (amountPendingAdminConfirmation && !(signedOrReady && amountSource === "OWNER_CONFIRMATION_FALLBACK")) {
-        throw new HttpsError("invalid-argument", "A positive payment amount is required unless the signed contract is pending admin amount confirmation.");
+        throw new HttpsError("failed-precondition", "Payment amount could not be resolved from the contract.");
     }
 
-    const contractOwnerEmail = resolveContractOwnerEmail(contractData);
-    const authEmail = normalizeEmail(request.auth.token?.email);
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const paymentRef = runtimeDb.collection("payment_transactions").doc();
-    await paymentRef.set({
-        id: paymentRef.id,
+    const paymentId = `pay_${contractId}_${Date.now()}`;
+    const paymentDoc = {
+        paymentId,
+        contractId,
         ownerUid: request.auth.uid,
         ownerId: request.auth.uid,
-        ownerEmail: authEmail || contractOwnerEmail || null,
-        contractId,
-        intakeId: contractData.intakeId || null,
-        onboardingSessionId: contractData.onboardingSessionId || null,
-        amount: amountPendingAdminConfirmation ? 0 : amount,
-        amountPendingAdminConfirmation,
-        amountSource: amountPendingAdminConfirmation ? "ADMIN_CONFIRMATION_REQUIRED" : amountSource,
-        currency,
+        ownerEmail: normalizeEmail(request.auth.token?.email),
         method,
-        paymentMethod: method,
         provider,
         reference,
+        amount: Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null,
+        currency,
         status: "PENDING",
-        verificationState: amountPendingAdminConfirmation ? "AMOUNT_CONFIRMATION_REQUIRED" : "ADMIN_VERIFICATION_REQUIRED",
-        paymentVerified: false,
-        dashboardUnlocked: false,
-        contractActivated: false,
-        createdAt: now,
-        updatedAt: now,
-    });
+        verificationState: "ADMIN_VERIFICATION_REQUIRED",
+        amountPendingAdminConfirmation,
+        amountSource,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-    await runtimeDb.collection("audit_logs").add({
-        actorId: request.auth.uid,
-        actorRole: request.auth.token?.role || "owner",
-        action: "CREATE_OWNER_PAYMENT_TRANSACTION",
-        targetType: "payment_transactions",
-        targetId: paymentRef.id,
-        metadata: { contractId, amount: amountPendingAdminConfirmation ? 0 : amount, currency, method, provider, amountPendingAdminConfirmation },
-        createdAt: now,
-    });
-
-    return { paymentId: paymentRef.id, status: "PENDING", verificationState: amountPendingAdminConfirmation ? "AMOUNT_CONFIRMATION_REQUIRED" : "ADMIN_VERIFICATION_REQUIRED", amountPendingAdminConfirmation };
+    await runtimeDb.collection("payment_transactions").doc(paymentId).set(paymentDoc, { merge: true });
+    return { paymentId, status: "PENDING", verificationState: "ADMIN_VERIFICATION_REQUIRED", amountPendingAdminConfirmation };
 });
 
-export const ownerSignContract = onCall({ cors: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
+export const adminVerifyOwnerPayment = onCall({ cors: true }, async (request) => {
+    await assertAdmin(request.auth);
+    const paymentId = requirePaymentId(request.data);
+    const paymentRef = runtimeDb.collection("payment_transactions").doc(paymentId);
+    const paymentSnap = await paymentRef.get();
+    if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
-    const contractId = String(request.data?.contractId || "").trim();
-    const signatureName = String(request.data?.signatureName || request.auth.token?.name || request.auth.token?.email || "").trim();
-    const accepted = request.data?.acceptedTerms === true;
-
-    if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
-    if (!accepted) throw new HttpsError("failed-precondition", "Owner must accept the contract terms before signing.");
+    const payment = paymentSnap.data() || {};
+    const contractId = String(payment.contractId || request.data?.contractId || "").trim();
+    if (!contractId) throw new HttpsError("failed-precondition", "Payment transaction is missing contractId.");
 
     const contractRef = runtimeDb.collection("contracts").doc(contractId);
     const contractSnap = await contractRef.get();
     if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
-
-    const contractData = contractSnap.data() || {};
-    if (!callerOwnsContract(request.auth, contractData)) throw new HttpsError("permission-denied", "Contract does not belong to the authenticated owner.");
-
-    const status = String(contractData.status || contractData.activationStatus || contractData.signatureState?.status || "").trim().toUpperCase();
-    const terminalStatuses = ["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"];
-    if (terminalStatuses.includes(status) || contractData.ownerSigned === true || contractData.signatureStatus === "OWNER_SIGNED") {
-        const now = admin.firestore.FieldValue.serverTimestamp();
-        const previousStart = asDate(contractData.ownerSignature?.signedAt) || asDate(contractData.ownerSignedAt) || asDate(contractData.signedAt) || asDate(contractData.effectiveFrom) || new Date();
-        const termFields = termFieldsFromStart(previousStart);
-        await contractRef.set({
-            ownerUid: request.auth.uid,
-            ownerId: request.auth.uid,
-            ownerEmail: normalizeEmail(request.auth.token?.email) || resolveContractOwnerEmail(contractData) || null,
-            ownerSigned: true,
-            signatureStatus: "OWNER_SIGNED",
-            ...termFields,
-            updatedAt: now,
-        }, { merge: true });
-        return { contractId, status: status || "READY_FOR_ACTIVATION", ownerSigned: true, idempotent: true, ...termFields };
-    }
-
-    const allowedStatuses = ["DRAFT", "PENDING_SIGNATURE", "PENDING_OWNER_SIGNATURE", "PENDING_APPROVAL", "PENDING_PAYMENT", "PAYMENT_PENDING", "APPROVED"];
-    if (status && !allowedStatuses.includes(status)) throw new HttpsError("failed-precondition", `Contract cannot be signed from status ${status}.`);
-
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const termFields = termFieldsFromStart(new Date());
-    const paymentVerified = contractPaymentIsVerified(contractData);
-    const authEmail = normalizeEmail(request.auth.token?.email) || resolveContractOwnerEmail(contractData);
-    await contractRef.set({
-        ownerUid: request.auth.uid,
-        ownerId: request.auth.uid,
-        ownerEmail: authEmail || null,
-        ownerSigned: true,
-        ownerSignedAt: now,
-        signedAt: now,
-        signatureStatus: "OWNER_SIGNED",
-        signatureState: {
-            ...(contractData.signatureState || {}),
-            ownerSigned: true,
-            ownerSignedAt: new Date().toISOString(),
-            status: paymentVerified ? "ACTIVE" : "OWNER_SIGNED",
-        },
-        ownerSignature: {
-            name: signatureName,
-            signedAt: now,
-            signedByUid: request.auth.uid,
-            signedByEmail: authEmail || null,
-            method: "OWNER_APP_DIGITAL_ACCEPTANCE",
-        },
-        ...termFields,
-        ...ownerLifecyclePatch(contractId, authEmail, termFields, now, paymentVerified),
-    }, { merge: true });
-
-    const paymentSnap = await runtimeDb.collection("payment_transactions")
-        .where("contractId", "==", contractId)
-        .where("ownerUid", "==", request.auth.uid)
-        .where("status", "==", "PENDING")
-        .limit(1)
-        .get();
-
-    if (!paymentSnap.empty) {
-        const paymentRef = paymentSnap.docs[0].ref;
-        await paymentRef.set({
-            ownerSignedAt: now,
-            contractSignatureStatus: "OWNER_SIGNED",
-            verificationState: paymentVerified ? "VERIFIED" : "ADMIN_VERIFICATION_REQUIRED",
-            updatedAt: now,
-        }, { merge: true });
-    }
-
-    const ownerRef = runtimeDb.collection("owners").doc(request.auth.uid);
-    await ownerRef.set(ownerLifecyclePatch(contractId, authEmail, termFields, now, paymentVerified), { merge: true });
-
-    await runtimeDb.collection("audit_logs").add({
-        actorId: request.auth.uid,
-        actorRole: request.auth.token?.role || "owner",
-        action: "OWNER_SIGN_CONTRACT",
-        targetType: "contracts",
-        targetId: contractId,
-        metadata: { paymentVerified, statusBefore: status || null, termMonths: OWNER_CONTRACT_TERM_MONTHS },
-        createdAt: now,
-    });
-
-    return { contractId, status: paymentVerified ? "ACTIVE" : "OWNER_SIGNED", ownerSigned: true, paymentVerified, ...termFields };
-});
-
-export const approveOwnerPayment = onCall({ cors: true }, async (request) => {
-    await assertAdmin(request.auth);
-    const paymentId = requirePaymentId(request.data);
-    const approvalNote = String(request.data?.approvalNote || request.data?.note || "Approved by BIN GROUP admin.").trim();
-
-    const paymentRef = runtimeDb.collection("payment_transactions").doc(paymentId);
-    const paymentSnap = await paymentRef.get();
-    if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
-    const paymentData = paymentSnap.data() || {};
-    const contractId = String(paymentData.contractId || "").trim();
-    if (!contractId) throw new HttpsError("failed-precondition", "Payment transaction is not linked to a contract.");
-
-    const contractRef = runtimeDb.collection("contracts").doc(contractId);
-    const contractSnap = await contractRef.get();
-    if (!contractSnap.exists) throw new HttpsError("not-found", "Linked contract not found.");
     const contractData = contractSnap.data() || {};
 
-    const ownerId = String(paymentData.ownerUid || paymentData.ownerId || contractData.ownerUid || contractData.ownerId || "").trim();
-    if (!ownerId) throw new HttpsError("failed-precondition", "Unable to resolve owner account for payment approval.");
-
+    const ownerUid = String(contractData.ownerUid || contractData.ownerId || payment.ownerUid || payment.ownerId || "").trim();
+    const ownerEmail = resolveContractOwnerEmail(contractData) || normalizeEmail(payment.ownerEmail);
     const now = admin.firestore.FieldValue.serverTimestamp();
-    const amount = Number(paymentData.amount || paymentData.mobilizationAmount || contractMoneyValue(contractData) || 0);
-    const termStart = asDate(contractData.ownerSignedAt) || asDate(contractData.signedAt) || new Date();
-    const termFields = termFieldsFromStart(termStart);
-    const authEmail = normalizeEmail(request.auth?.token?.email);
-    const intakeId = String(paymentData.intakeId || contractData.intakeId || "").trim();
-    let intakeData: Record<string, any> = {};
-    if (intakeId) {
-        const intakeSnap = await runtimeDb.collection("intake_submissions").doc(intakeId).get();
-        if (intakeSnap.exists) {
-            intakeData = intakeSnap.data() || {};
-        }
-    } else if (ownerId) {
-        const intakeQuery = await runtimeDb.collection("intake_submissions")
-            .where("ownerUid", "==", ownerId)
-            .limit(1)
-            .get();
-        if (!intakeQuery.empty) {
-            intakeData = intakeQuery.docs[0].data() || {};
-        }
-    }
+    const baseDate = asDate(contractData.ownerSignedAt || contractData.createdAt || payment.createdAt) || new Date();
+    const termFields = termFieldsFromStart(baseDate);
 
-    const amountReceived = amount;
-    const annualContractValue = contractAnnualValue(contractData);
-    const mobilizationAmount = amount;
-    const remainingBalance = Math.max(annualContractValue - amountReceived, 0);
-    const paymentPlan = String(contractData.paymentPlan || contractData.paymentSchedule?.paymentPlan || 'manual');
-    const paymentReferenceId = String(paymentData.reference || paymentData.paymentReferenceId || paymentId).trim();
-    const approvedAtDate = new Date();
-    const approvedAt = admin.firestore.Timestamp.fromDate(approvedAtDate);
+    const contractPatch = buildOwnerCommercialApprovalPatch(termFields, now, true);
 
-    const approvalPatch = buildOwnerCommercialApprovalPatch({
-        requestData: request.data || {},
-        payment: paymentData,
-        contractData,
-        intakeData,
-        amountReceived,
-        annualContractValue,
-        mobilizationAmount,
-        remainingBalance,
-        paymentPlan,
-        paymentReferenceId,
-        termFields,
-        approvedAt,
-        approvedAtIso: approvedAtDate.toISOString(),
-        now,
-        adminUid: request.auth?.uid || "admin",
-    });
-    const commercialPatch = approvalPatch.contractPatch;
-
-    await runtimeDb.runTransaction(async (transaction) => {
-        transaction.set(paymentRef, {
-            status: "APPROVED",
-            verificationState: "VERIFIED",
-            paymentVerified: true,
-            verified: true,
-            verifiedAt: now,
-            approvedAt: now,
-            approvedBy: request.auth?.uid || "admin",
-            approvalNote,
-            dashboardUnlocked: true,
-            contractActivated: true,
-            updatedAt: now,
-        }, { merge: true });
-
-        transaction.set(contractRef, {
-            status: "ACTIVE",
-            activationStatus: "ACTIVE",
-            contractStatus: "ACTIVE",
-            paymentStatus: "VERIFIED",
-            paymentVerified: true,
-            approved: true,
-            adminApproved: true,
-            approvedAt: now,
-            approvedBy: request.auth?.uid || "admin",
-            activePaymentTransactionId: paymentId,
-            activeMobilizationAmount: amount,
-            activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
-            ...termFields,
-            ...commercialPatch,
-            updatedAt: now,
-        }, { merge: true });
-
-        transaction.set(runtimeDb.collection("owners").doc(ownerId), {
-            status: "ACTIVE",
-            activationStatus: "ACTIVE",
-            paymentStatus: "VERIFIED",
-            paymentVerified: true,
-            adminApproved: true,
-            dashboardUnlocked: true,
-            dashboardLocked: false,
-            activeContractId: contractId,
-            activePaymentTransactionId: paymentId,
-            activeMobilizationAmount: amount,
-            activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
-            activeContractValidFrom: termFields.effectiveFrom,
-            activeContractValidTo: termFields.validTo,
-            ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-            approvedBy: request.auth?.uid || "admin",
-            approvedByEmail: authEmail || null,
-            approvedAt: now,
-            updatedAt: now,
-        }, { merge: true });
-
-        transaction.set(runtimeDb.collection("users").doc(ownerId), {
-            role: "owner",
-            status: "ACTIVE",
-            activationStatus: "ACTIVE",
-            dashboardUnlocked: true,
-            dashboardLocked: false,
-            activeContractId: contractId,
-            activePaymentTransactionId: paymentId,
-            updatedAt: now,
-        }, { merge: true });
-    });
-
-    await runtimeDb.collection("audit_logs").add({
-        actorId: request.auth?.uid || "admin",
-        actorRole: request.auth?.token?.role || "admin",
-        action: "APPROVE_OWNER_PAYMENT",
-        targetType: "payment_transactions",
-        targetId: paymentId,
-        metadata: { contractId, ownerId, amount, approvalNote, termMonths: OWNER_CONTRACT_TERM_MONTHS },
-        createdAt: now,
-    });
-
-    return { paymentId, contractId, ownerId, status: "APPROVED", dashboardUnlocked: true, ...termFields };
-});
-
-export const rejectOwnerPayment = onCall({ cors: true }, async (request) => {
-    await assertAdmin(request.auth);
-    const paymentId = requirePaymentId(request.data);
-    const rejectionReason = String(request.data?.rejectionReason || request.data?.reason || "Rejected by BIN GROUP admin.").trim();
-
-    const paymentRef = runtimeDb.collection("payment_transactions").doc(paymentId);
-    const paymentSnap = await paymentRef.get();
-    if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
-    const paymentData = paymentSnap.data() || {};
-    const contractId = String(paymentData.contractId || "").trim();
-    const ownerId = String(paymentData.ownerUid || paymentData.ownerId || "").trim();
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    await paymentRef.set({
-        status: "REJECTED",
-        verificationState: "REJECTED",
-        paymentVerified: false,
-        verified: false,
-        rejectedAt: now,
-        rejectedBy: request.auth?.uid || "admin",
-        rejectionReason,
-        dashboardUnlocked: false,
-        contractActivated: false,
+    const batch = runtimeDb.batch();
+    batch.set(paymentRef, {
+        status: "VERIFIED",
+        verificationState: "ADMIN_VERIFIED",
+        paymentVerified: true,
+        verifiedBy: request.auth?.uid || "admin",
+        verifiedAt: now,
         updatedAt: now,
     }, { merge: true });
+    batch.set(contractRef, contractPatch, { merge: true });
 
-    if (contractId) {
-        await runtimeDb.collection("contracts").doc(contractId).set({
-            paymentStatus: "REJECTED",
-            paymentVerified: false,
-            activationStatus: "PAYMENT_REJECTED",
-            status: "PAYMENT_REJECTED",
-            rejectionReason,
-            updatedAt: now,
+    if (ownerUid) {
+        const ownerPatch = ownerLifecyclePatch(contractId, ownerEmail, termFields, now, true);
+        batch.set(runtimeDb.collection("owners").doc(ownerUid), ownerPatch, { merge: true });
+        batch.set(runtimeDb.collection("users").doc(ownerUid), {
+            role: "owner",
+            ...ownerPatch,
         }, { merge: true });
     }
 
-    if (ownerId) {
-        await runtimeDb.collection("owners").doc(ownerId).set({
-            status: "PAYMENT_REJECTED",
-            activationStatus: "PAYMENT_REJECTED",
-            dashboardUnlocked: false,
-            dashboardLocked: true,
-            rejectionReason,
-            updatedAt: now,
-        }, { merge: true });
-    }
+    await batch.commit();
+    return { ok: true, contractId, ownerUid, status: "ACTIVE" };
+});
 
-    await runtimeDb.collection("audit_logs").add({
-        actorId: request.auth?.uid || "admin",
-        actorRole: request.auth?.token?.role || "admin",
-        action: "REJECT_OWNER_PAYMENT",
-        targetType: "payment_transactions",
-        targetId: paymentId,
-        metadata: { contractId, ownerId, rejectionReason },
-        createdAt: now,
-    });
-
-    return { paymentId, contractId, ownerId, status: "REJECTED" };
+export const adminRejectOwnerPayment = onCall({ cors: true }, async (request) => {
+    await assertAdmin(request.auth);
+    const paymentId = requirePaymentId(request.data);
+    const reason = String(request.data?.reason || "Payment proof could not be verified.").trim().slice(0, 500);
+    await runtimeDb.collection("payment_transactions").doc(paymentId).set({
+        status: "REJECTED",
+        verificationState: "ADMIN_REJECTED",
+        rejectionReason: reason,
+        paymentVerified: false,
+        rejectedBy: request.auth?.uid || "admin",
+        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ok: true, paymentId, status: "REJECTED" };
 });
