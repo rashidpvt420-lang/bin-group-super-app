@@ -20,6 +20,7 @@ import {
 import { Bot, Grip, Send, ShieldCheck, Sparkles, User, X } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
+import { functions, httpsCallable } from '../lib/firebase';
 import { generateSovereignAIResponse, type SovereignRole } from '../utils/propertyTruthIntelligence';
 
 export interface SovereignAIChatProps {
@@ -208,18 +209,21 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     setInput('');
     setLoading(true);
 
-    window.setTimeout(() => {
-      const aiText = generateSovereignAIResponse({
-        role,
-        text,
-        pageContext,
-        isAutoSummary,
-        fallbackSummary: isAutoSummary ? generateSummary() : undefined,
-      });
-      const aiMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', text: aiText, timestamp: new Date() };
-      setMessages((prev) => [...prev, aiMsg]);
+    const fallbackSummary = isAutoSummary ? generateSummary() : undefined;
+    try {
+      const runSovereignAI = httpsCallable(functions, 'runSovereignAI');
+      const result: any = await runSovereignAI({ role, text, pageContext, isAutoSummary, fallbackSummary, provider: 'gemini' });
+      const responseText = String(result?.data?.text || '').trim();
+      if (!responseText) throw new Error('Sovereign AI returned an empty response.');
+      const liveBadge = result?.data?.live ? `\n\n— Live AI: ${String(result.data.provider || 'provider').toUpperCase()}` : '';
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), type: 'ai', text: `${responseText}${liveBadge}`, timestamp: new Date() }]);
+    } catch (error) {
+      console.warn('[SovereignAI] Live callable failed, using local fallback:', error);
+      const aiText = generateSovereignAIResponse({ role, text, pageContext, isAutoSummary, fallbackSummary });
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), type: 'ai', text: `${aiText}\n\n— Local fallback active`, timestamp: new Date() }]);
+    } finally {
       setLoading(false);
-    }, 650);
+    }
   };
 
   const handlePrompt = (prompt: Prompt) => {
@@ -273,7 +277,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
           <Avatar sx={{ bgcolor: binThemeTokens.gold, width: 40, height: 40 }}><Sparkles color="#000" size={24} /></Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>SOVEREIGN AI</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>PROPERTY TRUTH ASSISTANT</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>LIVE PROPERTY TRUTH ASSISTANT</Typography>
           </Box>
         </Stack>
         <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
@@ -305,7 +309,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
         </Box>
         <TextField
           fullWidth
-          placeholder="Ask about Property Truth, Autopilot, SLA, Passport..."
+          placeholder="Ask live AI about Property Truth, Autopilot, SLA, Passport..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
@@ -314,7 +318,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
           InputProps={{ endAdornment: <InputAdornment position="end"><IconButton onClick={() => handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
         <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontWeight: 900 }}>
-          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> PROPERTY TRUTH SESSION
+          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> LIVE PROPERTY TRUTH SESSION
         </Typography>
       </Box>
     </Box>
