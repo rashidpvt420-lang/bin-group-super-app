@@ -20,6 +20,7 @@ import {
 import { Bot, Grip, Send, ShieldCheck, Sparkles, User, X } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
+import { functions, httpsCallable } from '../lib/firebase';
 import { generateSovereignAIResponse, type SovereignRole } from '../utils/propertyTruthIntelligence';
 
 export interface SovereignAIChatProps {
@@ -37,9 +38,16 @@ interface Message {
 type Prompt = { label: string; action: 'SUMMARIZE' | 'NAVIGATE' | 'MESSAGE'; payload: string };
 type FabPosition = { x: number; y: number };
 
+type LiveAIResponse = {
+  provider?: string;
+  text?: string;
+  snapshot?: unknown;
+};
+
 const CHAT_POSITION_KEY = 'bin_sovereign_ai_chat_position_v1';
 const FAB_SIZE = 56;
 const EDGE_PADDING = 14;
+const askSovereignAI = httpsCallable(functions, 'askSovereignAI');
 
 const getDefaultFabPosition = (): FabPosition => {
   if (typeof window === 'undefined') return { x: 30, y: 30 };
@@ -201,6 +209,14 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     return 'Summary protocol active, but context parameters are unmapped for this role.';
   };
 
+  const generateLocalFallback = (text: string, isAutoSummary = false): string => generateSovereignAIResponse({
+    role,
+    text,
+    pageContext,
+    isAutoSummary,
+    fallbackSummary: isAutoSummary ? generateSummary() : undefined,
+  });
+
   const handleSend = async (text: string, isAutoSummary = false) => {
     if (!text.trim()) return;
     const userMsg: Message = { id: Date.now().toString(), type: 'user', text, timestamp: new Date() };
@@ -208,18 +224,25 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     setInput('');
     setLoading(true);
 
-    window.setTimeout(() => {
-      const aiText = generateSovereignAIResponse({
+    try {
+      const result = await askSovereignAI({
         role,
         text,
-        pageContext,
-        isAutoSummary,
+        pageContext: pageContext || {},
         fallbackSummary: isAutoSummary ? generateSummary() : undefined,
       });
+      const data = (result.data || {}) as LiveAIResponse;
+      const provider = data.provider ? `\n\nProvider: ${String(data.provider).toUpperCase()}` : '';
+      const aiText = `${data.text || generateLocalFallback(text, isAutoSummary)}${provider}`;
       const aiMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', text: aiText, timestamp: new Date() };
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (error) {
+      console.warn('[SovereignAIChat] Live AI unavailable. Using local fallback:', error);
+      const aiMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', text: `${generateLocalFallback(text, isAutoSummary)}\n\nProvider: LOCAL FALLBACK`, timestamp: new Date() };
+      setMessages((prev) => [...prev, aiMsg]);
+    } finally {
       setLoading(false);
-    }, 650);
+    }
   };
 
   const handlePrompt = (prompt: Prompt) => {
@@ -273,7 +296,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
           <Avatar sx={{ bgcolor: binThemeTokens.gold, width: 40, height: 40 }}><Sparkles color="#000" size={24} /></Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>SOVEREIGN AI</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>PROPERTY TRUTH ASSISTANT</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>LIVE PROPERTY TRUTH ASSISTANT</Typography>
           </Box>
         </Stack>
         <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
@@ -305,7 +328,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
         </Box>
         <TextField
           fullWidth
-          placeholder="Ask about Property Truth, Autopilot, SLA, Passport..."
+          placeholder="Ask live AI about Property Truth, Autopilot, SLA, Passport..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
@@ -314,7 +337,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
           InputProps={{ endAdornment: <InputAdornment position="end"><IconButton onClick={() => handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
         <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontWeight: 900 }}>
-          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> PROPERTY TRUTH SESSION
+          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> SECURE SERVER-SIDE AI SESSION
         </Typography>
       </Box>
     </Box>
