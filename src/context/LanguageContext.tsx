@@ -1817,14 +1817,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   const value = useMemo<LanguageContextType>(() => {
-    const t = (key: string, variables?: Record<string, any>) => {
-      const direct = translations[lang]?.[key] || translations.en[key];
-      return applyVariables(direct || humanizeKey(key), variables);
+    const t = (key: string, variables?: Record<string, any>): string => {
+      const raw = translations[lang]?.[key] ?? translations.en?.[key];
+      return interpolateTranslation(coerceTranslationString(raw, key), variables);
     };
 
-    const tx = (key: string, fallback: string, variables?: Record<string, any>) => {
-      const direct = translations[lang]?.[key] || translations.en[key] || fallback;
-      return applyVariables(direct, variables);
+    const tx = (key: string, fallback: string, variables?: Record<string, any>): string => {
+      const raw = translations[lang]?.[key] ?? translations.en?.[key] ?? fallback;
+      return interpolateTranslation(coerceTranslationString(raw, fallback || key), variables);
     };
 
     return {
