@@ -36,7 +36,6 @@ export default function PortalSessionControls({
   const nextLang = lang === 'en' ? 'ar' : 'en';
   const languageLabel = nextLang.toUpperCase();
   const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
-  const textColor = dark ? '#FFFFFF' : '#111827';
   const softBackground = dark ? alpha('#FFFFFF', 0.08) : '#FFFFFF';
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
 
