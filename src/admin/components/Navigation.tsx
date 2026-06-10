@@ -7,6 +7,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import SecurityIcon from '@mui/icons-material/Security';
 import FileTextIcon from '@mui/icons-material/Description';
 import LogoutIcon from '@mui/icons-material/Logout';
+import TranslateIcon from '@mui/icons-material/Translate';
 import { Users, Zap, Shield, Activity, DollarSign, LayoutDashboard, Cpu, Building2, FileSignature, Bot } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useLanguage } from '../../context/LanguageContext';
@@ -29,12 +30,13 @@ const renderAdminNavIcon = (Icon: React.ElementType, color?: string) => (
 );
 
 const Navigation = () => {
-    const { tx, isRTL, lang } = useLanguage();
+    const { tx, isRTL, lang, setLang } = useLanguage();
     const { user } = useAuth();
 
     const compact = useMediaQuery('(max-width:1100px)');
     const drawerWidth = compact ? 88 : 280;
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
+    const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff' || user?.role === 'finance_staff' || user?.role === 'account_manager' || user?.role === 'finance_admin' || user?.role === 'dispatcher' || user?.role === 'operations_manager';
 
@@ -156,6 +158,18 @@ const Navigation = () => {
             <Box sx={{ mt: 'auto', p: compact ? 1 : 2 }}>
                 {!compact && <CeoContactButtons compact />}
                 <ListItemButton
+                    data-testid="admin-language-toggle"
+                    onClick={toggleLanguage}
+                    sx={{ borderRadius: 2, mt: 2, bgcolor: alpha('#B8932F', 0.1), '&:hover': { bgcolor: alpha('#B8932F', 0.16) }, justifyContent: compact ? 'center' : 'flex-start', px: compact ? 1.5 : 2 }}
+                    title={compact ? label('nav.language', 'Language', 'اللغة') : undefined}
+                >
+                    <ListItemIcon sx={{ color: '#B8932F', minWidth: compact ? 'auto' : 40, justifyContent: 'center' }}>
+                        <TranslateIcon />
+                    </ListItemIcon>
+                    {!compact && <ListItemText primary={lang === 'en' ? 'AR' : 'EN'} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.75rem', color: '#B8932F', textAlign: isRTL ? 'right' : 'left' }} />}
+                </ListItemButton>
+                <ListItemButton
+                    data-testid="admin-logout"
                     onClick={() => { 
                         const currentLang = localStorage.getItem('bin_language');
                         const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
