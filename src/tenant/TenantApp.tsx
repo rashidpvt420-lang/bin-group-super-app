@@ -1,13 +1,14 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { 
-    Box, Container, AppBar, Toolbar, Typography, IconButton, 
-    Breadcrumbs, Link as MuiLink, alpha, Stack, Avatar 
+import {
+    Box, Container, AppBar, Toolbar, Typography, IconButton,
+    Breadcrumbs, Link as MuiLink, alpha, Stack
 } from '@mui/material';
-import { ArrowLeft, Home, Globe, User } from 'lucide-react';
+import { ArrowLeft, Home, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
+import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
@@ -27,17 +28,16 @@ import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { setLang, isRTL, lang, t, tx } = useLanguage();
-    const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
+    const { isRTL, lang, t, tx } = useLanguage();
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
 
     return (
-        <Box sx={{ 
-            minHeight: '100vh', 
-            bgcolor: binThemeTokens.black, 
-            color: binThemeTokens.textPrimary, 
+        <Box sx={{
+            minHeight: '100vh',
+            bgcolor: binThemeTokens.black,
+            color: binThemeTokens.textPrimary,
             direction: isRTL ? 'rtl' : 'ltr',
             display: 'flex',
             flexDirection: 'column',
@@ -45,18 +45,18 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             isolation: 'isolate'
         }}>
             <BrandWatermark opacity={0.038} />
-            <AppBar 
-                position="sticky" 
+            <AppBar
+                position="sticky"
                 elevation={0}
-                sx={{ 
-                    bgcolor: 'rgba(11, 11, 12, 0.9)', 
-                    backdropFilter: 'blur(16px)', 
+                sx={{
+                    bgcolor: 'rgba(11, 11, 12, 0.9)',
+                    backdropFilter: 'blur(16px)',
                     borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`,
                     zIndex: 1200
                 }}
             >
-                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
                         {location.pathname !== '/tenant' && location.pathname !== '/tenant/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary }}>
                                 <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
@@ -65,7 +65,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}>
                             <Home size={22} />
                         </IconButton>
-                        <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}>
+                        <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
                                 {label('portal.tenant.title', 'TENANT PORTAL', 'بوابة المستأجر')}
                             </Typography>
@@ -75,20 +75,21 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         </Box>
                     </Box>
 
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <NotificationBell />
                         <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
                             <User size={18} />
                         </IconButton>
+                        <PortalSessionControls role="tenant" dark accent={binThemeTokens.gold} />
                     </Stack>
                 </Toolbar>
             </AppBar>
-            
+
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                 {pathnames.length > 1 && (
-                    <Breadcrumbs 
-                        sx={{ 
-                            mb: 4, 
+                    <Breadcrumbs
+                        sx={{
+                            mb: 4,
                             '& .MuiBreadcrumbs-separator': { color: 'rgba(255,255,255,0.2)' },
                             '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' }
                         }}

@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Container,
-  Divider,
   IconButton,
   Paper,
   Stack,
@@ -14,12 +13,11 @@ import {
   Typography,
   alpha,
 } from '@mui/material';
-import { ArrowLeft, Briefcase, Building, FileUp, Globe, Home, Paintbrush, Users, Wallet } from 'lucide-react';
+import { Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
-import { binThemeTokens } from '../theme/binGroupTheme';
-import { auth } from '../lib/firebase';
 import { NotificationBell } from '../components/NotificationBell';
+import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
@@ -33,15 +31,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useRole();
-  const { setLang, isRTL, lang, tx } = useLanguage();
+  const { isRTL, lang, tx } = useLanguage();
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
-  const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
-
-  const handleLogout = () => {
-    auth.signOut();
-    navigate('/login');
-  };
 
   const menuItems = [
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: <Home size={18} /> },
@@ -55,22 +47,22 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
     <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
       <BrandWatermark opacity={0.035} compact />
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
-        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
             <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#B8932F', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
               <Briefcase size={20} />
             </Box>
-            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
               <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>
                 {label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}
               </Typography>
               <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>
-                {label('broker.portal.subtitle', 'PARTNER PORTAL · MADE IN UAE 🇦🇪', 'بوابة الشركاء · صنع في الإمارات 🇦🇪')}
+                {label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}
               </Typography>
             </Box>
           </Stack>
 
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
             <IconButton
               onClick={() => navigate('/broker/referrals')}
               sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }}
@@ -84,6 +76,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
                 {user?.displayName?.charAt(0) || 'B'}
               </Avatar>
             </Box>
+            <PortalSessionControls role="broker" accent="#B8932F" />
           </Stack>
         </Toolbar>
       </AppBar>
@@ -104,7 +97,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
 
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>
-          {label('broker.footer', '© 2026 BIN GROUP SOVEREIGN · BROKER TERMINAL · MADE IN UAE 🇦🇪', '© 2026 BIN GROUP SOVEREIGN · محطة الوسطاء · صنع في الإمارات 🇦🇪')}
+          {label('broker.footer', '© 2026 BIN GROUP SOVEREIGN - BROKER TERMINAL - MADE IN UAE', '© 2026 BIN GROUP SOVEREIGN - محطة الوسطاء - صنع في الإمارات')}
         </Typography>
       </Box>
 
