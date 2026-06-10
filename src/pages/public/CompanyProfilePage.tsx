@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileText,
   Home,
+  LogIn,
   Mail,
   MapPin,
   MessageSquare,
@@ -45,6 +46,7 @@ function getCopy(lang: 'en' | 'ar') {
     brand: ar ? 'مجموعة بن' : 'BIN GROUP',
     navHome: ar ? 'الرئيسية' : 'Home',
     navStart: ar ? 'ابدأ تفاصيل العقار' : 'Start Property Details',
+    navLogin: ar ? 'دخول البوابة' : 'Portal Login',
     navQuote: ar ? 'عرض سعر فوري' : 'Get Instant Quote',
     navDemo: ar ? 'العرض التوضيحي' : 'Demo Reel',
     title: ar ? 'BIN GROUP - الصيانة العامة وإدارة العقارات' : 'BIN GROUP - General Maintenance & Property Management',
@@ -155,7 +157,7 @@ export default function CompanyProfilePage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>
-      <BrandWatermark opacity={0.035} />
+      <BrandWatermark opacity={0.07} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(18px)', borderBottom: `1px solid ${line}` }}>
           <Container maxWidth="lg" sx={{ py: 1.2, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -167,6 +169,7 @@ export default function CompanyProfilePage() {
             </Button>
             <NavButton onClick={() => navigate('/')} icon={<Home size={17} />}>{copy.navHome}</NavButton>
             <NavButton onClick={() => navigate('/onboarding')} contained>{copy.navStart}</NavButton>
+            <NavButton onClick={() => navigate('/login')} icon={<LogIn size={17} />}>{copy.navLogin}</NavButton>
             <NavButton onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} icon={<PlayCircle size={17} />}>{copy.navDemo}</NavButton>
             <NavButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>{lang === 'ar' ? 'EN' : 'AR'}</NavButton>
           </Container>
@@ -306,7 +309,7 @@ export default function CompanyProfilePage() {
         </Container>
 
         <Container maxWidth="lg" sx={{ pb: 9 }}>
-          <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, bgcolor: '#111827', color: '#fff' }}>
+          <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, bgcolor: '#111827', color: '#fff', border: '1px solid rgba(212,175,55,.30)', boxShadow: '0 24px 70px rgba(17,24,39,.18)' }}>
             <Grid container spacing={4} alignItems="center">
               <Grid item xs={12} md={6}>
                 <Typography variant="h3" fontWeight={950} sx={{ color: gold, textAlign }}>{copy.contactTitle}</Typography>
@@ -314,11 +317,11 @@ export default function CompanyProfilePage() {
               </Grid>
               <Grid item xs={12} md={6}>
                 <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Phone size={18} color={gold} /><Typography>{CONTACT.phone}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MessageSquare size={18} color={gold} /><Typography>{CONTACT.whatsapp}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Mail size={18} color={gold} /><Typography>{CONTACT.email}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MapPin size={18} color={gold} /><Typography>{copy.location}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Timer size={18} color={gold} /><Typography>Owner request → quote → contract → verified service record</Typography></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Phone size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.phone}</Typography></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MessageSquare size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.whatsapp}</Typography></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Mail size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.email}</Typography></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MapPin size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{copy.location}</Typography></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Timer size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>Owner request → quote → contract → verified service record</Typography></Stack>
                 </Stack>
               </Grid>
             </Grid>
@@ -328,3 +331,4 @@ export default function CompanyProfilePage() {
     </Box>
   );
 }
+
