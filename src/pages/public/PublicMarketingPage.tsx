@@ -27,7 +27,6 @@ type PublicMarketingPageProps = { page?: PublicMarketingPageKey };
 type CopyShape = typeof copy.en;
 
 const WHATSAPP_URL = 'https://wa.me/971552423233';
-const COMPANY_URL = '/company';
 const ONBOARDING_URL = '/onboarding';
 const QUOTE_URL = '/onboarding?intent=quote';
 const LOGIN_URL = '/login';
@@ -46,7 +45,6 @@ const radius = { outer: 3, card: 2.25, button: 2 };
 const copy = {
   en: {
     brand: 'BIN GROUP',
-    company: 'Company Profile',
     chip: 'UAE PROPERTY CARE HOME OS',
     title: 'One Operating System for Property Care, Management, and Proof.',
     desc: 'BIN GROUP gives serious UAE property owners a unified Home OS: property details, instant quote, contract selection, 15% mobilization, tenant registry, rent ledger waterfall, 5% management fee logic, technician dispatch, SLA timers, before-and-after proof, owner reports, and permanent property passport history.',
@@ -78,7 +76,6 @@ const copy = {
   },
   ar: {
     brand: 'مجموعة بن',
-    company: 'نبذة الشركة',
     chip: 'نظام تشغيل العناية بالعقار في الإمارات',
     title: 'نظام تشغيل واحد للعناية بالعقار وإدارته وإثبات الخدمة.',
     desc: 'مجموعة بن تمنح ملاك العقارات في الإمارات نظام Home OS موحد: تفاصيل العقار، عرض سعر فوري، اختيار العقد، دفعة تفعيل 15٪، سجل المستأجرين، دفتر الإيجارات، منطق رسوم الإدارة 5٪، إرسال الفنيين، مؤقتات SLA، إثبات قبل وبعد، تقارير المالك، وسجل جواز العقار الدائم.',
@@ -116,7 +113,7 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: canvas, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>
-      <BrandWatermark opacity={0.035} />
+      <BrandWatermark opacity={0.07} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         <Nav c={c} />
         <Hero c={c} />
@@ -166,9 +163,7 @@ function Nav({ c }: { c: CopyShape }) {
             <Typography fontWeight={950} sx={{ color: ink }}>{c.brand}</Typography>
           </Stack>
         </Button>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <ActionButton href={COMPANY_URL} icon={<Building2 size={17} />}>{c.company}</ActionButton>
-          <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>          <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
             {lang === 'ar' ? 'EN' : 'AR'}
@@ -345,3 +340,4 @@ function Inquiry({ c }: { c: CopyShape }) {
     </SectionPaper>
   );
 }
+
