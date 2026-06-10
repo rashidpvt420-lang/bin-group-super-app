@@ -15,6 +15,7 @@ export * from "./notificationDelivery";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./aiAssistant";
+export * from "./aiDesignStudio";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -218,115 +219,99 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     const amount = Number.isFinite(requestedAmount) && requestedAmount > 0 ? requestedAmount : contractAmount;
     const amountPendingAdminConfirmation = !(Number.isFinite(amount) && amount > 0);
 
-    if (amountPendingAdminConfirmation && !(signedOrReady && amountSource === "OWNER_CONFIRMATION_FALLBACK")) {
-        throw new HttpsError("failed-precondition", "Payment amount could not be resolved from the contract.");
-    }
+    if (!signedOrReady) throw new HttpsError("failed-precondition", "Contract must be signed or ready for activation before payment submission.");
 
-    const paymentId = `pay_${contractId}_${Date.now()}`;
-    const paymentDoc = {
-        paymentId,
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const paymentRef = runtimeDb.collection("payment_transactions").doc();
+    await paymentRef.set({
+        id: paymentRef.id,
         contractId,
         ownerUid: request.auth.uid,
         ownerId: request.auth.uid,
-        ownerEmail: normalizeEmail(request.auth.token?.email),
-        method,
+        ownerEmail: request.auth.token?.email || resolveContractOwnerEmail(contractData) || null,
+        payerId: request.auth.uid,
+        payerRole: "owner",
+        amount,
+        requestedAmount,
+        amountSource,
+        amountPendingAdminConfirmation,
+        currency,
         provider,
         reference,
-        amount: Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null,
-        currency,
+        method,
+        status: "PENDING",
+        paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+        verificationState: "ADMIN_VERIFICATION_REQUIRED",
+        source: "OWNER_CONTRACT_PAYMENT",
+        createdAt: now,
+        updatedAt: now,
+    });
+
+    await runtimeDb.collection("contracts").doc(contractId).set({
+        paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+        latestPaymentTransactionId: paymentRef.id,
+        updatedAt: now,
+    }, { merge: true });
+
+    return {
+        paymentId: paymentRef.id,
         status: "PENDING",
         verificationState: "ADMIN_VERIFICATION_REQUIRED",
         amountPendingAdminConfirmation,
-        amountSource,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-
-    await runtimeDb.collection("payment_transactions").doc(paymentId).set(paymentDoc, { merge: true });
-    return { paymentId, status: "PENDING", verificationState: "ADMIN_VERIFICATION_REQUIRED", amountPendingAdminConfirmation };
 });
 
-export const adminVerifyOwnerPayment = onCall({ cors: true }, async (request) => {
+export const adminVerifyOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
     await assertAdmin(request.auth);
     const paymentId = requirePaymentId(request.data);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
     const paymentRef = runtimeDb.collection("payment_transactions").doc(paymentId);
     const paymentSnap = await paymentRef.get();
     if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
     const payment = paymentSnap.data() || {};
-    const contractId = String(payment.contractId || request.data?.contractId || "").trim();
-    if (!contractId) throw new HttpsError("failed-precondition", "Payment transaction is missing contractId.");
+    const contractId = String(payment.contractId || "").trim();
+    if (!contractId) throw new HttpsError("failed-precondition", "Payment is missing contractId.");
 
     const contractRef = runtimeDb.collection("contracts").doc(contractId);
     const contractSnap = await contractRef.get();
     if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
     const contractData = contractSnap.data() || {};
 
-    const ownerUid = String(contractData.ownerUid || contractData.ownerId || payment.ownerUid || payment.ownerId || "").trim();
-    const ownerEmail = resolveContractOwnerEmail(contractData) || normalizeEmail(payment.ownerEmail);
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    const baseDate = asDate(contractData.ownerSignedAt || contractData.createdAt || payment.createdAt) || new Date();
-    const termFields = termFieldsFromStart(baseDate);
-    const adminUid = request.auth?.uid || "admin";
-    const amountReceived = firstPositiveNumber(payment.amount, payment.amountReceived, contractMoneyValue(contractData));
-    const annualContractValue = contractAnnualValue(contractData);
-    const mobilizationAmount = contractMoneyValue(contractData);
-    const paymentVerified = contractPaymentIsVerified({ ...contractData, paymentVerified: true, paymentStatus: "VERIFIED" });
-
-    const commercialApproval = buildOwnerCommercialApprovalPatch({
-        payment,
-        contractData,
-        contractId,
-        paymentId,
-        termFields,
-        now,
-        approvedAt: baseDate,
-        approvedBy: adminUid,
-        adminUid,
-        amountReceived,
-        annualContractValue,
-        mobilizationAmount,
-        paymentReferenceId: payment.reference || payment.paymentReferenceId || payment.paymentId || paymentId,
-        paymentPlan: payment.paymentPlan || contractData.paymentPlan || contractData.paymentSchedule?.paymentPlan || "manual",
-    });
+    const effectiveStart = asDate(contractData.ownerSignedAt || contractData.signedAt || contractData.acceptedAt || new Date());
+    const termFields = termFieldsFromStart(effectiveStart);
+    const ownerEmail = resolveContractOwnerEmail(contractData) || payment.ownerEmail || "";
+    const ownerId = String(contractData.ownerUid || contractData.ownerId || payment.ownerUid || payment.ownerId || "").trim();
 
     const batch = runtimeDb.batch();
     batch.set(paymentRef, {
-        ...(commercialApproval.paymentPatch || {}),
         status: "VERIFIED",
+        paymentStatus: "VERIFIED",
         verificationState: "ADMIN_VERIFIED",
-        paymentVerified: true,
-        verifiedBy: adminUid,
         verifiedAt: now,
+        verifiedBy: request.auth?.uid || null,
         updatedAt: now,
     }, { merge: true });
-    batch.set(contractRef, commercialApproval.contractPatch || commercialApproval, { merge: true });
 
-    if (ownerUid) {
-        const ownerPatch = ownerLifecyclePatch(contractId, ownerEmail, termFields, now, paymentVerified);
-        batch.set(runtimeDb.collection("owners").doc(ownerUid), ownerPatch, { merge: true });
-        batch.set(runtimeDb.collection("users").doc(ownerUid), {
-            role: "owner",
-            ...ownerPatch,
-        }, { merge: true });
+    const commercialPatch = buildOwnerCommercialApprovalPatch(contractData.commercialSchedule || {}, termFields, now);
+    batch.set(contractRef, {
+        paymentVerified: true,
+        paymentStatus: "VERIFIED",
+        paymentVerifiedAt: now,
+        status: "ACTIVE",
+        activationStatus: "ACTIVE",
+        contractSignatureStatus: "ACTIVE",
+        activeContractTermMonths: OWNER_CONTRACT_TERM_MONTHS,
+        ...termFields,
+        commercialSchedule: commercialPatch,
+        updatedAt: now,
+    }, { merge: true });
+
+    if (ownerId) {
+        batch.set(runtimeDb.collection("owners").doc(ownerId), ownerLifecyclePatch(contractId, ownerEmail, termFields, now, true), { merge: true });
     }
 
     await batch.commit();
-    return { ok: true, contractId, ownerUid, status: "ACTIVE" };
-});
-
-export const adminRejectOwnerPayment = onCall({ cors: true }, async (request) => {
-    await assertAdmin(request.auth);
-    const paymentId = requirePaymentId(request.data);
-    const reason = String(request.data?.reason || "Payment proof could not be verified.").trim().slice(0, 500);
-    await runtimeDb.collection("payment_transactions").doc(paymentId).set({
-        status: "REJECTED",
-        verificationState: "ADMIN_REJECTED",
-        rejectionReason: reason,
-        paymentVerified: false,
-        rejectedBy: request.auth?.uid || "admin",
-        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { ok: true, paymentId, status: "REJECTED" };
+    return { status: "VERIFIED", contractId, ownerId };
 });
