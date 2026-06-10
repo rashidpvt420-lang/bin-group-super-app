@@ -1,9 +1,11 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Avatar, Button } from '@mui/material';
-import { ArrowLeft, Wrench, ChevronRight, User } from 'lucide-react';
+import { Box, Container, AppBar, Toolbar, Typography, IconButton, Breadcrumbs, Link as MuiLink, alpha, Button } from '@mui/material';
+import { ArrowLeft, Wrench, ChevronRight, User, LogOut } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
+import { auth } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import BrandWatermark from '../components/BrandWatermark';
@@ -35,6 +37,15 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
     const pathnames = location.pathname.split('/').filter((x) => x);
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } finally {
+            sessionStorage.clear();
+            window.location.href = '/login?intendedRole=technician';
+        }
+    };
 
     return (
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
@@ -93,6 +104,21 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.5 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <NotificationBell />
+                        <IconButton
+                            onClick={handleLogout}
+                            sx={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 2,
+                                bgcolor: alpha('#EF4444', 0.08),
+                                border: `1px solid ${alpha('#EF4444', 0.30)}`,
+                                color: '#EF4444',
+                            }}
+                            aria-label={label('nav.logout', 'Logout', 'تسجيل الخروج')}
+                            title={label('nav.logout', 'Logout', 'تسجيل الخروج')}
+                        >
+                            <LogOut size={20} />
+                        </IconButton>
                         <IconButton
                             onClick={() => navigate('/technician/profile')}
                             sx={{
