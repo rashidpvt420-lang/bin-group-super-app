@@ -2,11 +2,13 @@ import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, AppBar, Toolbar, Typography, Container, IconButton,
-    Breadcrumbs, Link as MuiLink, alpha, Stack, Button
+    Breadcrumbs, Link as MuiLink, alpha, Stack, Button, Tooltip
 } from '@mui/material';
-import { ArrowLeft, LayoutDashboard, Paintbrush, UserCircle } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, LogOut, Paintbrush, UserCircle } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { auth } from '../lib/firebase';
 import { NotificationBell } from '../components/NotificationBell';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 import BrandWatermark from '../components/BrandWatermark';
@@ -39,6 +41,20 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const pathnames = location.pathname.split('/').filter(Boolean);
     const toggleLanguage = () => setLang(lang === 'en' ? 'ar' : 'en');
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
+
+    const handleSecureLogout = async () => {
+        const preferredLanguage = localStorage.getItem('bin_language');
+        try {
+            localStorage.clear();
+            sessionStorage.clear();
+            if (preferredLanguage) localStorage.setItem('bin_language', preferredLanguage);
+            await signOut(auth);
+        } catch (error) {
+            console.warn('[OwnerApp] Secure logout fallback triggered.', error);
+        } finally {
+            window.location.replace('/login?intendedRole=owner&logout=1');
+        }
+    };
 
     void toggleLanguage;
 
@@ -93,6 +109,35 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}>
                             <SafeIcon icon={UserCircle} size={18} />
                         </IconButton>
+                        <Button
+                            onClick={handleSecureLogout}
+                            startIcon={renderSafeIcon(LogOut, { size: 17 })}
+                            sx={{
+                                display: { xs: 'none', sm: 'inline-flex' },
+                                color: '#ef4444',
+                                border: `1px solid ${alpha('#ef4444', 0.28)}`,
+                                borderRadius: 3,
+                                fontWeight: 950,
+                                bgcolor: alpha('#ef4444', 0.08),
+                                '&:hover': { bgcolor: alpha('#ef4444', 0.14) }
+                            }}
+                        >
+                            {label('nav.logout_secure', 'Logout', 'تسجيل الخروج')}
+                        </Button>
+                        <Tooltip title={label('nav.logout_secure', 'Logout', 'تسجيل الخروج')}>
+                            <IconButton
+                                onClick={handleSecureLogout}
+                                sx={{
+                                    display: { xs: 'inline-flex', sm: 'none' },
+                                    color: '#ef4444',
+                                    bgcolor: alpha('#ef4444', 0.08),
+                                    border: `1px solid ${alpha('#ef4444', 0.28)}`,
+                                    borderRadius: 3
+                                }}
+                            >
+                                <SafeIcon icon={LogOut} size={18} />
+                            </IconButton>
+                        </Tooltip>
                     </Stack>
                 </Toolbar>
             </AppBar>
