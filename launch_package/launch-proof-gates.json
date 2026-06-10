@@ -1,28 +1,75 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
+  "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
+  "lastAuditUpdate": "2026-06-10",
   "requiredProviderGates": {
-    "firebaseAuth": { "required": true, "status": "passed", "proof": "E2E role login smoke tests passed for admin, owner, tenant, technician, broker profiles against live production environment on 2026-06-06." },
-    "firestoreRules": { "required": true, "status": "passed", "proof": "All 13 security rules emulator tests passed successfully via firebase emulator test suite on 2026-06-06." },
-    "storageRules": { "required": true, "status": "passed", "proof": "All storage security rules reviewed, verified and deployed." },
-    "firebaseFunctions": { "required": true, "status": "passed", "proof": "Functions built and tested successfully in emulator and production deploy." },
-    "firebaseCloudMessaging": { "required": true, "status": "passed", "proof": "Notification services verified, registered, and integration tested." },
-    "googleMaps": { "required": true, "status": "passed", "proof": "Billing enabled, restricted key, map render, geocode/GPS tests." },
-    "aiVisionOrTriage": { "required": true, "status": "passed", "proof": "Backend-only secret, confidence fallback, Arabic/English triage tests." },
-    "paymentGatewayOrManualBank": { "required": true, "status": "passed", "proof": "Chosen gateway/manual bank flow, webhook or admin verification tests, VAT wording." },
-    "whatsappBusiness": { "required": false, "status": "passed", "proof": "Business verification, templates, opt-in, send logs." },
-    "smsVoiceFallback": { "required": false, "status": "passed", "proof": "Carrier approval, cost control, emergency fallback test." },
-    "uaeDataResidencyPosition": { "required": true, "status": "passed", "proof": "Documented data categories, subprocessors, hosting region, retention policy." }
+    "firebaseAuth": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Fresh production proof for admin, owner, tenant, technician, and broker login on live Firebase Auth. Attach run date, tester, role, device, and screenshots/log references."
+    },
+    "firestoreRules": {
+      "required": true,
+      "status": "passed",
+      "proof": "Security rules emulator tests were previously reported passing. Re-run before public launch after every rules change."
+    },
+    "storageRules": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Fresh upload/download/delete permission test for tenant issue photos, technician before/after photos, contracts, invoices, and admin evidence access."
+    },
+    "firebaseFunctions": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI."
+    },
+    "firebaseCloudMessaging": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real Android/iOS/PWA push notification delivery test with token registration, foreground/background delivery, and disabled-permission fallback."
+    },
+    "googleMaps": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real mobile GPS permission, map render, technician check-in, arrival tracking, and location-denied fallback test."
+    },
+    "aiVisionOrTriage": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "PR #117/live AI backend must be merged or formally waived. Confirm backend-only secrets and no client-exposed AI keys."
+    },
+    "paymentGatewayOrManualBank": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Live owner contract -> 15% mobilization/manual bank/admin verification -> dashboard unlock path, including rejection path."
+    },
+    "whatsappBusiness": {
+      "required": false,
+      "status": "pending",
+      "proofRequired": "Optional: business verification, approved templates, opt-in, send logs."
+    },
+    "smsVoiceFallback": {
+      "required": false,
+      "status": "pending",
+      "proofRequired": "Optional: carrier approval, cost control, emergency fallback test."
+    },
+    "uaeDataResidencyPosition": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Document data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording before public launch."
+    }
   },
   "requiredDeviceGates": {
-    "androidPwaSmoke": { "required": true, "status": "passed" },
-    "iosPwaSmoke": { "required": true, "status": "passed" },
-    "technicianGpsTracking": { "required": true, "status": "passed" },
-    "pushNotifications": { "required": true, "status": "passed" },
-    "pdfMobileDownload": { "required": true, "status": "passed" },
-    "arabicRtlAllCoreScreens": { "required": true, "status": "passed" },
-    "everyButtonWritesFirestoreOrStorage": { "required": true, "status": "passed" },
-    "androidReleaseAab": { "required": true, "status": "passed" }
+    "androidPwaSmoke": { "required": true, "status": "pending", "proofRequired": "Real Android phone PWA test across all five dashboards." },
+    "iosPwaSmoke": { "required": true, "status": "pending", "proofRequired": "Real iPhone/Safari PWA test across all five dashboards." },
+    "technicianGpsTracking": { "required": true, "status": "pending", "proofRequired": "Real technician GPS check-in and live tracking test." },
+    "pushNotifications": { "required": true, "status": "pending", "proofRequired": "Real push notification delivery and fallback test." },
+    "pdfMobileDownload": { "required": true, "status": "pending", "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test." },
+    "arabicRtlAllCoreScreens": { "required": true, "status": "pending", "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs." },
+    "everyButtonWritesFirestoreOrStorage": { "required": true, "status": "pending", "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely." },
+    "logoutAllDashboards": { "required": true, "status": "pending", "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile." },
+    "androidReleaseAab": { "required": true, "status": "pending", "proofRequired": "Required only if publishing native Android build; otherwise formal waiver required for PWA-only pilot." }
   },
   "allowedWaiverFormat": {
     "waivedBy": "CEO/admin owner name",
