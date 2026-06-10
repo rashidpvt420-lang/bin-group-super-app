@@ -7,7 +7,8 @@ import {
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getAuth, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, User } from 'firebase/auth';
+import { getAuth, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
@@ -20,35 +21,30 @@ type BinFirebaseConfig = {
     appId: string;
 };
 
-const readEnv = (name: string): string => {
-    const viteValue = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : '';
-    const reactName = name.startsWith('VITE_') ? `REACT_APP_${name.slice(5)}` : name;
-    const reactValue = (typeof process !== 'undefined' && process.env) ? process.env[reactName] : '';
-    const value = viteValue || reactValue || '';
-    return value && !value.includes('REPLACE_ME') ? value : '';
+const clean = (value?: string): string => {
+    const normalized = String(value || '').trim();
+    return normalized && !normalized.includes('REPLACE_ME') ? normalized : '';
 };
 
-const required = (name: string): string => {
-    const value = readEnv(name);
-    if (!value) {
-        throw new Error(`Missing Firebase runtime configuration: ${name}. Set the matching REACT_APP_* variable for the standalone admin panel build.`);
-    }
-    return value;
-};
-
+// CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
+// Do not use dynamic process.env[key] here; it is not replaced during build.
 const firebaseConfig: BinFirebaseConfig = {
-    apiKey: required('VITE_FIREBASE_API_KEY'),
-    authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN') || 'bin-group-57c60.firebaseapp.com',
-    projectId: readEnv('VITE_FIREBASE_PROJECT_ID') || 'bin-group-57c60',
-    storageBucket: readEnv('VITE_FIREBASE_STORAGE_BUCKET') || 'bin-group-57c60.firebasestorage.app',
-    messagingSenderId: readEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || '123413252227',
-    appId: readEnv('VITE_FIREBASE_APP_ID') || '1:123413252227:web:285cb53bc26626d699f3b6'
+    apiKey: clean(process.env.REACT_APP_FIREBASE_API_KEY),
+    authDomain: clean(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN) || 'bin-group-57c60.firebaseapp.com',
+    projectId: clean(process.env.REACT_APP_FIREBASE_PROJECT_ID) || 'bin-group-57c60',
+    storageBucket: clean(process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) || 'bin-group-57c60.firebasestorage.app',
+    messagingSenderId: clean(process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID) || '123413252227',
+    appId: clean(process.env.REACT_APP_FIREBASE_APP_ID) || '1:123413252227:web:285cb53bc26626d699f3b6'
 };
+
+if (!firebaseConfig.apiKey) {
+    throw new Error('Missing Firebase runtime configuration: REACT_APP_FIREBASE_API_KEY. Rebuild admin panel after setting REACT_APP_FIREBASE_API_KEY.');
+}
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 if (typeof window !== 'undefined') {
-    const enableAppCheck = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+    const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
     const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
     const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
 
@@ -57,8 +53,8 @@ if (typeof window !== 'undefined') {
             (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
             console.log('App Check debug token set for local/automation testing.');
         }
-        const siteKey = readEnv('VITE_APP_CHECK_SITE_KEY') || readEnv('REACT_APP_APP_CHECK_SITE_KEY');
-        if (siteKey && !siteKey.includes('REPLACE_ME')) {
+        const siteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
+        if (siteKey) {
             try {
                 initializeAppCheck(app, {
                     provider: new ReCaptchaV3Provider(siteKey),
@@ -83,8 +79,9 @@ const functions = getFunctions(app, 'europe-west3');
 
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
-    onAuthStateChanged, type User,
+    onAuthStateChanged,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
     ref, uploadBytes, getDownloadURL, signInWithPopup, signInWithEmailAndPassword
 };
+export type { User };
 export default app;
