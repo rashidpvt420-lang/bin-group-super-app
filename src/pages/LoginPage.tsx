@@ -20,8 +20,17 @@ import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth, signInWithPopup } from '../lib/firebase';
-import { GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import {
+    GoogleAuthProvider,
+    browserLocalPersistence,
+    getRedirectResult,
+    sendPasswordResetEmail,
+    setPersistence,
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    signInWithRedirect,
+} from 'firebase/auth';
 import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
@@ -36,6 +45,9 @@ const palette = {
     border: '#E5E7EB',
     gold: binThemeTokens.gold,
 };
+
+const GOOGLE_REDIRECT_INTENT_KEY = 'bin_google_redirect_intended_role';
+const GOOGLE_REDIRECT_RETURN_TO_KEY = 'bin_google_redirect_return_to';
 
 const LoginPage: React.FC = () => {
     const { t, tx, isRTL, lang, setLang } = useLanguage();
@@ -67,6 +79,10 @@ const LoginPage: React.FC = () => {
         if (resolvedRole === 'technician') return '/technician/dashboard';
         if (resolvedRole === 'broker') return '/broker/dashboard';
         if (resolvedRole === 'admin') return '/admin/dashboard';
+        if (intendedRoleKey === 'admin') return '/admin/dashboard';
+        if (intendedRoleKey === 'tenant') return '/tenant/dashboard';
+        if (intendedRoleKey === 'technician') return '/technician/dashboard';
+        if (intendedRoleKey === 'broker') return '/broker/dashboard';
         return '/owner/dashboard';
     };
 
@@ -82,7 +98,7 @@ const LoginPage: React.FC = () => {
             message,
             authDomain: auth.config?.authDomain,
             currentUrl: window.location.href,
-            provider: code.includes('google') ? 'google.com' : 'password',
+            provider: code.includes('google') || code.includes('popup') || code.includes('redirect') ? 'google.com' : 'password',
             env: import.meta.env.MODE,
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
@@ -91,20 +107,72 @@ const LoginPage: React.FC = () => {
         if (code === 'auth/invalid-email') return tx('login.error.invalid_email', 'Please enter a valid email address.');
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return t('login.error.invalid');
         if (code === 'auth/too-many-requests') return t('login.error.too_many');
-        if (code === 'auth/popup-closed-by-user') return t('login.error.popup_closed');
+        if (code === 'auth/popup-closed-by-user') return tx('login.error.popup_closed', 'Google sign-in was closed before completion. Try again or use email and password.');
+        if (code === 'auth/popup-blocked') return tx('login.error.popup_blocked', 'The browser blocked the Google sign-in popup. A redirect sign-in will be attempted.');
+        if (code === 'auth/unauthorized-domain') return tx('login.error.unauthorized_domain', 'This domain is not authorized for Firebase Google sign-in. Add the hosting domain in Firebase Authentication settings.');
+        if (code === 'auth/operation-not-allowed') return tx('login.error.provider_disabled', 'This sign-in method is not enabled in Firebase Authentication. Enable Google or Email/Password sign-in first.');
+        if (code === 'auth/account-exists-with-different-credential') return tx('login.error.account_exists', 'This email already exists with another sign-in method. Sign in using email/password first, then link Google later.');
         if (code === 'auth/network-request-failed') return t('login.error.network');
         return tx('login.error.generic', 'Login could not be completed. Please contact BIN GROUP support.');
     };
+
+    useEffect(() => {
+        let mounted = true;
+        const completeGoogleRedirect = async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (!mounted || !result?.user) return;
+                await result.user.getIdToken(true).catch(() => undefined);
+                await refreshRole();
+                const storedReturnTo = sessionStorage.getItem(GOOGLE_REDIRECT_RETURN_TO_KEY) || '';
+                const storedIntent = sessionStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY) || intendedRoleKey || '';
+                sessionStorage.removeItem(GOOGLE_REDIRECT_RETURN_TO_KEY);
+                sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
+                if (storedReturnTo.startsWith('/') && !storedReturnTo.startsWith('//')) {
+                    navigate(storedReturnTo, { replace: true });
+                    return;
+                }
+                if (storedIntent === 'admin') navigate('/admin/dashboard', { replace: true });
+                else if (storedIntent === 'tenant') navigate('/tenant/dashboard', { replace: true });
+                else if (storedIntent === 'technician') navigate('/technician/dashboard', { replace: true });
+                else if (storedIntent === 'broker') navigate('/broker/dashboard', { replace: true });
+            } catch (err: any) {
+                if (mounted) setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+            }
+        };
+        void completeGoogleRedirect();
+        return () => { mounted = false; };
+    }, []);
 
     const handleGoogleLogin = async () => {
         setLocalLoading(true);
         setNotice(null);
         try {
             const provider = new GoogleAuthProvider();
-            const result = await signInWithPopup(auth, provider);
-            if (result.user) {
-                await refreshRole();
-                if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
+            provider.setCustomParameters({ prompt: 'select_account' });
+            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
+            sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, intendedRoleKey || '');
+            sessionStorage.setItem(GOOGLE_REDIRECT_RETURN_TO_KEY, safeReturnTo || '');
+
+            try {
+                const result = await signInWithPopup(auth, provider);
+                if (result.user) {
+                    await result.user.getIdToken(true).catch(() => undefined);
+                    await refreshRole();
+                    if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
+                }
+            } catch (popupErr: any) {
+                const popupCode = popupErr?.code || '';
+                const shouldRedirect = [
+                    'auth/popup-blocked',
+                    'auth/cancelled-popup-request',
+                    'auth/web-storage-unsupported',
+                ].includes(popupCode);
+                if (shouldRedirect) {
+                    await signInWithRedirect(auth, provider);
+                    return;
+                }
+                throw popupErr;
             }
         } catch (err: any) {
             setNotice({ type: 'error', text: getFriendlyAuthError(err) });
@@ -117,7 +185,9 @@ const LoginPage: React.FC = () => {
         setLocalLoading(true);
         setNotice(null);
         try {
-            await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
+            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
+            const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+            await userCredential.user.getIdToken(true).catch(() => undefined);
             await refreshRole();
             if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
         } catch (err: any) {
