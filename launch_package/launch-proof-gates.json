@@ -1,8 +1,21 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
   "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
+  "publicLaunchScope": "Hosted web app and PWA first. Native Android AAB is not required unless BIN GROUP decides to publish a Play Store build.",
   "lastAuditUpdate": "2026-06-10",
+  "deploymentProof": {
+    "hosting": {
+      "required": true,
+      "status": "passed",
+      "proof": "Firebase deploy completed for bin-group-57c60 hosting and bin-group-admin-panel hosting on 2026-06-10."
+    },
+    "functionsDeploy": {
+      "required": true,
+      "status": "passed",
+      "proof": "Firebase deploy updated production functions including runSovereignAI(europe-west3), payment, ticket, HR, notification, and passport functions on 2026-06-10."
+    }
+  },
   "requiredProviderGates": {
     "firebaseAuth": {
       "required": true,
@@ -19,10 +32,10 @@
       "status": "pending",
       "proofRequired": "Fresh upload/download/delete permission test for tenant issue photos, technician before/after photos, contracts, invoices, and admin evidence access."
     },
-    "firebaseFunctions": {
+    "firebaseFunctionsLiveSmoke": {
       "required": true,
       "status": "pending",
-      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI."
+      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI. Deployment alone is not enough for this gate."
     },
     "firebaseCloudMessaging": {
       "required": true,
@@ -37,7 +50,7 @@
     "aiVisionOrTriage": {
       "required": true,
       "status": "pending",
-      "proofRequired": "PR #117/live AI backend must be merged or formally waived. Confirm backend-only secrets and no client-exposed AI keys."
+      "proofRequired": "Production runSovereignAI callable must be tested with a signed-in user. Confirm server-side secrets/fallback behavior and no client-exposed AI keys."
     },
     "paymentGatewayOrManualBank": {
       "required": true,
@@ -69,7 +82,16 @@
     "arabicRtlAllCoreScreens": { "required": true, "status": "pending", "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs." },
     "everyButtonWritesFirestoreOrStorage": { "required": true, "status": "pending", "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely." },
     "logoutAllDashboards": { "required": true, "status": "pending", "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile." },
-    "androidReleaseAab": { "required": true, "status": "pending", "proofRequired": "Required only if publishing native Android build; otherwise formal waiver required for PWA-only pilot." }
+    "androidReleaseAab": {
+      "required": false,
+      "status": "waived",
+      "waiver": {
+        "waivedBy": "Rashid AbdulGhani, Founder & CEO",
+        "waivedAt": "2026-06-10T00:00:00+04:00",
+        "riskNote": "BIN GROUP public launch scope is hosted web/PWA first. Native Android Play Store AAB is outside the current launch scope.",
+        "expiresAt": "2026-12-31T23:59:59+04:00"
+      }
+    }
   },
   "allowedWaiverFormat": {
     "waivedBy": "CEO/admin owner name",
