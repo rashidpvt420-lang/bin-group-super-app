@@ -88,9 +88,9 @@ export default function TenantDashboardPage() {
           setContractData(nextContract);
         }
       } catch (err: any) {
-        const isPermissionDenied = err?.code === 'permission-denied' || 
-                                   err?.message?.includes('permission-denied') || 
-                                   err?.message?.includes('insufficient permissions');
+        const isPermissionDenied = err?.code === 'permission-denied' ||
+          err?.message?.includes('permission-denied') ||
+          err?.message?.includes('insufficient permissions');
         if (isPermissionDenied) {
           console.warn('[TenantDashboard] residence fetch failed: permission-denied. Failing silently with empty state.');
         } else {
@@ -148,27 +148,14 @@ export default function TenantDashboardPage() {
           <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, fontWeight: 950 }}>{user?.displayName?.charAt(0) || 'R'}</Avatar>
         </Box>
 
-        <Button
-          variant="contained"
-          onClick={() => navigate('/tenant/request')}
-          data-testid="tenant-new-request"
-          sx={{
-            alignSelf: isRTL ? 'flex-end' : 'flex-start',
-            bgcolor: binThemeTokens.gold,
-            color: '#000',
-            borderRadius: 4,
-            fontWeight: 950,
-            px: 4,
-            py: 1.5,
-          }}
-        >
+        <Button variant="contained" onClick={() => navigate('/tenant/request')} data-testid="tenant-new-request" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 4, fontWeight: 950, px: 4, py: 1.5 }}>
           {tx('dash.newRequestBtn', 'New Request')}
         </Button>
 
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3 }}>
             <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>CONTRACT ACCESS MODE</Typography>
+              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{tx('dash.contractAccessMode', 'CONTRACT ACCESS MODE')}</Typography>
               <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950 }}>{contractProfile.tenantTitle}</Typography>
             </Box>
             <Chip label={contractMode.replace(/_/g, ' ')} sx={{ bgcolor: alpha(showMaintenance ? '#10b981' : '#3b82f6', 0.12), color: showMaintenance ? '#10b981' : '#93c5fd', fontWeight: 950 }} />
@@ -182,9 +169,9 @@ export default function TenantDashboardPage() {
         </Paper>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showMaintenance ? '/tenant/request' : '/tenant/request?category=management')} startIcon={<Wrench size={24} />} sx={{ height: 96, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 5, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? 'New Request' : 'Management Request'}</Button></Grid>
-          <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/emergency')} startIcon={<AlertTriangle size={24} />} sx={{ height: 96, borderColor: '#ef4444', color: '#ef4444', borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? (t('dash.emergency_dispatch') || 'Emergency Dispatch') : 'Escalate to Management'}</Button></Grid>
-          <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/design-studio')} startIcon={<Paintbrush size={24} />} sx={{ height: 96, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{t('nav.ai_studio') || 'AI Design Studio'}</Button></Grid>
+          <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showMaintenance ? '/tenant/request' : '/tenant/request?category=management')} startIcon={<Wrench size={24} />} sx={{ height: 96, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 5, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? tx('dash.newRequestBtn', 'New Request') : tx('dash.managementRequest', 'Management Request')}</Button></Grid>
+          <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/emergency')} startIcon={<AlertTriangle size={24} />} sx={{ height: 96, borderColor: '#ef4444', color: '#ef4444', borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{showMaintenance ? tx('dash.emergency_dispatch', 'Emergency Dispatch') : tx('dash.escalateMgmt', 'Escalate to Management')}</Button></Grid>
+          <Grid item xs={12} md={4}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/design-studio')} startIcon={<Paintbrush size={24} />} sx={{ height: 96, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderRadius: 5, borderWidth: 2, fontWeight: 950, fontSize: '1rem' }}>{tx('nav.ai_studio', 'AI Design Studio')}</Button></Grid>
         </Grid>
 
         <Grid container spacing={4}>
@@ -192,49 +179,49 @@ export default function TenantDashboardPage() {
             {showLedger ? (
               <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {t('dash.lease_financials') || 'Lease & Financials'}</Typography>
-                  <Chip label={contractData?.status === 'ACTIVE' ? 'ACTIVE LEASE' : (contractData?.status || 'NO ACTIVE LEASE').replace(/_/g, ' ')} sx={{ bgcolor: contractData?.status === 'ACTIVE' ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', color: contractData?.status === 'ACTIVE' ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950 }} />
+                  <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {tx('dash.lease_financials', 'Lease & Financials')}</Typography>
+                  <Chip label={contractData?.status === 'ACTIVE' ? tx('dash.activeLease', 'ACTIVE LEASE') : (contractData?.status || tx('dash.noActiveLease', 'NO ACTIVE LEASE')).replace(/_/g, ' ')} sx={{ bgcolor: contractData?.status === 'ACTIVE' ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', color: contractData?.status === 'ACTIVE' ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950 }} />
                 </Stack>
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>CONTRACT TERM</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>{formatDate(contractData?.startDate || contractData?.validFrom)} - {formatDate(contractData?.endDate || contractData?.validTo)}</Typography></Box></Grid>
-                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>UPCOMING PAYMENT</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>{contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : '—'}</Typography></Box></Grid>
-                  <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>VIEW LEDGER / DOCUMENTS</Button></Grid>
+                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.contractTerm', 'CONTRACT TERM')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>{formatDate(contractData?.startDate || contractData?.validFrom)} - {formatDate(contractData?.endDate || contractData?.validTo)}</Typography></Box></Grid>
+                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.upcomingPayment', 'UPCOMING PAYMENT')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>{contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : '—'}</Typography></Box></Grid>
+                  <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{tx('dash.viewLedgerDocs', 'VIEW LEDGER / DOCUMENTS')}</Button></Grid>
                 </Grid>
               </Paper>
             ) : (
-              <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>Lease and rent ledger are not shown for this access mode. This dashboard focuses on service requests, property access, notices, and available management tools.</Alert>
+              <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger are not shown for this access mode. This dashboard focuses on service requests, property access, notices, and available management tools.')}</Alert>
             )}
 
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><Home size={20} /> {t('dash.residency_details') || 'Residency Details'}</Typography>
-                <Chip label={propertyProfile.tenantContractRequired ? 'Lease / Occupancy' : 'Reporter Access'} sx={{ bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 950 }} />
+                <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><Home size={20} /> {tx('dash.residency_details', 'Residency Details')}</Typography>
+                <Chip label={propertyProfile.tenantContractRequired ? tx('dash.leaseOccupancy', 'Lease / Occupancy') : tx('dash.reporterAccess', 'Reporter Access')} sx={{ bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 950 }} />
               </Stack>
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{t('field.property') || 'PROPERTY'}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{propertyData?.propertyName || propertyData?.name || t('dash.verifying_location') || 'Property verification pending'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'flex', gap: 0.7, alignItems: 'center', mt: 1 }}><MapPin size={13} /> {propertyData?.emirate || 'UAE'}</Typography></Box></Grid>
-                <Grid item xs={12} md={3}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{propertyProfile.tenantContractRequired ? (t('field.unit') || 'UNIT') : 'AREA / ROLE'}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{unitData?.unitNumber || unitData?.unitId || '—'}</Typography></Box></Grid>
-                <Grid item xs={12} md={3}><Box sx={{ p: 3, bgcolor: alpha('#10b981', 0.06), borderRadius: 4, textAlign: 'center' }}><CheckCircle2 color="#10b981" /><Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block', mt: 1 }}>{t('status.connected') || 'Connected'}</Typography></Box></Grid>
+                <Grid item xs={12} md={6}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('field.property', 'PROPERTY')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{propertyData?.propertyName || propertyData?.name || tx('dash.verifying_location', 'Property verification pending')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'flex', gap: 0.7, alignItems: 'center', mt: 1 }}><MapPin size={13} /> {propertyData?.emirate || 'UAE'}</Typography></Box></Grid>
+                <Grid item xs={12} md={3}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{propertyProfile.tenantContractRequired ? tx('field.unit', 'UNIT') : tx('dash.areaRole', 'AREA / ROLE')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{unitData?.unitNumber || unitData?.unitId || '—'}</Typography></Box></Grid>
+                <Grid item xs={12} md={3}><Box sx={{ p: 3, bgcolor: alpha('#10b981', 0.06), borderRadius: 4, textAlign: 'center' }}><CheckCircle2 color="#10b981" /><Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block', mt: 1 }}>{tx('status.connected', 'Connected')}</Typography></Box></Grid>
               </Grid>
             </Paper>
 
-            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 5, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={20} color={binThemeTokens.gold} /> {t('dash.active_tickets') || 'Active Tickets'}</Typography>
+            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 5, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={20} color={binThemeTokens.gold} /> {tx('dash.active_tickets', 'Active Tickets')}</Typography>
             {activeTickets.length ? activeTickets.map((ticket) => (
               <Paper key={ticket.id} sx={{ p: 3, mb: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
-                <Stack direction="row" justifyContent="space-between" gap={2}><Box><Typography sx={{ color: '#fff', fontWeight: 950 }}>{ticket.description || ticket.category || 'Maintenance request'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>REF: {ticket.id.substring(0, 8)} · {ticket.category || 'General'}</Typography></Box><Chip label={String(ticket.status || 'OPEN').replaceAll('_', ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} /></Stack>
-                <Button size="small" onClick={() => navigate(`/tenant/ticket/${ticket.id}`)} sx={{ mt: 2, color: binThemeTokens.gold, fontWeight: 950 }}>{t('common.view_details') || 'View Details'}</Button>
+                <Stack direction="row" justifyContent="space-between" gap={2}><Box><Typography sx={{ color: '#fff', fontWeight: 950 }}>{ticket.description || ticket.category || tx('dash.maintenanceRequest', 'Maintenance request')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>REF: {ticket.id.substring(0, 8)} · {ticket.category || tx('dash.general', 'General')}</Typography></Box><Chip label={String(ticket.status || 'OPEN').replaceAll('_', ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} /></Stack>
+                <Button size="small" onClick={() => navigate(`/tenant/ticket/${ticket.id}`)} sx={{ mt: 2, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('common.view_details', 'View Details')}</Button>
               </Paper>
-            )) : <Paper sx={{ p: 5, textAlign: 'center', bgcolor: alpha('#10b981', 0.03), border: `1px dashed ${alpha('#10b981', 0.22)}`, borderRadius: 6 }}><CheckCircle2 color="#10b981" size={44} /><Typography sx={{ color: '#fff', fontWeight: 950, mt: 2 }}>{t('dash.no_tickets') || 'No active maintenance tickets'}</Typography></Paper>}
+            )) : <Paper sx={{ p: 5, textAlign: 'center', bgcolor: alpha('#10b981', 0.03), border: `1px dashed ${alpha('#10b981', 0.22)}`, borderRadius: 6 }}><CheckCircle2 color="#10b981" size={44} /><Typography sx={{ color: '#fff', fontWeight: 950, mt: 2 }}>{tx('dash.no_tickets', 'No active maintenance tickets')}</Typography></Paper>}
           </Grid>
 
           <Grid item xs={12} lg={4}>
             <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
-              <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2 }}>{t('dash.quick_services') || 'Quick Services'}</Typography>
+              <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2 }}>{tx('dash.quick_services', 'Quick Services')}</Typography>
               <Grid container spacing={2}>{serviceButtons.map((service) => <Grid item xs={6} key={service.label}><Button fullWidth variant="outlined" onClick={() => navigate(service.route)} sx={{ minHeight: 112, flexDirection: 'column', gap: 1, borderColor: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 4, fontWeight: 900 }}><Box sx={{ color: binThemeTokens.gold }}>{service.icon}</Box>{service.label}</Button></Grid>)}</Grid>
             </Paper>
             <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
-              <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', gap: 1, alignItems: 'center' }}><FileText size={20} /> {t('dash.notices') || 'Notices'}</Typography>
-              <Stack spacing={2} sx={{ mt: 2 }}>{notices.length ? notices.map((notice) => <Box key={notice.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography sx={{ color: '#fff', fontWeight: 900 }}>{notice.title || 'System Update'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{notice.message || 'Building notice'}</Typography></Box>) : <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)' }}>{t('dash.no_notices') || 'No current notices.'}</Typography>}</Stack>
-              <Button fullWidth variant="outlined" onClick={() => navigate('/tenant/documents')} sx={{ mt: 3, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{t('dash.open_vault') || 'Open Document Vault'}</Button>
+              <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', gap: 1, alignItems: 'center' }}><FileText size={20} /> {tx('dash.notices', 'Notices')}</Typography>
+              <Stack spacing={2} sx={{ mt: 2 }}>{notices.length ? notices.map((notice) => <Box key={notice.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography sx={{ color: '#fff', fontWeight: 900 }}>{notice.title || tx('dash.systemUpdate', 'System Update')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{notice.message || tx('dash.buildingNotice', 'Building notice')}</Typography></Box>) : <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)' }}>{tx('dash.no_notices', 'No current notices.')}</Typography>}</Stack>
+              <Button fullWidth variant="outlined" onClick={() => navigate('/tenant/documents')} sx={{ mt: 3, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.open_vault', 'Open Document Vault')}</Button>
             </Paper>
           </Grid>
         </Grid>
@@ -242,4 +229,3 @@ export default function TenantDashboardPage() {
     </Box>
   );
 }
-
