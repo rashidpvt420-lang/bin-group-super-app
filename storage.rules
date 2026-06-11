@@ -117,7 +117,7 @@ service firebase.storage {
     function isAllowedImageContentType() {
       return request.resource != null && (
         request.resource.contentType.matches('image/.*') ||
-        request.resource.contentType in ['application/octet-stream', 'binary/octet-stream']
+        request.resource.contentType in ['application/octet-stream', 'binary/octet-stream', '']
       );
     }
 
@@ -159,10 +159,15 @@ service firebase.storage {
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
-    match /design_requests/{userId}/{fileName} {
+    match /design_requests/{userId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
       allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /ai_design_renders/{userId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow create, update, delete: if isAdmin();
     }
 
     match /proofs/{ticketId}/{allPaths=**} {
