@@ -15,10 +15,23 @@ const currentAdminPath = () => {
 
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
-  const targetUrl = `${ADMIN_PANEL_URL}${currentAdminPath()}`;
+  const targetPath = currentAdminPath();
+  const targetUrl = `${ADMIN_PANEL_URL}${targetPath}`;
+  const loginUrl = `${ADMIN_PANEL_URL}/login`;
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      window.location.replace(targetUrl);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [targetUrl]);
 
   const openAdminPanel = () => {
     window.location.href = targetUrl;
+  };
+
+  const openAdminLogin = () => {
+    window.location.href = loginUrl;
   };
 
   const resetAndLogin = async () => {
@@ -37,7 +50,7 @@ export default function AdminTerminal() {
     } catch {
       // Ignore storage failures and continue navigation.
     }
-    window.location.href = `${ADMIN_PANEL_URL}/login`;
+    window.location.href = loginUrl;
   };
 
   return (
@@ -61,8 +74,8 @@ export default function AdminTerminal() {
       <Box
         sx={{
           width: '100%',
-          maxWidth: 720,
-          bgcolor: 'rgba(15, 23, 42, 0.92)',
+          maxWidth: 760,
+          bgcolor: 'rgba(15, 23, 42, 0.94)',
           border: '1px solid rgba(201,166,70,0.35)',
           borderRadius: 5,
           p: { xs: 3, md: 5 },
@@ -74,12 +87,12 @@ export default function AdminTerminal() {
           BIN GROUP ADMIN
         </Typography>
         <Typography variant="h3" sx={{ mt: 2, mb: 2, fontWeight: 950, letterSpacing: -1.5 }}>
-          {tx('admin.bridge.title', 'Admin Command Center')}
+          {tx('admin.bridge.title', 'Redirecting to Admin Command Center')}
         </Typography>
         <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 4, lineHeight: 1.7 }}>
           {tx(
             'admin.bridge.desc',
-            'The stable production admin console runs on the dedicated admin hosting site. Use it for owner approvals, tickets, technicians, contracts, payments, and sovereign operations.'
+            'The main app does not contain the admin login form. You are being sent to the dedicated production admin panel for owner approvals, tickets, technicians, contracts, payments, and sovereign operations.'
           )}
         </Typography>
 
@@ -101,7 +114,7 @@ export default function AdminTerminal() {
           </Button>
           <Button
             variant="outlined"
-            onClick={resetAndLogin}
+            onClick={openAdminLogin}
             sx={{
               borderColor: 'rgba(201,166,70,0.65)',
               color: '#E5C86B',
@@ -110,6 +123,21 @@ export default function AdminTerminal() {
               py: 1.5,
               borderRadius: 2,
               '&:hover': { borderColor: '#E5C86B', bgcolor: 'rgba(201,166,70,0.08)' },
+            }}
+          >
+            {tx('admin.bridge.login', 'Open Admin Login')}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={resetAndLogin}
+            sx={{
+              borderColor: 'rgba(239,68,68,0.55)',
+              color: '#FCA5A5',
+              fontWeight: 950,
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              '&:hover': { borderColor: '#FCA5A5', bgcolor: 'rgba(239,68,68,0.08)' },
             }}
           >
             {tx('admin.bridge.reset', 'Reset & Login')}
