@@ -303,6 +303,7 @@ const LoginPage: React.FC = () => {
                                     autoFocus
                                     type="email"
                                     name="email"
+                                    inputProps={{ 'data-testid': 'login-email' }}
                                     InputProps={{ startAdornment: <InputAdornment position="start"><SafeIcon icon={Mail} size={20} color={palette.gold} /></InputAdornment> }}
                                     sx={{
                                         '& .MuiInputBase-root': { bgcolor: '#FFFFFF', minHeight: 58, borderRadius: 2 },
@@ -320,6 +321,7 @@ const LoginPage: React.FC = () => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
+                                    inputProps={{ 'data-testid': 'login-password' }}
                                     InputProps={{
                                         startAdornment: <InputAdornment position="start"><SafeIcon icon={Key} size={20} color={palette.gold} /></InputAdornment>,
                                         endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: palette.ink }}><SafeIcon icon={showPassword ? EyeOff : Eye} size={20} /></IconButton></InputAdornment>,

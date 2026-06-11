@@ -22,6 +22,21 @@ for (const p of possibleConfigPaths) {
   }
 }
 
+// Validate required environment variables and exit on failure
+const requiredEnvVars = [
+  'E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD',
+  'E2E_OWNER_EMAIL', 'E2E_OWNER_PASSWORD',
+  'E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD',
+  'E2E_TECHNICIAN_EMAIL', 'E2E_TECHNICIAN_PASSWORD',
+  'E2E_BROKER_EMAIL', 'E2E_BROKER_PASSWORD'
+];
+
+const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required E2E environment variables: ${missingVars.join(', ')}`);
+  process.exit(1);
+}
+
 const projectId = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 
 if (!admin.apps.length) {
@@ -34,15 +49,15 @@ const auth = admin.auth();
 const usersToSeed = [
   {
     role: 'admin',
-    email: process.env.E2E_ADMIN_EMAIL || 'Admin@bin-Group.com',
-    password: process.env.E2E_ADMIN_PASSWORD || 'bin112233',
+    email: process.env.E2E_ADMIN_EMAIL,
+    password: process.env.E2E_ADMIN_PASSWORD,
     claims: { admin: true, role: 'admin', testAccount: true },
     displayName: 'E2E Admin',
   },
   {
     role: 'owner',
-    email: process.env.E2E_OWNER_EMAIL || 'owner@bin-Group.com',
-    password: process.env.E2E_OWNER_PASSWORD || 'bin112233',
+    email: process.env.E2E_OWNER_EMAIL,
+    password: process.env.E2E_OWNER_PASSWORD,
     claims: { role: 'owner', testAccount: true },
     displayName: 'E2E Owner',
     extraProfile: {
@@ -55,8 +70,8 @@ const usersToSeed = [
   },
   {
     role: 'tenant',
-    email: process.env.E2E_TENANT_EMAIL || 'Tenant@bin-Group.com',
-    password: process.env.E2E_TENANT_PASSWORD || 'bin112233',
+    email: process.env.E2E_TENANT_EMAIL,
+    password: process.env.E2E_TENANT_PASSWORD,
     claims: { role: 'tenant', testAccount: true },
     displayName: 'E2E Tenant',
     extraProfile: {
@@ -68,8 +83,8 @@ const usersToSeed = [
   },
   {
     role: 'technician',
-    email: process.env.E2E_TECHNICIAN_EMAIL || 'Technician@bin-Group.com',
-    password: process.env.E2E_TECHNICIAN_PASSWORD || 'bin112233',
+    email: process.env.E2E_TECHNICIAN_EMAIL,
+    password: process.env.E2E_TECHNICIAN_PASSWORD,
     claims: { role: 'technician', testAccount: true },
     displayName: 'E2E Technician',
     extraProfile: {
@@ -79,8 +94,8 @@ const usersToSeed = [
   },
   {
     role: 'broker',
-    email: process.env.E2E_BROKER_EMAIL || 'broker@bin-Group.com',
-    password: process.env.E2E_BROKER_PASSWORD || 'bin112233',
+    email: process.env.E2E_BROKER_EMAIL,
+    password: process.env.E2E_BROKER_PASSWORD,
     claims: { role: 'broker', testAccount: true },
     displayName: 'E2E Broker',
   }
@@ -138,6 +153,7 @@ async function seed() {
 
     } catch (err) {
       console.error(`❌ Error seeding ${email}:`, err);
+      throw err;
     }
   }
 }
