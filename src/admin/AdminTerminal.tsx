@@ -3,6 +3,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
+import PortalSessionControls from '../components/PortalSessionControls';
 
 const ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
 
@@ -51,8 +52,12 @@ export default function AdminTerminal() {
         p: { xs: 2, md: 4 },
         direction: isRTL ? 'rtl' : 'ltr',
         backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(201,166,70,0.18), transparent 42%)',
+        position: 'relative',
       }}
     >
+      <Box sx={{ position: 'absolute', top: 24, [isRTL ? 'left' : 'right']: 24 }}>
+        <PortalSessionControls role="admin" dark accent="#C9A646" />
+      </Box>
       <Box
         sx={{
           width: '100%',
