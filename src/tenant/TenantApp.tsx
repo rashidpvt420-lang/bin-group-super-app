@@ -10,6 +10,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
+import SafeIcon from '../components/SafeIcon';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
@@ -59,11 +60,11 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
                         {location.pathname !== '/tenant' && location.pathname !== '/tenant/dashboard' && (
                             <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary }}>
-                                <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
+                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                             </IconButton>
                         )}
                         <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}>
-                            <Home size={22} />
+                            <SafeIcon icon={Home} size={22} />
                         </IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
@@ -78,7 +79,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <NotificationBell />
                         <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
-                            <User size={18} />
+                            <SafeIcon icon={User} size={18} />
                         </IconButton>
                         <PortalSessionControls role="tenant" dark accent={binThemeTokens.gold} />
                     </Stack>
