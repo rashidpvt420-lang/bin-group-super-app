@@ -4,6 +4,12 @@ module.exports = {
   webpack: {
     alias: {
       "@bin/shared": path.resolve(__dirname, "../../packages/shared/src"),
+      // Prevent React hook crashes from duplicate React instances when the admin
+      // panel imports shared workspace source files.
+      react: path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
+      "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
     },
     configure: (webpackConfig) => {
       // 1. Remove ModuleScopePlugin to allow imports from outside src/
