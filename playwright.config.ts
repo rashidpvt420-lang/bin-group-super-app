@@ -1,17 +1,28 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Auto-load .env.e2e for local runs (contains E2E_*_EMAIL/PASSWORD credentials).
 // In CI, these vars come from GitHub Secrets and take precedence.
-if (existsSync('.env.e2e')) {
-  loadDotenv({ path: '.env.e2e', override: false });
+const possibleConfigPaths = [
+  path.resolve(__dirname, '.env.e2e'),
+  path.resolve(process.cwd(), '.env.e2e'),
+  path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
+];
+for (const p of possibleConfigPaths) {
+  if (existsSync(p)) {
+    loadDotenv({ path: p, override: false });
+    break;
+  }
 }
 
-
-
 const hasExplicitBaseURL = Boolean(process.env.E2E_BASE_URL);
-const baseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:4173';
+const baseURL = process.env.E2E_BASE_URL || 'http://localhost:4173';
 const ciMode = Boolean(process.env.CI);
 
 const projects = ciMode
@@ -30,7 +41,7 @@ export default defineConfig({
   webServer: hasExplicitBaseURL
     ? undefined
     : {
-        command: 'npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
+        command: 'npm run preview -- --host localhost --port 4173 --strictPort',
         url: baseURL,
         reuseExistingServer: true,
         timeout: 120_000,

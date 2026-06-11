@@ -1,4 +1,25 @@
 import { expect, Page, test } from '@playwright/test';
+import { existsSync } from 'fs';
+import { config as loadDotenv } from 'dotenv';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env.e2e before accessing process.env
+const possibleConfigPaths = [
+  path.resolve(__dirname, '../../.env.e2e'),
+  path.resolve(__dirname, '../../../.env.e2e'),
+  path.resolve(process.cwd(), '.env.e2e'),
+  path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
+];
+for (const p of possibleConfigPaths) {
+  if (existsSync(p)) {
+    loadDotenv({ path: p });
+    break;
+  }
+}
 
 type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -27,6 +48,12 @@ async function expectNoRuntimeCrash(page: Page, route: string) {
 }
 
 async function login(page: Page, email: string, password: string) {
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      console.log(`[BROWSER_ERROR] ${msg.text()}`);
+    }
+  });
+
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
   const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"], input:not([type="password"])').first();
@@ -39,9 +66,14 @@ async function login(page: Page, email: string, password: string) {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_000);
   await expectNoRuntimeCrash(page, '/login after submit');
+
+  // Verify login succeeds and page URL is not /login
+  await expect(page, 'Should redirect away from login page after successful authentication').not.toHaveURL(/\/login/, { timeout: 15_000 });
 }
 
 async function expectDashboardControls(page: Page, role: RoleName) {
+  // Verify page URL is not /login before checking controls
+  await expect(page, 'Should not be on login page when asserting dashboard controls').not.toHaveURL(/\/login/, { timeout: 15_000 });
   await expect(page.getByTestId(`${role}-language-toggle`), `${role} must expose language toggle`).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId(`${role}-logout`).or(page.getByTestId(`${role}-logout-mobile`)), `${role} must expose logout control`).toBeVisible({ timeout: 15_000 });
 }
@@ -60,18 +92,21 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
       test(`${role} route renders: ${route}`, async ({ page }) => {
         const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
         expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
+        await expect(page, `Should not redirect to login page for ${route}`).not.toHaveURL(/\/login/, { timeout: 15_000 });
         await expectNoRuntimeCrash(page, route);
       });
     }
 
     test(`${role} dashboard exposes required launch controls`, async ({ page }) => {
       await page.goto(criticalRoutes[role][0], { waitUntil: 'domcontentloaded' });
+      await expect(page, `Should not redirect to login page for dashboard`).not.toHaveURL(/\/login/, { timeout: 15_000 });
       await expectNoRuntimeCrash(page, criticalRoutes[role][0]);
       await expectDashboardControls(page, role);
     });
 
     test(`${role} language switch is mandatory`, async ({ page }) => {
       await page.goto(criticalRoutes[role][0], { waitUntil: 'domcontentloaded' });
+      await expect(page, `Should not redirect to login page for language switch`).not.toHaveURL(/\/login/, { timeout: 15_000 });
       await expectNoRuntimeCrash(page, criticalRoutes[role][0]);
       const languageButton = page.getByTestId(`${role}-language-toggle`);
       await expect(languageButton).toBeVisible({ timeout: 15_000 });
