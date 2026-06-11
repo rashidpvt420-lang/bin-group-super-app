@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'firestore.rules';
-const source = readFileSync(path, 'utf8');
+const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 const brokerOwnsNeedle = '    function brokerOwns(data) {';
 
 function dedupeBrokerOwns(input) {
@@ -49,7 +49,13 @@ function dedupeBrokerOwns(input) {
 
 function replaceLineBlock(input, startText, endText, replacement, label) {
   const start = input.indexOf(startText);
-  if (start === -1) throw new Error(`[rules-normalize] Missing ${label} start.`);
+  if (start === -1) {
+    if (input.includes(replacement)) {
+      console.log(`Already normalized/hardened: ${label}`);
+      return input;
+    }
+    throw new Error(`[rules-normalize] Missing ${label} start.`);
+  }
   const end = input.indexOf(endText, start);
   if (end === -1) throw new Error(`[rules-normalize] Missing ${label} end.`);
   return input.slice(0, start) + replacement + input.slice(end + endText.length);

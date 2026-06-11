@@ -323,8 +323,7 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||
-                  (signedIn() && !(request.auth.uid in [resource.data.get('ownerId', ''), resource.data.get('ownerUid', '')]) && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
+      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
       allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
       allow delete: if isAdmin();
@@ -506,21 +505,21 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow read: if isAdmin() || isHr();
-      allow create: if signedIn();
+      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /audit_logs/{logId} {
       allow read: if isAdmin() || isHr();
-      allow create: if signedIn();
+      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /notifications/{notificationId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
-      allow create: if signedIn();
+      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));
       allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
       allow delete: if isAdmin();
     }
@@ -725,7 +724,7 @@ service cloud.firestore {
 
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
-      allow create: if signedIn();
+      allow create: if signedIn() && request.resource.data.status == 'new';
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
