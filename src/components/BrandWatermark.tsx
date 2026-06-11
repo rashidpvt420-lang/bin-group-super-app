@@ -8,9 +8,7 @@ type BrandWatermarkProps = {
   compact?: boolean;
 };
 
-export default function BrandWatermark({ label = 'BIN GROUP', opacity = 0.07, compact = false }: BrandWatermarkProps) {
-  const size = compact ? { xs: 260, sm: 360, md: 480 } : { xs: 360, sm: 560, md: 760 };
-
+export default function BrandWatermark({ label = 'BIN GROUP', opacity = 0.06, compact = false }: BrandWatermarkProps) {
   return (
     <Box
       aria-hidden="true"
@@ -27,39 +25,35 @@ export default function BrandWatermark({ label = 'BIN GROUP', opacity = 0.07, co
     >
       <Box
         sx={{
-          width: size,
-          height: size,
-          borderRadius: '50%',
-          border: `1px solid ${alpha(binThemeTokens.gold, 0.34)}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          position: 'absolute',
+          fontWeight: 950,
+          letterSpacing: { xs: 10, md: 24 },
+          fontSize: { xs: '5.8rem', sm: '9rem', md: '13rem' },
+          lineHeight: 0.9,
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          textTransform: 'uppercase',
+          color: 'rgba(191,157,65,0.9)',
           opacity,
           transform: 'rotate(-12deg)',
-          background: `radial-gradient(circle, ${alpha(binThemeTokens.gold, 0.34)} 0%, ${alpha(binThemeTokens.gold, 0.12)} 44%, transparent 70%)`,
-          boxShadow: `0 0 160px ${alpha(binThemeTokens.gold, 0.18)}`,
+          textShadow: `0 0 48px ${alpha(binThemeTokens.gold, 0.18)}`,
         }}
       >
-        <Box
-          sx={{
-            px: { xs: 2.4, md: 5 },
-            py: { xs: 1.6, md: 3 },
-            borderTop: `2px solid ${alpha(binThemeTokens.gold, 0.95)}`,
-            borderBottom: `2px solid ${alpha(binThemeTokens.gold, 0.95)}`,
-            color: alpha(binThemeTokens.gold, 0.95),
-            fontWeight: 950,
-            letterSpacing: { xs: 6, md: 13 },
-            fontSize: { xs: compact ? '1.6rem' : '2.2rem', sm: compact ? '2.3rem' : '3.6rem', md: compact ? '3.2rem' : '5.4rem' },
-            lineHeight: 1,
-            textAlign: 'center',
-            whiteSpace: 'nowrap',
-            textTransform: 'uppercase',
-            textShadow: `0 0 36px ${alpha(binThemeTokens.gold, 0.42)}`,
-          }}
-        >
-          {label}
-        </Box>
+        {label}
       </Box>
+
+      <Box
+        sx={{
+          width: { xs: compact ? 270 : 360, sm: compact ? 380 : 520, md: compact ? 520 : 720 },
+          height: { xs: compact ? 270 : 360, sm: compact ? 380 : 520, md: compact ? 520 : 720 },
+          borderRadius: '50%',
+          border: `2px solid ${alpha(binThemeTokens.gold, 0.26)}`,
+          opacity: opacity * 0.82,
+          transform: 'rotate(-12deg)',
+          background: `radial-gradient(circle, ${alpha(binThemeTokens.gold, 0.18)} 0%, transparent 66%)`,
+          boxShadow: `0 0 150px ${alpha(binThemeTokens.gold, 0.16)}`,
+        }}
+      />
     </Box>
   );
 }

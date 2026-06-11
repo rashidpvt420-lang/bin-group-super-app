@@ -47,6 +47,7 @@ function getCopy(lang: 'en' | 'ar') {
     navHome: ar ? 'الرئيسية' : 'Home',
     navStart: ar ? 'ابدأ تفاصيل العقار' : 'Start Property Details',
     navLogin: ar ? 'دخول البوابة' : 'Portal Login',
+
     navQuote: ar ? 'عرض سعر فوري' : 'Get Instant Quote',
     navDemo: ar ? 'العرض التوضيحي' : 'Demo Reel',
     title: ar ? 'BIN GROUP - الصيانة العامة وإدارة العقارات' : 'BIN GROUP - General Maintenance & Property Management',
@@ -331,4 +332,5 @@ export default function CompanyProfilePage() {
     </Box>
   );
 }
+
 
