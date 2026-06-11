@@ -27,7 +27,7 @@ const ADMIN_ROLES = new Set([
 ]);
 
 const BOOTSTRAP_ADMIN_EMAILS = new Set(
-    (process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || 'rashid.pvt420@gmail.com')
+    (process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || '')
         .split(',')
         .map((email) => email.trim().toLowerCase())
         .filter(Boolean)
