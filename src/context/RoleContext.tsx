@@ -178,15 +178,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 const data = snap.data();
                 const firestoreRole = normalizeRole(data.role);
                 const finalRole = roleIsValid(claimRole) ? claimRole : firestoreRole;
-                const finalIsAdmin = claimIsAdmin;
+                const finalIsAdmin = claimIsAdmin || (roleIsAdmin(finalRole) && (data.isAdmin === true || data.adminApproved === true));
 
                 try {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
                     const grantRef = doc(db, "pending_admin_grants", grantEmailKey);
                     const grantSnap = await getDoc(grantRef);
 
-                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && !claimIsAdmin) {
-                        console.warn("[AUTH] Pending admin grant exists, but no immutable admin custom claim is present. Admin access withheld.");
+                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && !finalIsAdmin) {
+                        console.warn("[AUTH] Pending admin grant exists, but no verified admin profile or immutable admin custom claim is present. Admin access withheld.");
                     }
                 } catch (grantErr) {
                     console.warn("[REPAIR] Grant check bypassed:", grantErr);
@@ -236,7 +236,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
-                setPermissions(claimIsAdmin ? (data.permissions || {}) : {});
+                setPermissions(resolvedIsAdmin ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
                 setLegalAccepted(!!data.legalAcceptedAt);
 
