@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, IconButton, Stack, Tooltip, alpha } from '@mui/material';
+import { Button, IconButton, Stack, Tooltip, alpha, useTheme, useMediaQuery } from '@mui/material';
 import { Globe, LogOut } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
@@ -33,6 +33,8 @@ export default function PortalSessionControls({
   compact = false,
 }: PortalSessionControlsProps) {
   const { lang, setLang, isRTL } = useLanguage();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const nextLang = lang === 'en' ? 'ar' : 'en';
   const languageLabel = nextLang.toUpperCase();
   const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
@@ -79,49 +81,49 @@ export default function PortalSessionControls({
         {languageLabel}
       </Button>
 
-      <Button
-        type="button"
-        data-testid={`${role}-logout`}
-        aria-label={logoutLabel}
-        onClick={handleLogout}
-        startIcon={<SafeIcon icon={LogOut} size={16} />}
-        sx={{
-          display: { xs: 'none', sm: 'inline-flex' },
-          color: '#EF4444',
-          border: `1px solid ${alpha('#EF4444', 0.3)}`,
-          borderRadius: 3,
-          fontWeight: 950,
-          bgcolor: alpha('#EF4444', dark ? 0.14 : 0.08),
-          textTransform: 'none',
-          '& .MuiButton-startIcon': {
-            mr: isRTL ? 0 : 0.6,
-            ml: isRTL ? 0.6 : 0,
-          },
-          '&:hover': { bgcolor: alpha('#EF4444', dark ? 0.20 : 0.14) },
-        }}
-      >
-        {compact ? '' : logoutLabel}
-      </Button>
-
-      <Tooltip title={logoutLabel}>
-        <IconButton
+      {!isMobile ? (
+        <Button
           type="button"
-          data-testid={`${role}-logout-mobile`}
+          data-testid={`${role}-logout`}
           aria-label={logoutLabel}
           onClick={handleLogout}
+          startIcon={<SafeIcon icon={LogOut} size={16} />}
           sx={{
-            display: { xs: 'inline-flex', sm: 'none' },
             color: '#EF4444',
-            bgcolor: alpha('#EF4444', dark ? 0.14 : 0.08),
             border: `1px solid ${alpha('#EF4444', 0.3)}`,
             borderRadius: 3,
-            width: 42,
-            height: 42,
+            fontWeight: 950,
+            bgcolor: alpha('#EF4444', dark ? 0.14 : 0.08),
+            textTransform: 'none',
+            '& .MuiButton-startIcon': {
+              mr: isRTL ? 0 : 0.6,
+              ml: isRTL ? 0.6 : 0,
+            },
+            '&:hover': { bgcolor: alpha('#EF4444', dark ? 0.20 : 0.14) },
           }}
         >
-          <SafeIcon icon={LogOut} size={18} />
-        </IconButton>
-      </Tooltip>
+          {compact ? '' : logoutLabel}
+        </Button>
+      ) : (
+        <Tooltip title={logoutLabel}>
+          <IconButton
+            type="button"
+            data-testid={`${role}-logout-mobile`}
+            aria-label={logoutLabel}
+            onClick={handleLogout}
+            sx={{
+              color: '#EF4444',
+              bgcolor: alpha('#EF4444', dark ? 0.14 : 0.08),
+              border: `1px solid ${alpha('#EF4444', 0.3)}`,
+              borderRadius: 3,
+              width: 42,
+              height: 42,
+            }}
+          >
+            <SafeIcon icon={LogOut} size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
     </Stack>
   );
 }
