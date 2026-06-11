@@ -61,6 +61,34 @@ function replaceLineBlock(input, startText, endText, replacement, label) {
   return input.slice(0, start) + replacement + input.slice(end + endText.length);
 }
 
+function normalizeNotificationBlock(input) {
+  const blockRegex = /    match \/notifications\/\{[^}]+\} \{\n[\s\S]*?\n    \}/;
+  const match = input.match(blockRegex);
+
+  if (!match) {
+    throw new Error('[rules-normalize] Missing notifications rule block.');
+  }
+
+  const block = match[0];
+  if (
+    block.includes('allow create: if isAdmin();') ||
+    block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid')
+  ) {
+    console.log('Already normalized/hardened: notifications create rule');
+    return input;
+  }
+
+  if (!block.includes('allow create: if signedIn();') && !block.includes('allow create: if isAdmin() || signedIn();')) {
+    throw new Error('[rules-normalize] Notifications rule block found, but no known unsafe create rule was present.');
+  }
+
+  const paramMatch = block.match(/match \/notifications\/\{([^}]+)\}/);
+  const paramName = paramMatch?.[1] || 'notificationId';
+  const replacement = `    match /notifications/{${paramName}} {\n      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));\n      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));\n      allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));\n      allow delete: if isAdmin();\n    }`;
+
+  return input.replace(block, replacement);
+}
+
 let { output, seen, removed } = dedupeBrokerOwns(source);
 
 output = replaceLineBlock(
@@ -71,13 +99,7 @@ output = replaceLineBlock(
   'properties read rule'
 );
 
-output = replaceLineBlock(
-  output,
-  "    match /notifications/{notificationId} {\n      allow read:",
-  "      allow update:",
-  "    match /notifications/{notificationId} {\n      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));\n      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));\n      allow update:",
-  'notifications create rule'
-);
+output = normalizeNotificationBlock(output);
 
 if (output !== source) writeFileSync(path, output);
 
