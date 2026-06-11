@@ -1,20 +1,20 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'firestore.rules';
-let rules = readFileSync(path, 'utf8');
+let rules = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 let changes = 0;
 
 function patchIfNeeded(label, before, after, alreadyMarkers = []) {
+  const alreadyHardened = alreadyMarkers.length > 0 && alreadyMarkers.every((marker) => rules.includes(marker));
+  if (alreadyHardened) {
+    console.log(`Already hardened: ${label}`);
+    return;
+  }
+
   if (rules.includes(before)) {
     rules = rules.replace(before, after);
     changes += 1;
     console.log(`Patched: ${label}`);
-    return;
-  }
-
-  const alreadyHardened = alreadyMarkers.length > 0 && alreadyMarkers.every((marker) => rules.includes(marker));
-  if (alreadyHardened) {
-    console.log(`Already hardened: ${label}`);
     return;
   }
 
@@ -111,32 +111,36 @@ patchIfNeeded(
 
 patchIfNeeded(
   'auditLogs creation must be actor scoped',
-  `    match /auditLogs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
+  `    match /auditLogs/{logId} {
+      allow read: if isAdmin() || isHr();
       allow create: if signedIn();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`,
-  `    match /auditLogs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
+  `    match /auditLogs/{logId} {
+      allow read: if isAdmin() || isHr();
       allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`,
-  ["match /auditLogs/{auditId}", "allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;"]
+  [`match /auditLogs/{logId} {\n      allow read: if isAdmin() || isHr();\n      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;`]
 );
 
 patchIfNeeded(
   'audit_logs creation must be actor scoped',
-  `    match /audit_logs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
+  `    match /audit_logs/{logId} {
+      allow read: if isAdmin() || isHr();
       allow create: if signedIn();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`,
-  `    match /audit_logs/{auditId} {
-      allow read: if isAdmin() || hasPermission('canViewAuditLogs') || (signedIn() && resource.data.actorId == request.auth.uid);
+  `    match /audit_logs/{logId} {
+      allow read: if isAdmin() || isHr();
       allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`,
-  ["match /audit_logs/{auditId}", "allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;"]
+  [`match /audit_logs/{logId} {\n      allow read: if isAdmin() || isHr();\n      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;`]
 );
 
 patchIfNeeded(
@@ -229,5 +233,21 @@ patchIfNeeded(
   ["match /brokerLeads/{leadId}", "match /referrals/{referralId}", "function brokerOwns(data)"]
 );
 
-writeFileSync(path, rules);
-console.log(`Firestore rules hardening preflight complete. Changes applied: ${changes}.`);
+const isVerify = process.argv.includes('--verify');
+
+if (isVerify) {
+  if (changes > 0) {
+    console.error(`Firestore rules hardening verification failed: ${changes} pending hardening changes were not applied.`);
+    process.exit(1);
+  } else {
+    console.log('Firestore rules hardening verification passed. All rules are fully hardened.');
+    process.exit(0);
+  }
+} else {
+  if (changes > 0) {
+    writeFileSync(path, rules);
+    console.log(`Firestore rules hardening complete. Changes applied and written: ${changes}.`);
+  } else {
+    console.log('Firestore rules already hardened. No changes written.');
+  }
+}
