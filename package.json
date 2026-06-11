@@ -29,6 +29,7 @@
     "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
     "test:repo-hygiene": "node scripts/repo-hygiene-guard.mjs",
     "test:launch-clearance": "node scripts/verify-launch-clearance.mjs",
+    "launch:pass": "node scripts/record-launch-proof.mjs",
     "test:hr-smoke": "node scripts/hr-smoke-test.mjs",
     "test:e2e": "playwright install --with-deps chromium && playwright test",
     "test:e2e:env": "node scripts/verify-e2e-env.mjs",
