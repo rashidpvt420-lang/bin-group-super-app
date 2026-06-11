@@ -26,7 +26,24 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
+const BOOTSTRAP_ADMIN_EMAILS = new Set(
+    (process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || 'rashid.pvt420@gmail.com')
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+);
+
 const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+const profileRoleFrom = (profile: any) => String(profile?.role || profile?.userRole || profile?.primaryRole || '').trim().toLowerCase();
+const canonicalEmail = (value: unknown) => {
+    const email = String(value || '').trim().toLowerCase();
+    const [local, domain] = email.split('@');
+    if (!local || !domain) return email;
+    const normalizedDomain = domain === 'googlemail.com' ? 'gmail.com' : domain;
+    const normalizedLocal = normalizedDomain === 'gmail.com' ? local.split('+')[0].replace(/\./g, '') : local;
+    return `${normalizedLocal}@${normalizedDomain}`;
+};
+
 const claimsGrantAdmin = (claims: Record<string, unknown>) => {
     const role = claimRoleFrom(claims);
     return Boolean(
@@ -37,6 +54,19 @@ const claimsGrantAdmin = (claims: Record<string, unknown>) => {
         ADMIN_ROLES.has(role)
     );
 };
+
+const profileGrantsAdmin = (profile: any) => {
+    const role = profileRoleFrom(profile);
+    return Boolean(
+        profile?.admin === true ||
+        profile?.isAdmin === true ||
+        profile?.ceo === true ||
+        profile?.manager === true ||
+        ADMIN_ROLES.has(role)
+    );
+};
+
+const founderEmailGrantsAdmin = (email: unknown) => BOOTSTRAP_ADMIN_EMAILS.has(canonicalEmail(email));
 
 export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -95,15 +125,17 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
 
                 const claims = idTokenResult.claims || {};
                 const profile = userDoc.exists() ? userDoc.data() : null;
-                const role = claimRoleFrom(claims);
-                const isAdmin = claimsGrantAdmin(claims);
+                const claimRole = claimRoleFrom(claims);
+                const profileRole = profileRoleFrom(profile);
+                const isFounderBootstrap = founderEmailGrantsAdmin(usr.email);
+                const isAdmin = claimsGrantAdmin(claims) || profileGrantsAdmin(profile) || isFounderBootstrap;
+                const role = claimRole || profileRole || (isFounderBootstrap ? 'super_admin' : '');
 
                 if (!isAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
                 }
 
-                // Successful Admin Resolution. Admin authority comes only from immutable custom claims.
-                setUser({ ...usr, ...profile, role, isAdmin: true, claims });
+                setUser({ ...usr, ...profile, role, isAdmin: true, claims, bootstrapAdmin: isFounderBootstrap });
                 setIsAuthenticated(true);
                 setError(null);
 
@@ -117,6 +149,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                         targetId: 'admin-panel',
                         action: 'login',
                         userAgent: navigator.userAgent,
+                        bootstrapAdmin: isFounderBootstrap,
                         createdAt: serverTimestamp()
                     }).catch(e => console.error("Audit log failed", e));
                 }
@@ -174,7 +207,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             await signOut(auth);
             setIsAuthenticated(false);
             setUser(null);
-            window.location.href = '/admin/login';
+            window.location.href = '/login';
         } catch (e) {
             window.location.reload();
         }
