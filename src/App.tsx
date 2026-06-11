@@ -11,38 +11,68 @@ import DemoVideosPage from './pages/public/DemoVideosPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
+function lazyWithRetry(componentImport: () => Promise<any>) {
+  return React.lazy(async () => {
+    try {
+      return await componentImport();
+    } catch (error: any) {
+      console.error("Dynamic import failed. Checking if reload is needed...", error);
+      const isChunkLoadError = 
+        /failed to fetch/i.test(error.message || '') ||
+        /dynamically imported module/i.test(error.message || '') ||
+        /loading chunk/i.test(error.message || '') ||
+        /chunk/i.test(error.message || '');
+        
+      if (isChunkLoadError) {
+        try {
+          const lastReload = sessionStorage.getItem('bin_chunk_reload_timestamp');
+          const now = Date.now();
+          if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
+            sessionStorage.setItem('bin_chunk_reload_timestamp', String(now));
+            console.warn("Forcing page reload to fetch updated bundle chunks.");
+            window.location.reload();
+            return new Promise(() => {});
+          }
+        } catch (e) {
+          console.error("Error setting session storage or reloading", e);
+        }
+      }
+      throw error;
+    }
+  });
+}
 
-const LandingPage = React.lazy(() => import('./pages/LandingPage'));
-const OwnerLandingPage = React.lazy(() => import('./pages/OwnerLandingPage'));
-const LoginPage = React.lazy(() => import('./pages/LoginPage'));
-const RoleGatewayPage = React.lazy(() => import('./pages/RoleGatewayPage'));
-const PropertyOnboardingPage = React.lazy(() => import('./pages/PropertyOnboardingPage'));
-const CompanyProfilePage = React.lazy(() => import('./pages/public/CompanyProfilePage'));
-const InvoiceVerificationPage = React.lazy(() => import('./pages/public/InvoiceVerificationPage'));
-const CertificateVerificationPage = React.lazy(() => import('./pages/public/CertificateVerificationPage'));
-const InvoiceDetailsPage = React.lazy(() => import('./pages/InvoiceDetailsPage'));
-const TenantInvitePage = React.lazy(() => import('./pages/TenantInvitePage'));
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'));
+const OwnerLandingPage = lazyWithRetry(() => import('./pages/OwnerLandingPage'));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
+const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
+const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
+const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
+const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
+const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
+const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
+const TenantInvitePage = lazyWithRetry(() => import('./pages/TenantInvitePage'));
 
-const AuthenticatedShell = React.lazy(() => import('./components/AuthenticatedShell'));
-const ProtectedRoute = React.lazy(() => import('./components/ProtectedRoute'));
+const AuthenticatedShell = lazyWithRetry(() => import('./components/AuthenticatedShell'));
+const ProtectedRoute = lazyWithRetry(() => import('./components/ProtectedRoute'));
 
-const FinancialDashboardPage = React.lazy(() => import('./pages/FinancialDashboardPage'));
-const HealthScorePage = React.lazy(() => import('./pages/HealthScorePage'));
-const MaintenanceCalendarPage = React.lazy(() => import('./pages/MaintenanceCalendarPage'));
-const TurnoverEnginePage = React.lazy(() => import('./pages/TurnoverEnginePage'));
-const GovernmentPropertyPage = React.lazy(() => import('./pages/GovernmentPropertyPage'));
-const PropertyUnitsPage = React.lazy(() => import('./pages/PropertyUnitsPage'));
-const NotificationInboxPage = React.lazy(() => import('./pages/NotificationInboxPage'));
-const DesignStudioPage = React.lazy(() => import('./pages/DesignStudioPage'));
-const DesignRequestDetailPage = React.lazy(() => import('./pages/DesignRequestDetailPage'));
-const TenantApp = React.lazy(() => import('./tenant/TenantApp'));
-const TechnicianApp = React.lazy(() => import('./technician/TechnicianApp'));
-const ReportingDashboard = React.lazy(() => import('./pages/ReportingDashboard'));
-const ExecutiveReportingPage = React.lazy(() => import('./pages/ExecutiveReportingPage'));
-const BrokerApp = React.lazy(() => import('./broker/BrokerApp'));
-const AuditorPortalPage = React.lazy(() => import('./pages/public/AuditorPortalPage'));
-const AdminTerminal = React.lazy(() => import('./admin/AdminTerminal'));
-const OwnerApp = React.lazy(() => import('./owner/OwnerApp'));
+const FinancialDashboardPage = lazyWithRetry(() => import('./pages/FinancialDashboardPage'));
+const HealthScorePage = lazyWithRetry(() => import('./pages/HealthScorePage'));
+const MaintenanceCalendarPage = lazyWithRetry(() => import('./pages/MaintenanceCalendarPage'));
+const TurnoverEnginePage = lazyWithRetry(() => import('./pages/TurnoverEnginePage'));
+const GovernmentPropertyPage = lazyWithRetry(() => import('./pages/GovernmentPropertyPage'));
+const PropertyUnitsPage = lazyWithRetry(() => import('./pages/PropertyUnitsPage'));
+const NotificationInboxPage = lazyWithRetry(() => import('./pages/NotificationInboxPage'));
+const DesignStudioPage = lazyWithRetry(() => import('./pages/DesignStudioPage'));
+const DesignRequestDetailPage = lazyWithRetry(() => import('./pages/DesignRequestDetailPage'));
+const TenantApp = lazyWithRetry(() => import('./tenant/TenantApp'));
+const TechnicianApp = lazyWithRetry(() => import('./technician/TechnicianApp'));
+const ReportingDashboard = lazyWithRetry(() => import('./pages/ReportingDashboard'));
+const ExecutiveReportingPage = lazyWithRetry(() => import('./pages/ExecutiveReportingPage'));
+const BrokerApp = lazyWithRetry(() => import('./broker/BrokerApp'));
+const AuditorPortalPage = lazyWithRetry(() => import('./pages/public/AuditorPortalPage'));
+const AdminTerminal = lazyWithRetry(() => import('./admin/AdminTerminal'));
+const OwnerApp = lazyWithRetry(() => import('./owner/OwnerApp'));
 
 const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedContract', 'propertyDraft', 'ownerOnboarding', 'bin-group-onboarding-v2'];
 const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';

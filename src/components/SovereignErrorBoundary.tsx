@@ -93,6 +93,27 @@ class SovereignErrorBoundary extends Component<Props, State> {
   public async componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("BIN-CRITICAL: Sovereign System Interruption detected.", error, errorInfo);
     
+    const isChunkLoadError = 
+      /failed to fetch/i.test(error.message || "") ||
+      /dynamically imported module/i.test(error.message || "") ||
+      /loading chunk/i.test(error.message || "") ||
+      /chunk/i.test(error.message || "");
+
+    if (isChunkLoadError) {
+      try {
+        const lastReload = sessionStorage.getItem('bin_chunk_reload_timestamp');
+        const now = Date.now();
+        if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
+          sessionStorage.setItem('bin_chunk_reload_timestamp', String(now));
+          console.warn("Chunk load failure detected. Reloading page to fetch latest assets...");
+          window.location.reload();
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to auto-reload on chunk failure", e);
+      }
+    }
+    
     try {
         const { db, collection, addDoc, serverTimestamp } = await import("../lib/firebase");
         const auth = (await import("../lib/firebase")).auth;
