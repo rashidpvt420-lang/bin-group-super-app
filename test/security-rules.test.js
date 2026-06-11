@@ -145,8 +145,8 @@ describe('Firestore Security Rules', () => {
     // Tenant A should be able to read/create/delete their own
     await assertSucceeds(getDoc(doc(tenantADb, 'gatePasses/pass_1')));
     await assertSucceeds(setDoc(doc(tenantADb, 'gatePasses/pass_new'), { tenantUid: 'tenant_a', visitorName: 'Visitor New' }));
-    
-    // Tenant B should fail to read or delete Tenant A's gatePasses
+
+    // Tenant B should fail to read Tenant A's gatePasses
     await assertFails(getDoc(doc(tenantBDb, 'gatePasses/pass_1')));
   });
 
@@ -162,22 +162,41 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantBDb, 'amenityBookings/booking_1')));
   });
 
-  it('tenant property access: Tenant can read assigned property doc', async () => {
+  it('tenant property access: Tenant can read assigned property doc and another valid tenant is blocked', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    
-    // Setup property
-    await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
-    // Setup tenant user doc with propertyId
+
+    // Setup properties
+    await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a', tenantId: 'tenant_a' });
+    await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b', tenantId: 'tenant_b' });
+
+    // Setup tenant user docs so both tenant contexts are valid tenant users.
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', ownerId: 'owner_a' });
+    await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b', ownerId: 'owner_b' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
 
-    // Tenant A (assigned to prop_a) should succeed
+    // Tenant A should read only its assigned property.
     await assertSucceeds(getDoc(doc(tenantADb, 'properties/prop_a')));
-    // Tenant B (not assigned to prop_a) should fail
+    await assertFails(getDoc(doc(tenantADb, 'properties/prop_b')));
+
+    // Tenant B is a real tenant user, but must still be blocked from Tenant A's property.
     await assertFails(getDoc(doc(tenantBDb, 'properties/prop_a')));
+  });
+
+  it('notifications abuse guard: user cannot create notification for another recipient', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    await assertFails(setDoc(doc(tenantADb, 'notifications/for_tenant_b'), {
+      recipientId: 'tenant_b',
+      userId: 'tenant_b',
+      createdBy: 'tenant_a',
+      title: 'Fake operational notification',
+      body: 'This should be blocked by rules.',
+      createdAt: new Date().toISOString(),
+      read: false,
+    }));
   });
 
   it('owner tenant profile access: Owner can read assigned tenants', async () => {
