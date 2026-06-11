@@ -7,6 +7,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
+import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -56,7 +57,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         {!isDashboard && (
                             <Button
                                 onClick={() => navigate(-1)}
-                                startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />}
+                                startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })}
                                 sx={{
                                     color: shell.ink,
                                     border: `1px solid ${shell.gold}`,
@@ -87,12 +88,12 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 minWidth: 0,
                             }}
                         >
-                            <Wrench size={19} /> {label('portal.technician.title', 'FIELD SOVEREIGN - UAE', 'الميدان السيادي - الإمارات')}
+                            <SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD SOVEREIGN - UAE', 'الميدان السيادي - الإمارات')}
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.5 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <NotificationBell />
-                        <Button onClick={() => navigate('/technician/profile')} startIcon={<User size={18} />} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>
+                        <Button onClick={() => navigate('/technician/profile')} startIcon={renderSafeIcon(User, { size: 18 })} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>
                             {label('nav.profile', 'Profile', 'الملف الشخصي')}
                         </Button>
                         <PortalSessionControls role="technician" accent={shell.gold} />
@@ -109,7 +110,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         {pathnames.slice(1).map((value, index) => {
                             const fallback = value.replace('-', ' ').toUpperCase();
                             const labelText = label(`nav.${value.toLowerCase().replace('-', '_')}`, fallback, fallback);
-                            return <Typography key={`${value}-${index}`} sx={{ color: shell.gold, fontWeight: 900, fontSize: '0.75rem' }}><ChevronRight size={12} /> {labelText}</Typography>;
+                            return <Typography key={`${value}-${index}`} sx={{ color: shell.gold, fontWeight: 900, fontSize: '0.75rem' }}><SafeIcon icon={ChevronRight} size={12} /> {labelText}</Typography>;
                         })}
                     </Box>
                 )}
