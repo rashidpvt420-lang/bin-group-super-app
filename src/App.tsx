@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
@@ -10,19 +10,22 @@ import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
+import { AIProvider } from './context/AIContext';
+import { SovereignAIChat } from './components/SovereignAIChat';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
+
 function lazyWithRetry(componentImport: () => Promise<any>) {
   return React.lazy(async () => {
     try {
       return await componentImport();
     } catch (error: any) {
       console.error("Dynamic import failed. Checking if reload is needed...", error);
-      const isChunkLoadError = 
+      const isChunkLoadError =
         /failed to fetch/i.test(error.message || '') ||
         /dynamically imported module/i.test(error.message || '') ||
         /loading chunk/i.test(error.message || '') ||
         /chunk/i.test(error.message || '');
-        
+
       if (isChunkLoadError) {
         try {
           const lastReload = sessionStorage.getItem('bin_chunk_reload_timestamp');
@@ -102,6 +105,8 @@ const NOTIFICATION_ROLES = [
   'broker',
   ...ADMIN_STAFF_ROLES,
 ];
+
+const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/tech', '/broker', '/admin', '/auditor'];
 
 function runOneTimeLegacyOnboardingCleanup() {
   try {
@@ -215,6 +220,13 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
+function PublicSovereignAIEntry() {
+  const location = useLocation();
+  const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
+  if (isRolePortalRoute) return null;
+  return <SovereignAIChat role="unknown" />;
+}
+
 function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
@@ -291,9 +303,12 @@ export default function App() {
     <Router>
       <LanguageProvider>
         <CustomThemeProvider>
-          <CssBaseline />
-          <AppContent />
-          <IOSPwaGuardian />
+          <AIProvider>
+            <CssBaseline />
+            <AppContent />
+            <PublicSovereignAIEntry />
+            <IOSPwaGuardian />
+          </AIProvider>
         </CustomThemeProvider>
       </LanguageProvider>
     </Router>
