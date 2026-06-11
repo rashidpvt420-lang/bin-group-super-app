@@ -10,18 +10,7 @@ const roleRoutes: Record<RoleName, string> = {
   broker: '/broker/dashboard',
 };
 
-const publicRoutes = [
-  '/',
-  '/login',
-  '/owners',
-  '/tenants',
-  '/technicians',
-  '/brokers',
-  '/company',
-  '/support',
-  '/privacy',
-  '/terms',
-];
+const publicRoutes = ['/', '/login', '/owners', '/tenants', '/technicians', '/brokers', '/company', '/support', '/privacy', '/terms'];
 
 const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|cannot read properties of undefined|null is not an object/i;
 const serverErrorText = /bad gateway|service unavailable|internal server error|gateway timeout/i;
@@ -121,6 +110,11 @@ async function login(page: Page, email: string, password: string) {
   await submit.click();
 }
 
+async function expectDashboardControls(page: Page, role: RoleName) {
+  await expect(page.getByTestId(`${role}-language-toggle`), `${role} must expose language toggle`).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId(`${role}-logout`).or(page.getByTestId(`${role}-logout-mobile`)), `${role} must expose logout control`).toBeVisible({ timeout: 20_000 });
+}
+
 test.describe('BIN GROUP production public smoke', () => {
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
@@ -136,7 +130,7 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
     const email = process.env[`E2E_${role.toUpperCase()}_EMAIL`];
     const password = process.env[`E2E_${role.toUpperCase()}_PASSWORD`];
 
-    test(`${role} can login and reach dashboard`, async ({ page }) => {
+    test(`${role} can login, reach dashboard, and see launch controls`, async ({ page }) => {
       if (!email || !password) {
         throw new Error(`Missing E2E_${role.toUpperCase()}_EMAIL/PASSWORD secrets. Mandatory role credentials must be defined for public launch smoke tests.`);
       }
@@ -159,6 +153,7 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
 
       await page.goto(roleRoutes[role], { waitUntil: 'domcontentloaded' });
       await expectNoCriticalRuntimeCrash(page, roleRoutes[role]);
+      await expectDashboardControls(page, role);
 
       const currentPath = new URL(page.url()).pathname;
       expect(currentPath, `${role} should be able to reach ${roleRoutes[role]}`).toBe(roleRoutes[role]);
