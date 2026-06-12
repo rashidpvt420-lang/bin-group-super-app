@@ -193,7 +193,7 @@ class FirebaseRealtimeService {
     return () => this.unsubscribe(ref);
   }
 
-  private addListener(ref: string, callback: (data: any) {
+  private addListener(ref: string, callback: (data: any) => void) {
     if (!this.listeners.has(ref)) {
       this.listeners.set(ref, new Set());
     }
