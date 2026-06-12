@@ -55,6 +55,11 @@ jobs:
         run: |
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
+          if [ -n "${VITE_APP_CHECK_SITE_KEY}" ]; then
+            printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
+          else
+            printf 'VITE_ENABLE_FIREBASE_APPCHECK=false\n' >> .env.production
+          fi
           printf 'VITE_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> .env.production
           printf 'VITE_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> .env.production
           printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
@@ -167,6 +172,11 @@ jobs:
         run: |
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
+          if [ -n "${VITE_APP_CHECK_SITE_KEY}" ]; then
+            printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
+          else
+            printf 'VITE_ENABLE_FIREBASE_APPCHECK=false\n' >> .env.production
+          fi
           printf 'VITE_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> .env.production
           printf 'VITE_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> .env.production
           printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
@@ -232,13 +242,7 @@ jobs:
           echo "::error::Firebase critical deploy failed after 3 attempts. Review Firebase service availability and IAM permissions."
           exit 1
 
-      - name: Attempt Functions deploy and capture edge failures
-        continue-on-error: true
+      - name: Deploy Firebase Functions
         run: |
-          set +e
+          set -euo pipefail
           npx firebase deploy --only functions --project "${GCP_PROJECT_ID}" --non-interactive --force
-          code=$?
-          if [ "$code" -ne 0 ]; then
-            echo "::warning::Functions deploy reported edge-function errors. Critical hosting/rules/storage deployment already succeeded. Review failing function names in this step log."
-          fi
-          exit 0
