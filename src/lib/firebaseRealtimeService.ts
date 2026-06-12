@@ -4,12 +4,14 @@
  * Provides bidirectional real-time updates for all dashboards
  */
 
-import { db, collection, query, where, orderBy, limit, onSnapshot, Timestamp } from './firebase';
+import { db, collection, query, where, orderBy, limit, onSnapshot } from './firebase';
 import type { Unsubscribe } from './firebase';
 
 type RealtimeErrorPayload = { error: string };
 type RealtimeListPayload<T = any> = T[] | RealtimeErrorPayload;
 type RealtimePayload<T = any> = T | RealtimeErrorPayload;
+
+const MAINTENANCE_TICKETS_COLLECTION = 'maintenanceTickets';
 
 interface RealtimeSubscription {
   unsubscribe: Unsubscribe;
@@ -57,7 +59,7 @@ class FirebaseRealtimeService {
     this.addListener(ref, callback);
 
     const q = query(
-      collection(db, 'tickets'),
+      collection(db, MAINTENANCE_TICKETS_COLLECTION),
       where('tenantId', '==', tenantId),
       orderBy('createdAt', 'desc'),
       limit(100)
@@ -72,7 +74,7 @@ class FirebaseRealtimeService {
       }));
       this.notifyListeners(ref, tickets);
     }, (error) => {
-      console.error('[Real-Time] Tenant tickets subscription failed:', error);
+      console.error('[Real-Time] Tenant maintenanceTickets subscription failed:', error);
       this.notifyListeners(ref, { error: error.message });
     });
 
@@ -88,22 +90,22 @@ class FirebaseRealtimeService {
     this.addListener(ref, callback);
 
     const q = query(
-      collection(db, 'tickets'),
+      collection(db, MAINTENANCE_TICKETS_COLLECTION),
       where('assignedTechnicianId', '==', technicianId),
-      orderBy('priority', 'desc'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(100)
     );
 
     const unsub = onSnapshot(q, (snap) => {
       const tickets = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        location: doc.data().location || {},
+        location: doc.data().location || doc.data().jobLocation || doc.data().propertyLocation || {},
         lastSync: new Date().toISOString()
       }));
       this.notifyListeners(ref, tickets);
     }, (error) => {
-      console.error('[Real-Time] Technician tickets subscription failed:', error);
+      console.error('[Real-Time] Technician maintenanceTickets subscription failed:', error);
       this.notifyListeners(ref, { error: error.message });
     });
 
@@ -191,7 +193,7 @@ class FirebaseRealtimeService {
     return () => this.unsubscribe(ref);
   }
 
-  private addListener(ref: string, callback: (data: any) => void) {
+  private addListener(ref: string, callback: (data: any) {
     if (!this.listeners.has(ref)) {
       this.listeners.set(ref, new Set());
     }
