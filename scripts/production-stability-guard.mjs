@@ -24,6 +24,7 @@ const stripePayment = read('functions/stripePayment.ts');
 const ownerDashboard = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
+const realtimeService = read('src/lib/firebaseRealtimeService.ts');
 
 const ownerActivationIsAdminControlled =
   firestoreRules.includes('adminCreateOrUpdateActivatedContract') ||
@@ -52,11 +53,6 @@ const emergencyPushDeployIsExplicit =
   workflow.includes("if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'") &&
   workflow.includes('Deployment secrets preflight');
 
-const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
-  /\n\s*- name: Attempt Functions deploy and capture edge failures[\s\S]*?\n\s*exit 0\n?/,
-  '\n'
-);
-
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
 assert(firebaseJson.includes('"rules": "storage.rules"'), 'Firebase must reference storage.rules.');
@@ -69,7 +65,10 @@ assert(workflowDispatchOnly || deployJobHasManualGate || emergencyPushDeployIsEx
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
-assert(!workflowWithoutOptionalFunctionsTolerance.includes('continue-on-error: true'), 'Critical production validation/deploy steps must not ignore errors.');
+assert(!workflow.includes('continue-on-error: true'), 'Critical production validation/deploy steps must not ignore errors.');
+assert(workflow.includes('Deploy Firebase Functions'), 'Workflow must deploy Firebase Functions as a first-class production step.');
+assert(workflow.includes('npx firebase deploy --only functions'), 'Workflow must deploy Firebase Functions.');
+assert(workflow.includes('VITE_ENABLE_FIREBASE_APPCHECK=true'), 'Production build must enable App Check when a site key exists.');
 
 assert(accountStep.includes('submitPendingOwnerRegistration'), 'Owner account step must use server-backed pending owner registration.');
 assert(accountStep.includes('signInWithEmailAndPassword'), 'Owner account step must establish an authenticated session after registration.');
@@ -95,6 +94,11 @@ assert(firestoreRules.includes('paymentDraftCreate'), 'Firestore rules must guar
 assert(firestoreRules.includes('safeTenantEvidenceUpdate'), 'Firestore rules must allow narrow tenant-owned evidence metadata updates.');
 assert(ownerActivationIsAdminControlled, 'Firestore rules must keep activation admin controlled.');
 assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onboarding proof uploads.');
+
+assert(realtimeService.includes("const MAINTENANCE_TICKETS_COLLECTION = 'maintenanceTickets'"), 'Realtime service must define maintenanceTickets as the canonical ticket collection.');
+assert(!realtimeService.includes("collection(db, 'tickets')"), 'Realtime service must not subscribe to legacy tickets collection.');
+assert(realtimeService.includes('collection(db, MAINTENANCE_TICKETS_COLLECTION)'), 'Realtime service must subscribe to maintenanceTickets.');
+assert(realtimeService.includes('private addListener(ref: string, callback: (data: any) => void)'), 'Realtime service must keep a valid listener callback type signature.');
 
 if (failures.length) {
   console.error('\nProduction stability guard failed:\n');
