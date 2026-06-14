@@ -11,6 +11,18 @@ const forbiddenFragments = [
     label: 'unrestricted notification creation',
     text: '      allow create: if signedIn();',
   },
+  {
+    label: 'open mission pool readable by any signed-in user',
+    text: "function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null",
+  },
+  {
+    label: 'tenant ticket create without unit/property validation',
+    text: "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
+  },
+  {
+    label: 'open mission claim without technician/dispatch authority',
+    text: "function safeOpenMissionClaim() {\n      return openMissionPoolRead(resource.data) &&",
+  },
 ];
 
 const requiredFragments = [
@@ -21,6 +33,26 @@ const requiredFragments = [
   {
     label: 'hardened notification create rule',
     text: "allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid",
+  },
+  {
+    label: 'technician dispatch authority helper',
+    text: 'function hasTechnicianDispatchAuthority() {',
+  },
+  {
+    label: 'open mission pool scoped to dispatch authority',
+    text: "function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null",
+  },
+  {
+    label: 'open mission claim requires dispatch authority',
+    text: 'return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&',
+  },
+  {
+    label: 'tenant ticket unit/property binding helper',
+    text: 'function canCreateTenantBoundTicket(data) {',
+  },
+  {
+    label: 'tenant ticket create uses binding helper',
+    text: 'ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);',
   },
 ];
 
