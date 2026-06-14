@@ -174,9 +174,11 @@ const MaintenanceCalendarPage: React.FC = () => {
                                 COMPLIANCE METRICS
                             </Typography>
                             <Box sx={{ mt: 4 }}>
-                                <Typography variant="h3" fontWeight="950" color="#FFF">92%</Typography>
+                                <Typography variant="h3" fontWeight="950" color="#FFF">
+                                    {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'COMPLETED').length / tasks.length) * 100) : 0}%
+                                </Typography>
                                 <Typography variant="body2" color="textSecondary">On-Time Completion Rate</Typography>
-                                <LinearProgress variant="determinate" value={92} sx={{ mt: 2, height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#4ADE80' } }} />
+                                <LinearProgress variant="determinate" value={tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'COMPLETED').length / tasks.length) * 100) : 0} sx={{ mt: 2, height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#4ADE80' } }} />
                             </Box>
                         </Paper>
 

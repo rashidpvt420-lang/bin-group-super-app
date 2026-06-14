@@ -197,11 +197,14 @@ export default function TurnoverEnginePage() {
               <Grid container spacing={4}>
                   <Grid item xs={12} lg={8}>
                       <Stack spacing={3}>
-                          {[
-                              { unit: 'A102', status: 'IN_RESTORATION', progress: 65, tasks: ['Painting', 'Deep Clean', 'AC Service'] },
-                              { unit: 'B405', status: 'READY_FOR_LEASE', progress: 100, tasks: [] },
-                              { unit: 'P10', status: 'INSPECTION_PENDING', progress: 10, tasks: ['Key Collection', 'Structural Audit'] }
-                          ].map((node, i) => (
+                          {(quotes.length > 0 ? quotes.map(q => ({
+                              unit: q.unitId || q.unitType || 'Unit',
+                              status: q.status === 'COMPLETED' ? 'READY_FOR_LEASE' : q.status === 'IN_PROGRESS' ? 'IN_RESTORATION' : 'INSPECTION_PENDING',
+                              progress: q.status === 'COMPLETED' ? 100 : q.status === 'IN_PROGRESS' ? 65 : q.status === 'APPROVED' ? 30 : 10,
+                              tasks: q.status === 'COMPLETED' ? [] : ['Painting', 'Deep Clean', 'AC Service'].slice(0, q.status === 'APPROVED' ? 2 : 3),
+                          })) : [
+                              { unit: 'No Active Turnovers', status: 'INSPECTION_PENDING', progress: 0, tasks: [] }
+                          ]).map((node, i) => (
                               <Paper key={i} sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
                                   <Grid container spacing={3} alignItems="center">
                                       <Grid item xs={12} sm={3}>

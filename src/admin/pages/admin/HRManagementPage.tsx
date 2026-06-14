@@ -140,7 +140,7 @@ const INTEGRATION_READINESS = [
     }
 ];
 
-const PAYROLL_PERIOD = 'June 2026';
+const PAYROLL_PERIOD = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
 const parseDateValue = (value: any): Date | null => {
     if (!value) return null;
