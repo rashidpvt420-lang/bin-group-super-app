@@ -357,7 +357,7 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);
+      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));
       allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
       allow delete: if isAdmin();
@@ -400,7 +400,7 @@ service cloud.firestore {
 
     match /maintenanceTickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
+      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
       allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
       match /messages/{messageId} {
