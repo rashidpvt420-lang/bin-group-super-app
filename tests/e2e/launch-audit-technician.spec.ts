@@ -12,6 +12,12 @@ const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
 
+function requireAuditCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Launch audit blocked: missing E2E_TECHNICIAN_EMAIL/PASSWORD. Do not skip technician launch audit during clearance.');
+  }
+}
+
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
@@ -29,8 +35,6 @@ async function assertHealthy(page: Page, context: string) {
 }
 
 test.describe('Technician launch audit', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_TECHNICIAN_EMAIL/PASSWORD — skipping technician audit.');
-
   // Grant geolocation so the map page doesn't block on a permission prompt
   test.use({
     geolocation: { latitude: 25.2048, longitude: 55.2708 }, // Dubai
@@ -38,6 +42,7 @@ test.describe('Technician launch audit', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    requireAuditCredentials();
     await login(page);
   });
 
