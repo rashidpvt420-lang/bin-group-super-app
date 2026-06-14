@@ -2,18 +2,27 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx';
 let source = readFileSync(path, 'utf8');
+let changed = false;
 
-function mustReplace(label, before, after) {
+function replaceOrThrow(label, before, after) {
   if (!source.includes(before)) {
     throw new Error(`Owner app hardening failed: missing pattern for ${label}`);
   }
   source = source.replace(before, after);
+  changed = true;
 }
 
-if (!source.includes('onAuthStateChanged')) {
-  mustReplace(
-    'firebase import observer',
-    `import {
+function replaceIfNotAlready(label, before, after, alreadyAppliedPattern) {
+  if (source.includes(alreadyAppliedPattern)) {
+    console.log(`Owner app hardening already applied: ${label}`);
+    return;
+  }
+  replaceOrThrow(label, before, after);
+}
+
+replaceIfNotAlready(
+  'firebase import observer',
+  `import {
     auth,
     functions,
     getDownloadURL,
@@ -22,7 +31,7 @@ if (!source.includes('onAuthStateChanged')) {
     storage,
     uploadBytes
 } from '../../lib/firebase';`,
-    `import {
+  `import {
     auth,
     functions,
     getDownloadURL,
@@ -31,17 +40,16 @@ if (!source.includes('onAuthStateChanged')) {
     ref,
     storage,
     uploadBytes
-} from '../../lib/firebase';`
-  );
-}
+} from '../../lib/firebase';`,
+  'onAuthStateChanged'
+);
 
-if (!source.includes('waitForCurrentUser')) {
-  mustReplace(
-    'insert wait helper',
-    `import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
+replaceIfNotAlready(
+  'insert wait helper',
+  `import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
 const PaymentSubmissionStep`,
-    `import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
+  `import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
 const waitForCurrentUser = (timeoutMs = 8000): Promise<any | null> => {
     return new Promise((resolve) => {
@@ -67,12 +75,12 @@ const waitForCurrentUser = (timeoutMs = 8000): Promise<any | null> => {
     });
 };
 
-const PaymentSubmissionStep`
-  );
-}
+const PaymentSubmissionStep`,
+  'const waitForCurrentUser = (timeoutMs = 8000)'
+);
 
-mustReplace(
-  'current user direct read',
+replaceIfNotAlready(
+  'current user guarded read',
   `        const currentUser = auth.currentUser;
         if (!currentUser) {
             setError(t('onboarding.error.session_expired') || 'Your session expired. Please sign in again.');
@@ -96,18 +104,19 @@ mustReplace(
             return;
         }
 
-        setSubmitting(true);`
+        setSubmitting(true);`,
+  'const currentUser = await waitForCurrentUser();'
 );
 
-if (!source.includes('await currentUser.getIdToken(true);')) {
-  mustReplace(
-    'force token refresh before callable',
-    '        try {\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;',
-    '        try {\n            await currentUser.getIdToken(true);\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;'
-  );
-}
+replaceIfNotAlready(
+  'force token refresh before callable',
+  '        try {\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;',
+  '        try {\n            await currentUser.getIdToken(true);\n            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;',
+  'await currentUser.getIdToken(true);'
+);
 
-source = source.replace(
+replaceIfNotAlready(
+  'gateway login recovery action',
   `{error && <Alert severity="error">{error}</Alert>}`,
   `{error && (
                                 <Alert
@@ -120,8 +129,13 @@ source = source.replace(
                                 >
                                     {error}
                                 </Alert>
-                            )}`
+                            )}`,
+  'Gateway Login</Button>'
 );
 
-writeFileSync(path, source);
-console.log('Owner app payment session handling hardened.');
+if (changed) {
+  writeFileSync(path, source);
+  console.log('Owner app payment session handling hardened.');
+} else {
+  console.log('Owner app payment session handling already hardened. No changes written.');
+}
