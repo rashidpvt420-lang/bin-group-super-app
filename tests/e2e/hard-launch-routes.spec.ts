@@ -34,6 +34,11 @@ const criticalRoutes: Record<RoleName, string[]> = {
 const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found/i;
 const accessFailureText = /access denied|not authorized/i;
 
+function requireCredential(value: string | undefined, key: string): string {
+  if (!value?.trim()) throw new Error(`Launch audit blocked: missing ${key}. Do not skip role tests during launch clearance.`);
+  return value;
+}
+
 async function expectNoRuntimeCrash(page: Page, route: string) {
   await expect(page.locator('body'), `${route} body should be visible`).toBeVisible({ timeout: 20_000 });
   const text = await page.locator('body').innerText({ timeout: 20_000 });
@@ -80,12 +85,13 @@ async function expectDashboardControls(page: Page, role: RoleName) {
 
 for (const role of Object.keys(criticalRoutes) as RoleName[]) {
   test.describe(`${role} hard-launch critical routes`, () => {
-    const email = process.env[`E2E_${role.toUpperCase()}_EMAIL`];
-    const password = process.env[`E2E_${role.toUpperCase()}_PASSWORD`];
+    const emailKey = `E2E_${role.toUpperCase()}_EMAIL`;
+    const passwordKey = `E2E_${role.toUpperCase()}_PASSWORD`;
+    const email = process.env[emailKey];
+    const password = process.env[passwordKey];
 
     test.beforeEach(async ({ page }) => {
-      test.skip(!email || !password, `Missing E2E_${role.toUpperCase()}_EMAIL/PASSWORD secrets.`);
-      await login(page, email!, password!);
+      await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey));
     });
 
     for (const route of criticalRoutes[role]) {
