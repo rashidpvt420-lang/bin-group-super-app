@@ -84,7 +84,6 @@ function AppContent() {
     React.useEffect(() => {
         const timer = setTimeout(() => {
             if (loading) {
-                console.warn('[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.');
                 setSafetyReleased(true);
             }
         }, 12000);
