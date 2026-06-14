@@ -134,6 +134,72 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
+  it('open mission claim: only technician or dispatcher-authorized users can claim open jobs', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'maintenanceTickets/open_ticket'), {
+      tenantId: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_a',
+      assignedTechnicianId: null,
+      status: 'OPEN',
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'maintenanceTickets/open_ticket'), {
+      assignedTechnicianId: 'owner_a',
+      technicianId: 'owner_a',
+      status: 'ASSIGNED',
+      updatedAt: new Date().toISOString(),
+      assignedAt: new Date().toISOString(),
+    }));
+
+    const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
+    await assertSucceeds(updateDoc(doc(techDb, 'maintenanceTickets/open_ticket'), {
+      assignedTechnicianId: 'tech_a',
+      technicianId: 'tech_a',
+      status: 'ASSIGNED',
+      updatedAt: new Date().toISOString(),
+      assignedAt: new Date().toISOString(),
+    }));
+  });
+
+  it('tenant ticket creation: tenant must use their own assigned unit and matching property', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a', ownerId: 'owner_a' });
+    await setDoc(doc(adminDb, 'units/unit_b'), { tenantId: 'tenant_b', propertyId: 'prop_b', ownerId: 'owner_b' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a', { role: 'tenant', email: 'tenant-a@example.com' }).firestore();
+
+    await assertSucceeds(setDoc(doc(tenantADb, 'maintenanceTickets/tenant_valid_ticket'), {
+      tenantId: 'tenant_a',
+      tenantUid: 'tenant_a',
+      unitId: 'unit_a',
+      propertyId: 'prop_a',
+      status: 'OPEN',
+      source: 'TENANT_PORTAL',
+    }));
+
+    await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/wrong_property_ticket'), {
+      tenantId: 'tenant_a',
+      tenantUid: 'tenant_a',
+      unitId: 'unit_a',
+      propertyId: 'prop_b',
+      status: 'OPEN',
+      source: 'TENANT_PORTAL',
+    }));
+
+    await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/wrong_unit_ticket'), {
+      tenantId: 'tenant_a',
+      tenantUid: 'tenant_a',
+      unitId: 'unit_b',
+      propertyId: 'prop_b',
+      status: 'OPEN',
+      source: 'TENANT_PORTAL',
+    }));
+  });
+
   it('gatePasses isolation: Tenant can manage own gatePasses, others blocked', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
