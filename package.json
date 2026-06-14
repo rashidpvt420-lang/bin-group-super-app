@@ -20,7 +20,8 @@
     "build:functions": "npm run build --workspace=functions",
     "lint": "eslint src --ext .ts,.tsx",
     "preview": "vite preview",
-    "deploy": "firebase deploy --project bin-group-57c60",
+    "deploy": "npm run prepare:rules && firebase deploy --project bin-group-57c60",
+    "deploy:raw": "firebase deploy --project bin-group-57c60",
     "normalize:rules": "node scripts/normalize-firestore-rules.mjs",
     "harden:rules": "node scripts/harden-firestore-rules.mjs",
     "prepare:rules": "npm run normalize:rules && npm run harden:rules",
@@ -88,8 +89,7 @@
     "firebase-admin": "^13.6.0",
     "firebase-tools": "^15.19.1",
     "globals": "^13.24.0",
-    "typescript": "^5.3.3",
-    "vite": "^8.0.16"
-  },
-  "overrides": {}
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  }
 }
