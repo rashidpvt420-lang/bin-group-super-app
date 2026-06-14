@@ -76,6 +76,11 @@ type PassportRow = {
   gpsLabel: string;
   intakeId: string;
   updatedAt: any;
+  floors: number;
+  lifts: number;
+  parking: number;
+  age: number;
+  complianceStatus: string;
   raw: any;
 };
 
@@ -140,6 +145,11 @@ const normalizePassport = (id: string, passportData: any = {}, propertyData: any
     gpsLabel: normalizeGeo(data),
     intakeId: asText(data.intakeId ?? data.latestIntakeId, ''),
     updatedAt: data.updatedAt ?? data.createdAt ?? propertyData.updatedAt ?? passportData.updatedAt,
+    floors: asNumber(data.floors ?? data.floorsCount ?? data.floor_count),
+    lifts: asNumber(data.lifts ?? data.elevators),
+    parking: asNumber(data.parking ?? data.parkingCapacity ?? data.parking_spaces),
+    age: asNumber(data.age ?? data.buildingAge ?? data.building_age),
+    complianceStatus: asText(data.complianceStatus ?? data.compliance_status, 'PENDING_REVIEW'),
     raw: data,
   };
 };
@@ -393,6 +403,30 @@ export default function PropertyPassportPage() {
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <InfoBlock title="Financials" lines={[`${money(selected.rentCollectedTotal)} collected`, `${money(selected.rentOutstandingTotal)} outstanding`]} icon={<TrendingUp size={18} />} />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <InfoBlock
+                      title="Structural"
+                      lines={[
+                        selected.floors ? `${selected.floors} floor${selected.floors !== 1 ? 's' : ''}` : 'Floors: —',
+                        selected.lifts ? `${selected.lifts} lift${selected.lifts !== 1 ? 's' : ''}` : 'Lifts: —',
+                        selected.parking ? `${selected.parking} parking bays` : 'Parking: —',
+                        selected.age ? `Asset age: ${selected.age} yrs` : 'Age: —',
+                      ]}
+                      icon={<Home size={18} />}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <InfoBlock
+                      title="Compliance"
+                      lines={[
+                        `Status: ${selected.complianceStatus.replace(/_/g, ' ')}`,
+                        `Open tickets: ${selected.maintenanceTicketsOpen}`,
+                        `Closed tickets: ${selected.maintenanceTicketsClosed}`,
+                        `Expired leases: ${selected.expiredLeases}`,
+                      ]}
+                      icon={<Shield size={18} />}
+                    />
                   </Grid>
                 </Grid>
 

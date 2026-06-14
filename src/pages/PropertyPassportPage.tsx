@@ -96,6 +96,56 @@ export default function PropertyPassportPage() {
                                         <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Key size={16} color={binThemeTokens.gold}/> {property.units || property.numberOfUnits || '1'}</Typography>
                                     </Stack>
                                 </Grid>
+                                <Grid item xs={6}>
+                                    <Stack spacing={0.5}>
+                                        <Typography variant="caption" color="textSecondary">FLOORS</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Building size={16} color={binThemeTokens.gold}/> {property.floors || property.floorsCount || '—'}</Typography>
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Stack spacing={0.5}>
+                                        <Typography variant="caption" color="textSecondary">LIFTS</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={16} color={binThemeTokens.gold}/> {property.lifts ?? '—'}</Typography>
+                                    </Stack>
+                                </Grid>
+                                {(property.offices > 0) && (
+                                    <Grid item xs={6}>
+                                        <Stack spacing={0.5}>
+                                            <Typography variant="caption" color="textSecondary">OFFICES</Typography>
+                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Landmark size={16} color={binThemeTokens.gold}/> {property.offices}</Typography>
+                                        </Stack>
+                                    </Grid>
+                                )}
+                                {(property.shops > 0) && (
+                                    <Grid item xs={6}>
+                                        <Stack spacing={0.5}>
+                                            <Typography variant="caption" color="textSecondary">SHOPS</Typography>
+                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Landmark size={16} color={binThemeTokens.gold}/> {property.shops}</Typography>
+                                        </Stack>
+                                    </Grid>
+                                )}
+                                {(property.parkingCapacity > 0 || property.parking > 0) && (
+                                    <Grid item xs={6}>
+                                        <Stack spacing={0.5}>
+                                            <Typography variant="caption" color="textSecondary">PARKING</Typography>
+                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><MapPin size={16} color={binThemeTokens.gold}/> {property.parkingCapacity || property.parking} bays</Typography>
+                                        </Stack>
+                                    </Grid>
+                                )}
+                                <Grid item xs={6}>
+                                    <Stack spacing={0.5}>
+                                        <Typography variant="caption" color="textSecondary">ASSET AGE</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Calendar size={16} color={binThemeTokens.gold}/> {property.age ? `${property.age} yrs` : '—'}</Typography>
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <Stack spacing={0.5}>
+                                        <Typography variant="caption" color="textSecondary">COMPLIANCE</Typography>
+                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: property.complianceStatus === 'COMPLIANT' ? '#10b981' : '#f59e0b' }}>
+                                            <CheckCircle2 size={16}/> {property.complianceStatus || 'PENDING REVIEW'}
+                                        </Typography>
+                                    </Stack>
+                                </Grid>
                             </Grid>
                         </Paper>
 
@@ -224,4 +274,3 @@ export default function PropertyPassportPage() {
         </Container>
     );
 }
-
