@@ -23,6 +23,10 @@ const forbiddenFragments = [
     label: 'open mission claim without technician/dispatch authority',
     text: "function safeOpenMissionClaim() {\n      return openMissionPoolRead(resource.data) &&",
   },
+  {
+    label: 'open mission claim double-evaluates dispatch helper',
+    text: 'return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&',
+  },
 ];
 
 const requiredFragments = [
@@ -39,12 +43,16 @@ const requiredFragments = [
     text: 'function hasTechnicianDispatchAuthority() {',
   },
   {
-    label: 'open mission pool scoped to dispatch authority',
-    text: "function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null",
+    label: 'open mission availability helper',
+    text: 'function openMissionAvailable(data) {',
   },
   {
-    label: 'open mission claim requires dispatch authority',
-    text: 'return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&',
+    label: 'open mission pool scoped to dispatch authority',
+    text: 'function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
+  },
+  {
+    label: 'open mission claim requires dispatch authority without duplicate pool check',
+    text: 'return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
   },
   {
     label: 'tenant ticket unit/property binding helper',
