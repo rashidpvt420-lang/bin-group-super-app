@@ -233,6 +233,70 @@ patchIfNeeded(
   ["match /brokerLeads/{leadId}", "match /referrals/{referralId}", "function brokerOwns(data)"]
 );
 
+patchIfNeeded(
+  'open mission pool must be technician/dispatcher scoped',
+  `    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }`,
+  `    function isTechnicianActor() {
+      return signedIn() && (
+        ('role' in request.auth.token && request.auth.token.role == 'technician') ||
+        ('userRole' in request.auth.token && request.auth.token.userRole == 'technician') ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'technician') ||
+        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician')
+      );
+    }
+
+    function hasTechnicianDispatchAuthority() {
+      return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
+    }
+
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }`,
+  ["function hasTechnicianDispatchAuthority()", "function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority()"]
+);
+
+patchIfNeeded(
+  'tenant-created tickets must match assigned unit and property',
+  `    function safeTechnicianTicketUpdate() {`,
+  `    function canCreateTenantBoundTicket(data) {
+      return signedIn() &&
+        tenantOwns(data) &&
+        data.keys().hasAll(['unitId', 'propertyId']) &&
+        data.unitId is string &&
+        data.propertyId is string &&
+        data.unitId.size() > 0 &&
+        exists(/databases/$(database)/documents/units/$(data.unitId)) &&
+        (
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantId) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantUid) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.userId) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.authUid) ||
+          emailMatches(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantEmail)
+        ) &&
+        data.propertyId == get(/databases/$(database)/documents/units/$(data.unitId)).data.propertyId &&
+        (!('ownerId' in data) || !('ownerId' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerId == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerId) &&
+        (!('ownerUid' in data) || !('ownerUid' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerUid == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerUid);
+    }
+
+    function safeTechnicianTicketUpdate() {`,
+  ["function canCreateTenantBoundTicket(data)", "data.keys().hasAll(['unitId', 'propertyId'])", "data.propertyId == get(/databases/$(database)/documents/units/$(data.unitId)).data.propertyId"]
+);
+
+patchIfNeeded(
+  'tickets tenant creation must use unit/property binding helper',
+  `      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);`,
+  `      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);`,
+  ["allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);"]
+);
+
+patchIfNeeded(
+  'open mission claim must require technician/dispatch authority explicitly',
+  `    function safeOpenMissionClaim() {
+      return openMissionPoolRead(resource.data) &&`,
+  `    function safeOpenMissionClaim() {
+      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&`,
+  ["return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&"]
+);
+
 const isVerify = process.argv.includes('--verify');
 
 if (isVerify) {
