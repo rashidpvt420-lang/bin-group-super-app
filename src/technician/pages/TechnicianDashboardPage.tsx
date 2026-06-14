@@ -30,6 +30,7 @@ import {
     Hammer,
     Mail,
     MapPin,
+    MessageCircle,
     Navigation,
     Phone,
     Power,
@@ -351,7 +352,7 @@ export default function TechnicianDashboardPage() {
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button><Button fullWidth variant="outlined" onClick={() => navigate('/technician/offline')} sx={{ mt: 1, borderColor: ui.line, color: ui.muted, fontWeight: 900, fontSize: '0.78rem' }}>OFFLINE SYNC QUEUE</Button><Button fullWidth variant="contained" startIcon={<MessageCircle size={15} />} onClick={() => window.open('https://wa.me/971552423233?text=' + encodeURIComponent('Hello BIN GROUP Support, I need help with a job.'), '_blank')} sx={{ mt: 1, bgcolor: '#25D366', color: '#FFF', fontWeight: 950, fontSize: '0.78rem' }}>WHATSAPP SUPPORT</Button></SectionCard></Grid>
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 

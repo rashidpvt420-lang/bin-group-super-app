@@ -3,7 +3,8 @@ import {
     Container, Typography, Box, Paper, Grid, Stack, Button,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
-    IconButton, Alert, LinearProgress, Divider, FormControl, InputLabel, Select, MenuItem
+    IconButton, Alert, LinearProgress, Divider, FormControl, InputLabel, Select, MenuItem,
+    Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -186,6 +187,8 @@ export default function HRManagementPage() {
     const [payrollError, setPayrollError] = useState<string | null>(null);
     const [dataWarning, setDataWarning] = useState<string | null>(null);
     const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
+    const [reviewDialog, setReviewDialog] = useState<{ open: boolean; requestId: string; approve: boolean } | null>(null);
+    const [reviewNote, setReviewNote] = useState('');
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -361,10 +364,12 @@ export default function HRManagementPage() {
                 module: 'hr_command',
                 timestamp: serverTimestamp()
             });
-            alert(`Request ${approve ? 'approved' : 'rejected'} successfully.`);
         } catch (err: any) {
             console.error('Failed to review request:', err);
-            alert(`Error reviewing request: ${err.message}`);
+            setDataWarning(`Error reviewing request: ${err.message}`);
+        } finally {
+            setReviewDialog(null);
+            setReviewNote('');
         }
     };
 
@@ -394,7 +399,8 @@ export default function HRManagementPage() {
                 deductions: s.deductions || 0
             });
             if (result.data?.success) {
-                alert('Sovereign Pay Advice secured and dispatched via email.');
+                setDataWarning(null);
+                setPayrollError(null);
             }
         } catch (err: any) {
             console.error('Payroll fault:', err);
@@ -714,14 +720,8 @@ export default function HRManagementPage() {
                                                 <TableCell align="right">
                                                     {req.status === 'pending_hr_review' && canReview ? (
                                                         <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                            <Button size="small" variant="contained" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => {
-                                                                const note = prompt('Enter approval note:');
-                                                                if (note !== null) handleReviewRequest(req.id, true, note);
-                                                            }}>APPROVE</Button>
-                                                            <Button size="small" variant="outlined" color="error" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => {
-                                                                const note = prompt('Enter rejection note:');
-                                                                if (note !== null) handleReviewRequest(req.id, false, note);
-                                                            }}>REJECT</Button>
+                                                            <Button size="small" variant="contained" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => { setReviewNote(''); setReviewDialog({ open: true, requestId: req.id, approve: true }); }}>APPROVE</Button>
+                                                            <Button size="small" variant="outlined" color="error" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => { setReviewNote(''); setReviewDialog({ open: true, requestId: req.id, approve: false }); }}>REJECT</Button>
                                                         </Stack>
                                                     ) : req.reviewNote ? (
                                                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontStyle: 'italic' }}>Note: {req.reviewNote}</Typography>
@@ -883,6 +883,40 @@ export default function HRManagementPage() {
                     </Paper>
                 )}
             </Container>
+
+            <Dialog
+                open={Boolean(reviewDialog?.open)}
+                onClose={() => { setReviewDialog(null); setReviewNote(''); }}
+                PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, minWidth: 400 } }}
+            >
+                <DialogTitle sx={{ color: '#FFF', fontWeight: 950 }}>
+                    {reviewDialog?.approve ? 'Approve Request' : 'Reject Request'}
+                </DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        multiline
+                        minRows={3}
+                        label={reviewDialog?.approve ? 'Approval note (optional)' : 'Rejection reason (required)'}
+                        value={reviewNote}
+                        onChange={(e) => setReviewNote(e.target.value)}
+                        sx={{ mt: 1, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => { setReviewDialog(null); setReviewNote(''); }} sx={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        color={reviewDialog?.approve ? 'success' : 'error'}
+                        disabled={!reviewDialog?.approve && !reviewNote.trim()}
+                        onClick={() => { if (reviewDialog) handleReviewRequest(reviewDialog.requestId, reviewDialog.approve, reviewNote); }}
+                        sx={{ fontWeight: 950 }}
+                    >
+                        {reviewDialog?.approve ? 'CONFIRM APPROVE' : 'CONFIRM REJECT'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

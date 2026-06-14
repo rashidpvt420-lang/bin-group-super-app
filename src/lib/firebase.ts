@@ -20,7 +20,9 @@ import {
   type User,
 } from 'firebase/auth';
 import {
-  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   collectionGroup,
   doc,
@@ -118,7 +120,9 @@ if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined
   }
 }
 
-export const db: Firestore = getFirestore(app);
+export const db: Firestore = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 export const auth: Auth = getAuth(app);
 
 if (typeof window !== 'undefined') {
