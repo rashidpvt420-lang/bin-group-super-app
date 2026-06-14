@@ -19,6 +19,7 @@ const BinGroupHeader: React.FC = () => {
     const { user, role } = useRole();
     const navigate = useNavigate();
     const [unreadCount, setUnreadCount] = useState(0);
+    const [logoError, setLogoError] = useState(false);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -42,12 +43,16 @@ const BinGroupHeader: React.FC = () => {
         }}>
             <Toolbar sx={{ justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }} onClick={() => navigate('/')}>
-                    <Box 
-                        component="img" 
-                        src="/logo.png" 
-                        sx={{ width: 40, height: 40, borderRadius: 1 }} 
-                        onError={(e: any) => e.target.style.display = 'none'}
-                    />
+                    {logoError ? (
+                        <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d4af37', fontWeight: 950, fontSize: 14 }}>BG</Box>
+                    ) : (
+                        <Box
+                            component="img"
+                            src="/logo.png"
+                            sx={{ width: 40, height: 40, borderRadius: 1 }}
+                            onError={() => setLogoError(true)}
+                        />
+                    )}
                     <Typography variant="h6" fontWeight="900" sx={{ letterSpacing: 1, display: { xs: 'none', sm: 'block' } }}>
                         BIN-<Typography component="span" variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>GROUPS</Typography>
                     </Typography>
