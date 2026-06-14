@@ -1,4 +1,6 @@
-import admin from 'firebase-admin';
+import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
@@ -39,16 +41,16 @@ function initializeAdmin() {
 
     if (localKey) {
         const serviceAccount = JSON.parse(fs.readFileSync(localKey, 'utf8'));
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
+        initializeApp({
+            credential: cert(serviceAccount),
             projectId,
         });
         console.log(chalk.green(`✅ [IAM] Authenticated with ${path.basename(localKey)}`));
         return;
     }
 
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
+    initializeApp({
+        credential: applicationDefault(),
         projectId,
     });
     console.log(chalk.green('✅ [IAM] Authenticated with Application Default Credentials'));
@@ -56,8 +58,8 @@ function initializeAdmin() {
 
 initializeAdmin();
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = getFirestore();
+const auth = getAuth();
 
 async function getOrCreateUser(email) {
     try {
@@ -113,9 +115,9 @@ async function grantAdmin(email) {
             isAdmin: true,
             adminApproved: true,
             status: 'active',
-            legalAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            legalAcceptedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
         console.log(chalk.blue('📝 [AUDIT] Logging repair action...'));
@@ -127,7 +129,7 @@ async function grantAdmin(email) {
             targetId: uid,
             targetEmail: email,
             reason: 'Admin login repair',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 
         const verified = await auth.getUser(uid);

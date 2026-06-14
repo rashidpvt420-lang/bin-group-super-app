@@ -1,4 +1,6 @@
-import admin from 'firebase-admin';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import chalk from 'chalk';
 
 /**
@@ -13,12 +15,12 @@ if (!email) {
     process.exit(1);
 }
 
-admin.initializeApp({
+initializeApp({
     projectId: 'bin-group-57c60'
 });
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = getFirestore();
+const auth = getAuth();
 
 async function verifyAdmin(targetEmail) {
     try {
