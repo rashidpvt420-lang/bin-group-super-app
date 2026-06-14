@@ -40,8 +40,6 @@ const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
 const radius = { outer: 3, card: 2.25, button: 2 };
 
-
-
 const copy = {
   en: {
     brand: 'BIN GROUP',
@@ -154,16 +152,22 @@ function ActionButton({ children, href, icon, contained = false, onClick }: { ch
 
 function Nav({ c }: { c: CopyShape }) {
   const { lang, setLang } = useLanguage();
+  const [logoError, setLogoError] = React.useState(false);
   return (
     <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${line}` }}>
       <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
         <Button component="a" href="/" sx={{ p: 0, minWidth: 0, color: ink, mr: 'auto' }}>
           <Stack direction="row" spacing={1.2} alignItems="center">
-            <Box component="img" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 1.2, boxShadow: `0 10px 22px ${alpha('#000', 0.10)}`, bgcolor: '#fff' }} />
+            {logoError ? (
+              <Box sx={{ width: 44, height: 44, borderRadius: 1.2, bgcolor: alpha(gold, 0.12), border: `1px solid ${alpha(gold, 0.35)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: gold, fontWeight: 950, fontSize: 15 }}>BG</Box>
+            ) : (
+              <Box component="img" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 1.2, boxShadow: `0 10px 22px ${alpha('#000', 0.10)}`, bgcolor: '#fff' }} onError={() => setLogoError(true)} />
+            )}
             <Typography fontWeight={950} sx={{ color: ink }}>{c.brand}</Typography>
           </Stack>
         </Button>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>          <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
             {lang === 'ar' ? 'EN' : 'AR'}
@@ -254,71 +258,6 @@ function Trust() {
   );
 }
 
-function Proof({ c }: { c: CopyShape }) {
-  const icons = [<Workflow key="workflow" />, <WalletCards key="wallet" />, <Building2 key="building" />, <Bot key="bot" />];
-  return (
-    <SectionPaper>
-      <Grid container spacing={3.5} alignItems="stretch">
-        <Grid item xs={12} md={5}>
-          <Chip label="THE PITCH" sx={{ borderRadius: 1.25, bgcolor: alpha(gold, .12), color: '#6F5522', fontWeight: 950, mb: 2 }} />
-          <Typography variant="h3" fontWeight={950} sx={{ color: ink, letterSpacing: '-0.04em', mb: 2 }}>{c.proofTitle}</Typography>
-          <Typography sx={{ color: muted, lineHeight: 1.8, fontWeight: 700 }}>{c.proofDesc}</Typography>
-        </Grid>
-        <Grid item xs={12} md={7}>
-          <Grid container spacing={2}>
-            {c.cards.map((card, idx) => (
-              <Grid item xs={12} sm={6} key={card[0]}>
-                <Paper sx={{ p: 2.4, minHeight: 160, height: '100%', borderRadius: radius.card, bgcolor: platinum, border: `1px solid ${line}` }}>
-                  <Box sx={{ color: gold, mb: 1.25 }}>{icons[idx]}</Box>
-                  <Typography fontWeight={950} sx={{ color: ink, mb: 1 }}>{card[0]}</Typography>
-                  <Typography variant="body2" sx={{ color: muted, lineHeight: 1.65, fontWeight: 700 }}>{card[1]}</Typography>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Grid>
-      </Grid>
-    </SectionPaper>
-  );
-}
-
-function Pricing({ c }: { c: CopyShape }) {
-  return (
-    <SectionPaper tone="platinum">
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-        <FileText color={gold} />
-        <Typography variant="h4" fontWeight={950} sx={{ color: ink }}>{c.pricingTitle}</Typography>
-      </Stack>
-      <Grid container spacing={2}>
-        {c.pricing.map((price) => (
-          <Grid item xs={12} sm={6} md={3} key={price[0]}>
-            <Paper sx={{ p: 2.4, borderRadius: radius.card, bgcolor: '#fff', border: `1px solid ${line}`, height: '100%' }}>
-              <Typography fontWeight={950} sx={{ color: ink }}>{price[0]}</Typography>
-              <Typography variant="h5" fontWeight={950} sx={{ color: gold }}>{price[1]}</Typography>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
-    </SectionPaper>
-  );
-}
-
-function Coverage({ c }: { c: CopyShape }) {
-  return (
-    <SectionPaper>
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-        <ShieldCheck color={gold} />
-        <Typography variant="h4" fontWeight={950} sx={{ color: ink }}>{c.coverageTitle}</Typography>
-      </Stack>
-      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-        {c.coverage.map((asset) => (
-          <Chip key={asset} label={asset} sx={{ borderRadius: 1.2, bgcolor: alpha(gold, .08), color: '#59451D', border: `1px solid ${alpha(gold, .16)}`, fontWeight: 850 }} />
-        ))}
-      </Stack>
-    </SectionPaper>
-  );
-}
-
 function Inquiry({ c }: { c: CopyShape }) {
   return (
     <SectionPaper tone="gold" sx={{ mb: 0 }}>
@@ -340,4 +279,3 @@ function Inquiry({ c }: { c: CopyShape }) {
     </SectionPaper>
   );
 }
-
