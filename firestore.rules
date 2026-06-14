@@ -87,7 +87,21 @@ service cloud.firestore {
     function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
     function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
     function staffCanCreate(data) { return signedIn() && (isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
-    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function isTechnicianActor() {
+      return signedIn() && (
+        ('role' in request.auth.token && request.auth.token.role == 'technician') ||
+        ('userRole' in request.auth.token && request.auth.token.userRole == 'technician') ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'technician') ||
+        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician')
+      );
+    }
+
+    function hasTechnicianDispatchAuthority() {
+      return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
+    }
+
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
 
     function staffRequestCreate(data) {
@@ -131,6 +145,26 @@ service cloud.firestore {
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']);
     }
 
+    function canCreateTenantBoundTicket(data) {
+      return signedIn() &&
+        tenantOwns(data) &&
+        data.keys().hasAll(['unitId', 'propertyId']) &&
+        data.unitId is string &&
+        data.propertyId is string &&
+        data.unitId.size() > 0 &&
+        exists(/databases/$(database)/documents/units/$(data.unitId)) &&
+        (
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantId) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantUid) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.userId) ||
+          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.authUid) ||
+          emailMatches(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantEmail)
+        ) &&
+        data.propertyId == get(/databases/$(database)/documents/units/$(data.unitId)).data.propertyId &&
+        (!('ownerId' in data) || !('ownerId' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerId == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerId) &&
+        (!('ownerUid' in data) || !('ownerUid' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerUid == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerUid);
+    }
+
     function safeTechnicianTicketUpdate() {
       return signedIn() && techOwns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -159,7 +193,7 @@ service cloud.firestore {
     }
 
     function safeOpenMissionClaim() {
-      return openMissionPoolRead(resource.data) &&
+      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
         (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
@@ -359,7 +393,7 @@ service cloud.firestore {
 
     match /tickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
+      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
       allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
     }
