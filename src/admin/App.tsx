@@ -52,6 +52,24 @@ import LiveMapPage from './pages/map/LiveMapPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import AdminDutyCommandPage from './pages/technicians/AdminDutyCommandPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
+import AdminContractsPage from './pages/contracts/AdminContractsPage';
+import SovereignControlPage from './pages/admin/SovereignControlPage';
+import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
+import GeoRepairCommandCenter from './pages/admin/GeoRepairCommandCenter';
+import PropertyManagementPage from './pages/admin/PropertyManagementPage';
+import CompanyProfileAdminPage from './pages/admin/CompanyProfileAdminPage';
+import AdminMessagesPage from './pages/admin/AdminMessagesPage';
+import AdminPermissionsPage from './pages/admin/AdminPermissionsPage';
+import SmartBuildingMonitorPage from './pages/dashboard/SmartBuildingMonitorPage';
+import DocumentOSPage from './pages/documents/DocumentOSPage';
+import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
+import PricingPage from './pages/pricing/PricingPage';
+import AddPropertyPage from './pages/properties/AddPropertyPage';
+import BuildingRegistryPage from './pages/properties/BuildingRegistryPage';
+import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import TechnicianPerformancePage from './pages/technicians/TechnicianPerformancePage';
+import BrokerCommissionHubPage from './pages/brokers/BrokerCommissionHubPage';
+import CompanyProfileSettingsPage from './pages/settings/CompanyProfileSettingsPage';
 import { adminTheme, binThemeTokens } from './theme/adminTheme';
 
 const safeRtlPlugin = (rtlPlugin as any).default || rtlPlugin;
@@ -135,6 +153,24 @@ function AppContent() {
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
                     <Route path="/admin/ai-studio/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                     <Route path="/ai-studio/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    <Route path="/contracts" element={<ProtectedRoute adminOnly><AdminContractsPage /></ProtectedRoute>} />
+                    <Route path="/admin/sovereign-control" element={<ProtectedRoute adminOnly><SovereignControlPage /></ProtectedRoute>} />
+                    <Route path="/admin/live-ops" element={<ProtectedRoute adminOnly><LiveOpsCommandCenter /></ProtectedRoute>} />
+                    <Route path="/admin/geo-repair" element={<ProtectedRoute adminOnly><GeoRepairCommandCenter /></ProtectedRoute>} />
+                    <Route path="/properties" element={<ProtectedRoute adminOnly><PropertyManagementPage /></ProtectedRoute>} />
+                    <Route path="/properties/add" element={<ProtectedRoute adminOnly><AddPropertyPage /></ProtectedRoute>} />
+                    <Route path="/properties/registry" element={<ProtectedRoute adminOnly><BuildingRegistryPage /></ProtectedRoute>} />
+                    <Route path="/admin/company-profile" element={<ProtectedRoute adminOnly><CompanyProfileAdminPage /></ProtectedRoute>} />
+                    <Route path="/settings/company-profile" element={<ProtectedRoute adminOnly><CompanyProfileSettingsPage /></ProtectedRoute>} />
+                    <Route path="/admin/messages" element={<ProtectedRoute adminOnly><AdminMessagesPage /></ProtectedRoute>} />
+                    <Route path="/admin/permissions" element={<ProtectedRoute adminOnly><AdminPermissionsPage /></ProtectedRoute>} />
+                    <Route path="/admin/smart-building" element={<ProtectedRoute adminOnly><SmartBuildingMonitorPage /></ProtectedRoute>} />
+                    <Route path="/admin/document-os" element={<ProtectedRoute adminOnly><DocumentOSPage /></ProtectedRoute>} />
+                    <Route path="/admin/payment-approvals" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><PricingPage /></ProtectedRoute>} />
+                    <Route path="/technicians/duty" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
+                    <Route path="/technicians/performance" element={<ProtectedRoute adminOnly><TechnicianPerformancePage /></ProtectedRoute>} />
+                    <Route path="/broker/commissions" element={<ProtectedRoute adminOnly><BrokerCommissionHubPage /></ProtectedRoute>} />
                 </Route>
             )}
             <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />

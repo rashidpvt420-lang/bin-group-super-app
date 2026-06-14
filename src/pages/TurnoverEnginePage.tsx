@@ -13,7 +13,7 @@ import {
     Zap, PaintBucket, Eraser, Key
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { db, collection, query, where, getDocs, doc, updateDoc } from '../lib/firebase';
+import { db, collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { fetchTurnoverStats } from '../utils/turnoverEngine';
@@ -92,6 +92,20 @@ export default function TurnoverEnginePage() {
       setDetailsOpen(false);
     } catch (error) {
       setSnackbar({ open: true, message: t('turnover.msg.reject_failed'), severity: 'error' });
+    }
+  };
+
+  const handleInitiateMoveOut = async () => {
+    if (!user?.uid) return;
+    try {
+      await addDoc(collection(db, 'moveout_requests'), {
+        ownerId: user.uid,
+        requestedAt: serverTimestamp(),
+        status: 'PENDING',
+      });
+      setSnackbar({ open: true, message: 'Move-out request submitted. BIN GROUP will contact you within 24 hours.', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Request failed. Please try again.', severity: 'error' });
     }
   };
 
@@ -229,7 +243,7 @@ export default function TurnoverEnginePage() {
                                   <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">DECOR AUDIT</Typography><Typography variant="caption" color="textSecondary">Jotun Premium Finish as standard.</Typography></Box>
                               </Box>
                           </Stack>
-                          <Button fullWidth variant="contained" sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT</Button>
+                          <Button fullWidth variant="contained" onClick={handleInitiateMoveOut} sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT</Button>
                       </Paper>
                   </Grid>
               </Grid>

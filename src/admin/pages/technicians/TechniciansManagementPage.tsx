@@ -18,6 +18,7 @@ import {
     collection, onSnapshot, query, where, serverTimestamp, 
     doc, updateDoc, deleteDoc, orderBy 
 } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -28,6 +29,7 @@ import { filterLaunchRecords, comingSoon } from '../../utils/launchDataHygiene';
 
 export default function TechniciansManagementPage() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [techs, setTechs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
@@ -154,7 +156,7 @@ export default function TechniciansManagementPage() {
                     <AdminCrudActions 
                         id={tech.uid}
                         actions={[
-                            { type: 'view', onClick: () => comingSoon('Technician profile detail is not connected yet.') },
+                            { type: 'view', onClick: () => navigate(`/technicians/${tech.uid}`) },
                             { type: 'edit', onClick: (id) => handleEdit(tech) },
                             { type: 'assign', label: 'ASSIGN JOB', onClick: () => comingSoon('Assign job from this registry is coming soon. Use Tickets > Assign for live dispatch.') },
                             { type: 'delete', onClick: () => comingSoon('Technician removal is blocked for launch safety. Suspend the account from Firebase/Admin approval flow instead.'), requiresConfirm: true }
