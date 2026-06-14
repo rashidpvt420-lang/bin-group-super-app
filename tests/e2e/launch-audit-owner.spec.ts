@@ -12,6 +12,12 @@ const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
 
+function requireAuditCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Launch audit blocked: missing E2E_OWNER_EMAIL/PASSWORD. Do not skip owner launch audit during clearance.');
+  }
+}
+
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
@@ -29,9 +35,8 @@ async function assertHealthy(page: Page, context: string) {
 }
 
 test.describe('Owner launch audit', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_OWNER_EMAIL/PASSWORD — skipping owner audit.');
-
   test.beforeEach(async ({ page }) => {
+    requireAuditCredentials();
     await login(page);
   });
 
