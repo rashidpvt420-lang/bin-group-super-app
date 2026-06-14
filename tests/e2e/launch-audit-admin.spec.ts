@@ -12,6 +12,12 @@ const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
 const RAW_I18N_KEY  = /^(nav|onboarding|dash|sos|tech|fin|admin)\.[a-z_]+$/;
 
+function requireAuditCredentials() {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('Launch audit blocked: missing E2E_ADMIN_EMAIL/PASSWORD. Do not skip admin launch audit during clearance.');
+  }
+}
+
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
@@ -35,9 +41,8 @@ async function consoleCollector(page: Page) {
 }
 
 test.describe('Admin launch audit', () => {
-  test.skip(!EMAIL || !PASSWORD, 'Missing E2E_ADMIN_EMAIL/PASSWORD — skipping admin audit.');
-
   test.beforeEach(async ({ page }) => {
+    requireAuditCredentials();
     await login(page);
   });
 
