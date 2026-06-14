@@ -38,6 +38,7 @@ const GovernmentPropertyPage: React.FC = () => {
     const [assets, setAssets] = useState<AssetRegistryItem[]>([]);
     const [coverage, setCoverage] = useState<CoverageItem[]>([]);
     const [tickets, setTickets] = useState<any[]>([]);
+    const [fetchError, setFetchError] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -73,7 +74,7 @@ const GovernmentPropertyPage: React.FC = () => {
                         { id: 'c2', system: 'Structural Shell', provider: 'Oman Insurance', expiryDate: new Date(Date.now() + 86400000 * 45), type: 'INSURANCE', policyNumber: 'POL-DXB-001', status: 'EXPIRING' },
                     ]);
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error(err); setFetchError(true); }
             setLoading(false);
         };
         fetchAll();
@@ -106,6 +107,13 @@ const GovernmentPropertyPage: React.FC = () => {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (fetchError) return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 3 }}>
+            <Typography variant="h5" fontWeight="900" sx={{ color: '#EF4444' }}>DATA LOAD FAILURE</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)' }}>Unable to retrieve property data. Check your connection and try again.</Typography>
+            <Button variant="outlined" onClick={() => window.location.reload()} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>RETRY</Button>
+        </Box>
+    );
 
     return (
         <Box sx={{ bgcolor: '#000', minHeight: '100vh', py: 6 }}>
