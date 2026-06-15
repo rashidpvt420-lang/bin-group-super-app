@@ -29,7 +29,7 @@ const clean = (value?: string): string => {
 // CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
 // Do not use dynamic process.env[key] here; it is not replaced during build.
 const firebaseConfig: BinFirebaseConfig = {
-    apiKey: clean(process.env.REACT_APP_FIREBASE_API_KEY),
+    apiKey: clean(process.env.REACT_APP_FIREBASE_API_KEY) || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
     authDomain: clean(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN) || 'bin-group-57c60.firebaseapp.com',
     projectId: clean(process.env.REACT_APP_FIREBASE_PROJECT_ID) || 'bin-group-57c60',
     storageBucket: clean(process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) || 'bin-group-57c60.firebasestorage.app',
