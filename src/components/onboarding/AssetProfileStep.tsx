@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-    Box, Typography, Grid, Paper, alpha, Stack, TextField, MenuItem, Container, Button, CircularProgress, Snackbar, Alert, Chip
+    Box, Typography, Grid, Paper, alpha, Stack, TextField, MenuItem, Container, Button, CircularProgress, Snackbar, Alert, Chip, Divider
 } from '@mui/material';
 import {
     Home, Building2, Building, Hotel, Landmark, Gem,
@@ -684,7 +684,13 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                     );
                                 })}
                             </Grid>
-                        </Paper>
+
+                            {activeProperty?.propertyType && (
+                                <Box sx={{ mt: 3 }}>
+                                    <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 3 }} />
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 2 }}>3. Property Profile</Typography>
+                                </Box>
+                            )}
 
                         {isMosque && (
                             <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
@@ -1180,6 +1186,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                 </Stack>
                             </Paper>
                         )}
+                        </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={5}>
