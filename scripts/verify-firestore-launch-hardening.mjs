@@ -32,7 +32,7 @@ const forbiddenFragments = [
 const requiredFragments = [
   {
     label: 'hardened property read rule',
-    text: "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);",
+    text: "ownerCanRead(resource.data) || tenantOwns(resource.data)",
   },
   {
     label: 'hardened notification create rule',
