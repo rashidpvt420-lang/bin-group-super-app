@@ -49,6 +49,7 @@ const copy = {
     primary: 'Start Property Details',
     quote: 'Get Instant Quote',
     login: 'Portal Login',
+    about: 'About BIN GROUP',
     whatsapp: 'WhatsApp BIN GROUP',
     flow: 'Owner journey: details → quote → contract → service tracking → verified payout record',
     proofTitle: 'A complete agentic PropTech ecosystem',
@@ -80,6 +81,7 @@ const copy = {
     primary: 'ابدأ تفاصيل العقار',
     quote: 'احصل على عرض سعر فوري',
     login: 'دخول البوابة',
+    about: 'من نحن',
     whatsapp: 'تواصل عبر واتساب',
     flow: 'رحلة المالك: تفاصيل ← عرض سعر ← عقد ← تتبع الخدمة ← سجل دفع موثق',
     proofTitle: 'منظومة PropTech ذكية ومتكاملة',
@@ -167,6 +169,7 @@ function Nav({ c }: { c: CopyShape }) {
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ActionButton href="/company" icon={<Building2 size={17} />}>{c.about}</ActionButton>
           <ActionButton href={ONBOARDING_URL} contained>{c.primary}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
@@ -272,6 +275,7 @@ function Inquiry({ c }: { c: CopyShape }) {
         <Grid item xs={12} md={4}>
           <Stack spacing={1.3}>
             <ActionButton href={ONBOARDING_URL}>{c.primary}</ActionButton>
+            <ActionButton href="/company" icon={<Building2 size={17} />}>{c.about}</ActionButton>
             <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
           </Stack>
         </Grid>
