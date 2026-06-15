@@ -6,7 +6,7 @@ import {
     Home, Building2, Building, Hotel, Landmark, Gem,
     Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw, Check
 } from 'lucide-react';
-import { useOnboardingStore } from '../../store/onboardingStore';
+import { useOnboardingStore, inferAssetGrade } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { storage, ref, uploadBytes, getDownloadURL, functions } from '../../lib/firebase';
@@ -302,6 +302,11 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const isPrivateMajlis = pt === 'Private Majlis';
     const isMixedUse = pt === 'Mixed-Use Tower' || pt === 'Skyscraper';
     const isFarm = pt === 'Farm / Estate';
+
+    const inferredGrade = useMemo(() => inferAssetGrade((activeProperty || {}) as any), [activeProperty]);
+    const gradeOrder = ['Standard', 'Premium', 'Luxury', 'Sovereign'];
+    const effectiveGrade = gradeOrder[Math.max(gradeOrder.indexOf(inferredGrade), gradeOrder.indexOf(activeProperty?.assetGrade || 'Standard'))];
+    const gradeColor = effectiveGrade === 'Standard' ? 'rgba(255,255,255,0.55)' : effectiveGrade === 'Premium' ? '#60a5fa' : binThemeTokens.gold;
 
     const hotelProfile = (activeProperty as any)?.hotelProfile || createDefaultHotelProfile();
     const schoolProfile = (activeProperty as any)?.schoolProfile || createDefaultSchoolProfile();
@@ -1202,17 +1207,33 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                     </Paper>
                                 )}
 
-                                <TextField
-                                    select fullWidth label={t('onboarding.asset_type')} size="small"
-                                    value={activeProperty?.assetGrade || 'Premium'}
-                                    onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
-                                    sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                >
-                                    <MenuItem value="Standard">{t('onboarding.grade.standard')}</MenuItem>
-                                    <MenuItem value="Premium">{t('onboarding.grade.premium')}</MenuItem>
-                                    <MenuItem value="Luxury">{t('onboarding.grade.luxury')}</MenuItem>
-                                    <MenuItem value="Sovereign">{t('onboarding.grade.sovereign')}</MenuItem>
-                                </TextField>
+                                <Box>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>Auto-detected grade:</Typography>
+                                        <Chip label={inferredGrade} size="small" sx={{ bgcolor: alpha(gradeColor, 0.15), color: gradeColor, fontWeight: 900, fontSize: 11, height: 20 }} />
+                                        {effectiveGrade !== inferredGrade && (
+                                            <Chip label={`→ ${effectiveGrade} (manual)`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900, fontSize: 11, height: 20 }} />
+                                        )}
+                                    </Stack>
+                                    <TextField
+                                        select fullWidth label="Asset Grade / درجة الأصل" size="small"
+                                        value={activeProperty?.assetGrade || 'Standard'}
+                                        onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
+                                        helperText={
+                                            effectiveGrade === 'Standard' ? 'Standard spec — base pricing applies' :
+                                            effectiveGrade === 'Premium' ? 'Premium spec — 20% grade premium applies' :
+                                            effectiveGrade === 'Luxury' ? 'Luxury spec — 45% grade premium applies' :
+                                            'Sovereign / Ultra-Luxury — highest pricing tier'
+                                        }
+                                        FormHelperTextProps={{ sx: { color: gradeColor, fontWeight: 700 } }}
+                                        sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                                    >
+                                        <MenuItem value="Standard">Standard — base spec</MenuItem>
+                                        <MenuItem value="Premium">Premium — 20% premium</MenuItem>
+                                        <MenuItem value="Luxury">Luxury — 45% premium</MenuItem>
+                                        <MenuItem value="Sovereign">Sovereign — 2× rate</MenuItem>
+                                    </TextField>
+                                </Box>
 
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
