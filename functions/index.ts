@@ -1186,14 +1186,17 @@ export const generateAndEmailPayslip = onCall({
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
-        const { input } = request.data;
+        const { context, input: rawInput } = request.data;
+        const prompt = rawInput || (context
+            ? `You are BIN GROUP's property intelligence AI. Analyze this property data and provide a concise strategic maintenance recommendation (2-3 sentences):\n${JSON.stringify(context).substring(0, 2000)}`
+            : 'Provide general property maintenance guidance for a UAE property.');
         const apiKey = openAiKey.value();
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: "gpt-4o-mini",
-                messages: [{ role: "system", content: "You are the BIN GROUP AI assistant." }, { role: "user", content: input }],
+                messages: [{ role: "system", content: "You are the BIN GROUP AI assistant. Be concise and practical." }, { role: "user", content: prompt }],
                 max_tokens: 250
             })
         });

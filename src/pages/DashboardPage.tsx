@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import {
   Container, Grid, Card, CardContent, Typography, Box, Button,
   LinearProgress, Table, TableBody, TableCell, TableContainer,
@@ -118,19 +119,55 @@ export default function DashboardPage() {
         fetchData();
     }, [user, role]);
 
-    const handleDownloadAudit = async (propId: string, area: string) => {
+    const handleDownloadAudit = (propId: string, area: string) => {
         const intel = intelligence[propId];
         if (!intel) return;
-
         setGeneratingAudit(propId);
         try {
-            const generateAudit = httpsCallable(functions, 'generateIntegrityAudit');
-            const result = await generateAudit({ intel, propertyName: area });
-            const { url } = result.data as { url: string };
-            window.open(url, '_blank');
+            const pdf = new jsPDF();
+            pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
+            pdf.setTextColor(198, 167, 94); pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
+            pdf.text('SOVEREIGN INTEGRITY AUDIT', 14, 20);
+            pdf.setFontSize(10); pdf.setTextColor(255, 255, 255);
+            pdf.text(`Property: ${area}`, 14, 30);
+            pdf.text(`Generated: ${new Date().toLocaleDateString()} | BIN GROUP Platform`, 14, 37);
+            pdf.setDrawColor(198, 167, 94); pdf.line(14, 42, 196, 42);
+            let y = 52;
+            if (intel.assetResilience) {
+                pdf.setTextColor(198, 167, 94); pdf.setFontSize(11); pdf.text('ASSET RESILIENCE', 14, y); y += 8;
+                pdf.setTextColor(255, 255, 255); pdf.setFontSize(9);
+                pdf.text(`Overall Risk: ${intel.assetResilience.overallRiskLevel || 'N/A'}`, 14, y); y += 6;
+                pdf.text(`Decay Probability: ${intel.assetResilience.decayProbability !== undefined ? `${(intel.assetResilience.decayProbability * 100).toFixed(0)}%` : 'N/A'}`, 14, y); y += 6;
+                if (intel.assetResilience.topRiskCategory) { pdf.text(`Top Risk: ${intel.assetResilience.topRiskCategory}`, 14, y); y += 6; }
+                y += 4;
+            }
+            if (intel.financialForecast) {
+                pdf.setTextColor(198, 167, 94); pdf.setFontSize(11); pdf.text('FINANCIAL FORECAST', 14, y); y += 8;
+                pdf.setTextColor(255, 255, 255); pdf.setFontSize(9);
+                if (intel.financialForecast.projectedAnnualYield !== undefined) { pdf.text(`Projected Annual Yield: AED ${intel.financialForecast.projectedAnnualYield.toLocaleString()}`, 14, y); y += 6; }
+                if (intel.financialForecast.maintenanceCostEstimate !== undefined) { pdf.text(`Maintenance Cost Estimate: AED ${intel.financialForecast.maintenanceCostEstimate.toLocaleString()}`, 14, y); y += 6; }
+                y += 4;
+            }
+            if (intel.alerts?.length) {
+                pdf.setTextColor(198, 167, 94); pdf.setFontSize(11); pdf.text('ALERTS & RECOMMENDATIONS', 14, y); y += 8;
+                intel.alerts.forEach((alert: any) => {
+                    pdf.setTextColor(alert.type === 'CRITICAL' ? 239 : alert.type === 'WARNING' ? 251 : 200, alert.type === 'CRITICAL' ? 68 : alert.type === 'WARNING' ? 191 : 200, 68);
+                    pdf.setFontSize(9);
+                    const msgLines = pdf.splitTextToSize(`[${alert.type}] ${alert.message}`, 180);
+                    pdf.text(msgLines, 14, y); y += msgLines.length * 5 + 2;
+                    if (alert.recommendation) {
+                        pdf.setTextColor(180, 180, 180);
+                        const recLines = pdf.splitTextToSize(`→ ${alert.recommendation}`, 180);
+                        pdf.text(recLines, 14, y); y += recLines.length * 5 + 3;
+                    }
+                    if (y > 260) { pdf.addPage(); pdf.setFillColor(5,5,5); pdf.rect(0,0,210,297,'F'); y = 20; }
+                });
+            }
+            pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
+            pdf.text('BIN GROUP Sovereign Platform | Confidential Asset Intelligence', 14, 285);
+            pdf.save(`integrity-audit-${propId.substring(0, 6)}.pdf`);
         } catch (error) {
-            console.error("Audit generation failed:", error);
-            alert("Sovereign Terminal Error: Failed to generate report.");
+            console.error("Audit PDF generation failed:", error);
         } finally {
             setGeneratingAudit(null);
         }

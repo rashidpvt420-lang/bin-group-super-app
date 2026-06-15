@@ -95,7 +95,7 @@ output = replaceLineBlock(
   output,
   "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||",
   "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
-  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);",
+  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));",
   'properties read rule'
 );
 

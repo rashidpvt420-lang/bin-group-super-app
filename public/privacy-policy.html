@@ -5,62 +5,104 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - BIN GROUP</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-        h1 { border-bottom: 2px solid #eee; padding-bottom: 10px; color: #1a73e8; }
-        h2 { margin-top: 30px; color: #202124; }
-        p { margin-bottom: 15px; }
-        .last-updated { color: #70757a; font-style: italic; }
-        footer { margin-top: 50px; border-top: 1px solid #eee; padding-top: 20px; font-size: 0.9em; text-align: center; color: #70757a; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.7; color: #333; max-width: 820px; margin: 0 auto; padding: 40px 20px; }
+        h1 { border-bottom: 3px solid #C6A75E; padding-bottom: 12px; color: #111; }
+        h2 { margin-top: 36px; color: #1a1a1a; font-size: 1.1rem; }
+        p, li { margin-bottom: 12px; }
+        .last-updated { color: #888; font-style: italic; }
+        .badge { display: inline-block; background: #C6A75E; color: #fff; padding: 2px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; margin-right: 6px; }
+        footer { margin-top: 60px; border-top: 1px solid #eee; padding-top: 20px; font-size: 0.85em; text-align: center; color: #888; }
     </style>
 </head>
 <body>
     <h1>Privacy Policy</h1>
-    <p class="last-updated">Last Updated: March 28, 2026</p>
+    <p class="last-updated">Last Updated: June 14, 2026 | Effective: June 14, 2026</p>
 
-    <p>BIN GROUP ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Admin Panel and related services.</p>
+    <p>BIN GROUP ("we," "our," or "us"), operating as <strong>All Kind Building Projects Contracting L.L.C S.P.C</strong>, is committed to protecting your privacy. This Privacy Policy applies to all users of the <strong>BIN GROUP Super App</strong>, including property owners, tenants, technicians, brokers, and administrators.</p>
 
-    <h2>1. Information We Collect</h2>
-    <p>We may collect information that you provide directly to us, including your name, email address, and authentication information when you use Google OAuth to sign in to our services.</p>
+    <h2>1. Who This Policy Covers</h2>
+    <p>This policy covers all five user types within the BIN GROUP platform:</p>
+    <ul>
+        <li><span class="badge">OWNER</span> Property owners managing portfolios, contracts, and financial records.</li>
+        <li><span class="badge">TENANT</span> Tenants submitting maintenance requests and managing tenancy.</li>
+        <li><span class="badge">TECHNICIAN</span> Field technicians receiving job dispatches and GPS tracking.</li>
+        <li><span class="badge">BROKER</span> Property brokers managing referrals and commissions.</li>
+        <li><span class="badge">ADMIN</span> Internal BIN GROUP operations staff.</li>
+    </ul>
 
-    <h2>2. Use of Google OAuth</h2>
-    <p>Our application uses Google OAuth to authenticate users. When you sign in using your Google account, we may access certain information from your Google profile, such as your name and email address, to facilitate the login process and provide access to the Admin Panel.</p>
+    <h2>2. Information We Collect</h2>
+    <p>We collect the following categories of personal information:</p>
+    <ul>
+        <li><strong>Identity Data:</strong> Full name, email address, phone number, Emirates ID number (for KYC verification).</li>
+        <li><strong>Location Data:</strong> Real-time GPS coordinates of technicians during active duty — used exclusively for job dispatch and route optimization. Location tracking stops when a technician ends their shift.</li>
+        <li><strong>Financial Data:</strong> IBAN/bank details for rent collection and payroll disbursement. Payment card data is processed by Stripe and never stored on our servers.</li>
+        <li><strong>Property Data:</strong> Property details, maintenance history, photos, and contract records associated with your account.</li>
+        <li><strong>Usage Data:</strong> App interactions, feature usage, error logs — used to improve service quality.</li>
+        <li><strong>Photos/Media:</strong> Before-and-after maintenance photos uploaded by technicians or tenants as part of the Evidence-Vault™ workflow.</li>
+        <li><strong>Device Data:</strong> Device type, OS version, push notification token for service alerts.</li>
+    </ul>
 
     <h2>3. How We Use Your Information</h2>
-    <p>We use the information we collect to:</p>
     <ul>
-        <li>Provide, maintain, and improve our services.</li>
-        <li>Authenticate your identity and provide access to the Admin Panel.</li>
-        <li>Communicate with you about updates, security alerts, and support.</li>
+        <li>Authenticate your identity and provide role-appropriate access to the platform.</li>
+        <li>Match and dispatch the nearest available certified technician to your property.</li>
+        <li>Process rent payments, maintenance invoices, and technician payroll.</li>
+        <li>Generate digital property records, contracts, and compliance reports.</li>
+        <li>Send push notifications for job assignments, ticket updates, and payment confirmations.</li>
+        <li>Fulfill UAE regulatory obligations (RERA, DLD, WPS).</li>
+        <li>Improve and secure the platform through aggregated analytics.</li>
     </ul>
 
-    <h2>4. Sensitive Data and GPS Tracking</h2>
-    <p>Depending on your role (e.g., Technician, Staff, or Tenant), we may collect and process sensitive information:</p>
+    <h2>4. GPS & Location Tracking</h2>
+    <p>GPS tracking applies exclusively to technicians during active duty hours. Location data is:</p>
     <ul>
-        <li><strong>GPS and Location Data:</strong> For field staff and technicians, we collect real-time location data during active duty hours to facilitate dispatching and ensure safety. Location tracking is disabled when off-duty.</li>
-        <li><strong>Biometric, ID, and Financial Data:</strong> We securely collect and store Emirates ID, passport details, health card information, and IBAN/bank details for HR, payroll, and legal compliance purposes (e.g., WPS processing).</li>
+        <li>Written to Firebase Firestore every 10 seconds while a technician is on an active job.</li>
+        <li>Visible only to the assigned property owner and BIN GROUP operations staff.</li>
+        <li>Automatically stopped when the technician ends their shift or completes all jobs.</li>
+        <li>Never shared with third parties or used for advertising.</li>
     </ul>
 
-    <h2>5. Third-Party Data Processing</h2>
-    <p>We do not sell your personal data. We may share necessary information with trusted third-party providers (such as payment gateways, SMS gateways, cloud hosting providers, and government compliance APIs like UAE Pass or WPS) solely to provide our services and fulfill legal obligations. All third parties are bound by strict data protection agreements.</p>
+    <h2>5. Camera & Photo Access</h2>
+    <p>Camera access is requested when a technician or tenant submits a maintenance request or completes a job. Photos are uploaded to Firebase Storage, encrypted at rest, and accessible only to the parties involved in the ticket (tenant, assigned technician, property owner, and BIN GROUP admin).</p>
 
-    <h2>6. Data Security</h2>
-    <p>We implement appropriate technical and organizational measures to protect the security of your personal information, including encryption for sensitive fields and Role-Based Access Control (RBAC). However, please note that no method of transmission over the Internet is 100% secure.</p>
+    <h2>6. Third-Party Services</h2>
+    <p>We use the following trusted third-party services to operate the platform:</p>
+    <ul>
+        <li><strong>Firebase (Google):</strong> Authentication, database, cloud storage, and push notifications.</li>
+        <li><strong>Stripe:</strong> Payment processing. Card data is handled directly by Stripe and not stored on our servers.</li>
+        <li><strong>OpenAI:</strong> AI-powered design renders and property intelligence. No personal data is sent to OpenAI — only anonymized property parameters.</li>
+        <li><strong>Google Maps:</strong> Route display for technician navigation.</li>
+    </ul>
+    <p>We do not sell your personal data to any third party.</p>
 
-    <h2>7. Changes to This Privacy Policy</h2>
-    <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
+    <h2>7. Data Retention</h2>
+    <p>We retain your data for as long as your account is active, or as required by UAE law. Property records and contracts are retained for a minimum of 5 years per UAE regulatory requirements. You may request deletion of your account by contacting us at ceo@bin-groups.com.</p>
 
-    <h2>8. Contact Us</h2>
-    <p>If you have any questions about this Privacy Policy, please contact us at ceo@bin-groups.com.</p>
+    <h2>8. Data Security</h2>
+    <p>We implement role-based access control (RBAC), Firestore security rules, Firebase App Check, and TLS encryption for all data in transit. Sensitive fields (Emirates ID, IBAN) are access-restricted to authorised roles only.</p>
 
-    <footer>
-        &copy; 2026 BIN GROUP. All rights reserved.
-    </footer>
+    <h2>9. Your Rights (UAE PDPL)</h2>
+    <p>Under the UAE Personal Data Protection Law (Federal Decree-Law No. 45 of 2021), you have the right to:</p>
+    <ul>
+        <li>Access the personal data we hold about you.</li>
+        <li>Request correction of inaccurate data.</li>
+        <li>Request deletion of your data where legally permitted.</li>
+        <li>Withdraw consent for optional data processing.</li>
+    </ul>
+    <p>To exercise these rights, contact: <strong>ceo@bin-groups.com</strong></p>
+
+    <h2>10. Children's Privacy</h2>
+    <p>BIN GROUP is intended for users aged 18 and above. We do not knowingly collect data from minors.</p>
+
+    <h2>11. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy as the platform evolves. The "Last Updated" date at the top of this page will reflect any changes. Continued use of the app after changes constitutes acceptance.</p>
+
+    <h2>12. Contact Us</h2>
+    <p>BIN GROUP — All Kind Building Projects Contracting L.L.C S.P.C<br>
+    Al Ain, United Arab Emirates<br>
+    Email: <a href="mailto:ceo@bin-groups.com">ceo@bin-groups.com</a><br>
+    WhatsApp: +971 55 2423233</p>
+
+    <footer>&copy; 2026 BIN GROUP — All Kind Building Projects Contracting L.L.C S.P.C. All rights reserved.</footer>
 </body>
 </html>

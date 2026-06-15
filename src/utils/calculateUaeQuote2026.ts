@@ -29,6 +29,9 @@ export interface QuoteInput {
   hvacCount?: number;
   offices?: number;
   shops?: number;
+ claude/quirky-carson-x5ygtk
+  assetGrade?: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
+
   wuduAreas?: number;
   assetLabel?: string;
 }
@@ -42,6 +45,7 @@ export interface AppliedAddOn {
   id: string;
   label: string;
   annualValue: number;
+ main
 }
 
 export interface QuoteOutput {
@@ -56,6 +60,8 @@ export interface QuoteOutput {
   quarterlyPayment: number;
   monthlyPayment: number;
   mobilizationFee: number;
+  gradeMultiplier: number;
+  effectiveGrade: string;
   recommendedTier: string;
   pricingExplanation: string[];
   riskFlags: string[];
@@ -231,7 +237,13 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     hvacCount: positiveNumber(raw.hvacCount),
     offices: positiveNumber(raw.offices),
     shops: positiveNumber(raw.shops),
+ claude/quirky-carson-x5ygtk
+    assetGrade: (['Standard', 'Premium', 'Luxury', 'Ultra-Luxury', 'Sovereign'].includes(String(raw.assetGrade || ''))
+      ? raw.assetGrade
+      : 'Standard') as QuoteInput['assetGrade'],
+
     wuduAreas: positiveNumber(raw.wuduAreas),
+ main
   };
 }
 
@@ -245,6 +257,14 @@ function slaMultiplier(slaTier: QuoteInput['slaTier']): number {
   if (slaTier === 'elite') return 1.3;
   if (slaTier === 'premium') return 1.15;
   return 1;
+}
+
+function calcGradeMultiplier(grade: QuoteInput['assetGrade']): number {
+  if (grade === 'Sovereign') return 2.00;
+  if (grade === 'Ultra-Luxury') return 1.70;
+  if (grade === 'Luxury') return 1.45;
+  if (grade === 'Premium') return 1.20;
+  return 1.00;
 }
 
 function addPaymentExplanation(paymentPlan: QuoteInput['paymentPlan'], pricingExplanation: string[]) {
@@ -383,6 +403,18 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const capacityMultiplier = worshipperCapacity <= 300 ? 1 : worshipperCapacity <= 1000 ? 1.15 : worshipperCapacity <= 3000 ? 1.35 : 1.6;
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 8 * capacityMultiplier;
+ claude/quirky-carson-x5ygtk
+  const wuduCleaning = worshipperProxy <= 300 ? 28_000 :
+                       worshipperProxy <= 1000 ? 55_000 :
+                       worshipperProxy <= 3000 ? 90_000 : 130_000;
+  const ramadanSurge = 15500 + (safeInput.hasCentralHVAC ? 2500 : 0);
+  const compliancePremium = Math.max(baseQuote * 0.04, 2500);
+  const complexityPremium = (baseQuote + softServices) * 0.1;
+  const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, safeInput);
+  const mosqueGradeMultiplier = calcGradeMultiplier(safeInput.assetGrade);
+  const annualTotal = (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal) * mosqueGradeMultiplier * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
+
   const wuduCleaning = wuduAreas * 5 * 35 * 365;
   const ramadanSurge = 15500 + (safeInput.hasCentralHVAC ? 2500 : 0);
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
@@ -391,6 +423,7 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const addOnTotal = calculateAddOnAnnualValue(mandatoryAddOns, safeInput);
   const subtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
+  main
 
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP rate applied to ${sqft} sqft.`);
   pricingExplanation.push(`${ageCoefficient}x mosque age/risk coefficient applied.`);
@@ -399,6 +432,26 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
   if (age > 10) riskFlags.push('Aging mosque MEP risk premium required');
   if (!safeInput.hasSiraCctv) riskFlags.push('Mosque security/compliance review required');
+
+ claude/quirky-carson-x5ygtk
+  return {
+    baseQuote,
+    zoneAdjustedQuote: baseQuote,
+    emirateAdjustedQuote: baseQuote,
+    gradeMultiplier: mosqueGradeMultiplier,
+    effectiveGrade: safeInput.assetGrade || 'Standard',
+    complexityPremium,
+    compliancePremium,
+    addOnTotal,
+    discount: 0,
+    annualTotal,
+    quarterlyPayment: annualTotal / 4,
+    monthlyPayment: annualTotal / 12,
+    mobilizationFee: annualTotal * 0.15,
+    recommendedTier: safeInput.slaTier,
+    pricingExplanation,
+    riskFlags,
+  };
 
   return enrichOutput({
     baseQuote, zoneAdjustedQuote: baseQuote, emirateAdjustedQuote: baseQuote, complexityPremium, compliancePremium, addOnTotal, discount: 0,
@@ -420,6 +473,7 @@ function findAssetClass(assetId: string): InternalAssetClass {
   const fromMatrix = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === assetId) as InternalAssetClass | undefined;
   const internal = INTERNAL_ASSET_CLASSES.find((asset) => asset.id === assetId);
   return fromMatrix || internal || INTERNAL_ASSET_CLASSES.find((asset) => asset.id === 'government_property')!;
+ main
 }
 
 export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefined): QuoteOutput {
@@ -470,6 +524,14 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const emirateMultiplier = emirateEntry ? finiteNumber(emirateEntry.value, 1) : 1;
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional operational cost adjustment for ${safeInput.emirate} (${emirateMultiplier}x) applied.`);
+ claude/quirky-carson-x5ygtk
+
+  const appliedGradeMultiplier = calcGradeMultiplier(safeInput.assetGrade);
+  const gradeAdjustedQuote = emirateAdjustedQuote * appliedGradeMultiplier;
+  if (appliedGradeMultiplier > 1) pricingExplanation.push(`${safeInput.assetGrade} asset grade premium (${appliedGradeMultiplier}x) applied.`);
+
+
+ main
   const ageMultiplier = safeInput.propertyAge > 20 ? 1.25 : safeInput.propertyAge > 10 ? 1.15 : safeInput.propertyAge > 5 ? 1.08 : 1;
   if (ageMultiplier > 1) pricingExplanation.push(`Structural maintenance adjustment applied for ${safeInput.propertyAge}-year asset age.`);
 
@@ -487,10 +549,42 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     complexityPremiumPercent += 15;
     riskFlags.push('Critical / institutional systems coverage required');
   }
+ claude/quirky-carson-x5ygtk
+
+  const complexityPremium = gradeAdjustedQuote * (complexityPremiumPercent / 100);
+
   const complexityPremium = emirateAdjustedQuote * (complexityPremiumPercent / 100);
+ main
   if (complexityPremiumPercent !== 0) pricingExplanation.push('Institutional technical complexity and compliance premium included.');
   const appliedSlaMultiplier = slaMultiplier(safeInput.slaTier);
   if (appliedSlaMultiplier > 1) pricingExplanation.push(`${safeInput.slaTier.toUpperCase()} Performance Service Level Agreement applied.`);
+ claude/quirky-carson-x5ygtk
+
+  const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, safeInput);
+  const subtotal = (gradeAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
+  const annualTotal = subtotal * (1 + planSurcharge(safeInput.paymentPlan));
+  addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
+
+  return {
+    baseQuote,
+    zoneAdjustedQuote,
+    emirateAdjustedQuote,
+    gradeMultiplier: appliedGradeMultiplier,
+    effectiveGrade: safeInput.assetGrade || 'Standard',
+    complexityPremium,
+    compliancePremium: 0,
+    addOnTotal,
+    discount: 0,
+    annualTotal,
+    quarterlyPayment: annualTotal / 4,
+    monthlyPayment: annualTotal / 12,
+    mobilizationFee: annualTotal * 0.15,
+    recommendedTier: safeInput.slaTier,
+    pricingExplanation,
+    riskFlags,
+  };
+
   const mandatoryAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
   const addOnTotal = calculateAddOnAnnualValue(mandatoryAddOns, safeInput);
   const subtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
@@ -509,4 +603,5 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
       { label: 'Mandatory systems/add-ons', amount: addOnTotal },
     ],
   }, safeInput);
+ main
 }

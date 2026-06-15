@@ -45,8 +45,7 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   }
 
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
-  if (!key || key === "mock_key") {
-    console.error("Stripe checkout blocked: STRIPE_SECRET_KEY is not configured for production.");
+  if (!key) {
     throw new HttpsError(
       "failed-precondition",
       "Online card payment is not configured. Use bank transfer/manual verification until the payment provider is activated."
@@ -97,12 +96,12 @@ export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey, 
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   const webhookSecret = stripeWebhookSecret.value() || process.env.STRIPE_WEBHOOK_SECRET;
   
-  if (!key || key === "mock_key") {
+  if (!key) {
     response.status(400).send("Webhook setup error: Stripe secret key is unconfigured.");
     return;
   }
 
-  if (!webhookSecret || webhookSecret === "mock_webhook_secret") {
+  if (!webhookSecret) {
     response.status(400).send("Webhook setup error: Stripe webhook secret is unconfigured.");
     return;
   }

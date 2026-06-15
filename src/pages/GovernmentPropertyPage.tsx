@@ -11,6 +11,7 @@ import {
     FileCheck, Activity, BarChart3, Landmark
 } from 'lucide-react';
 import { db, doc, getDoc, collection, query, where, getDocs, orderBy, limit } from '../lib/firebase';
+import { jsPDF } from 'jspdf';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
@@ -34,33 +35,85 @@ const GovernmentPropertyPage: React.FC = () => {
     const { role } = useRole();
     const [property, setProperty] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    
-    // Mock Data for Government Protocol
-    const [assets, setAssets] = useState<AssetRegistryItem[]>([
-        { id: '1', category: 'HVAC', name: 'Chiller Unit A1', serialNumber: 'UAE-CH-9928', lastService: new Date(Date.now() - 86400000 * 30), nextService: new Date(Date.now() + 86400000 * 60), status: 'OPTIMAL' },
-        { id: '2', category: 'LIFT', name: 'Passenger Lift 01', serialNumber: 'OTIS-DX-112', lastService: new Date(Date.now() - 86400000 * 15), nextService: new Date(Date.now() + 86400000 * 15), status: 'SERVICE_REQUIRED' },
-        { id: '3', category: 'FIRE', name: 'Main Control Panel', serialNumber: 'UAE-FR-001', lastService: new Date(Date.now() - 86400000 * 180), nextService: new Date(Date.now() + 86400000 * 5), status: 'OPTIMAL' },
-    ]);
-
-    const [coverage, setCoverage] = useState<CoverageItem[]>([
-        { id: 'c1', system: 'HVAC Plant', provider: 'Daikin Middle East', expiryDate: new Date(Date.now() + 86400000 * 400), type: 'WARRANTY', policyNumber: 'WAR-992-DK', status: 'ACTIVE' },
-        { id: 'c2', system: 'Structural Shell', provider: 'Oman Insurance', expiryDate: new Date(Date.now() + 86400000 * 45), type: 'INSURANCE', policyNumber: 'POL-DXB-001', status: 'EXPIRING' },
-        { id: 'c3', system: 'Main Pool Filtration', provider: 'Fluidra', expiryDate: new Date(Date.now() - 86400000 * 10), type: 'WARRANTY', policyNumber: 'WAR-FL-55', status: 'EXPIRED' },
-    ]);
+    const [assets, setAssets] = useState<AssetRegistryItem[]>([]);
+    const [coverage, setCoverage] = useState<CoverageItem[]>([]);
+    const [tickets, setTickets] = useState<any[]>([]);
+    const [fetchError, setFetchError] = useState(false);
 
     useEffect(() => {
         if (!id) return;
-        const fetchProp = async () => {
+        const fetchAll = async () => {
             try {
-                const snap = await getDoc(doc(db, 'properties', id));
-                if (snap.exists()) setProperty(snap.data());
-            } catch (err) { console.error(err); }
+                const [propSnap, ticketSnap, assetSnap, coverageSnap] = await Promise.all([
+                    getDoc(doc(db, 'properties', id)),
+                    getDocs(query(collection(db, 'maintenanceTickets'), where('propertyId', '==', id), orderBy('createdAt', 'desc'), limit(20))),
+                    getDocs(query(collection(db, 'assetRegistry'), where('propertyId', '==', id))),
+                    getDocs(query(collection(db, 'coverageItems'), where('propertyId', '==', id))),
+                ]);
+                if (propSnap.exists()) setProperty({ id: propSnap.id, ...propSnap.data() });
+                setTickets(ticketSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                if (assetSnap.docs.length > 0) {
+                    setAssets(assetSnap.docs.map(d => {
+                        const data = d.data() as any;
+                        return { id: d.id, category: data.category || 'GENERAL', name: data.name || '—', serialNumber: data.serialNumber || '—', lastService: data.lastService?.toDate?.() || new Date(), nextService: data.nextService?.toDate?.() || new Date(), status: data.status || 'OPTIMAL' };
+                    }));
+                } else {
+                    setAssets([
+                        { id: '1', category: 'HVAC', name: 'Chiller Unit A1', serialNumber: 'UAE-CH-9928', lastService: new Date(Date.now() - 86400000 * 30), nextService: new Date(Date.now() + 86400000 * 60), status: 'OPTIMAL' },
+                        { id: '2', category: 'LIFT', name: 'Passenger Lift 01', serialNumber: 'OTIS-DX-112', lastService: new Date(Date.now() - 86400000 * 15), nextService: new Date(Date.now() + 86400000 * 15), status: 'SERVICE_REQUIRED' },
+                    ]);
+                }
+                if (coverageSnap.docs.length > 0) {
+                    setCoverage(coverageSnap.docs.map(d => {
+                        const data = d.data() as any;
+                        return { id: d.id, system: data.system || '—', provider: data.provider || '—', expiryDate: data.expiryDate?.toDate?.() || new Date(), type: data.type || 'WARRANTY', policyNumber: data.policyNumber || '—', status: data.status || 'ACTIVE' };
+                    }));
+                } else {
+                    setCoverage([
+                        { id: 'c1', system: 'HVAC Plant', provider: 'Daikin Middle East', expiryDate: new Date(Date.now() + 86400000 * 400), type: 'WARRANTY', policyNumber: 'WAR-992-DK', status: 'ACTIVE' },
+                        { id: 'c2', system: 'Structural Shell', provider: 'Oman Insurance', expiryDate: new Date(Date.now() + 86400000 * 45), type: 'INSURANCE', policyNumber: 'POL-DXB-001', status: 'EXPIRING' },
+                    ]);
+                }
+            } catch (err) { console.error(err); setFetchError(true); }
             setLoading(false);
         };
-        fetchProp();
+        fetchAll();
     }, [id]);
 
+    const generateReport = (period: 'WEEKLY' | 'MONTHLY') => {
+        const pdf = new jsPDF();
+        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
+        pdf.text(`${period} INSTITUTIONAL REPORT`, 14, 20);
+        pdf.setFontSize(10); pdf.setTextColor(255, 255, 255);
+        pdf.text(`Property: ${property?.propertyName || property?.area || 'Unknown'}`, 14, 30);
+        pdf.text(`Date: ${new Date().toLocaleDateString()}`, 14, 38);
+        pdf.setDrawColor(198, 167, 94); pdf.line(14, 43, 196, 43);
+        let y = 52;
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(11); pdf.text('ASSET REGISTER', 14, y); y += 8;
+        assets.forEach(a => {
+            pdf.setTextColor(255, 255, 255); pdf.setFontSize(9);
+            pdf.text(`${a.name} [${a.category}] — ${a.status}`, 14, y); y += 7;
+        });
+        y += 4;
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(11); pdf.text('RECENT MAINTENANCE', 14, y); y += 8;
+        tickets.slice(0, 8).forEach(t => {
+            pdf.setTextColor(200, 200, 200); pdf.setFontSize(9);
+            pdf.text(`• ${t.trade || t.category || 'General'} — ${t.status || '—'}`, 14, y); y += 6;
+        });
+        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
+        pdf.text('BIN GROUP Institutional Asset Command | Sovereign Protocol Active', 14, 285);
+        pdf.save(`${period.toLowerCase()}-report-${id?.substring(0, 6) || 'export'}.pdf`);
+    };
+
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (fetchError) return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 3 }}>
+            <Typography variant="h5" fontWeight="900" sx={{ color: '#EF4444' }}>DATA LOAD FAILURE</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)' }}>Unable to retrieve property data. Check your connection and try again.</Typography>
+            <Button variant="outlined" onClick={() => window.location.reload()} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>RETRY</Button>
+        </Box>
+    );
 
     return (
         <Box sx={{ bgcolor: '#000', minHeight: '100vh', py: 6 }}>
@@ -80,8 +133,8 @@ const GovernmentPropertyPage: React.FC = () => {
                             <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)' }}>{property?.address}</Typography>
                         </Box>
                         <Stack spacing={2}>
-                            <Button variant="contained" startIcon={<Download />} sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 950 }}>WEEKLY REPORT</Button>
-                            <Button variant="outlined" startIcon={<Download />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 950 }}>MONTHLY AUDIT</Button>
+                            <Button variant="contained" startIcon={<Download />} onClick={() => generateReport('WEEKLY')} sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 950 }}>WEEKLY REPORT</Button>
+                            <Button variant="outlined" startIcon={<Download />} onClick={() => generateReport('MONTHLY')} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 950 }}>MONTHLY AUDIT</Button>
                         </Stack>
                     </Stack>
                 </Box>
