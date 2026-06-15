@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Box, Button, Card, CardContent, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import {
   Award,
@@ -19,7 +19,6 @@ import {
   MessageSquare,
   Navigation,
   Phone,
-  Play,
   PlayCircle,
   ShieldCheck,
   Sparkles,
@@ -77,7 +76,6 @@ function getCopy(lang: 'en' | 'ar') {
       : 'Property owners and tenants across the UAE face the same frustrations. BIN GROUP was built to solve them.',
 
     ownerProblems: ar
- claude/quirky-carson-x5ygtk
       ? [
           'لا رؤية لما يحدث فعلياً في العقار',
           'مقاولون غير موثوقين بلا إثبات على العمل المنجز',
@@ -147,77 +145,6 @@ function getCopy(lang: 'en' | 'ar') {
           ['Direct Management Channel', 'Secure institutional communication instead of scattered messages.'],
         ],
 
-
-      ? [
-          'لا رؤية لما يحدث فعلياً في العقار',
-          'مقاولون غير موثوقين بلا إثبات على العمل المنجز',
-          'إدارة ورقية فوضوية للعقود والفواتير',
-          'صعوبة إدارة أكثر من عقار في وقت واحد',
-          'تأخير في الصيانة يُتلف الأصول ويرفع التكاليف',
-        ]
-      : [
-          'No visibility into what is actually happening at the property',
-          'Unreliable contractors with no proof of work done',
-          'Chaotic paper-based contract and invoice management',
-          'Difficulty managing multiple properties at once',
-          'Delayed maintenance that damages assets and inflates costs',
-        ],
-
-    tenantProblems: ar
-      ? [
-          'استجابة بطيئة لطلبات الصيانة',
-          'لا تحديثات على حالة الطلب بعد التقديم',
-          'صعوبة التواصل مع الإدارة',
-          'العيش مع مشاكل معلقة دون حل واضح',
-        ]
-      : [
-          'Slow response to maintenance requests',
-          'No status updates after a request is submitted',
-          'Hard to reach property management directly',
-          'Living with unresolved issues and no clear timeline',
-        ],
-
-    ownerGetsTitle: ar ? 'ما يحصل عليه المالك' : 'What Owners Get',
-    ownerGets: ar
-      ? [
-          ['لوحة تحكم كاملة', 'عرض فوري لجميع العقارات، الطلبات النشطة، الحالة المالية، والمخاطر المكشوفة.'],
-          ['جواز العقار الرقمي', 'سجل رقمي شامل لكل عقار: العقود، الفواتير، التقارير، سجل الصيانة، وتحديثات الأنظمة.'],
-          ['إثبات قبل وبعد لكل خدمة', 'صور موثقة قبل وبعد كل عمل — لا دفع يتم بدون إثبات فعلي.'],
-          ['مؤشر صحة العقار (BPI)', 'درجة صحية تلقائية مع توصيات ذكية لكل عقار تُحدّث مع كل خدمة.'],
-          ['تقويم الصيانة الوقائية', 'مواعيد صيانة مجدولة تلقائياً حسب نوع وعمر العقار.'],
-          ['التحكم المالي الكامل', 'سجل الإيرادات، خصومات الإدارة، صافي المدفوعات، وتصدير التقارير.'],
-          ['إدارة الشواغر والتسليم', 'بروتوكول Hard-Reset™ بين المستأجرين: مفاتيح، طلاء، تنظيف، توثيق.'],
-          ['تقارير قابلة للتنزيل', 'تقارير PDF فورية لأي عقار — للمشاركة مع الجهات الحكومية أو الشركاء.'],
-        ]
-      : [
-          ['Full Property Dashboard', 'Instant view of all properties, active requests, financial position, and exposed risks.'],
-          ['Digital Property Passport', 'Comprehensive digital record per property: contracts, invoices, reports, maintenance history, and system updates.'],
-          ['Before & After Proof on Every Job', 'Documented photos before and after every job — no payment released without verified evidence.'],
-          ['Building Performance Index (BPI)', 'Automatic health score with smart recommendations per property, updated after every service.'],
-          ['Preventive Maintenance Calendar', 'Automatically scheduled maintenance dates based on property type and age.'],
-          ['Full Financial Control', 'Revenue ledger, management deductions, net payouts, and report exports.'],
-          ['Vacancy & Turnover Management', 'Hard-Reset™ protocol between tenants: keys, paint, cleaning, full documentation.'],
-          ['Downloadable Reports', 'Instant PDF reports for any property — shareable with government bodies or partners.'],
-        ],
-
-    tenantGetsTitle: ar ? 'ما يحصل عليه المستأجر' : 'What Tenants Get',
-    tenantGets: ar
-      ? [
-          ['تقديم طلب بصورة في ثوانٍ', 'أرفق صورة، حدد الأولوية، واضغط إرسال — لا مكالمات، لا انتظار.'],
-          ['تتبع فوري للحالة', 'كل طلب يُحدّث تلقائياً: مُعيَّن → في الطريق → مكتمل — مع إشعارات مباشرة.'],
-          ['SOS للطوارئ', 'زر طارئ يصل لفريق BIN GROUP فوراً لحالات الأعطال الحرجة.'],
-          ['مكان نظيف ومُصان', 'خطة صيانة وقائية منتظمة تمنع الأعطال قبل حدوثها.'],
-          ['تواصل مباشر مع الإدارة', 'قناة تواصل مؤسسية آمنة بدلاً من الرسائل المتناثرة.'],
-        ]
-      : [
-          ['Submit a Request with a Photo in Seconds', 'Attach a photo, set the priority, and hit submit — no phone calls, no waiting on hold.'],
-          ['Real-Time Status Tracking', 'Every request auto-updates: Assigned → En Route → Completed — with live notifications.'],
-          ['SOS Emergency Button', 'Direct emergency escalation to the BIN GROUP team for critical faults.'],
-          ['A Clean, Well-Maintained Home', 'Regular preventive maintenance plans stop problems before they happen.'],
-          ['Direct Management Channel', 'Secure institutional communication instead of scattered messages.'],
-        ],
-
- main
     demoTitle: ar ? 'عرض BIN GROUP التشغيلي' : 'BIN GROUP Operations Demo',
     demoSubtitle: ar
       ? 'رحلة كاملة: من طلب المالك إلى إرسال الفني عبر GPS، إثبات قبل وبعد، العقد، الدفع، والتقرير.'
@@ -283,13 +210,10 @@ function getCopy(lang: 'en' | 'ar') {
   };
 }
 
-const YOUTUBE_DEMO_URL = 'https://www.youtube.com/embed/dQw4w9WgXcQ'; // Replace with real demo video ID
-
 function TrustChip({ label }: { label: string }) {
   return <Chip label={label} sx={{ borderRadius: 1.2, bgcolor: alpha(gold, 0.12), color: '#6F5522', border: `1px solid ${alpha(gold, 0.22)}`, fontWeight: 950 }} />;
 }
 
- claude/quirky-carson-x5ygtk
 function HeroLogoCard() {
   const CREDENTIAL_BADGES = ['EST. 2010', 'AL AIN · UAE', 'LICENSED LLC'];
   const HERO_STATS = [['15+', 'Years'], ['+500', 'Assets'], ['7', 'Emirates']];
@@ -347,66 +271,6 @@ function HeroLogoCard() {
             </Box>
           ))}
         </Box>
-
-function PropertyHeroVisual() {
-  return (
-    <Box sx={{ position: 'relative', borderRadius: 4, overflow: 'hidden', minHeight: { xs: 280, md: 400 }, bgcolor: '#111827', border: `1px solid ${alpha(gold, 0.3)}`, boxShadow: `0 32px 80px ${alpha(gold, 0.18)}` }}>
-      {/* Background gradient */}
-      <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #0B0B0C 0%, #1a1a2e 40%, #16213e 100%)' }} />
-      {/* Gold grid overlay */}
-      <Box sx={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${alpha(gold, 0.04)} 1px, transparent 1px), linear-gradient(90deg, ${alpha(gold, 0.04)} 1px, transparent 1px)`, backgroundSize: '40px 40px' }} />
-      {/* Building silhouettes */}
-      <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-        {/* Tall building left */}
-        <Box sx={{ position: 'absolute', bottom: 0, left: '8%', width: 48, height: 200, bgcolor: alpha(gold, 0.18), borderRadius: '4px 4px 0 0', border: `1px solid ${alpha(gold, 0.25)}` }}>
-          {[0,1,2,3,4,5,6,7].map(row => [0,1,2].map(col => (
-            <Box key={`${row}-${col}`} sx={{ position: 'absolute', width: 8, height: 8, bgcolor: Math.random() > 0.4 ? alpha(gold, 0.7) : 'transparent', top: 16 + row * 22, left: 8 + col * 14, borderRadius: 0.5 }} />
-          )))}
-        </Box>
-        {/* Wide tower center-left */}
-        <Box sx={{ position: 'absolute', bottom: 0, left: '22%', width: 70, height: 260, bgcolor: alpha(gold, 0.22), borderRadius: '4px 4px 0 0', border: `1px solid ${alpha(gold, 0.3)}` }}>
-          {[0,1,2,3,4,5,6,7,8,9].map(row => [0,1,2,3].map(col => (
-            <Box key={`${row}-${col}`} sx={{ position: 'absolute', width: 10, height: 10, bgcolor: (row + col) % 3 === 0 ? alpha(gold, 0.8) : 'transparent', top: 16 + row * 24, left: 8 + col * 16, borderRadius: 0.5 }} />
-          )))}
-        </Box>
-        {/* Main hero building center */}
-        <Box sx={{ position: 'absolute', bottom: 0, left: '40%', width: 100, height: 320, bgcolor: alpha(gold, 0.28), borderRadius: '6px 6px 0 0', border: `1.5px solid ${alpha(gold, 0.5)}`, boxShadow: `0 0 40px ${alpha(gold, 0.15)}` }}>
-          {[0,1,2,3,4,5,6,7,8,9,10,11].map(row => [0,1,2,3,4].map(col => (
-            <Box key={`${row}-${col}`} sx={{ position: 'absolute', width: 12, height: 12, bgcolor: (row * col) % 4 === 0 ? alpha(gold, 0.9) : alpha(gold, 0.15), top: 20 + row * 26, left: 10 + col * 18, borderRadius: 0.5 }} />
-          )))}
-        </Box>
-        {/* Mid tower right of center */}
-        <Box sx={{ position: 'absolute', bottom: 0, left: '60%', width: 60, height: 230, bgcolor: alpha(gold, 0.16), borderRadius: '4px 4px 0 0', border: `1px solid ${alpha(gold, 0.22)}` }}>
-          {[0,1,2,3,4,5,6,7,8].map(row => [0,1,2].map(col => (
-            <Box key={`${row}-${col}`} sx={{ position: 'absolute', width: 10, height: 10, bgcolor: (row + col) % 2 === 0 ? alpha(gold, 0.6) : 'transparent', top: 16 + row * 24, left: 8 + col * 16, borderRadius: 0.5 }} />
-          )))}
-        </Box>
-        {/* Far right building */}
-        <Box sx={{ position: 'absolute', bottom: 0, right: '6%', width: 55, height: 180, bgcolor: alpha(gold, 0.14), borderRadius: '4px 4px 0 0', border: `1px solid ${alpha(gold, 0.2)}` }}>
-          {[0,1,2,3,4,5,6].map(row => [0,1].map(col => (
-            <Box key={`${row}-${col}`} sx={{ position: 'absolute', width: 10, height: 10, bgcolor: row % 2 === col % 2 ? alpha(gold, 0.5) : 'transparent', top: 14 + row * 22, left: 10 + col * 18, borderRadius: 0.5 }} />
-          )))}
-        </Box>
-      </Box>
-      {/* Ground line */}
-      <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, bgcolor: alpha(gold, 0.4) }} />
-      {/* Logo overlay */}
-      <Box sx={{ position: 'absolute', top: 24, left: 24 }}>
-        <Box component="img" src="/logo.png" sx={{ width: 56, height: 56, borderRadius: 2, boxShadow: `0 8px 24px ${alpha(gold, 0.3)}` }} />
-      </Box>
-      {/* Stats overlay */}
-      <Box sx={{ position: 'absolute', top: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {[['15+ Years', 'Est. 2010'], ['UAE Licensed', 'Al Ain HQ'], ['+500 Assets', 'Managed']].map(([v, l]) => (
-          <Box key={v} sx={{ px: 2, py: 0.8, bgcolor: 'rgba(0,0,0,0.6)', borderRadius: 1.5, border: `1px solid ${alpha(gold, 0.3)}`, backdropFilter: 'blur(8px)' }}>
-            <Typography variant="caption" sx={{ color: gold, fontWeight: 950, display: 'block', lineHeight: 1.2 }}>{v}</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.65rem', fontWeight: 700 }}>{l}</Typography>
-          </Box>
-        ))}
-      </Box>
-      {/* BIN GROUP label at bottom */}
-      <Box sx={{ position: 'absolute', bottom: 16, left: 0, right: 0, textAlign: 'center' }}>
-        <Typography sx={{ color: alpha(gold, 0.8), fontWeight: 950, letterSpacing: 6, fontSize: '0.75rem', textTransform: 'uppercase' }}>BIN GROUP · AL AIN · UAE</Typography>
- main
       </Box>
     </Box>
   );
@@ -448,7 +312,6 @@ export default function CompanyProfilePage() {
       <BrandWatermark opacity={0.07} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
 
- claude/quirky-carson-x5ygtk
         {/* Company Credentials Band */}
         <Box sx={{ bgcolor: '#111827', py: 0.85, borderBottom: `1px solid ${alpha(gold, 0.22)}` }}>
           <Container maxWidth="lg">
@@ -465,8 +328,6 @@ export default function CompanyProfilePage() {
           </Container>
         </Box>
 
-
- main
         {/* Nav */}
         <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(18px)', borderBottom: `1px solid ${line}` }}>
           <Container maxWidth="lg" sx={{ py: 1.2, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
@@ -504,11 +365,7 @@ export default function CompanyProfilePage() {
                 </Stack>
               </Grid>
               <Grid item xs={12} md={5}>
- claude/quirky-carson-x5ygtk
                 <HeroLogoCard />
-
-                <PropertyHeroVisual />
- main
               </Grid>
             </Grid>
           </Container>
@@ -518,7 +375,6 @@ export default function CompanyProfilePage() {
         <Box sx={{ py: 10, bgcolor: '#111827', borderBottom: `1px solid rgba(212,175,55,.20)` }}>
           <Container maxWidth="lg">
             <Box sx={{ textAlign: 'center', mb: 7 }}>
- claude/quirky-carson-x5ygtk
               <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
                 <Box sx={{
                   position: 'relative', display: 'inline-block',
@@ -534,8 +390,6 @@ export default function CompanyProfilePage() {
                   }} />
                 </Box>
               </Box>
-
- main
               <Chip label={copy.ar ? 'هويتنا' : 'WHO WE ARE'} sx={{ mb: 2, bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
               <Typography variant="h2" fontWeight={950} sx={{ color: '#FFF', mb: 2 }}>{copy.aboutTitle}</Typography>
               <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.68)', fontWeight: 700, maxWidth: 760, mx: 'auto', lineHeight: 1.8 }}>{copy.aboutSubtitle}</Typography>
@@ -563,7 +417,6 @@ export default function CompanyProfilePage() {
                     <Typography variant="h5" fontWeight={950} sx={{ color: gold, textAlign }}>
                       {copy.ar ? 'قصتنا' : 'Our Story'}
                     </Typography>
- claude/quirky-carson-x5ygtk
                   </Stack>
                   <Typography sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 700, lineHeight: 2, textAlign }}>
                     {copy.ar
@@ -584,28 +437,6 @@ export default function CompanyProfilePage() {
                     <Box sx={{ p: 1.2, bgcolor: alpha(gold, 0.12), borderRadius: 2 }}><Sparkles color={gold} size={22} /></Box>
                     <Typography variant="h5" fontWeight={950} sx={{ color: gold, textAlign }}>{copy.missionTitle}</Typography>
                   </Stack>
-
-                  </Stack>
-                  <Typography sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 700, lineHeight: 2, textAlign }}>
-                    {copy.ar
-                      ? 'تأسست مجموعة BIN GROUP عام 2010 في مدينة العين، إمارة أبوظبي، بهدف واضح: تقديم خدمات صيانة وإدارة عقارات موثوقة ومُوثَّقة لأصحاب العقارات في الإمارات. بدأنا بمشاريع صيانة صغيرة وتطورنا إلى نظام تشغيل متكامل يضم مالكي العقارات، المستأجرين، الفنيين، والوسطاء في منصة رقمية واحدة.'
-                      : 'BIN GROUP was founded in 2010 in Al Ain, Abu Dhabi Emirate, with a clear goal: deliver reliable, documented maintenance and property management services to UAE property owners. We started with local maintenance projects and grew into a full operating system connecting owners, tenants, technicians, and brokers in one digital platform.'}
-                  </Typography>
-                  <Box sx={{ mt: 3, p: 2.5, bgcolor: alpha(gold, 0.07), borderRadius: 3, border: `1px solid ${alpha(gold, 0.18)}` }}>
-                    <Typography variant="caption" sx={{ color: gold, fontWeight: 950, display: 'block', mb: 1, letterSpacing: 1 }}>
-                      {copy.ar ? 'السجل التجاري' : 'LEGAL IDENTITY'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.7)', fontWeight: 750, lineHeight: 1.8 }}>{copy.aboutLicense}</Typography>
-                  </Box>
-                </Paper>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 4, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,.04)', border: `1px solid ${alpha(gold, 0.18)}` }}>
-                  <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-                    <Box sx={{ p: 1.2, bgcolor: alpha(gold, 0.12), borderRadius: 2 }}><Sparkles color={gold} size={22} /></Box>
-                    <Typography variant="h5" fontWeight={950} sx={{ color: gold, textAlign }}>{copy.missionTitle}</Typography>
-                  </Stack>
- main
                   <Typography sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 700, lineHeight: 2, textAlign }}>{copy.mission}</Typography>
                   <Grid container spacing={2} sx={{ mt: 3 }}>
                     {[
@@ -712,123 +543,12 @@ export default function CompanyProfilePage() {
                       <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75 }}>{desc}</Typography>
                     </Stack>
                   </Paper>
- claude/quirky-carson-x5ygtk
-
                 </Grid>
               ))}
             </Grid>
           </Container>
         </Box>
 
-        {/* Demo Reel */}
-        <Box id="demo" sx={{ scrollMarginTop: 96, py: 9, bgcolor: '#111827', borderBottom: `1px solid rgba(212,175,55,.20)` }}>
-          <Container maxWidth="lg">
-            <Box sx={{ textAlign: 'center', mb: 6 }}>
-              <Chip label={copy.ar ? 'العرض التوضيحي' : 'LIVE DEMO REEL'} sx={{ mb: 2, bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
-              <Typography variant="h2" fontWeight={950} sx={{ color: '#FFF', mb: 1.5 }}>{copy.demoVideoTitle}</Typography>
-              <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.62)', fontWeight: 700, maxWidth: 680, mx: 'auto' }}>{copy.demoVideoSubtitle}</Typography>
-            </Box>
-
-            {/* Video player */}
-            <Box sx={{ position: 'relative', borderRadius: 4, overflow: 'hidden', mb: 6, boxShadow: `0 32px 80px rgba(0,0,0,.5)`, border: `1.5px solid ${alpha(gold, 0.35)}` }}>
-              {!videoPlaying ? (
-                <Box
-                  onClick={() => setVideoPlaying(true)}
-                  sx={{
-                    position: 'relative', cursor: 'pointer', bgcolor: '#0B0B0C',
-                    aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #0B0B0C 0%, #1a1a2e 60%, #0B0B0C 100%)',
-                    '&:hover .play-overlay': { transform: 'scale(1.08)' },
-                  }}
-                >
-                  {/* Background pattern */}
-                  <Box sx={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${alpha(gold, 0.03)} 1px, transparent 1px), linear-gradient(90deg, ${alpha(gold, 0.03)} 1px, transparent 1px)`, backgroundSize: '60px 60px' }} />
-                  {/* App mockup cards */}
-                  <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexWrap: 'wrap', px: 4, opacity: 0.4 }}>
-                    {['Owner Dashboard', 'Tenant Requests', 'Tech Dispatch', 'Evidence Vault', 'Contracts & Pay'].map((label, i) => (
-                      <Box key={label} sx={{ px: 2.5, py: 1.5, bgcolor: alpha(gold, 0.1), border: `1px solid ${alpha(gold, 0.25)}`, borderRadius: 2 }}>
-                        <Typography sx={{ color: gold, fontWeight: 950, fontSize: '0.75rem' }}>{label}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                  {/* BIN GROUP watermark */}
-                  <Box sx={{ position: 'absolute', top: 20, left: 20, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box component="img" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 1.5, boxShadow: `0 8px 20px ${alpha(gold, 0.3)}` }} />
-                    <Box>
-                      <Typography sx={{ color: gold, fontWeight: 950, fontSize: '0.85rem', lineHeight: 1 }}>BIN GROUP</Typography>
-                      <Typography sx={{ color: 'rgba(255,255,255,.5)', fontSize: '0.65rem', fontWeight: 700 }}>SUPER APP · UAE</Typography>
-                    </Box>
-                  </Box>
-                  {/* Play button */}
-                  <Box className="play-overlay" sx={{ position: 'relative', zIndex: 2, width: 88, height: 88, borderRadius: '50%', bgcolor: gold, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 16px 48px ${alpha(gold, 0.5)}`, transition: 'transform .2s', flexShrink: 0 }}>
-                    <Play size={36} color="#111827" fill="#111827" style={{ marginLeft: 4 }} />
-                  </Box>
-                  <Box sx={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center' }}>
-                    <Typography sx={{ color: 'rgba(255,255,255,.5)', fontWeight: 800, fontSize: '0.8rem', letterSpacing: 2 }}>
-                      {copy.ar ? 'انقر لمشاهدة العرض الكامل' : 'CLICK TO WATCH THE FULL DEMO'}
-                    </Typography>
-                  </Box>
-                </Box>
-              ) : (
-                <Box sx={{ aspectRatio: '16/9', bgcolor: '#000' }}>
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    src={`${YOUTUBE_DEMO_URL}?autoplay=1&rel=0&modestbranding=1`}
-                    title="BIN GROUP Demo"
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ display: 'block', width: '100%', aspectRatio: '16/9' }}
-                  />
-                </Box>
-              )}
-            </Box>
-
-            {/* CTA below video */}
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mb: 8 }}>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<PlayCircle size={20} />}
-                onClick={() => window.open(`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(copy.ar ? 'مرحباً، أرغب في حجز عرض تشغيلي مباشر لتطبيق BIN GROUP.' : 'Hello, I would like to book a live demo of BIN GROUP.')}`, '_blank')}
-                sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, px: 4, py: 1.6, borderRadius: 3 }}
-              >
-                {copy.demoVideoBtn}
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                startIcon={<MessageSquare size={20} />}
-                onClick={() => navigate('/onboarding')}
-                sx={{ borderColor: alpha(gold, 0.5), color: gold, fontWeight: 950, px: 4, py: 1.6, borderRadius: 3 }}
-              >
-                {copy.demoVideoCta}
-              </Button>
-            </Stack>
-
-            {/* Demo scenes */}
-            <Typography variant="h5" fontWeight={950} sx={{ color: '#FFF', mb: 3, textAlign: 'center' }}>{copy.demoTitle}</Typography>
-            <Grid container spacing={2}>
-              {copy.demoScenes.map((scene, idx) => (
-                <Grid item xs={12} sm={6} md={4} key={scene[0]}>
-                  <Paper sx={{ p: 2.5, height: '100%', borderRadius: 3, bgcolor: 'rgba(255,255,255,.04)', border: `1px solid ${alpha(gold, 0.16)}` }}>
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                      <Box sx={{ color: gold, mt: 0.35, flexShrink: 0, p: 1, bgcolor: alpha(gold, 0.1), borderRadius: 1.5 }}>{DEMO_ICONS[idx]}</Box>
-                      <Box>
-                        <Typography fontWeight={950} sx={{ color: '#FFF' }}>{scene[0]}</Typography>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 700, lineHeight: 1.65, mt: 0.8 }}>{scene[1]}</Typography>
-                      </Box>
-                    </Stack>
-                  </Paper>
- main
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
- claude/quirky-carson-x5ygtk
         {/* Demo Reel */}
         <Box id="demo" sx={{ scrollMarginTop: 96, py: 9, bgcolor: '#111827', borderBottom: `1px solid rgba(212,175,55,.20)` }}>
           <Container maxWidth="lg">
@@ -937,26 +657,12 @@ export default function CompanyProfilePage() {
                       </Box>
                     </Stack>
                   </Paper>
-
-        {/* Trust */}
-        <Box sx={{ py: 7, borderBottom: `1px solid ${line}` }}>
-          <Container maxWidth="lg">
-            <Typography variant="h3" fontWeight={950} sx={{ textAlign: 'center', mb: 4 }}>{copy.trustTitle}</Typography>
-            <Grid container spacing={2} justifyContent="center">
-              {copy.trust.map((item) => (
-                <Grid item xs={12} sm={6} md={4} key={item}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ p: 2.5, borderRadius: radius.card, border: `1px solid ${line}`, bgcolor: platinum }}>
-                    <CheckCircle2 size={20} color={gold} style={{ flexShrink: 0 }} />
-                    <Typography sx={{ color: '#374151', fontWeight: 800 }}>{item}</Typography>
-                  </Stack>
- main
                 </Grid>
               ))}
             </Grid>
           </Container>
         </Box>
 
- claude/quirky-carson-x5ygtk
         {/* Trust */}
         <Box sx={{ py: 7, borderBottom: `1px solid ${line}` }}>
           <Container maxWidth="lg">
@@ -974,14 +680,11 @@ export default function CompanyProfilePage() {
           </Container>
         </Box>
 
-
- main
         {/* Contact */}
         <Container maxWidth="lg" sx={{ py: 9 }}>
           <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, bgcolor: '#111827', color: '#fff', border: '1px solid rgba(212,175,55,.30)', boxShadow: '0 24px 70px rgba(17,24,39,.18)' }}>
             <Grid container spacing={4} alignItems="center">
               <Grid item xs={12} md={5}>
- claude/quirky-carson-x5ygtk
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2.5 }}>
                   <Box component="img" src="/logo.png" alt="BIN GROUP" sx={{ width: 64, height: 64, borderRadius: 2.5, border: `2px solid ${alpha(gold, 0.55)}`, boxShadow: `0 8px 28px ${alpha(gold, 0.3)}`, flexShrink: 0 }} />
                   <Box>
@@ -990,10 +693,6 @@ export default function CompanyProfilePage() {
                   </Box>
                 </Stack>
                 <Typography sx={{ color: 'rgba(255,255,255,.68)', fontWeight: 800, mt: 1, lineHeight: 1.7, textAlign }}>{copy.footer}</Typography>
-
-                <Typography variant="h3" fontWeight={950} sx={{ color: gold, textAlign }}>{copy.contactTitle}</Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,.68)', fontWeight: 800, mt: 1.5, lineHeight: 1.7, textAlign }}>{copy.footer}</Typography>
- main
                 <Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ mt: 3, borderRadius: radius.button, bgcolor: gold, color: '#111827', fontWeight: 950, px: 3.5, py: 1.4 }}>
                   {copy.ctaStart}
                 </Button>
