@@ -1,8 +1,6 @@
 import React, { useEffect } from 'react';
-import {
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip
-} from '@mui/material';
-import { Wrench, UserCheck, ShieldCheck, ArrowRight, CalendarCheck, CheckCircle2, XCircle, ClipboardCheck, Timer } from 'lucide-react';
+import { Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip } from '@mui/material';
+import { Wrench, UserCheck, ShieldCheck, ArrowRight, CalendarCheck, CheckCircle2, XCircle, ClipboardCheck, Timer, FileText } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -13,21 +11,23 @@ const tx = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
 const copy = {
     serviceScopeDetails: { en: 'Service Scope Details', ar: 'تفاصيل نطاق الخدمة' },
-    ppmCoverage: { en: 'PPM, Coverage, Exclusions and Proof', ar: 'الصيانة الوقائية، التغطية، الاستثناءات والإثبات' },
+    ppmCoverage: { en: 'PPM, Coverage, Exclusions and Contract Clauses', ar: 'الصيانة الوقائية والتغطية والاستثناءات وبنود العقد' },
     ppmSchedule: { en: 'PPM Schedule', ar: 'جدول الصيانة الوقائية' },
     completionProof: { en: 'Completion Proof', ar: 'إثبات الإنجاز' },
     ppmProgram: { en: 'PPM Program', ar: 'برنامج الصيانة الوقائية' },
     slaResponse: { en: 'SLA Response', ar: 'استجابة SLA' },
     included: { en: 'Included', ar: 'مشمول' },
     notIncluded: { en: 'Not Included / Approval', ar: 'غير مشمول / يحتاج موافقة' },
+    contractClauses: { en: 'Contract Clauses', ar: 'بنود العقد' },
     selectedSystems: { en: 'Selected Systems and Add-ons', ar: 'الأنظمة والإضافات المختارة' },
     noSystems: { en: 'No systems selected yet', ar: 'لم يتم اختيار أنظمة بعد' },
-    mandatoryAddons: { en: 'Mandatory add-ons calculated from systems', ar: 'الإضافات الإلزامية محسوبة حسب الأنظمة' },
-    ppmPrefix: { en: 'PPM:', ar: 'الصيانة الوقائية:' },
+    mandatoryAddons: { en: 'Mandatory add-ons calculated from asset profile', ar: 'الإضافات الإلزامية محسوبة حسب ملف الأصل' },
     fullAnnualPayment: { en: 'Full annual payment', ar: 'دفعة سنوية كاملة' },
     includedValue: { en: 'Included', ar: 'مشمول' },
     approvalRule: { en: 'Approval Rule', ar: 'قاعدة الموافقة' },
     approvalRuleText: { en: 'Work above AED 1,000 needs owner approval before execution.', ar: 'أي عمل يتجاوز 1,000 درهم يحتاج موافقة المالك قبل التنفيذ.' },
+    selectedAsset: { en: 'Selected asset profile', ar: 'ملف الأصل المختار' },
+    quoteBreakdown: { en: 'Quote Breakdown', ar: 'تفصيل السعر' },
 };
 
 const systemLabels: Record<string, LocalText> = {
@@ -46,19 +46,6 @@ const systemLabels: Record<string, LocalText> = {
     pool: { en: 'Swimming Pool', ar: 'المسبح' },
     greaseTrap: { en: 'Grease Trap', ar: 'مصيدة الشحوم' },
     majlisGarden: { en: 'Majlis Garden', ar: 'حديقة المجلس' },
-};
-
-const addOnLabels: Record<string, LocalText> = {
-    fire_safety: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' },
-    water_tank: { en: 'Water Tank Service', ar: 'خدمة خزان المياه' },
-    elevator_amc: { en: 'Lift AMC', ar: 'عقد صيانة المصاعد' },
-    hvac_pm: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' },
-    cleaning: { en: 'Cleaning / Deep Cleaning', ar: 'تنظيف / تنظيف عميق' },
-    pest_control: { en: 'Pest Control', ar: 'مكافحة الحشرات' },
-    landscaping: { en: 'Landscaping', ar: 'تنسيق الحدائق' },
-    move_in_out_inspection: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' },
-    mep_support: { en: 'MEP Support', ar: 'دعم MEP' },
-    waste_management: { en: 'Waste Management', ar: 'إدارة النفايات' },
 };
 
 const ppmTextByTier: Record<string, LocalText> = {
@@ -85,55 +72,14 @@ const paymentPlanDetails: Record<string, LocalText> = {
     monthly: { en: '15% mobilization first, then monthly billing after verification.', ar: 'دفعة تعبئة 15% أولاً، ثم فوترة شهرية بعد التحقق.' },
 };
 
-const includedScopes: Record<string, LocalText[]> = {
-    pm_only: [
-        { en: 'Tenant coordination', ar: 'تنسيق المستأجرين' },
-        { en: 'Owner reporting', ar: 'تقارير المالك' },
-        { en: 'Complaint management', ar: 'إدارة الشكاوى' },
-        { en: 'Rent/admin follow-up', ar: 'متابعة الإيجارات والإدارة' },
-    ],
-    both: [
-        { en: 'PPM and reactive maintenance', ar: 'صيانة وقائية واستجابة للأعطال' },
-        { en: 'Tenant coordination', ar: 'تنسيق المستأجرين' },
-        { en: 'Owner reporting', ar: 'تقارير المالك' },
-        { en: 'Ticket workflow', ar: 'مسار التذاكر' },
-        { en: 'Completion proof', ar: 'إثبات الإنجاز' },
-    ],
-    fm_only: [
-        { en: 'PPM calendar', ar: 'تقويم الصيانة الوقائية' },
-        { en: 'Reactive maintenance workflow', ar: 'مسار الصيانة التفاعلية' },
-        { en: 'Technician dispatch', ar: 'إرسال الفنيين' },
-        { en: 'SLA tracking', ar: 'تتبع SLA' },
-        { en: 'Completion proof', ar: 'إثبات الإنجاز' },
-    ],
-};
-
-const excludedScopes: Record<string, LocalText[]> = {
-    pm_only: [
-        { en: 'PPM visits', ar: 'زيارات الصيانة الوقائية' },
-        { en: 'Technical labor', ar: 'العمالة الفنية' },
-        { en: 'Parts and materials', ar: 'قطع الغيار والمواد' },
-        { en: 'Maintenance repairs unless separately approved', ar: 'إصلاحات الصيانة ما لم تتم الموافقة عليها بشكل منفصل' },
-    ],
-    default: [
-        { en: 'Repairs above AED 1,000 without owner approval', ar: 'الإصلاحات فوق 1,000 درهم بدون موافقة المالك' },
-        { en: 'Major replacement works', ar: 'أعمال الاستبدال الكبيرة' },
-        { en: 'Civil renovation or fit-out', ar: 'التجديد المدني أو أعمال التجهيز' },
-        { en: 'Materials and specialist invoices unless quoted', ar: 'المواد وفواتير المختصين ما لم يتم تسعيرها' },
-    ],
-};
-
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, propertyData, selectedAddOns, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const ar = lang === 'ar';
-
     const activePropertyIndex = 0;
     const property = properties[activePropertyIndex] || propertyData || ({} as any);
 
-    useEffect(() => {
-        calculateSummary();
-    }, [properties, calculateSummary]);
+    useEffect(() => { calculateSummary(); }, [properties, calculateSummary]);
 
     const plans = [
         { id: 'FM_ONLY', strategy: 'fm_only', name: t('onboarding.plan.amc'), icon: <Wrench size={24} />, desc: t('onboarding.plan.amc_desc') },
@@ -172,9 +118,12 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
-    const selectedAddOnNames = (selectedAddOns || []).map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
-    const includedScope = selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only;
-    const excludedScope = selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default;
+    const selectedAddOnNames = (quote?.appliedAddOns?.length ? quote.appliedAddOns.map(a => `${a.label} · AED ${formatAED(a.annualValue)}`) : selectedAddOns.map((id) => id.replace(/_/g, ' ')));
+    const includedScope = quote?.includedServices?.length ? quote.includedServices : [];
+    const excludedScope = quote?.excludedServices?.length ? quote.excludedServices : [];
+    const contractClauses = quote?.contractClauses?.length ? quote.contractClauses : [];
+    const assetSpecificScope = quote?.assetSpecificScope?.length ? quote.assetSpecificScope : [];
+    const quoteBreakdown = quote?.pricingBreakdown?.filter((line) => Math.abs(line.amount) > 0) || [];
 
     return (
         <Box sx={{ py: 2 }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -214,16 +163,18 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 </Stack>
                             </Stack>
                             <Grid container spacing={2.5}>
+                                <Grid item xs={12}><Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold}>{tx(copy.selectedAsset, ar)}</Typography><Typography variant="body2" sx={{ color: '#FFF', mt: 1, fontWeight: 800 }}>{property.propertyType || 'Property'} · {property.assetGrade || 'Premium'} · {property.sqft || 0} sq.ft · {property.units || property.rooms || property.roomCount || 1} unit/capacity</Typography><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>{assetSpecificScope.map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: '#FFF', fontWeight: 800 }} />)}</Stack></Paper></Grid>
                                 <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><CalendarCheck size={17} /> {tx(copy.ppmProgram, ar)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', mt: 1.2, lineHeight: 1.75, textAlign: isRTL ? 'right' : 'left' }}>{selectedPpmText}</Typography></Paper></Grid>
                                 <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Timer size={17} /> {tx(copy.slaResponse, ar)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', mt: 1.2, lineHeight: 1.75, textAlign: isRTL ? 'right' : 'left' }}>{selectedResponseText}</Typography></Paper></Grid>
-                                <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#86efac" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><CheckCircle2 size={17} /> {tx(copy.included, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{includedScope.map(item => <Typography key={item.en} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {tx(item, ar)}</Typography>)}</Stack></Paper></Grid>
-                                <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#fca5a5" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><XCircle size={17} /> {tx(copy.notIncluded, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{excludedScope.map(item => <Typography key={item.en} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {tx(item, ar)}</Typography>)}</Stack></Paper></Grid>
+                                <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#86efac" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><CheckCircle2 size={17} /> {tx(copy.included, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{includedScope.map(item => <Typography key={item} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {item}</Typography>)}</Stack></Paper></Grid>
+                                <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#fca5a5" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><XCircle size={17} /> {tx(copy.notIncluded, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{excludedScope.map(item => <Typography key={item} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {item}</Typography>)}</Stack></Paper></Grid>
+                                <Grid item xs={12}><Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><FileText size={17} /> {tx(copy.contractClauses, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{contractClauses.slice(0, 8).map(item => <Typography key={item} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {item}</Typography>)}</Stack></Paper></Grid>
                                 <Grid item xs={12}><Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold}>{tx(copy.selectedSystems, ar)}</Typography><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>{(selectedSystems.length ? selectedSystems : [tx(copy.noSystems, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: '#FFF', fontWeight: 800 }} />)}{(selectedAddOnNames.length ? selectedAddOnNames : [tx(copy.mandatoryAddons, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />)}</Stack></Paper></Grid>
                             </Grid>
                         </Paper>
 
                         <Grid container spacing={4}>
-                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{tier.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(copy.ppmPrefix, ar)} {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
+                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{tier.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>PPM: {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
                             <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>3. {t('onboarding.payment_title')}</Typography><RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>{paymentPlans.map(plan => <FormControlLabel key={plan.id} value={plan.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{plan.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{plan.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(plan.detail, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
                         </Grid>
                     </Grid>
@@ -236,6 +187,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
                                 {isAnnualPayment ? <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="rgba(255,255,255,0.72)">{tx(copy.includedValue, ar)}</Typography></Box> : <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>}
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+                                <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.quoteBreakdown, ar)}</Typography><Stack spacing={0.7} sx={{ mt: 1 }}>{quoteBreakdown.map(line => <Box key={line.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)' }}>{line.label}</Typography><Typography variant="caption" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatAED(line.amount)}</Typography></Box>)}</Stack></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
                             </Stack>
