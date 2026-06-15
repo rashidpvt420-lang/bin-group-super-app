@@ -220,121 +220,6 @@ const isMosqueAsset = (property: Partial<PropertyData>): boolean => {
     return label.includes('mosque') || label.includes('masjid') || label.includes('religious_facility') || label.includes('mosque_fm');
 };
 
- claude/quirky-carson-x5ygtk
-export const inferAssetGrade = (property: PropertyData): 'Standard' | 'Premium' | 'Luxury' | 'Sovereign' => {
-    const pt = property.propertyType || '';
-    const hotel = (property as any).hotelProfile || {};
-    const school = (property as any).schoolProfile || {};
-    const hospital = (property as any).hospitalProfile || {};
-    const stadium = (property as any).stadiumProfile || {};
-    const villa = (property as any).villaProfile || {};
-    const residential = (property as any).residentialProfile || {};
-    const commercial = (property as any).commercialProfile || {};
-    const warehouse = (property as any).warehouseProfile || {};
-    const labour = (property as any).labourCampProfile || {};
-    const government = (property as any).governmentProfile || {};
-    const majlis = (property as any).majlisProfile || {};
-    const mixed = (property as any).mixedUseProfile || {};
-    const farm = (property as any).farmProfile || {};
-
-    if (pt === 'Government Majlis' || property.majlisType === 'government') return 'Sovereign';
-
-    if (pt === 'Hotel' || pt === 'Resort') {
-        const stars = Number(hotel.starRating || 3);
-        const amenities = [hotel.hasSpa, hotel.hasPool, hotel.hasGym, hotel.hasRestaurant, hotel.hasConferenceFacility].filter(Boolean).length;
-        if (stars >= 5 || amenities >= 4) return 'Luxury';
-        if (stars >= 4 || amenities >= 2) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Villa') {
-        const sqft = property.sqft || 0;
-        const luxFeatures = [villa.hasPrivatePool, villa.hasStaffQuarters, villa.hasSolarPanels].filter(Boolean).length;
-        if (sqft >= 8000 || luxFeatures >= 2) return 'Luxury';
-        if (villa.hasPrivatePool || sqft >= 4000 || villa.hasBBQArea) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Apartment' || pt === 'Residential Building') {
-        if (residential.hasPool && residential.hasGym) return 'Luxury';
-        if (residential.hasPool || residential.hasGym || residential.hasLobby) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Hospital' || pt === 'Clinic') {
-        const icu = Number(hospital.icuBeds || 0);
-        const theaters = Number(hospital.surgicalTheaters || 0);
-        if (icu > 10 || theaters > 3) return 'Luxury';
-        if (icu > 0 || theaters > 0) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'School') {
-        const features = [school.hasLabs, school.hasPlayground, school.hasCanteen, school.hasClinic, school.hasSwimmingPool].filter(Boolean).length;
-        if (features >= 4) return 'Luxury';
-        if (features >= 2) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Stadium' || pt === 'Sports Complex' || pt === 'Event Venue') {
-        const seats = Number(stadium.seatingCapacity || 0);
-        if (seats > 20000) return 'Luxury';
-        if (seats > 5000) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Warehouse' || pt === 'Industrial Property') {
-        if (warehouse.hasHazmat || Number(warehouse.powerLoadKW || 0) > 500) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Labour Camp' || pt === 'Staff Accommodation') {
-        const features = [labour.hasMedicalRoom, labour.hasCanteen, labour.hasPestControlZone, labour.hasFireSafety].filter(Boolean).length;
-        if (features >= 3) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Government Property') {
-        if (government.securityLevel === 'Maximum' || (government.hasVIPArea && government.hasCeremonialSpace)) return 'Luxury';
-        if (government.hasVIPArea || government.securityLevel === 'Enhanced') return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Private Majlis') {
-        const halls = Number(majlis.eventHallsCount || 0);
-        if (halls > 2 || (majlis.hasGarden && majlis.hasVIPRoom)) return 'Luxury';
-        if (majlis.hasGarden || halls > 0) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Mixed-Use Tower') {
-        if (mixed.hasHotelComponent || (property.floors || 0) >= 40) return 'Luxury';
-        if (Number(mixed.totalUnits || 0) > 200 || (property.floors || 0) >= 20) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Commercial Building' || pt === 'Office' || pt === 'Skyscraper') {
-        if ((property.floors || 0) >= 40 || commercial.hasDataRoom) return 'Luxury';
-        if ((property.floors || 0) >= 20 || (property.lifts || 0) > 4) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Retail Center' || pt === 'Mall') {
-        const shops = Number((property as any).retailProfile?.shopsCount || property.shops || 0);
-        if (shops > 200) return 'Luxury';
-        if (shops > 50) return 'Premium';
-        return 'Standard';
-    }
-
-    if (pt === 'Farm / Estate') {
-        const acres = Number(farm.landAcres || 0);
-        if (acres > 20 && farm.hasStaffQuarters) return 'Luxury';
-        if (acres > 5 || farm.hasStaffQuarters) return 'Premium';
-        return 'Standard';
-    }
-
-    return 'Standard';
-
 const resolveAssetClassId = (property: Partial<PropertyData>): string => {
     const label = normalizeText(property.propertyType, property.subType, property.assetClass, property.serviceModel);
     if (isMosqueAsset(property)) return 'mosque_fm';
@@ -363,47 +248,111 @@ const resolveAssetClassId = (property: Partial<PropertyData>): string => {
     if (label.includes('event venue')) return 'event_venue';
     if (label.includes('farm') || label.includes('estate')) return 'farm_estate';
     return 'apt-std';
- main
+};
+
+export const inferAssetGrade = (property: PropertyData): 'Standard' | 'Premium' | 'Luxury' | 'Sovereign' => {
+    const pt = property.propertyType || '';
+    const hotel = (property as any).hotelProfile || {};
+    const school = (property as any).schoolProfile || {};
+    const hospital = (property as any).hospitalProfile || {};
+    const stadium = (property as any).stadiumProfile || {};
+    const villa = (property as any).villaProfile || {};
+    const residential = (property as any).residentialProfile || {};
+    const commercial = (property as any).commercialProfile || {};
+    const warehouse = (property as any).warehouseProfile || {};
+    const labour = (property as any).labourCampProfile || {};
+    const government = (property as any).governmentProfile || {};
+    const majlis = (property as any).majlisProfile || {};
+    const mixed = (property as any).mixedUseProfile || {};
+    const farm = (property as any).farmProfile || {};
+    if (pt === 'Government Majlis' || property.majlisType === 'government') return 'Sovereign';
+    if (pt === 'Hotel' || pt === 'Resort') {
+        const stars = Number(hotel.starRating || 3);
+        const amenities = [hotel.hasSpa, hotel.hasPool, hotel.hasGym, hotel.hasRestaurant, hotel.hasConferenceFacility].filter(Boolean).length;
+        if (stars >= 5 || amenities >= 4) return 'Luxury';
+        if (stars >= 4 || amenities >= 2) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Villa') {
+        const sqft = property.sqft || 0;
+        const luxFeatures = [villa.hasPrivatePool, villa.hasStaffQuarters, villa.hasSolarPanels].filter(Boolean).length;
+        if (sqft >= 8000 || luxFeatures >= 2) return 'Luxury';
+        if (villa.hasPrivatePool || sqft >= 4000 || villa.hasBBQArea) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Apartment' || pt === 'Residential Building') {
+        if (residential.hasPool && residential.hasGym) return 'Luxury';
+        if (residential.hasPool || residential.hasGym || residential.hasLobby) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Hospital' || pt === 'Clinic') {
+        const icu = Number(hospital.icuBeds || 0);
+        const theaters = Number(hospital.surgicalTheaters || 0);
+        if (icu > 10 || theaters > 3) return 'Luxury';
+        if (icu > 0 || theaters > 0) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'School') {
+        const features = [school.hasLabs, school.hasPlayground, school.hasCanteen, school.hasClinic, school.hasSwimmingPool].filter(Boolean).length;
+        if (features >= 4) return 'Luxury';
+        if (features >= 2) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Stadium' || pt === 'Sports Complex' || pt === 'Event Venue') {
+        const seats = Number(stadium.seatingCapacity || 0);
+        if (seats > 20000) return 'Luxury';
+        if (seats > 5000) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Warehouse' || pt === 'Industrial Property') {
+        if (warehouse.hasHazmat || Number(warehouse.powerLoadKW || 0) > 500) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Labour Camp' || pt === 'Staff Accommodation') {
+        const features = [labour.hasMedicalRoom, labour.hasCanteen, labour.hasPestControlZone, labour.hasFireSafety].filter(Boolean).length;
+        if (features >= 3) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Government Property') {
+        if (government.securityLevel === 'Maximum' || (government.hasVIPArea && government.hasCeremonialSpace)) return 'Luxury';
+        if (government.hasVIPArea || government.securityLevel === 'Enhanced') return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Private Majlis') {
+        const halls = Number(majlis.eventHallsCount || 0);
+        if (halls > 2 || (majlis.hasGarden && majlis.hasVIPRoom)) return 'Luxury';
+        if (majlis.hasGarden || halls > 0) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Mixed-Use Tower') {
+        if (mixed.hasHotelComponent || (property.floors || 0) >= 40) return 'Luxury';
+        if (Number(mixed.totalUnits || 0) > 200 || (property.floors || 0) >= 20) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Commercial Building' || pt === 'Office' || pt === 'Skyscraper') {
+        if ((property.floors || 0) >= 40 || commercial.hasDataRoom) return 'Luxury';
+        if ((property.floors || 0) >= 20 || (property.lifts || 0) > 4) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Retail Center' || pt === 'Mall') {
+        const shops = Number((property as any).retailProfile?.shopsCount || property.shops || 0);
+        if (shops > 200) return 'Luxury';
+        if (shops > 50) return 'Premium';
+        return 'Standard';
+    }
+    if (pt === 'Farm / Estate') {
+        const acres = Number(farm.landAcres || 0);
+        if (acres > 20 && farm.hasStaffQuarters) return 'Luxury';
+        if (acres > 5 || farm.hasStaffQuarters) return 'Premium';
+        return 'Standard';
+    }
+    return 'Standard';
 };
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
     const mosqueProfile = property.mosqueProfile || {};
     const isMosque = isMosqueAsset(property);
- claude/quirky-carson-x5ygtk
-
-    // Map internal types to Pricing Matrix types
-    const inferredGrade = inferAssetGrade(property);
-    const gradeOrder = ['Standard', 'Premium', 'Luxury', 'Ultra-Luxury', 'Sovereign'];
-    const effectiveGrade = gradeOrder[Math.max(gradeOrder.indexOf(inferredGrade), gradeOrder.indexOf(property.assetGrade || 'Standard'))] as 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
-
-    let assetClassId = 'apt-std';
-    const pt = property.propertyType || '';
-    if (isMosque) assetClassId = 'mosque_fm';
-    else if (pt === 'Villa') assetClassId = effectiveGrade === 'Luxury' || effectiveGrade === 'Ultra-Luxury' || effectiveGrade === 'Sovereign' ? 'villa-lux' : 'villa-std';
-    else if (pt === 'Apartment') assetClassId = effectiveGrade === 'Luxury' || effectiveGrade === 'Ultra-Luxury' || effectiveGrade === 'Sovereign' ? 'apt-lux' : 'apt-std';
-    else if (pt === 'Residential Building') assetClassId = 'apt-std';
-    else if (pt === 'Commercial Building' || pt === 'Skyscraper') assetClassId = 'com-twr';
-    else if (pt === 'Office') assetClassId = 'off-sml';
-    else if (pt === 'Retail Center' || pt === 'Mall') assetClassId = 'rtl-mall';
-    else if (pt === 'Hotel' || pt === 'Resort') assetClassId = 'mid_scale_hotel';
-    else if (pt === 'Hospital' || pt === 'Clinic') assetClassId = 'hosp';
-    else if (pt === 'School') assetClassId = 'hosp'; // education uses healthcare tier (sqft, min 75K)
-    else if (pt === 'Warehouse' || pt === 'Industrial Property') assetClassId = 'com-twr'; // sqft-based industrial
-    else if (pt === 'Labour Camp' || pt === 'Staff Accommodation') assetClassId = 'lab-camp';
-    else if (pt === 'Government Property') assetClassId = 'com-twr';
-    else if (pt === 'Government Majlis' || property.majlisType === 'government' || (property.majlis && property.majlisType !== 'private')) assetClassId = 'government_majlis';
-    else if (pt === 'Private Majlis' || property.majlisType === 'private') assetClassId = 'private_majlis';
-    else if (pt === 'Mixed-Use Tower') assetClassId = 'mix-dev';
-    else if (pt === 'Stadium' || pt === 'Sports Complex' || pt === 'Event Venue') assetClassId = 'mix-dev';
-    else if (pt === 'Farm / Estate') assetClassId = 'villa-lux';
-    else if (pt === 'Building') assetClassId = 'com-twr';
-    else if (pt === 'Commercial') assetClassId = 'off-sml';
-    else if (property.majlis) assetClassId = 'government_majlis';
-
-    // Map emirate to camelCase
-
     const assetClassId = resolveAssetClassId(property);
- main
     const emirateMap: Record<string, string> = {
         Dubai: 'dubai',
         'Abu Dhabi': 'abuDhabi',
@@ -427,19 +376,8 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         zone: property.zone || 'B',
         contractType: property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY' : (property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
         sqft: isMosque ? (Number(mosqueProfile.grossFloorAreaSqft) || property.sqft) : property.sqft,
- claude/quirky-carson-x5ygtk
-        units: isMosque
-            ? (Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units)
-            : (pt === 'Labour Camp' || pt === 'Staff Accommodation')
-            ? ((property as any).labourCampProfile?.bedsCount || property.bedrooms || property.units)
-            : property.units,
-        beds: (pt === 'Hospital' || pt === 'Clinic')
-            ? ((property as any).hospitalProfile?.bedsCount || property.bedrooms || property.units)
-            : undefined,
-
         units: capacityOrUnits,
         beds,
- main
         annualRent: property.annualRent,
         annualRevenue: property.annualRevenue,
         propertyAge: isMosque ? (Number(mosqueProfile.propertyAgeYears) || property.age) : property.age,
@@ -460,11 +398,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         hvacCount: property.hvacCount || Number(mosqueProfile.hvacUnitsCount || 0),
         offices: property.offices,
         shops: property.shops,
- claude/quirky-carson-x5ygtk
-        assetGrade: effectiveGrade,
-
         wuduAreas: isMosque ? Number(mosqueProfile.wuduAreasCount || property.units || 1) : undefined
- main
     });
 };
 
