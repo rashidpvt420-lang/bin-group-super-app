@@ -585,7 +585,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const canProceed = Boolean(
         activeProperty?.propertyType &&
         activeProperty?.sqft > 0 &&
-        (activeProperty?.units > 0 || activeProperty?.rooms > 0 || activeProperty?.beds > 0)
+        (activeProperty?.units > 0 || activeProperty?.rooms > 0 || activeProperty?.bedrooms > 0)
     );
     const selectedType = types.find((type) => type.id === activeProperty?.propertyType);
 

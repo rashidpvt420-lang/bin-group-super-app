@@ -80,7 +80,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                                 : primaryProperty?.propertyType === 'School'
                                 ? `${(primaryProperty as any)?.schoolProfile?.classroomsCount || primaryProperty?.units || 0} classrooms · ${(primaryProperty as any)?.schoolProfile?.studentCapacity || 0} students`
                                 : primaryProperty?.propertyType === 'Hospital' || primaryProperty?.propertyType === 'Clinic'
-                                ? `${(primaryProperty as any)?.hospitalProfile?.bedsCount || primaryProperty?.beds || 0} beds · ${(primaryProperty as any)?.hospitalProfile?.icuBeds || 0} ICU`
+                                ? `${(primaryProperty as any)?.hospitalProfile?.bedsCount || (primaryProperty as any)?.beds || 0} beds · ${(primaryProperty as any)?.hospitalProfile?.icuBeds || 0} ICU`
                                 : primaryProperty?.propertyType === 'Mosque / Masjid'
                                 ? `${(primaryProperty as any)?.mosqueProfile?.maxWorshipperCapacity || primaryProperty?.rooms || 0} capacity · ${(primaryProperty as any)?.mosqueProfile?.wuduAreasCount || primaryProperty?.units || 0} wudu areas`
                                 : primaryProperty?.propertyType && ['Stadium', 'Sports Complex', 'Event Venue'].includes(primaryProperty.propertyType)
