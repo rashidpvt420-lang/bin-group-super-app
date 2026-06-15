@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 import {
     Home, Building2, Building, Hotel, Landmark, Gem,
-    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw
+    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw, Check
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -20,6 +20,55 @@ const getMosqueRegulatoryAuthority = (emirate: string) => {
     if (emirate === 'Sharjah') return 'Sharjah Islamic Affairs';
     return 'Local Islamic Affairs Authority';
 };
+
+const createDefaultHotelProfile = () => ({
+    starRating: 3,
+    roomsCount: 0,
+    bedsCount: 0,
+    conferenceRoomsCount: 0,
+    hasRestaurant: false,
+    hasPool: false,
+    hasGym: false,
+    hasSpa: false,
+    hasConferenceRoom: false,
+});
+
+const createDefaultSchoolProfile = () => ({
+    institutionType: 'School' as string,
+    studentCapacity: 0,
+    classroomsCount: 0,
+    labsCount: 0,
+    sportsCourtCount: 0,
+    hasSwimmingPool: false,
+    hasAuditorium: false,
+    hasCafeteria: false,
+    hasLibrary: false,
+});
+
+const createDefaultHospitalProfile = () => ({
+    facilityType: 'Hospital' as string,
+    bedsCount: 0,
+    wardsCount: 0,
+    icuBeds: 0,
+    operatingTheatersCount: 0,
+    hasEmergencyDept: true,
+    hasMedicalGas: false,
+    hasPharmacy: false,
+    hasLaboratory: false,
+    hasOperatingTheaters: false,
+});
+
+const createDefaultStadiumProfile = () => ({
+    seatingCapacity: 0,
+    pitchesCount: 1,
+    courtsCount: 0,
+    vipSuitesCount: 0,
+    hasChangeRooms: true,
+    hasConcessionsArea: false,
+    hasLightingSystem: false,
+    hasPublicAddress: false,
+    hasVIPSuite: false,
+});
 
 const createDefaultMosqueProfile = (emirate = 'Dubai') => ({
     mosqueName: '',
@@ -119,6 +168,15 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     const activeProperty = properties[0];
     const mosqueProfile = (activeProperty as any)?.mosqueProfile || createDefaultMosqueProfile(activeProperty?.emirate || 'Dubai');
     const isMosque = activeProperty?.propertyType === 'Mosque / Masjid';
+    const isHotel = activeProperty?.propertyType === 'Hotel' || activeProperty?.propertyType === 'Resort';
+    const isSchool = activeProperty?.propertyType === 'School';
+    const isHospital = activeProperty?.propertyType === 'Hospital' || activeProperty?.propertyType === 'Clinic';
+    const isStadium = ['Stadium', 'Sports Complex', 'Event Venue'].includes(activeProperty?.propertyType || '');
+
+    const hotelProfile = (activeProperty as any)?.hotelProfile || createDefaultHotelProfile();
+    const schoolProfile = (activeProperty as any)?.schoolProfile || createDefaultSchoolProfile();
+    const hospitalProfile = (activeProperty as any)?.hospitalProfile || createDefaultHospitalProfile();
+    const stadiumProfile = (activeProperty as any)?.stadiumProfile || createDefaultStadiumProfile();
 
     const mosqueComplianceWarnings = useMemo(() => {
         const warnings: string[] = [];
@@ -199,6 +257,10 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
     const selectPropertyType = (type: any) => {
         const isSelectedMosque = type.id === 'Mosque / Masjid';
+        const isSelectedHotel = type.id === 'Hotel' || type.id === 'Resort';
+        const isSelectedSchool = type.id === 'School';
+        const isSelectedHospital = type.id === 'Hospital' || type.id === 'Clinic';
+        const isSelectedStadium = ['Stadium', 'Sports Complex', 'Event Venue'].includes(type.id);
         const nextEmirate = activeProperty?.emirate || 'Dubai';
         updateProperty(0, {
             propertyType: type.id,
@@ -210,14 +272,28 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
             assetGrade: isSelectedMosque || type.premium ? 'Sovereign' : activeProperty?.assetGrade || 'Premium',
             sira: isSelectedMosque ? true : activeProperty?.sira,
             tank: isSelectedMosque ? true : activeProperty?.tank,
-            hvac: isSelectedMosque ? true : activeProperty?.hvac,
-            fireAlarm: isSelectedMosque ? true : activeProperty?.fireAlarm,
+            hvac: isSelectedMosque || isSelectedHotel || isSelectedHospital ? true : activeProperty?.hvac,
+            fireAlarm: isSelectedMosque || isSelectedHospital ? true : activeProperty?.fireAlarm,
+            hasPool: isSelectedHotel ? false : activeProperty?.hasPool,
+            hasGym: isSelectedHotel ? false : activeProperty?.hasGym,
             mosqueProfile: isSelectedMosque ? createDefaultMosqueProfile(nextEmirate) : (activeProperty as any)?.mosqueProfile,
+            hotelProfile: isSelectedHotel ? createDefaultHotelProfile() : (activeProperty as any)?.hotelProfile,
+            schoolProfile: isSelectedSchool ? createDefaultSchoolProfile() : (activeProperty as any)?.schoolProfile,
+            hospitalProfile: isSelectedHospital ? createDefaultHospitalProfile() : (activeProperty as any)?.hospitalProfile,
+            stadiumProfile: isSelectedStadium ? createDefaultStadiumProfile() : (activeProperty as any)?.stadiumProfile,
             assetClass: isSelectedMosque ? 'RELIGIOUS_FACILITY' : (activeProperty as any)?.assetClass,
-            riskProfile: isSelectedMosque ? 'HIGH_FOOTFALL_SENSITIVE_ASSET' : (activeProperty as any)?.riskProfile,
-            serviceModel: isSelectedMosque ? 'MOSQUE_FM' : (activeProperty as any)?.serviceModel,
+            riskProfile: isSelectedMosque ? 'HIGH_FOOTFALL_SENSITIVE_ASSET' : isSelectedHospital ? 'CRITICAL_HEALTHCARE_ASSET' : (activeProperty as any)?.riskProfile,
+            serviceModel: isSelectedMosque ? 'MOSQUE_FM' : isSelectedHotel ? 'HOSPITALITY_FM' : isSelectedHospital ? 'HEALTHCARE_FM' : (activeProperty as any)?.serviceModel,
             missions: isSelectedMosque
                 ? ['Prayer-time safe scheduling', '5 daily Wudu cleaning cycles', 'Ramadan surge readiness', 'Awqaf/IACAD compliance reporting', 'CCTV/SIRA review']
+                : isSelectedHotel
+                ? ['24/7 guest MEP response', 'Pool & gym maintenance', 'Restaurant grease trap service', 'Concierge coordination', 'HVAC hotel priority']
+                : isSelectedSchool
+                ? ['Classroom & lab safety', 'Cafeteria systems', 'Emergency evacuation AMC', 'Student-safe scheduling', 'Sports facility care']
+                : isSelectedHospital
+                ? ['Critical medical systems MEP', '24/7 emergency dispatch', 'Infection control compliance', 'Generator AMC', 'Medical gas visual inspection']
+                : isSelectedStadium
+                ? ['Event-day MEP readiness', 'Crowd safety systems', 'Pitch irrigation maintenance', 'VIP facilities priority', 'CCTV crowd monitoring']
                 : activeProperty?.missions || [],
         } as any);
     };
@@ -235,7 +311,48 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         } as any);
     };
 
-    const canProceed = activeProperty?.propertyType && activeProperty?.units > 0 && activeProperty?.sqft > 0;
+    const updateHotelProfile = (patch: Record<string, any>) => {
+        const nextProfile = { ...hotelProfile, ...patch };
+        updateProperty(0, {
+            rooms: nextProfile.roomsCount || 0,
+            beds: nextProfile.bedsCount || 0,
+            units: nextProfile.roomsCount || 0,
+            hasPool: nextProfile.hasPool,
+            hasGym: nextProfile.hasGym,
+            hotelProfile: nextProfile,
+        } as any);
+    };
+
+    const updateSchoolProfile = (patch: Record<string, any>) => {
+        const nextProfile = { ...schoolProfile, ...patch };
+        updateProperty(0, {
+            units: nextProfile.classroomsCount || 0,
+            schoolProfile: nextProfile,
+        } as any);
+    };
+
+    const updateHospitalProfile = (patch: Record<string, any>) => {
+        const nextProfile = { ...hospitalProfile, ...patch };
+        updateProperty(0, {
+            beds: nextProfile.bedsCount || 0,
+            units: Math.max(nextProfile.wardsCount || 0, 1),
+            hospitalProfile: nextProfile,
+        } as any);
+    };
+
+    const updateStadiumProfile = (patch: Record<string, any>) => {
+        const nextProfile = { ...stadiumProfile, ...patch };
+        updateProperty(0, {
+            units: nextProfile.seatingCapacity ? Math.max(1, Math.ceil(nextProfile.seatingCapacity / 100)) : activeProperty?.units || 0,
+            stadiumProfile: nextProfile,
+        } as any);
+    };
+
+    const canProceed = Boolean(
+        activeProperty?.propertyType &&
+        activeProperty?.sqft > 0 &&
+        (activeProperty?.units > 0 || activeProperty?.rooms > 0 || activeProperty?.beds > 0)
+    );
     const selectedType = types.find((type) => type.id === activeProperty?.propertyType);
 
     return (
@@ -297,8 +414,8 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                                     p: { xs: 1.4, sm: 2 },
                                                     minHeight: { xs: 104, sm: 122 },
                                                     cursor: 'pointer',
-                                                    bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.12) : 'rgba(255,255,255,0.02)',
-                                                    border: `1px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.06)'}`,
+                                                    bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.15) : 'rgba(255,255,255,0.02)',
+                                                    border: `2px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.06)'}`,
                                                     borderRadius: { xs: 3, sm: 3.5 },
                                                     transition: 'all 0.2s ease',
                                                     textAlign: 'center',
@@ -307,13 +424,20 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     gap: 0.75,
+                                                    position: 'relative',
+                                                    boxShadow: isSelected ? `0 0 0 1px ${binThemeTokens.gold}` : 'none',
                                                     '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198, 167, 94, 0.05)' }
                                                 }}
                                             >
+                                                {isSelected && (
+                                                    <Box sx={{ position: 'absolute', top: 5, right: 5, bgcolor: binThemeTokens.gold, borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Check size={11} color="#000" strokeWidth={3} />
+                                                    </Box>
+                                                )}
                                                 <Box sx={{ color: isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.35)', display: 'flex', justifyContent: 'center' }}>
                                                     {type.icon}
                                                 </Box>
-                                                <Typography variant="caption" fontWeight="950" sx={{ color: '#FFF', display: 'block', lineHeight: 1.18, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
+                                                <Typography variant="caption" fontWeight="950" sx={{ color: isSelected ? binThemeTokens.gold : '#FFF', display: 'block', lineHeight: 1.18, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
                                                     {type.label}
                                                 </Typography>
                                                 <Stack direction="row" spacing={0.5} justifyContent="center" flexWrap="wrap" useFlexGap>
@@ -407,6 +531,186 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                 </Stack>
                             </Paper>
                         )}
+
+                        {isHotel && (
+                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Hotel / Resort Profile</Typography>
+                                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Guest-First. 24/7 Ready. Hospitality Grade.</Typography>
+                                    </Box>
+                                    <Hotel color={binThemeTokens.gold} />
+                                </Stack>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField select fullWidth size="small" label="Star rating" value={hotelProfile.starRating || 3} onChange={(e) => updateHotelProfile({ starRating: Number(e.target.value) })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
+                                            {[1, 2, 3, 4, 5].map((s) => <MenuItem key={s} value={s}>{s}★</MenuItem>)}
+                                        </TextField>
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Rooms" value={hotelProfile.roomsCount || 0} onChange={(e) => updateHotelProfile({ roomsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Beds" value={hotelProfile.bedsCount || 0} onChange={(e) => updateHotelProfile({ bedsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Conference rooms" value={hotelProfile.conferenceRoomsCount || 0} onChange={(e) => updateHotelProfile({ conferenceRoomsCount: Number(e.target.value) || 0, hasConferenceRoom: Number(e.target.value) > 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                </Grid>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 3 }}>
+                                    {[
+                                        { key: 'hasPool', label: 'Swimming Pool' },
+                                        { key: 'hasGym', label: 'Gym / Fitness' },
+                                        { key: 'hasRestaurant', label: 'Restaurant / F&B' },
+                                        { key: 'hasSpa', label: 'Spa / Wellness' },
+                                    ].map(({ key, label }) => (
+                                        <Chip key={key} label={label} onClick={() => updateHotelProfile({ [key]: !hotelProfile[key] })}
+                                            sx={{ bgcolor: hotelProfile[key] ? alpha(binThemeTokens.gold, 0.2) : 'rgba(255,255,255,0.04)', color: hotelProfile[key] ? binThemeTokens.gold : 'rgba(255,255,255,0.6)', border: `1px solid ${hotelProfile[key] ? alpha(binThemeTokens.gold, 0.5) : 'rgba(255,255,255,0.1)'}`, fontWeight: 900, cursor: 'pointer' }} />
+                                    ))}
+                                </Stack>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+                                    {['24/7 Guest MEP Response', 'Pool & Gym AMC', 'Restaurant Grease Trap', 'Concierge Coordination', 'HVAC Hotel Priority'].map((badge) => (
+                                        <Chip key={badge} label={badge} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }} />
+                                    ))}
+                                </Stack>
+                            </Paper>
+                        )}
+
+                        {isSchool && (
+                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>School / University Profile</Typography>
+                                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Safe. Compliant. Student-Ready.</Typography>
+                                    </Box>
+                                    <Landmark color={binThemeTokens.gold} />
+                                </Stack>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField select fullWidth size="small" label="Institution type" value={schoolProfile.institutionType || 'School'} onChange={(e) => updateSchoolProfile({ institutionType: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
+                                            {['School', 'University', 'College', 'Vocational Institute', 'Nursery'].map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                        </TextField>
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Student capacity" value={schoolProfile.studentCapacity || 0} onChange={(e) => updateSchoolProfile({ studentCapacity: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Classrooms" value={schoolProfile.classroomsCount || 0} onChange={(e) => updateSchoolProfile({ classroomsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Labs" value={schoolProfile.labsCount || 0} onChange={(e) => updateSchoolProfile({ labsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Sports courts" value={schoolProfile.sportsCourtCount || 0} onChange={(e) => updateSchoolProfile({ sportsCourtCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                </Grid>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 3 }}>
+                                    {[
+                                        { key: 'hasSwimmingPool', label: 'Swimming Pool' },
+                                        { key: 'hasAuditorium', label: 'Auditorium / Hall' },
+                                        { key: 'hasCafeteria', label: 'Cafeteria' },
+                                        { key: 'hasLibrary', label: 'Library' },
+                                    ].map(({ key, label }) => (
+                                        <Chip key={key} label={label} onClick={() => updateSchoolProfile({ [key]: !schoolProfile[key] })}
+                                            sx={{ bgcolor: schoolProfile[key] ? alpha(binThemeTokens.gold, 0.2) : 'rgba(255,255,255,0.04)', color: schoolProfile[key] ? binThemeTokens.gold : 'rgba(255,255,255,0.6)', border: `1px solid ${schoolProfile[key] ? alpha(binThemeTokens.gold, 0.5) : 'rgba(255,255,255,0.1)'}`, fontWeight: 900, cursor: 'pointer' }} />
+                                    ))}
+                                </Stack>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+                                    {['Lab Safety Systems', 'Classroom AC AMC', 'Cafeteria Grease Trap', 'Emergency Evacuation', 'Water Tank Sterilization'].map((badge) => (
+                                        <Chip key={badge} label={badge} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }} />
+                                    ))}
+                                </Stack>
+                            </Paper>
+                        )}
+
+                        {isHospital && (
+                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Hospital / Clinic Profile</Typography>
+                                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Critical. Compliant. 24/7 Emergency Ready.</Typography>
+                                    </Box>
+                                    <ShieldCheck color={binThemeTokens.gold} />
+                                </Stack>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField select fullWidth size="small" label="Facility type" value={hospitalProfile.facilityType || 'Hospital'} onChange={(e) => updateHospitalProfile({ facilityType: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
+                                            {['Hospital', 'Specialist Clinic', 'Day Surgery', 'Polyclinic', 'Medical Centre'].map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                                        </TextField>
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Beds" value={hospitalProfile.bedsCount || 0} onChange={(e) => updateHospitalProfile({ bedsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Wards" value={hospitalProfile.wardsCount || 0} onChange={(e) => updateHospitalProfile({ wardsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="ICU beds" value={hospitalProfile.icuBeds || 0} onChange={(e) => updateHospitalProfile({ icuBeds: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Operating theaters" value={hospitalProfile.operatingTheatersCount || 0} onChange={(e) => updateHospitalProfile({ operatingTheatersCount: Number(e.target.value) || 0, hasOperatingTheaters: Number(e.target.value) > 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                </Grid>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 3 }}>
+                                    {[
+                                        { key: 'hasEmergencyDept', label: 'Emergency Dept.' },
+                                        { key: 'hasMedicalGas', label: 'Medical Gas' },
+                                        { key: 'hasPharmacy', label: 'Pharmacy' },
+                                        { key: 'hasLaboratory', label: 'Laboratory' },
+                                    ].map(({ key, label }) => (
+                                        <Chip key={key} label={label} onClick={() => updateHospitalProfile({ [key]: !hospitalProfile[key] })}
+                                            sx={{ bgcolor: hospitalProfile[key] ? alpha(binThemeTokens.gold, 0.2) : 'rgba(255,255,255,0.04)', color: hospitalProfile[key] ? binThemeTokens.gold : 'rgba(255,255,255,0.6)', border: `1px solid ${hospitalProfile[key] ? alpha(binThemeTokens.gold, 0.5) : 'rgba(255,255,255,0.1)'}`, fontWeight: 900, cursor: 'pointer' }} />
+                                    ))}
+                                </Stack>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+                                    {['Critical Systems Priority', 'Medical Gas Inspection', '24/7 Emergency Dispatch', 'Infection Control Protocol', 'Generator AMC'].map((badge) => (
+                                        <Chip key={badge} label={badge} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }} />
+                                    ))}
+                                </Stack>
+                            </Paper>
+                        )}
+
+                        {isStadium && (
+                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Stadium / Sports / Event Profile</Typography>
+                                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Event-Ready. Crowd-Safe. Maximum Uptime.</Typography>
+                                    </Box>
+                                    <Gem color={binThemeTokens.gold} />
+                                </Stack>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Seating capacity" value={stadiumProfile.seatingCapacity || 0} onChange={(e) => updateStadiumProfile({ seatingCapacity: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Pitches / fields" value={stadiumProfile.pitchesCount || 0} onChange={(e) => updateStadiumProfile({ pitchesCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="Courts" value={stadiumProfile.courtsCount || 0} onChange={(e) => updateStadiumProfile({ courtsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                    <Grid item xs={6} sm={3}>
+                                        <TextField fullWidth size="small" type="number" label="VIP suites" value={stadiumProfile.vipSuitesCount || 0} onChange={(e) => updateStadiumProfile({ vipSuitesCount: Number(e.target.value) || 0, hasVIPSuite: Number(e.target.value) > 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                    </Grid>
+                                </Grid>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 3 }}>
+                                    {[
+                                        { key: 'hasChangeRooms', label: 'Changing Rooms' },
+                                        { key: 'hasConcessionsArea', label: 'Concessions / F&B' },
+                                        { key: 'hasLightingSystem', label: 'Floodlighting' },
+                                        { key: 'hasPublicAddress', label: 'PA / AV System' },
+                                    ].map(({ key, label }) => (
+                                        <Chip key={key} label={label} onClick={() => updateStadiumProfile({ [key]: !stadiumProfile[key] })}
+                                            sx={{ bgcolor: stadiumProfile[key] ? alpha(binThemeTokens.gold, 0.2) : 'rgba(255,255,255,0.04)', color: stadiumProfile[key] ? binThemeTokens.gold : 'rgba(255,255,255,0.6)', border: `1px solid ${stadiumProfile[key] ? alpha(binThemeTokens.gold, 0.5) : 'rgba(255,255,255,0.1)'}`, fontWeight: 900, cursor: 'pointer' }} />
+                                    ))}
+                                </Stack>
+                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+                                    {['Event-Day MEP Standby', 'Pitch Irrigation', 'Crowd Safety Systems', 'VIP Facilities Priority', 'CCTV Crowd Monitoring'].map((badge) => (
+                                        <Chip key={badge} label={badge} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }} />
+                                    ))}
+                                </Stack>
+                            </Paper>
+                        )}
                     </Grid>
 
                     <Grid item xs={12} lg={5}>
@@ -448,7 +752,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
-                                        <TextField fullWidth label={isMosque ? 'Wudu areas' : t('onboarding.units')} type="number" size="small" value={activeProperty?.units || 0} onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
+                                        <TextField fullWidth label={isMosque ? 'Wudu areas' : isHotel ? 'Rooms' : isSchool ? 'Classrooms' : isHospital ? 'Wards' : isStadium ? 'Capacity / 100' : t('onboarding.units')} type="number" size="small" value={activeProperty?.units || 0} onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
                                     </Grid>
                                     <Grid item xs={6}>
                                         <TextField fullWidth label={t('onboarding.floors')} type="number" size="small" value={activeProperty?.floors || 1} onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />

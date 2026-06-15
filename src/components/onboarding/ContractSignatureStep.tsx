@@ -107,6 +107,31 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
                             <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Contract Mode / نوع العقد</Typography><Typography variant="body2" fontWeight="800">{modeLabel(primaryProperty?.strategy)}</Typography></Grid>
                             <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Annual Value / القيمة السنوية</Typography><Typography variant="body2" fontWeight="800" color="primary.main">AED {formatAED(quote?.annualTotal || 0)}</Typography></Grid>
                             <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Mobilization / دفعة البدء</Typography><Typography variant="body2" fontWeight="800">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Grid>
+                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Asset Type / نوع الأصل</Typography><Typography variant="body2" fontWeight="800">{primaryProperty?.propertyType || 'N/A'}</Typography></Grid>
+                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">GFA / المساحة الإجمالية</Typography><Typography variant="body2" fontWeight="800">{primaryProperty?.sqft ? `${primaryProperty.sqft.toLocaleString()} sq.ft` : 'N/A'}</Typography></Grid>
+                            {(primaryProperty?.propertyType === 'Hotel' || primaryProperty?.propertyType === 'Resort') && <>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Hotel Rooms / الغرف</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.hotelProfile?.roomsCount || primaryProperty?.rooms || 'N/A'}</Typography></Grid>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Star Rating / التصنيف النجمي</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.hotelProfile?.starRating || 3}★ {(primaryProperty as any)?.hotelProfile?.hasPool ? '· Pool' : ''}{(primaryProperty as any)?.hotelProfile?.hasGym ? '· Gym' : ''}{(primaryProperty as any)?.hotelProfile?.hasRestaurant ? '· Restaurant' : ''}</Typography></Grid>
+                            </>}
+                            {primaryProperty?.propertyType === 'School' && <>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Institution / المؤسسة</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.schoolProfile?.institutionType || 'School'}</Typography></Grid>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Classrooms · Students / الفصول · الطلاب</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.schoolProfile?.classroomsCount || primaryProperty?.units || 'N/A'} classrooms · {(primaryProperty as any)?.schoolProfile?.studentCapacity || 'N/A'} students</Typography></Grid>
+                            </>}
+                            {(primaryProperty?.propertyType === 'Hospital' || primaryProperty?.propertyType === 'Clinic') && <>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Facility Type / نوع المرفق</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.hospitalProfile?.facilityType || primaryProperty?.propertyType}</Typography></Grid>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Beds · ICU / الأسرة · العناية المركزة</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.hospitalProfile?.bedsCount || primaryProperty?.beds || 'N/A'} beds · {(primaryProperty as any)?.hospitalProfile?.icuBeds || 0} ICU</Typography></Grid>
+                            </>}
+                            {primaryProperty?.propertyType === 'Mosque / Masjid' && <>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Worshipper Capacity / سعة المصلين</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.mosqueProfile?.maxWorshipperCapacity || primaryProperty?.rooms || 'N/A'}</Typography></Grid>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Wudu Areas · Ramadan Peak / الوضوء · رمضان</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.mosqueProfile?.wuduAreasCount || primaryProperty?.units || 'N/A'} wudu areas · {(primaryProperty as any)?.mosqueProfile?.ramadanPeakCapacity || 'N/A'} peak</Typography></Grid>
+                            </>}
+                            {primaryProperty?.propertyType && ['Stadium', 'Sports Complex', 'Event Venue'].includes(primaryProperty.propertyType) && <>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Seating Capacity / سعة المقاعد</Typography><Typography variant="body2" fontWeight="800">{(primaryProperty as any)?.stadiumProfile?.seatingCapacity?.toLocaleString() || 'N/A'}</Typography></Grid>
+                                <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Pitches + Courts / ملاعب</Typography><Typography variant="body2" fontWeight="800">{((primaryProperty as any)?.stadiumProfile?.pitchesCount || 0) + ((primaryProperty as any)?.stadiumProfile?.courtsCount || 0)} total</Typography></Grid>
+                            </>}
+                            {(primaryProperty as any)?.missions?.length > 0 && (
+                                <Grid item xs={12}><Typography variant="caption" color="text.secondary">Service Missions / مهام الخدمة</Typography><Typography variant="body2" fontWeight="800">{((primaryProperty as any)?.missions || []).slice(0, 4).join(' · ')}</Typography></Grid>
+                            )}
                         </Grid>
                     </AgreementSection>
 

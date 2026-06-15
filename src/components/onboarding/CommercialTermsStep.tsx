@@ -108,6 +108,99 @@ const includedScopes: Record<string, LocalText[]> = {
     ],
 };
 
+const propertyTypeInclusions: Record<string, LocalText[]> = {
+    'Hotel': [
+        { en: 'Guest room MEP emergency response (24/7)', ar: 'استجابة طوارئ MEP لغرف الضيوف (24/7)' },
+        { en: 'Pool & gym system maintenance', ar: 'صيانة أنظمة المسبح والصالة الرياضية' },
+        { en: 'HVAC hotel-priority cooling schedule', ar: 'جدول تبريد بأولوية فندقية' },
+        { en: 'Commercial kitchen grease trap service', ar: 'خدمة مصيدة الشحوم للمطبخ التجاري' },
+        { en: 'Concierge maintenance coordination', ar: 'تنسيق صيانة الكونسيرج' },
+        { en: 'Fire safety & elevator AMC', ar: 'عقد صيانة أنظمة الحريق والمصاعد' },
+    ],
+    'Resort': [
+        { en: 'Resort-wide MEP emergency response (24/7)', ar: 'استجابة طوارئ MEP للمنتجع (24/7)' },
+        { en: 'Pool & waterpark system maintenance', ar: 'صيانة أنظمة المسبح وألعاب المياه' },
+        { en: 'HVAC hotel-priority cooling schedule', ar: 'جدول تبريد بأولوية فندقية' },
+        { en: 'Landscaping & irrigation support', ar: 'دعم التنسيق والري' },
+        { en: 'Concierge maintenance coordination', ar: 'تنسيق صيانة الكونسيرج' },
+        { en: 'Fire safety & elevator AMC', ar: 'عقد صيانة أنظمة الحريق والمصاعد' },
+    ],
+    'Hospital': [
+        { en: 'Critical medical systems MEP support', ar: 'دعم MEP للأنظمة الطبية الحرجة' },
+        { en: '24/7 emergency dispatch protocol', ar: 'بروتوكول إرسال الطوارئ 24/7' },
+        { en: 'Infection control-compliant maintenance', ar: 'صيانة متوافقة مع مكافحة العدوى' },
+        { en: 'Generator & backup power AMC', ar: 'عقد صيانة المولد والطاقة الاحتياطية' },
+        { en: 'Medical gas systems visual inspection', ar: 'فحص بصري لأنظمة الغاز الطبي' },
+        { en: 'Fire & life safety systems AMC', ar: 'عقد صيانة أنظمة الحريق وسلامة الحياة' },
+    ],
+    'Clinic': [
+        { en: 'Medical facility MEP maintenance', ar: 'صيانة MEP للمرفق الطبي' },
+        { en: 'HVAC sanitized air quality maintenance', ar: 'صيانة جودة الهواء المعقم' },
+        { en: 'Emergency electrical response', ar: 'استجابة طوارئ كهربائية' },
+        { en: 'Fire & safety systems AMC', ar: 'عقد صيانة أنظمة الحريق والسلامة' },
+        { en: 'Water tank sterilization', ar: 'تعقيم خزان المياه' },
+    ],
+    'School': [
+        { en: 'Classroom electrical & AC maintenance', ar: 'صيانة الكهرباء والتكييف في الفصول' },
+        { en: 'Lab safety systems inspection', ar: 'فحص أنظمة سلامة المختبرات' },
+        { en: 'Cafeteria plumbing & grease trap', ar: 'السباكة ومصيدة الشحوم في الكافتيريا' },
+        { en: 'Sports & outdoor facility maintenance', ar: 'صيانة المرافق الرياضية والخارجية' },
+        { en: 'Emergency & evacuation system checks', ar: 'فحوصات أنظمة الطوارئ والإخلاء' },
+        { en: 'Water tank & potable water compliance', ar: 'امتثال خزان المياه والمياه الصالحة للشرب' },
+    ],
+    'Mosque / Masjid': [
+        { en: 'Prayer-time safe maintenance scheduling', ar: 'جدولة صيانة آمنة خلال أوقات الصلاة' },
+        { en: '5x daily Wudu area cleaning cycles', ar: '5 دورات تنظيف يومية لمناطق الوضوء' },
+        { en: 'Ramadan surge-ready MEP protocol', ar: 'بروتوكول MEP جاهز لذروة رمضان' },
+        { en: 'Awqaf / IACAD compliance reporting', ar: 'تقارير الامتثال لـ الأوقاف / IACAD' },
+        { en: 'CCTV 30-day storage compliance', ar: 'امتثال تخزين CCTV لـ 30 يوماً' },
+        { en: 'Emergency MEP 24/7 response', ar: 'استجابة MEP للطوارئ 24/7' },
+    ],
+    'Stadium': [
+        { en: 'Event-day MEP readiness checks', ar: 'فحوصات جاهزية MEP في يوم الفعاليات' },
+        { en: 'Crowd safety systems maintenance', ar: 'صيانة أنظمة سلامة الجماهير' },
+        { en: 'VIP suite & facilities maintenance', ar: 'صيانة مرافق الدرجة الأولى' },
+        { en: 'Pitch / court lighting & irrigation', ar: 'إضاءة وري الملعب / الملاعب' },
+        { en: 'Concessions & food court systems', ar: 'أنظمة مناطق الطعام والوجبات' },
+        { en: 'CCTV crowd monitoring AMC', ar: 'عقد صيانة نظام مراقبة الجماهير' },
+    ],
+    'Sports Complex': [
+        { en: 'Sports facility MEP maintenance', ar: 'صيانة MEP للمنشأة الرياضية' },
+        { en: 'Pitch / court lighting systems', ar: 'أنظمة إضاءة الملاعب' },
+        { en: 'Changing room plumbing & HVAC', ar: 'سباكة وتكييف غرف تغيير الملابس' },
+        { en: 'Fire & emergency systems AMC', ar: 'عقد صيانة أنظمة الحريق والطوارئ' },
+        { en: 'Water tank sterilization', ar: 'تعقيم خزان المياه' },
+    ],
+    'Event Venue': [
+        { en: 'Event-day MEP standby support', ar: 'دعم MEP احتياطي في يوم الفعاليات' },
+        { en: 'Lighting & AV infrastructure maintenance', ar: 'صيانة البنية التحتية للإضاءة والصوت/الصورة' },
+        { en: 'HVAC event-scale cooling', ar: 'تبريد HVAC بمستوى الفعاليات' },
+        { en: 'Kitchen & catering systems support', ar: 'دعم أنظمة المطبخ والتموين' },
+        { en: 'Fire safety & emergency systems', ar: 'أنظمة سلامة الحريق والطوارئ' },
+    ],
+    'Government Majlis': [
+        { en: 'Majlis event-day readiness checks', ar: 'فحوصات جاهزية المجلس ليوم الفعالية' },
+        { en: 'Full MEP systems maintenance', ar: 'صيانة أنظمة MEP الكاملة' },
+        { en: 'Garden & exterior deep care', ar: 'العناية العميقة بالحديقة والمناطق الخارجية' },
+        { en: 'CCTV & security systems AMC', ar: 'عقد صيانة أنظمة CCTV والأمن' },
+        { en: 'VIP-grade completion reporting', ar: 'تقارير إنجاز بمستوى VIP' },
+    ],
+    'Private Majlis': [
+        { en: 'Majlis MEP maintenance & PPM', ar: 'صيانة MEP والصيانة الوقائية للمجلس' },
+        { en: 'Garden & exterior care', ar: 'العناية بالحديقة والمناطق الخارجية' },
+        { en: 'Event-day standby technician', ar: 'فني احتياطي ليوم الفعاليات' },
+        { en: 'Fire safety systems inspection', ar: 'فحص أنظمة سلامة الحريق' },
+    ],
+    'Mall': [
+        { en: 'Retail unit MEP response & PPM', ar: 'استجابة ومتابعة صيانة وقائية لوحدات التجزئة' },
+        { en: 'HVAC common area cooling management', ar: 'إدارة تبريد المناطق المشتركة' },
+        { en: 'Escalator & elevator AMC', ar: 'عقد صيانة السلالم المتحركة والمصاعد' },
+        { en: 'Food court grease trap service', ar: 'خدمة مصيدة الشحوم لمنطقة المطاعم' },
+        { en: 'Fire safety & emergency systems', ar: 'أنظمة سلامة الحريق والطوارئ' },
+        { en: 'CCTV & security AMC', ar: 'عقد صيانة CCTV والأمن' },
+    ],
+};
+
 const excludedScopes: Record<string, LocalText[]> = {
     pm_only: [
         { en: 'PPM visits', ar: 'زيارات الصيانة الوقائية' },
@@ -173,7 +266,9 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
     const selectedAddOnNames = (selectedAddOns || []).map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
-    const includedScope = selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only;
+    const propertyTypeKey = String(property.propertyType || '');
+    const typeSpecificInclusions = propertyTypeInclusions[propertyTypeKey];
+    const includedScope = typeSpecificInclusions || (selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only);
     const excludedScope = selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default;
 
     return (

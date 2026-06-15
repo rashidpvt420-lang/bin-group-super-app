@@ -282,7 +282,9 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
 
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 8 * capacityMultiplier;
-  const wuduCleaning = worshipperProxy * 5 * 35 * 365;
+  const wuduCleaning = worshipperProxy <= 300 ? 28_000 :
+                       worshipperProxy <= 1000 ? 55_000 :
+                       worshipperProxy <= 3000 ? 90_000 : 130_000;
   const ramadanSurge = 15500 + (safeInput.hasCentralHVAC ? 2500 : 0);
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
   const complexityPremium = (baseQuote + softServices) * 0.1;
