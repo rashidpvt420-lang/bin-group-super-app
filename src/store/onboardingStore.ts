@@ -254,13 +254,29 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
 
     // Map internal types to Pricing Matrix types
     let assetClassId = 'apt-std';
+    const pt = property.propertyType || '';
     if (isMosque) assetClassId = 'mosque_fm';
-    else if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
-    else if (property.propertyType === 'Building') assetClassId = 'com-twr';
-    else if (property.propertyType === 'Commercial') assetClassId = 'off-sml';
-    else if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) assetClassId = 'government_majlis';
-    else if (property.propertyType === 'Hotel') assetClassId = 'mid_scale_hotel';
-    
+    else if (pt === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Sovereign' ? 'villa-lux' : 'villa-std';
+    else if (pt === 'Apartment') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Sovereign' ? 'apt-lux' : 'apt-std';
+    else if (pt === 'Residential Building') assetClassId = 'apt-std';
+    else if (pt === 'Commercial Building' || pt === 'Skyscraper') assetClassId = 'com-twr';
+    else if (pt === 'Office') assetClassId = 'off-sml';
+    else if (pt === 'Retail Center' || pt === 'Mall') assetClassId = 'rtl-mall';
+    else if (pt === 'Hotel' || pt === 'Resort') assetClassId = 'mid_scale_hotel';
+    else if (pt === 'Hospital' || pt === 'Clinic') assetClassId = 'hosp';
+    else if (pt === 'School') assetClassId = 'hosp'; // education uses healthcare tier (sqft, min 75K)
+    else if (pt === 'Warehouse' || pt === 'Industrial Property') assetClassId = 'com-twr'; // sqft-based industrial
+    else if (pt === 'Labour Camp' || pt === 'Staff Accommodation') assetClassId = 'lab-camp';
+    else if (pt === 'Government Property') assetClassId = 'com-twr';
+    else if (pt === 'Government Majlis' || property.majlisType === 'government' || (property.majlis && property.majlisType !== 'private')) assetClassId = 'government_majlis';
+    else if (pt === 'Private Majlis' || property.majlisType === 'private') assetClassId = 'private_majlis';
+    else if (pt === 'Mixed-Use Tower') assetClassId = 'mix-dev';
+    else if (pt === 'Stadium' || pt === 'Sports Complex' || pt === 'Event Venue') assetClassId = 'mix-dev';
+    else if (pt === 'Farm / Estate') assetClassId = 'villa-lux';
+    else if (pt === 'Building') assetClassId = 'com-twr';
+    else if (pt === 'Commercial') assetClassId = 'off-sml';
+    else if (property.majlis) assetClassId = 'government_majlis';
+
     // Map emirate to camelCase
     const emirateMap: Record<string, string> = {
         'Dubai': 'dubai',
@@ -282,7 +298,14 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
             property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY' : 
             (property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
         sqft: isMosque ? (Number(mosqueProfile.grossFloorAreaSqft) || property.sqft) : property.sqft,
-        units: isMosque ? (Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units) : property.units,
+        units: isMosque
+            ? (Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units)
+            : (pt === 'Labour Camp' || pt === 'Staff Accommodation')
+            ? ((property as any).labourCampProfile?.bedsCount || property.bedrooms || property.units)
+            : property.units,
+        beds: (pt === 'Hospital' || pt === 'Clinic')
+            ? ((property as any).hospitalProfile?.bedsCount || property.bedrooms || property.units)
+            : undefined,
         annualRent: property.annualRent,
         propertyAge: isMosque ? (Number(mosqueProfile.propertyAgeYears) || property.age) : property.age,
         floors: property.floors,

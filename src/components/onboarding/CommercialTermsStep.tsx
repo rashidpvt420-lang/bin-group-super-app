@@ -201,6 +201,176 @@ const propertyTypeInclusions: Record<string, LocalText[]> = {
     ],
 };
 
+const remainingPropertyTypeInclusions: Record<string, LocalText[]> = {
+    'Villa': [
+        { en: 'MEP preventive maintenance (electrical, plumbing, AC)', ar: 'صيانة وقائية لـ MEP (كهرباء، سباكة، تكييف)' },
+        { en: 'Private pool & garden care', ar: 'صيانة المسبح والحديقة الخاصة' },
+        { en: 'Water tank sterilization', ar: 'تعقيم خزان المياه' },
+        { en: 'Generator AMC', ar: 'عقد صيانة المولد' },
+        { en: 'Fire alarm & safety systems', ar: 'إنذار الحريق وأنظمة السلامة' },
+    ],
+    'Apartment': [
+        { en: 'Building common area MEP maintenance', ar: 'صيانة MEP للمناطق المشتركة بالمبنى' },
+        { en: 'Elevator AMC', ar: 'عقد صيانة المصاعد' },
+        { en: 'Fire safety systems', ar: 'أنظمة سلامة الحريق' },
+        { en: 'Water pump & tank service', ar: 'خدمة مضخة وخزان المياه' },
+        { en: 'AC units maintenance', ar: 'صيانة وحدات التكييف' },
+    ],
+    'Residential Building': [
+        { en: 'Building MEP maintenance (all common systems)', ar: 'صيانة MEP للمبنى (جميع الأنظمة المشتركة)' },
+        { en: 'Elevator AMC', ar: 'عقد صيانة المصاعد' },
+        { en: 'Fire safety & emergency systems', ar: 'أنظمة سلامة الحريق والطوارئ' },
+        { en: 'Water tank sterilization & pump service', ar: 'تعقيم الخزان وصيانة المضخة' },
+        { en: 'Common area lighting & electrical', ar: 'إضاءة وكهرباء المناطق المشتركة' },
+    ],
+    'Commercial Building': [
+        { en: 'Office floor MEP maintenance', ar: 'صيانة MEP لأدوار المكاتب' },
+        { en: 'Central HVAC system maintenance', ar: 'صيانة نظام HVAC المركزي' },
+        { en: 'Elevator & escalator AMC', ar: 'عقد صيانة المصاعد والسلالم المتحركة' },
+        { en: 'Fire safety & emergency systems', ar: 'أنظمة سلامة الحريق والطوارئ' },
+        { en: 'Generator standby & AMC', ar: 'مولد احتياطي وعقد صيانة' },
+        { en: 'Building access control systems', ar: 'أنظمة التحكم بالدخول' },
+    ],
+    'Office': [
+        { en: 'Workspace MEP maintenance', ar: 'صيانة MEP لمساحة العمل' },
+        { en: 'AC units & ventilation service', ar: 'خدمة وحدات التكييف والتهوية' },
+        { en: 'Fire & emergency AMC', ar: 'عقد صيانة الحريق والطوارئ' },
+        { en: 'Electrical safety checks', ar: 'فحوصات سلامة الكهرباء' },
+        { en: 'Water tank sterilization', ar: 'تعقيم خزان المياه' },
+    ],
+    'Retail Center': [
+        { en: 'Shop MEP emergency response', ar: 'استجابة طوارئ MEP للمحلات' },
+        { en: 'Escalator & elevator AMC', ar: 'عقد صيانة السلالم المتحركة والمصاعد' },
+        { en: 'Food court grease trap service', ar: 'خدمة مصيدة الشحوم لمنطقة المطاعم' },
+        { en: 'Fire safety & CCTV AMC', ar: 'عقد صيانة الحريق والكاميرات' },
+        { en: 'Common area cleaning systems', ar: 'أنظمة تنظيف المناطق المشتركة' },
+        { en: 'Parking area lighting & systems', ar: 'إضاءة وأنظمة منطقة الانتظار' },
+    ],
+    'Warehouse': [
+        { en: 'Industrial MEP maintenance', ar: 'صيانة MEP الصناعية' },
+        { en: 'Fire pump & sprinkler system AMC', ar: 'عقد صيانة مضخة الحريق والرشاشات' },
+        { en: 'Loading bay door & shutter systems', ar: 'أنظمة أبواب وشترات منطقة التحميل' },
+        { en: 'HVAC & industrial ventilation', ar: 'تكييف وتهوية صناعية' },
+        { en: 'Emergency lighting & electrical safety', ar: 'إضاءة طوارئ وسلامة كهربائية' },
+    ],
+    'Industrial Property': [
+        { en: 'Heavy MEP maintenance', ar: 'صيانة MEP الثقيلة' },
+        { en: 'Fire safety systems AMC', ar: 'عقد صيانة أنظمة سلامة الحريق' },
+        { en: 'Industrial ventilation & HVAC', ar: 'تهوية وتكييف صناعي' },
+        { en: 'Power systems & electrical safety', ar: 'أنظمة الطاقة وسلامة الكهرباء' },
+        { en: 'Safety compliance reporting', ar: 'تقارير الامتثال للسلامة' },
+    ],
+    'Labour Camp': [
+        { en: 'Accommodation MEP maintenance', ar: 'صيانة MEP للإقامة' },
+        { en: 'Water tank sterilization (all blocks)', ar: 'تعقيم خزانات المياه (جميع المباني)' },
+        { en: 'Pest control AMC', ar: 'عقد صيانة مكافحة الآفات' },
+        { en: 'Fire safety systems', ar: 'أنظمة سلامة الحريق' },
+        { en: 'Laundry & kitchen systems maintenance', ar: 'صيانة أنظمة المغسلة والمطبخ' },
+        { en: 'Ministry-compliant health & safety log', ar: 'سجل صحة وسلامة متوافق مع الوزارة' },
+    ],
+    'Staff Accommodation': [
+        { en: 'Accommodation MEP maintenance', ar: 'صيانة MEP للإقامة' },
+        { en: 'Water tank sterilization', ar: 'تعقيم خزان المياه' },
+        { en: 'Fire safety systems', ar: 'أنظمة سلامة الحريق' },
+        { en: 'Common area maintenance', ar: 'صيانة المناطق المشتركة' },
+        { en: 'AC unit service', ar: 'خدمة وحدات التكييف' },
+    ],
+    'Government Property': [
+        { en: 'Government-standard MEP maintenance', ar: 'صيانة MEP بمعايير حكومية' },
+        { en: 'Security & access control systems AMC', ar: 'عقد صيانة أنظمة الأمن والتحكم بالدخول' },
+        { en: 'VIP area priority response', ar: 'استجابة ذات أولوية لمنطقة كبار الشخصيات' },
+        { en: 'Fire & emergency systems AMC', ar: 'عقد صيانة أنظمة الحريق والطوارئ' },
+        { en: 'CCTV & surveillance AMC', ar: 'عقد صيانة CCTV والمراقبة' },
+        { en: 'Government compliance documentation', ar: 'وثائق الامتثال الحكومية' },
+    ],
+    'Mixed-Use Tower': [
+        { en: 'Residential floor MEP response', ar: 'استجابة MEP للطوابق السكنية' },
+        { en: 'Commercial floor MEP systems', ar: 'أنظمة MEP للطوابق التجارية' },
+        { en: 'Multiple elevator banks AMC', ar: 'عقد صيانة بنوك المصاعد المتعددة' },
+        { en: 'Pool & gym maintenance', ar: 'صيانة المسبح والصالة الرياضية' },
+        { en: 'Retail podium fire safety & systems', ar: 'سلامة الحريق وأنظمة البودية التجارية' },
+        { en: 'District cooling or central HVAC', ar: 'التبريد المركزي أو HVAC المركزي' },
+    ],
+    'Skyscraper': [
+        { en: 'High-rise MEP systems maintenance', ar: 'صيانة أنظمة MEP للمباني الشاهقة' },
+        { en: 'Facade / BMU access & maintenance', ar: 'صيانة واجهة الوصول / BMU' },
+        { en: 'Elevator bank AMC (30+ floors)', ar: 'عقد صيانة بنوك المصاعد (30+ طابق)' },
+        { en: 'District cooling optimization', ar: 'تحسين التبريد المركزي' },
+        { en: 'Fire & life safety systems AMC', ar: 'عقد صيانة أنظمة الحريق وسلامة الحياة' },
+        { en: 'Building management system (BMS) support', ar: 'دعم نظام إدارة المبنى (BMS)' },
+    ],
+    'Farm / Estate': [
+        { en: 'Irrigation system maintenance & repairs', ar: 'صيانة وإصلاح نظام الري' },
+        { en: 'Pump room MEP maintenance', ar: 'صيانة MEP لغرفة المضخات' },
+        { en: 'Landscape lighting & external electrical', ar: 'إضاءة الحديقة والكهرباء الخارجية' },
+        { en: 'Generator AMC', ar: 'عقد صيانة المولد' },
+        { en: 'Staff quarters MEP maintenance', ar: 'صيانة MEP لسكن الموظفين' },
+    ],
+};
+
+const propertyTypeExclusions: Record<string, LocalText[]> = {
+    'Villa': [
+        { en: 'Tenant disputes or rent collection', ar: 'نزاعات المستأجرين أو تحصيل الإيجار' },
+        { en: 'Structural / civil works without separate contract', ar: 'أعمال إنشائية / مدنية بدون عقد منفصل' },
+        { en: 'Swimming pool chemical supply', ar: 'توريد مواد كيميائية للمسبح' },
+        { en: 'Landscaping plants & materials', ar: 'نباتات ومواد تنسيق الحدائق' },
+    ],
+    'Hotel': [
+        { en: 'Guest complaints / hospitality disputes', ar: 'شكاوى الضيوف / نزاعات الضيافة' },
+        { en: 'Food & beverage supply', ar: 'توريد الأغذية والمشروبات' },
+        { en: 'Guest room furnishing or decoration', ar: 'أثاث أو ديكور غرف الضيوف' },
+        { en: 'Revenue management or hotel operations', ar: 'إدارة الإيرادات أو العمليات الفندقية' },
+    ],
+    'Hospital': [
+        { en: 'Medical equipment supply or calibration', ar: 'توريد أو معايرة المعدات الطبية' },
+        { en: 'Clinical or patient care services', ar: 'الخدمات السريرية أو رعاية المرضى' },
+        { en: 'Pharmaceutical supply', ar: 'توريد الأدوية' },
+        { en: 'Medical waste disposal', ar: 'التخلص من النفايات الطبية' },
+    ],
+    'School': [
+        { en: 'Teaching or educational services', ar: 'خدمات التدريس أو التعليم' },
+        { en: 'School bus maintenance or transport', ar: 'صيانة الحافلات المدرسية أو النقل' },
+        { en: 'Kitchen food supply or catering', ar: 'توريد الطعام أو خدمات التموين' },
+        { en: 'IT systems or AV equipment', ar: 'أنظمة تقنية المعلومات أو معدات AV' },
+    ],
+    'Mosque / Masjid': [
+        { en: 'Imam / religious staff employment', ar: 'توظيف الأئمة والموظفين الدينيين' },
+        { en: 'Carpet supply or replacement', ar: 'توريد السجاد أو استبداله' },
+        { en: 'Chandelier supply without separate quote', ar: 'توريد الثريات بدون عرض سعر منفصل' },
+        { en: 'Awqaf authority fees or licensing', ar: 'رسوم الأوقاف أو التراخيص' },
+    ],
+    'Warehouse': [
+        { en: 'Goods storage or inventory management', ar: 'تخزين البضائع أو إدارة المخزون' },
+        { en: 'Racking supply or installation', ar: 'توريد أو تركيب الرفوف' },
+        { en: 'Forklift or equipment maintenance', ar: 'صيانة الرافعات الشوكية أو المعدات' },
+        { en: 'Hazmat disposal without specialist quote', ar: 'التخلص من المواد الخطرة بدون عرض متخصص' },
+    ],
+    'Labour Camp': [
+        { en: 'Labour recruitment or HR services', ar: 'استقطاب العمالة أو خدمات الموارد البشرية' },
+        { en: 'Food catering or meal preparation', ar: 'تموين الطعام أو إعداد الوجبات' },
+        { en: 'Medical or clinic services', ar: 'الخدمات الطبية أو العيادية' },
+        { en: 'Visa or government document processing', ar: 'معالجة التأشيرات أو المستندات الحكومية' },
+    ],
+    'Stadium': [
+        { en: 'Event management or crowd control staffing', ar: 'إدارة الفعاليات أو موظفو التحكم بالحشود' },
+        { en: 'Pitch turf supply or replacement', ar: 'توريد أو استبدال العشب' },
+        { en: 'Concessions supply or food services', ar: 'توريد الامتيازات أو خدمات الطعام' },
+        { en: 'Ticketing or event technology systems', ar: 'أنظمة التذاكر أو التقنية الخاصة بالفعاليات' },
+    ],
+    'Farm / Estate': [
+        { en: 'Agricultural produce or crops', ar: 'المنتجات الزراعية أو المحاصيل' },
+        { en: 'Livestock or animal care', ar: 'رعاية الماشية أو الحيوانات' },
+        { en: 'Irrigation pipes supply', ar: 'توريد أنابيب الري' },
+        { en: 'Agricultural chemicals or fertilizers', ar: 'المبيدات الزراعية أو الأسمدة' },
+    ],
+    default: [
+        { en: 'Repairs above AED 1,000 without owner approval', ar: 'الإصلاحات فوق 1,000 درهم بدون موافقة المالك' },
+        { en: 'Major replacement works', ar: 'أعمال الاستبدال الكبيرة' },
+        { en: 'Civil renovation or fit-out', ar: 'التجديد المدني أو أعمال التجهيز' },
+        { en: 'Materials and specialist invoices unless quoted', ar: 'المواد وفواتير المختصين ما لم يتم تسعيرها' },
+    ],
+};
+
 const excludedScopes: Record<string, LocalText[]> = {
     pm_only: [
         { en: 'PPM visits', ar: 'زيارات الصيانة الوقائية' },
@@ -267,9 +437,10 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
     const selectedAddOnNames = (selectedAddOns || []).map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
     const propertyTypeKey = String(property.propertyType || '');
-    const typeSpecificInclusions = propertyTypeInclusions[propertyTypeKey];
+    const allTypeInclusions = { ...propertyTypeInclusions, ...remainingPropertyTypeInclusions };
+    const typeSpecificInclusions = allTypeInclusions[propertyTypeKey];
     const includedScope = typeSpecificInclusions || (selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only);
-    const excludedScope = selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default;
+    const excludedScope = propertyTypeExclusions[propertyTypeKey] || (selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default);
 
     return (
         <Box sx={{ py: 2 }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -327,6 +498,17 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}`, position: { lg: 'sticky' }, top: 24 }}>
                             <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(quote?.annualTotal || 0)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
+                            <Stack spacing={1.5} sx={{ mb: 3 }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', letterSpacing: ar ? 0 : 0.5 }}>{ar ? 'تفاصيل السعر' : 'Pricing Breakdown'}</Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.55)">{ar ? 'الصيانة الأساسية' : 'Base Maintenance'}</Typography><Typography variant="caption" color="rgba(255,255,255,0.85)" fontWeight="700">AED {formatAED(quote?.baseQuote || 0)}</Typography></Box>
+                                {(quote?.complexityPremium || 0) > 0 && <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.55)">{ar ? 'علاوة التعقيد والامتثال' : 'Complexity & Compliance'}</Typography><Typography variant="caption" color="rgba(255,255,255,0.85)" fontWeight="700">AED {formatAED(quote?.complexityPremium || 0)}</Typography></Box>}
+                                {(quote?.addOnTotal || 0) > 0 && <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.55)">{ar ? 'خدمات إضافية' : 'Add-on Services'}</Typography><Typography variant="caption" color="rgba(255,255,255,0.85)" fontWeight="700">AED {formatAED(quote?.addOnTotal || 0)}</Typography></Box>}
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.55)">{ar ? 'مستوى SLA' : 'SLA Tier'}</Typography><Typography variant="caption" color={binThemeTokens.gold} fontWeight="700">{slaTiers.find(s => s.id === selectedSlaTier)?.label}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.55)">{ar ? 'خطة الدفع' : 'Payment Plan'}</Typography><Typography variant="caption" color="rgba(255,255,255,0.85)" fontWeight="700">{paymentPlans.find(p => p.id === selectedPaymentPlan)?.label}</Typography></Box>
+                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="caption" color="rgba(255,255,255,0.7)" fontWeight="900">{ar ? 'الإجمالي السنوي (بدون VAT)' : 'Annual Total (excl. VAT)'}</Typography><Typography variant="caption" color={binThemeTokens.gold} fontWeight="950">AED {formatAED(quote?.annualTotal || 0)}</Typography></Box>
+                            </Stack>
+                            <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
                                 {isAnnualPayment ? <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="rgba(255,255,255,0.72)">{tx(copy.includedValue, ar)}</Typography></Box> : <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>}
