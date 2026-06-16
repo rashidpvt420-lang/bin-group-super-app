@@ -30,6 +30,9 @@ import OwnerComplaintPage from './pages/OwnerComplaintPage';
 import OwnerTicketsPage from './pages/OwnerTicketsPage';
 import OwnerTicketDetailPage from './pages/OwnerTicketDetailPage';
 import OwnerAIIntelligencePage from './pages/OwnerAIIntelligencePage';
+import OwnerDamageEstimatePage from './pages/OwnerDamageEstimatePage';
+import OwnerPLReportPage from './pages/OwnerPLReportPage';
+import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -134,6 +137,9 @@ export default function OwnerApp() {
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />
+                <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
+                <Route path="/p-l-report" element={<OwnerPLReportPage />} />
+                <Route path="/contractor-marketplace" element={<ContractorMarketplacePage />} />
             </Routes>
         </OwnerLayout>
     );

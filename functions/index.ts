@@ -2971,3 +2971,9 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
         }
     }
 );
+
+// ─── NEW FEATURES ─────────────────────────────────────────────────────────
+export { assessDamage } from "./damageAssessment";
+export { runSovereignAI } from "./aiAssistant";
+export { whatsappWebhook } from "./whatsappBot";
+
