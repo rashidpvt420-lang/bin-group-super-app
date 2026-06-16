@@ -101,8 +101,12 @@ service cloud.firestore {
       return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
     }
 
+<<<<<<< Updated upstream
     function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
     function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
+=======
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+>>>>>>> Stashed changes
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
 
     function staffRequestCreate(data) {
@@ -194,7 +198,11 @@ service cloud.firestore {
     }
 
     function safeOpenMissionClaim() {
+<<<<<<< Updated upstream
       return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
+=======
+      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
+>>>>>>> Stashed changes
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
         (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
