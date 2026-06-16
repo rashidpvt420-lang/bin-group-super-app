@@ -34,6 +34,7 @@
     "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
     "test:repo-hygiene": "node scripts/repo-hygiene-guard.mjs",
     "test:launch-clearance": "node scripts/verify-launch-clearance.mjs",
+    "test:pilot-clearance": "node scripts/verify-launch-clearance.mjs --pilot",
     "launch:pass": "node scripts/record-launch-proof.mjs",
     "test:hr-smoke": "node scripts/hr-smoke-test.mjs",
     "test:uae-platform-config": "node scripts/verify-uae-platform-config.mjs",
