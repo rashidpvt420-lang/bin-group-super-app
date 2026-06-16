@@ -55,6 +55,8 @@ const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/Invoi
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
 const TenantInvitePage = lazyWithRetry(() => import('./pages/TenantInvitePage'));
+const PropertyPassportPublicPage = lazyWithRetry(() => import('./pages/public/PropertyPassportPublicPage'));
+const PropertyVerifiedBadgePage = lazyWithRetry(() => import('./pages/public/PropertyVerifiedBadgePage'));
 
 const AuthenticatedShell = lazyWithRetry(() => import('./components/AuthenticatedShell'));
 const ProtectedRoute = lazyWithRetry(() => import('./components/ProtectedRoute'));
@@ -290,6 +292,8 @@ function AppContent() {
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
+        <Route path="/passport/:id" element={<PropertyPassportPublicPage />} />
+        <Route path="/verify/property/:id" element={<PropertyVerifiedBadgePage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
