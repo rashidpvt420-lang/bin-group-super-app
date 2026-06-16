@@ -79,7 +79,7 @@ function getCopy(lang: 'en' | 'ar') {
 
     missionTitle: ar ? 'مهمتنا' : 'Our Mission',
     mission: ar
-      ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تُقلّل الضغط التشغيلي، وتُحسّن العناية اليومية بالعقارات من خلال التواصل الواضح، ومعايير الخدمة المهنية، والسجلات الرقمية، والتنفيذ الميداني المُساءَل.'
+      ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تُقلّل الضغط التشغيلي، وتُحسّن العناية اليومية بالعقارات من خلال التواصل الواضح، ومعايير الخدمة المهنية، والسجلات الرقمية، والتنفيذ الميداني المُساءل.'
       : 'To deliver dependable maintenance and property management services that protect client properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
     visionTitle: ar ? 'رؤيتنا' : 'Our Vision',
     vision: ar
