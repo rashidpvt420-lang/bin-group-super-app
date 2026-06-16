@@ -4,6 +4,18 @@ const path = 'firestore.rules';
 const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 const brokerOwnsNeedle = '    function brokerOwns(data) {';
 
+function resolveKnownConflictMarkers(input) {
+  return input
+    .replace(
+      `<<<<<<< Updated upstream\n    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }\n=======\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n>>>>>>> Stashed changes`,
+      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
+    )
+    .replace(
+      `    function safeOpenMissionClaim() {\n<<<<<<< Updated upstream\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&\n=======\n      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&\n>>>>>>> Stashed changes`,
+      `    function safeOpenMissionClaim() {\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
+    );
+}
+
 function dedupeBrokerOwns(input) {
   let cursor = 0;
   let seen = 0;
@@ -89,7 +101,8 @@ function normalizeNotificationBlock(input) {
   return input.replace(block, replacement);
 }
 
-let { output, seen, removed } = dedupeBrokerOwns(source);
+let normalizedSource = resolveKnownConflictMarkers(source);
+let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
 
 output = replaceLineBlock(
   output,
