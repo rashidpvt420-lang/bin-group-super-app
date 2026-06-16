@@ -80,6 +80,7 @@ function getCopy(lang: 'en' | 'ar') {
     missionTitle: ar ? 'مهمتنا' : 'Our Mission',
     mission: ar
  claude/quirky-carson-x5ygtk
+ claude/quirky-carson-x5ygtk
       ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تُقلّل الضغط التشغيلي، وتُحسّن العناية اليومية بالعقارات من خلال التواصل الواضح، ومعايير الخدمة المهنية، والسجلات الرقمية، والتنفيذ الميداني المُساءل.'
       : 'To deliver dependable maintenance and property management services that protect client properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
     visionTitle: ar ? 'رؤيتنا' : 'Our Vision',
@@ -91,6 +92,13 @@ function getCopy(lang: 'en' | 'ar') {
     visionTitle: ar ? 'رؤيتنا' : 'Our Vision',
     vision: ar
       ? 'أن نصبح شركة رعاية عقارية موثوقة في الإمارات انطلاقًا من مدينة العين، معروفة بالصيانة الموثوقة، إدارة العقارات الشفافة، العمليات الرقمية الذكية، وسير عمل الموظفين بدون ورق، والعلاقات طويلة الأمد مع العملاء.'
+ main
+
+      ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تُقلّل الضغط التشغيلي، وتُحسّن العناية اليومية بالعقارات من خلال التواصل الواضح، ومعايير الخدمة المهنية، والسجلات الرقمية، والتنفيذ الميداني المُساءل.'
+      : 'To deliver dependable maintenance and property management services that protect client properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
+    visionTitle: ar ? 'رؤيتنا' : 'Our Vision',
+    vision: ar
+      ? 'أن نصبح شركة رعاية عقارية موثوقة في الإمارات انطلاقاً من مدينة العين، معروفة بالصيانة الموثوقة، إدارة العقارات الشفافة، العمليات الرقمية الذكية، وسير عمل الموظفين بدون ورق، والعلاقات طويلة الأمد مع العملاء.'
  main
       : 'To become a trusted UAE property-care company starting from Al Ain, known for reliable maintenance, transparent property management, smart digital operations, paperless staff workflows, and long-term client relationships.',
     promiseTitle: ar ? 'وعدنا' : 'Our Promise',
