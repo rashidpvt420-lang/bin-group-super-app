@@ -186,7 +186,7 @@ export const whatsappWebhook = onRequest(
     try {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
-          const value = change.value || {};
+          const value: WhatsAppWebhookValue = change.value || {};
           for (const message of value.messages || []) {
             const persisted = await persistInboundMessage({
               entryId: entry.id || "",
