@@ -18,6 +18,7 @@ import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
+import SupportPage from '../pages/public/SupportPage';
 
 const shell = {
     ink: '#111827',
@@ -144,6 +145,7 @@ export default function TechnicianApp() {
                 <Route path="/profile" element={<TechnicianProfilePage />} />
                 <Route path="/hr" element={<TechnicianHRPage />} />
                 <Route path="/offline" element={<TechnicianOfflinePage />} />
+                <Route path="/support" element={<SupportPage />} />
             </Routes>
         </TechnicianLayout>
     );
