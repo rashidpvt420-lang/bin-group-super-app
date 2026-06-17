@@ -101,6 +101,49 @@ function normalizeNotificationBlock(input) {
   return input.replace(block, replacement);
 }
 
+function insertOwnerTrustWorkflowRules(input) {
+  if (input.includes('match /owner_approval_requests/{approvalId}')) return input;
+  const marker = '    match /{document=**} {';
+  if (!input.includes(marker)) throw new Error('[rules-normalize] Missing catch-all marker for Owner Trust workflow rules.');
+  const block = `
+    match /communication_intake/{intakeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /vendor_rfqs/{rfqId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /vendor_quotes/{quoteId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /owner_approval_requests/{approvalId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) && request.resource.data.decision in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED']);
+    }
+
+    match /vendors/{vendorId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /maintenance_ledger/{ledgerId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || resource.data.technicianId == request.auth.uid));
+      allow create: if isAdmin() || (signedIn() && request.resource.data.source == 'owner_approval_center');
+      allow update: if isAdmin();
+    }
+
+    match /data_governance_events/{eventId} {
+      allow read, write: if isAdmin();
+      allow create: if isAdmin() || signedIn();
+    }
+`;
+  return input.replace(marker, `${block}\n${marker}`);
+}
+
 let normalizedSource = resolveKnownConflictMarkers(source);
 let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
 
@@ -113,7 +156,8 @@ output = replaceLineBlock(
 );
 
 output = normalizeNotificationBlock(output);
+output = insertOwnerTrustWorkflowRules(output);
 
 if (output !== source) writeFileSync(path, output);
 
-console.log(`Firestore rules normalization complete. Kept ${seen > 0 ? 1 : 0}, removed ${removed} duplicate brokerOwns helper(s), hardened launch-critical access rules.`);
+console.log(`Firestore rules normalization complete. Kept ${seen > 0 ? 1 : 0}, removed ${removed} duplicate brokerOwns helper(s), hardened launch-critical and Owner Trust workflow access rules.`);
