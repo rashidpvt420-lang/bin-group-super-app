@@ -197,3 +197,33 @@ export function buildLedgerCompletenessChecklist(record: Record<string, unknown>
     present: Boolean(record[field.key]),
   }));
 }
+
+export function getApprovalRuleForAmount(amountAed: number): OwnerApprovalRule {
+  if (amountAed > 1500) {
+    return UAE_OWNER_APPROVAL_RULES.find((rule) => rule.id === 'three-quotes-over-1500')!;
+  }
+  if (amountAed > 500) {
+    return UAE_OWNER_APPROVAL_RULES.find((rule) => rule.id === 'owner-approval-over-500')!;
+  }
+  return UAE_OWNER_APPROVAL_RULES.find((rule) => rule.id === 'auto-under-500')!;
+}
+
+export function getQuoteAwardGate(amountAed: number, quotesReceived: number) {
+  const minimumQuotes = amountAed > 1500 ? 3 : 1;
+  return {
+    rule: getApprovalRuleForAmount(amountAed),
+    minimumQuotes,
+    received: quotesReceived,
+    allowed: quotesReceived >= minimumQuotes,
+  };
+}
+
+export function getQuoteBenchmark(amounts: number[]) {
+  const valid = amounts.filter((amount) => Number.isFinite(amount) && amount > 0);
+  if (valid.length === 0) return null;
+  const average = valid.reduce((sum, amount) => sum + amount, 0) / valid.length;
+  return {
+    average,
+    deviationPct: (amount: number) => (average > 0 ? ((amount - average) / average) * 100 : 0),
+  };
+}
