@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>BIN GROUP</string>
+	<string>BIN GROUP</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,8 +20,20 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>BIN GROUP uses the camera to capture maintenance evidence, before and after repair photos, property inspection photos, and document images.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BIN GROUP uses location while the app is open to support technician navigation, arrival confirmation, job dispatch, and property service tracking.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BIN GROUP may use the microphone only when a user records service evidence or support media.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>BIN GROUP may save generated reports, invoices, certificates, and service evidence to the photo library when you choose to export them.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>BIN GROUP lets users select existing photos for maintenance requests, technician completion proof, documents, and property evidence.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
