@@ -176,34 +176,6 @@ jobs:
           printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
           cp .env.production .env.local
 
-      - name: Ensure optional Stripe function secrets exist
-        continue-on-error: true
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-        run: |
-          set -euo pipefail
-
-          ensure_secret_version() {
-            local name="$1"
-            local fallback_value="$2"
-            local secret_value="${!name:-}"
-
-            if [ -z "$secret_value" ]; then
-              secret_value="$fallback_value"
-            fi
-
-            if ! gcloud secrets describe "$name" --project "${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-              gcloud secrets create "$name" --project "${GCP_PROJECT_ID}" --replication-policy="automatic" >/dev/null
-            fi
-
-            printf '%s' "$secret_value" | gcloud secrets versions add "$name" --project "${GCP_PROJECT_ID}" --data-file=- >/dev/null
-            echo "Ensured Secret Manager version for $name."
-          }
-
-          ensure_secret_version "STRIPE_SECRET_KEY" "mock_key"
-          ensure_secret_version "STRIPE_WEBHOOK_SECRET" "mock_webhook_secret"
-
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
