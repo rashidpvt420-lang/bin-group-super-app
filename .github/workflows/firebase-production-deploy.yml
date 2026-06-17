@@ -52,8 +52,8 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
 
       - name: Create production environment file
         run: |
@@ -161,8 +161,8 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
 
       - name: Create production environment file
         run: |
