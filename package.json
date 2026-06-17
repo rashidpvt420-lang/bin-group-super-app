@@ -32,6 +32,7 @@
     "test:rules:node": "npm run prepare:rules && npm run verify:rules-hardening && node --test test/security-rules.test.js",
     "test:stability": "npm run prepare:rules && npm run verify:rules-hardening && node scripts/production-stability-guard.mjs",
     "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
+    "test:mobile-store-readiness": "node scripts/mobile-store-readiness-audit.mjs",
     "test:repo-hygiene": "npm run normalize:rules && node scripts/repo-hygiene-guard.mjs",
     "test:launch-clearance": "node scripts/verify-launch-clearance.mjs",
     "test:pilot-clearance": "node scripts/verify-launch-clearance.mjs --pilot",
@@ -46,9 +47,24 @@
     "test:e2e:launch-audit:live": "node scripts/run-live-launch-audit.mjs",
     "test:e2e:business": "playwright install --with-deps chromium && playwright test tests/e2e/business-owner.spec.ts tests/e2e/business-tenant.spec.ts tests/e2e/business-technician.spec.ts tests/e2e/business-admin.spec.ts tests/e2e/business-broker.spec.ts tests/e2e/business-global.spec.ts --project=chromium-desktop",
     "seed:e2e": "node scripts/seed-e2e-accounts.js",
-    "payroll:generate-payslips": "node scripts/payroll-generate-payslips.mjs"
+    "payroll:generate-payslips": "node scripts/payroll-generate-payslips.mjs",
+    "mobile:init": "npm run build && npx cap sync",
+    "mobile:add:android": "npx cap add android",
+    "mobile:add:ios": "npx cap add ios",
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:open:android": "npx cap open android",
+    "mobile:open:ios": "npx cap open ios",
+    "mobile:check": "npm run test:mobile-store-readiness && npm run build"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/camera": "^7.0.2",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/filesystem": "^7.1.4",
+    "@capacitor/geolocation": "^7.1.5",
+    "@capacitor/push-notifications": "^7.0.3",
+    "@capacitor/splash-screen": "^7.0.3",
+    "@capacitor/status-bar": "^7.0.3",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
@@ -75,6 +91,9 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/ios": "^7.4.4",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.54.0",
     "@types/node": "^20.11.17",
