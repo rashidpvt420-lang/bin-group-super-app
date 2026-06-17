@@ -82,6 +82,8 @@ jobs:
 
       - name: Build dedicated admin panel
         run: npm run build:admin
+        env:
+          CI: false
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
@@ -209,6 +211,8 @@ jobs:
 
       - name: Build dedicated admin panel
         run: npm run build:admin
+        env:
+          CI: false
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
