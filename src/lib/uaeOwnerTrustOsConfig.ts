@@ -208,23 +208,14 @@ export function getApprovalRuleForAmount(amountAed: number): OwnerApprovalRule {
   return UAE_OWNER_APPROVAL_RULES.find((rule) => rule.id === 'auto-under-500')!;
 }
 
-fix/emergency-quote-gate-override
 export function getQuoteAwardGate(amountAed: number, quotesReceived: number, isEmergency = false) {
   const minimumQuotes = !isEmergency && amountAed > 1500 ? 3 : 1;
-
-export function getQuoteAwardGate(amountAed: number, quotesReceived: number) {
-  const minimumQuotes = amountAed > 1500 ? 3 : 1;
- main
   return {
     rule: getApprovalRuleForAmount(amountAed),
     minimumQuotes,
     received: quotesReceived,
- fix/emergency-quote-gate-override
     emergencyOverride: isEmergency && amountAed > 1500,
     allowed: isEmergency || quotesReceived >= minimumQuotes,
-
-    allowed: quotesReceived >= minimumQuotes,
- main
   };
 }
 
