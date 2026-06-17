@@ -177,6 +177,7 @@ jobs:
           cp .env.production .env.local
 
       - name: Ensure optional Stripe function secrets exist
+        continue-on-error: true
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
