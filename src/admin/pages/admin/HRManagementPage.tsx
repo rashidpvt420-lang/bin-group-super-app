@@ -19,7 +19,10 @@ import {
     Landmark,
     Clock,
     AlertTriangle,
-    ClipboardCheck
+    ClipboardCheck,
+    Calculator,
+    Sun,
+    Users as UsersIcon
 } from 'lucide-react';
 import {
     db,
@@ -46,6 +49,14 @@ import {
     HR_SELF_SERVICE_COLLECTIONS,
     PAPERLESS_HR_PUBLIC_COPY
 } from '../../../lib/hrSelfServiceBlueprint';
+import {
+    BIN_GROUP_PRIMARY_ENTITY,
+    calculateEosbEstimate,
+    summarizeEmiratisation,
+    summarizeGpssaRegistrations,
+    getHeatStressSeasonStatus,
+    type EosbTerminationReason
+} from '../../../lib/uaeWorkforceComplianceEngine';
 
 type RiskTone = 'success' | 'warning' | 'error' | 'info';
 
@@ -189,6 +200,12 @@ export default function HRManagementPage() {
     const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
     const [reviewDialog, setReviewDialog] = useState<{ open: boolean; requestId: string; approve: boolean } | null>(null);
     const [reviewNote, setReviewNote] = useState('');
+    const [eosbDialogOpen, setEosbDialogOpen] = useState(false);
+    const [eosbStaffId, setEosbStaffId] = useState('');
+    const [eosbBasicSalary, setEosbBasicSalary] = useState('');
+    const [eosbJoiningDate, setEosbJoiningDate] = useState('');
+    const [eosbLastWorkingDate, setEosbLastWorkingDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [eosbReason, setEosbReason] = useState<EosbTerminationReason>('resignation');
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -343,6 +360,39 @@ export default function HRManagementPage() {
         return { activeStaff, pending, urgent, highRiskMood, avgReadiness };
     }, [staff, visibleRequests, moodCheckins]);
 
+    const emiratisationStatus = useMemo(() => summarizeEmiratisation(staff, { baselineYear: 2024 }), [staff]);
+    const gpssaSummary = useMemo(() => summarizeGpssaRegistrations(staff), [staff]);
+    const heatStress = useMemo(() => getHeatStressSeasonStatus(), []);
+
+    const eosbSelectedStaff = useMemo(() => staff.find((s) => s.id === eosbStaffId) || null, [staff, eosbStaffId]);
+
+    const eosbResult = useMemo(() => {
+        const basicSalary = Number(eosbBasicSalary || 0);
+        if (!basicSalary || !eosbJoiningDate || !eosbLastWorkingDate) return null;
+        return calculateEosbEstimate({
+            basicMonthlySalaryAed: basicSalary,
+            joiningDate: new Date(eosbJoiningDate),
+            lastWorkingDate: new Date(eosbLastWorkingDate),
+            terminationReason: eosbReason,
+        });
+    }, [eosbBasicSalary, eosbJoiningDate, eosbLastWorkingDate, eosbReason]);
+
+    const handleOpenEosbDialog = (s?: any) => {
+        if (s) {
+            setEosbStaffId(s.id);
+            setEosbBasicSalary(String(s.basicSalary || s.salaryPackage?.basicSalary || ''));
+            const joinValue = s.joiningDate || s.hireDate;
+            setEosbJoiningDate(joinValue ? String(parseDateValue(joinValue)?.toISOString().slice(0, 10) || '') : '');
+        } else {
+            setEosbStaffId('');
+            setEosbBasicSalary('');
+            setEosbJoiningDate('');
+        }
+        setEosbLastWorkingDate(new Date().toISOString().slice(0, 10));
+        setEosbReason('resignation');
+        setEosbDialogOpen(true);
+    };
+
     const handleReviewRequest = async (requestId: string, approve: boolean, note: string) => {
         try {
             const nextStatus = approve ? 'approved' : 'rejected';
@@ -471,6 +521,16 @@ export default function HRManagementPage() {
                         >
                             OPEN PAYROLL / FINANCIALS
                         </Button>
+                        {isHRManager && (
+                            <Button
+                                variant="outlined"
+                                startIcon={<Calculator size={18} />}
+                                onClick={() => handleOpenEosbDialog()}
+                                sx={{ borderColor: 'rgba(255,255,255,0.18)', color: '#FFF', fontWeight: 950 }}
+                            >
+                                EOSB ESTIMATOR
+                            </Button>
+                        )}
                         {isHRManager && (
                             <Button
                                 variant="contained"
@@ -740,6 +800,61 @@ export default function HRManagementPage() {
 
                 {tab === 3 && (
                     <Grid container spacing={3}>
+                        {heatStress.inSeason && (
+                            <Grid item xs={12}>
+                                <Alert
+                                    severity={heatStress.inRestrictedWindowNow ? 'error' : 'warning'}
+                                    icon={<Sun size={20} />}
+                                    sx={{ borderRadius: 3 }}
+                                >
+                                    Heat-stress season active ({heatStress.seasonLabel}). Outdoor direct-sun work is banned {heatStress.windowLabel} daily{heatStress.inRestrictedWindowNow ? ' — restricted window is in effect right now.' : '.'} Confirm rosters exclude this window or record a supervisor exception.
+                                </Alert>
+                            </Grid>
+                        )}
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                                    <Landmark color={binThemeTokens.gold} size={20} />
+                                    <Typography variant="subtitle1" color="#FFF" fontWeight="950">Entity Profile</Typography>
+                                </Stack>
+                                <Typography variant="body2" color="#FFF" fontWeight="800">{BIN_GROUP_PRIMARY_ENTITY.legalNameEn}</Typography>
+                                <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 1.5 }}>{BIN_GROUP_PRIMARY_ENTITY.jurisdiction} · {BIN_GROUP_PRIMARY_ENTITY.workLocationEmirate}</Typography>
+                                <Chip size="small" label={`${BIN_GROUP_PRIMARY_ENTITY.fieldsRequiringConfirmation.length} fields need confirmation`} sx={{ fontWeight: 900, bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', mb: 1.5 }} />
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', display: 'block' }}>{BIN_GROUP_PRIMARY_ENTITY.notes}</Typography>
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                                    <UsersIcon color={binThemeTokens.gold} size={20} />
+                                    <Typography variant="subtitle1" color="#FFF" fontWeight="950">Emiratisation</Typography>
+                                </Stack>
+                                {emiratisationStatus.applicable ? (
+                                    <>
+                                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                                            <Typography variant="caption" color="textSecondary">Current / Required</Typography>
+                                            <Typography variant="body2" fontWeight="950" color={emiratisationStatus.onTrack ? '#10b981' : '#ef4444'}>{emiratisationStatus.currentPct}% / {emiratisationStatus.requiredPct}%</Typography>
+                                        </Stack>
+                                        <LinearProgress variant="determinate" value={Math.min(100, (emiratisationStatus.currentPct / Math.max(emiratisationStatus.requiredPct, 1)) * 100)} sx={{ height: 7, borderRadius: 999, bgcolor: 'rgba(255,255,255,0.08)', mb: 1.5, '& .MuiLinearProgress-bar': { bgcolor: emiratisationStatus.onTrack ? '#10b981' : '#ef4444' } }} />
+                                        <Chip size="small" label={emiratisationStatus.onTrack ? 'On track' : `Gap: ${emiratisationStatus.gapPct}%`} sx={{ fontWeight: 900, bgcolor: emiratisationStatus.onTrack ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', color: emiratisationStatus.onTrack ? '#10b981' : '#ef4444', mb: 1.5 }} />
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', display: 'block' }}>{emiratisationStatus.note}</Typography>
+                                    </>
+                                ) : (
+                                    <Typography variant="caption" color="textSecondary">{emiratisationStatus.note}</Typography>
+                                )}
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                                    <ShieldCheck color={binThemeTokens.gold} size={20} />
+                                    <Typography variant="subtitle1" color="#FFF" fontWeight="950">GPSSA Registration</Typography>
+                                </Stack>
+                                <Typography variant="body2" color="#FFF" fontWeight="800">{gpssaSummary.registeredCount} / {gpssaSummary.applicableCount} UAE national staff registered</Typography>
+                                <Chip size="small" label={gpssaSummary.overdueCount > 0 ? `${gpssaSummary.overdueCount} overdue` : 'None overdue'} sx={{ mt: 1.5, fontWeight: 900, bgcolor: gpssaSummary.overdueCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)', color: gpssaSummary.overdueCount > 0 ? '#ef4444' : '#10b981' }} />
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 1.5 }}>Registration due ~30 working days from joining. Applies to UAE national staff only.</Typography>
+                            </Paper>
+                        </Grid>
                         <Grid item xs={12} lg={4}>
                             <Paper sx={{ p: 4, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
                                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
@@ -915,6 +1030,95 @@ export default function HRManagementPage() {
                     >
                         {reviewDialog?.approve ? 'CONFIRM APPROVE' : 'CONFIRM REJECT'}
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={eosbDialogOpen}
+                onClose={() => setEosbDialogOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
+            >
+                <DialogTitle sx={{ color: '#FFF', fontWeight: 950 }}>End-of-Service Benefit Estimator</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ mt: 1 }}>
+                        <FormControl size="small" fullWidth>
+                            <InputLabel sx={{ color: 'rgba(255,255,255,0.55)' }}>Staff member (optional)</InputLabel>
+                            <Select
+                                value={eosbStaffId}
+                                label="Staff member (optional)"
+                                onChange={(e) => handleOpenEosbDialog(staff.find((s) => s.id === e.target.value))}
+                                sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.04)' }}
+                            >
+                                <MenuItem value="">Manual entry</MenuItem>
+                                {staff.map((s) => <MenuItem key={s.id} value={s.id}>{s.displayName || s.fullName || s.email}</MenuItem>)}
+                            </Select>
+                        </FormControl>
+                        <TextField
+                            label="Basic monthly salary (AED)"
+                            type="number"
+                            size="small"
+                            fullWidth
+                            value={eosbBasicSalary}
+                            onChange={(e) => setEosbBasicSalary(e.target.value)}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}
+                        />
+                        <Stack direction="row" spacing={2}>
+                            <TextField
+                                label="Joining date"
+                                type="date"
+                                size="small"
+                                fullWidth
+                                value={eosbJoiningDate}
+                                onChange={(e) => setEosbJoiningDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}
+                            />
+                            <TextField
+                                label="Last working date"
+                                type="date"
+                                size="small"
+                                fullWidth
+                                value={eosbLastWorkingDate}
+                                onChange={(e) => setEosbLastWorkingDate(e.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}
+                            />
+                        </Stack>
+                        <FormControl size="small" fullWidth>
+                            <InputLabel sx={{ color: 'rgba(255,255,255,0.55)' }}>Separation type</InputLabel>
+                            <Select
+                                value={eosbReason}
+                                label="Separation type"
+                                onChange={(e) => setEosbReason(e.target.value as EosbTerminationReason)}
+                                sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.04)' }}
+                            >
+                                <MenuItem value="resignation">Resignation</MenuItem>
+                                <MenuItem value="employer_terminated">Employer-terminated</MenuItem>
+                                <MenuItem value="contract_end">Contract end / non-renewal</MenuItem>
+                                <MenuItem value="death_or_disability">Death or disability</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        {eosbResult && (
+                            <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.03)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, borderRadius: 3 }}>
+                                <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>ESTIMATED GRATUITY</Typography>
+                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold} sx={{ my: 1 }}>AED {eosbResult.finalEstimateAed.toLocaleString()}</Typography>
+                                <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                                    <Stack direction="row" justifyContent="space-between"><Typography variant="caption" color="textSecondary">Service period</Typography><Typography variant="caption" color="#FFF">{eosbResult.serviceYears} years</Typography></Stack>
+                                    <Stack direction="row" justifyContent="space-between"><Typography variant="caption" color="textSecondary">Daily rate</Typography><Typography variant="caption" color="#FFF">AED {eosbResult.dailyRateAed}</Typography></Stack>
+                                    <Stack direction="row" justifyContent="space-between"><Typography variant="caption" color="textSecondary">Raw calculated gratuity</Typography><Typography variant="caption" color="#FFF">AED {eosbResult.rawGratuityAed.toLocaleString()}</Typography></Stack>
+                                    {eosbResult.capApplied && <Stack direction="row" justifyContent="space-between"><Typography variant="caption" color="textSecondary">2-year wage cap applied</Typography><Typography variant="caption" color="#eab308">AED {eosbResult.capAed.toLocaleString()}</Typography></Stack>}
+                                </Stack>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', display: 'block', mb: 1.5 }}>{eosbResult.note}</Typography>
+                                <Alert severity="warning" sx={{ fontSize: '0.75rem' }}>{eosbResult.disclaimer}</Alert>
+                            </Paper>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setEosbDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>Close</Button>
                 </DialogActions>
             </Dialog>
         </Box>
