@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Award, Briefcase, CheckCircle2, Clock, DollarSign,
-  MapPin, Plus, Star, Tool, Users, Wrench, Zap,
+  MapPin, Plus, Star, Users, Wrench, Zap,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
