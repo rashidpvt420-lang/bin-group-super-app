@@ -32,23 +32,6 @@ async function sendWhatsAppMessage(phoneId: string, token: string, to: string, b
   });
 }
 
-async function sendWhatsAppTemplate(phoneId: string, token: string, to: string, templateName: string, params: string[]) {
-  await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "template",
-      template: {
-        name: templateName,
-        language: { code: "en" },
-        components: [{ type: "body", parameters: params.map(p => ({ type: "text", text: p })) }],
-      },
-    }),
-  });
-}
-
 async function routeMessage(from: string, text: string, phoneId: string, token: string) {
   const lower = text.toLowerCase().trim();
 
@@ -131,7 +114,7 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
   await sendWhatsAppMessage(phoneId, token, from, welcomeMsg(userName));
 }
 
-export const whatsappWebhook = onRequest({
+export const whatsappBotWebhook = onRequest({
   cors: false,
   timeoutSeconds: 30,
   secrets: [waToken, waVerifyToken, waPhoneId],

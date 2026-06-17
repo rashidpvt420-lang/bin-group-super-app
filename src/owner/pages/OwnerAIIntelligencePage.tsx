@@ -227,7 +227,6 @@ export default function OwnerAIIntelligencePage() {
 
   useEffect(() => {
     setPageContext({ ...pageCtx, ledger });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties.length, passports.length]);
 
   const dir = isRTL ? 'rtl' : 'ltr';
