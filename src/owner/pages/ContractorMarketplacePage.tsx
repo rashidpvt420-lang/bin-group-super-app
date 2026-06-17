@@ -146,7 +146,7 @@ function JobCard({ job, onAward }: { job: any; onAward?: (jobId: string, bidId: 
               <Stack spacing={1.5}>
                 {sortedBids.map(bid => {
                   const amount = bid.amount || 0;
-                  const gate = getQuoteAwardGate(amount, bids.length);
+                  const gate = getQuoteAwardGate(amount, bids.length, job.urgency === 'EMERGENCY');
                   const deviationPct = benchmark ? Math.round(benchmark.deviationPct(amount)) : 0;
                   return (
                     <Stack key={bid.id} spacing={1} sx={{ p: 2, bgcolor: alpha(gold, 0.05), border: `1px solid ${alpha(gold, 0.14)}`, borderRadius: 2.5 }}>
@@ -182,6 +182,13 @@ function JobCard({ job, onAward }: { job: any; onAward?: (jobId: string, bidId: 
                             label={`Needs ${gate.minimumQuotes} quotes before award (${gate.received}/${gate.minimumQuotes}) · over AED 1,500`}
                             size="small"
                             sx={{ bgcolor: alpha('#F59E0B', 0.1), color: '#F59E0B', fontWeight: 850, fontSize: '0.58rem' }}
+                          />
+                        )}
+                        {gate.emergencyOverride && (
+                          <Chip
+                            label="Emergency override · 3-quote rule waived"
+                            size="small"
+                            sx={{ bgcolor: alpha('#EF4444', 0.1), color: '#EF4444', fontWeight: 850, fontSize: '0.58rem' }}
                           />
                         )}
                       </Stack>
