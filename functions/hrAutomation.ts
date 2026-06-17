@@ -20,6 +20,9 @@ const EXPIRY_FIELDS = [
     { key: "tradeCertificateExpiry", label: "Trade Certificate" },
     { key: "occupationalHealthCardExpiry", label: "Occupational Health Card" },
 ];
+const UAE_NATIONALITY_TOKENS = ["uae", "emirati", "united arab emirates", "uae national"];
+// GPSSA pension registration is due within ~30 working days of joining; approximated as 42 calendar days.
+const GPSSA_REGISTRATION_WINDOW_DAYS = 42;
 
 function normalizeRole(value: unknown) {
     return String(value || "").trim().toLowerCase();
@@ -97,10 +100,27 @@ function daysUntil(value: unknown) {
     return Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
+function isUaeNational(value: unknown) {
+    return UAE_NATIONALITY_TOKENS.includes(String(value || "").trim().toLowerCase());
+}
+
+function gpssaOverdueWarning(data: FirebaseFirestore.DocumentData): string | null {
+    if (!isUaeNational(data.nationality)) return null;
+    if (data.gpssaRegisteredAt || data.gpssaStatus === "registered") return null;
+    const joinDate = dateFromAny(data.joiningDate || data.hireDate || data.createdAt);
+    if (!joinDate) return null;
+    const dueDate = new Date(joinDate.getTime() + GPSSA_REGISTRATION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const daysPastDue = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysPastDue < 0) return null;
+    return `GPSSA pension registration: ${daysPastDue} days overdue (approx. 30-working-day filing window)`;
+}
+
 function complianceWarnings(data: FirebaseFirestore.DocumentData) {
-    return EXPIRY_FIELDS.map((field) => ({ ...field, days: daysUntil(data[field.key]) }))
+    const expiryWarnings = EXPIRY_FIELDS.map((field) => ({ ...field, days: daysUntil(data[field.key]) }))
         .filter((item) => item.days !== null && item.days <= 30)
         .map((item) => `${item.label}: ${item.days! < 0 ? `${Math.abs(item.days!)} days expired` : `${item.days} days left`}`);
+    const gpssaWarning = gpssaOverdueWarning(data);
+    return gpssaWarning ? [...expiryWarnings, gpssaWarning] : expiryWarnings;
 }
 
 
@@ -352,8 +372,37 @@ export const onStaffRequestReviewed = onDocumentUpdated("staffRequests/{requestI
     });
 });
 
+// Federal heat-stress rule bans outdoor direct-sun work 12:30-15:00, 15 June - 15 September.
+// Sends one reminder per season (not daily) to avoid alert fatigue.
+async function maybeSendHeatStressSeasonReminder() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const seasonStart = new Date(year, 5, 15);
+    const seasonEnd = new Date(year, 8, 15, 23, 59, 59);
+    if (now < seasonStart || now > seasonEnd) return;
+
+    const reminderId = `heat_stress_season_${year}`;
+    const reminderRef = db.collection("systemLogs").doc(reminderId);
+    const existing = await reminderRef.get();
+    if (existing.exists) return;
+
+    await reminderRef.set({
+        type: "HEAT_STRESS_SEASON_ACTIVE",
+        year,
+        message: "Midday outdoor work ban in effect: 12:30-15:00, 15 June - 15 September. Confirm rosters exclude direct-sun outdoor work in this window or record a supervisor exception.",
+        createdAt: serverTimestamp(),
+    });
+
+    const recipients = await usersByRoles(HR_RECIPIENT_ROLES);
+    await Promise.allSettled(recipients.map((recipient) => queueUserNotification(String(recipient.id), "Heat-stress season active", "Midday outdoor work ban (12:30-15:00) is in effect until 15 September. Confirm rosters and exception records.", {
+        type: "heat_stress_season_reminder",
+        url: "/admin/hr",
+    })));
+}
+
 export const dailyHrComplianceSweep = onSchedule("every 24 hours", async () => {
     const todayKey = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    await maybeSendHeatStressSeasonReminder();
     const staffUsers = await usersByRoles(STAFF_ROLES);
 
     for (const staff of staffUsers) {
@@ -388,7 +437,7 @@ export const dailyHrComplianceSweep = onSchedule("every 24 hours", async () => {
             requestType: "document_update",
             requestLabel: "Document / Compliance Update",
             category: "documents",
-            priority: warnings.some((warning) => warning.includes("expired")) ? "urgent" : "high",
+            priority: warnings.some((warning) => warning.includes("expired") || warning.includes("overdue")) ? "urgent" : "high",
             reason: `Automated compliance alert: ${warnings.join("; ")}`,
             status: "pending_hr_review",
             source: "daily_hr_compliance_sweep",
