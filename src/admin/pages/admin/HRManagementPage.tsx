@@ -852,6 +852,16 @@ export default function HRManagementPage() {
                                 </Stack>
                                 <Typography variant="body2" color="#FFF" fontWeight="800">{gpssaSummary.registeredCount} / {gpssaSummary.applicableCount} UAE national staff registered</Typography>
                                 <Chip size="small" label={gpssaSummary.overdueCount > 0 ? `${gpssaSummary.overdueCount} overdue` : 'None overdue'} sx={{ mt: 1.5, fontWeight: 900, bgcolor: gpssaSummary.overdueCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)', color: gpssaSummary.overdueCount > 0 ? '#ef4444' : '#10b981' }} />
+                                {gpssaSummary.overdueCount > 0 && (
+                                    <Stack direction="row" spacing={0.75} sx={{ mt: 1.5, flexWrap: 'wrap', gap: 0.75 }}>
+                                        {gpssaSummary.overdueStaff.slice(0, 5).map((s: any) => (
+                                            <Chip key={s.id || s.uid || s.email} size="small" label={s.displayName || s.fullName || s.email || 'Staff'} sx={{ fontWeight: 800, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.06)', color: '#FFF' }} />
+                                        ))}
+                                        {gpssaSummary.overdueStaff.length > 5 && (
+                                            <Chip size="small" label={`+${gpssaSummary.overdueStaff.length - 5} more`} sx={{ fontWeight: 800, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)' }} />
+                                        )}
+                                    </Stack>
+                                )}
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 1.5 }}>Registration due ~30 working days from joining. Applies to UAE national staff only.</Typography>
                             </Paper>
                         </Grid>
