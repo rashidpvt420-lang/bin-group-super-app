@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Grid, Stack, TextField, Typography } from '@mui/material';
-import { auth, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
+import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type ApprovalRequest = {
@@ -25,10 +25,13 @@ const decisions = [
   { key: 'EMERGENCY_APPROVED', label: 'Emergency approval' },
 ];
 
+const submitDecision = httpsCallable(functions, 'submitOwnerApprovalDecision');
+
 export default function OwnerApprovalCenterPage() {
   const [items, setItems] = React.useState<ApprovalRequest[]>([]);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const [notice, setNotice] = React.useState('');
+  const [submittingId, setSubmittingId] = React.useState('');
   const ownerId = auth.currentUser?.uid || '';
 
   React.useEffect(() => {
@@ -47,17 +50,14 @@ export default function OwnerApprovalCenterPage() {
 
   const decide = async (request: ApprovalRequest, decision: string) => {
     try {
-      await updateDoc(doc(db, 'owner_approval_requests', request.id), {
-        status: decision === 'APPROVED' || decision === 'EMERGENCY_APPROVED' ? 'owner_approved' : decision === 'REJECTED' ? 'owner_rejected' : 'more_quotes_requested',
-        decision,
-        decisionNote: notes[request.id] || '',
-        ownerDecisionBy: ownerId,
-        decidedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      setNotice(`Decision recorded: ${decision}. Audit ledger sync is handled by the secured backend workflow.`);
+      setSubmittingId(`${request.id}:${decision}`);
+      const result = await submitDecision({ approvalRequestId: request.id, decision, decisionNote: notes[request.id] || '' });
+      const data = result.data as any;
+      setNotice(`Decision recorded: ${data?.decision || decision}. Secured backend workflow will sync the RFQ, ticket, and ledger.`);
     } catch (error: any) {
       setNotice(error?.message || 'Failed to record owner decision.');
+    } finally {
+      setSubmittingId('');
     }
   };
 
@@ -90,11 +90,14 @@ export default function OwnerApprovalCenterPage() {
                 </Stack>
                 <TextField fullWidth multiline minRows={2} label="Owner decision note" value={notes[request.id] || ''} onChange={(e) => setNotes({ ...notes, [request.id]: e.target.value })} sx={{ mb: 2 }} />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                  {decisions.map((decision) => (
-                    <Button key={decision.key} variant={decision.key === 'APPROVED' ? 'contained' : 'outlined'} onClick={() => decide(request, decision.key)} sx={decision.key === 'APPROVED' ? { bgcolor: binThemeTokens.goldHover, color: '#111827', fontWeight: 950 } : { fontWeight: 900 }}>
-                      {decision.label}
-                    </Button>
-                  ))}
+                  {decisions.map((decision) => {
+                    const busy = submittingId === `${request.id}:${decision.key}`;
+                    return (
+                      <Button key={decision.key} variant={decision.key === 'APPROVED' ? 'contained' : 'outlined'} disabled={Boolean(submittingId)} onClick={() => decide(request, decision.key)} sx={decision.key === 'APPROVED' ? { bgcolor: binThemeTokens.goldHover, color: '#111827', fontWeight: 950 } : { fontWeight: 900 }}>
+                        {busy ? 'Submitting...' : decision.label}
+                      </Button>
+                    );
+                  })}
                 </Stack>
               </CardContent>
             </Card>
