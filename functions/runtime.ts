@@ -7,6 +7,7 @@ export * from "./ownerRegistrationRequest";
 export * from "./onboardingProofUpload";
 export * from "./stripePayment";
 export * from "./adminOwnerOperations";
+export * from "./paymentTransactionApproval";
 export * from "./mailDelivery";
 export * from "./notificationDelivery";
 export * from "./ticketNormalization";

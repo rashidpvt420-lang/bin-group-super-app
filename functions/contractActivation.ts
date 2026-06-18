@@ -113,6 +113,110 @@ export const adminApproveContractActivation = onCall({ cors: true }, async (requ
   return { status: "SUCCESS", contractId, ownerUid };
 });
 
+const SIGNED_AWAITING_PAYMENT_STATUSES = new Set(["ready_for_activation", "owner_signed", "signed"]);
+
+export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
+
+  const contractId = String(request.data?.contractId || "").trim();
+  if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
+
+  const ref = db.collection("contracts").doc(contractId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Contract not found.");
+
+  const contract = snap.data() || {};
+  const ownerUid = String(contract.ownerId || contract.ownerUid || "").trim();
+  const requesterEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+  const contractEmail = String(contract.ownerEmail || "").trim().toLowerCase();
+  if (ownerUid && ownerUid !== request.auth.uid && contractEmail !== requesterEmail) {
+    throw new HttpsError("permission-denied", "This contract belongs to another owner.");
+  }
+
+  if (contract.paymentVerified === true) {
+    return { paymentId: contract.paymentId || contractId, amountPendingAdminConfirmation: false, idempotent: true };
+  }
+  if (roleOf(contract.paymentStatus) === "pending_verification" || roleOf(contract.status) === "pending_admin_payment_verification") {
+    return {
+      paymentId: contract.paymentId || contractId,
+      amountPendingAdminConfirmation: Number(contract.amountReceived || contract.mobilizationAmount || 0) <= 0,
+      idempotent: true,
+    };
+  }
+
+  const signed = SIGNED_AWAITING_PAYMENT_STATUSES.has(roleOf(contract.status)) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
+  if (!signed) throw new HttpsError("failed-precondition", "Contract must be signed before submitting a payment verification request.");
+
+  const method = String(request.data?.method || "BANK_TRANSFER").trim().toUpperCase();
+  const provider = String(request.data?.provider || "MANUAL").trim().toUpperCase();
+  const amount = Number(request.data?.amount || request.data?.mobilizationAmount || 0);
+  const currency = String(request.data?.currency || "AED").trim().toUpperCase();
+  const reference = String(request.data?.reference || request.data?.paymentReferenceId || "").trim();
+  const paymentReferenceId = String(request.data?.paymentReferenceId || reference || `OWNER_PORTAL_${Date.now()}`).trim();
+  const annualContractValue = Number(request.data?.annualContractValue || contract.annualContractValue || 0);
+  const mobilizationAmount = Number(request.data?.mobilizationAmount || amount || 0);
+  const paymentPlan = String(request.data?.paymentPlan || "").trim();
+  const amountSource = String(request.data?.amountSource || "").trim();
+  const commercialScheduleLocked = Boolean(request.data?.commercialScheduleLocked);
+
+  const now = ts();
+  const paymentRef = db.collection("payment_transactions").doc();
+  const batch = db.batch();
+
+  batch.set(paymentRef, {
+    contractId,
+    intakeId: contractId,
+    ownerUid: request.auth.uid,
+    ownerId: ownerUid || request.auth.uid,
+    ownerEmail: contractEmail || requesterEmail,
+    method,
+    provider,
+    amount,
+    currency,
+    reference,
+    paymentReferenceId,
+    annualContractValue,
+    mobilizationAmount,
+    paymentPlan,
+    amountSource,
+    commercialScheduleLocked,
+    status: "PENDING",
+    verificationState: "ADMIN_VERIFICATION_REQUIRED",
+    source: "OWNER_PORTAL_MANUAL_VERIFICATION_BRIDGE",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  batch.set(ref, {
+    paymentId: paymentRef.id,
+    paymentStatus: "PENDING_VERIFICATION",
+    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    paymentMethod: method,
+    provider,
+    amountReceived: amount,
+    paymentReferenceId,
+    mobilizationAmount,
+    annualContractValue: annualContractValue || contract.annualContractValue,
+    paymentSubmittedAt: now,
+    updatedAt: now,
+  }, { merge: true });
+
+  batch.set(db.collection("auditLogs").doc(), {
+    action: "OWNER_CREATE_PAYMENT_TRANSACTION",
+    actorId: request.auth.uid,
+    actorRole: "owner",
+    contractId,
+    paymentId: paymentRef.id,
+    amount,
+    method,
+    createdAt: now,
+  });
+
+  await batch.commit();
+
+  return { paymentId: paymentRef.id, amountPendingAdminConfirmation: amount <= 0, idempotent: false };
+});
+
 export const adminRejectContractActivation = onCall({ cors: true }, async (request) => {
   await requireAdmin(request.auth);
 
