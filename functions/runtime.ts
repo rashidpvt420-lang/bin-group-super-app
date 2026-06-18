@@ -14,6 +14,7 @@ export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
+export * from "./contractSignatureOtp";
 
 if (!admin.apps.length) {
   admin.initializeApp();
