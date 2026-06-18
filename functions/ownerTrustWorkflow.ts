@@ -1,4 +1,5 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) {
@@ -6,6 +7,67 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+
+const ALLOWED_DECISIONS = new Set(["APPROVED", "REJECTED", "REQUEST_MORE_QUOTES", "EMERGENCY_APPROVED"]);
+
+function asText(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function statusForDecision(decision: string) {
+  if (decision === "APPROVED") return "owner_approved";
+  if (decision === "EMERGENCY_APPROVED") return "owner_approved_emergency";
+  if (decision === "REJECTED") return "owner_rejected";
+  return "more_quotes_requested";
+}
+
+export const submitOwnerApprovalDecision = onCall(
+  { cors: true, region: "europe-west3" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication is required.");
+
+    const ownerId = request.auth.uid;
+    const approvalId = asText(request.data?.approvalRequestId || request.data?.requestId).slice(0, 160);
+    const decision = asText(request.data?.decision).toUpperCase();
+    const decisionNote = asText(request.data?.decisionNote).slice(0, 2000);
+
+    if (!approvalId) throw new HttpsError("invalid-argument", "approvalRequestId is required.");
+    if (!ALLOWED_DECISIONS.has(decision)) throw new HttpsError("invalid-argument", "Unsupported owner decision.");
+
+    const ref = db.collection("owner_approval_requests").doc(approvalId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Owner approval request not found.");
+    const data = snap.data() || {};
+    if (data.ownerId !== ownerId) throw new HttpsError("permission-denied", "This approval request does not belong to the signed-in owner.");
+
+    const status = statusForDecision(decision);
+    await ref.set({
+      status,
+      decision,
+      decisionNote,
+      ownerDecisionBy: ownerId,
+      decidedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await db.collection("data_governance_events").add({
+      source: "submitOwnerApprovalDecision",
+      actorId: ownerId,
+      actorRole: "owner",
+      eventType: "OWNER_APPROVAL_DECISION_SUBMITTED",
+      approvalRequestId: approvalId,
+      rfqId: data.rfqId || "",
+      ticketId: data.ticketId || "",
+      propertyId: data.propertyId || "",
+      decision,
+      status,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, approvalRequestId: approvalId, decision, status };
+  }
+);
 
 export const onOwnerApprovalDecision = onDocumentUpdated(
   {
@@ -20,14 +82,7 @@ export const onOwnerApprovalDecision = onDocumentUpdated(
     if (before.status === after.status && before.decision === after.decision) return;
     if (!after.decision) return;
 
-    const statusByDecision: Record<string, string> = {
-      APPROVED: "owner_approved",
-      EMERGENCY_APPROVED: "owner_approved_emergency",
-      REJECTED: "owner_rejected",
-      REQUEST_MORE_QUOTES: "more_quotes_requested",
-    };
-
-    const derivedStatus = statusByDecision[String(after.decision)] || String(after.status || "owner_decision_recorded");
+    const derivedStatus = statusForDecision(String(after.decision));
     const batch = db.batch();
 
     if (after.rfqId) {
