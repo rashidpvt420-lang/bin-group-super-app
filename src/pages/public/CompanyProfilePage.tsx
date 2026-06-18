@@ -1,12 +1,19 @@
 import React, { useMemo } from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import {
+  AlertTriangle,
   Award,
+  Banknote,
   Briefcase,
   Building2,
   CheckCircle2,
+  Clock,
+  FileText,
   Globe,
+  HandCoins,
+  HeartHandshake,
   Home,
+  KeyRound,
   LogIn,
   Mail,
   MapPin,
@@ -14,6 +21,9 @@ import {
   Phone,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
+  UserCheck,
+  ClipboardCheck,
   Users,
   Wrench,
   Zap,
@@ -43,6 +53,46 @@ const SERVICES = [
   { icon: <Sparkles size={22} />, en: 'AI Property Intelligence', ar: 'ذكاء العقارات بالذكاء الاصطناعي', descEn: 'AI-assisted quote logic, property classification, design previews, predictive maintenance, and portfolio decisions.', descAr: 'منطق عروض الأسعار بمساعدة الذكاء الاصطناعي، تصنيف العقارات، معاينات التصميم، الصيانة التنبؤية.' },
   { icon: <Briefcase size={22} />, en: 'Digital Compliance Passport', ar: 'جواز الامتثال الرقمي', descEn: 'Visa, ID, passport, medical card, trade certifications, PPE, and dispatch-readiness tracked in one dossier.', descAr: 'التأشيرة، الهوية، جواز السفر، البطاقة الصحية، الشهادات المهنية، ومعدات الوقاية في ملف واحد.' },
   { icon: <Award size={22} />, en: 'Owner Trust & Proof', ar: 'ثقة المالك والإثبات', descEn: 'Every action builds trust: quote path, contract record, 15% mobilization, GPS evidence, photo proof, and reports.', descAr: 'كل إجراء يبني الثقة: مسار عرض الأسعار، سجل العقد، 15% تعبئة، أدلة GPS، صور إثبات، وتقارير.' },
+];
+
+const PROBLEMS = [
+  { icon: <AlertTriangle size={22} />, en: 'Owners Are Stretched Thin', ar: 'الملاك مشغولون جدًا', descEn: 'Owners juggling multiple properties have no single place to see contracts, costs, or repair status until something breaks.', descAr: 'الملاك الذين يديرون عقارات متعددة لا يملكون مكانًا واحدًا لمعرفة العقود أو التكاليف أو حالة الإصلاحات — حتى تحدث مشكلة.' },
+  { icon: <Clock size={22} />, en: 'Tenants Wait Too Long', ar: 'المستأجرون ينتظرون طويلاً', descEn: 'A leaking tap or broken AC reported by phone or message often gets lost, delayed, or forgotten.', descAr: 'تسرب صنبور أو عطل تكييف يُبلَّغ عنه بمكالمة أو رسالة غالبًا يضيع أو يتأخر أو يُنسى.' },
+  { icon: <Wrench size={22} />, en: 'Technicians Work Without Structure', ar: 'الفنيون يعملون دون تنظيم', descEn: 'Field teams without job cards, routes, or proof requirements waste time and leave no record of what was actually done.', descAr: 'الفرق الميدانية بدون بطاقات عمل أو مسارات أو إثبات تنفيذ تُهدر الوقت ولا تترك سجلاً لما تم تنفيذه فعليًا.' },
+  { icon: <FileText size={22} />, en: 'No Paper Trail, No Protection', ar: 'لا سجل، لا حماية', descEn: 'Verbal agreements and paper receipts disappear exactly when an owner, tenant, or technician needs proof.', descAr: 'الاتفاقات الشفهية والإيصالات الورقية تختفي تمامًا عندما يحتاج المالك أو المستأجر أو الفني إلى إثبات.' },
+  { icon: <Users size={22} />, en: 'HR Runs On WhatsApp And Paper', ar: 'الموارد البشرية تُدار عبر واتساب والورق', descEn: 'Leave requests, payslip questions, and HR letters handled informally lead to disputes, compliance gaps, and unhappy staff.', descAr: 'طلبات الإجازة واستفسارات الراتب وخطابات الموارد البشرية التي تُدار بشكل غير رسمي تؤدي إلى نزاعات وثغرات في الامتثال وموظفين غير راضين.' },
+];
+
+const OWNER_NEEDS = [
+  { needEn: "Know what's happening without calling anyone", needAr: 'معرفة ما يحدث دون الاتصال بأي شخص', solutionEn: 'A live dashboard for every property, contract, and job status.', solutionAr: 'لوحة تحكم مباشرة لكل عقار وعقد وحالة عمل.' },
+  { needEn: 'Avoid surprise bills', needAr: 'تجنّب الفواتير المفاجئة', solutionEn: 'Fixed-scope contracts, 15% mobilization, and a transparent payment plan agreed upfront.', solutionAr: 'عقود بنطاق محدد، تعبئة 15%، وخطة دفع شفافة مُتفق عليها مسبقًا.' },
+  { needEn: 'Approve before money is spent', needAr: 'الموافقة قبل إنفاق المال', solutionEn: 'An owner approval gate on high-cost work and quotes before any work proceeds.', solutionAr: 'بوابة موافقة المالك على الأعمال والعروض ذات التكلفة العالية قبل بدء أي تنفيذ.' },
+  { needEn: 'Proof the work was actually done', needAr: 'إثبات أن العمل تم فعليًا', solutionEn: 'Before-and-after photos, GPS-stamped job records, and a digital sign-off on every visit.', solutionAr: 'صور قبل وبعد، سجلات عمل بموقع GPS، وتوقيع رقمي على كل زيارة.' },
+  { needEn: "Protect the property's value", needAr: 'حماية قيمة العقار', solutionEn: 'Scheduled preventive maintenance and a digital property passport tracking every intervention.', solutionAr: 'صيانة وقائية مجدولة وجواز عقار رقمي يتتبع كل تدخل.' },
+  { needEn: "Confidence in who's on site", needAr: 'الثقة بمن يدخل العقار', solutionEn: 'Verified technicians with tracked compliance documents and dispatch records.', solutionAr: 'فنيون موثقون بسجلات امتثال متابَعة وسجلات إرسال.' },
+];
+
+const TENANT_NEEDS = [
+  { needEn: 'Report an issue without chasing anyone', needAr: 'الإبلاغ عن مشكلة دون متابعة أي شخص', solutionEn: 'Submit a request in seconds with photos, category, and priority — no phone tag.', solutionAr: 'تقديم طلب في ثوانٍ مع الصور والفئة والأولوية — بدون انتظار على الهاتف.' },
+  { needEn: "Know what's happening", needAr: 'معرفة ما يحدث', solutionEn: 'Live status updates from submitted, to assigned, to completed.', solutionAr: 'تحديثات حالة مباشرة من الإرسال إلى التكليف إلى الإكمال.' },
+  { needEn: 'Be understood in their own language', needAr: 'أن يتم فهمهم بلغتهم', solutionEn: 'A full bilingual English/Arabic experience, with technicians briefed in clear terms.', solutionAr: 'تجربة ثنائية اللغة عربي/إنجليزي بالكامل، مع توجيه واضح للفنيين.' },
+  { needEn: 'Trust the person at the door', needAr: 'الثقة بالشخص عند الباب', solutionEn: 'Technicians arrive with a verified job card tied to their request.', solutionAr: 'يصل الفنيون ببطاقة عمل موثقة مرتبطة بطلبهم.' },
+  { needEn: 'Fast response on urgent issues', needAr: 'استجابة سريعة للحالات العاجلة', solutionEn: 'Priority flagging routes urgent safety and utility issues first.', solutionAr: 'تصنيف الأولوية يُسرّع توجيه حالات السلامة والمرافق العاجلة أولاً.' },
+  { needEn: 'Confirm the job was done right', needAr: 'تأكيد أن العمل تم بشكل صحيح', solutionEn: 'A tenant confirmation step closes the loop before a job is marked complete.', solutionAr: 'خطوة تأكيد المستأجر تُغلق الطلب قبل تصنيفه مكتملًا.' },
+];
+
+const ROI_POINTS = [
+  { icon: <TrendingUp size={22} />, en: 'Protects Property Value', ar: 'حماية قيمة العقار', descEn: 'Scheduled preventive maintenance catches small problems before they become expensive structural or system failures.', descAr: 'الصيانة الوقائية المجدولة تكشف المشاكل الصغيرة قبل أن تتحول إلى أعطال إنشائية أو نظامية مكلفة.' },
+  { icon: <HandCoins size={22} />, en: 'Predictable, Transparent Costs', ar: 'تكاليف واضحة وقابلة للتوقع', descEn: 'Fixed contract scope, a clear 15% mobilization step, and visible payment-plan status remove budget surprises.', descAr: 'نطاق عقد ثابت، خطوة تعبئة 15% واضحة، وحالة خطة دفع مرئية تُلغي مفاجآت الموازنة.' },
+  { icon: <Clock size={22} />, en: 'Faster Resolution, Fewer Complaints', ar: 'حل أسرع، شكاوى أقل', descEn: 'Structured dispatch and SLA tracking turn maintenance requests around faster — fewer tenant disputes and lower turnover risk.', descAr: 'الإرسال المنظم وتتبع SLA يُسرّعان معالجة طلبات الصيانة، أي نزاعات أقل مع المستأجرين ومخاطر دوران أقل.' },
+  { icon: <ShieldCheck size={22} />, en: 'Lower Legal And Compliance Risk', ar: 'مخاطر قانونية وامتثال أقل', descEn: "Every quote, approval, contract, and job has a timestamped digital record — exactly what's needed if a dispute or audit happens.", descAr: 'كل عرض سعر وموافقة وعقد ومهمة له سجل رقمي موثّق بالتاريخ والوقت — وهو ما تحتاجه تمامًا عند نزاع أو تدقيق.' },
+];
+
+const HR_POINTS = [
+  { icon: <UserCheck size={22} />, en: 'Paperless Staff Self-Service', ar: 'خدمة ذاتية للموظفين بدون ورق', descEn: 'Leave, sick leave, overtime, payslip questions, and HR letters are requested and tracked digitally — no lost paperwork, no informal HR over chat.', descAr: 'تُطلب وتُتابع الإجازات، الإجازات المرضية، الأوفر تايم، استفسارات الراتب، وخطابات الموارد البشرية رقميًا — بدون أوراق ضائعة أو موارد بشرية غير رسمية عبر واتساب.' },
+  { icon: <ClipboardCheck size={22} />, en: 'Digital Compliance Passport', ar: 'جواز الامتثال الرقمي', descEn: 'Visa, Emirates ID, passport, medical card, training, and PPE records are tracked per technician, so only properly documented staff are dispatched.', descAr: 'تُتابع سجلات التأشيرة والهوية الإماراتية وجواز السفر والبطاقة الصحية والتدريب ومعدات الحماية لكل فني، حتى لا يُرسَل إلا الموظف الموثّق بالكامل.' },
+  { icon: <Banknote size={22} />, en: 'Payroll Transparency', ar: 'شفافية الرواتب', descEn: 'Staff can see basic salary context, allowances, overtime, and payment status, while HR/Admin keeps full approval control.', descAr: 'يمكن للموظفين رؤية سياق الراتب الأساسي والبدلات والأوفر تايم وحالة الدفع، مع بقاء صلاحية الاعتماد الكاملة لدى الموارد البشرية/الإدارة.' },
+  { icon: <HeartHandshake size={22} />, en: 'UAE Labour Compliance Awareness', ar: 'وعي بالامتثال لقانون العمل الإماراتي', descEn: 'Workforce records are structured around UAE practice — end-of-service, GPSSA, Emiratisation context, and heat-stress safety windows for outdoor field work.', descAr: 'سجلات القوى العاملة مهيكلة وفق الممارسات الإماراتية: مكافأة نهاية الخدمة، التأمينات (GPSSA)، سياق التوطين، ونوافذ السلامة من خطر الإجهاد الحراري للعمل الميداني.' },
 ];
 
 function getCopy(lang: 'en' | 'ar') {
@@ -90,8 +140,36 @@ function getCopy(lang: 'en' | 'ar') {
       ? 'رعاية عقارية موثوقة من العين: عروض أسعار واضحة، عقود موثقة، 15% تعبئة، رؤية خطة الدفع، طلبات المستأجر، إرسال الفني، إثبات قبل وبعد، تقارير المالك، وخدمة ذاتية للموظفين.'
       : 'Trusted property care from Al Ain: clear quotes, documented contracts, 15% mobilization, payment-plan visibility, tenant requests, technician dispatch, before-and-after evidence, owner reports, and staff self-service.',
 
+    problemsChip: ar ? 'المشكلة' : 'THE PROBLEM',
+    problemsTitle: ar ? 'ما الذي نحلّه' : 'What We Solve',
+    problemsSubtitle: ar
+      ? 'رعاية العقارات في الإمارات غالبًا تعني مكالمات متفرقة، إيصالات ورقية، وعدم وضوح في من يفعل ماذا. هذه هي المشاكل الحقيقية التي بُنيت BIN GROUP لحلها.'
+      : 'Property care in the UAE too often means scattered calls, paper receipts, and no clarity on who is doing what. These are the real problems BIN GROUP was built to solve.',
+
     servicesChip: ar ? 'ما نقدمه' : 'WHAT WE OFFER',
     servicesTitle: ar ? 'خدماتنا' : 'Our Services',
+
+    needsChip: ar ? 'من نخدم' : 'WHO WE SERVE',
+    needsTitle: ar ? 'ما يحتاجه الملاك والمستأجرون' : 'What Owners & Tenants Need',
+    needsSubtitle: ar
+      ? 'كل ميزة في BIN GROUP مبنية على حاجة حقيقية لمالك أو مستأجر، لا على تقنية لمجرد وجودها.'
+      : 'Every BIN GROUP feature is built around a real owner or tenant need — not technology for its own sake.',
+    needsOwnerLabel: ar ? 'احتياجات المالك' : 'Owner Needs',
+    needsTenantLabel: ar ? 'احتياجات المستأجر' : 'Tenant Needs',
+    needsNeedLabel: ar ? 'الحاجة' : 'The Need',
+    needsSolutionLabel: ar ? 'كيف نلبّيها' : 'How We Meet It',
+
+    roiChip: ar ? 'القيمة والعائد' : 'VALUE & ROI',
+    roiTitle: ar ? 'لماذا هذا عائد استثمار، لا تكلفة فقط' : 'Why This Is a Return, Not Just a Cost',
+    roiSubtitle: ar
+      ? 'BIN GROUP ليست مجرد مزود صيانة، بل طريقة لحماية قيمة العقار، تقليل المخاطر، وضبط التكاليف على المدى الطويل.'
+      : "BIN GROUP isn't just a maintenance vendor — it's a way to protect property value, reduce risk, and control costs over the long run.",
+
+    hrChip: ar ? 'القوى العاملة' : 'WORKFORCE',
+    hrTitle: ar ? 'موارد بشرية مبنية لفِرق العقارات والميدان' : 'HR Built for Field & Property Teams',
+    hrSubtitle: ar
+      ? 'الفنيون والموظفون الموثّقون جيدًا والمدعومون بشكل صحيح يقدمون خدمة أفضل للملاك والمستأجرين. هكذا نُدير قوتنا العاملة.'
+      : 'Well-documented, properly supported technicians and staff deliver better service to owners and tenants. This is how we run our workforce.',
 
     coverageChip: ar ? 'نطاق الخدمة' : 'COVERAGE',
     coverageTitle: ar ? 'مناطق الخدمة' : 'Service Areas',
@@ -268,6 +346,30 @@ export default function CompanyProfilePage() {
           </Container>
         </Box>
 
+        {/* ── PROBLEMS WE SOLVE ── */}
+        <Box sx={{ py: 10, bgcolor: platinum, borderBottom: `1px solid ${line}` }}>
+          <Container maxWidth="lg">
+            <Box sx={{ textAlign: 'center', mb: 7 }}>
+              <Chip label={copy.problemsChip} sx={{ mb: 2, bgcolor: alpha(gold, 0.1), color: '#6F5522', fontWeight: 950, border: `1px solid ${alpha(gold, 0.22)}` }} />
+              <Typography variant="h2" fontWeight={950} sx={{ color: ink, mb: 2 }}>{copy.problemsTitle}</Typography>
+              <Typography variant="h6" sx={{ color: muted, fontWeight: 700, maxWidth: 760, mx: 'auto', lineHeight: 1.9 }}>{copy.problemsSubtitle}</Typography>
+            </Box>
+            <Grid container spacing={3}>
+              {PROBLEMS.map(({ icon, en, ar, descEn, descAr }) => (
+                <Grid item xs={12} sm={6} md={4} key={en}>
+                  <Paper sx={{ p: 3.5, height: '100%', borderRadius: radius.card, border: `1px solid ${line}`, bgcolor: '#fff', transition: 'box-shadow .2s', '&:hover': { boxShadow: `0 16px 40px ${alpha('#DC2626', 0.1)}`, borderColor: alpha('#DC2626', 0.3) } }}>
+                    <Stack spacing={1.5} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                      <Box sx={{ p: 1.2, bgcolor: alpha('#DC2626', 0.08), borderRadius: 2, color: '#B91C1C', display: 'inline-flex' }}>{icon}</Box>
+                      <Typography fontWeight={950} sx={{ color: ink, textAlign }}>{copy.ar ? ar : en}</Typography>
+                      <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, textAlign }}>{copy.ar ? descAr : descEn}</Typography>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
+
         {/* ── SERVICES ── */}
         <Box sx={{ py: 10, bgcolor: platinum, borderBottom: `1px solid ${line}` }}>
           <Container maxWidth="lg">
@@ -283,6 +385,95 @@ export default function CompanyProfilePage() {
                       <Box sx={{ p: 1.2, bgcolor: alpha(gold, 0.1), borderRadius: 2, color: '#6F5522', display: 'inline-flex' }}>{icon}</Box>
                       <Typography fontWeight={950} sx={{ color: ink, textAlign }}>{copy.ar ? ar : en}</Typography>
                       <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, textAlign }}>{copy.ar ? descAr : descEn}</Typography>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
+
+        {/* ── OWNER & TENANT NEEDS ── */}
+        <Box sx={{ py: 10, bgcolor: '#111827', borderBottom: `1px solid ${alpha(gold, 0.18)}` }}>
+          <Container maxWidth="lg">
+            <Box sx={{ textAlign: 'center', mb: 7 }}>
+              <Chip label={copy.needsChip} sx={{ mb: 2, bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
+              <Typography variant="h2" fontWeight={950} sx={{ color: '#FFF', mb: 2 }}>{copy.needsTitle}</Typography>
+              <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.65)', fontWeight: 700, maxWidth: 760, mx: 'auto', lineHeight: 1.9 }}>{copy.needsSubtitle}</Typography>
+            </Box>
+            <Grid container spacing={4}>
+              {[
+                { label: copy.needsOwnerLabel, icon: <KeyRound size={20} />, items: OWNER_NEEDS },
+                { label: copy.needsTenantLabel, icon: <Home size={20} />, items: TENANT_NEEDS },
+              ].map(({ label, icon, items }) => (
+                <Grid item xs={12} md={6} key={label}>
+                  <Paper sx={{ p: { xs: 2.5, md: 3.5 }, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,.04)', border: `1px solid ${alpha(gold, 0.18)}` }}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
+                      <Box sx={{ p: 1, bgcolor: alpha(gold, 0.14), borderRadius: 2, color: gold, display: 'inline-flex' }}>{icon}</Box>
+                      <Typography variant="h6" fontWeight={950} sx={{ color: gold }}>{label}</Typography>
+                    </Stack>
+                    <Stack spacing={2.5} divider={<Box sx={{ borderBottom: `1px solid ${alpha(gold, 0.12)}` }} />}>
+                      {items.map((item: { needEn: string; needAr: string; solutionEn: string; solutionAr: string }) => (
+                        <Box key={item.needEn}>
+                          <Typography sx={{ color: '#FFF', fontWeight: 850, fontSize: '0.92rem', textAlign, mb: 0.5 }}>
+                            {copy.ar ? item.needAr : item.needEn}
+                          </Typography>
+                          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-start">
+                            <CheckCircle2 size={15} color={gold} style={{ flexShrink: 0, marginTop: 3 }} />
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.65)', lineHeight: 1.7, textAlign }}>
+                              {copy.ar ? item.solutionAr : item.solutionEn}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
+
+        {/* ── ROI / VALUE ── */}
+        <Box sx={{ py: 10, bgcolor: platinum, borderBottom: `1px solid ${line}` }}>
+          <Container maxWidth="lg">
+            <Box sx={{ textAlign: 'center', mb: 7 }}>
+              <Chip label={copy.roiChip} sx={{ mb: 2, bgcolor: alpha('#10B981', 0.1), color: '#0F766E', fontWeight: 950, border: `1px solid ${alpha('#10B981', 0.25)}` }} />
+              <Typography variant="h2" fontWeight={950} sx={{ color: ink, mb: 2 }}>{copy.roiTitle}</Typography>
+              <Typography variant="h6" sx={{ color: muted, fontWeight: 700, maxWidth: 760, mx: 'auto', lineHeight: 1.9 }}>{copy.roiSubtitle}</Typography>
+            </Box>
+            <Grid container spacing={3}>
+              {ROI_POINTS.map(({ icon, en, ar, descEn, descAr }) => (
+                <Grid item xs={12} sm={6} md={3} key={en}>
+                  <Paper sx={{ p: 3.5, height: '100%', borderRadius: radius.card, border: `1px solid ${line}`, bgcolor: '#fff', transition: 'box-shadow .2s', '&:hover': { boxShadow: `0 16px 40px ${alpha('#10B981', 0.14)}`, borderColor: alpha('#10B981', 0.35) } }}>
+                    <Stack spacing={1.5} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                      <Box sx={{ p: 1.2, bgcolor: alpha('#10B981', 0.1), borderRadius: 2, color: '#0F766E', display: 'inline-flex' }}>{icon}</Box>
+                      <Typography fontWeight={950} sx={{ color: ink, textAlign }}>{copy.ar ? ar : en}</Typography>
+                      <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, textAlign }}>{copy.ar ? descAr : descEn}</Typography>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
+
+        {/* ── HR / WORKFORCE ── */}
+        <Box sx={{ py: 10, bgcolor: '#111827', borderBottom: `1px solid ${alpha(gold, 0.18)}` }}>
+          <Container maxWidth="lg">
+            <Box sx={{ textAlign: 'center', mb: 7 }}>
+              <Chip label={copy.hrChip} sx={{ mb: 2, bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
+              <Typography variant="h2" fontWeight={950} sx={{ color: '#FFF', mb: 2 }}>{copy.hrTitle}</Typography>
+              <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.65)', fontWeight: 700, maxWidth: 760, mx: 'auto', lineHeight: 1.9 }}>{copy.hrSubtitle}</Typography>
+            </Box>
+            <Grid container spacing={3}>
+              {HR_POINTS.map(({ icon, en, ar, descEn, descAr }) => (
+                <Grid item xs={12} sm={6} md={3} key={en}>
+                  <Paper sx={{ p: 3.5, height: '100%', borderRadius: radius.card, bgcolor: 'rgba(255,255,255,.04)', border: `1px solid ${alpha(gold, 0.18)}` }}>
+                    <Stack spacing={1.5} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                      <Box sx={{ p: 1.2, bgcolor: alpha(gold, 0.12), borderRadius: 2, color: gold, display: 'inline-flex' }}>{icon}</Box>
+                      <Typography fontWeight={950} sx={{ color: '#FFF', textAlign }}>{copy.ar ? ar : en}</Typography>
+                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.65)', lineHeight: 1.75, textAlign }}>{copy.ar ? descAr : descEn}</Typography>
                     </Stack>
                   </Paper>
                 </Grid>
