@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
     Box, Typography, Button, Checkbox, FormControlLabel,
-    Paper, Divider, Stack, TextField, Alert, Snackbar
+    Paper, Divider, Stack, TextField, Alert, Snackbar, CircularProgress
 } from '@mui/material';
 import DrawIcon from '@mui/icons-material/Draw';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
@@ -12,6 +12,7 @@ import { formatAED } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { registerArabicFont } from '../utils/arabicPdfFont';
+import { functions, httpsCallable } from '../lib/firebase';
 
 interface Props {
     propertyData: any;
@@ -19,64 +20,105 @@ interface Props {
     onSign: (data: any) => void;
 }
 
+const requestContractCode = httpsCallable(functions, 'requestContractSignatureOtp');
+const verifyContractCode = httpsCallable(functions, 'verifyContractSignatureOtp');
+
 export default function ContractDigitalSignature({ propertyData, selectedPlan, onSign }: Props) {
     const { t } = useLanguage();
     const [accepted, setAccepted] = useState(false);
     const [signature, setSignature] = useState('');
-    const [otp, setOtp] = useState('');
-    const [otpSent, setOtpSent] = useState(false);
+    const [code, setCode] = useState('');
+    const [codeSent, setCodeSent] = useState(false);
+    const [codeRequestId, setCodeRequestId] = useState('');
+    const [codeChannel, setCodeChannel] = useState('email');
+    const [sendingCode, setSendingCode] = useState(false);
+    const [verifyingCode, setVerifyingCode] = useState(false);
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
 
-    const handleSendOtp = () => {
-        setOtpSent(true);
-        setSnackbar({ open: true, message: "Institutional Activation: OTP sent to the registered mobile number on the Title Deed.", severity: 'info' });
+    const handleSendCode = async () => {
+        try {
+            setSendingCode(true);
+            const result = await requestContractCode({
+                contractId: propertyData?.contractId || propertyData?.id || propertyData?.propertyId || 'contract-pending',
+                propertyId: propertyData?.propertyId || propertyData?.id || '',
+                propertyName: propertyData?.address || propertyData?.propertyName || 'BIN GROUP contract',
+                address: propertyData?.address || propertyData?.propertyName || '',
+                email: propertyData?.ownerEmail || propertyData?.email || propertyData?.contactEmail || '',
+            });
+            const data = result.data as any;
+            setCodeRequestId(String(data?.requestId || ''));
+            setCodeChannel(String(data?.channel || 'email'));
+            setCodeSent(true);
+            setSnackbar({ open: true, message: data?.message || 'Contract verification code sent to the verified owner contact.', severity: 'success' });
+        } catch (error: any) {
+            setSnackbar({ open: true, message: error?.message || 'Failed to send contract verification code.', severity: 'error' });
+        } finally {
+            setSendingCode(false);
+        }
     };
 
-    const handleFinalize = () => {
-        const signedArtifact = {
-            signature,
-            timestamp: new Date().toISOString(),
-            version: 'v2.0-UAE-INSTITUTIONAL',
-            institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            acceptanceLog: {
-                accepted,
-                otpVerified: true,
-                platform: 'BIN-GENESIS-SOVEREIGN-OS'
-            }
-        };
-        
-        generateContractPDF(signedArtifact);
-        onSign(signedArtifact);
+    const handleFinalize = async () => {
+        try {
+            setVerifyingCode(true);
+            if (!codeRequestId) throw new Error('Verification request is missing. Request a new code.');
+            const result = await verifyContractCode({ requestId: codeRequestId, otp: code, signature });
+            const verification = result.data as any;
+            if (!verification?.ok) throw new Error('Code verification failed.');
+
+            const signedArtifact = {
+                signature,
+                timestamp: new Date().toISOString(),
+                version: 'v2.1-UAE-INSTITUTIONAL-VERIFIED',
+                institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+                verificationId: verification.verificationId,
+                acceptanceLog: {
+                    accepted,
+                    otpVerified: true,
+                    otpVerificationId: verification.verificationId,
+                    otpChannel: verification.channel || codeChannel,
+                    platform: 'BIN-GENESIS-SOVEREIGN-OS'
+                }
+            };
+
+            generateContractPDF(signedArtifact);
+            onSign(signedArtifact);
+            setSnackbar({ open: true, message: 'Contract signed with verified backend evidence.', severity: 'success' });
+        } catch (error: any) {
+            setSnackbar({ open: true, message: error?.message || 'Verification failed. Contract was not signed.', severity: 'error' });
+        } finally {
+            setVerifyingCode(false);
+        }
     };
 
     const generateContractPDF = (artifact: any) => {
         const doc = new jsPDF();
         registerArabicFont(doc);
         const contractInfo = getContractContent();
-        
+
         doc.setFontSize(22);
         doc.text("BIN GROUP - SOVEREIGN CONTRACT", 105, 20, { align: "center" });
-        
+
         doc.setFontSize(16);
         doc.text(contractInfo.title, 105, 30, { align: "center" });
-        
+
         doc.setFontSize(12);
         doc.text(`Version: ${artifact.version}`, 20, 50);
         doc.text(`Hash: ${artifact.institutionalHash}`, 20, 58);
         doc.text(`Timestamp: ${new Date(artifact.timestamp).toLocaleString()}`, 20, 66);
+        doc.text(`Verification ID: ${artifact.verificationId || 'N/A'}`, 20, 74);
 
         doc.setFontSize(14);
-        doc.text("1. PARTIES", 20, 85);
+        doc.text("1. PARTIES", 20, 90);
         doc.setFontSize(11);
-        doc.text(`Property: ${propertyData?.address || propertyData?.propertyName || 'Subject Asset'}`, 20, 95);
-        doc.text(`Owner/Entity: ${propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}`, 20, 102);
-        doc.text(`Provider: BIN GROUP PROPERTY MANAGEMENT LLC`, 20, 109);
+        doc.text(`Property: ${propertyData?.address || propertyData?.propertyName || 'Subject Asset'}`, 20, 100);
+        doc.text(`Owner/Entity: ${propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}`, 20, 107);
+        doc.text(`Provider: BIN GROUP PROPERTY MANAGEMENT LLC`, 20, 114);
 
         doc.setFontSize(14);
-        doc.text("2. SCOPE OF SERVICES", 20, 125);
+        doc.text("2. SCOPE OF SERVICES", 20, 130);
         doc.setFontSize(11);
         const splitScope = doc.splitTextToSize(contractInfo.body, 170);
-        doc.text(splitScope, 20, 135);
+        doc.text(splitScope, 20, 140);
 
         doc.setFontSize(14);
         doc.text("3. PRICING & DISBURSEMENT", 20, 180);
@@ -88,10 +130,9 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
         doc.text("4. SIGNATURES", 20, 220);
         doc.setFontSize(11);
         doc.text(`Digitally Signed By: ${artifact.signature}`, 20, 230);
-        doc.text(`Mobile OTP Verified: YES`, 20, 237);
+        doc.text(`Backend Verification: YES`, 20, 237);
         doc.text(`Platform Origin: ${artifact.acceptanceLog.platform}`, 20, 244);
-        
-        // Add secure border around signature
+
         doc.rect(15, 215, 180, 40);
 
         doc.save(`BIN_GROUP_Contract_${artifact.institutionalHash}.pdf`);
@@ -100,12 +141,12 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
     const getContractContent = () => {
         const pType = propertyData?.propertyType;
         const isMajlis = pType === 'GOVERNMENT_MAJLIS' || pType?.toLowerCase() === 'majlis' || propertyData?.majlis;
-        
+
         if (isMajlis) {
-            return { 
-                title: 'SOVEREIGN MAJLIS MAINTENANCE AGREEMENT', 
+            return {
+                title: 'SOVEREIGN MAJLIS MAINTENANCE AGREEMENT',
                 body: `The Provider shall furnish comprehensive maintenance and event-readiness services specifically engineered for sovereign/government Majlis operations.
-                
+
 Inclusions:
 - Comprehensive AC & HVAC maintenance
 - Specialized Electrical & Lighting systems
@@ -142,8 +183,7 @@ Inclusions:
 
             <Alert severity="info" sx={{ mb: 4, bgcolor: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0' }}>
                 <Typography variant="subtitle2" fontWeight="bold">Legal Protocol Notice:</Typography>
-                This contract is governed by the relevant UAE municipal and federal regulations. 
-                Signing this activates the institutional asset management layer.
+                This contract is governed by the relevant UAE municipal and federal regulations. Signing activates the institutional asset management layer only after backend verification succeeds.
             </Alert>
 
             <Paper sx={{ p: 4, mb: 4, bgcolor: '#fff', border: '1px solid #e2e8f0', height: 350, overflowY: 'auto' }}>
@@ -151,9 +191,9 @@ Inclusions:
                     {contract.title}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', mb: 4 }}>
-                    VERSION: v2.0-UAE-INSTITUTIONAL
+                    VERSION: v2.1-UAE-INSTITUTIONAL-VERIFIED
                 </Typography>
-                
+
                 <Box sx={{ mb: 3 }}>
                     <Typography variant="subtitle2" fontWeight="bold">1. PARTIES</Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
@@ -185,12 +225,12 @@ Inclusions:
             <Stack spacing={3}>
                 <Box>
                     <Typography variant="subtitle2" fontWeight="bold" gutterBottom>Type Digital Signature</Typography>
-                    <TextField 
-                        fullWidth 
-                        placeholder="Type Full Name / Authority Authorized Person" 
-                        value={signature} 
+                    <TextField
+                        fullWidth
+                        placeholder="Type Full Name / Authority Authorized Person"
+                        value={signature}
                         onChange={(e) => setSignature(e.target.value)}
-                        helperText="Type your name to digitally sign the agreement."
+                        helperText="Type your name to digitally sign the agreement. The signature is accepted only after backend code verification."
                     />
                 </Box>
 
@@ -198,48 +238,47 @@ Inclusions:
                     control={<Checkbox checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />}
                     label={
                         <Typography variant="body2">
-                            I verify that I am the legal owner or authorized representative and accept the 
-                            Agreement and Data Compliance Protocol.
+                            I verify that I am the legal owner or authorized representative and accept the Agreement and Data Compliance Protocol.
                         </Typography>
                     }
                 />
 
-                {!otpSent ? (
-                    <Button 
-                        variant="outlined" 
-                        size="large" 
-                        disabled={!accepted || !signature} 
-                        onClick={handleSendOtp}
-                        startIcon={<ArticleIcon />}
+                {!codeSent ? (
+                    <Button
+                        variant="outlined"
+                        size="large"
+                        disabled={!accepted || !signature || sendingCode}
+                        onClick={handleSendCode}
+                        startIcon={sendingCode ? <CircularProgress size={18} /> : <ArticleIcon />}
                     >
-                        Verify with Mobile OTP
+                        {sendingCode ? 'Sending verification code...' : 'Verify contract signature'}
                     </Button>
                 ) : (
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                        <TextField 
-                            label="Enter 6-digit OTP" 
-                            size="small" 
-                            value={otp} 
-                            onChange={(e) => setOtp(e.target.value)}
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <TextField
+                            label={`Enter 6-digit code sent by ${codeChannel}`}
+                            size="small"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         />
-                        <Button 
-                            variant="contained" 
+                        <Button
+                            variant="contained"
                             color="success"
                             size="large"
-                            disabled={otp.length < 6}
+                            disabled={code.length < 6 || verifyingCode}
                             onClick={handleFinalize}
-                            startIcon={<DrawIcon />}
+                            startIcon={verifyingCode ? <CircularProgress size={18} color="inherit" /> : <DrawIcon />}
                             sx={{ fontWeight: 'bold' }}
                         >
-                            Finalize & Activate
+                            {verifyingCode ? 'Verifying...' : 'Finalize & Activate'}
                         </Button>
                     </Box>
                 )}
             </Stack>
 
-            <Snackbar 
-                open={snackbar.open} 
-                autoHideDuration={6000} 
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
