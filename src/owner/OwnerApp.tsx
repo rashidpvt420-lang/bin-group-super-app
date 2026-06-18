@@ -33,6 +33,7 @@ import OwnerAIIntelligencePage from './pages/OwnerAIIntelligencePage';
 import OwnerDamageEstimatePage from './pages/OwnerDamageEstimatePage';
 import OwnerPLReportPage from './pages/OwnerPLReportPage';
 import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
+import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -66,6 +67,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                        <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
+                            {label('nav.owner_approvals', 'Approvals')}
+                        </Button>
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.property_passport', 'Property Passport')}
                         </Button>
@@ -140,6 +144,7 @@ export default function OwnerApp() {
                 <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
                 <Route path="/p-l-report" element={<OwnerPLReportPage />} />
                 <Route path="/contractor-marketplace" element={<ContractorMarketplacePage />} />
+                <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
             </Routes>
         </OwnerLayout>
     );
