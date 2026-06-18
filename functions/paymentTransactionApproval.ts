@@ -26,12 +26,17 @@ function resolvePaymentId(data: any) {
 }
 
 /**
- * payment_transactions/{paymentId} docs are written by submitOwnerOnboardingPaymentPackage with
- * doc ID === intakeId, and carry an `intakeId` field set to the same value - the linked
- * contracts/{intakeId} and intake_submissions/{intakeId} docs share that same ID.
+ * payment_transactions/{paymentId} docs are written by three different callables:
+ * submitOwnerOnboardingPaymentPackage (doc ID === intakeId, no separate contractId),
+ * submitOwnerOnboarding (contractId = `${submissionId}_contract`, distinct from intakeId),
+ * and createOwnerPaymentTransaction (contractId === intakeId). contractId must win for
+ * contracts/{id} and owner activation whenever it's present; intakeId stays the key for
+ * intake_submissions/{id}, which is never addressed by contractId.
  */
-function resolveIntakeId(paymentId: string, payment: any) {
-  return String(payment?.intakeId || paymentId || "").trim();
+function resolveActivationIds(paymentId: string, payment: any) {
+  const intakeId = String(payment?.intakeId || "").trim();
+  const contractId = String(payment?.contractId || intakeId || paymentId || "").trim();
+  return { contractId, intakeId };
 }
 
 export const adminApprovePayment = onCall({ cors: true }, async (request) => {
@@ -49,7 +54,7 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     return { status: "SUCCESS", paymentId, idempotent: true };
   }
 
-  const intakeId = resolveIntakeId(paymentId, payment);
+  const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
   const ownerUid = String(request.data?.ownerUid || payment.ownerUid || payment.ownerId || "").trim();
   const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || "").trim();
   const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || 0);
@@ -76,8 +81,8 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     updatedAt: now,
   }, { merge: true });
 
-  if (intakeId) {
-    const contractRef = db.collection("contracts").doc(intakeId);
+  if (contractId) {
+    const contractRef = db.collection("contracts").doc(contractId);
     batch.set(contractRef, {
       status: "ACTIVE",
       paymentStatus: "APPROVED",
@@ -90,7 +95,9 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
       approvedAt: now,
       updatedAt: now,
     }, { merge: true });
+  }
 
+  if (intakeId) {
     batch.set(db.collection("intake_submissions").doc(intakeId), {
       status: "ACTIVE",
       paymentStatus: "APPROVED",
@@ -106,8 +113,8 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
       adminApproved: true,
       dashboardUnlocked: true,
       dashboardLocked: false,
-      activeContractId: intakeId || null,
-      latestActivationContractId: intakeId || null,
+      activeContractId: contractId || null,
+      latestActivationContractId: contractId || null,
       activationStatus: "ACTIVE",
       approvedBy: actorId,
       approvedAt: now,
@@ -122,6 +129,7 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     actorId,
     actorEmail,
     paymentId,
+    contractId: contractId || null,
     intakeId: intakeId || null,
     ownerUid: ownerUid || null,
     paymentReferenceId: paymentReferenceId || null,
@@ -142,13 +150,13 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
 <p>Support: support@bin-groups.com</p>
 <p>BIN GROUP - Made in UAE 🇦🇪</p>`,
       },
-      metadata: { type: "owner_payment_approved_dashboard_activated", paymentId, intakeId, ownerUid },
+      metadata: { type: "owner_payment_approved_dashboard_activated", paymentId, contractId, intakeId, ownerUid },
       createdAt: now,
     });
   }
 
   await batch.commit();
-  return { status: "SUCCESS", paymentId, intakeId: intakeId || null, ownerUid: ownerUid || null, idempotent: false };
+  return { status: "SUCCESS", paymentId, contractId: contractId || null, intakeId: intakeId || null, ownerUid: ownerUid || null, idempotent: false };
 });
 
 export const adminRejectPayment = onCall({ cors: true }, async (request) => {
@@ -162,7 +170,7 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
   if (!snap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
   const payment = snap.data() || {};
-  const intakeId = resolveIntakeId(paymentId, payment);
+  const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
   const reason = String(request.data?.reason || "Rejected by admin.").trim();
   const now = ts();
   const actorId = request.auth?.uid || "admin";
@@ -177,8 +185,8 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
     updatedAt: now,
   }, { merge: true });
 
-  if (intakeId) {
-    batch.set(db.collection("contracts").doc(intakeId), {
+  if (contractId) {
+    batch.set(db.collection("contracts").doc(contractId), {
       status: "PAYMENT_REJECTED",
       paymentStatus: "REJECTED",
       activationStatus: "LOCKED_PAYMENT_REJECTED",
@@ -188,7 +196,9 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
       rejectedAt: now,
       updatedAt: now,
     }, { merge: true });
+  }
 
+  if (intakeId) {
     batch.set(db.collection("intake_submissions").doc(intakeId), {
       status: "payment_rejected",
       paymentStatus: "REJECTED",
@@ -200,6 +210,7 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
     action: "ADMIN_REJECT_PAYMENT",
     actorId,
     paymentId,
+    contractId: contractId || null,
     intakeId: intakeId || null,
     reason,
     createdAt: now,
