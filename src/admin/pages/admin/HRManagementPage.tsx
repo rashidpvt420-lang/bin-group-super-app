@@ -35,7 +35,11 @@ import {
     limit,
     httpsCallable,
     auth,
-    functions
+    functions,
+    storage,
+    ref,
+    uploadBytes,
+    getDownloadURL
 } from '@/lib/firebase';
 import { useLanguage } from '../../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/adminTheme';
@@ -46,6 +50,14 @@ import {
     HR_SELF_SERVICE_COLLECTIONS,
     PAPERLESS_HR_PUBLIC_COPY
 } from '../../../lib/hrSelfServiceBlueprint';
+import {
+    buildNocLetterDoc,
+    buildExperienceLetterDoc,
+    buildSalaryCertificateDoc,
+    savePdfMobileSafe,
+    type HrLetterIssuer,
+    type HrLetterStaffInfo
+} from '../../../utils/hrLetterPdf';
 
 type RiskTone = 'success' | 'warning' | 'error' | 'info';
 
@@ -74,6 +86,8 @@ const REQUEST_STATUS_COLORS: Record<string, string> = {
     escalated: '#f97316',
     closed: '#94a3b8'
 };
+
+const LETTER_REQUEST_TYPES = ['noc_letter', 'experience_letter', 'salary_certificate'];
 
 const SOVEREIGN_HR_MODULES = [
     {
@@ -189,6 +203,11 @@ export default function HRManagementPage() {
     const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
     const [reviewDialog, setReviewDialog] = useState<{ open: boolean; requestId: string; approve: boolean } | null>(null);
     const [reviewNote, setReviewNote] = useState('');
+    const [letterDialog, setLetterDialog] = useState<{ open: boolean; request: any } | null>(null);
+    const [letterPurpose, setLetterPurpose] = useState('');
+    const [letterLastWorkingDate, setLetterLastWorkingDate] = useState('');
+    const [letterIssuing, setLetterIssuing] = useState(false);
+    const [letterError, setLetterError] = useState<string | null>(null);
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
     const isHRStaff = user?.role === 'hr_staff' || isHRManager;
@@ -370,6 +389,115 @@ export default function HRManagementPage() {
         } finally {
             setReviewDialog(null);
             setReviewNote('');
+        }
+    };
+
+    const handleOpenLetterDialog = (req: any) => {
+        setLetterError(null);
+        setLetterPurpose(req.reason && req.reason !== 'No reason provided' ? req.reason : '');
+        setLetterLastWorkingDate('');
+        setLetterDialog({ open: true, request: req });
+    };
+
+    const handleIssueLetter = async () => {
+        const req = letterDialog?.request;
+        if (!req) return;
+
+        const requiresPurpose = req.requestType !== 'experience_letter';
+        if (requiresPurpose && !letterPurpose.trim()) {
+            setLetterError('Enter a purpose for this letter before issuing.');
+            return;
+        }
+
+        setLetterIssuing(true);
+        setLetterError(null);
+        try {
+            const matchedStaff = staff.find((s) => s.id === req.uid || (req.email && s.email === req.email)) || null;
+            const joiningDate = parseDateValue(matchedStaff?.joiningDate) || parseDateValue(req.joiningDate) || new Date();
+            const staffInfo: HrLetterStaffInfo = {
+                fullName: req.displayName || matchedStaff?.displayName || matchedStaff?.fullName || 'Staff Member',
+                position: matchedStaff?.trade || matchedStaff?.specialization || matchedStaff?.role || 'Staff',
+                staffCode: matchedStaff?.employeeCode,
+                joiningDate
+            };
+            const issuer: HrLetterIssuer = {
+                hrName: user?.displayName || user?.email || 'HR Department',
+                hrDesignation: isHRManager ? 'HR Manager' : 'HR Department'
+            };
+            const referenceNumber = `BG-${req.requestType.toUpperCase().slice(0, 3)}-${Date.now().toString().slice(-8)}`;
+            const issueDate = new Date();
+
+            let built: { doc: any; filename: string };
+            if (req.requestType === 'noc_letter') {
+                built = buildNocLetterDoc({ staff: staffInfo, issuer, purpose: letterPurpose.trim(), referenceNumber, issueDate });
+            } else if (req.requestType === 'experience_letter') {
+                built = buildExperienceLetterDoc({
+                    staff: staffInfo,
+                    issuer,
+                    lastWorkingDate: letterLastWorkingDate ? new Date(letterLastWorkingDate) : null,
+                    referenceNumber,
+                    issueDate
+                });
+            } else if (req.requestType === 'salary_certificate') {
+                const basicSalaryAed = Number(matchedStaff?.basicSalary || matchedStaff?.salaryPackage?.basicSalary || 0);
+                const allowances = Number(matchedStaff?.allowances || matchedStaff?.salaryPackage?.allowances || 0);
+                if (!basicSalaryAed) {
+                    throw new Error('Salary data is not configured for this staff member. Update salary records before issuing a salary certificate.');
+                }
+                built = buildSalaryCertificateDoc({
+                    staff: staffInfo,
+                    issuer,
+                    basicSalaryAed,
+                    grossSalaryAed: basicSalaryAed + allowances,
+                    purpose: letterPurpose.trim(),
+                    referenceNumber,
+                    issueDate
+                });
+            } else {
+                throw new Error('Unsupported letter type for this request.');
+            }
+
+            const staffUid = req.uid || matchedStaff?.id || null;
+            let fileUrl: string | null = null;
+            if (staffUid) {
+                try {
+                    const storagePath = `hrDocuments/${staffUid}/letters/${referenceNumber}-${built.filename}`;
+                    const fileRef = ref(storage, storagePath);
+                    await uploadBytes(fileRef, built.doc.output('blob'), { contentType: 'application/pdf' });
+                    fileUrl = await getDownloadURL(fileRef);
+                } catch (uploadErr) {
+                    console.warn('[HR] Letter Storage upload failed, continuing with local download only:', uploadErr);
+                }
+            }
+
+            const result = savePdfMobileSafe(built.doc, built.filename);
+            if (!result?.ok && !fileUrl) {
+                throw new Error('PDF generation failed on this device. Try a different browser and retry.');
+            }
+
+            await addDoc(collection(db, 'staffLetters'), {
+                requestId: req.id,
+                uid: staffUid,
+                email: req.email || matchedStaff?.email || null,
+                staffName: staffInfo.fullName,
+                letterType: req.requestType,
+                referenceNumber,
+                purpose: letterPurpose.trim() || null,
+                lastWorkingDate: letterLastWorkingDate || null,
+                fileUrl,
+                issuedById: user?.uid || null,
+                issuedBy: user?.displayName || user?.email || 'HR Department',
+                issuedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+            });
+
+            await handleReviewRequest(req.id, true, `Letter issued: ${referenceNumber}`);
+            setLetterDialog(null);
+        } catch (err: any) {
+            console.error('Failed to issue letter:', err);
+            setLetterError(err.message || 'Letter generation failed.');
+        } finally {
+            setLetterIssuing(false);
         }
     };
 
@@ -720,7 +848,11 @@ export default function HRManagementPage() {
                                                 <TableCell align="right">
                                                     {req.status === 'pending_hr_review' && canReview ? (
                                                         <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                            <Button size="small" variant="contained" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => { setReviewNote(''); setReviewDialog({ open: true, requestId: req.id, approve: true }); }}>APPROVE</Button>
+                                                            {LETTER_REQUEST_TYPES.includes(req.requestType) ? (
+                                                                <Button size="small" variant="contained" sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: binThemeTokens.gold, color: '#000' }} onClick={() => handleOpenLetterDialog(req)}>ISSUE LETTER</Button>
+                                                            ) : (
+                                                                <Button size="small" variant="contained" color="success" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => { setReviewNote(''); setReviewDialog({ open: true, requestId: req.id, approve: true }); }}>APPROVE</Button>
+                                                            )}
                                                             <Button size="small" variant="outlined" color="error" sx={{ fontSize: '0.65rem', fontWeight: 900 }} onClick={() => { setReviewNote(''); setReviewDialog({ open: true, requestId: req.id, approve: false }); }}>REJECT</Button>
                                                         </Stack>
                                                     ) : req.reviewNote ? (
@@ -914,6 +1046,53 @@ export default function HRManagementPage() {
                         sx={{ fontWeight: 950 }}
                     >
                         {reviewDialog?.approve ? 'CONFIRM APPROVE' : 'CONFIRM REJECT'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={Boolean(letterDialog?.open)}
+                onClose={() => { if (!letterIssuing) { setLetterDialog(null); setLetterError(null); } }}
+                PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, minWidth: 420 } }}
+            >
+                <DialogTitle sx={{ color: '#FFF', fontWeight: 950 }}>
+                    Issue {requestTitle(letterDialog?.request?.requestType || '')}
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 2 }}>
+                        For {letterDialog?.request?.displayName || 'Staff Member'} ({letterDialog?.request?.email || 'no email on file'}). Generates a bilingual PDF from profile data on file — verify details before issuing to banks, embassies, or government authorities.
+                    </Typography>
+                    {letterDialog?.request?.requestType !== 'experience_letter' ? (
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            label="Purpose (e.g. bank loan, visa application)"
+                            value={letterPurpose}
+                            onChange={(e) => setLetterPurpose(e.target.value)}
+                            sx={{ mb: 2, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                        />
+                    ) : (
+                        <TextField
+                            fullWidth
+                            type="date"
+                            label="Last Working Date (leave blank if still employed)"
+                            InputLabelProps={{ shrink: true }}
+                            value={letterLastWorkingDate}
+                            onChange={(e) => setLetterLastWorkingDate(e.target.value)}
+                            sx={{ mb: 2, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                        />
+                    )}
+                    {letterError && <Alert severity="error" sx={{ mb: 1 }}>{letterError}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => { setLetterDialog(null); setLetterError(null); }} disabled={letterIssuing} sx={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        disabled={letterIssuing || (letterDialog?.request?.requestType !== 'experience_letter' && !letterPurpose.trim())}
+                        onClick={handleIssueLetter}
+                        sx={{ fontWeight: 950, bgcolor: binThemeTokens.gold, color: '#000' }}
+                    >
+                        {letterIssuing ? 'GENERATING…' : 'GENERATE & APPROVE'}
                     </Button>
                 </DialogActions>
             </Dialog>

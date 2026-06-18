@@ -23,6 +23,14 @@ service cloud.firestore {
       ));
     }
 
+    function isHrManagerTier() {
+      return isAdmin() || (signedIn() && (
+        ('role' in request.auth.token && request.auth.token.role in ['hr_admin', 'hr_manager']) ||
+        ('userRole' in request.auth.token && request.auth.token.userRole in ['hr_admin', 'hr_manager']) ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['hr_admin', 'hr_manager'])
+      ));
+    }
+
     function isFinance() {
       return isAdmin() || (signedIn() && (
         ('role' in request.auth.token && request.auth.token.role in ['finance_admin', 'finance_staff', 'account_manager']) ||
@@ -87,6 +95,9 @@ service cloud.firestore {
     function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
     function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
     function staffCanCreate(data) { return signedIn() && (isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
+    function isConfidentialRequest(data) {
+      return ('requestType' in data && data.requestType == 'manager_issue') || ('category' in data && data.category == 'confidential');
+    }
     function isTechnicianActor() {
       return signedIn() && (
         ('role' in request.auth.token && request.auth.token.role == 'technician') ||
@@ -441,16 +452,20 @@ service cloud.firestore {
     }
 
     match /staffRequests/{requestId} {
-      allow read: if isHr() || isFinance() || isOps() || staffCanRead(resource.data);
+      allow read: if isConfidentialRequest(resource.data)
+        ? (isHrManagerTier() || staffCanRead(resource.data))
+        : (isHr() || isFinance() || isOps() || staffCanRead(resource.data));
       allow create: if isHr() || isFinance() || isOps() || staffRequestCreate(request.resource.data);
-      allow update: if isHr() || isFinance() || isOps();
+      allow update: if isConfidentialRequest(resource.data) ? isHrManagerTier() : (isHr() || isFinance() || isOps());
       allow delete: if isHr() || isAdmin();
     }
 
     match /hrAiConversations/{caseId} {
-      allow read: if isHr() || staffCanRead(resource.data);
+      allow read: if isConfidentialRequest(resource.data)
+        ? (isHrManagerTier() || staffCanRead(resource.data))
+        : (isHr() || staffCanRead(resource.data));
       allow create: if isHr() || staffRequestCreate(request.resource.data);
-      allow update: if isHr();
+      allow update: if isConfidentialRequest(resource.data) ? isHrManagerTier() : isHr();
       allow delete: if isHr();
     }
 
@@ -508,6 +523,13 @@ service cloud.firestore {
       allow create: if isHr();
       allow update: if isHr();
       allow delete: if isHr();
+    }
+
+    match /staffComplaints/{complaintId} {
+      allow read: if isHrManagerTier() || staffCanRead(resource.data);
+      allow create: if isHrManagerTier() || staffRequestCreate(request.resource.data);
+      allow update: if isHrManagerTier();
+      allow delete: if isHrManagerTier();
     }
 
     match /staffTraining/{trainingId} {

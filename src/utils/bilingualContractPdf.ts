@@ -24,29 +24,29 @@ function normalizeArabic(doc: jsPDF, value: string) {
   return hasArabic(value) && processor ? processor(value) : value;
 }
 
-function writeLTR(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
+export function writeLTR(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
   doc.text(value || '-', x, y, options as any);
 }
 
-function writeRTL(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
+export function writeRTL(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
   doc.setFont(getArabicFontName(doc), 'normal');
   doc.text(normalizeArabic(doc, value || '-'), x, y, { align: 'right', ...options } as any);
   doc.setFont('helvetica', 'normal');
 }
 
-function wrappedLTR(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
+export function wrappedLTR(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
   const lines = doc.splitTextToSize(value || '-', width);
   doc.text(lines, x, y);
   return y + lines.length * lineHeight;
 }
 
-function wrappedRTL(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
+export function wrappedRTL(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
   const lines = doc.splitTextToSize(normalizeArabic(doc, value || '-'), width);
   lines.forEach((line: string, index: number) => writeRTL(doc, line, x, y + index * lineHeight));
   return y + lines.length * lineHeight;
 }
 
-function savePdfMobileSafe(doc: jsPDF, filename: string) {
+export function savePdfMobileSafe(doc: jsPDF, filename: string) {
   try {
     doc.save(filename);
     return { ok: true, mode: 'download' };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
+import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { addDoc, collection, db, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -51,6 +51,7 @@ export default function TechnicianHRPageV2() {
   const [registryError, setRegistryError] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [letters, setLetters] = useState<any[]>([]);
   const [documentType, setDocumentType] = useState('emirates_id');
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
@@ -74,6 +75,16 @@ export default function TechnicianHRPageV2() {
       setDocuments(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
     }, (error) => {
       console.warn('Staff document vault realtime failed:', error);
+    });
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const q = query(collection(db, 'staffLetters'), where('uid', '==', user.uid));
+    return onSnapshot(q, (snap) => {
+      setLetters(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
+    }, (error) => {
+      console.warn('Staff letters realtime failed:', error);
     });
   }, [user?.uid]);
 
@@ -229,6 +240,29 @@ export default function TechnicianHRPageV2() {
         </Stack>
         {uploadMessage && <Alert severity={uploadMessage.startsWith('Upload failed') || uploadMessage.startsWith('File is too') ? 'error' : 'success'} sx={{ mt: 2 }}>{uploadMessage}</Alert>}
         {documents.length > 0 && <Stack spacing={1.2} sx={{ mt: 3 }}>{documents.slice(0, 8).map((doc) => <Paper key={doc.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><FileText color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{doc.documentLabel || requestTitle(doc.documentType)}</Typography><Typography variant="caption" color="textSecondary">{doc.fileName}</Typography></Box></Stack><Chip label={String(doc.status || 'pending_hr_review').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Award color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">My HR Letters</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>NOC letters, experience letters, and salary certificates issued by HR. Request one via the AI router above (e.g. &quot;I need a salary certificate for a bank loan&quot;).</Typography>
+        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No letters issued yet.</Typography> : <Stack spacing={1.2}>{letters.slice(0, 10).map((letter) => (
+          <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+              <Stack direction="row" spacing={1.2} alignItems="center">
+                <Award color={binThemeTokens.gold} size={18} />
+                <Box>
+                  <Typography color="#FFF" fontWeight="900">{requestTitle(letter.letterType)}</Typography>
+                  <Typography variant="caption" color="textSecondary">Ref: {letter.referenceNumber || 'N/A'}{letter.issuedAt?.toDate ? ` · Issued ${letter.issuedAt.toDate().toLocaleDateString()}` : ''}</Typography>
+                </Box>
+              </Stack>
+              {letter.fileUrl ? (
+                <Button size="small" variant="outlined" component="a" href={letter.fileUrl} target="_blank" rel="noopener noreferrer" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>DOWNLOAD</Button>
+              ) : (
+                <Chip label="ISSUED" size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />
+              )}
+            </Stack>
+          </Paper>
+        ))}</Stack>}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
