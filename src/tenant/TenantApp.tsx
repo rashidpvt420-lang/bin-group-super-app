@@ -11,6 +11,7 @@ import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon from '../components/SafeIcon';
+import BinConnectChatBox from '../components/BinConnectChatBox';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
@@ -113,6 +114,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     {children}
                 </Box>
             </Container>
+
+            <BinConnectChatBox role="tenant" dark />
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
