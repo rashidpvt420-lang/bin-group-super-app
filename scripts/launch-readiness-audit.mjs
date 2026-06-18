@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -56,7 +56,7 @@ advisory('Push', 'Messaging service worker', hasFile('public/firebase-messaging-
 check('AI Studio', 'Design studio exists', hasFile('src/pages/DesignStudioPage.tsx'));
 check('AI Studio', 'Design records written', contains('src/pages/DesignStudioPage.tsx', ['design_requests', 'design_quotes', 'design_concepts']));
 advisory('AI Studio', 'External AI image generation wired', aiImageGenerationWired, 'Admin Design Studio calls generateDesignConcept and backend returns generatedImage.');
-check('HR', 'Technician HR page exists', hasFile('src/technician/pages/TechnicianHRPage.tsx'));
+check('HR', 'Technician HR page exists', hasFile('src/technician/pages/TechnicianHRPageV2.tsx'), 'Routed technician HR page is TechnicianHRPageV2 after dead-file cleanup PR #146.');
 check('HR', 'Staff agreements allowed', text('firestore.rules').includes('staffAgreements'));
 check('HR', 'Salary history allowed', text('firestore.rules').includes('salaryHistory'));
 advisory('Play Store', 'Android project exists', hasFile('android') || hasFile('capacitor.config.ts'), 'Needed for native Play Store package.');
@@ -86,5 +86,3 @@ const lines = [
 fs.mkdirSync(path.join(root, 'audit'), { recursive: true });
 fs.writeFileSync(path.join(root, 'audit', 'launch-readiness-report.md'), lines.join('\n'));
 console.log(lines.join('\n'));
-
-
