@@ -9,6 +9,7 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import BinConnectChatBox from '../components/BinConnectChatBox';
 
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
@@ -105,6 +106,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
                 </OwnerActivationGuard>
             </Container>
+
+            <BinConnectChatBox role="owner" />
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>
