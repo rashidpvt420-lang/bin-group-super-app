@@ -28,6 +28,9 @@ const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const smtpUserSecret = defineSecret("SMTP_USER");
 const smtpPassSecret = defineSecret("SMTP_PASS");
+// Same Secret Manager names used by functions/whatsappBot.ts and functions/whatsappWebhook.ts.
+const waToken = defineSecret("WHATSAPP_TOKEN");
+const waPhoneId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 
 // ─── AUDIT HELPER ──────────────────────────────────────────────────────────
 
@@ -719,7 +722,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
+export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -800,7 +803,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
-export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after || before?.status === after.status) return;
@@ -872,7 +875,7 @@ export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}"
 });
 
 
-export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
+export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     const ticketData = snap.data();
@@ -1011,8 +1014,8 @@ async function sendTwilioSMS(to: string, message: string) {
 }
 
 async function sendWhatsAppTemplate(to: string, templateName: string, languageCode = "en", bodyText = "") {
-    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneId = waPhoneId.value();
+    const token = waToken.value();
     if (!phoneId || !token) {
         console.info(`[WhatsApp MOCK] To: ${to}, Template: ${templateName}, BodyText: ${bodyText}`);
         return;
@@ -1201,8 +1204,16 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
             })
         });
         const data = await response.json();
-        return { status: "SUCCESS", guidance: data.choices?.[0]?.message?.content };
+        if (!response.ok) {
+            console.error("[getMissionGuidance] OpenAI request failed:", response.status, data?.error?.message || data);
+            throw new HttpsError('internal', 'AI backend unavailable.');
+        }
+        const guidance = data.choices?.[0]?.message?.content;
+        if (!guidance) throw new HttpsError('internal', 'AI backend returned no guidance.');
+        return { status: "SUCCESS", guidance };
     } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        console.error("[getMissionGuidance] Unexpected error:", error);
         throw new HttpsError('internal', 'AI backend unavailable.');
     }
 });
@@ -1299,7 +1310,7 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
 
 // ─── SCHEDULED MISSIONS ────────────────────────────────────────────────────
 
-export const onApprovalStagnant = onSchedule("every 24 hours", async () => {
+export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours", secrets: [waToken, waPhoneId] }, async () => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const pending = await db.collection("maintenanceTickets")
         .where("status", "==", "AWAITING_OWNER_APPROVAL")
@@ -2720,7 +2731,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
 
 // ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
 
-export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId}/messages/{messageId}", async (event) => {
+export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}", secrets: [waToken, waPhoneId] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
 
@@ -2887,7 +2898,7 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
     }
 });
 
-export const onTicketTechnicianAssignmentChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;

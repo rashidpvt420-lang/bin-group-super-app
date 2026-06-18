@@ -77,10 +77,18 @@ firebase functions:secrets:set SMTP_PASS
 # AI providers
 firebase functions:secrets:set OPENAI_API_KEY
 firebase functions:secrets:set GEMINI_API_KEY
+
+# WhatsApp Business Cloud API (Meta) — required by whatsappBotWebhook and whatsappWebhook
+firebase functions:secrets:set WHATSAPP_TOKEN
+firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID
+firebase functions:secrets:set WHATSAPP_VERIFY_TOKEN
 ```
 
 > [!NOTE]
 > The production mail function reads `SMTP_USER` and `SMTP_PASS`. Do not use the old `SMTP_PASSWORD` name; it will not satisfy the deployed function.
+
+> [!WARNING]
+> Two separate WhatsApp inbound webhook functions are currently deployed: `whatsappBotWebhook` (menu-driven bot, auto-creates `maintenanceTickets` directly) and `whatsappWebhook` (writes to `communication_intake` for human review in the admin Triage Queue). Meta only allows one callback URL per WhatsApp Business app, so confirm which function's HTTPS URL is registered in the Meta Developer Console before assuming either one is receiving live traffic.
 
 Recommended non-secret runtime values:
 
@@ -126,6 +134,9 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 - [ ] Stripe live AED checkout completed and webhook updates Firestore payment state
 - [ ] `SMTP_USER` and `SMTP_PASS` set in Firebase Secret Manager
 - [ ] Branded email sender test creates `mail/{id}` and reaches `delivery.state=SUCCESS`
+- [ ] `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` set in Firebase Secret Manager
+- [ ] Meta WhatsApp Business app webhook callback URL points at the intended deployed function (`whatsappBotWebhook` or `whatsappWebhook` — see open item below) and verification succeeds
+- [ ] `OPENAI_API_KEY` set in Firebase Secret Manager; confirm a live (non-fallback) response from the Sovereign AI assistant and Mission Guidance feed
 - [ ] Admin password rotated and `E2E_ADMIN_PASSWORD` GitHub secret updated
 - [ ] Manual Live Role Smoke Tests workflow passes for admin, owner, tenant, technician, and broker
 - [ ] `npm run test:rules` passes all test cases
