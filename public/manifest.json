@@ -1,20 +1,29 @@
 {
-  "short_name": "BIN-Groups",
-  "name": "BIN-Groups | Institutional Asset OS",
+  "id": "/",
+  "short_name": "BIN GROUP",
+  "name": "BIN GROUP | UAE Property Asset Reliability OS",
+  "description": "UAE property maintenance, asset reliability, owner dashboards, tenant requests, technician workflows, broker referrals, contracts, payments, and verified service evidence.",
   "display": "standalone",
-  "start_url": "/",
+  "orientation": "portrait-primary",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "lang": "en-AE",
+  "dir": "ltr",
   "theme_color": "#FFFFFF",
   "background_color": "#FFFFFF",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
       "src": "/logo.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "/logo.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ]
 }

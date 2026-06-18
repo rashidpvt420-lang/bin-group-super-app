@@ -1,4 +1,4 @@
-package com.bingroup.app;
+package ae.bingroups.superapp;
 
 import com.getcapacitor.BridgeActivity;
 

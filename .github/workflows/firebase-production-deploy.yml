@@ -2,6 +2,9 @@ name: Firebase Production Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -16,6 +19,7 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+  REACT_APP_FOUNDER_ADMIN_EMAILS: ${{ secrets.REACT_APP_FOUNDER_ADMIN_EMAILS || 'ceo@bin-groups.com' }}
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
   VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
@@ -48,8 +52,8 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
 
       - name: Create production environment file
         run: |
@@ -73,14 +77,13 @@ jobs:
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
-      - name: Build unified public and admin app
+      - name: Build unified public app
         run: npm run build
 
-      - name: Prepare legacy admin hosting target from unified app
-        run: |
-          rm -rf apps/admin-panel/build
-          mkdir -p apps/admin-panel
-          cp -R dist apps/admin-panel/build
+      - name: Build dedicated admin panel
+        run: npm run build:admin
+        env:
+          CI: false
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
@@ -99,7 +102,7 @@ jobs:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
     steps:
       - name: Checkout repository
@@ -160,8 +163,8 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
 
       - name: Create production environment file
         run: |
@@ -173,44 +176,16 @@ jobs:
           printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
           cp .env.production .env.local
 
-      - name: Ensure optional Stripe function secrets exist
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-        run: |
-          set -euo pipefail
-
-          ensure_secret_version() {
-            local name="$1"
-            local fallback_value="$2"
-            local secret_value="${!name:-}"
-
-            if [ -z "$secret_value" ]; then
-              secret_value="$fallback_value"
-            fi
-
-            if ! gcloud secrets describe "$name" --project "${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-              gcloud secrets create "$name" --project "${GCP_PROJECT_ID}" --replication-policy="automatic" >/dev/null
-            fi
-
-            printf '%s' "$secret_value" | gcloud secrets versions add "$name" --project "${GCP_PROJECT_ID}" --data-file=- >/dev/null
-            echo "Ensured Secret Manager version for $name."
-          }
-
-          ensure_secret_version "STRIPE_SECRET_KEY" "mock_key"
-          ensure_secret_version "STRIPE_WEBHOOK_SECRET" "mock_webhook_secret"
-
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
-      - name: Build unified public and admin app
+      - name: Build unified public app
         run: npm run build
 
-      - name: Prepare legacy admin hosting target from unified app
-        run: |
-          rm -rf apps/admin-panel/build
-          mkdir -p apps/admin-panel
-          cp -R dist apps/admin-panel/build
+      - name: Build dedicated admin panel
+        run: npm run build:admin
+        env:
+          CI: false
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
