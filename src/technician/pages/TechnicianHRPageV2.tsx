@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+ feat/hr-self-service-letters-and-confidentiality
 import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
+
+import { Bot, CloudUpload, FileText, HeartPulse, Plus, Sun } from 'lucide-react';
+ main
 import { useRole } from '../../context/RoleContext';
 import { addDoc, collection, db, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
+import { getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 
 const quickPrompts = [
   'I need annual leave next week',
@@ -203,11 +208,23 @@ export default function TechnicianHRPageV2() {
     }
   };
 
+  const heatStress = useMemo(() => getHeatStressSeasonStatus(), []);
+
   return (
     <Box sx={{ pb: 6 }}>
       <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
       <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>AI-Driven Multilingual Blue-Collar Workforce ESS</Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>Trained for {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.</Typography>
+
+      {heatStress.inSeason && (
+        <Alert
+          severity={heatStress.inRestrictedWindowNow ? 'error' : 'warning'}
+          icon={<Sun size={20} />}
+          sx={{ mb: 3, borderRadius: 3 }}
+        >
+          Midday outdoor work ban is active ({heatStress.seasonLabel}). You must not be asked to work outdoors in direct sun {heatStress.windowLabel} daily{heatStress.inRestrictedWindowNow ? ' — that restricted window is in effect right now' : ''}. If a supervisor asks you to work outdoors during this window, report it here as a safety case.
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
