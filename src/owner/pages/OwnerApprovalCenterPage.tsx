@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Grid, Stack, TextField, Typography } from '@mui/material';
-import { addDoc, auth, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
+import { auth, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type ApprovalRequest = {
@@ -55,19 +55,7 @@ export default function OwnerApprovalCenterPage() {
         decidedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      await addDoc(collection(db, 'maintenance_ledger'), {
-        source: 'owner_approval_center',
-        ledgerEvent: 'OWNER_APPROVAL_DECISION',
-        approvalRequestId: request.id,
-        rfqId: request.rfqId || '',
-        ticketId: request.ticketId || '',
-        propertyId: request.propertyId || '',
-        ownerId,
-        decision,
-        decisionNote: notes[request.id] || '',
-        createdAt: serverTimestamp(),
-      });
-      setNotice(`Decision recorded: ${decision}.`);
+      setNotice(`Decision recorded: ${decision}. Audit ledger sync is handled by the secured backend workflow.`);
     } catch (error: any) {
       setNotice(error?.message || 'Failed to record owner decision.');
     }
