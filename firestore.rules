@@ -764,6 +764,57 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // RFQ -> vendor quote -> owner approval procurement trust workflow
+    // (RfqTrustWorkflowPage, VendorCommandCenterPage, OwnerApprovalCenterPage).
+    match /vendor_rfqs/{rfqId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /vendor_quotes/{quoteId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /owner_approval_requests/{requestId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    match /maintenance_ledger/{ledgerId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || (signedIn() && request.resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /data_governance_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /communication_intake/{intakeId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read: if isAdmin();
       allow create: if isAdmin();
