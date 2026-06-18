@@ -102,7 +102,7 @@ function normalizeNotificationBlock(input) {
 }
 
 function insertOwnerTrustWorkflowRules(input) {
-  if (input.includes('match /owner_approval_requests/{approvalId}')) return input;
+  if (/match \/owner_approval_requests\/\{[^}]+\}/.test(input)) return input;
   const marker = '    match /{document=**} {';
   if (!input.includes(marker)) throw new Error('[rules-normalize] Missing catch-all marker for Owner Trust workflow rules.');
   const block = `

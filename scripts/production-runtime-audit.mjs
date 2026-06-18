@@ -82,7 +82,10 @@ const packageJson = read('package.json');
 const deploymentChecklist = read('docs/production-env-checklist.md');
 const stripePaymentFunction = read('functions/stripePayment.ts');
 const mailDeliveryFunction = read('functions/mailDelivery.ts');
+const whatsappWebhookFunction = read('functions/whatsappWebhook.ts');
+const aiAssistantFunction = read('functions/aiAssistant.ts');
 const runtimeExports = read('functions/runtime.ts');
+const runtimeAllExports = read('functions/runtimeAll.ts');
 
 const enKeys = extractTranslationKeys(languageContext, 'en');
 const arKeys = extractTranslationKeys(languageContext, 'ar');
@@ -137,7 +140,68 @@ assert(deploymentChecklist.includes('STRIPE_SECRET_KEY'), 'Production checklist 
 assert(deploymentChecklist.includes('STRIPE_WEBHOOK_SECRET'), 'Production checklist must require STRIPE_WEBHOOK_SECRET.');
 assert(deploymentChecklist.includes('SMTP_USER'), 'Production checklist must require SMTP_USER.');
 assert(deploymentChecklist.includes('SMTP_PASS'), 'Production checklist must require SMTP_PASS.');
-assert(!deploymentChecklist.includes('SMTP_PASSWORD'), 'Production checklist must not reference obsolete SMTP_PASSWORD; use SMTP_PASS.');
+assert(
+  !deploymentChecklist.includes('functions:secrets:set SMTP_PASSWORD') && !deploymentChecklist.includes('`SMTP_PASSWORD` set in Firebase'),
+  'Production checklist must not instruct setting the obsolete SMTP_PASSWORD secret; use SMTP_PASS.'
+);
+
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_TOKEN.');
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_PHONE_NUMBER_ID")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_PHONE_NUMBER_ID.');
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_VERIFY_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_VERIFY_TOKEN.');
+assert(
+  runtimeAllExports.includes('export * from "./whatsappWebhook"') || runtimeAllExports.includes("export * from './whatsappWebhook'"),
+  'WhatsApp webhook must be exported from the deployed runtime entrypoint.'
+);
+
+assert(aiAssistantFunction.includes('defineSecret("OPENAI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key OPENAI_API_KEY.');
+assert(aiAssistantFunction.includes('defineSecret("GEMINI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key GEMINI_API_KEY.');
+assert(runtimeExports.includes('export * from "./aiAssistant"'), 'AI assistant functions must be exported from the deployed runtime entrypoint.');
+
+assert(deploymentChecklist.includes('WHATSAPP_TOKEN'), 'Production checklist must require WHATSAPP_TOKEN.');
+assert(deploymentChecklist.includes('OPENAI_API_KEY'), 'Production checklist must require OPENAI_API_KEY.');
+
+// ── Frontend/backend callable wiring check ────────────────────────────────────
+// Catches the exact bug class where a frontend httpsCallable() name was renamed,
+// typo'd, or never implemented on the backend - the function silently 404s at
+// call time since there's no compile-time link between the two sides.
+function extractCalledFunctionNames(source) {
+  const names = new Set();
+  const re = /httpsCallable(?:<[^>]*>)?\(\s*functions\s*,\s*['"]([\w.-]+)['"]/g;
+  let match;
+  while ((match = re.exec(source))) names.add(match[1]);
+  return names;
+}
+
+function extractExportedCallableNames(source) {
+  const names = new Set();
+  const re = /export\s+const\s+(\w+)\s*=\s*onCall\s*\(/g;
+  let match;
+  while ((match = re.exec(source))) names.add(match[1]);
+  return names;
+}
+
+const frontendFiles = [...walk('src'), ...walk('apps')];
+const calledFunctionNames = new Set();
+for (const file of frontendFiles) {
+  for (const name of extractCalledFunctionNames(readFileSync(file, 'utf8'))) calledFunctionNames.add(name);
+}
+
+const backendCallableNames = new Set();
+if (existsSync('functions')) {
+  for (const entry of readdirSync('functions')) {
+    if (!entry.endsWith('.ts') || entry.endsWith('.d.ts')) continue;
+    for (const name of extractExportedCallableNames(readFileSync(join('functions', entry), 'utf8'))) {
+      backendCallableNames.add(name);
+    }
+  }
+}
+
+const phantomCallables = [...calledFunctionNames].filter((name) => !backendCallableNames.has(name)).sort();
+warn(
+  phantomCallables.length === 0,
+  `Frontend calls ${phantomCallables.length} Cloud Function(s) with no matching "export const <name> = onCall(...)" anywhere under functions/: ${phantomCallables.join(', ')}. ` +
+  'Verify each call site is either dead/unrouted code or needs a real backend implementation.'
+);
 
 // ── Production environment variable checks ───────────────────────────────────
 // These checks run against the current process.env — they catch missing public
