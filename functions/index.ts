@@ -12,7 +12,7 @@ import {
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
-import { generateContractPDF, generatePayslipPDF } from "./pdfEngine";
+import { generateContractPDF, generatePayslipPDF, generateIntegrityAuditPDF } from "./pdfEngine";
 export { deliverNotificationPush } from "./notificationDelivery";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
@@ -875,11 +875,8 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
 });
 
 
-export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const ticketData = snap.data();
-
+async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReference, ticketData: any) {
+    const ticketId = ticketRef.id;
     try {
         // Works for both tenant-filed AND owner-filed tickets
         const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";
@@ -910,10 +907,10 @@ export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets
                 geo: propertyGeo
             }
         };
-        await snap.ref.update(contextUpdate);
+        await ticketRef.update(contextUpdate);
 
         if (!propertyGeo || !contextUpdate.emirate) {
-            await snap.ref.update({
+            await ticketRef.update({
                 status: "pending_assignment",
                 assignmentStatus: "admin_manual_assignment",
                 assignmentError: "Missing geo-anchor."
@@ -944,7 +941,7 @@ export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets
 
         if (candidates.length > 0) {
             const bestTech = candidates[0];
-            await snap.ref.update({
+            await ticketRef.update({
                 assignedTechnicianId: bestTech.id,
                 technicianId: bestTech.id,
                 assignedTechnicianName: bestTech.data.displayName || bestTech.data.name || "Specialist",
@@ -959,8 +956,8 @@ export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets
             });
 
             await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
-                url: `/technician/job/${event.params.ticketId}`,
-                extraData: { ticketId: event.params.ticketId, openRoute: true }
+                url: `/technician/job/${ticketId}`,
+                extraData: { ticketId, openRoute: true }
             });
 
             await logAudit({
@@ -968,13 +965,111 @@ export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets
                 actorRole: "system",
                 action: "AUTO_ASSIGN",
                 targetType: "maintenanceTickets",
-                targetId: event.params.ticketId,
+                targetId: ticketId,
                 metadata: { techId: bestTech.id, reason: bestTech.sameArea ? "AREA_MATCH" : "DISTANCE" }
             });
         }
     } catch (err) {
         console.error("AutoRoute Failure:", err);
     }
+}
+
+export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    await attemptAutoAssignment(snap.ref, snap.data());
+});
+
+export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { propertyId, title, description, trade, priority } = request.data || {};
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required.");
+    if (!title) throw new HttpsError("invalid-argument", "Title is required.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    const propertyData = propertyDoc.data()!;
+
+    if (propertyData.ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You do not own this property.");
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const ticketRef = db.collection("maintenanceTickets").doc();
+    const tradeValue = safeString(trade, "GENERAL");
+    await ticketRef.set({
+        propertyId,
+        propertyName: propertyData.name || propertyData.propertyName || propertyData.address || "Institutional Asset",
+        ownerId: propertyData.ownerId,
+        title: safeString(title),
+        description: safeString(description),
+        trade: tradeValue,
+        category: tradeValue,
+        priority: safeString(priority, "NORMAL"),
+        status: "OPEN",
+        source: "ai_mission_guidance",
+        createdBy: request.auth.uid,
+        createdAt: now,
+        updatedAt: now
+    });
+
+    await logAudit({
+        actorId: request.auth.uid, actorRole: "owner",
+        action: "AI_TICKET_CREATE", targetType: "maintenanceTickets", targetId: ticketRef.id,
+        metadata: { propertyId, trade: tradeValue, priority }
+    });
+
+    return { status: "SUCCESS", ticketId: ticketRef.id };
+});
+
+export const approveMaintenanceProposal = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { ticketId } = request.data || {};
+    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID is required.");
+
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+    const ticketDoc = await ticketRef.get();
+    if (!ticketDoc.exists) throw new HttpsError("not-found", "Proposal not found.");
+    const ticketData = ticketDoc.data()!;
+
+    if (ticketData.status !== "PREVENTIVE_PROPOSAL") {
+        throw new HttpsError("failed-precondition", "This ticket is not a pending preventive proposal.");
+    }
+
+    let ownerId: string | null = ticketData.ownerId || null;
+    if (ticketData.propertyId) {
+        const propertyDoc = await db.collection("properties").doc(ticketData.propertyId).get();
+        if (propertyDoc.exists) ownerId = propertyDoc.data()?.ownerId || ownerId;
+    }
+
+    if (ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You are not authorized to approve this proposal.");
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await ticketRef.update({
+        status: "OPEN",
+        ownerId,
+        approvalType: "OWNER_SANCTIONED",
+        approvedBy: request.auth.uid,
+        approvedAt: now,
+        updatedAt: now
+    });
+
+    await logAudit({
+        actorId: request.auth.uid, actorRole: "owner",
+        action: "APPROVE_PREVENTIVE_PROPOSAL", targetType: "maintenanceTickets", targetId: ticketId
+    });
+
+    await attemptAutoAssignment(ticketRef, { ...ticketData, status: "OPEN", ownerId });
+
+    return { status: "SUCCESS" };
 });
 
 
@@ -1183,6 +1278,41 @@ export const generateAndEmailPayslip = onCall({
         return { success: true, pdfUrl };
     } catch (err: any) {
         throw new HttpsError("internal", "Payroll failed.");
+    }
+});
+
+export const generateIntegrityAudit = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { intel, propertyName } = request.data || {};
+    const payload = assertPlainObject(intel, "Intelligence payload");
+    const propertyId = safeString(payload.propertyId);
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required in the intelligence payload.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    if (propertyDoc.data()?.ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You do not own this property.");
+    }
+
+    try {
+        const url = await generateIntegrityAuditPDF({
+            propertyId,
+            propertyName: safeString(propertyName, "Property"),
+            intel: payload
+        });
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "owner",
+            action: "INTEGRITY_AUDIT_GENERATE", targetType: "properties", targetId: propertyId
+        });
+
+        return { status: "SUCCESS", url };
+    } catch (err: any) {
+        console.error("Integrity audit generation failed:", err);
+        throw new HttpsError("internal", "Audit generation failed.");
     }
 });
 
