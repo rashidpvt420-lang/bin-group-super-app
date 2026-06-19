@@ -1,7 +1,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const appPath = 'apps/admin-panel/src/App.tsx';
-const navPath = 'apps/admin-panel/src/components/Navigation.tsx';
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(scriptDir, '..');
+
+const appPath = resolve(repoRoot, 'apps/admin-panel/src/App.tsx');
+const navPath = resolve(repoRoot, 'apps/admin-panel/src/components/Navigation.tsx');
 
 let app = readFileSync(appPath, 'utf8');
 if (!app.includes("BinConnectInboxPage")) {
