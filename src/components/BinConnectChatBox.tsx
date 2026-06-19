@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Badge, Box, Button, Chip, Divider, Fab, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { MessageSquare, Send, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { addDoc, auth, collection, db, limit, onSnapshot, query, serverTimestamp, where } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
@@ -35,13 +36,26 @@ const roleDefaults: Record<PortalRole, string> = {
   staff: 'admin_support',
 };
 
+const routePrefix: Record<PortalRole, string> = {
+  owner: '/owner',
+  tenant: '/tenant',
+  technician: '/technician',
+  broker: '/broker',
+  admin: '/admin',
+  staff: '/technician',
+};
+
 export default function BinConnectChatBox({ role, dark = false }: { role: PortalRole; dark?: boolean }) {
+  const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
   const [channel, setChannel] = React.useState(roleDefaults[role]);
   const [title, setTitle] = React.useState('');
   const [message, setMessage] = React.useState('');
   const [recipient, setRecipient] = React.useState('');
   const [context, setContext] = React.useState('');
+  const [propertyId, setPropertyId] = React.useState('');
+  const [unitId, setUnitId] = React.useState('');
+  const [ticketId, setTicketId] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [notice, setNotice] = React.useState('');
   const [threads, setThreads] = React.useState<Conversation[]>([]);
@@ -58,6 +72,11 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setThreads(rows);
     }, () => setThreads([]));
   }, [uid]);
+
+  const openInbox = () => {
+    setOpen(false);
+    navigate(`${routePrefix[role]}/bin-connect`);
+  };
 
   const send = async () => {
     if (!uid) {
@@ -83,6 +102,9 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
         participantIds,
         recipientHint: recipient.trim(),
         context: context.trim(),
+        propertyId: propertyId.trim(),
+        unitId: unitId.trim(),
+        ticketId: ticketId.trim(),
         lastMessage: message.trim().slice(0, 240),
         priority: channel === 'dashboard_issue' ? 'high' : channel === 'majlis_staff' ? 'high' : 'normal',
         createdAt: serverTimestamp(),
@@ -101,7 +123,10 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setTitle('');
       setRecipient('');
       setContext('');
-      setNotice('Message sent to BIN Connect. Admin/CEO can review and reply from the thread record.');
+      setPropertyId('');
+      setUnitId('');
+      setTicketId('');
+      setNotice('Message sent to BIN Connect. Open inbox to continue the conversation.');
     } catch (error: any) {
       setNotice(error?.message || 'Message could not be sent. Check Firestore rules or connection.');
     } finally {
@@ -112,7 +137,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   return (
     <Box sx={{ position: 'fixed', right: { xs: 16, md: 26 }, bottom: { xs: 74, md: 28 }, zIndex: 1500 }}>
       {open && (
-        <Paper elevation={14} sx={{ width: { xs: 'calc(100vw - 32px)', sm: 420 }, maxHeight: '78vh', overflow: 'auto', mb: 1.5, borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`, bgcolor: dark ? '#111827' : '#FFFFFF', color: dark ? '#FFFFFF' : binThemeTokens.textPrimary }}>
+        <Paper elevation={14} sx={{ width: { xs: 'calc(100vw - 32px)', sm: 440 }, maxHeight: '78vh', overflow: 'auto', mb: 1.5, borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`, bgcolor: dark ? '#111827' : '#FFFFFF', color: dark ? '#FFFFFF' : binThemeTokens.textPrimary }}>
           <Stack spacing={2} sx={{ p: 2.4 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
@@ -122,15 +147,21 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
               <Button size="small" onClick={() => setOpen(false)} sx={{ minWidth: 0, color: binThemeTokens.goldHover }}><X size={18} /></Button>
             </Stack>
             {notice && <Alert severity={notice.includes('sent') ? 'success' : 'warning'}>{notice}</Alert>}
+            <Button onClick={openInbox} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 950 }}>Open full inbox / replies</Button>
             <TextField select label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)} size="small" fullWidth>{CHANNELS.map((item) => <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>)}</TextField>
             <TextField label="Subject" value={title} onChange={(e) => setTitle(e.target.value)} size="small" fullWidth placeholder="Example: Majlis AC issue, dashboard idea, payment question" />
             <TextField label="Recipient hint" value={recipient} onChange={(e) => setRecipient(e.target.value)} size="small" fullWidth placeholder="Optional: tenant name, technician, CEO, unit, email, Majlis staff" />
             <TextField label="Context" value={context} onChange={(e) => setContext(e.target.value)} size="small" fullWidth placeholder="Optional: property, unit, ticket, Majlis, building" />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField label="Property ID" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} size="small" fullWidth />
+              <TextField label="Unit ID" value={unitId} onChange={(e) => setUnitId(e.target.value)} size="small" fullWidth />
+              <TextField label="Ticket ID" value={ticketId} onChange={(e) => setTicketId(e.target.value)} size="small" fullWidth />
+            </Stack>
             <TextField label="Message" value={message} onChange={(e) => setMessage(e.target.value)} fullWidth multiline minRows={3} placeholder="Write like WhatsApp: ask for help, send suggestion, report issue, request update..." />
             <Button onClick={send} disabled={busy} variant="contained" endIcon={<Send size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{busy ? 'Sending...' : 'Send Message'}</Button>
             <Divider />
             <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 900 }}>Recent BIN Connect threads</Typography>
-            <Stack spacing={1}>{threads.length === 0 ? <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.45)' : binThemeTokens.textSecondary }}>No recent threads yet.</Typography> : threads.slice(0, 4).map((thread) => <Box key={thread.id} sx={{ p: 1.2, borderRadius: 2, bgcolor: dark ? 'rgba(255,255,255,.05)' : alpha(binThemeTokens.gold, .06) }}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={thread.channel || 'chat'} /><Typography variant="body2" fontWeight={900}>{thread.title || 'BIN Connect'}</Typography></Stack><Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open thread'}</Typography></Box>)}</Stack>
+            <Stack spacing={1}>{threads.length === 0 ? <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.45)' : binThemeTokens.textSecondary }}>No recent threads yet.</Typography> : threads.slice(0, 4).map((thread) => <Box key={thread.id} onClick={openInbox} sx={{ p: 1.2, borderRadius: 2, cursor: 'pointer', bgcolor: dark ? 'rgba(255,255,255,.05)' : alpha(binThemeTokens.gold, .06) }}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={thread.channel || 'chat'} /><Typography variant="body2" fontWeight={900}>{thread.title || 'BIN Connect'}</Typography></Stack><Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open thread'}</Typography></Box>)}</Stack>
           </Stack>
         </Paper>
       )}
