@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
+import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { addDoc, collection, db, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
+import { getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 
 const quickPrompts = [
   'I need annual leave next week',
@@ -51,6 +52,7 @@ export default function TechnicianHRPageV2() {
   const [registryError, setRegistryError] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [letters, setLetters] = useState<any[]>([]);
   const [documentType, setDocumentType] = useState('emirates_id');
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
@@ -60,7 +62,7 @@ export default function TechnicianHRPageV2() {
     const q = query(collection(db, 'staffRequests'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
       setRegistryError('');
-      setRequests(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
+      setRequests(sortByNewest(snap.docs.map((item) => ({ id: item.id, ...item.data() }))));
     }, (error) => {
       console.warn('AI HR request registry realtime failed:', error);
       setRegistryError('Live registry sync is not available yet. Newly created cases will still appear instantly on this screen.');
@@ -71,9 +73,19 @@ export default function TechnicianHRPageV2() {
     if (!user?.uid) return undefined;
     const q = query(collection(db, 'staffDocuments'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
-      setDocuments(sortByNewest(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
+      setDocuments(sortByNewest(snap.docs.map((item) => ({ id: item.id, ...item.data() }))));
     }, (error) => {
       console.warn('Staff document vault realtime failed:', error);
+    });
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const q = query(collection(db, 'staffLetters'), where('uid', '==', user.uid));
+    return onSnapshot(q, (snap) => {
+      setLetters(sortByNewest(snap.docs.map((item) => ({ id: item.id, ...item.data() }))));
+    }, (error) => {
+      console.warn('Staff letters realtime failed:', error);
     });
   }, [user?.uid]);
 
@@ -192,11 +204,19 @@ export default function TechnicianHRPageV2() {
     }
   };
 
+  const heatStress = useMemo(() => getHeatStressSeasonStatus(), []);
+
   return (
     <Box sx={{ pb: 6 }}>
       <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
       <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>AI-Driven Multilingual Blue-Collar Workforce ESS</Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>Trained for {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.</Typography>
+
+      {heatStress.inSeason && (
+        <Alert severity={heatStress.inRestrictedWindowNow ? 'error' : 'warning'} icon={<Sun size={20} />} sx={{ mb: 3, borderRadius: 3 }}>
+          Midday outdoor work ban is active ({heatStress.seasonLabel}). You must not be asked to work outdoors in direct sun {heatStress.windowLabel} daily{heatStress.inRestrictedWindowNow ? ' — that restricted window is in effect right now' : ''}. If a supervisor asks you to work outdoors during this window, report it here as a safety case.
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
@@ -228,7 +248,20 @@ export default function TechnicianHRPageV2() {
           </Button>
         </Stack>
         {uploadMessage && <Alert severity={uploadMessage.startsWith('Upload failed') || uploadMessage.startsWith('File is too') ? 'error' : 'success'} sx={{ mt: 2 }}>{uploadMessage}</Alert>}
-        {documents.length > 0 && <Stack spacing={1.2} sx={{ mt: 3 }}>{documents.slice(0, 8).map((doc) => <Paper key={doc.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><FileText color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{doc.documentLabel || requestTitle(doc.documentType)}</Typography><Typography variant="caption" color="textSecondary">{doc.fileName}</Typography></Box></Stack><Chip label={String(doc.status || 'pending_hr_review').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        {documents.length > 0 && <Stack spacing={1.2} sx={{ mt: 3 }}>{documents.slice(0, 8).map((item) => <Paper key={item.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><FileText color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{item.documentLabel || requestTitle(item.documentType)}</Typography><Typography variant="caption" color="textSecondary">{item.fileName}</Typography></Box></Stack><Chip label={String(item.status || 'pending_hr_review').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Award color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">My HR Letters</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>NOC letters, experience letters, and salary certificates issued by HR. Request one via the AI router above.</Typography>
+        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No letters issued yet.</Typography> : <Stack spacing={1.2}>{letters.slice(0, 10).map((letter) => (
+          <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+              <Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{requestTitle(letter.letterType)}</Typography><Typography variant="caption" color="textSecondary">Ref: {letter.referenceNumber || 'N/A'}</Typography></Box></Stack>
+              {letter.fileUrl ? <Button size="small" variant="outlined" component="a" href={letter.fileUrl} target="_blank" rel="noopener noreferrer" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>DOWNLOAD</Button> : <Chip label="ISSUED" size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
+            </Stack>
+          </Paper>
+        ))}</Stack>}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>

@@ -1,8 +1,9 @@
 # BIN GROUP — Production Environment Checklist
 
 > [!IMPORTANT]
-> All keys below must be set as **GitHub Actions Secrets** before deploying to production.
-> Navigate to: **GitHub → Repository → Settings → Secrets and variables → Actions → New repository secret**
+> Public launch requires both **GitHub Actions Secrets** for client build-time values and **Firebase Secret Manager** entries for backend provider secrets.
+> Navigate to: **GitHub → Repository → Settings → Secrets and variables → Actions → New repository secret** for `VITE_*` values.
+> Use `firebase functions:secrets:set` for backend provider secrets.
 
 ---
 
@@ -22,7 +23,7 @@
 ## 2. Firebase App Check (reCAPTCHA v3) — Required for Public Launch
 
 > [!CAUTION]
-> Without App Check, Firebase APIs are unprotected and can be abused by bots.
+> Without App Check enforcement, Firebase APIs are exposed to automated abuse even if Firestore rules are strong.
 
 | Secret Name | Where to Get It |
 |---|---|
@@ -33,6 +34,7 @@
 1. Firebase Console → **App Check** → Apps
 2. Select your web app → **reCAPTCHA v3** → paste the site key
 3. Click **Save**
+4. Enable enforcement for Firestore, Storage, and callable/HTTP Functions after the live smoke test passes
 
 ---
 
@@ -58,17 +60,43 @@
 
 ---
 
-## 5. Backend Function Secrets (via Firebase Secret Manager)
+## 5. Backend Function Secrets — Firebase Secret Manager Only
 
 > [!WARNING]
-> Do NOT add these to GitHub Secrets or `.env` files. Use Firebase Secret Manager exclusively.
+> Do **not** add backend provider secrets to GitHub Secrets or `.env` files. Use Firebase Secret Manager exclusively.
 
 ```bash
-# Set each secret using Firebase CLI
-firebase functions:secrets:set OPENAI_API_KEY
+# Stripe live payment provider
 firebase functions:secrets:set STRIPE_SECRET_KEY
-firebase functions:secrets:set SMTP_PASSWORD
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+
+# Branded email delivery provider
+firebase functions:secrets:set SMTP_USER
+firebase functions:secrets:set SMTP_PASS
+
+# AI providers
+firebase functions:secrets:set OPENAI_API_KEY
 firebase functions:secrets:set GEMINI_API_KEY
+
+# WhatsApp Business Cloud API (Meta) — required by whatsappBotWebhook and whatsappWebhook
+firebase functions:secrets:set WHATSAPP_TOKEN
+firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID
+firebase functions:secrets:set WHATSAPP_VERIFY_TOKEN
+```
+
+> [!NOTE]
+> The production mail function reads `SMTP_USER` and `SMTP_PASS`. Do not use the old `SMTP_PASSWORD` name; it will not satisfy the deployed function.
+
+> [!WARNING]
+> Two separate WhatsApp inbound webhook functions are currently deployed: `whatsappBotWebhook` (menu-driven bot, auto-creates `maintenanceTickets` directly) and `whatsappWebhook` (writes to `communication_intake` for human review in the admin Triage Queue). Meta only allows one callback URL per WhatsApp Business app, so confirm which function's HTTPS URL is registered in the Meta Developer Console before assuming either one is receiving live traffic.
+
+Recommended non-secret runtime values:
+
+```bash
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=465
+MAIL_FROM="BIN GROUP <ceo@bin-groups.com>"
+MAIL_REPLY_TO="BIN GROUP Admin <ceo@bin-groups.com>"
 ```
 
 ---
@@ -82,15 +110,37 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 
 ---
 
-## 7. Verification Checklist Before Launch
+## 7. Admin Credential Rotation — Required Before Public Launch
+
+1. Firebase Console → Authentication → Users
+2. Select the production admin account
+3. Reset/rotate password
+4. Update `E2E_ADMIN_PASSWORD` in GitHub Actions Secrets
+5. Run the manual **Live Role Smoke Tests** workflow
+6. Record the workflow run ID in `launch_package/launch-proof-gates.json`
+
+---
+
+## 8. Verification Checklist Before Launch
 
 - [ ] All 6 `VITE_FIREBASE_*` keys set in GitHub Secrets
 - [ ] `VITE_APP_CHECK_SITE_KEY` set and registered in Firebase App Check console
 - [ ] `VITE_ENABLE_FIREBASE_APPCHECK=true` set in GitHub Secrets (production only)
+- [ ] App Check enforcement active for Firestore, Storage, and Functions
 - [ ] `VITE_FIREBASE_VAPID_KEY` set from Firebase Cloud Messaging → Web Push certificate
 - [ ] `VITE_GOOGLE_MAPS_API_KEY` set with proper domain restrictions
 - [ ] Firebase Authorized Domains includes custom domain
-- [ ] `npm run test:rules` passes all 9 test cases
+- [ ] `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` set in Firebase Secret Manager
+- [ ] Stripe live AED checkout completed and webhook updates Firestore payment state
+- [ ] `SMTP_USER` and `SMTP_PASS` set in Firebase Secret Manager
+- [ ] Branded email sender test creates `mail/{id}` and reaches `delivery.state=SUCCESS`
+- [ ] `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` set in Firebase Secret Manager
+- [ ] Meta WhatsApp Business app webhook callback URL points at the intended deployed function (`whatsappBotWebhook` or `whatsappWebhook` — see open item below) and verification succeeds
+- [ ] `OPENAI_API_KEY` set in Firebase Secret Manager; confirm a live (non-fallback) response from the Sovereign AI assistant and Mission Guidance feed
+- [ ] Admin password rotated and `E2E_ADMIN_PASSWORD` GitHub secret updated
+- [ ] Manual Live Role Smoke Tests workflow passes for admin, owner, tenant, technician, and broker
+- [ ] `npm run test:rules` passes all test cases
+- [ ] `npm run test:runtime-audit` passes in production validation environment
 - [ ] `npm run build` completes without errors
 - [ ] Arabic text renders correctly in generated PDFs
 - [ ] Push notification received on a real Android device (Chrome)
@@ -100,4 +150,4 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 
 ## Quick Status Check
 
-Run `npm run test:runtime-audit` locally to get an automated health check of all environment variables.
+Run `npm run test:runtime-audit` locally to get an automated health check of source configuration and launch-critical environment variables.

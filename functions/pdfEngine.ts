@@ -573,3 +573,130 @@ export async function generatePayslipPDF(data: any) {
         doc.end();
     });
 }
+
+export async function generateIntegrityAuditPDF(data: { propertyId: string; propertyName: string; intel: any }) {
+    let fontBuffer: Buffer | null = null;
+    try {
+        fontBuffer = await getCairoFont();
+    } catch (err) {
+        console.error("Cairo font load failed for integrity audit:", err);
+    }
+
+    return new Promise<string>((resolve, reject) => {
+        const doc = new PDFDocument({
+            margin: 50,
+            size: 'A4',
+            info: { Title: 'Property Integrity Audit', Author: 'BIN GROUP Super App' }
+        });
+        if (fontBuffer) {
+            try {
+                doc.registerFont('Cairo', fontBuffer);
+                doc.font('Cairo');
+            } catch (err) {
+                console.error("Font registration failed for integrity audit:", err);
+            }
+        }
+
+        const chunks: Buffer[] = [];
+        const intel = data.intel || {};
+        const resilience = intel.assetResilience || {};
+        const forecast = intel.financialForecast || {};
+        const alerts: any[] = Array.isArray(intel.alerts) ? intel.alerts : [];
+        const auditId = `AUDIT-${Date.now()}`;
+
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('error', reject);
+        doc.on('end', async () => {
+            try {
+                const buffer = Buffer.concat(chunks);
+                const url = await savePdf(buffer, `auditReports/${textValue(data.propertyId, 'unknown')}/${auditId}.pdf`, {
+                    propertyId: textValue(data.propertyId, ''),
+                    propertyName: textValue(data.propertyName, ''),
+                    auditId,
+                    generatedAt: textValue(intel.generatedAt, new Date().toISOString())
+                });
+                resolve(url);
+            } catch (err) {
+                reject(err);
+            }
+        });
+
+        doc.fillColor(GOLD).fontSize(20).text('BIN GROUP - PROPERTY INTEGRITY AUDIT', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fillColor(MUTED).fontSize(9).text(`Report ID: ${auditId}`, { align: 'center' });
+        doc.moveDown(1.2);
+
+        doc.fillColor(INK).fontSize(12).text(`Property: ${textValue(data.propertyName)}`);
+        doc.fillColor(MUTED).fontSize(10).text(`Generated: ${new Date().toLocaleString('en-AE')}`);
+        doc.moveDown(1);
+        doc.rect(50, doc.y, 495, 2).fill(GOLD);
+        doc.moveDown(1);
+
+        doc.fillColor(GOLD).fontSize(13).text('ASSET RESILIENCE');
+        doc.moveDown(0.3);
+        doc.fillColor(INK).fontSize(10).text(`Health Index: ${textValue(resilience.healthIndex, 'N/A')}`);
+        doc.text(`Predicted 12-Month Decay: ${textValue(resilience.predictedDecay12Months, 'N/A')}`);
+        if (resilience.overallRiskLevel) doc.text(`Overall Risk Level: ${resilience.overallRiskLevel}`);
+        if (resilience.topRiskCategory) doc.text(`Top Risk Category: ${resilience.topRiskCategory}`);
+        doc.moveDown(0.6);
+
+        const failureWindows: any[] = Array.isArray(resilience.criticalFailureWindows) ? resilience.criticalFailureWindows : [];
+        if (failureWindows.length) {
+            doc.fillColor(INK).fontSize(10.5).text('Critical Failure Windows:');
+            failureWindows.forEach((window: any) => {
+                if (doc.y > 700) doc.addPage();
+                const start = textValue(window?.predictedWindow?.start, '---');
+                const end = textValue(window?.predictedWindow?.end, '---');
+                doc.fontSize(9).fillColor(MUTED).text(`- ${textValue(window?.assetCategory)} (${Math.round(Number(window?.probability || 0) * 100)}% probability, window ${start} to ${end})`);
+                if (window?.guidance) doc.fontSize(8.5).fillColor(MUTED).text(`   Guidance: ${window.guidance}`);
+            });
+            doc.moveDown(0.6);
+        }
+
+        if (doc.y > 680) doc.addPage();
+        doc.fillColor(GOLD).fontSize(13).text('FINANCIAL YIELD FORECAST');
+        doc.moveDown(0.3);
+        doc.fillColor(INK).fontSize(10).text(`Expected Net ROI: ${textValue(forecast.expectedNetROI, 'N/A')}%`);
+        if (forecast.projectedAnnualYield !== undefined) doc.text(`Projected Annual Yield: ${money(forecast.projectedAnnualYield)}`);
+        if (forecast.maintenanceCostEstimate !== undefined) doc.text(`Maintenance Cost Estimate: ${money(forecast.maintenanceCostEstimate)}`);
+        doc.moveDown(0.4);
+
+        const quarters: any[] = Array.isArray(forecast.quarterlyProjections) ? forecast.quarterlyProjections : [];
+        if (quarters.length) {
+            doc.fontSize(10.5).text('Quarterly Projections:');
+            quarters.forEach((q: any) => {
+                if (doc.y > 720) doc.addPage();
+                doc.fontSize(9).fillColor(MUTED).text(`- ${textValue(q?.quarter)}: Income ${money(q?.projectedIncome)}, Expenses ${money(q?.projectedExpenses)}, Net ${money(q?.projectedNet)}`);
+            });
+            doc.moveDown(0.5);
+        }
+
+        const riskFactors: string[] = Array.isArray(forecast.riskFactors) ? forecast.riskFactors : [];
+        if (riskFactors.length) {
+            doc.fillColor(INK).fontSize(10.5).text('Risk Factors:');
+            riskFactors.forEach((factor: string) => doc.fontSize(9).fillColor(MUTED).text(`- ${factor}`));
+            doc.moveDown(0.5);
+        }
+        if (forecast.guidance) {
+            doc.fillColor(INK).fontSize(9.5).text(`Guidance: ${forecast.guidance}`, { align: 'justify' });
+            doc.moveDown(0.6);
+        }
+
+        if (alerts.length) {
+            if (doc.y > 650) doc.addPage();
+            doc.fillColor(GOLD).fontSize(13).text('MISSION ALERTS');
+            doc.moveDown(0.3);
+            alerts.forEach((alert: any) => {
+                if (doc.y > 700) doc.addPage();
+                doc.fontSize(9.5).fillColor(alert?.type === 'CRITICAL' ? '#B91C1C' : INK).text(`[${textValue(alert?.type, 'INFO')}] ${textValue(alert?.message)}`);
+                if (alert?.recommendation) doc.fontSize(8.5).fillColor(MUTED).text(`   Recommendation: ${alert.recommendation}`);
+                doc.moveDown(0.3);
+            });
+        }
+
+        doc.moveDown(1);
+        doc.fillColor(MUTED).fontSize(7).text('This report is generated by BIN GROUP AI Mission Guidance for decision support only and does not replace professional engineering, financial, or legal advice.', { align: 'center' });
+
+        doc.end();
+    });
+}

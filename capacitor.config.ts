@@ -1,26 +1,33 @@
-import { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.bingroup.app',
-  appName: 'BIN Group',
+  appId: 'ae.bingroups.superapp',
+  appName: 'BIN GROUP',
   webDir: 'dist',
   bundledWebRuntime: false,
+  server: {
+    androidScheme: 'https',
+    iosScheme: 'https',
+  },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      backgroundColor: '#0B0B0C',
+      launchShowDuration: 1200,
+      launchAutoHide: true,
+      backgroundColor: '#FFFFFF',
       androidSplashResourceName: 'splash',
-      showSpinner: false,
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: true,
+      spinnerColor: '#C9A646'
+    },
+    StatusBar: {
+      style: 'LIGHT',
+      backgroundColor: '#FFFFFF',
+      overlaysWebView: false
     },
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
-    },
-    Geolocation: {
-      permissions: {
-        location: 'always',
-      },
-    },
-  },
+      presentationOptions: ['badge', 'sound', 'alert']
+    }
+  }
 };
 
 export default config;

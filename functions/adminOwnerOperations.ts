@@ -375,6 +375,8 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
   return { status: "APPROVED_PENDING_OWNER_SIGNATURE", ownerId, contractId, propertyIds, paymentId, signUrl };
 });
 
+const ALREADY_SIGNED_STATUSES = new Set(["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"]);
+
 export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
   const contractId = s(request.data?.contractId);
@@ -388,28 +390,34 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   const ownerEmail = s(contract.ownerEmail || request.auth.token?.email).toLowerCase();
   const requesterEmail = s(request.auth.token?.email).toLowerCase();
   if (ownerId && ownerId !== request.auth.uid && ownerEmail !== requesterEmail) throw new HttpsError("permission-denied", "This contract belongs to another owner.");
+
+  const alreadySigned = ALREADY_SIGNED_STATUSES.has(s(contract.status).toUpperCase()) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
+  if (alreadySigned) {
+    return { status: s(contract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: contract.signedPdfUrl || contract.pdfUrl || "", idempotent: true };
+  }
+
   const signedAtDate = new Date();
   const termFields = termFieldsFromStart(signedAtDate);
   const pdfUrl = await generateContractPDF({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
   const batch = db.batch();
-  batch.set(ref, { status: "ACTIVE", contractStatus: "signed_active", activationStatus: "ACTIVE", signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+  // NOTE: signing only marks the contract ready for activation. Payment verification
+  // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
+  // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
+  batch.set(ref, { status: "READY_FOR_ACTIVATION", contractStatus: "signed_awaiting_payment_verification", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureStatus: "OWNER_SIGNED", signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
   if (ownerId) {
     const ownerPatch = {
       email: ownerEmail || null,
       latestActivationContractId: contractId,
       activeContractId: contractId,
-      contractSignatureStatus: 'ACTIVE',
-      activationStatus: 'ACTIVE',
-      status: 'ACTIVE',
+      contractSignatureStatus: 'SIGNED_AWAITING_PAYMENT_VERIFICATION',
+      activationStatus: 'PENDING_PAYMENT_VERIFICATION',
       activeContractTermMonths: termFields.contractTermMonths,
       activeContractValidFrom: termFields.effectiveFrom,
       activeContractValidTo: termFields.validTo,
       ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-      dashboardLocked: false,
-      dashboardUnlocked: true,
-      adminApproved: true,
-      paymentVerified: true,
+      dashboardLocked: true,
+      dashboardUnlocked: false,
       signedPdfUrl: pdfUrl,
       updatedAt: ts()
     };
@@ -422,21 +430,21 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
     message: {
       from: "BIN GROUP <ceo@bin-groups.com>",
       replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
-      subject: "BIN GROUP Owner Dashboard Activated + Signed Contract PDF",
+      subject: "BIN GROUP Contract Signed - Payment Verification Pending",
       html: `<p>Dear ${signatureName},</p>
-<p><b>Your BIN GROUP contract has been signed and your owner dashboard is now active.</b></p>
+<p><b>Your BIN GROUP contract has been signed. Your signed PDF is attached below.</b></p>
 <p><a href="${pdfUrl}">Download signed contract PDF</a></p>
-<p><a href="${dashboardUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Dashboard</a></p>
-<p>You can now access your property passport, contracts, documents, tickets, tenants and financial records.</p>
+<p>Submit your mobilization payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment (typically within 24 hours).</p>
+<p><a href="${dashboardUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
 <p>Support: support@bin-groups.com</p>
 <p>BIN GROUP - Made in UAE 🇦🇪</p>`
     },
-    metadata: { type: "owner_signed_contract_pdf_dashboard_activated", contractId, ownerId, pdfUrl, dashboardUrl },
+    metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
     createdAt: ts()
   });
   batch.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
   await batch.commit();
-  return { status: "SIGNED_PDF_EMAILED", contractId, pdfUrl };
+  return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: false };
 });
 
 export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request) => {

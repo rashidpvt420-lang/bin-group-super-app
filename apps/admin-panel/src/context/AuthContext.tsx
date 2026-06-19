@@ -26,15 +26,11 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
-const BOOTSTRAP_ADMIN_EMAILS = new Set(
-    (process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || '')
-        .split(',')
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean)
-);
+const DEFAULT_FOUNDER_ADMIN_EMAILS = [
+    'ceo@bin-groups.com',
+    'ceo@bin-group.com',
+];
 
-const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
-const profileRoleFrom = (profile: any) => String(profile?.role || profile?.userRole || profile?.primaryRole || '').trim().toLowerCase();
 const canonicalEmail = (value: unknown) => {
     const email = String(value || '').trim().toLowerCase();
     const [local, domain] = email.split('@');
@@ -43,6 +39,17 @@ const canonicalEmail = (value: unknown) => {
     const normalizedLocal = normalizedDomain === 'gmail.com' ? local.split('+')[0].replace(/\./g, '') : local;
     return `${normalizedLocal}@${normalizedDomain}`;
 };
+
+const BOOTSTRAP_ADMIN_EMAILS = new Set([
+    ...DEFAULT_FOUNDER_ADMIN_EMAILS,
+    ...(process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || '')
+        .split(',')
+        .map((email) => canonicalEmail(email))
+        .filter(Boolean),
+]);
+
+const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+const profileRoleFrom = (profile: any) => String(profile?.role || profile?.userRole || profile?.primaryRole || '').trim().toLowerCase();
 
 const claimsGrantAdmin = (claims: Record<string, unknown>) => {
     const role = claimRoleFrom(claims);
@@ -129,10 +136,26 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 const profileRole = profileRoleFrom(profile);
                 const isFounderBootstrap = founderEmailGrantsAdmin(usr.email);
                 const isAdmin = claimsGrantAdmin(claims) || profileGrantsAdmin(profile) || isFounderBootstrap;
-                const role = claimRole || profileRole || (isFounderBootstrap ? 'super_admin' : '');
+                const role = isFounderBootstrap ? 'super_admin' : (claimRole || profileRole || '');
 
                 if (!isAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
+                }
+
+                if (isFounderBootstrap && (!profile || profile.role !== 'super_admin' || profile.isAdmin !== true || profile.admin !== true)) {
+                    updateDoc(doc(db, 'users', usr.uid), {
+                        role: 'super_admin',
+                        userRole: 'super_admin',
+                        primaryRole: 'super_admin',
+                        isAdmin: true,
+                        admin: true,
+                        ceo: true,
+                        adminApproved: true,
+                        onboardingComplete: true,
+                        status: 'ACTIVE',
+                        founderBootstrapRepairedAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    }).catch((repairErr) => console.warn('[ADMIN-AUTH] Founder profile repair deferred:', repairErr));
                 }
 
                 setUser({ ...usr, ...profile, role, isAdmin: true, claims, bootstrapAdmin: isFounderBootstrap });

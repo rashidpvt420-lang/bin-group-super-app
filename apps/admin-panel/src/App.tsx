@@ -55,6 +55,10 @@ import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitor
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
+import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
+import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
+import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
+import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -136,6 +140,10 @@ function AppContent() {
                     <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
+                    <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />

@@ -20,6 +20,7 @@ import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import BinConnectChatBox from '../components/BinConnectChatBox';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -102,6 +103,8 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Stack>
         {children}
       </Container>
+
+      <BinConnectChatBox role="broker" />
 
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>

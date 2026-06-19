@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Award, Briefcase, CheckCircle2, Clock, DollarSign,
-  MapPin, Plus, Star, Tool, Users, Wrench, Zap,
+  MapPin, Plus, Star, Users, Wrench, Zap,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useRole } from '../../context/RoleContext';
@@ -15,6 +15,7 @@ import {
   db, collection, query, where, onSnapshot,
   addDoc, serverTimestamp, updateDoc, doc,
 } from '../../lib/firebase';
+import { getQuoteAwardGate, getQuoteBenchmark } from '../../lib/uaeOwnerTrustOsConfig';
 
 const gold = binThemeTokens.gold;
 const CARD = 'rgba(15, 23, 42, 0.42)';
@@ -135,33 +136,69 @@ function JobCard({ job, onAward }: { job: any; onAward?: (jobId: string, bidId: 
           </Stack>
         </Stack>
 
-        {bids.length > 0 && (
-          <>
-            <Divider sx={{ borderColor: alpha(gold, 0.1) }} />
-            <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontWeight: 900, letterSpacing: 2 }}>BIDS RECEIVED</Typography>
-            <Stack spacing={1.5}>
-              {bids.sort((a, b) => (a.amount || 0) - (b.amount || 0)).map(bid => (
-                <Stack key={bid.id} direction="row" justifyContent="space-between" alignItems="center"
-                  sx={{ p: 2, bgcolor: alpha(gold, 0.05), border: `1px solid ${alpha(gold, 0.14)}`, borderRadius: 2.5 }}>
-                  <Box>
-                    <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: '0.85rem' }}>{bid.contractorName || 'Contractor'}</Typography>
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 800 }}>{bid.notes?.slice(0, 60)}</Typography>
-                  </Box>
-                  <Stack alignItems="flex-end" spacing={0.5}>
-                    <Typography sx={{ color: gold, fontWeight: 950 }}>{bid.amount?.toLocaleString()} AED</Typography>
-                    {job.status === 'BIDDING' && onAward && (
-                      <Button size="small" onClick={() => onAward(job.id, bid.id)}
-                        sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, fontSize: '0.65rem', px: 1.5, py: 0.3, borderRadius: 2, minHeight: 0 }}>
-                        Award
-                      </Button>
-                    )}
-                    {bid.awarded && <Chip label="AWARDED" size="small" sx={{ bgcolor: alpha('#22C55E', 0.12), color: '#22C55E', fontWeight: 950, fontSize: '0.55rem' }} />}
-                  </Stack>
-                </Stack>
-              ))}
-            </Stack>
-          </>
-        )}
+        {bids.length > 0 && (() => {
+          const sortedBids = [...bids].sort((a, b) => (a.amount || 0) - (b.amount || 0));
+          const benchmark = getQuoteBenchmark(sortedBids.map(b => b.amount || 0));
+          return (
+            <>
+              <Divider sx={{ borderColor: alpha(gold, 0.1) }} />
+              <Typography variant="caption" sx={{ color: alpha(gold, 0.7), fontWeight: 900, letterSpacing: 2 }}>BIDS RECEIVED</Typography>
+              <Stack spacing={1.5}>
+                {sortedBids.map(bid => {
+                  const amount = bid.amount || 0;
+                  const gate = getQuoteAwardGate(amount, bids.length, job.urgency === 'EMERGENCY');
+                  const deviationPct = benchmark ? Math.round(benchmark.deviationPct(amount)) : 0;
+                  return (
+                    <Stack key={bid.id} spacing={1} sx={{ p: 2, bgcolor: alpha(gold, 0.05), border: `1px solid ${alpha(gold, 0.14)}`, borderRadius: 2.5 }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Box>
+                          <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: '0.85rem' }}>{bid.contractorName || 'Contractor'}</Typography>
+                          <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 800 }}>{bid.notes?.slice(0, 60)}</Typography>
+                        </Box>
+                        <Stack alignItems="flex-end" spacing={0.5}>
+                          <Typography sx={{ color: gold, fontWeight: 950 }}>{amount.toLocaleString()} AED</Typography>
+                          {job.status === 'BIDDING' && onAward && (
+                            <Button size="small" onClick={() => onAward(job.id, bid.id)} disabled={!gate.allowed}
+                              sx={{ bgcolor: gate.allowed ? gold : alpha('#fff', 0.08), color: gate.allowed ? '#111827' : alpha('#fff', 0.35), fontWeight: 950, fontSize: '0.65rem', px: 1.5, py: 0.3, borderRadius: 2, minHeight: 0 }}>
+                              Award
+                            </Button>
+                          )}
+                          {bid.awarded && <Chip label="AWARDED" size="small" sx={{ bgcolor: alpha('#22C55E', 0.12), color: '#22C55E', fontWeight: 950, fontSize: '0.55rem' }} />}
+                        </Stack>
+                      </Stack>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        {benchmark && Math.abs(deviationPct) >= 10 && (
+                          <Chip
+                            label={`${Math.abs(deviationPct)}% ${deviationPct > 0 ? 'above' : 'below'} avg bid`}
+                            size="small"
+                            sx={{ bgcolor: alpha(deviationPct > 0 ? '#EF4444' : '#22C55E', 0.1), color: deviationPct > 0 ? '#EF4444' : '#22C55E', fontWeight: 850, fontSize: '0.58rem' }}
+                          />
+                        )}
+                        {amount <= 500 && (
+                          <Chip label="Auto-approval eligible · under AED 500" size="small" sx={{ bgcolor: alpha('#22C55E', 0.1), color: '#22C55E', fontWeight: 850, fontSize: '0.58rem' }} />
+                        )}
+                        {!gate.allowed && (
+                          <Chip
+                            label={`Needs ${gate.minimumQuotes} quotes before award (${gate.received}/${gate.minimumQuotes}) · over AED 1,500`}
+                            size="small"
+                            sx={{ bgcolor: alpha('#F59E0B', 0.1), color: '#F59E0B', fontWeight: 850, fontSize: '0.58rem' }}
+                          />
+                        )}
+                        {gate.emergencyOverride && (
+                          <Chip
+                            label="Emergency override · 3-quote rule waived"
+                            size="small"
+                            sx={{ bgcolor: alpha('#EF4444', 0.1), color: '#EF4444', fontWeight: 850, fontSize: '0.58rem' }}
+                          />
+                        )}
+                      </Stack>
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            </>
+          );
+        })()}
       </Stack>
     </Paper>
   );

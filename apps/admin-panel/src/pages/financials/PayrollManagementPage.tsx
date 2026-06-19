@@ -24,7 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -45,6 +45,7 @@ interface PayrollRecord {
   month: string; // YYYY-MM
   status: 'pending' | 'paid';
   processedAt: any;
+  pdfUrl?: string;
 }
 
 export default function PayrollManagementPage() {
@@ -121,12 +122,26 @@ export default function PayrollManagementPage() {
   const handleSettlePayment = async (record: PayrollRecord) => {
     setProcessing(true);
     try {
-        // 1. Generate Payslip via Cloud Protocol
-        const payslipNode = httpsCallable(functions, 'processStaffPayslip');
-        const result: any = await payslipNode({ payrollId: record.id });
+        const generatePayslip = httpsCallable(functions, 'generateAndEmailPayslip');
+        const result: any = await generatePayslip({
+          staffId: record.techId,
+          staffName: record.techName,
+          payPeriod: record.month,
+          basicSalary: record.amount,
+          allowances: 0,
+          overtime: 0,
+          deductions: 0,
+        });
 
-        if (result.data.status === 'SUCCESS') {
+        if (result.data?.success) {
+            await updateDoc(doc(db, 'payroll', record.id), {
+              status: 'paid',
+              pdfUrl: result.data.pdfUrl || null,
+              processedAt: serverTimestamp(),
+            });
             alert(`Sovereign Pay Advice Secured: ${result.data.pdfUrl}`);
+        } else {
+            alert("Institutional Payroll node failed. Check ledger permissions.");
         }
     } catch (err: any) {
         console.error("Payslip Node Fault:", err);
@@ -221,7 +236,15 @@ export default function PayrollManagementPage() {
                         {t('fin.settle_payment') || 'PAY & ADVISE'}
                     </Button>
                   ) : (
-                    <Button size="small" startIcon={<FileText size={14} />} sx={{ fontWeight: 900 }}>VIEW SLIP</Button>
+                    <Button
+                        size="small"
+                        startIcon={<FileText size={14} />}
+                        sx={{ fontWeight: 900 }}
+                        disabled={!record.pdfUrl}
+                        onClick={() => record.pdfUrl && window.open(record.pdfUrl, '_blank', 'noopener,noreferrer')}
+                    >
+                        VIEW SLIP
+                    </Button>
                   )}
                 </TableCell>
               </TableRow>

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 const gatePath = 'launch_package/launch-proof-gates.json';
 const failures = [];
 const warnings = [];
+const isPilotMode = process.argv.includes('--pilot') || process.env.LAUNCH_SCOPE === 'pilot';
 
 function fail(message) {
   failures.push(message);
@@ -30,6 +31,7 @@ function validateGate(groupName, name, gate) {
   const required = gate.required === true;
   const status = String(gate.status || '').toLowerCase();
   const label = `${groupName}.${name}`;
+  const pilotCanDefer = isPilotMode && groupName !== 'deploymentProof';
 
   if (status === 'passed') {
     if (!proofText(gate)) {
@@ -45,6 +47,11 @@ function validateGate(groupName, name, gate) {
     if (required) {
       warn(`${label} is required but waived. Confirm this is intentionally accepted by the CEO/admin owner.`);
     }
+    return;
+  }
+
+  if (pilotCanDefer && required && status === 'pending') {
+    warn(`${label} remains pending and is deferred for private pilot only. Public launch still requires passed proof or formal waiver.`);
     return;
   }
 
@@ -71,20 +78,21 @@ if (!existsSync(gatePath)) {
 }
 
 if (failures.length) {
-  console.error('\nPUBLIC LAUNCH CLEARANCE: NO-GO\n');
+  console.error(`\n${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: NO-GO\n`);
   for (const item of failures) console.error(`- ${item}`);
   if (warnings.length) {
     console.error('\nWarnings:');
     for (const item of warnings) console.error(`- ${item}`);
   }
-  console.error('\nFor pilot use, record real passed evidence with: npm run launch:pass -- --gate <gateName> --proof "<live proof>"');
+  console.error('\nFor pilot use, run: npm run test:pilot-clearance');
+  console.error('For public launch, record real passed evidence with: npm run launch:pass -- --gate <gateName> --proof "<live proof>"');
   console.error('For a formal waiver, edit launch_package/launch-proof-gates.json and include waivedBy, waivedAt, riskNote, and expiresAt.');
   process.exit(1);
 }
 
 if (warnings.length) {
-  console.warn('\nPUBLIC LAUNCH CLEARANCE: GO WITH WAIVERS\n');
+  console.warn(`\n${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: GO WITH WARNINGS\n`);
   for (const item of warnings) console.warn(`- ${item}`);
 } else {
-  console.log('PUBLIC LAUNCH CLEARANCE: GO');
+  console.log(`${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: GO`);
 }

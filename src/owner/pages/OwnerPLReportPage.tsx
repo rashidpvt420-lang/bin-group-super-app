@@ -222,7 +222,7 @@ export default function OwnerPLReportPage() {
           <Box>
             <Typography variant="h4" fontWeight={950} sx={{ color: '#fff' }}>Profit & Loss {year}</Typography>
             <Typography variant="body2" sx={{ color: alpha('#fff', 0.4), fontWeight: 700 }}>
-              {passports.length} propert{passports.length === 1 ? 'y' : 'ies'} · UAE Corporate Tax Compliant
+              {passports.length} propert{passports.length === 1 ? 'y' : 'ies'} · Owner Financial Summary
             </Typography>
           </Box>
           <Button
@@ -308,9 +308,9 @@ export default function OwnerPLReportPage() {
             <FileText size={18} />
           </Box>
           <Box>
-            <Typography variant="caption" sx={{ color: alpha('#22C55E', 0.7), fontWeight: 900, letterSpacing: 2 }}>UAE CORPORATE TAX NOTE</Typography>
+            <Typography variant="caption" sx={{ color: alpha('#22C55E', 0.7), fontWeight: 900, letterSpacing: 2 }}>TAX READINESS NOTE</Typography>
             <Typography sx={{ color: alpha('#fff', 0.6), fontWeight: 800, fontSize: '0.85rem', mt: 0.3 }}>
-              UAE Corporate Tax (effective June 2023) applies to taxable income above AED 375,000. Maintenance costs, management fees, and operating expenses are deductible. Download this report as supporting documentation for your tax submission. Always consult a UAE-licensed tax advisor.
+              UAE Corporate Tax (Federal Decree-Law No. 47 of 2022) targets licensed business activity. Rental income earned directly by a natural-person landlord is generally outside Corporate Tax scope. If you hold property through a UAE company, Corporate Tax may apply once taxable income exceeds AED 375,000 (Small Business Relief may apply under AED 3M revenue). Maintenance costs, management fees, and operating expenses shown here are itemised as supporting documentation either way. This is a financial summary, not tax advice — confirm your specific position with a UAE-licensed tax advisor.
             </Typography>
           </Box>
         </Stack>
