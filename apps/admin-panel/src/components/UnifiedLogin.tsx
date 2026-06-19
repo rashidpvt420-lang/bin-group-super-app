@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { auth, signInWithPopup, signInWithEmailAndPassword } from '../lib/firebase';
-import { 
+import { auth, signInWithEmailAndPassword } from '../lib/firebase';
+import {
     GoogleAuthProvider,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    signInWithRedirect,
+    setPersistence,
+    browserLocalPersistence
 } from 'firebase/auth';
 import { Shield, Lock, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -22,8 +25,7 @@ export default function UnifiedLogin() {
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
         const message = err?.message || '';
-        
-        // Institutional Diagnostic Logging
+
         console.error("🛡️ [AUTH_DIAGNOSTIC]", {
             code,
             message,
@@ -39,16 +41,25 @@ export default function UnifiedLogin() {
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
             return 'The institutional email or passcode is incorrect.';
         }
+        if (code === 'auth/unauthorized-domain') {
+            return 'Google SSO domain is not authorized in Firebase Auth. Add the admin hosting domain under Firebase Authentication > Settings > Authorized domains.';
+        }
+        if (code === 'auth/operation-not-allowed') {
+            return 'Google sign-in is not enabled in Firebase Authentication providers.';
+        }
         if (code === 'auth/too-many-requests') {
             return 'Security lockout: Too many attempts. Please wait.';
         }
         if (code === 'auth/popup-closed-by-user') {
             return 'SSO Handshake cancelled by operator.';
         }
+        if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+            return 'Popup SSO was blocked. The admin panel now uses redirect SSO; retry the Google button.';
+        }
         if (code === 'auth/network-request-failed') {
             return 'Protocol timeout: Network connection failed.';
         }
-        
+
         return 'Login could not be completed. Please contact BIN GROUP support.';
     };
 
@@ -56,12 +67,11 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            console.log("🔍 [DIAG] Starting Admin SSO Handshake...");
-            const result = await signInWithPopup(auth, provider);
-            if (result.user) {
-                console.log("🛡️ [AUTH] Admin SSO successful for:", result.user.email);
-            }
+            console.log("🔍 [DIAG] Starting Admin Google redirect SSO...");
+            await setPersistence(auth, browserLocalPersistence);
+            await signInWithRedirect(auth, provider);
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
             setLocalLoading(false);
@@ -74,6 +84,7 @@ export default function UnifiedLogin() {
         setLocalError(null);
         try {
             console.log("🔍 [DIAG] Validating Administrative Credentials...");
+            await setPersistence(auth, browserLocalPersistence);
             const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             if (result.user) {
                 console.log("🛡️ [AUTH] Admin Secure Login successful for:", result.user.email);
@@ -115,14 +126,12 @@ export default function UnifiedLogin() {
 
     return (
         <div className={`min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30 ${isRTL ? 'rtl' : 'ltr'}`}>
-            {/* Background Branding */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
             </div>
 
             <div className="w-full max-w-[420px] relative z-10">
-                {/* Branding Section */}
                 <div className="text-center mb-12">
                     <div className="inline-block p-4 rounded-3xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-[#C6A75E]/20 shadow-2xl mb-6">
                         <Shield className="w-12 h-12 text-[#C6A75E]" strokeWidth={1.5} />
@@ -135,14 +144,13 @@ export default function UnifiedLogin() {
                     </p>
                 </div>
 
-                {/* Login Card */}
                 <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-white/5 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
-                    
+
                     <div className="mb-8">
-                        <h2 className="text-xl font-black text-white mb-2">{t('login.portal')}</h2>
+                        <h2 className="text-xl font-black text-white mb-2">ADMIN PORTAL</h2>
                         <p className="text-sm text-[#64748b] leading-relaxed">
-                            {t('login.authorized_only')}
+                            Authorized CEO and admin access only.
                         </p>
                     </div>
 
@@ -174,7 +182,7 @@ export default function UnifiedLogin() {
                                 required
                             />
                         </div>
-                        <button 
+                        <button
                             type="submit"
                             disabled={loading || !email || !password}
                             className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
@@ -197,7 +205,7 @@ export default function UnifiedLogin() {
                         <div className="h-[1px] flex-1 bg-white/20"></div>
                     </div>
 
-                    <button 
+                    <button
                         type="button"
                         onClick={handleGoogleLogin}
                         disabled={loading}
@@ -205,7 +213,7 @@ export default function UnifiedLogin() {
                     >
                         <div className="flex items-center gap-3">
                             <Globe className="w-5 h-5" />
-                            <span className="uppercase tracking-widest text-sm">{t('login.google')}</span>
+                            <span className="uppercase tracking-widest text-sm">SIGN IN WITH GOOGLE</span>
                         </div>
                     </button>
 
@@ -219,7 +227,7 @@ export default function UnifiedLogin() {
 
                 <div className="mt-12 text-center opacity-40">
                     <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
-                        BIN-Groups CORE v1.23-STABLE
+                        BIN-Groups CORE v1.24-ADMIN-SSO
                     </p>
                 </div>
             </div>
