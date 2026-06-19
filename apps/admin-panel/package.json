@@ -33,7 +33,7 @@
   "scripts": {
     "start": "craco start",
     "dev": "npm start",
-    "prebuild": "node ../../scripts/wire-bin-connect-admin-inbox.mjs && node ../../scripts/wire-pilot-completion-routes.mjs",
+    "prebuild": "node ../../scripts/patch-admin-auth-recovery.mjs && node ../../scripts/wire-bin-connect-admin-inbox.mjs && node ../../scripts/wire-pilot-completion-routes.mjs && node ../../scripts/wire-public-launch-command-center.mjs",
     "build": "craco build",
     "test": "craco test",
     "eject": "react-scripts eject"
