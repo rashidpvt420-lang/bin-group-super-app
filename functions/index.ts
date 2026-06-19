@@ -1316,6 +1316,279 @@ export const generateIntegrityAudit = onCall({ cors: true }, async (request) => 
     }
 });
 
+// ─── ADMIN PRICING, COMPLIANCE & ROI TOOLING ───────────────────────────────
+
+export const calculateAMCV2 = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const { propertyName, zone, buildingAge, numUnits } = request.data || {};
+    const age = Number(buildingAge);
+    const units = Number(numUnits);
+    if (!Number.isFinite(age) || age < 0) throw new HttpsError("invalid-argument", "A valid building age is required.");
+    if (!Number.isFinite(units) || units <= 0) throw new HttpsError("invalid-argument", "A valid unit count is required.");
+
+    const ageBonus = 1 + Math.min(age * 0.012, 0.40);
+    const ratePerUnit = Math.round(3500 * ageBonus);
+    const baseAED = ratePerUnit * units;
+
+    return {
+        propertyName: safeString(propertyName, "Property"),
+        zone: safeString(zone, "Standard"),
+        baseAED,
+        ratePerUnit,
+        numUnits: units
+    };
+});
+
+export const exportComplianceReport = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const monthsRaw = Number(request.data?.months);
+    const months = Number.isFinite(monthsRaw) && monthsRaw > 0 ? Math.min(monthsRaw, 36) : 12;
+
+    try {
+        const periodEnd = new Date();
+        const periodStart = new Date(periodEnd.getTime() - months * 30 * 24 * 60 * 60 * 1000);
+        const periodStartTs = admin.firestore.Timestamp.fromDate(periodStart);
+
+        const [snakeSnap, camelSnap, ticketsSnap] = await Promise.all([
+            db.collection("audit_logs").where("createdAt", ">=", periodStartTs).orderBy("createdAt", "desc").limit(2000).get(),
+            db.collection("auditLogs").where("createdAt", ">=", periodStartTs).orderBy("createdAt", "desc").limit(2000).get(),
+            db.collection("maintenanceTickets").where("updatedAt", ">=", periodStartTs).get()
+        ]);
+
+        const CRITICAL_KEYWORDS = ["REJECT", "CRITICAL", "FAIL", "BREACH", "FRAUD", "SUSPEND", "TERMINATE", "DELETE"];
+        const entries: Array<Record<string, any>> = [];
+        let contractEvents = 0;
+        let criticalEvents = 0;
+
+        const consume = (snap: admin.firestore.QuerySnapshot) => {
+            snap.forEach(doc => {
+                const data = doc.data();
+                const action = safeString(data.action, "UNKNOWN_ACTION");
+                if (action.includes("CONTRACT")) contractEvents++;
+                if (CRITICAL_KEYWORDS.some(k => action.includes(k))) criticalEvents++;
+                entries.push({
+                    id: doc.id,
+                    actorId: data.actorId || null,
+                    actorRole: data.actorRole || null,
+                    action,
+                    targetType: data.targetType || null,
+                    targetId: data.targetId || null,
+                    reason: data.reason || null,
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null
+                });
+            });
+        };
+        consume(snakeSnap);
+        consume(camelSnap);
+        entries.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+        let slaBreaches = 0;
+        let slaTracked = 0;
+        ticketsSnap.forEach(doc => {
+            slaTracked++;
+            if (doc.data().slaViolated === true) slaBreaches++;
+        });
+        const slaCompliancePct = slaTracked > 0 ? Math.round(((slaTracked - slaBreaches) / slaTracked) * 1000) / 10 : 100;
+
+        const report = {
+            generatedAt: new Date().toISOString(),
+            periodMonths: months,
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+            summary: {
+                totalAuditEvents: entries.length,
+                contractEvents,
+                slaCompliancePct,
+                slaBreaches,
+                criticalEvents
+            },
+            entries: entries.slice(0, 1000)
+        };
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "EXPORT_COMPLIANCE_REPORT", targetType: "audit_logs", targetId: "ALL",
+            metadata: { months }
+        });
+
+        return { status: "SUCCESS", report };
+    } catch (err: any) {
+        console.error("Compliance report export failed:", err);
+        throw new HttpsError("internal", "Compliance report export failed.");
+    }
+});
+
+export const generateTrialROIReport = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const propertyId = safeString(request.data?.propertyId);
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    const propertyData = propertyDoc.data()!;
+
+    try {
+        const periodEnd = new Date();
+        const periodStart = new Date(periodEnd.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+        const ticketsSnap = await db.collection("maintenanceTickets").where("propertyId", "==", propertyId).get();
+
+        const resolvedStatuses = new Set(["COMPLETED", "completed", "CLOSED", "closed", "RESOLVED", "resolved"]);
+        let totalResolved = 0;
+        let totalPending = 0;
+        let slaCompliant = 0;
+        let slaTracked = 0;
+        let resolutionHoursSum = 0;
+        let resolutionSamples = 0;
+        let preventedCost = 0;
+        const categoryCounts: Record<string, number> = {};
+
+        ticketsSnap.forEach(doc => {
+            const data = doc.data();
+            const status = String(data.status || "");
+            const category = safeString(data.category || data.trade, "GENERAL");
+            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+
+            if (resolvedStatuses.has(status)) {
+                totalResolved++;
+                preventedCost += Number(data.estimatedCost) || Number(data.actualCost) || 0;
+
+                const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+                const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : null;
+                if (createdAt && completedAt) {
+                    resolutionHoursSum += (completedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+                    resolutionSamples++;
+                }
+
+                slaTracked++;
+                if (!data.slaViolated) slaCompliant++;
+            } else {
+                totalPending++;
+            }
+        });
+
+        const totalTickets = totalResolved + totalPending;
+        const avgResolutionHours = resolutionSamples > 0 ? Math.round((resolutionHoursSum / resolutionSamples) * 10) / 10 : 0;
+        const slaComplianceRate = slaTracked > 0 ? Math.round((slaCompliant / slaTracked) * 1000) / 10 : 100;
+
+        const topCategories: [string, number][] = Object.entries(categoryCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        const passportSnap = await db.collection("property_passports").doc(`passport_${propertyId}`).get();
+        const passportData = passportSnap.exists ? passportSnap.data() : null;
+        const rawHealthScore = passportData ? Number(passportData.assetHealthScore ?? passportData.healthScore) : NaN;
+        const assetHealthScore = Number.isFinite(rawHealthScore) ? rawHealthScore : null;
+
+        const ownerId = safeString(propertyData.ownerId);
+        const ownerDoc = ownerId ? await db.collection("users").doc(ownerId).get() : null;
+        const ownerName = ownerDoc?.exists
+            ? safeString(ownerDoc.data()?.name || ownerDoc.data()?.displayName, "Property Owner")
+            : "Property Owner";
+
+        const headline = slaComplianceRate >= 90
+            ? "Portfolio is operating within institutional SLA standards."
+            : slaComplianceRate >= 75
+                ? "Portfolio performance is acceptable but has room for improvement."
+                : "Portfolio SLA compliance requires immediate attention.";
+
+        const recommendation = totalPending > 0
+            ? `${totalPending} mission(s) remain open. Prioritize dispatch to protect SLA compliance.`
+            : "All missions resolved within the reporting window. Maintain the current preventive maintenance cadence.";
+
+        const report = {
+            propertyId,
+            propertyName: safeString(propertyData.name || propertyData.propertyName || propertyData.address, "Institutional Asset"),
+            ownerName,
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+            totalTickets,
+            totalResolved,
+            totalPending,
+            avgResolutionHours,
+            slaComplianceRate,
+            totalPreventedCostAED: Math.round(preventedCost),
+            assetHealthScore,
+            topCategories,
+            trialSummary: { headline, recommendation },
+            generatedAt: new Date().toISOString()
+        };
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "GENERATE_ROI_REPORT", targetType: "properties", targetId: propertyId
+        });
+
+        return report;
+    } catch (err: any) {
+        console.error("ROI report generation failed:", err);
+        throw new HttpsError("internal", "ROI report generation failed.");
+    }
+});
+
+export const notifyRole = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const payload = assertPlainObject(request.data, "Notification payload");
+    const role = safeString(payload.role);
+    const title = safeString(payload.title);
+    const body = safeString(payload.body);
+    const allowedRoles = new Set(["owner", "tenant", "technician", "broker", "admin"]);
+    if (!allowedRoles.has(role)) throw new HttpsError("invalid-argument", "A valid target role is required.");
+    if (!title || !body) throw new HttpsError("invalid-argument", "Notification title and body are required.");
+
+    const type = safeString(payload.type, "ADMIN_BROADCAST");
+    const link = payload.link ? safeString(payload.link) : null;
+
+    try {
+        const usersSnap = await db.collection("users").where("role", "==", role).limit(500).get();
+        if (usersSnap.empty) {
+            return { status: "SUCCESS", notified: 0 };
+        }
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const batch = db.batch();
+        usersSnap.forEach(userDoc => {
+            const ref = db.collection("notifications").doc();
+            batch.set(ref, {
+                userId: userDoc.id,
+                role,
+                title,
+                body,
+                type,
+                link,
+                status: "PENDING",
+                read: false,
+                createdAt: now,
+                source: "ADMIN_NOTIFY_ROLE"
+            });
+        });
+        await batch.commit();
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "NOTIFY_ROLE_BROADCAST", targetType: "users", targetId: role,
+            metadata: { count: usersSnap.size, type }
+        });
+
+        return { status: "SUCCESS", notified: usersSnap.size };
+    } catch (err: any) {
+        console.error("Role notification broadcast failed:", err);
+        throw new HttpsError("internal", "Role notification broadcast failed.");
+    }
+});
+
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
@@ -2725,7 +2998,9 @@ export const processPayment = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
 
     const { invoiceId, paymentMethod, amount } = request.data;
-    if (!invoiceId || !amount) throw new HttpsError("invalid-argument", "Transaction payload incomplete.");
+    if (!invoiceId || typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+        throw new HttpsError("invalid-argument", "Transaction payload incomplete or invalid.");
+    }
 
     const uid = request.auth.uid;
     const invoiceRef = db.collection("invoices").doc(invoiceId);
@@ -2736,6 +3011,11 @@ export const processPayment = onCall({ cors: true }, async (request) => {
 
         const invoiceData = invoiceSnap.data()!;
         if (invoiceData.status === "PAID") throw new HttpsError("failed-precondition", "Transaction already settled.");
+
+        const invoiceAmount = Number(invoiceData.amount);
+        if (!Number.isFinite(invoiceAmount) || Math.abs(amount - invoiceAmount) > 0.01) {
+            throw new HttpsError("invalid-argument", "Payment amount does not match the invoice balance.");
+        }
 
         const txId = `TXN-${Date.now()}-${uid.substring(0, 5)}`;
         const receiptId = `RCPT-${Date.now()}`;
