@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { auth, signInWithEmailAndPassword } from '../lib/firebase';
 import {
     GoogleAuthProvider,
@@ -21,9 +21,18 @@ export default function UnifiedLogin() {
     const [diagnostic, setDiagnostic] = useState('Admin login ready. Use Google or email/password.');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const redirectWatchdogRef = useRef<number | null>(null);
 
     const error = authError || localError;
-    const loading = authLoading || localLoading;
+    const loading = authLoading;
+    const actionLoading = localLoading;
+
+    const clearRedirectWatchdog = () => {
+        if (redirectWatchdogRef.current !== null) {
+            window.clearTimeout(redirectWatchdogRef.current);
+            redirectWatchdogRef.current = null;
+        }
+    };
 
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
@@ -72,21 +81,29 @@ export default function UnifiedLogin() {
         getRedirectResult(auth)
             .then((result) => {
                 if (!active) return;
+                clearRedirectWatchdog();
                 if (result?.user) {
+                    setLocalLoading(false);
                     setDiagnostic(`Google returned ${result.user.email || 'admin account'}. Verifying admin permission...`);
                     sessionStorage.removeItem('bin_admin_google_redirect_started');
                 } else if (sessionStorage.getItem('bin_admin_google_redirect_started') === '1') {
-                    setDiagnostic('Returned from Google. Waiting for Firebase auth state. If this remains, check Firebase authorized domains/provider.');
+                    setLocalLoading(false);
+                    setDiagnostic('Returned from Google. Waiting for Firebase auth state. If this remains, check Firebase authorized domains/provider and admin email permissions.');
                 }
             })
             .catch((err: any) => {
                 if (!active) return;
+                clearRedirectWatchdog();
                 const friendly = getFriendlyAuthError(err);
                 setLocalError(friendly);
+                setLocalLoading(false);
                 setDiagnostic(`Google redirect failed: ${err?.code || err?.message || 'unknown error'}`);
                 sessionStorage.removeItem('bin_admin_google_redirect_started');
             });
-        return () => { active = false; };
+        return () => {
+            active = false;
+            clearRedirectWatchdog();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -100,8 +117,17 @@ export default function UnifiedLogin() {
             setDiagnostic('Opening Google sign-in. Choose the Firebase admin account.');
             sessionStorage.setItem('bin_admin_google_redirect_started', '1');
             await setPersistence(auth, browserLocalPersistence);
+            clearRedirectWatchdog();
+            redirectWatchdogRef.current = window.setTimeout(() => {
+                if (sessionStorage.getItem('bin_admin_google_redirect_started') === '1') {
+                    setLocalLoading(false);
+                    setLocalError('Google sign-in did not open or return. Use Chrome/Safari directly, then verify Firebase Auth authorized domains include bin-group-admin-panel.web.app.');
+                    setDiagnostic('Google redirect watchdog expired. This usually means the mobile browser blocked the redirect helper or Firebase Auth domain/provider is not configured.');
+                }
+            }, 8000);
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
+            clearRedirectWatchdog();
             sessionStorage.removeItem('bin_admin_google_redirect_started');
             setLocalError(getFriendlyAuthError(err));
             setDiagnostic(`Google sign-in could not start: ${err?.code || err?.message || 'unknown error'}`);
@@ -235,15 +261,15 @@ export default function UnifiedLogin() {
                         </div>
                         <button
                             type="submit"
-                            disabled={loading || !email || !password}
+                            disabled={actionLoading || !email || !password}
                             className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
                         >
-                            {loading ? '...' : t('login.signin')}
+                            {actionLoading ? 'Checking...' : t('login.signin')}
                         </button>
                         <button
                             type="button"
                             onClick={handlePasswordReset}
-                            disabled={loading}
+                            disabled={actionLoading}
                             className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
                         >
                             Forgot password
@@ -259,12 +285,12 @@ export default function UnifiedLogin() {
                     <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        disabled={loading}
+                        disabled={actionLoading}
                         className="w-full group relative flex items-center justify-center bg-white text-black font-black py-4 px-8 rounded-xl transition-all duration-300 hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <div className="flex items-center gap-3">
                             <Globe className="w-5 h-5" />
-                            <span className="uppercase tracking-widest text-sm">Sign in with Google</span>
+                            <span className="uppercase tracking-widest text-sm">{actionLoading ? 'Opening Google...' : 'Sign in with Google'}</span>
                         </div>
                     </button>
 
@@ -275,7 +301,7 @@ export default function UnifiedLogin() {
                     <button
                         type="button"
                         onClick={handleResetLocalSession}
-                        disabled={loading}
+                        disabled={actionLoading}
                         className="mt-4 w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest hover:text-[#C6A75E] transition-colors disabled:opacity-50"
                     >
                         Reset local login session
@@ -291,7 +317,7 @@ export default function UnifiedLogin() {
 
                 <div className="mt-12 text-center opacity-40">
                     <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
-                        BIN GROUP ADMIN PANEL · 2026-06-19 AUTH FIX
+                        BIN GROUP ADMIN PANEL · 2026-06-19 AUTH WATCHDOG
                     </p>
                 </div>
             </div>
