@@ -8,9 +8,9 @@ import {
     ShieldCheck, Download, Activity, AlertCircle, 
     CheckCircle, Shield, FileText, Lock
 } from 'lucide-react';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import { useLanguage, binThemeTokens } from '@bin/shared';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
@@ -42,8 +42,7 @@ export default function CompliancePage() {
     const handleExport = async () => {
         setExporting(true);
         try {
-            const fns = getFunctions();
-            const result = await httpsCallable(fns, 'exportComplianceReport')({ months: 12 }) as any;
+            const result = await httpsCallable(functions, 'exportComplianceReport')({ months: 12 }) as any;
             const report = result.data.report;
             const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
