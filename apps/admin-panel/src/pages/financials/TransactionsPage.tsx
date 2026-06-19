@@ -43,11 +43,12 @@ export default function TransactionsPage() {
     return () => unsubscribe();
   }, []);
 
-  const income = transactions.filter(t => t.type === 'credit').reduce((sum, t) => sum + t.amount, 0);
-  const expenses = transactions.filter(t => t.type === 'debit').reduce((sum, t) => sum + t.amount, 0);
+  const income = transactions.filter(t => t.type === 'credit').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  const expenses = transactions.filter(t => t.type === 'debit').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-  const formatAED = (val: number) => {
-    return val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
+  const formatAED = (val?: number | null) => {
+    const safeVal = typeof val === 'number' && !isNaN(val) ? val : 0;
+    return safeVal.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
   };
 
   return (
@@ -108,9 +109,9 @@ export default function TransactionsPage() {
           <TableBody>
             {transactions.map((tx) => (
               <TableRow key={tx.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tx.createdAt?.toDate().toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') || t('status.pending')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tx.createdAt?.toDate?.()?.toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') || t('status.pending')}</TableCell>
                 <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{tx.description}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={tx.category.toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={(tx.category || 'N/A').toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
                 <TableCell sx={{ fontWeight: 900, color: tx.type === 'credit' ? '#10b981' : '#ef4444', textAlign: isRTL ? 'right' : 'left' }}>
                   {tx.type === 'credit' ? '+' : '-'} {formatAED(tx.amount)}
                 </TableCell>
