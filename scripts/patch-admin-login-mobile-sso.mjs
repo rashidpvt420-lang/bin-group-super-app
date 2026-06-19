@@ -35,26 +35,30 @@ replaceString(
   'firebase redirect SSO imports'
 );
 
-replaceRegex(
-  /const handleGoogleLogin = async \(\) => \{[\s\S]*?\n    \};\n\n    const handleEmailLogin/,
-  `const handleGoogleLogin = async () => {
-        setLocalLoading(true);
-        setLocalError(null);
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        try {
-            console.log('🔍 [DIAG] Starting Admin Google redirect SSO...');
-            await setPersistence(auth, browserLocalPersistence);
-            await signInWithRedirect(auth, provider);
-        } catch (err: any) {
-            setLocalError(getFriendlyAuthError(err));
-            setLocalLoading(false);
-        }
-    };
+if (!source.includes('getRedirectResult(auth)')) {
+  replaceRegex(
+    /const handleGoogleLogin = async \(\) => \{[\s\S]*?\n    \};\n\n    const handleEmailLogin/,
+    `const handleGoogleLogin = async () => {
+          setLocalLoading(true);
+          setLocalError(null);
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          try {
+              console.log('🔍 [DIAG] Starting Admin Google redirect SSO...');
+              await setPersistence(auth, browserLocalPersistence);
+              await signInWithRedirect(auth, provider);
+          } catch (err: any) {
+              setLocalError(getFriendlyAuthError(err));
+              setLocalLoading(false);
+          }
+      };
 
-    const handleEmailLogin`,
-  'mobile redirect Google SSO'
-);
+      const handleEmailLogin`,
+    'mobile redirect Google SSO'
+  );
+} else {
+  console.log('[admin-login-patch] enhanced redirect diagnostics already present; preserving login handler.');
+}
 
 replaceRegex(
   /<h1 className="text-4xl font-black text-white tracking-tighter mb-2[^"]*">[\s\S]*?<\/h1>/,
