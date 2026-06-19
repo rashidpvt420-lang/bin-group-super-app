@@ -43,11 +43,17 @@ const block = `
 if (rules.includes(marker)) {
   console.log('BIN Connect rules already present.');
 } else {
+  // The top-level catch-all is the LAST `match /{document=**} {` in the file
+  // (4-space indent, immediately inside `match /databases/{database}/documents {`).
+  // Earlier nested occurrences (e.g. inside `match /users/{userId} {`) share the
+  // same text at a deeper indent, so anchoring on the first match would silently
+  // insert this block at the wrong nesting depth. Anchor on the last occurrence instead.
   const anchor = '    match /{document=**} {';
-  if (!rules.includes(anchor)) {
+  const anchorIndex = rules.lastIndexOf(anchor);
+  if (anchorIndex === -1) {
     throw new Error('Could not find catch-all match anchor in firestore.rules');
   }
-  rules = rules.replace(anchor, `${block}\n${anchor}`);
+  rules = rules.slice(0, anchorIndex) + block + '\n' + rules.slice(anchorIndex);
   writeFileSync(path, rules);
   console.log('BIN Connect rules inserted before catch-all.');
 }
