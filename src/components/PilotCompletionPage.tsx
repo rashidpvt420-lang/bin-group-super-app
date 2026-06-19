@@ -3,7 +3,8 @@ import { Alert, Box, Button, Chip, Grid, Paper, Stack, Typography, alpha } from 
 import { BarChart3, CheckCircle2, ClipboardCheck, MessageSquare, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { FRIENDS_PILOT_CHECKLIST, OWNER_ROI_FORMULA, PILOT_COMPLETION_PACK, PilotRole } from '../lib/pilotCompletionBlueprint';
+import { FRIENDS_PILOT_CHECKLIST, OWNER_ROI_FORMULA, PILOT_COMPLETION_PACK } from '../lib/pilotCompletionBlueprint';
+import type { PilotRole } from '../lib/pilotCompletionBlueprint';
 
 const roleTitles: Record<PilotRole, string> = {
   owner: 'Owner ROI, Trust & Approval Center',
