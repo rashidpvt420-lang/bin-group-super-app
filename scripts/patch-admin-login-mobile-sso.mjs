@@ -43,7 +43,7 @@ replaceRegex(
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            console.log("🔍 [DIAG] Starting Admin Google redirect SSO...");
+            console.log('🔍 [DIAG] Starting Admin Google redirect SSO...');
             await setPersistence(auth, browserLocalPersistence);
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
@@ -57,38 +57,85 @@ replaceRegex(
 );
 
 replaceRegex(
+  /<h1 className="text-4xl font-black text-white tracking-tighter mb-2[^"]*">[\s\S]*?<\/h1>/,
+  `<h1 className="text-4xl font-black text-white tracking-tighter mb-2">
+                        BIN GROUP
+                    </h1>`,
+  'clean admin brand title'
+);
+
+replaceRegex(
+  /<p className="text-\[#94a3b8\] font-bold tracking-\[0\.2em\] text-\[10px\] uppercase">[\s\S]*?<\/p>/,
+  `<p className="text-[#94a3b8] font-bold tracking-[0.2em] text-[10px] uppercase">
+                        Admin Control Panel
+                    </p>`,
+  'clean admin brand subtitle'
+);
+
+replaceRegex(
   /<h2 className="text-xl font-black text-white mb-2">[\s\S]*?<\/h2>/,
-  `<h2 className="text-xl font-black text-white mb-2">ADMIN PORTAL</h2>`,
-  'admin portal title'
+  `<h2 className="text-xl font-black text-white mb-2">Admin Login</h2>`,
+  'admin login title'
 );
 
 replaceRegex(
   /<p className="text-sm text-\[#64748b\] leading-relaxed">[\s\S]*?<\/p>/,
   `<p className="text-sm text-[#64748b] leading-relaxed">
-                            Authorized CEO and admin access only.
+                            Authorized BIN GROUP admin access only.
                         </p>`,
-  'admin portal subtitle'
+  'admin login subtitle'
+);
+
+replaceRegex(
+  /<span className="text-\[10px\] text-white font-bold uppercase tracking-widest">[\s\S]*?<\/span>/,
+  `<span className="text-[10px] text-white font-bold uppercase tracking-widest">Or</span>`,
+  'clean SSO separator'
 );
 
 replaceRegex(
   /<span className="uppercase tracking-widest text-sm">[\s\S]*?<\/span>/,
-  `<span className="uppercase tracking-widest text-sm">SIGN IN WITH GOOGLE</span>`,
+  `<span className="uppercase tracking-widest text-sm">Sign in with Google</span>`,
   'google button label'
 );
 
-if (!source.includes('ADMIN PORTAL') || source.includes('PARTNER PORTAL')) {
-  console.error('[admin-login-patch] ADMIN PORTAL enforcement failed.');
-  process.exit(1);
+replaceRegex(
+  /<span className="text-\[9px\] text-\[#94a3b8\] font-black uppercase tracking-widest">[\s\S]*?<\/span>/,
+  `<span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
+                            Protected admin access
+                        </span>`,
+  'protected access badge'
+);
+
+replaceRegex(
+  /BIN-Groups CORE v[\s\S]*?ADMIN-SSO/,
+  `BIN GROUP ADMIN PANEL`,
+  'footer admin branding'
+);
+
+const forbidden = [
+  'BIN-ADMINISTRY',
+  'Sovereign Command & Control Center',
+  'Authorized CEO and admin access only',
+  'Or SSO',
+  'ISO 27001 CERTIFIED & SOVEREIGN SECURED',
+  'BIN-Groups CORE'
+];
+
+for (const token of forbidden) {
+  if (source.includes(token)) {
+    console.error(`[admin-login-patch] forbidden legacy login copy remains: ${token}`);
+    process.exit(1);
+  }
 }
 
-if (!source.includes('signInWithRedirect')) {
-  console.error('[admin-login-patch] redirect SSO enforcement failed.');
+if (!source.includes('BIN GROUP') || !source.includes('Admin Login') || !source.includes('signInWithRedirect')) {
+  console.error('[admin-login-patch] clean admin login enforcement failed.');
   process.exit(1);
 }
 
 if (changed) {
   writeFileSync(file, source);
-  console.log('[admin-login-patch] admin login patched successfully.');
+  console.log('[admin-login-patch] clean admin login patched successfully.');
 } else {
-  console.log('[admin-login-patch] admin login already patched.');
+  console.log('[admin-login-patch] clean admin login already patched.');
 }
