@@ -22,6 +22,7 @@ type Thread = {
   ticketId?: string;
   lastMessage?: string;
   createdAt?: any;
+  updatedAt?: any;
 };
 
 type Message = {
