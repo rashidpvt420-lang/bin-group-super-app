@@ -36,6 +36,7 @@ export interface SovereignUser extends User {
     userAgent?: string;
     legalAcceptedAt?: string;
     adminApproved?: boolean;
+    onboardingComplete?: boolean;
 }
 
 interface RoleContextType {
