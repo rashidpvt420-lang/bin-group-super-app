@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth, signInWithEmailAndPassword } from '../lib/firebase';
 import {
     GoogleAuthProvider,
     sendPasswordResetEmail,
     signInWithRedirect,
+    getRedirectResult,
     setPersistence,
-    browserLocalPersistence
+    browserLocalPersistence,
+    signOut
 } from 'firebase/auth';
 import { Shield, Lock, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +18,7 @@ export default function UnifiedLogin() {
     const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [diagnostic, setDiagnostic] = useState('Admin login ready. Use Google or email/password.');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -42,7 +45,7 @@ export default function UnifiedLogin() {
             return 'The admin email or password is incorrect.';
         }
         if (code === 'auth/unauthorized-domain') {
-            return 'Google sign-in domain is not authorized in Firebase Auth. Add this admin domain under Firebase Authentication > Settings > Authorized domains.';
+            return 'Google sign-in domain is not authorized in Firebase Auth. Add bin-group-admin-panel.web.app under Firebase Authentication > Settings > Authorized domains.';
         }
         if (code === 'auth/operation-not-allowed') {
             return 'Google sign-in is not enabled in Firebase Authentication providers.';
@@ -50,7 +53,7 @@ export default function UnifiedLogin() {
         if (code === 'auth/too-many-requests') {
             return 'Too many login attempts. Please wait and try again.';
         }
-        if (code === 'auth/popup-closed-by-user') {
+        if (code === 'auth/redirect-cancelled-by-user' || code === 'auth/popup-closed-by-user') {
             return 'Google sign-in was cancelled.';
         }
         if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
@@ -60,8 +63,32 @@ export default function UnifiedLogin() {
             return 'Network connection failed. Check internet connection and retry.';
         }
 
-        return 'Login could not be completed. Please contact BIN GROUP support.';
+        return message ? `Login could not be completed: ${message}` : 'Login could not be completed. Please contact BIN GROUP support.';
     };
+
+    useEffect(() => {
+        let active = true;
+        setDiagnostic(`Admin login build active on ${window.location.hostname}. Auth domain: ${auth.config?.authDomain || 'unknown'}.`);
+        getRedirectResult(auth)
+            .then((result) => {
+                if (!active) return;
+                if (result?.user) {
+                    setDiagnostic(`Google returned ${result.user.email || 'admin account'}. Verifying admin permission...`);
+                    sessionStorage.removeItem('bin_admin_google_redirect_started');
+                } else if (sessionStorage.getItem('bin_admin_google_redirect_started') === '1') {
+                    setDiagnostic('Returned from Google. Waiting for Firebase auth state. If this remains, check Firebase authorized domains/provider.');
+                }
+            })
+            .catch((err: any) => {
+                if (!active) return;
+                const friendly = getFriendlyAuthError(err);
+                setLocalError(friendly);
+                setDiagnostic(`Google redirect failed: ${err?.code || err?.message || 'unknown error'}`);
+                sessionStorage.removeItem('bin_admin_google_redirect_started');
+            });
+        return () => { active = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleGoogleLogin = async () => {
         setLocalLoading(true);
@@ -70,10 +97,14 @@ export default function UnifiedLogin() {
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
             console.log('🔍 [DIAG] Starting Admin Google redirect SSO...');
+            setDiagnostic('Opening Google sign-in. Choose the Firebase admin account.');
+            sessionStorage.setItem('bin_admin_google_redirect_started', '1');
             await setPersistence(auth, browserLocalPersistence);
             await signInWithRedirect(auth, provider);
         } catch (err: any) {
+            sessionStorage.removeItem('bin_admin_google_redirect_started');
             setLocalError(getFriendlyAuthError(err));
+            setDiagnostic(`Google sign-in could not start: ${err?.code || err?.message || 'unknown error'}`);
             setLocalLoading(false);
         }
     };
@@ -84,13 +115,16 @@ export default function UnifiedLogin() {
         setLocalError(null);
         try {
             console.log('🔍 [DIAG] Validating admin credentials...');
+            setDiagnostic('Checking admin email/password with Firebase Auth...');
             await setPersistence(auth, browserLocalPersistence);
             const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             if (result.user) {
+                setDiagnostic(`Signed in as ${result.user.email}. Verifying admin permission...`);
                 console.log('🛡️ [AUTH] Admin login successful for:', result.user.email);
             }
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
+            setDiagnostic(`Email/password sign-in failed: ${err?.code || err?.message || 'unknown error'}`);
             setLocalLoading(false);
         }
     };
@@ -104,12 +138,28 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         try {
-            await sendPasswordResetEmail(auth, email);
+            await sendPasswordResetEmail(auth, email.trim().toLowerCase());
             setLocalError('Password reset email sent. Check your inbox.');
+            setDiagnostic(`Password reset sent to ${email.trim().toLowerCase()}.`);
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
+            setDiagnostic(`Password reset failed: ${err?.code || err?.message || 'unknown error'}`);
         } finally {
             setLocalLoading(false);
+        }
+    };
+
+    const handleResetLocalSession = async () => {
+        try {
+            const lang = localStorage.getItem('bin_language');
+            localStorage.clear();
+            sessionStorage.clear();
+            if (lang) localStorage.setItem('bin_language', lang);
+            await signOut(auth);
+        } catch (err) {
+            console.warn('[ADMIN-AUTH] Reset local session warning:', err);
+        } finally {
+            window.location.href = '/login?reset=1';
         }
     };
 
@@ -120,6 +170,7 @@ export default function UnifiedLogin() {
                 <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">
                     {t('common.auth_sync')}
                 </p>
+                <p className="text-[#94a3b8] text-xs font-bold mt-4 text-center max-w-sm">{diagnostic}</p>
             </div>
         );
     }
@@ -217,6 +268,19 @@ export default function UnifiedLogin() {
                         </div>
                     </button>
 
+                    <div className="mt-5 p-3 rounded-2xl bg-white/5 border border-white/10 text-[#94a3b8] text-[11px] font-bold leading-relaxed">
+                        {diagnostic}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={handleResetLocalSession}
+                        disabled={loading}
+                        className="mt-4 w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest hover:text-[#C6A75E] transition-colors disabled:opacity-50"
+                    >
+                        Reset local login session
+                    </button>
+
                     <div className="mt-8 flex items-center justify-center gap-2 opacity-40">
                         <Lock className="w-3 h-3 text-[#94a3b8]" />
                         <span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
@@ -227,7 +291,7 @@ export default function UnifiedLogin() {
 
                 <div className="mt-12 text-center opacity-40">
                     <p className="text-[9px] text-[#94a3b8] font-black uppercase tracking-[0.3em]">
-                        BIN GROUP ADMIN PANEL
+                        BIN GROUP ADMIN PANEL · 2026-06-19 AUTH FIX
                     </p>
                 </div>
             </div>
