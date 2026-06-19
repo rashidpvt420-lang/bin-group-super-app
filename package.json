@@ -12,7 +12,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/wire-owner-trust-routes.mjs",
+    "prebuild": "node scripts/wire-owner-trust-routes.mjs && node scripts/wire-bin-connect-inbox-routes.mjs",
     "build": "vite build",
     "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
     "build:shared": "npm run build --workspace=@bin/shared",
