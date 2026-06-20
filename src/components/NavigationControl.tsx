@@ -3,7 +3,7 @@ import { Box, IconButton, Tooltip, Breadcrumbs, Link, Typography, Stack, alpha }
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, LayoutDashboard, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useRole } from '../context/RoleContext';
-import { binThemeTokens } from '../admin/theme/adminTheme';
+import { binThemeTokens } from '../theme/binGroupTheme';
 
 export const NavigationControl: React.FC = () => {
     const navigate = useNavigate();
