@@ -21,6 +21,7 @@ import InstitutionalReportsPanel from './components/reports/InstitutionalReports
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
+import BrandWatermark from './components/BrandWatermark';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -198,6 +199,7 @@ function Layout() {
                 overflow: 'hidden',
                 position: 'relative'
             }}>
+                <BrandWatermark opacity={0.035} />
                 {/* GLOBAL ADMIN TOP BAR */}
                 <Box sx={{ 
                     px: 4,
