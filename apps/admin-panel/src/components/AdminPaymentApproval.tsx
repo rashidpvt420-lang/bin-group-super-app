@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
+import { db, auth, functions, httpsCallable } from '../lib/firebase';
 import { 
   collection, query, where, onSnapshot 
 } from 'firebase/firestore';
@@ -12,7 +12,6 @@ import {
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Receipt, History } from 'lucide-react';
-import axios from 'axios';
 import { useLanguage } from '@bin/shared';
 
 interface Contract {
@@ -80,35 +79,25 @@ export default function AdminPaymentApproval() {
       const user = auth.currentUser;
       if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
 
-      const token = await user.getIdToken(true);
-      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
-      const functionUrl = 'https://adminverifypayment-sc33mcrduq-uc.a.run.app';
-      
-      const response = await axios.post(functionUrl, {
-        data: {
-          contractId: selectedContract.id,
-          paymentId: selectedContract.paymentId,
-          method: selectedContract.provider,
-          referenceId,
-          amountReceived: amountReceived || selectedContract.amount,
-          notes: notes || "Standard manual verification via Admin Hub.",
-          receivedAt: new Date().toISOString()
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const approveFn = httpsCallable(functions, 'adminApprovePayment');
+      const response = await approveFn({
+        paymentId: selectedContract.paymentId,
+        paymentReferenceId: referenceId.trim(),
+        amountReceived: Number(amountReceived) || selectedContract.amount,
+        notes: notes.trim() || "Standard manual verification via Admin Hub.",
+        method: selectedContract.provider,
+        receivedAt: new Date().toISOString()
       });
 
-      if (response.data?.result?.success) {
+      const result = response.data as any;
+      if (result?.status === 'SUCCESS') {
         alert(t('admin.payment_settled'));
       } else {
-        throw new Error(response.data?.result?.message || t('admin.payment_rejected'));
+        throw new Error(result?.message || t('admin.payment_rejected'));
       }
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Verification Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.failed_verify_settlement');
+      const errorMsg = error.message || t('admin.failed_verify_settlement');
       alert(errorMsg);
     } finally {
       setProcessingId(null);
