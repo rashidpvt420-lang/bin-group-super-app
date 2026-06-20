@@ -1484,7 +1484,7 @@ export const generateTrialROIReport = onCall({ cors: true }, async (request) => 
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5);
 
-        const passportSnap = await db.collection("property_passports").doc(`passport_${propertyId}`).get();
+        const passportSnap = await db.collection("propertyPassports").doc(propertyId).get();
         const passportData = passportSnap.exists ? passportSnap.data() : null;
         const rawHealthScore = passportData ? Number(passportData.assetHealthScore ?? passportData.healthScore) : NaN;
         const assetHealthScore = Number.isFinite(rawHealthScore) ? rawHealthScore : null;
