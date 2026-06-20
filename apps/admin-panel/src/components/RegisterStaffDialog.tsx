@@ -125,7 +125,7 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         };
     };
 
-    const salaryPackage = buildAutoSalaryPackage();
+    // The buildAutoSalaryPackage function can be kept in case it's needed later, but removing the unused invocation.
 
 const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

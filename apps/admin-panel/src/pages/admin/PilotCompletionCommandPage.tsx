@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { CheckCircle2, ClipboardCheck, GitPullRequest, Rocket, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, GitPullRequest, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/adminTheme';
 
