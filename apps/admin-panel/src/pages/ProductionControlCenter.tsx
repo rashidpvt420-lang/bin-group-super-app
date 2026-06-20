@@ -19,7 +19,8 @@ import {
     ExternalLink
 } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -40,6 +41,7 @@ export default function ProductionControlCenter() {
         openTickets: 0
     });
     const [latestBatches, setLatestBatches] = useState<any[]>([]);
+    const [actionRunning, setActionRunning] = useState<'aggregation' | 'invitations' | null>(null);
     const [systemHealth] = useState({
         sendGrid: 'operational',
         functions: 'operational',
@@ -126,6 +128,40 @@ export default function ProductionControlCenter() {
         });
 
         doc.save("BIN_GROUP_OPERATIONS_REPORT.pdf");
+    };
+
+    const handleRerunAggregation = async () => {
+        if (!window.confirm("FORCE RECALCULATE ALL PASSPORTS? This may take several minutes.")) return;
+        setActionRunning('aggregation');
+        try {
+            const propsSnap = await getDocs(collection(db, 'properties'));
+            const recalc = httpsCallable(functions, 'recalculatePropertyPassport');
+            const results = await Promise.allSettled(propsSnap.docs.map((p) => recalc({ propertyId: p.id })));
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            alert(`Portfolio aggregation complete: ${results.length - failed} of ${results.length} properties recalculated${failed ? `, ${failed} failed` : ''}.`);
+        } catch (err) {
+            console.error('Aggregation error:', err);
+            alert('Aggregation failed to run. Check console for details.');
+        } finally {
+            setActionRunning(null);
+        }
+    };
+
+    const handleResendFailedInvitations = async () => {
+        if (!window.confirm("RESEND ALL FAILED INVITATIONS?")) return;
+        setActionRunning('invitations');
+        try {
+            const failedSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('status', '==', 'failed')));
+            const resend = httpsCallable(functions, 'resendTenantInvitation');
+            const results = await Promise.allSettled(failedSnap.docs.map((d) => resend({ invitationId: d.id })));
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            alert(`Resend complete: ${results.length - failed} of ${results.length} invitations re-queued${failed ? `, ${failed} failed` : ''}.`);
+        } catch (err) {
+            console.error('Resend invitations error:', err);
+            alert('Resend failed to run. Check console for details.');
+        } finally {
+            setActionRunning(null);
+        }
     };
 
     if (loading) {
@@ -284,29 +320,23 @@ export default function ProductionControlCenter() {
                         >
                             BULK ARCHIVE PILOT TENANTS
                         </Button>
-                        <Button 
-                            fullWidth 
+                        <Button
+                            fullWidth
                             variant="outlined"
+                            disabled={actionRunning !== null}
                             sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
-                            onClick={() => {
-                                if(window.confirm("FORCE RECALCULATE ALL PASSPORTS? This may take several minutes.")) {
-                                    alert("Aggregation task queued.");
-                                }
-                            }}
+                            onClick={handleRerunAggregation}
                         >
-                            RERUN PORTFOLIO AGGREGATION
+                            {actionRunning === 'aggregation' ? 'RECALCULATING...' : 'RERUN PORTFOLIO AGGREGATION'}
                         </Button>
-                        <Button 
-                            fullWidth 
+                        <Button
+                            fullWidth
                             variant="outlined"
+                            disabled={actionRunning !== null}
                             sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
-                            onClick={() => {
-                                if(window.confirm("RESEND ALL FAILED INVITATIONS?")) {
-                                    alert("Dispatching recovery emails...");
-                                }
-                            }}
+                            onClick={handleResendFailedInvitations}
                         >
-                            RESEND FAILED INVITATIONS
+                            {actionRunning === 'invitations' ? 'SENDING...' : 'RESEND FAILED INVITATIONS'}
                         </Button>
                     </Stack>
                 </Grid>
