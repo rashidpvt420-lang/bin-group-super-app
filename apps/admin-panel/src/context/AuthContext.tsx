@@ -111,7 +111,15 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             console.log("🔍 [DIAG] Admin Auth handshake marked as READY.");
         };
 
+        const authStateWatchdog = window.setTimeout(() => {
+            if (authHandshakeResolved) return;
+            console.error('🛡️ [AUTH] onAuthStateChanged did not fire within watchdog window.');
+            setError('Admin token check timed out. Use Reset & Login, then retry.');
+            markAuthReady();
+        }, 12000);
+
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+            window.clearTimeout(authStateWatchdog);
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             
             if (!usr) {
@@ -229,6 +237,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         });
 
         return () => {
+            window.clearTimeout(authStateWatchdog);
             if (unsubscribe) unsubscribe();
         };
     }, []);
