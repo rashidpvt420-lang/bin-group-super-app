@@ -33,7 +33,6 @@ import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
-import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
 import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
 import ProfitabilityPage from './pages/admin/ProfitabilityPage';
@@ -122,7 +121,6 @@ function AppContent() {
                     <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
                     <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
-                    <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
