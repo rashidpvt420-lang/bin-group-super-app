@@ -329,17 +329,17 @@ export default function PricingPage() {
                     </Typography>
 
                     <Box sx={{ mt: 4, p: 3, bgcolor: '#f8fafc', borderRadius: 2, textAlign: 'center', border: '1px solid #e2e8f0' }}>
-                        <Typography variant="subtitle2" gutterBottom>DIGITAL EXECUTION</Typography>
+                        <Typography variant="subtitle2" gutterBottom>DIGITAL SUBMISSION</Typography>
                         <Typography variant="caption" display="block" color="textSecondary" sx={{ mb: 2 }}>
-                            By clicking "I ACCEPT" and signing digitally below, the Client agrees to be legally bound by these terms.
+                            By clicking "I ACCEPT" below, the Client agrees to submit the signature for verification. Manual signature is required.
                         </Typography>
                         <Button 
                             variant="contained" 
                             startIcon={<CheckCircleIcon />} 
-                            onClick={() => alert("Digital Signature Captured: BIN-AGR-" + Math.floor(Math.random() * 9000 + 1000) + "\nContract legally executed via BIN Secure Gateway. PDF copy sent to your email and Media Vault.")}
+                            onClick={() => alert("Signature review pending. Manual signature required.")}
                             sx={{ bgcolor: '#0f172a', px: 4, py: 1.5 }}
                         >
-                            I Accept &amp; Sign Digitally
+                            I Accept (Signature Review Pending)
                         </Button>
                         <Typography variant="caption" display="block" sx={{ mt: 1 }}>DATE: {new Date().toLocaleDateString()}</Typography>
                     </Box>

@@ -119,7 +119,7 @@ export default function TenantPaymentsPage() {
         Payments & Invoices
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        View all rent invoices, maintenance charges, and make payments via bank transfer or Stripe.
+        View all rent invoices and maintenance charges. Current accepted payment methods are Cash and Cheque at BIN GROUP HQ (Bank Transfer coming soon, Credit Card/Stripe deferred to Phase 2).
       </Typography>
 
       {/* Summary row */}
@@ -247,8 +247,12 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 4, borderRadius: 4, border: `1px solid ${alpha(gold, 0.3)}` }}>
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
                 <Building2 color={gold} size={24} />
-                <Typography variant="h6" fontWeight="950" color="#111827">UAE Bank Transfer Details</Typography>
+                <Typography variant="h6" fontWeight="950" color="#111827">UAE Bank Transfer (Coming Soon)</Typography>
               </Stack>
+
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                Bank transfer is coming soon. Currently, the accepted payment methods are Cash and Cheque.
+              </Alert>
 
               {[
                 { label: 'Bank', value: BANK_NAME, key: 'bank' },
@@ -280,7 +284,7 @@ export default function TenantPaymentsPage() {
               ))}
 
               <Alert severity="info" sx={{ mt: 2 }}>
-                Use your <strong>invoice number</strong> or <strong>unit number</strong> as the payment reference so finance can reconcile your transfer.
+                Use your <strong>invoice number</strong> or <strong>unit number</strong> as the payment reference so finance can reconcile your transfer once active.
               </Alert>
             </Paper>
           </Grid>
@@ -289,10 +293,10 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 4, borderRadius: 4, border: '1px solid #E5E7EB', bgcolor: '#FAFAFA' }}>
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
                 <MessageCircle color="#25D366" size={24} />
-                <Typography variant="h6" fontWeight="950" color="#111827">Confirm on WhatsApp</Typography>
+                <Typography variant="h6" fontWeight="950" color="#111827">Confirm Payment via WhatsApp</Typography>
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                After making your bank transfer, send us the receipt on WhatsApp so our finance team can reconcile your payment instantly.
+                Currently accepted payment methods are Cash and Cheque. Please contact us on WhatsApp to arrange payment, schedule a pickup, or send your receipt.
               </Typography>
               <Button
                 fullWidth
@@ -300,12 +304,12 @@ export default function TenantPaymentsPage() {
                 size="large"
                 startIcon={<MessageCircle size={20} />}
                 onClick={() => {
-                  const msg = encodeURIComponent(`Hello BIN GROUP,\n\nI have completed a bank transfer payment.\nTenant: ${user?.displayName || user?.email || ''}\n\nPlease confirm receipt and update my account. Thank you.`);
+                  const msg = encodeURIComponent(`Hello BIN GROUP,\n\nI would like to make a payment for my unit.\nTenant: ${user?.displayName || user?.email || ''}\n\nPlease help me arrange a Cash/Cheque payment. Thank you.`);
                   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
                 }}
                 sx={{ bgcolor: '#25D366', color: '#FFF', fontWeight: 950, borderRadius: 3, py: 1.5, mb: 2 }}
               >
-                SEND RECEIPT ON WHATSAPP
+                CONTACT VIA WHATSAPP
               </Button>
               <Button
                 fullWidth
@@ -322,22 +326,22 @@ export default function TenantPaymentsPage() {
               <Box sx={{ p: 2.5, bgcolor: alpha(gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(gold, 0.2)}` }}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                   <CreditCard size={18} color={gold} />
-                  <Typography fontWeight="950" color="#111827">Online Card Payment</Typography>
+                  <Typography fontWeight="950" color="#111827">Online Card Payment (Coming Soon - Phase 2)</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Secure card payment via Stripe is coming soon. Contact us via WhatsApp to arrange an instant payment link.
+                  Secure card payment via Stripe is deferred to Phase 2. Currently, please pay via Cash or Cheque.
                 </Typography>
                 <Button
                   fullWidth
                   variant="outlined"
                   startIcon={<ExternalLink size={16} />}
                   onClick={() => {
-                    const msg = encodeURIComponent('Hello BIN GROUP,\n\nI would like to pay my rent via card. Please send me a secure payment link. Thank you.');
+                    const msg = encodeURIComponent('Hello BIN GROUP,\n\nI would like to make a payment. What are the Cash/Cheque instructions? Thank you.');
                     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
                   }}
                   sx={{ borderColor: gold, color: gold, fontWeight: 900, borderRadius: 2 }}
                 >
-                  REQUEST PAYMENT LINK
+                  REQUEST PAYMENT INFO
                 </Button>
               </Box>
             </Paper>
