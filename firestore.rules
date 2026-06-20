@@ -87,21 +87,16 @@ service cloud.firestore {
     function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
     function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
     function staffCanCreate(data) { return signedIn() && (isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
-    function isTechnicianActor() {
+    function hasTechnicianDispatchAuthority() {
       return signedIn() && (
-        ('role' in request.auth.token && request.auth.token.role == 'technician') ||
-        ('userRole' in request.auth.token && request.auth.token.userRole == 'technician') ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'technician') ||
-        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician')
+        request.auth.token.role in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
+        request.auth.token.userRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
+        request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']
       );
     }
 
-    function hasTechnicianDispatchAuthority() {
-      return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
-    }
-
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
 
     function staffRequestCreate(data) {
@@ -193,7 +188,7 @@ service cloud.firestore {
     }
 
     function safeOpenMissionClaim() {
-      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
         (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
@@ -400,7 +395,7 @@ service cloud.firestore {
 
     match /maintenanceTickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);
+      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
       allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
       match /messages/{messageId} {
