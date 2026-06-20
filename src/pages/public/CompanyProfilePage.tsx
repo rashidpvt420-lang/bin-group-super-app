@@ -1,336 +1,120 @@
-import React, { useMemo } from 'react';
-import { Box, Button, Card, CardContent, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import {
-  Building2,
-  Briefcase,
-  Camera,
-  CheckCircle2,
-  ClipboardCheck,
-  FileText,
-  Home,
-  LogIn,
-  Mail,
-  MapPin,
-  MessageSquare,
-  Navigation,
-  Phone,
-  PlayCircle,
-  ShieldCheck,
-  Sparkles,
-  Timer,
-  Users,
-  WalletCards,
-  Wrench,
-  Globe,
-} from 'lucide-react';
+import React from 'react';
+import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Award, Briefcase, Building2, CheckCircle2, Globe, Home, LogIn, Mail, MapPin, MessageSquare, Phone, ShieldCheck, Sparkles, Users, Wrench, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import BrandWatermark from '../../components/BrandWatermark';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'ceo@bin-groups.com' };
-const ink = '#111827';
-const muted = '#667085';
-const line = '#E8E3D7';
-const platinum = '#F8F9FB';
 const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
-const radius = { section: 3, card: 2.25, button: 2 };
+const ink = '#111827';
+const line = '#E8E3D7';
+const muted = '#667085';
 
+const serviceAreas = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
 
+const content = {
+  en: {
+    badge: 'COMPANY PROFILE',
+    title: 'BIN GROUP',
+    headline: 'A UAE property operations company built for owner trust, tenant comfort, technician accountability, and portfolio ROI.',
+    subline: 'Maintenance, property management, tenant service, technician dispatch, broker onboarding, RFQ/vendor control, HR readiness, AI triage, WhatsApp intake, contracts, invoices, and proof-based reporting in one operating system.',
+    license: 'All Kind Building Projects Contracting LLC S.P.C · Licensed in Abu Dhabi, UAE · Trade licence available on request',
+    stats: [['2010', 'Founded in Al Ain'], ['5', 'Role portals'], ['8', 'UAE emirates'], ['500+', 'Portfolio-ready scale']],
+    navStart: 'Start Property Details', navLogin: 'Portal Login', navHome: 'Home', lang: 'AR',
+    aboutTitle: 'What BIN GROUP Does',
+    about: 'BIN GROUP solves the daily property-care gap between owners, tenants, technicians, brokers, vendors, and staff. We turn maintenance from phone calls and promises into a documented workflow: request, triage, quote, approval, dispatch, evidence, tenant review, ledger, invoice, and report.',
+    sections: {
+      services: 'What We Do', problems: 'Problems We Solve', owners: 'What Owners Need', tenants: 'What Tenants Need', roi: 'ROI & Asset Value', hr: 'HR & Workforce Readiness', workflow: 'Trust Workflow', trust: 'Why Owners Can Trust Us', coverage: 'Service Areas', contact: 'Start With BIN GROUP'
+    },
+    services: [
+      ['Maintenance Contracts', 'AMC and on-demand maintenance for villas, apartments, towers, hotels, schools, offices, and portfolios.'],
+      ['Property Management', 'Owner coordination, tenant service, condition records, vendor supervision, renewals, and portfolio reporting.'],
+      ['Tenant Service Desk', 'No-call maintenance requests with photos, emergency flags, live status, proof review, and disputes.'],
+      ['Technician Dispatch', 'GPS-aware job cards, SLA expectations, before/after proof, closure notes, and performance visibility.'],
+      ['Broker & Owner Growth', 'Referral capture, owner onboarding, commission visibility, property intake, quote flow, and contract activation.'],
+      ['AI + WhatsApp Intake', 'AI-assisted triage, trade detection, WhatsApp intake, RFQ trigger, and faster admin review.'],
+      ['Trust & Compliance', 'Owner approval, vendor RFQ, maintenance ledger, PDPL governance, evidence vault, and reports.'],
+      ['HR Operations', 'Staff self-service, documents, payslip support, HR letters, safety signals, and technician readiness.'],
+    ],
+    problems: [
+      'Too many maintenance calls with no tracking', 'Unclear repair costs and weak owner control', 'Technician work without evidence', 'Vendor work without approval trail', 'Tenant dissatisfaction from slow updates', 'No portfolio health or ROI visibility', 'Manual HR and staff document chaos', 'No audit trail for disputes and payments'
+    ],
+    owners: ['Clear quote before contract', '15% mobilization and payment-plan visibility', 'Approval before high-cost work', 'Monthly reports and photo proof', 'ROI and cost visibility', 'Property passport and asset health', 'Vendor/RFQ control', 'Direct CEO/admin contact'],
+    tenants: ['No-call maintenance request', 'Photo/video issue evidence', 'Emergency flagging', 'Live request status', 'Technician proof review', 'Approve or dispute after repair', 'English/Arabic portal', 'Less delay and pressure'],
+    roi: ['Reduce random repairs', 'Prevent payment without proof', 'Improve tenant retention', 'Protect property value', 'Forecast maintenance cost', 'Standardize vendors and technicians', 'Reduce admin time', 'Create owner/institutional reports'],
+    hr: ['Digital staff dossier', 'Document upload and renewal', 'Leave, sick leave, and overtime requests', 'Payslip support', 'HR letters', 'Wellbeing and safety signals', 'Technician readiness before dispatch', 'Internal audit logs'],
+    workflow: ['WhatsApp / tenant portal', 'AI triage and trade detection', 'Maintenance ticket', 'RFQ/vendor comparison', 'Owner approval', 'Technician dispatch', 'Before/after proof', 'Tenant approval or dispute', 'Ledger, invoice, and report'],
+    trust: ['Licensed UAE company identity', 'No exaggerated promises: workflow and proof are shown', 'Owner approval before major cost', 'Photo evidence for every job', 'Reviewable maintenance ledger', 'Arabic/English support', 'Direct WhatsApp, email, and phone', 'Designed for portfolio and institutional scale'],
+    contactText: 'Contact BIN GROUP for a maintenance contract, property management, owner onboarding, pilot property, or portfolio operation.',
+    ctaStart: 'Start Your Contract', ctaWhatsApp: 'WhatsApp BIN GROUP', ctaEmail: 'Email Us', location: 'Al Ain, United Arab Emirates',
+  },
+  ar: {
+    badge: 'ملف الشركة', title: 'BIN GROUP', headline: 'شركة تشغيل عقاري في الإمارات مبنية على ثقة المالك، راحة المستأجر، محاسبة الفني، وقيمة العائد.',
+    subline: 'صيانة، إدارة عقارات، خدمة مستأجر، إرسال فنيين، وسطاء، RFQ وموردين، جاهزية HR، فرز AI، واتساب، عقود، فواتير، وتقارير إثبات في نظام واحد.',
+    license: 'All Kind Building Projects Contracting LLC S.P.C · مرخصة في أبوظبي، الإمارات · رخصة التجارة متاحة عند الطلب',
+    stats: [['2010', 'تأسست في العين'], ['5', 'بوابات تشغيل'], ['8', 'إمارات'], ['500+', 'جاهزية محافظ']],
+    navStart: 'ابدأ تفاصيل العقار', navLogin: 'دخول البوابة', navHome: 'الرئيسية', lang: 'EN',
+    aboutTitle: 'ماذا تفعل BIN GROUP',
+    about: 'BIN GROUP تحل فجوة العناية العقارية بين المالك والمستأجر والفني والوسيط والمورد والموظف. نحول الصيانة من مكالمات ووعود إلى سير موثق: طلب، فرز، عرض، موافقة، إرسال، إثبات، مراجعة مستأجر، سجل، فاتورة، وتقرير.',
+    sections: { services: 'ما نقدمه', problems: 'ما الذي نحلّه', owners: 'احتياجات المالك', tenants: 'احتياجات المستأجر', roi: 'العائد وقيمة الأصل', hr: 'جاهزية HR والفريق', workflow: 'سير الثقة', trust: 'لماذا يثق بنا المالك', coverage: 'مناطق الخدمة', contact: 'ابدأ مع BIN GROUP' },
+    services: [
+      ['عقود الصيانة', 'AMC وصيانة حسب الطلب للفلل، الشقق، الأبراج، الفنادق، المدارس، المكاتب، والمحافظ.'],
+      ['إدارة العقارات', 'تنسيق المالك، خدمة المستأجر، سجلات الحالة، الموردين، التجديدات، وتقارير المحفظة.'],
+      ['مركز خدمة المستأجر', 'طلبات بدون اتصالات مع صور، طوارئ، حالة مباشرة، مراجعة الإثبات، واعتراضات.'],
+      ['إرسال الفنيين', 'بطاقات عمل، SLA، صور قبل/بعد، ملاحظات إغلاق، وقياس أداء.'],
+      ['نمو المالك والوسيط', 'إحالات، انضمام المالك، عمولات، إدخال عقار، عرض سعر، وتفعيل عقد.'],
+      ['AI وواتساب', 'فرز ذكي، كشف تخصص، واتساب، RFQ، ومراجعة إدارية أسرع.'],
+      ['الثقة والامتثال', 'موافقة المالك، RFQ، سجل صيانة، حوكمة PDPL، خزنة إثبات، وتقارير.'],
+      ['تشغيل HR', 'خدمة ذاتية، وثائق، كشوف راتب، خطابات، سلامة، وجاهزية الفني.'],
+    ],
+    problems: ['مكالمات صيانة كثيرة بدون تتبع', 'تكاليف إصلاح غير واضحة', 'عمل فني بدون إثبات', 'موردون بدون موافقة', 'تأخر يزعج المستأجر', 'لا رؤية لصحة المحفظة والعائد', 'فوضى HR والوثائق', 'لا سجل تدقيق للنزاعات والمدفوعات'],
+    owners: ['عرض واضح قبل العقد', '15% تعبئة وخطة دفع', 'موافقة قبل الأعمال العالية', 'تقارير وصور إثبات', 'رؤية عائد وتكلفة', 'جواز عقار وصحة أصول', 'تحكم RFQ والمورد', 'تواصل مباشر مع الإدارة'],
+    tenants: ['طلب بدون اتصالات', 'رفع صورة أو فيديو', 'حالة طوارئ', 'تتبع مباشر', 'مراجعة إثبات الفني', 'تأكيد أو اعتراض', 'بوابة عربية/إنجليزية', 'تقليل التأخير والضغط'],
+    roi: ['تقليل الإصلاح العشوائي', 'منع الدفع بدون إثبات', 'تحسين بقاء المستأجر', 'حماية قيمة العقار', 'توقع تكلفة الصيانة', 'توحيد الموردين والفنيين', 'تقليل وقت الإدارة', 'تقارير للملاك والمؤسسات'],
+    hr: ['ملف موظف رقمي', 'رفع وتجديد الوثائق', 'إجازات ومرض وأوفر تايم', 'دعم كشوف الراتب', 'خطابات HR', 'إشارات سلامة ورفاهية', 'جاهزية الفني قبل الإرسال', 'سجلات تدقيق داخلية'],
+    workflow: ['واتساب / بوابة المستأجر', 'فرز AI والتخصص', 'تذكرة صيانة', 'RFQ ومقارنة موردين', 'موافقة المالك', 'إرسال الفني', 'إثبات قبل/بعد', 'تأكيد أو اعتراض المستأجر', 'سجل وفاتورة وتقرير'],
+    trust: ['هوية شركة مرخصة في الإمارات', 'لا وعود مبالغ فيها: النظام والإثبات ظاهر', 'موافقة المالك قبل التكلفة الكبيرة', 'صور إثبات لكل عمل', 'سجل صيانة قابل للمراجعة', 'دعم عربي/إنجليزي', 'واتساب وبريد وهاتف مباشر', 'مصمم للمحافظ والمؤسسات'],
+    contactText: 'تواصل مع BIN GROUP لعقد صيانة، إدارة عقار، انضمام مالك، تجربة عقار، أو تشغيل محفظة.',
+    ctaStart: 'ابدأ عقدك الآن', ctaWhatsApp: 'تواصل واتساب', ctaEmail: 'راسلنا', location: 'العين، الإمارات العربية المتحدة',
+  },
+};
 
-function getCopy(lang: 'en' | 'ar') {
-  const ar = lang === 'ar';
-  return {
-    ar,
-    brand: ar ? 'مجموعة بن' : 'BIN GROUP',
-    navHome: ar ? 'الرئيسية' : 'Home',
-    navStart: ar ? 'ابدأ تفاصيل العقار' : 'Start Property Details',
-    navLogin: ar ? 'دخول البوابة' : 'Portal Login',
-
-    navQuote: ar ? 'عرض سعر فوري' : 'Get Instant Quote',
-    navDemo: ar ? 'العرض التوضيحي' : 'Demo Reel',
-    title: ar ? 'BIN GROUP - الصيانة العامة وإدارة العقارات' : 'BIN GROUP - General Maintenance & Property Management',
-    subtitle: ar
-      ? 'صفحة واحدة رسمية تعرض الشركة، نموذج التشغيل، الخدمات، العرض التوضيحي، إثبات العمل، وتواصل الإدارة.'
-      : 'One official profile for the company, operating model, services, demo reel, proof workflow, and executive contact.',
-    badge1: ar ? 'جذور من العين منذ 2010' : 'Rooted in Al Ain since 2010',
-    badge2: ar ? 'شركة مرخصة في الإمارات' : 'Licensed UAE Company',
-    badge3: ar ? 'صيانة + إدارة عقارات' : 'Maintenance + Property Management',
-    request: ar ? 'طلب عقد أو عرض سعر' : 'Request Contract or Quote',
-    whatsapp: ar ? 'تواصل عبر واتساب' : 'WhatsApp BIN GROUP',
-    licenceTitle: ar ? 'الرخصة ونموذج التشغيل' : 'Licence & Operating Model',
-    licence: ar
-      ? 'All Kind Building Projects Contracting - L.L.C - S.P.C | يتم عرض رقم الرخصة التجارية وجهة الإصدار وتاريخ الانتهاء داخل التطبيق عند التفعيل النهائي.'
-      : 'All Kind Building Projects Contracting - L.L.C - S.P.C | Trade licence number, issuing authority, and expiry date should be displayed in the app before final public launch.',
-    aboutTitle: ar ? 'من نحن' : 'About the Company',
-    about: ar
-      ? 'بدأت BIN GROUP كعمل محلي صغير في مدينة العين عام 2010، يقدم خدمات عملية في الصيانة ومتابعة احتياجات العقارات اليومية. واليوم تطورت الشركة إلى مرحلة شركة مرخصة ومنظمة، تجمع بين الخبرة الميدانية والخدمة المهنية والسجلات الرقمية الواضحة. نعمل لخدمة الملاك والمستأجرين والعقارات السكنية والتجارية بطريقة أكثر شفافية وتنظيماً.'
-      : 'BIN GROUP began as a small local maintenance operation in Al Ain in 2010, supporting practical property-care needs in the local market. Today, the company has moved into a licensed and structured LLC phase, combining field experience, professional service standards, and clear digital records. We support owners, tenants, and residential or commercial properties with a more transparent and organised service model.',
-    servicesTitle: ar ? 'خدماتنا' : 'Our Services',
-    services: ar
-      ? [
-          ['عقود الصيانة', 'عقود صيانة مخصصة للفيلات والشقق والمباني والفنادق والمدارس والعيادات والمكاتب والمحافظ العقارية.'],
-          ['إدارة العقارات', 'تنسيق الملاك والمستأجرين، متابعة الشكاوى، سجلات الحالة، الإشراف على المقاولين، وتقارير العقار.'],
-          ['تشغيل الفنيين', 'بطاقات مهام، موقع، ملاحظات سلامة، إثبات قبل وبعد، وسجل إنجاز واضح داخل التطبيق.'],
-          ['جواز العقار الرقمي', 'سجل رقمي لكل عقار يشمل العقود والطلبات والفواتير والتقارير والصيانة والتحديثات.'],
-        ]
-      : [
-          ['Maintenance Contracts', 'Custom maintenance contracts for villas, apartments, buildings, hotels, schools, clinics, offices, and property portfolios.'],
-          ['Property Management', 'Owner and tenant coordination, complaint follow-up, condition records, contractor supervision, and property reporting.'],
-          ['Technician Operations', 'Job cards, location context, safety notes, before-and-after proof, and clear completion records inside the app.'],
-          ['Digital Property Passport', 'A digital record for each property covering contracts, requests, invoices, reports, maintenance activity, and updates.'],
-        ],
-    demoTitle: ar ? 'عرض BIN GROUP التشغيلي' : 'BIN GROUP Mission Demo Reel',
-    demoSubtitle: ar
-      ? 'عرض مرئي يثبت رحلة المالك والمستأجر والفني والوسيط من الطلب إلى الإرسال عبر GPS، إثبات قبل وبعد، العقد، الدفع، والتقرير.'
-      : 'A visual proof reel showing owner, tenant, technician, broker, GPS dispatch, before-and-after evidence, contract, payment, and reporting flows.',
-    demoScenes: ar
-      ? [
-          ['تطبيق المالك', 'عرض السعر، العقد، خطة الدفع، لوحة التحكم.'],
-          ['طلب المستأجر', 'طلب خدمة مع صورة، أولوية، وتتبع الحالة.'],
-          ['إرسال الفني عبر GPS', 'توجيه أقرب فني موثق إلى العقار.'],
-          ['إثبات قبل وبعد', 'صور قبل وبعد قبل إغلاق الخدمة أو تحرير الدفع.'],
-          ['العقد / الدفع / التقرير', 'عقد PDF، فاتورة، خطة دفع، تقرير، وسجل العقار.'],
-          ['تدفق الوسيط', 'تسجيل الإحالة، تسليم المالك، ووضوح العمولة.'],
-          ['استوديو التصميم AI', 'خيارات داخلية وخارجية قبل موافقة المالك.'],
-        ]
-      : [
-          ['Owner App', 'Quote, contract, payment plan, and active dashboard.'],
-          ['Tenant Photo Request', 'Service request with image, priority, and status tracking.'],
-          ['Technician GPS Dispatch', 'Nearest verified technician routed to the property.'],
-          ['Before / After Evidence', 'Visual proof before closeout or payment release.'],
-          ['Contract / Payment / Report Flow', 'PDF contract, invoice, payment plan, report, and property history.'],
-          ['Broker Flow', 'Referral registration, owner handover, and commission visibility.'],
-          ['AI Design Studio', 'Interior and exterior concept options before owner approval.'],
-        ],
-    innovationTitle: ar ? 'الابتكار والعمليات بدون أوراق' : 'Innovation & Paperless Operations',
-    innovation: ar
-      ? 'تعمل BIN GROUP على تطوير نظام خدمة ذاتية للموظفين مصمم لفرق الصيانة وإدارة العقارات في الإمارات. يساعد النظام الموظفين على طلب الإجازات، رفع المستندات، متابعة الحضور، مراجعة المهام، طلب خطابات الموارد البشرية، تتبع مستندات الامتثال، رفع ملاحظات السلامة، وطلب الأدوات ومعدات الوقاية بدون معاملات ورقية.'
-      : 'BIN GROUP is developing a staff self-service system designed for UAE maintenance and property management field teams. The system helps employees request leave, upload documents, review attendance context, track assigned jobs, request HR letters, manage compliance documents, report safety issues, and request tools or PPE without manual paperwork.',
-    proofTitle: ar ? 'كيف نبني الثقة' : 'How We Build Trust',
-    proof: ar
-      ? ['عرض بيانات الشركة والرخصة بوضوح', 'نطاق خدمة واضح بدون مبالغات', 'صور قبل وبعد وتقارير قابلة للمراجعة', 'تواصل مباشر عبر الهاتف والواتساب والبريد الإلكتروني', 'دعم ثنائي اللغة مع واجهة عربية RTL']
-      : ['Clear company and licence information', 'Defined service scope without exaggeration', 'Before-and-after proof and reviewable reports', 'Direct phone, WhatsApp, and email contact', 'Bilingual English/Arabic support with RTL Arabic layout'],
-    missionTitle: ar ? 'المهمة' : 'Mission',
-    mission: ar
-      ? 'تقديم خدمات صيانة وإدارة عقارات موثوقة تحمي ممتلكات العملاء، تقلل الضغط التشغيلي، وتوفر متابعة واضحة ومهنية من خلال السجلات الرقمية والمساءلة الميدانية.'
-      : 'To deliver dependable maintenance and property management services that protect clients’ properties, reduce operational stress, and improve daily property care through clear communication, digital records, and accountable field execution.',
-    contactTitle: ar ? 'تواصل الإدارة' : 'Executive Contact',
-    location: ar ? 'العين، الإمارات العربية المتحدة' : 'Al Ain, United Arab Emirates',
-    footer: ar ? 'عناية موثوقة بالعقارات، بجذور من مدينة العين.' : 'Trusted maintenance and property care, rooted in Al Ain.',
-  };
+function Card({ title, body, icon }: { title: string; body: string; icon: React.ReactNode }) {
+  return <Paper sx={{ p: 3, height: '100%', borderRadius: 3, border: `1px solid ${line}`, boxShadow: '0 14px 36px rgba(17,24,39,.05)' }}><Stack spacing={1.3}><Box sx={{ p: 1.1, borderRadius: 2, bgcolor: alpha(gold, .12), color: gold, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>{icon}</Box><Typography fontWeight={950} color={ink}>{title}</Typography><Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, fontWeight: 650 }}>{body}</Typography></Stack></Paper>;
 }
 
-function TrustChip({ label }: { label: string }) {
-  return <Chip label={label} sx={{ borderRadius: 1.2, bgcolor: alpha(gold, 0.12), color: '#6F5522', border: `1px solid ${alpha(gold, 0.22)}`, fontWeight: 950 }} />;
+function Checklist({ items, dark = false }: { items: string[]; dark?: boolean }) {
+  return <Grid container spacing={1.4}>{items.map((item) => <Grid item xs={12} sm={6} md={3} key={item}><Stack direction="row" spacing={1.1} alignItems="center" sx={{ p: 2, height: '100%', borderRadius: 2.5, bgcolor: dark ? 'rgba(255,255,255,.045)' : '#fff', border: `1px solid ${dark ? alpha(gold, .16) : line}` }}><CheckCircle2 size={18} color={gold} /><Typography sx={{ color: dark ? 'rgba(255,255,255,.78)' : '#374151', fontWeight: 850, lineHeight: 1.45 }}>{item}</Typography></Stack></Grid>)}</Grid>;
 }
 
-function NavButton({ children, onClick, contained = false, icon }: { children: React.ReactNode; onClick: () => void; contained?: boolean; icon?: React.ReactNode }) {
-  return (
-    <Button
-      onClick={onClick}
-      startIcon={icon}
-      sx={{
-        minHeight: 46,
-        px: 2.2,
-        borderRadius: radius.button,
-        fontWeight: 950,
-        color: contained ? '#111827' : gold,
-        border: contained ? 'none' : `1px solid ${alpha(gold, 0.38)}`,
-        background: contained ? `linear-gradient(135deg, ${goldLight}, ${gold})` : '#FFFFFF',
-        boxShadow: contained ? `0 12px 28px ${alpha(gold, 0.22)}` : 'none',
-      }}
-    >
-      {children}
-    </Button>
-  );
+function Section({ chip, title, children, dark = false, subtitle }: { chip: string; title: string; children: React.ReactNode; dark?: boolean; subtitle?: string }) {
+  return <Box sx={{ py: 9, bgcolor: dark ? '#111827' : '#fff', borderBottom: `1px solid ${dark ? alpha(gold, .18) : line}` }}><Container maxWidth="lg"><Box sx={{ textAlign: 'center', mb: 5 }}><Chip label={chip} sx={{ mb: 2, bgcolor: alpha(gold, dark ? .13 : .1), color: dark ? gold : '#6F5522', fontWeight: 950, border: `1px solid ${alpha(gold, .25)}` }} /><Typography variant="h2" fontWeight={950} sx={{ color: dark ? '#fff' : ink }}>{title}</Typography>{subtitle && <Typography variant="h6" sx={{ mt: 1.5, color: dark ? 'rgba(255,255,255,.62)' : muted, maxWidth: 830, mx: 'auto', lineHeight: 1.8, fontWeight: 700 }}>{subtitle}</Typography>}</Box>{children}</Container></Box>;
 }
 
 export default function CompanyProfilePage() {
   const navigate = useNavigate();
   const { lang, setLang, isRTL } = useLanguage();
-  const copy = useMemo(() => getCopy(lang), [lang]);
+  const c = content[lang];
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
-  const textAlign = isRTL ? 'right' : 'left';
-  const icons = [<Wrench key="wrench" />, <Briefcase key="briefcase" />, <Users key="users" />, <FileText key="file" />];
-  const demoIcons = [<Building2 key="owner" />, <Camera key="tenant" />, <Navigation key="gps" />, <ClipboardCheck key="evidence" />, <WalletCards key="finance" />, <Briefcase key="broker" />, <Sparkles key="ai" />];
+  const icons = [<Wrench size={22} />, <Building2 size={22} />, <Users size={22} />, <Zap size={22} />, <Briefcase size={22} />, <Sparkles size={22} />, <ShieldCheck size={22} />, <Award size={22} />];
 
-  return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}>
-      <BrandWatermark opacity={0.07} />
-      <Box sx={{ position: 'relative', zIndex: 1 }}>
-        <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(18px)', borderBottom: `1px solid ${line}` }}>
-          <Container maxWidth="lg" sx={{ py: 1.2, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
-            <Button onClick={() => navigate('/')} sx={{ p: 0, minWidth: 0, color: ink, mr: 'auto' }}>
-              <Stack direction="row" spacing={1.2} alignItems="center">
-                <Box component="img" src="/logo.png" sx={{ width: 42, height: 42, borderRadius: 1.1, boxShadow: '0 10px 22px rgba(17,24,39,.10)' }} />
-                <Typography fontWeight={950}>{copy.brand}</Typography>
-              </Stack>
-            </Button>
-            <NavButton onClick={() => navigate('/')} icon={<Home size={17} />}>{copy.navHome}</NavButton>
-            <NavButton onClick={() => navigate('/onboarding')} contained>{copy.navStart}</NavButton>
-            <NavButton onClick={() => navigate('/login')} icon={<LogIn size={17} />}>{copy.navLogin}</NavButton>
-            <NavButton onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} icon={<PlayCircle size={17} />}>{copy.navDemo}</NavButton>
-            <NavButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>{lang === 'ar' ? 'EN' : 'AR'}</NavButton>
-          </Container>
-        </Box>
-
-        <Box sx={{ position: 'relative', overflow: 'hidden', borderBottom: `1px solid ${line}`, background: `linear-gradient(135deg, ${platinum} 0%, #FFFFFF 58%, ${alpha(gold, 0.08)} 100%)` }}>
-          <Container maxWidth="lg" sx={{ py: { xs: 7, md: 12 } }}>
-            <Grid container spacing={5} alignItems="center">
-              <Grid item xs={12} md={7}>
-                <Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                    <TrustChip label={copy.badge1} />
-                    <TrustChip label={copy.badge2} />
-                    <TrustChip label={copy.badge3} />
-                  </Stack>
-                  <Typography variant="h1" fontWeight={950} sx={{ fontSize: { xs: '2.35rem', md: '4rem' }, lineHeight: 1, textAlign }}>{copy.title}</Typography>
-                  <Typography variant="h5" sx={{ color: muted, fontWeight: 750, lineHeight: 1.6, textAlign, maxWidth: 820 }}>{copy.subtitle}</Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                    <Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ borderRadius: radius.button, bgcolor: gold, color: '#111827', fontWeight: 950, px: 4, py: 1.5 }}>{copy.request}</Button>
-                    <Button variant="outlined" startIcon={<MessageSquare size={18} />} onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ borderRadius: radius.button, color: ink, borderColor: '#D6C99F', fontWeight: 950, px: 4, py: 1.5 }}>{copy.whatsapp}</Button>
-                  </Stack>
-                </Stack>
-              </Grid>
-              <Grid item xs={12} md={5}>
-                <Paper sx={{ p: 4, borderRadius: radius.section, bgcolor: 'rgba(255,255,255,.88)', border: `1px solid ${line}`, boxShadow: '0 24px 70px rgba(17,24,39,.08)' }}>
-                  <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                    <ShieldCheck color={gold} size={42} />
-                    <Typography variant="caption" sx={{ color: muted, fontWeight: 950 }}>{copy.licenceTitle}</Typography>
-                    <Typography sx={{ fontWeight: 850, lineHeight: 1.8, textAlign }}>{copy.licence}</Typography>
-                  </Stack>
-                </Paper>
-              </Grid>
-            </Grid>
-          </Container>
-        </Box>
-
-        <Container maxWidth="lg" sx={{ py: 8 }}>
-          <Grid container spacing={4}>
-            <Grid item xs={12} md={7}>
-              <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, border: `1px solid ${line}`, boxShadow: '0 18px 48px rgba(17,24,39,.06)', bgcolor: 'rgba(255,255,255,.92)' }}>
-                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Building2 color={gold} size={36} />
-                  <Typography variant="h3" fontWeight={950} sx={{ textAlign }}>{copy.aboutTitle}</Typography>
-                  <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.95, textAlign }}>{copy.about}</Typography>
-                </Stack>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={5}>
-              <Paper sx={{ p: { xs: 3, md: 5 }, height: '100%', borderRadius: radius.section, border: `1px solid ${line}`, boxShadow: '0 18px 48px rgba(17,24,39,.06)', bgcolor: 'rgba(255,255,255,.92)' }}>
-                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Sparkles color={gold} size={36} />
-                  <Typography variant="h4" fontWeight={950} sx={{ textAlign }}>{copy.missionTitle}</Typography>
-                  <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.9, textAlign }}>{copy.mission}</Typography>
-                </Stack>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Container>
-
-        <Box sx={{ py: 8, bgcolor: platinum, borderTop: `1px solid ${line}`, borderBottom: `1px solid ${line}` }}>
-          <Container maxWidth="lg">
-            <Typography variant="h2" fontWeight={950} sx={{ textAlign: 'center', mb: 5 }}>{copy.servicesTitle}</Typography>
-            <Grid container spacing={3}>
-              {copy.services.map((service, index) => (
-                <Grid item xs={12} md={3} key={service[0]}>
-                  <Card sx={{ height: '100%', borderRadius: radius.card, border: `1px solid ${line}`, boxShadow: '0 16px 40px rgba(17,24,39,.05)' }}>
-                    <CardContent sx={{ p: 3, textAlign }}>
-                      <Box sx={{ color: gold, mb: 2 }}>{icons[index]}</Box>
-                      <Typography variant="h6" fontWeight={950}>{service[0]}</Typography>
-                      <Typography variant="body2" sx={{ color: muted, lineHeight: 1.75, mt: 1 }}>{service[1]}</Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
-        <Box id="demo" sx={{ scrollMarginTop: 96, py: 8 }}>
-          <Container maxWidth="lg">
-            <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, border: `1px solid ${line}`, bgcolor: '#FFFFFF', boxShadow: '0 22px 60px rgba(17,24,39,.07)' }}>
-              <Grid container spacing={4} alignItems="center">
-                <Grid item xs={12} md={5}>
-                  <Chip label={copy.navDemo} sx={{ borderRadius: 1.2, bgcolor: alpha(gold, .12), color: '#6F5522', fontWeight: 950, mb: 2 }} />
-                  <Typography variant="h2" fontWeight={950} sx={{ color: ink, letterSpacing: '-0.04em', mb: 2, textAlign }}>{copy.demoTitle}</Typography>
-                  <Typography sx={{ color: muted, lineHeight: 1.8, fontWeight: 750, textAlign }}>{copy.demoSubtitle}</Typography>
-                  <Button onClick={() => navigate('/request-demo')} startIcon={<PlayCircle size={19} />} sx={{ mt: 3, borderRadius: radius.button, bgcolor: gold, color: '#111827', fontWeight: 950, px: 3, py: 1.3 }}>
-                    {copy.navDemo}
-                  </Button>
-                </Grid>
-                <Grid item xs={12} md={7}>
-                  <Grid container spacing={2}>
-                    {copy.demoScenes.map((scene, idx) => (
-                      <Grid item xs={12} sm={6} key={scene[0]}>
-                        <Paper sx={{ p: 2.4, height: '100%', minHeight: 148, borderRadius: radius.card, border: `1px solid ${line}`, bgcolor: idx % 2 ? '#FFFFFF' : platinum }}>
-                          <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                            <Box sx={{ color: gold, mt: .35 }}>{demoIcons[idx]}</Box>
-                            <Box>
-                              <Typography fontWeight={950} sx={{ color: ink }}>{scene[0]}</Typography>
-                              <Typography variant="body2" sx={{ color: muted, fontWeight: 700, lineHeight: 1.65, mt: .8 }}>{scene[1]}</Typography>
-                            </Box>
-                          </Stack>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Paper>
-          </Container>
-        </Box>
-
-        <Container maxWidth="lg" sx={{ pb: 8 }}>
-          <Grid container spacing={4}>
-            <Grid item xs={12} md={7}>
-              <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, border: `1px solid ${line}`, boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
-                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Typography variant="h3" fontWeight={950} sx={{ textAlign }}>{copy.innovationTitle}</Typography>
-                  <Typography sx={{ color: '#475467', fontWeight: 650, lineHeight: 1.95, textAlign }}>{copy.innovation}</Typography>
-                </Stack>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={5}>
-              <Paper sx={{ p: { xs: 3, md: 5 }, height: '100%', borderRadius: radius.section, border: `1px solid ${line}`, boxShadow: '0 18px 48px rgba(17,24,39,.06)' }}>
-                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Typography variant="h4" fontWeight={950} sx={{ textAlign }}>{copy.proofTitle}</Typography>
-                  {copy.proof.map((item) => (
-                    <Stack key={item} direction={isRTL ? 'row-reverse' : 'row'} spacing={1.3} alignItems="center" sx={{ width: '100%' }}>
-                      <CheckCircle2 size={18} color={gold} />
-                      <Typography sx={{ color: '#475467', fontWeight: 800, textAlign }}>{item}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Container>
-
-        <Container maxWidth="lg" sx={{ pb: 9 }}>
-          <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: radius.section, bgcolor: '#111827', color: '#fff', border: '1px solid rgba(212,175,55,.30)', boxShadow: '0 24px 70px rgba(17,24,39,.18)' }}>
-            <Grid container spacing={4} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <Typography variant="h3" fontWeight={950} sx={{ color: gold, textAlign }}>{copy.contactTitle}</Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,.72)', fontWeight: 800, mt: 1, textAlign }}>{copy.footer}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Stack spacing={2} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Phone size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.phone}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MessageSquare size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.whatsapp}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Mail size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{CONTACT.email}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><MapPin size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>{copy.location}</Typography></Stack>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center"><Timer size={18} color={gold} /><Typography sx={{ color: '#FFFFFF', fontWeight: 850, wordBreak: 'break-word' }}>Owner request → quote → contract → verified service record</Typography></Stack>
-                </Stack>
-              </Grid>
-            </Grid>
-          </Paper>
-        </Container>
-      </Box>
-    </Box>
-  );
+  return <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', overflowX: 'hidden' }}><BrandWatermark opacity={0.06} /><Box sx={{ position: 'relative', zIndex: 1 }}>
+    <Box sx={{ bgcolor: '#111827', py: .8, borderBottom: `1px solid ${alpha(gold, .2)}` }}><Container maxWidth="lg"><Stack direction="row" spacing={1.5} justifyContent="center" alignItems="center" flexWrap="wrap"><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px #22C55E' }} /><Typography sx={{ color: 'rgba(255,255,255,.78)', fontSize: '.72rem', fontWeight: 800 }}>All Kind Building Projects Contracting LLC S.P.C</Typography><Typography sx={{ color: 'rgba(255,255,255,.5)', fontSize: '.72rem', fontWeight: 700 }}>Licensed in Abu Dhabi, UAE</Typography></Stack></Container></Box>
+    <Box sx={{ position: 'sticky', top: 0, zIndex: 20, bgcolor: 'rgba(255,255,255,.94)', backdropFilter: 'blur(18px)', borderBottom: `1px solid ${line}` }}><Container maxWidth="lg" sx={{ py: 1.2, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}><Button onClick={() => navigate('/')} sx={{ p: 0, minWidth: 0, color: ink, mr: 'auto' }}><Stack direction="row" spacing={1.2} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 42, height: 42, borderRadius: 1.1 }} /><Typography fontWeight={950}>BIN GROUP</Typography></Stack></Button><Button startIcon={<Home size={17} />} onClick={() => navigate('/')} sx={{ color: gold, fontWeight: 950 }}>{c.navHome}</Button><Button onClick={() => navigate('/onboarding')} sx={{ bgcolor: goldLight, color: '#111827', fontWeight: 950 }}>{c.navStart}</Button><Button startIcon={<LogIn size={17} />} onClick={() => navigate('/login')} sx={{ color: gold, fontWeight: 950 }}>{c.navLogin}</Button><Button startIcon={<Globe size={17} />} onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: gold, fontWeight: 950 }}>{c.lang}</Button></Container></Box>
+    <Box sx={{ background: 'linear-gradient(160deg, #0B0B0C 0%, #1a1a2e 55%, #111827 100%)', py: { xs: 8, md: 12 }, textAlign: 'center', position: 'relative', overflow: 'hidden' }}><Container maxWidth="lg"><Stack spacing={4} alignItems="center"><Chip label={c.badge} sx={{ bgcolor: alpha(gold, .13), color: gold, fontWeight: 950, border: `1px solid ${alpha(gold, .3)}` }} /><Box component="img" src="/logo.png" alt="BIN GROUP" sx={{ width: { xs: 140, md: 178 }, height: { xs: 140, md: 178 }, borderRadius: '26px', border: `2.5px solid ${alpha(gold, .65)}`, boxShadow: `0 24px 72px ${alpha(gold, .42)}` }} /><Typography sx={{ color: gold, fontWeight: 950, letterSpacing: 7, fontSize: { xs: '2rem', md: '3rem' }, textTransform: 'uppercase' }}>{c.title}</Typography><Typography variant="h5" sx={{ color: 'rgba(255,255,255,.82)', fontWeight: 800, maxWidth: 900, lineHeight: 1.75 }}>{c.headline}</Typography><Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 900, lineHeight: 1.8 }}>{c.subline}</Typography><Grid container spacing={2} justifyContent="center" sx={{ maxWidth: 780 }}>{c.stats.map(([v, l]) => <Grid item xs={6} sm={3} key={`${v}-${l}`}><Typography sx={{ color: gold, fontWeight: 950, fontSize: '2rem' }}>{v}</Typography><Typography sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 800 }}>{l}</Typography></Grid>)}</Grid><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950 }}>{c.ctaStart}</Button><Button variant="outlined" startIcon={<MessageSquare size={18} />} onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ borderColor: alpha(gold, .45), color: gold, fontWeight: 950 }}>{c.ctaWhatsApp}</Button></Stack><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 700 }}>{c.license}</Typography></Stack></Container></Box>
+    <Section chip="WHO WE ARE" title={c.aboutTitle} subtitle={c.about}><Grid container spacing={3}>{c.services.slice(0, 3).map(([title, body], i) => <Grid item xs={12} md={4} key={title}><Card title={title} body={body} icon={icons[i]} /></Grid>)}</Grid></Section>
+    <Section dark chip={c.sections.services} title={c.sections.services}><Grid container spacing={3}>{c.services.map(([title, body], i) => <Grid item xs={12} sm={6} md={3} key={title}><Card title={title} body={body} icon={icons[i]} /></Grid>)}</Grid></Section>
+    <Section chip={c.sections.problems} title={c.sections.problems}><Checklist items={c.problems} /></Section>
+    <Section dark chip={c.sections.owners} title={c.sections.owners}><Checklist dark items={c.owners} /></Section>
+    <Section chip={c.sections.tenants} title={c.sections.tenants}><Checklist items={c.tenants} /></Section>
+    <Section dark chip={c.sections.roi} title={c.sections.roi}><Checklist dark items={c.roi} /></Section>
+    <Section chip={c.sections.workflow} title={c.sections.workflow}><Grid container spacing={2}>{c.workflow.map((step, i) => <Grid item xs={12} sm={6} md={4} key={step}><Paper sx={{ p: 2.4, borderRadius: 3, border: `1px solid ${line}` }}><Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: alpha(gold, .15), color: '#6F5522', display: 'grid', placeItems: 'center', fontWeight: 950 }}>{i + 1}</Box><Typography fontWeight={900}>{step}</Typography></Stack></Paper></Grid>)}</Grid></Section>
+    <Section dark chip={c.sections.hr} title={c.sections.hr}><Checklist dark items={c.hr} /></Section>
+    <Section chip={c.sections.trust} title={c.sections.trust}><Checklist items={c.trust} /></Section>
+    <Section dark chip={c.sections.coverage} title={c.sections.coverage}><Stack direction="row" flexWrap="wrap" justifyContent="center" sx={{ gap: 1.5 }}>{serviceAreas.map(area => <Box key={area} sx={{ px: 3, py: 1.2, bgcolor: 'rgba(255,255,255,.05)', border: `1.5px solid ${alpha(gold, .28)}`, borderRadius: 2.5 }}><Stack direction="row" spacing={1} alignItems="center"><MapPin size={14} color={gold} /><Typography sx={{ color: '#fff', fontWeight: 850 }}>{area}</Typography></Stack></Box>)}</Stack></Section>
+    <Box sx={{ py: 10, background: 'linear-gradient(160deg, #0B0B0C 0%, #1a1a2e 55%, #111827 100%)' }}><Container maxWidth="md"><Stack spacing={4} alignItems="center" textAlign="center"><Chip label={c.sections.contact} sx={{ bgcolor: alpha(gold, .12), color: gold, fontWeight: 950 }} /><Typography variant="h2" fontWeight={950} sx={{ color: gold }}>{c.sections.contact}</Typography><Typography variant="h6" sx={{ color: 'rgba(255,255,255,.7)', maxWidth: 650 }}>{c.contactText}</Typography><Grid container spacing={2}>{[[<Phone size={22} />, 'Phone', CONTACT.phone, `tel:${CONTACT.phone}`], [<MessageSquare size={22} />, 'WhatsApp', CONTACT.whatsapp, `https://wa.me/${whatsappDigits}`], [<Mail size={22} />, 'Email', CONTACT.email, `mailto:${CONTACT.email}`], [<MapPin size={22} />, 'Location', c.location, '']].map(([icon, label, value, href]: any) => <Grid item xs={12} sm={6} key={label}><Paper component={href ? 'a' : 'div'} href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} sx={{ p: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .22)}`, borderRadius: 3, display: 'block', textDecoration: 'none' }}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ color: gold }}>{icon}</Box><Box textAlign="left"><Typography variant="caption" sx={{ color: alpha(gold, .7), fontWeight: 900 }}>{label}</Typography><Typography sx={{ color: '#fff', fontWeight: 850 }}>{value}</Typography></Box></Stack></Paper></Grid>)}</Grid><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><Button variant="contained" onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950 }}>{c.ctaWhatsApp}</Button><Button variant="outlined" onClick={() => window.open(`mailto:${CONTACT.email}`, '_blank')} sx={{ borderColor: alpha(gold, .45), color: gold, fontWeight: 950 }}>{c.ctaEmail}</Button><Button variant="outlined" onClick={() => navigate('/onboarding')} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.22)', fontWeight: 950 }}>{c.ctaStart}</Button></Stack></Stack></Container></Box>
+  </Box></Box>;
 }
-
-

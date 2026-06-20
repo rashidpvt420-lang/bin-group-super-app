@@ -1,11 +1,11 @@
 /**
  * business-admin.spec.ts
  * Deep E2E business flow for the Admin role.
- * Verifies: Property creation, bulk tenant upload, assigning technicians, contract approval.
+ * Verifies: property, tenant import, ticket assignment, and contract approval controls are present and executable.
  */
 import { test, expect, Page } from '@playwright/test';
 
-const EMAIL    = process.env.E2E_ADMIN_EMAIL    ?? '';
+const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 
 function requireLaunchCredentials() {
@@ -16,15 +16,28 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
-  // We assume the admin panel is either at /admin or it's a separate app domain,
-  // but based on earlier routing it's a separate admin-panel app.
-  // However, we'll navigate to the admin login route for this project structure.
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  // Wait for the admin dashboard or portal to load
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|system interruption/i, { timeout: 10000 });
+}
+
+async function requireVisible(page: Page, selectors: string[], label: string) {
+  for (const selector of selectors) {
+    const target = page.locator(selector).first();
+    if (await target.isVisible({ timeout: 1500 }).catch(() => false)) return target;
+  }
+  const bodyPreview = await page.locator('body').innerText({ timeout: 5000 }).catch(() => 'body unavailable');
+  throw new Error(`Missing required admin launch control: ${label}. Selectors: ${selectors.join(' | ')}. Body: ${bodyPreview.slice(0, 1200)}`);
+}
+
+async function clickRequired(page: Page, selectors: string[], label: string) {
+  const target = await requireVisible(page, selectors, label);
+  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10000 });
+  await target.click();
 }
 
 test.describe('Admin Business Workflow', () => {
@@ -32,79 +45,61 @@ test.describe('Admin Business Workflow', () => {
     await login(page);
   });
 
-  test('Admin can add a property and bulk-upload 53 tenants', async ({ page }) => {
-    // Navigate to properties
-    await page.goto('/admin/properties', { waitUntil: 'domcontentloaded' }).catch(() => {});
-    
-    // Add property
-    const addPropertyBtn = page.locator('button:has-text("Add Property"), button:has-text("Create Property")').first();
-    if (await addPropertyBtn.isVisible()) {
-      await addPropertyBtn.click();
-      await page.locator('input[name="name"], input[placeholder*="name" i]').first().fill('E2E Tower 53');
-      await page.locator('button:has-text("Save"), button:has-text("Submit")').first().click();
-      await page.waitForTimeout(1000);
-    }
+  test('Admin property and tenant import controls are launch-ready', async ({ page }) => {
+    await page.goto('/admin/properties', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
 
-    // Navigate to Tenants
-    await page.goto('/admin/tenants', { waitUntil: 'domcontentloaded' }).catch(() => {});
-    
-    // Bulk Upload
-    const bulkUploadBtn = page.locator('button:has-text("Bulk Upload"), button:has-text("Import CSV")').first();
-    if (await bulkUploadBtn.isVisible()) {
-      const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null);
-      await bulkUploadBtn.click();
-      
-      const fileChooser = await fileChooserPromise;
-      if (fileChooser) {
-        // Here we would upload a mock CSV with 53 tenants.
-      }
-      
-      // Submit upload
-      const confirmUploadBtn = page.locator('button:has-text("Confirm Upload"), button:has-text("Import")').first();
-      if (await confirmUploadBtn.isVisible()) {
-        await confirmUploadBtn.click();
-      }
-      
-      await expect(page.locator('text=success').or(page.locator('text=imported'))).toBeVisible({ timeout: 10_000 }).catch(() => {});
-    }
+    await clickRequired(page, [
+      '[data-testid="admin-add-property"]',
+      '[data-testid*="add-property" i]',
+      'button:has-text("Add Property")',
+      'button:has-text("Create Property")',
+    ], 'add property');
+
+    await expect(page.locator('input, textarea').first(), 'property form must expose editable fields').toBeVisible({ timeout: 10000 });
+
+    await page.goto('/admin/tenants', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+
+    await clickRequired(page, [
+      '[data-testid="admin-bulk-upload-tenants"]',
+      '[data-testid*="bulk" i]',
+      'button:has-text("Bulk Upload")',
+      'button:has-text("Import CSV")',
+      'button:has-text("Upload CSV")',
+    ], 'tenant bulk import');
+
+    await expect(page.locator('input[type="file"], button:has-text("Choose File"), button:has-text("Select CSV")').first(), 'tenant import must expose a file picker').toBeVisible({ timeout: 10000 });
   });
 
-  test('Admin can assign a technician and approve contract', async ({ page }) => {
-    // Navigate to Tickets
-    await page.goto('/admin/tickets', { waitUntil: 'domcontentloaded' }).catch(() => {});
-    
-    // Open a ticket
-    const viewTicketBtn = page.locator('button:has-text("View"), a:has-text("View")').first();
-    if (await viewTicketBtn.isVisible()) {
-      await viewTicketBtn.click();
-      
-      // Assign Technician
-      const assignBtn = page.locator('button:has-text("Assign Technician"), button:has-text("Assign")').first();
-      if (await assignBtn.isVisible()) {
-        await assignBtn.click();
-        
-        // Select technician from dropdown
-        const techSelect = page.locator('select, [role="combobox"]').first();
-        if (await techSelect.isVisible()) {
-          // Select first available option
-        }
-        
-        const confirmAssignBtn = page.locator('button:has-text("Confirm Assignment"), button:has-text("Save")').first();
-        if (await confirmAssignBtn.isVisible()) {
-          await confirmAssignBtn.click();
-        }
-      }
-    }
+  test('Admin ticket assignment and contract approval controls are launch-ready', async ({ page }) => {
+    await page.goto('/admin/tickets', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
 
-    // Navigate to Contracts
-    await page.goto('/admin/contracts', { waitUntil: 'domcontentloaded' }).catch(() => {});
-    
-    // Approve contract
-    const approveBtn = page.locator('button:has-text("Approve Contract"), button:has-text("Approve")').first();
-    if (await approveBtn.isVisible()) {
-      await approveBtn.click();
-      await page.waitForTimeout(1000);
-      await expect(page.locator('text=approved').or(page.locator('text=Active'))).toBeVisible({ timeout: 5000 }).catch(() => {});
-    }
+    await clickRequired(page, [
+      '[data-testid="admin-ticket-view"]',
+      '[data-testid*="ticket-view" i]',
+      'button:has-text("View")',
+      'a:has-text("View")',
+    ], 'open ticket');
+
+    await clickRequired(page, [
+      '[data-testid="admin-assign-technician"]',
+      '[data-testid*="assign" i]',
+      'button:has-text("Assign Technician")',
+      'button:has-text("Assign")',
+    ], 'assign technician');
+
+    await expect(page.locator('select, [role="combobox"]').first(), 'assignment must expose technician selector').toBeVisible({ timeout: 10000 });
+
+    await page.goto('/admin/contracts', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+
+    await clickRequired(page, [
+      '[data-testid="admin-approve-contract"]',
+      '[data-testid*="approve" i]',
+      'button:has-text("Approve Contract")',
+      'button:has-text("Approve")',
+    ], 'approve contract');
   });
 });

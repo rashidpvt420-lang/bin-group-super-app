@@ -4,6 +4,18 @@ const path = 'firestore.rules';
 const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 const brokerOwnsNeedle = '    function brokerOwns(data) {';
 
+function resolveKnownConflictMarkers(input) {
+  return input
+    .replace(
+      `<<<<<<< Updated upstream\n    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }\n=======\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n>>>>>>> Stashed changes`,
+      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
+    )
+    .replace(
+      `    function safeOpenMissionClaim() {\n<<<<<<< Updated upstream\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&\n=======\n      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&\n>>>>>>> Stashed changes`,
+      `    function safeOpenMissionClaim() {\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
+    );
+}
+
 function dedupeBrokerOwns(input) {
   let cursor = 0;
   let seen = 0;
@@ -89,18 +101,63 @@ function normalizeNotificationBlock(input) {
   return input.replace(block, replacement);
 }
 
-let { output, seen, removed } = dedupeBrokerOwns(source);
+function insertOwnerTrustWorkflowRules(input) {
+  if (/match \/owner_approval_requests\/\{[^}]+\}/.test(input)) return input;
+  const marker = '    match /{document=**} {';
+  if (!input.includes(marker)) throw new Error('[rules-normalize] Missing catch-all marker for Owner Trust workflow rules.');
+  const block = `
+    match /communication_intake/{intakeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /vendor_rfqs/{rfqId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /vendor_quotes/{quoteId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /owner_approval_requests/{approvalId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) && request.resource.data.decision in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED']);
+    }
+
+    match /vendors/{vendorId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /maintenance_ledger/{ledgerId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid || resource.data.technicianId == request.auth.uid));
+      allow create: if isAdmin() || (signedIn() && request.resource.data.source == 'owner_approval_center');
+      allow update: if isAdmin();
+    }
+
+    match /data_governance_events/{eventId} {
+      allow read, write: if isAdmin();
+      allow create: if isAdmin() || signedIn();
+    }
+`;
+  return input.replace(marker, `${block}\n${marker}`);
+}
+
+let normalizedSource = resolveKnownConflictMarkers(source);
+let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
 
 output = replaceLineBlock(
   output,
   "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||",
   "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
-  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data);",
+  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));",
   'properties read rule'
 );
 
 output = normalizeNotificationBlock(output);
+output = insertOwnerTrustWorkflowRules(output);
 
 if (output !== source) writeFileSync(path, output);
 
-console.log(`Firestore rules normalization complete. Kept ${seen > 0 ? 1 : 0}, removed ${removed} duplicate brokerOwns helper(s), hardened launch-critical access rules.`);
+console.log(`Firestore rules normalization complete. Kept ${seen > 0 ? 1 : 0}, removed ${removed} duplicate brokerOwns helper(s), hardened launch-critical and Owner Trust workflow access rules.`);

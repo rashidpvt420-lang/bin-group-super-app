@@ -5,10 +5,13 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { setupSovereignAlertInterceptor } from '@bin/shared';
 
-setupSovereignAlertInterceptor();
+try {
+  setupSovereignAlertInterceptor();
+} catch (err) {
+  console.warn('[ADMIN-BOOT] Alert interceptor startup skipped:', err);
+}
 
-// [STABILITY-PROTOCOL] Global System Recovery
-const handleError = (msg: any, error: any) => {
+const renderFatalBootFallback = (msg: unknown, error: unknown) => {
   const debugId = `ADMIN-BOOT-${Date.now().toString(36).toUpperCase()}`;
   console.error(`[${debugId}] Admin bootstrap error:`, msg, error);
   const root = document.getElementById('root');
@@ -21,21 +24,57 @@ const handleError = (msg: any, error: any) => {
   }
 };
 
-(window as any).onerror = (msg: any, url: any, line: any, col: any, error: any) => handleError(msg, error);
-(window as any).onunhandledrejection = (event: any) => handleError('Unhandled Promise Rejection: ' + (event.reason || 'Unknown'), event.reason);
+const isKnownRecoverableBootNoise = (message: string) => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('resizeobserver loop') ||
+    normalized.includes('failed to register a serviceworker') ||
+    normalized.includes('service worker') ||
+    normalized.includes('messaging') ||
+    normalized.includes('notification') ||
+    normalized.includes('permission-denied') ||
+    normalized.includes('popup-closed-by-user')
+  );
+};
+
+(window as any).onerror = (msg: any, url: any, line: any, col: any, error: any) => {
+  const message = String(error?.message || msg || '');
+  if (isKnownRecoverableBootNoise(message)) {
+    console.warn('[ADMIN-BOOT] Recoverable browser/runtime event:', message);
+    return true;
+  }
+  console.error('[ADMIN-BOOT] Runtime error after shell boot:', { msg, url, line, col, error });
+  return false;
+};
+
+(window as any).onunhandledrejection = (event: any) => {
+  const reason = event?.reason;
+  const message = String(reason?.message || reason || 'Unhandled Promise Rejection');
+  if (isKnownRecoverableBootNoise(message)) {
+    console.warn('[ADMIN-BOOT] Recoverable async event:', message);
+    event?.preventDefault?.();
+    return;
+  }
+  console.error('[ADMIN-BOOT] Async startup event:', reason);
+};
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
     const root = ReactDOM.createRoot(rootElement as HTMLElement);
 
-    // [STABILITY] Unregister Service Workers
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (let registration of registrations) {
-                registration.unregister();
-                console.log('🛡️ [INIT] Purged Administrative Cache.');
-            }
-        });
+        navigator.serviceWorker.getRegistrations()
+            .then((registrations) => {
+                for (const registration of registrations) {
+                    registration.unregister().catch((err) => {
+                        console.warn('[ADMIN-BOOT] Service worker unregister skipped:', err);
+                    });
+                }
+                console.log('🛡️ [INIT] Administrative cache checked.');
+            })
+            .catch((err) => {
+                console.warn('[ADMIN-BOOT] Service worker cleanup skipped:', err);
+            });
     }
 
     try {
@@ -47,7 +86,8 @@ if (rootElement) {
             </React.StrictMode>
         );
     } catch (err) {
-        console.error('[ADMIN-SYSTEM] Critical Mount Error:', err);
-        handleError('Bootstrap Execution Fault', err);
+        renderFatalBootFallback('Bootstrap Execution Fault', err);
     }
+} else {
+    renderFatalBootFallback('Missing root element', null);
 }

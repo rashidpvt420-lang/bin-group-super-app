@@ -1,0 +1,26 @@
+{
+  "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
+  "adminRoute": "/ops/public-launch-command",
+  "evidenceCollection": "launch_evidence",
+  "requiredEvidenceFields": [
+    "testerName",
+    "role",
+    "device",
+    "productionUrl",
+    "proofRef",
+    "notes",
+    "status",
+    "createdAt"
+  ],
+  "requiredBusinessItems": [
+    "App Check production enforcement",
+    "Payment/manual bank activation proof",
+    "Admin password/MFA discipline",
+    "Privacy/data-retention wording",
+    "UAE data/subprocessor position",
+    "Support/complaint handling page",
+    "Refund/cancellation/SLA wording",
+    "Public contact and escalation policy"
+  ],
+  "publicLaunchWording": "BIN GROUP Super App is now live for UAE owners, tenants, technicians, brokers, and property operations teams — with proof-based maintenance, owner approval, BIN Connect, AI/WhatsApp intake, and admin command control."
+}

@@ -7,7 +7,8 @@ import { Calendar, Clock, CheckCircle2, AlertCircle, ShieldCheck, Wrench, Wind, 
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
-import { db, collection, query, where, getDocs, orderBy } from '../lib/firebase';
+import { useNavigate } from 'react-router-dom';
+import { db, collection, query, where, getDocs, orderBy, addDoc, serverTimestamp } from '../lib/firebase';
 
 interface ScheduledTask {
     id: string;
@@ -23,27 +24,58 @@ interface ScheduledTask {
 const MaintenanceCalendarPage: React.FC = () => {
     const { t, tx, isRTL } = useLanguage();
     const { user } = useRole();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState<ScheduledTask[]>([]);
+    const [requestingAudit, setRequestingAudit] = useState(false);
 
     useEffect(() => {
         const fetchSchedule = async () => {
-            if (!user?.uid) return;
-            // For production, this would fetch from a 'maintenance_schedule' collection.
-            // Mocking data for the upgrade phase as requested.
-            setTimeout(() => {
-                const mockTasks: ScheduledTask[] = [
-                    { id: '1', propertyId: 'p1', propertyName: 'Skyline Tower', taskName: 'Quarterly HVAC Sanitization', category: 'HVAC', dueDate: new Date(Date.now() + 86400000 * 5), status: 'SCHEDULED', frequency: 'QUARTERLY' },
-                    { id: '2', propertyId: 'p1', propertyName: 'Skyline Tower', taskName: 'Monthly Lift Load Test', category: 'LIFT', dueDate: new Date(Date.now() + 86400000 * 2), status: 'SCHEDULED', frequency: 'MONTHLY' },
-                    { id: '3', propertyId: 'p2', propertyName: 'Palm Villa 44', taskName: 'Weekly Pool Chemistry Balance', category: 'POOL', dueDate: new Date(Date.now() - 86400000 * 1), status: 'OVERDUE', frequency: 'WEEKLY' },
-                    { id: '4', propertyId: 'p2', propertyName: 'Palm Villa 44', taskName: 'Bi-Annual Fire Alarm Audit', category: 'FIRE', dueDate: new Date(Date.now() + 86400000 * 15), status: 'SCHEDULED', frequency: 'BI-ANNUAL' },
-                ];
-                setTasks(mockTasks);
-                setLoading(false);
-            }, 1000);
+            if (!user?.uid) { setLoading(false); return; }
+            try {
+                const snap = await getDocs(
+                    query(collection(db, 'maintenance_schedule'), where('ownerId', '==', user.uid), orderBy('dueDate', 'asc'))
+                );
+                if (snap.docs.length > 0) {
+                    setTasks(snap.docs.map(d => {
+                        const data = d.data() as any;
+                        return {
+                            id: d.id,
+                            propertyId: data.propertyId || '',
+                            propertyName: data.propertyName || 'Unknown Property',
+                            taskName: data.taskName || data.name || 'Scheduled Task',
+                            category: data.category || 'GENERAL',
+                            dueDate: data.dueDate?.toDate?.() || new Date(data.dueDate),
+                            status: data.status || 'SCHEDULED',
+                            frequency: data.frequency || 'MONTHLY',
+                        } as ScheduledTask;
+                    }));
+                } else {
+                    setTasks([
+                        { id: '1', propertyId: 'p1', propertyName: 'Your Property', taskName: 'Quarterly HVAC Sanitization', category: 'HVAC', dueDate: new Date(Date.now() + 86400000 * 5), status: 'SCHEDULED', frequency: 'QUARTERLY' },
+                        { id: '2', propertyId: 'p1', propertyName: 'Your Property', taskName: 'Bi-Annual Fire Alarm Audit', category: 'FIRE', dueDate: new Date(Date.now() + 86400000 * 15), status: 'SCHEDULED', frequency: 'BI-ANNUAL' },
+                    ]);
+                }
+            } catch { setLoading(false); return; }
+            setLoading(false);
         };
         fetchSchedule();
     }, [user]);
+
+    const handleRequestAudit = async () => {
+        if (!user?.uid || requestingAudit) return;
+        setRequestingAudit(true);
+        try {
+            await addDoc(collection(db, 'audit_requests'), {
+                ownerId: user.uid,
+                requestedAt: serverTimestamp(),
+                status: 'PENDING',
+                type: 'EXTRA_AUDIT',
+            });
+            window.alert('Extra audit request submitted. BIN GROUP will contact you within 24 hours.');
+        } catch { window.alert('Request failed. Please try again.'); }
+        setRequestingAudit(false);
+    };
 
     const getCategoryIcon = (cat: string) => {
         switch (cat) {
@@ -124,7 +156,7 @@ const MaintenanceCalendarPage: React.FC = () => {
                                                 mb: 2
                                             }} 
                                         />
-                                        <Button variant="outlined" size="small" fullWidth sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}>
+                                        <Button variant="outlined" size="small" fullWidth onClick={() => navigate(`/maintenance?propertyId=${task.propertyId}`)} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900 }}>
                                             VIEW LOGS
                                         </Button>
                                     </Grid>
@@ -142,9 +174,11 @@ const MaintenanceCalendarPage: React.FC = () => {
                                 COMPLIANCE METRICS
                             </Typography>
                             <Box sx={{ mt: 4 }}>
-                                <Typography variant="h3" fontWeight="950" color="#FFF">92%</Typography>
+                                <Typography variant="h3" fontWeight="950" color="#FFF">
+                                    {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'COMPLETED').length / tasks.length) * 100) : 0}%
+                                </Typography>
                                 <Typography variant="body2" color="textSecondary">On-Time Completion Rate</Typography>
-                                <LinearProgress variant="determinate" value={92} sx={{ mt: 2, height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#4ADE80' } }} />
+                                <LinearProgress variant="determinate" value={tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'COMPLETED').length / tasks.length) * 100) : 0} sx={{ mt: 2, height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#4ADE80' } }} />
                             </Box>
                         </Paper>
 
@@ -153,8 +187,8 @@ const MaintenanceCalendarPage: React.FC = () => {
                             <Typography variant="body2" color="textSecondary" sx={{ mb: 4, lineHeight: 1.6 }}>
                                 All scheduled tasks are performed by BIN GROUP certified specialists using the Evidence-Vault™ protocol for 100% auditable proof of service.
                             </Typography>
-                            <Button variant="contained" fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                REQUEST EXTRA AUDIT
+                            <Button variant="contained" fullWidth onClick={handleRequestAudit} disabled={requestingAudit} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                {requestingAudit ? 'SUBMITTING...' : 'REQUEST EXTRA AUDIT'}
                             </Button>
                         </Paper>
                     </Stack>

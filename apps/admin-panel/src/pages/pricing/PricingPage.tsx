@@ -24,8 +24,8 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import LockIcon from '@mui/icons-material/Lock';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import CompetitorComparison from '../../components/CompetitorComparison';
 
 interface PricingResult {
@@ -88,8 +88,7 @@ export default function PricingPage() {
         };
 
         try {
-            const fns = getFunctions(app, 'us-central1');
-            const cloudFn = httpsCallable(fns, 'calculateAMCV2');
+            const cloudFn = httpsCallable(functions, 'calculateAMCV2');
             const res: any = await cloudFn({
                 propertyName: 'Admin Calculation',
                 zone: 'Marina',

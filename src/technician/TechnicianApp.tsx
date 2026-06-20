@@ -8,6 +8,9 @@ import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import BinConnectChatBox from '../components/BinConnectChatBox';
+import PilotCompletionPage from '../components/PilotCompletionPage';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -17,6 +20,8 @@ import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
+import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
+import SupportPage from '../pages/public/SupportPage';
 
 const shell = {
     ink: '#111827',
@@ -85,7 +90,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                                 fontSize: { xs: '0.82rem', md: '1.15rem' },
                                 flexDirection: isRTL ? 'row-reverse' : 'row',
                                 textAlign: isRTL ? 'right' : 'left',
-                                minWidth: 0,
+                                minWidth: 0
                             }}
                         >
                             <SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD SOVEREIGN - UAE', 'الميدان السيادي - الإمارات')}
@@ -119,6 +124,8 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 </Box>
             </Container>
 
+            <BinConnectChatBox role="technician" />
+
             <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>
                     © 2026 BIN GROUP · FIELD NODE · MADE IN UAE
@@ -142,6 +149,10 @@ export default function TechnicianApp() {
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
                 <Route path="/hr" element={<TechnicianHRPage />} />
+                <Route path="/offline" element={<TechnicianOfflinePage />} />
+                <Route path="/support" element={<SupportPage />} />
+                <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />
+                <Route path="/pilot-completion" element={<PilotCompletionPage role="technician" />} />
             </Routes>
         </TechnicianLayout>
     );

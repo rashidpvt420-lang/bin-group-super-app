@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import { 
     Box, Typography, Paper, Grid, Stack, CircularProgress, 
     Chip, Table, TableBody, TableCell, TableContainer, TableHead, 
@@ -18,6 +19,59 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 export default function BrokerCommissionsPage() {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
+
+    const exportReport = () => {
+        const pdf = new jsPDF();
+        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
+        pdf.text('BROKER COMMISSION STATEMENT', 14, 20);
+        pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+        pdf.text(`Broker: ${user?.displayName || user?.email || 'N/A'}`, 14, 30);
+        pdf.text(`Generated: ${new Date().toLocaleDateString()} | BIN GROUP Platform`, 14, 37);
+        pdf.setDrawColor(198, 167, 94); pdf.line(14, 42, 196, 42);
+        let y = 52;
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(10); pdf.text('COMMISSION LEDGER', 14, y); y += 8;
+        commissions.forEach((c: any) => {
+            if (y > 265) { pdf.addPage(); pdf.setFillColor(5,5,5); pdf.rect(0,0,210,297,'F'); y = 20; }
+            pdf.setTextColor(255, 255, 255); pdf.setFontSize(8);
+            const date = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A';
+            const name = c.linkedLeadName || c.linkedReferralName || 'Direct Mission';
+            const prop = c.linkedProperty || c.propertyName || '';
+            pdf.text(`${date}  |  ${name}${prop ? ` — ${prop}` : ''}`, 14, y); y += 5;
+            pdf.setTextColor(198, 167, 94);
+            pdf.text(`AED ${(c.amount || 0).toLocaleString()}  |  ${String(c.status || '').toUpperCase()}`, 14, y); y += 8;
+        });
+        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
+        pdf.text('BIN GROUP Sovereign Platform | Confidential Commission Record', 14, 285);
+        pdf.save(`commission-statement-${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const viewStatement = (c: any) => {
+        const pdf = new jsPDF();
+        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
+        pdf.setTextColor(198, 167, 94); pdf.setFontSize(14); pdf.setFont('helvetica', 'bold');
+        pdf.text('COMMISSION STATEMENT', 14, 20);
+        pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+        pdf.text(`Ref: #${c.id.substring(0,8).toUpperCase()}`, 14, 30);
+        pdf.text(`Date: ${c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}`, 14, 37);
+        pdf.setDrawColor(198, 167, 94); pdf.line(14, 42, 196, 42);
+        let y = 52;
+        const fields = [
+            ['Client / Lead', c.linkedLeadName || c.linkedReferralName || 'Direct Mission'],
+            ['Property', c.linkedProperty || c.propertyName || 'Portfolio Wide'],
+            ['Amount', `AED ${(c.amount || 0).toLocaleString()}`],
+            ['Commission %', c.percentage ? `${c.percentage}%` : 'N/A'],
+            ['Status', String(c.status || '').toUpperCase()],
+            ['Payout Date', c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : c.expectedPayoutDate?.toDate ? c.expectedPayoutDate.toDate().toLocaleDateString() : 'Cycle End'],
+        ];
+        fields.forEach(([label, val]) => {
+            pdf.setTextColor(198, 167, 94); pdf.text(`${label}:`, 14, y);
+            pdf.setTextColor(255, 255, 255); pdf.text(val, 70, y); y += 10;
+        });
+        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
+        pdf.text('BIN GROUP Sovereign Platform | Confidential Commission Record', 14, 285);
+        pdf.save(`commission-${c.id.substring(0,8)}.pdf`);
+    };
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -64,9 +118,10 @@ export default function BrokerCommissionsPage() {
             subtitle="Institutional tracking of earned brokerage commissions"
             loading={loading}
             actions={
-                <Button 
-                    variant="outlined" 
+                <Button
+                    variant="outlined"
                     startIcon={<Download size={18} />}
+                    onClick={exportReport}
                     sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 900, px: 3, borderRadius: 3 }}
                 >
                     EXPORT REPORT
@@ -161,7 +216,7 @@ export default function BrokerCommissionsPage() {
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }} align="right">
                                         <Tooltip title="View Statement">
-                                            <IconButton sx={{ color: 'rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
+                                            <IconButton onClick={() => viewStatement(c)} sx={{ color: 'rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
                                                 <ExternalLink size={18} />
                                             </IconButton>
                                         </Tooltip>

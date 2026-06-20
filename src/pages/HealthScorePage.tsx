@@ -8,6 +8,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { ShieldCheck, Activity, Database, AlertTriangle, Construction, AlertCircle, ArrowLeft } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { db, collection, query, where, getDocs, limit, doc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { calculateBuildingHealth } from '../utils/buildingHealthEngine';
@@ -65,6 +66,37 @@ export default function HealthScorePage() {
       if (p) await fetchReportForProperty(p);
   };
 
+  const exportAuditPdf = () => {
+    if (!report) return;
+    const pdf = new jsPDF();
+    const prop = properties.find(p => p.id === selectedId) || {};
+    pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
+    pdf.setTextColor(198, 167, 94); pdf.setFontSize(18); pdf.setFont('helvetica', 'bold');
+    pdf.text('BUILDING PERFORMANCE INDEX (BPI)', 14, 20);
+    pdf.setFontSize(11); pdf.setTextColor(255, 255, 255);
+    pdf.text(`Property: ${(prop as any).propertyName || (prop as any).name || 'Unknown'}`, 14, 32);
+    pdf.setFontSize(28); pdf.setTextColor(198, 167, 94);
+    pdf.text(`${report.overallScore}`, 14, 56);
+    pdf.setFontSize(12); pdf.setTextColor(255, 255, 255);
+    pdf.text(`${report.label?.toUpperCase()} CONDITION  |  Risk: ${report.riskLevel}`, 40, 52);
+    pdf.setDrawColor(198, 167, 94); pdf.line(14, 62, 196, 62);
+    let y = 72;
+    pdf.setFontSize(10); pdf.setTextColor(198, 167, 94); pdf.text('SYSTEM BREAKDOWN', 14, y); y += 8;
+    report.systems?.forEach((s: any) => {
+      pdf.setTextColor(255, 255, 255); pdf.text(`${s.system}: ${s.score}%`, 14, y); y += 7;
+    });
+    y += 4;
+    pdf.setTextColor(198, 167, 94); pdf.text('RECOMMENDATIONS', 14, y); y += 8;
+    report.recommendations?.forEach((r: string) => {
+      pdf.setTextColor(200, 200, 200);
+      const lines = pdf.splitTextToSize(`• ${r}`, 180);
+      pdf.text(lines, 14, y); y += lines.length * 6 + 2;
+    });
+    pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
+    pdf.text(`Generated: ${new Date().toLocaleDateString()} | BIN GROUP Sovereign Platform`, 14, 285);
+    pdf.save(`bpi-audit-${(prop as any).id?.substring(0, 6) || 'report'}.pdf`);
+  };
+
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 20 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
   if (properties.length === 0) return (
@@ -116,7 +148,7 @@ export default function HealthScorePage() {
                 </Box>
                 <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 1.5 }}>{report?.label.toUpperCase()} CONDITION</Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>Risk Level: **{report?.riskLevel}**</Typography>
-                <Button variant="contained" fullWidth sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
+                <Button variant="contained" fullWidth onClick={exportAuditPdf} sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
             </Card>
         </Grid>
 

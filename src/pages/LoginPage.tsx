@@ -93,17 +93,9 @@ const LoginPage: React.FC = () => {
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
         const message = err?.message || '';
-        console.error('[AUTH_DIAGNOSTIC]', {
-            code,
-            message,
-            authDomain: auth.config?.authDomain,
-            currentUrl: window.location.href,
-            provider: code.includes('google') || code.includes('popup') || code.includes('redirect') ? 'google.com' : 'password',
-            env: import.meta.env.MODE,
-            timestamp: new Date().toISOString(),
-            userAgent: navigator.userAgent,
-            emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
-        });
+        if (import.meta.env.DEV) {
+            console.error('[AUTH_DIAGNOSTIC]', { code, authDomain: auth.config?.authDomain, env: import.meta.env.MODE });
+        }
         if (code === 'auth/invalid-email') return tx('login.error.invalid_email', 'Please enter a valid email address.');
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return t('login.error.invalid');
         if (code === 'auth/too-many-requests') return t('login.error.too_many');

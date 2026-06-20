@@ -24,7 +24,6 @@ for (const envFile of ['.env', '.env.local', '.env.production', '.env.production
   loadDotEnvFile(envFile);
 }
 
-
 function read(path) {
   if (!existsSync(path)) {
     failures.push(`Missing required file: ${path}`);
@@ -75,10 +74,18 @@ function extractTranslationKeys(source, lang) {
 
 const languageContext = read('src/context/LanguageContext.tsx');
 const firebaseRuntime = read('src/lib/firebase.ts');
+const adminFirebaseRuntime = read('src/admin/lib/firebase.ts');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
 const firebaseJson = read('firebase.json');
 const packageJson = read('package.json');
+const deploymentChecklist = read('docs/production-env-checklist.md');
+const stripePaymentFunction = read('functions/stripePayment.ts');
+const mailDeliveryFunction = read('functions/mailDelivery.ts');
+const whatsappWebhookFunction = read('functions/whatsappWebhook.ts');
+const aiAssistantFunction = read('functions/aiAssistant.ts');
+const runtimeExports = read('functions/runtime.ts');
+const runtimeAllExports = read('functions/runtimeAll.ts');
 
 const enKeys = extractTranslationKeys(languageContext, 'en');
 const arKeys = extractTranslationKeys(languageContext, 'ar');
@@ -97,6 +104,9 @@ assert(firebaseRuntime.includes('getFirestore(app)'), 'Firestore runtime must be
 assert(firebaseRuntime.includes('getStorage(app)'), 'Firebase Storage runtime must be initialized.');
 assert(firebaseRuntime.includes('getFunctions(app, FUNCTIONS_REGION)'), 'Firebase Functions runtime must use explicit region.');
 assert(firebaseRuntime.includes('getSafeMessaging'), 'Messaging must be wrapped in a safe support check.');
+assert(firebaseRuntime.includes("readEnv('VITE_APP_CHECK_SITE_KEY')"), 'Root Firebase runtime must read VITE_APP_CHECK_SITE_KEY from environment.');
+assert(firebaseRuntime.includes("readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true'"), 'Root Firebase runtime must gate App Check on VITE_ENABLE_FIREBASE_APPCHECK=true.');
+assert(adminFirebaseRuntime.includes('initializeAppCheck'), 'Admin Firebase runtime must support App Check initialization.');
 warn(!firebaseRuntime.includes('appCheckExplicitlyEnabled = false'), 'Firebase App Check is disabled in runtime. Enable before public launch after domain/provider setup.');
 
 assert(firestoreRules.includes('safeUserSelfUpdate'), 'Firestore rules must include safe user self-update guard.');
@@ -113,9 +123,89 @@ warn(allSource.includes('uploadBytes') || allSource.includes('uploadBytesResumab
 warn(allSource.includes('jsPDF') || allSource.includes('pdf'), 'No PDF generation/reference found in src scan.');
 warn(allSource.includes('getToken') || allSource.includes('Notification'), 'No browser push-notification/token request usage found in src scan.');
 
+// ── Provider integration contract checks ─────────────────────────────────────
+// These checks are static by design: backend provider secrets must live in
+// Firebase Secret Manager, not GitHub Actions or committed .env files.
+assert(stripePaymentFunction.includes('defineSecret("STRIPE_SECRET_KEY")'), 'Stripe function must use Firebase Secret Manager key STRIPE_SECRET_KEY.');
+assert(stripePaymentFunction.includes('defineSecret("STRIPE_WEBHOOK_SECRET")'), 'Stripe function must use Firebase Secret Manager key STRIPE_WEBHOOK_SECRET.');
+assert(stripePaymentFunction.includes('stripe.webhooks.constructEvent') || stripePaymentFunction.includes('webhooks.constructEvent'), 'Stripe webhook must verify Stripe signatures before accepting payment events.');
+assert(runtimeExports.includes('export * from "./stripePayment"'), 'Stripe payment functions must be exported from the deployed runtime entrypoint.');
+
+assert(mailDeliveryFunction.includes('defineSecret("SMTP_USER")'), 'Mail function must use Firebase Secret Manager key SMTP_USER.');
+assert(mailDeliveryFunction.includes('defineSecret("SMTP_PASS")'), 'Mail function must use Firebase Secret Manager key SMTP_PASS.');
+assert(mailDeliveryFunction.includes('process.env.MAIL_FROM') || mailDeliveryFunction.includes('process.env.SMTP_FROM'), 'Mail function must support branded sender configuration.');
+assert(runtimeExports.includes('export * from "./mailDelivery"'), 'Mail delivery functions must be exported from the deployed runtime entrypoint.');
+
+assert(deploymentChecklist.includes('STRIPE_SECRET_KEY'), 'Production checklist must require STRIPE_SECRET_KEY.');
+assert(deploymentChecklist.includes('STRIPE_WEBHOOK_SECRET'), 'Production checklist must require STRIPE_WEBHOOK_SECRET.');
+assert(deploymentChecklist.includes('SMTP_USER'), 'Production checklist must require SMTP_USER.');
+assert(deploymentChecklist.includes('SMTP_PASS'), 'Production checklist must require SMTP_PASS.');
+assert(
+  !deploymentChecklist.includes('functions:secrets:set SMTP_PASSWORD') && !deploymentChecklist.includes('`SMTP_PASSWORD` set in Firebase'),
+  'Production checklist must not instruct setting the obsolete SMTP_PASSWORD secret; use SMTP_PASS.'
+);
+
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_TOKEN.');
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_PHONE_NUMBER_ID")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_PHONE_NUMBER_ID.');
+assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_VERIFY_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_VERIFY_TOKEN.');
+assert(
+  runtimeAllExports.includes('export * from "./whatsappWebhook"') || runtimeAllExports.includes("export * from './whatsappWebhook'"),
+  'WhatsApp webhook must be exported from the deployed runtime entrypoint.'
+);
+
+assert(aiAssistantFunction.includes('defineSecret("OPENAI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key OPENAI_API_KEY.');
+assert(aiAssistantFunction.includes('defineSecret("GEMINI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key GEMINI_API_KEY.');
+assert(runtimeExports.includes('export * from "./aiAssistant"'), 'AI assistant functions must be exported from the deployed runtime entrypoint.');
+
+assert(deploymentChecklist.includes('WHATSAPP_TOKEN'), 'Production checklist must require WHATSAPP_TOKEN.');
+assert(deploymentChecklist.includes('OPENAI_API_KEY'), 'Production checklist must require OPENAI_API_KEY.');
+
+// ── Frontend/backend callable wiring check ────────────────────────────────────
+// Catches the exact bug class where a frontend httpsCallable() name was renamed,
+// typo'd, or never implemented on the backend - the function silently 404s at
+// call time since there's no compile-time link between the two sides.
+function extractCalledFunctionNames(source) {
+  const names = new Set();
+  const re = /httpsCallable(?:<[^>]*>)?\(\s*functions\s*,\s*['"]([\w.-]+)['"]/g;
+  let match;
+  while ((match = re.exec(source))) names.add(match[1]);
+  return names;
+}
+
+function extractExportedCallableNames(source) {
+  const names = new Set();
+  const re = /export\s+const\s+(\w+)\s*=\s*onCall\s*\(/g;
+  let match;
+  while ((match = re.exec(source))) names.add(match[1]);
+  return names;
+}
+
+const frontendFiles = [...walk('src'), ...walk('apps')];
+const calledFunctionNames = new Set();
+for (const file of frontendFiles) {
+  for (const name of extractCalledFunctionNames(readFileSync(file, 'utf8'))) calledFunctionNames.add(name);
+}
+
+const backendCallableNames = new Set();
+if (existsSync('functions')) {
+  for (const entry of readdirSync('functions')) {
+    if (!entry.endsWith('.ts') || entry.endsWith('.d.ts')) continue;
+    for (const name of extractExportedCallableNames(readFileSync(join('functions', entry), 'utf8'))) {
+      backendCallableNames.add(name);
+    }
+  }
+}
+
+const phantomCallables = [...calledFunctionNames].filter((name) => !backendCallableNames.has(name)).sort();
+warn(
+  phantomCallables.length === 0,
+  `Frontend calls ${phantomCallables.length} Cloud Function(s) with no matching "export const <name> = onCall(...)" anywhere under functions/: ${phantomCallables.join(', ')}. ` +
+  'Verify each call site is either dead/unrouted code or needs a real backend implementation.'
+);
+
 // ── Production environment variable checks ───────────────────────────────────
-// These checks run against the current process.env — they catch missing secrets
-// during local validation and in CI pre-deploy steps.
+// These checks run against the current process.env — they catch missing public
+// client keys during local validation and in CI pre-deploy steps.
 const envVapidKey = process.env.VITE_FIREBASE_VAPID_KEY || '';
 const envMapsKey = process.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const envAppCheckKey = process.env.VITE_APP_CHECK_SITE_KEY || '';
@@ -143,6 +233,7 @@ assert(
 );
 
 assert(packageJson.includes('test:stability'), 'package.json must expose production stability test script.');
+assert(packageJson.includes('test:e2e:business'), 'package.json must expose deep 5-profile business workflow tests.');
 
 if (warnings.length) {
   console.warn('\nProduction runtime audit warnings:\n');
@@ -156,4 +247,3 @@ if (failures.length) {
 }
 
 console.log('Production runtime audit passed.');
-

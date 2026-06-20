@@ -37,6 +37,9 @@ jobs:
       - name: Verify Java runtime
         run: java -version
 
+      - name: Normalize Firestore rules before hygiene guard
+        run: node scripts/normalize-firestore-rules.mjs
+
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 

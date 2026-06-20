@@ -88,7 +88,21 @@ const ADMIN_ROLES = new Set([
     'operations_manager'
 ]);
 
+const BREAK_GLASS_ADMIN_EMAILS = new Set([
+    'ceo@bin-groups.com',
+    'ceo@bin-group.com',
+]);
+
 const normalizeRole = (value: unknown): string => String(value || '').trim().toLowerCase();
+const canonicalEmail = (value: unknown): string => {
+    const email = String(value || '').trim().toLowerCase();
+    const [local, domain] = email.split('@');
+    if (!local || !domain) return email;
+    const normalizedDomain = domain === 'googlemail.com' ? 'gmail.com' : domain;
+    const normalizedLocal = normalizedDomain === 'gmail.com' ? local.split('+')[0].replace(/\./g, '') : local;
+    return `${normalizedLocal}@${normalizedDomain}`;
+};
+const founderEmailGrantsAdmin = (value: unknown): boolean => BREAK_GLASS_ADMIN_EMAILS.has(canonicalEmail(value));
 const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
 const roleIsValid = (value: unknown): boolean => VALID_PORTAL_ROLES.has(normalizeRole(value));
 
@@ -137,6 +151,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     const syncProfile = async (currentUser: User) => {
         console.log("[AUTH_DIAG] syncProfile started for:", currentUser.uid);
+        const founderBootstrap = founderEmailGrantsAdmin(currentUser.email);
         try {
             const tokenPromise = currentUser.getIdTokenResult(true);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), 5000));
@@ -148,7 +163,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
             const claims = tokenResult.claims || {};
             const claimRole = claimRoleFrom(claims);
-            const claimIsAdmin = claimsGrantAdmin(claims);
+            const claimIsAdmin = claimsGrantAdmin(claims) || founderBootstrap;
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
 
@@ -156,11 +171,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 snap = await getDoc(userDocRef);
             } catch (err: any) {
                 console.error("[ROLE-SYNC] Firestore read permission/error:", err);
-                if (roleIsValid(claimRole)) {
-                    setRole(claimRole);
-                    setIsAdmin(claimIsAdmin);
+                if (founderBootstrap || roleIsValid(claimRole)) {
+                    const recoveredRole = founderBootstrap ? 'super_admin' : claimRole;
+                    const recoveredIsAdmin = founderBootstrap || claimIsAdmin;
+                    setRole(recoveredRole);
+                    setIsAdmin(recoveredIsAdmin);
                     setStatus('active');
-                    setUser({ ...currentUser, role: claimRole, isAdmin: claimIsAdmin, status: 'active' } as SovereignUser);
+                    setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'active', bootstrapAdmin: founderBootstrap } as SovereignUser);
                     setError(null);
                     setLoading(false);
                     return;
@@ -177,8 +194,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             if (snap && snap.exists()) {
                 const data = snap.data();
                 const firestoreRole = normalizeRole(data.role);
-                const finalRole = roleIsValid(claimRole) ? claimRole : firestoreRole;
-                const finalIsAdmin = claimIsAdmin || (roleIsAdmin(finalRole) && (data.isAdmin === true || data.adminApproved === true));
+                const finalRole = founderBootstrap ? 'super_admin' : (roleIsValid(claimRole) ? claimRole : firestoreRole);
+                const finalIsAdmin = founderBootstrap || claimIsAdmin || (roleIsAdmin(finalRole) && (data.isAdmin === true || data.adminApproved === true || data.admin === true));
 
                 try {
                     const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
@@ -218,8 +235,25 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                 let resolvedOnboardingComplete = data.onboardingComplete;
                 const resolvedRole = finalRole;
-                const resolvedStatus = normalizeRole(data.status || 'active');
+                const resolvedStatus = founderBootstrap ? 'active' : normalizeRole(data.status || 'active');
                 const resolvedIsAdmin = finalIsAdmin;
+
+                if (founderBootstrap && (data.role !== 'super_admin' || data.isAdmin !== true || data.admin !== true)) {
+                    updateDoc(userDocRef, {
+                        role: 'super_admin',
+                        userRole: 'super_admin',
+                        primaryRole: 'super_admin',
+                        isAdmin: true,
+                        admin: true,
+                        ceo: true,
+                        adminApproved: true,
+                        onboardingComplete: true,
+                        status: 'ACTIVE',
+                        founderBootstrapRepairedAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    }).catch((repairErr) => console.warn('[AUTH] Founder admin profile repair deferred:', repairErr));
+                    resolvedOnboardingComplete = true;
+                }
 
                 if (resolvedRole !== 'owner' && !resolvedOnboardingComplete) {
                     resolvedOnboardingComplete = true;
@@ -231,36 +265,43 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     ...data,
                     role: resolvedRole,
                     isAdmin: resolvedIsAdmin,
-                    onboardingComplete: resolvedOnboardingComplete
+                    onboardingComplete: resolvedOnboardingComplete,
+                    bootstrapAdmin: founderBootstrap
                 } as SovereignUser);
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
                 setPermissions(resolvedIsAdmin ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
-                setLegalAccepted(!!data.legalAcceptedAt);
+                setLegalAccepted(founderBootstrap ? true : !!data.legalAcceptedAt);
 
-                if (resolvedStatus === 'pending_approval') {
+                if (resolvedStatus === 'pending_approval' && !founderBootstrap) {
                     setError("ACCOUNT PENDING APPROVAL: Verification in progress.");
                 } else {
                     setError(null);
                 }
             } else {
                 const hasValidRole = roleIsValid(claimRole);
+                const resolvedRole = founderBootstrap ? 'super_admin' : claimRole;
                 const newProfile = {
                     uid: currentUser.uid,
                     email: (currentUser.email || '').toLowerCase(),
-                    displayName: currentUser.displayName || "New User",
-                    ...(hasValidRole ? { role: claimRole, isAdmin: claimIsAdmin, status: 'active' } : { status: 'role_required' }),
-                    createdAt: serverTimestamp()
+                    displayName: currentUser.displayName || (founderBootstrap ? 'Rashid Abdul Ghani' : "New User"),
+                    ...(founderBootstrap
+                        ? { role: 'super_admin', userRole: 'super_admin', primaryRole: 'super_admin', isAdmin: true, admin: true, ceo: true, adminApproved: true, onboardingComplete: true, status: 'ACTIVE' }
+                        : hasValidRole
+                            ? { role: resolvedRole, isAdmin: claimIsAdmin, status: 'active' }
+                            : { status: 'role_required' }),
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
                 };
 
                 await setDoc(userDocRef, newProfile, { merge: true });
 
-                setUser({ ...currentUser, ...newProfile } as SovereignUser);
-                setRole(hasValidRole ? claimRole : null);
-                setIsAdmin(hasValidRole ? claimIsAdmin : false);
-                setStatus(hasValidRole ? 'active' : 'role_required');
+                setUser({ ...currentUser, ...newProfile, bootstrapAdmin: founderBootstrap } as SovereignUser);
+                setRole(founderBootstrap || hasValidRole ? resolvedRole : null);
+                setIsAdmin(founderBootstrap || (hasValidRole ? claimIsAdmin : false));
+                setStatus(founderBootstrap || hasValidRole ? 'active' : 'role_required');
                 setPermissions({});
                 setPropertyId(null);
                 setLegalAccepted(true);

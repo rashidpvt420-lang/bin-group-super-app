@@ -12,7 +12,7 @@ import {
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
-import { generateContractPDF, generatePayslipPDF } from "./pdfEngine";
+import { generateContractPDF, generatePayslipPDF, generateIntegrityAuditPDF } from "./pdfEngine";
 export { deliverNotificationPush } from "./notificationDelivery";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
@@ -28,6 +28,9 @@ const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const smtpUserSecret = defineSecret("SMTP_USER");
 const smtpPassSecret = defineSecret("SMTP_PASS");
+// Same Secret Manager names used by functions/whatsappBot.ts and functions/whatsappWebhook.ts.
+const waToken = defineSecret("WHATSAPP_TOKEN");
+const waPhoneId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 
 // ─── AUDIT HELPER ──────────────────────────────────────────────────────────
 
@@ -719,7 +722,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
+export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -800,7 +803,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
-export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after || before?.status === after.status) return;
@@ -872,11 +875,8 @@ export const onTicketStatusChanged = onDocumentUpdated("maintenanceTickets/{id}"
 });
 
 
-export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}", async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const ticketData = snap.data();
-
+async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReference, ticketData: any) {
+    const ticketId = ticketRef.id;
     try {
         // Works for both tenant-filed AND owner-filed tickets
         const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";
@@ -907,10 +907,10 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
                 geo: propertyGeo
             }
         };
-        await snap.ref.update(contextUpdate);
+        await ticketRef.update(contextUpdate);
 
         if (!propertyGeo || !contextUpdate.emirate) {
-            await snap.ref.update({
+            await ticketRef.update({
                 status: "pending_assignment",
                 assignmentStatus: "admin_manual_assignment",
                 assignmentError: "Missing geo-anchor."
@@ -941,7 +941,7 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
 
         if (candidates.length > 0) {
             const bestTech = candidates[0];
-            await snap.ref.update({
+            await ticketRef.update({
                 assignedTechnicianId: bestTech.id,
                 technicianId: bestTech.id,
                 assignedTechnicianName: bestTech.data.displayName || bestTech.data.name || "Specialist",
@@ -956,8 +956,8 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
             });
 
             await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
-                url: `/technician/job/${event.params.ticketId}`,
-                extraData: { ticketId: event.params.ticketId, openRoute: true }
+                url: `/technician/job/${ticketId}`,
+                extraData: { ticketId, openRoute: true }
             });
 
             await logAudit({
@@ -965,13 +965,111 @@ export const autoRouteTicket = onDocumentCreated("maintenanceTickets/{ticketId}"
                 actorRole: "system",
                 action: "AUTO_ASSIGN",
                 targetType: "maintenanceTickets",
-                targetId: event.params.ticketId,
+                targetId: ticketId,
                 metadata: { techId: bestTech.id, reason: bestTech.sameArea ? "AREA_MATCH" : "DISTANCE" }
             });
         }
     } catch (err) {
         console.error("AutoRoute Failure:", err);
     }
+}
+
+export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    await attemptAutoAssignment(snap.ref, snap.data());
+});
+
+export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { propertyId, title, description, trade, priority } = request.data || {};
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required.");
+    if (!title) throw new HttpsError("invalid-argument", "Title is required.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    const propertyData = propertyDoc.data()!;
+
+    if (propertyData.ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You do not own this property.");
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const ticketRef = db.collection("maintenanceTickets").doc();
+    const tradeValue = safeString(trade, "GENERAL");
+    await ticketRef.set({
+        propertyId,
+        propertyName: propertyData.name || propertyData.propertyName || propertyData.address || "Institutional Asset",
+        ownerId: propertyData.ownerId,
+        title: safeString(title),
+        description: safeString(description),
+        trade: tradeValue,
+        category: tradeValue,
+        priority: safeString(priority, "NORMAL"),
+        status: "OPEN",
+        source: "ai_mission_guidance",
+        createdBy: request.auth.uid,
+        createdAt: now,
+        updatedAt: now
+    });
+
+    await logAudit({
+        actorId: request.auth.uid, actorRole: "owner",
+        action: "AI_TICKET_CREATE", targetType: "maintenanceTickets", targetId: ticketRef.id,
+        metadata: { propertyId, trade: tradeValue, priority }
+    });
+
+    return { status: "SUCCESS", ticketId: ticketRef.id };
+});
+
+export const approveMaintenanceProposal = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { ticketId } = request.data || {};
+    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID is required.");
+
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+    const ticketDoc = await ticketRef.get();
+    if (!ticketDoc.exists) throw new HttpsError("not-found", "Proposal not found.");
+    const ticketData = ticketDoc.data()!;
+
+    if (ticketData.status !== "PREVENTIVE_PROPOSAL") {
+        throw new HttpsError("failed-precondition", "This ticket is not a pending preventive proposal.");
+    }
+
+    let ownerId: string | null = ticketData.ownerId || null;
+    if (ticketData.propertyId) {
+        const propertyDoc = await db.collection("properties").doc(ticketData.propertyId).get();
+        if (propertyDoc.exists) ownerId = propertyDoc.data()?.ownerId || ownerId;
+    }
+
+    if (ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You are not authorized to approve this proposal.");
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await ticketRef.update({
+        status: "OPEN",
+        ownerId,
+        approvalType: "OWNER_SANCTIONED",
+        approvedBy: request.auth.uid,
+        approvedAt: now,
+        updatedAt: now
+    });
+
+    await logAudit({
+        actorId: request.auth.uid, actorRole: "owner",
+        action: "APPROVE_PREVENTIVE_PROPOSAL", targetType: "maintenanceTickets", targetId: ticketId
+    });
+
+    await attemptAutoAssignment(ticketRef, { ...ticketData, status: "OPEN", ownerId });
+
+    return { status: "SUCCESS" };
 });
 
 
@@ -1011,8 +1109,8 @@ async function sendTwilioSMS(to: string, message: string) {
 }
 
 async function sendWhatsAppTemplate(to: string, templateName: string, languageCode = "en", bodyText = "") {
-    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneId = waPhoneId.value();
+    const token = waToken.value();
     if (!phoneId || !token) {
         console.info(`[WhatsApp MOCK] To: ${to}, Template: ${templateName}, BodyText: ${bodyText}`);
         return;
@@ -1183,23 +1281,342 @@ export const generateAndEmailPayslip = onCall({
     }
 });
 
+export const generateIntegrityAudit = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const { intel, propertyName } = request.data || {};
+    const payload = assertPlainObject(intel, "Intelligence payload");
+    const propertyId = safeString(payload.propertyId);
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required in the intelligence payload.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    if (propertyDoc.data()?.ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+        throw new HttpsError("permission-denied", "You do not own this property.");
+    }
+
+    try {
+        const url = await generateIntegrityAuditPDF({
+            propertyId,
+            propertyName: safeString(propertyName, "Property"),
+            intel: payload
+        });
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "owner",
+            action: "INTEGRITY_AUDIT_GENERATE", targetType: "properties", targetId: propertyId
+        });
+
+        return { status: "SUCCESS", url };
+    } catch (err: any) {
+        console.error("Integrity audit generation failed:", err);
+        throw new HttpsError("internal", "Audit generation failed.");
+    }
+});
+
+// ─── ADMIN PRICING, COMPLIANCE & ROI TOOLING ───────────────────────────────
+
+export const calculateAMCV2 = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const { propertyName, zone, buildingAge, numUnits } = request.data || {};
+    const age = Number(buildingAge);
+    const units = Number(numUnits);
+    if (!Number.isFinite(age) || age < 0) throw new HttpsError("invalid-argument", "A valid building age is required.");
+    if (!Number.isFinite(units) || units <= 0) throw new HttpsError("invalid-argument", "A valid unit count is required.");
+
+    const ageBonus = 1 + Math.min(age * 0.012, 0.40);
+    const ratePerUnit = Math.round(3500 * ageBonus);
+    const baseAED = ratePerUnit * units;
+
+    return {
+        propertyName: safeString(propertyName, "Property"),
+        zone: safeString(zone, "Standard"),
+        baseAED,
+        ratePerUnit,
+        numUnits: units
+    };
+});
+
+export const exportComplianceReport = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const monthsRaw = Number(request.data?.months);
+    const months = Number.isFinite(monthsRaw) && monthsRaw > 0 ? Math.min(monthsRaw, 36) : 12;
+
+    try {
+        const periodEnd = new Date();
+        const periodStart = new Date(periodEnd.getTime() - months * 30 * 24 * 60 * 60 * 1000);
+        const periodStartTs = admin.firestore.Timestamp.fromDate(periodStart);
+
+        const [snakeSnap, camelSnap, ticketsSnap] = await Promise.all([
+            db.collection("audit_logs").where("createdAt", ">=", periodStartTs).orderBy("createdAt", "desc").limit(2000).get(),
+            db.collection("auditLogs").where("createdAt", ">=", periodStartTs).orderBy("createdAt", "desc").limit(2000).get(),
+            db.collection("maintenanceTickets").where("updatedAt", ">=", periodStartTs).get()
+        ]);
+
+        const CRITICAL_KEYWORDS = ["REJECT", "CRITICAL", "FAIL", "BREACH", "FRAUD", "SUSPEND", "TERMINATE", "DELETE"];
+        const entries: Array<Record<string, any>> = [];
+        let contractEvents = 0;
+        let criticalEvents = 0;
+
+        const consume = (snap: admin.firestore.QuerySnapshot) => {
+            snap.forEach(doc => {
+                const data = doc.data();
+                const action = safeString(data.action, "UNKNOWN_ACTION");
+                if (action.includes("CONTRACT")) contractEvents++;
+                if (CRITICAL_KEYWORDS.some(k => action.includes(k))) criticalEvents++;
+                entries.push({
+                    id: doc.id,
+                    actorId: data.actorId || null,
+                    actorRole: data.actorRole || null,
+                    action,
+                    targetType: data.targetType || null,
+                    targetId: data.targetId || null,
+                    reason: data.reason || null,
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : null
+                });
+            });
+        };
+        consume(snakeSnap);
+        consume(camelSnap);
+        entries.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+        let slaBreaches = 0;
+        let slaTracked = 0;
+        ticketsSnap.forEach(doc => {
+            slaTracked++;
+            if (doc.data().slaViolated === true) slaBreaches++;
+        });
+        const slaCompliancePct = slaTracked > 0 ? Math.round(((slaTracked - slaBreaches) / slaTracked) * 1000) / 10 : 100;
+
+        const report = {
+            generatedAt: new Date().toISOString(),
+            periodMonths: months,
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+            summary: {
+                totalAuditEvents: entries.length,
+                contractEvents,
+                slaCompliancePct,
+                slaBreaches,
+                criticalEvents
+            },
+            entries: entries.slice(0, 1000)
+        };
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "EXPORT_COMPLIANCE_REPORT", targetType: "audit_logs", targetId: "ALL",
+            metadata: { months }
+        });
+
+        return { status: "SUCCESS", report };
+    } catch (err: any) {
+        console.error("Compliance report export failed:", err);
+        throw new HttpsError("internal", "Compliance report export failed.");
+    }
+});
+
+export const generateTrialROIReport = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const propertyId = safeString(request.data?.propertyId);
+    if (!propertyId) throw new HttpsError("invalid-argument", "Property ID is required.");
+
+    const propertyDoc = await db.collection("properties").doc(propertyId).get();
+    if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
+    const propertyData = propertyDoc.data()!;
+
+    try {
+        const periodEnd = new Date();
+        const periodStart = new Date(periodEnd.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+        const ticketsSnap = await db.collection("maintenanceTickets").where("propertyId", "==", propertyId).get();
+
+        const resolvedStatuses = new Set(["COMPLETED", "completed", "CLOSED", "closed", "RESOLVED", "resolved"]);
+        let totalResolved = 0;
+        let totalPending = 0;
+        let slaCompliant = 0;
+        let slaTracked = 0;
+        let resolutionHoursSum = 0;
+        let resolutionSamples = 0;
+        let preventedCost = 0;
+        const categoryCounts: Record<string, number> = {};
+
+        ticketsSnap.forEach(doc => {
+            const data = doc.data();
+            const status = String(data.status || "");
+            const category = safeString(data.category || data.trade, "GENERAL");
+            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+
+            if (resolvedStatuses.has(status)) {
+                totalResolved++;
+                preventedCost += Number(data.estimatedCost) || Number(data.actualCost) || 0;
+
+                const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+                const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : null;
+                if (createdAt && completedAt) {
+                    resolutionHoursSum += (completedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+                    resolutionSamples++;
+                }
+
+                slaTracked++;
+                if (!data.slaViolated) slaCompliant++;
+            } else {
+                totalPending++;
+            }
+        });
+
+        const totalTickets = totalResolved + totalPending;
+        const avgResolutionHours = resolutionSamples > 0 ? Math.round((resolutionHoursSum / resolutionSamples) * 10) / 10 : 0;
+        const slaComplianceRate = slaTracked > 0 ? Math.round((slaCompliant / slaTracked) * 1000) / 10 : 100;
+
+        const topCategories: [string, number][] = Object.entries(categoryCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        const passportSnap = await db.collection("propertyPassports").doc(propertyId).get();
+        const passportData = passportSnap.exists ? passportSnap.data() : null;
+        const rawHealthScore = passportData ? Number(passportData.assetHealthScore ?? passportData.healthScore) : NaN;
+        const assetHealthScore = Number.isFinite(rawHealthScore) ? rawHealthScore : null;
+
+        const ownerId = safeString(propertyData.ownerId);
+        const ownerDoc = ownerId ? await db.collection("users").doc(ownerId).get() : null;
+        const ownerName = ownerDoc?.exists
+            ? safeString(ownerDoc.data()?.name || ownerDoc.data()?.displayName, "Property Owner")
+            : "Property Owner";
+
+        const headline = slaComplianceRate >= 90
+            ? "Portfolio is operating within institutional SLA standards."
+            : slaComplianceRate >= 75
+                ? "Portfolio performance is acceptable but has room for improvement."
+                : "Portfolio SLA compliance requires immediate attention.";
+
+        const recommendation = totalPending > 0
+            ? `${totalPending} mission(s) remain open. Prioritize dispatch to protect SLA compliance.`
+            : "All missions resolved within the reporting window. Maintain the current preventive maintenance cadence.";
+
+        const report = {
+            propertyId,
+            propertyName: safeString(propertyData.name || propertyData.propertyName || propertyData.address, "Institutional Asset"),
+            ownerName,
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+            totalTickets,
+            totalResolved,
+            totalPending,
+            avgResolutionHours,
+            slaComplianceRate,
+            totalPreventedCostAED: Math.round(preventedCost),
+            assetHealthScore,
+            topCategories,
+            trialSummary: { headline, recommendation },
+            generatedAt: new Date().toISOString()
+        };
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "GENERATE_ROI_REPORT", targetType: "properties", targetId: propertyId
+        });
+
+        return report;
+    } catch (err: any) {
+        console.error("ROI report generation failed:", err);
+        throw new HttpsError("internal", "ROI report generation failed.");
+    }
+});
+
+export const notifyRole = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
+    const payload = assertPlainObject(request.data, "Notification payload");
+    const role = safeString(payload.role);
+    const title = safeString(payload.title);
+    const body = safeString(payload.body);
+    const allowedRoles = new Set(["owner", "tenant", "technician", "broker", "admin"]);
+    if (!allowedRoles.has(role)) throw new HttpsError("invalid-argument", "A valid target role is required.");
+    if (!title || !body) throw new HttpsError("invalid-argument", "Notification title and body are required.");
+
+    const type = safeString(payload.type, "ADMIN_BROADCAST");
+    const link = payload.link ? safeString(payload.link) : null;
+
+    try {
+        const usersSnap = await db.collection("users").where("role", "==", role).limit(500).get();
+        if (usersSnap.empty) {
+            return { status: "SUCCESS", notified: 0 };
+        }
+
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const batch = db.batch();
+        usersSnap.forEach(userDoc => {
+            const ref = db.collection("notifications").doc();
+            batch.set(ref, {
+                userId: userDoc.id,
+                role,
+                title,
+                body,
+                type,
+                link,
+                status: "PENDING",
+                read: false,
+                createdAt: now,
+                source: "ADMIN_NOTIFY_ROLE"
+            });
+        });
+        await batch.commit();
+
+        await logAudit({
+            actorId: request.auth.uid, actorRole: "admin",
+            action: "NOTIFY_ROLE_BROADCAST", targetType: "users", targetId: role,
+            metadata: { count: usersSnap.size, type }
+        });
+
+        return { status: "SUCCESS", notified: usersSnap.size };
+    } catch (err: any) {
+        console.error("Role notification broadcast failed:", err);
+        throw new HttpsError("internal", "Role notification broadcast failed.");
+    }
+});
+
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
-        const { input } = request.data;
+        const { context, input: rawInput } = request.data;
+        const prompt = rawInput || (context
+            ? `You are BIN GROUP's property intelligence AI. Analyze this property data and provide a concise strategic maintenance recommendation (2-3 sentences):\n${JSON.stringify(context).substring(0, 2000)}`
+            : 'Provide general property maintenance guidance for a UAE property.');
         const apiKey = openAiKey.value();
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: "gpt-4o-mini",
-                messages: [{ role: "system", content: "You are the BIN GROUP AI assistant." }, { role: "user", content: input }],
+                messages: [{ role: "system", content: "You are the BIN GROUP AI assistant. Be concise and practical." }, { role: "user", content: prompt }],
                 max_tokens: 250
             })
         });
         const data = await response.json();
-        return { status: "SUCCESS", guidance: data.choices?.[0]?.message?.content };
+        if (!response.ok) {
+            console.error("[getMissionGuidance] OpenAI request failed:", response.status, data?.error?.message || data);
+            throw new HttpsError('internal', 'AI backend unavailable.');
+        }
+        const guidance = data.choices?.[0]?.message?.content;
+        if (!guidance) throw new HttpsError('internal', 'AI backend returned no guidance.');
+        return { status: "SUCCESS", guidance };
     } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        console.error("[getMissionGuidance] Unexpected error:", error);
         throw new HttpsError('internal', 'AI backend unavailable.');
     }
 });
@@ -1296,7 +1713,7 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
 
 // ─── SCHEDULED MISSIONS ────────────────────────────────────────────────────
 
-export const onApprovalStagnant = onSchedule("every 24 hours", async () => {
+export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours", secrets: [waToken, waPhoneId] }, async () => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const pending = await db.collection("maintenanceTickets")
         .where("status", "==", "AWAITING_OWNER_APPROVAL")
@@ -2581,7 +2998,9 @@ export const processPayment = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
 
     const { invoiceId, paymentMethod, amount } = request.data;
-    if (!invoiceId || !amount) throw new HttpsError("invalid-argument", "Transaction payload incomplete.");
+    if (!invoiceId || typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+        throw new HttpsError("invalid-argument", "Transaction payload incomplete or invalid.");
+    }
 
     const uid = request.auth.uid;
     const invoiceRef = db.collection("invoices").doc(invoiceId);
@@ -2592,6 +3011,11 @@ export const processPayment = onCall({ cors: true }, async (request) => {
 
         const invoiceData = invoiceSnap.data()!;
         if (invoiceData.status === "PAID") throw new HttpsError("failed-precondition", "Transaction already settled.");
+
+        const invoiceAmount = Number(invoiceData.amount);
+        if (!Number.isFinite(invoiceAmount) || Math.abs(amount - invoiceAmount) > 0.01) {
+            throw new HttpsError("invalid-argument", "Payment amount does not match the invoice balance.");
+        }
 
         const txId = `TXN-${Date.now()}-${uid.substring(0, 5)}`;
         const receiptId = `RCPT-${Date.now()}`;
@@ -2717,7 +3141,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
 
 // ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
 
-export const onChatMessageSent = onDocumentCreated("maintenanceTickets/{ticketId}/messages/{messageId}", async (event) => {
+export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}", secrets: [waToken, waPhoneId] }, async (event) => {
     const snap = event.data;
     if (!snap) return;
 
@@ -2884,7 +3308,7 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
     }
 });
 
-export const onTicketTechnicianAssignmentChanged = onDocumentUpdated("maintenanceTickets/{id}", async (event) => {
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;
@@ -2968,3 +3392,9 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
         }
     }
 );
+
+// ─── NEW FEATURES ─────────────────────────────────────────────────────────
+export { assessDamage } from "./damageAssessment";
+export { runSovereignAI } from "./aiAssistant";
+export { whatsappBotWebhook } from "./whatsappBot";
+

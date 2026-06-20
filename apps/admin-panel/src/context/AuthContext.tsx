@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, onAuthStateChanged, app } from '../lib/firebase';
 import { signOut, getIdTokenResult } from 'firebase/auth';
-import { getDoc, doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, setDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken } from 'firebase/messaging';
 
 interface AuthContextType {
@@ -26,15 +26,11 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
-const BOOTSTRAP_ADMIN_EMAILS = new Set(
-    (process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || '')
-        .split(',')
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean)
-);
+const DEFAULT_FOUNDER_ADMIN_EMAILS = [
+    'ceo@bin-groups.com',
+    'ceo@bin-group.com',
+];
 
-const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
-const profileRoleFrom = (profile: any) => String(profile?.role || profile?.userRole || profile?.primaryRole || '').trim().toLowerCase();
 const canonicalEmail = (value: unknown) => {
     const email = String(value || '').trim().toLowerCase();
     const [local, domain] = email.split('@');
@@ -43,6 +39,17 @@ const canonicalEmail = (value: unknown) => {
     const normalizedLocal = normalizedDomain === 'gmail.com' ? local.split('+')[0].replace(/\./g, '') : local;
     return `${normalizedLocal}@${normalizedDomain}`;
 };
+
+const BOOTSTRAP_ADMIN_EMAILS = new Set([
+    ...DEFAULT_FOUNDER_ADMIN_EMAILS,
+    ...(process.env.REACT_APP_FOUNDER_ADMIN_EMAILS || '')
+        .split(',')
+        .map((email) => canonicalEmail(email))
+        .filter(Boolean),
+]);
+
+const claimRoleFrom = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
+const profileRoleFrom = (profile: any) => String(profile?.role || profile?.userRole || profile?.primaryRole || '').trim().toLowerCase();
 
 const claimsGrantAdmin = (claims: Record<string, unknown>) => {
     const role = claimRoleFrom(claims);
@@ -67,6 +74,13 @@ const profileGrantsAdmin = (profile: any) => {
 };
 
 const founderEmailGrantsAdmin = (email: unknown) => BOOTSTRAP_ADMIN_EMAILS.has(canonicalEmail(email));
+
+const timeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise<T> => {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(code)), ms)),
+    ]);
+};
 
 export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -97,49 +111,76 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             console.log("🔍 [DIAG] Admin Auth handshake marked as READY.");
         };
 
+        const authStateWatchdog = window.setTimeout(() => {
+            if (authHandshakeResolved) return;
+            console.error('🛡️ [AUTH] onAuthStateChanged did not fire within watchdog window.');
+            setError('Admin token check timed out. Use Reset & Login, then retry.');
+            markAuthReady();
+        }, 12000);
+
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+            window.clearTimeout(authStateWatchdog);
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             
             if (!usr) {
                 setIsAuthenticated(false);
                 setUser(null);
-                setError(null);
                 markAuthReady();
                 return;
             }
 
             try {
-                const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 15000);
-                });
-
-                const authResolutionPromise = Promise.all([
-                    getIdTokenResult(usr, true),
-                    getDoc(doc(db, "users", usr.uid)),
-                ]);
-
-                const [idTokenResult, userDoc] = await Promise.race([
-                    authResolutionPromise,
-                    timeoutPromise,
-                ]);
-
+                const idTokenResult = await timeout(getIdTokenResult(usr, true), 15000, 'AUTH_TOKEN_TIMEOUT');
                 const claims = idTokenResult.claims || {};
-                const profile = userDoc.exists() ? userDoc.data() : null;
                 const claimRole = claimRoleFrom(claims);
-                const profileRole = profileRoleFrom(profile);
                 const isFounderBootstrap = founderEmailGrantsAdmin(usr.email);
-                const isAdmin = claimsGrantAdmin(claims) || profileGrantsAdmin(profile) || isFounderBootstrap;
-                const role = claimRole || profileRole || (isFounderBootstrap ? 'super_admin' : '');
+                const claimsAdmin = claimsGrantAdmin(claims);
+
+                let profile: any = null;
+                let profileReadError: unknown = null;
+                try {
+                    const userDoc = await timeout(getDoc(doc(db, 'users', usr.uid)), 8000, 'ADMIN_PROFILE_TIMEOUT');
+                    profile = userDoc.exists() ? userDoc.data() : null;
+                } catch (profileErr) {
+                    profileReadError = profileErr;
+                    console.warn('[ADMIN-AUTH] Profile lookup failed; continuing with claims/founder bootstrap check:', profileErr);
+                }
+
+                const profileRole = profileRoleFrom(profile);
+                const profileAdmin = profileGrantsAdmin(profile);
+                const isAdmin = claimsAdmin || profileAdmin || isFounderBootstrap;
+                const role = isFounderBootstrap ? 'super_admin' : (claimRole || profileRole || '');
 
                 if (!isAdmin) {
-                    throw new Error("ADMIN_ACCESS_DENIED");
+                    if (profileReadError && !claimsAdmin) {
+                        throw new Error('ADMIN_PROFILE_LOOKUP_FAILED');
+                    }
+                    throw new Error('ADMIN_ACCESS_DENIED');
+                }
+
+                if (isFounderBootstrap && (!profile || profile.role !== 'super_admin' || profile.isAdmin !== true || profile.admin !== true)) {
+                    setDoc(doc(db, 'users', usr.uid), {
+                        uid: usr.uid,
+                        email: canonicalEmail(usr.email),
+                        displayName: usr.displayName || profile?.displayName || 'BIN GROUP CEO',
+                        role: 'super_admin',
+                        userRole: 'super_admin',
+                        primaryRole: 'super_admin',
+                        isAdmin: true,
+                        admin: true,
+                        ceo: true,
+                        adminApproved: true,
+                        onboardingComplete: true,
+                        status: 'ACTIVE',
+                        founderBootstrapRepairedAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    }, { merge: true }).catch((repairErr) => console.warn('[ADMIN-AUTH] Founder profile repair deferred:', repairErr));
                 }
 
                 setUser({ ...usr, ...profile, role, isAdmin: true, claims, bootstrapAdmin: isFounderBootstrap });
                 setIsAuthenticated(true);
                 setError(null);
 
-                // Audit Log (Once per session)
                 if (!sessionStorage.getItem(`login_audit_${usr.uid}`)) {
                     sessionStorage.setItem(`login_audit_${usr.uid}`, 'true');
                     addDoc(collection(db, 'audit_logs'), {
@@ -154,7 +195,6 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                     }).catch(e => console.error("Audit log failed", e));
                 }
 
-                // Optional FCM Sync
                 (async () => {
                     try {
                         const supported = await isSupported();
@@ -180,13 +220,16 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 setIsAuthenticated(false);
                 setUser(null);
 
-                if (err.message === "AUTH_SYNC_TIMEOUT") {
-                    setError("Admin session check timed out. Please retry.");
-                } else if (err.message === "ADMIN_ACCESS_DENIED") {
-                    setError("This account does not have admin access.");
+                if (err.message === 'AUTH_TOKEN_TIMEOUT' || err.message === 'AUTH_SYNC_TIMEOUT') {
+                    setError('Admin token check timed out. Use Reset & Login, then retry.');
+                } else if (err.message === 'ADMIN_PROFILE_TIMEOUT' || err.message === 'ADMIN_PROFILE_LOOKUP_FAILED') {
+                    setError('Admin profile could not be verified from Firestore. Use the founder admin email or repair the /users profile/admin claims.');
+                    await signOut(auth);
+                } else if (err.message === 'ADMIN_ACCESS_DENIED') {
+                    setError('This account does not have admin access. Use ceo@bin-groups.com or assign admin custom claims/profile role.');
                     await signOut(auth);
                 } else {
-                    setError("Admin login failed. Please try again.");
+                    setError('Admin login failed. Use Reset & Login, then try again.');
                 }
             } finally {
                 markAuthReady();
@@ -194,12 +237,13 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         });
 
         return () => {
+            window.clearTimeout(authStateWatchdog);
             if (unsubscribe) unsubscribe();
         };
     }, []);
 
     const login = async (credentials: any) => {
-        // Implementation provided by UnifiedLogin or direct firebase call
+        console.warn('[ADMIN-AUTH] login() is intentionally delegated to UnifiedLogin.', credentials?.email ? { email: credentials.email } : {});
     };
 
     const logout = async () => {

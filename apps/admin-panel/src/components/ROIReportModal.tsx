@@ -11,8 +11,9 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '@bin/shared';
+import { functions } from '../lib/firebase';
 
 interface ROIReport {
     propertyId: string;
@@ -49,8 +50,7 @@ export default function ROIReportModal({ propertyId, propertyName }: Props) {
         setError('');
         setReport(null);
         try {
-            const fns = getFunctions();
-            const fn = httpsCallable<{ propertyId: string }, ROIReport>(fns, 'generateTrialROIReport');
+            const fn = httpsCallable<{ propertyId: string }, ROIReport>(functions, 'generateTrialROIReport');
             const res = await fn({ propertyId });
             setReport(res.data);
         } catch (e: any) {

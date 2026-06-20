@@ -1,6 +1,6 @@
 {
   "name": "functions",
-  "main": "lib/runtime.js",
+  "main": "lib/runtimeAll.js",
   "scripts": {
     "build": "tsc",
     "test:ocr-guards": "node --test test/ocr-guards.test.cjs",
