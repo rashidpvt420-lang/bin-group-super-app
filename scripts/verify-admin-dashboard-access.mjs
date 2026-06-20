@@ -9,8 +9,8 @@ const adminPackage = JSON.parse(readFileSync('apps/admin-panel/package.json', 'u
 const requiredLogin = [
   'signInWithRedirect',
   'browserLocalPersistence',
-  'SIGN IN WITH GOOGLE',
-  'ADMIN PORTAL',
+  'Sign in with Google',
+  'Admin Login',
   'auth/unauthorized-domain',
   'auth/operation-not-allowed',
 ];

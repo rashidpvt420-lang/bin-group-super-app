@@ -98,13 +98,7 @@ function AppContent() {
     }
 
     if (error && !isAuthenticated) {
-        return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
-                <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.sys_init_fault')}</Typography>
-                <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{error}</Typography>
-                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
-            </Box>
-        );
+        console.warn('[ADMIN-SHELL] Auth error surfaced to login form instead of blocking recovery:', error);
     }
 
     return (

@@ -97,12 +97,6 @@ replaceRegex(
 );
 
 replaceRegex(
-  /<span className="uppercase tracking-widest text-sm">[\s\S]*?<\/span>/,
-  `<span className="uppercase tracking-widest text-sm">Sign in with Google</span>`,
-  'google button label'
-);
-
-replaceRegex(
   /<span className="text-\[9px\] text-\[#94a3b8\] font-black uppercase tracking-widest">[\s\S]*?<\/span>/,
   `<span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
                             Protected admin access

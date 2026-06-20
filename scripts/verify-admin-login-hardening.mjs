@@ -10,8 +10,8 @@ const requiredLoginTokens = [
   'provider.setCustomParameters({ prompt: \'select_account\' })',
   'auth/unauthorized-domain',
   'auth/operation-not-allowed',
-  'ADMIN PORTAL',
-  'SIGN IN WITH GOOGLE',
+  'Admin Login',
+  'Sign in with Google',
 ];
 
 for (const token of requiredLoginTokens) {
