@@ -59,6 +59,9 @@ import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
 import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
 import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
 import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
+import BinConnectInboxPage from './pages/admin/BinConnectInboxPage';
+import PilotCompletionCommandPage from './pages/admin/PilotCompletionCommandPage';
+import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -135,6 +138,9 @@ function AppContent() {
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
                     <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/bin-connect" element={<ProtectedRoute adminOnly><BinConnectInboxPage /></ProtectedRoute>} />
+                    <Route path="/ops/pilot-completion" element={<ProtectedRoute adminOnly><PilotCompletionCommandPage /></ProtectedRoute>} />
+                    <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />
                     <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
                     <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
                     <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />

@@ -112,10 +112,7 @@ service cloud.firestore {
     function isConfidentialRequest(data) {
       return ('requestType' in data && data.requestType == 'manager_issue') || ('category' in data && data.category == 'confidential');
     }
- review/deployed-hosting-state
 
-
- main
     function isTechnicianActor() {
       return signedIn() && (
         ('role' in request.auth.token && request.auth.token.role == 'technician') ||
@@ -133,10 +130,7 @@ service cloud.firestore {
         request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']
       );
     }
- review/deployed-hosting-state
 
-
- main
     function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
     function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
@@ -837,7 +831,6 @@ service cloud.firestore {
     match /owner_approval_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if isAdmin();
- review/deployed-hosting-state
       allow update: if isAdmin() || (
         signedIn() &&
         resource.data.ownerId == request.auth.uid &&
@@ -847,19 +840,12 @@ service cloud.firestore {
         request.resource.data.decision in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
         request.resource.data.status in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
       );
-
-      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
- main
       allow delete: if isAdmin();
     }
 
     match /maintenance_ledger/{ledgerId} {
       allow read: if isAdmin();
- review/deployed-hosting-state
       allow create: if isAdmin();
-
-      allow create: if isAdmin() || (signedIn() && request.resource.data.ownerId == request.auth.uid);
- main
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
