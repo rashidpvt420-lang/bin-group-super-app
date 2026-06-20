@@ -1,8 +1,8 @@
 {
-  "short_name": "BIN-Admin",
-  "name": "BIN-ADMINISTRY",
+  "short_name": "BIN Admin",
+  "name": "BIN Group Admin Portal",
   "display": "standalone",
-  "start_url": "/admin/",
+  "start_url": "/login",
   "theme_color": "#020617",
   "background_color": "#020617",
   "icons": [
