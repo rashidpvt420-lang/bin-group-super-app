@@ -1,5 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 
 const whatsappToken = defineSecret("WHATSAPP_TOKEN");
@@ -155,7 +155,6 @@ async function persistInboundMessage(args: {
 export const whatsappWebhook = onRequest(
   {
     region: "us-central1",
-    secrets: [whatsappToken, whatsappPhoneNumberId, whatsappVerifyToken],
     cors: false,
   },
   async (req, res) => {
@@ -163,8 +162,14 @@ export const whatsappWebhook = onRequest(
       const mode = String(req.query["hub.mode"] || "");
       const token = String(req.query["hub.verify_token"] || "");
       const challenge = String(req.query["hub.challenge"] || "");
+      const verifyToken = whatsappVerifyToken.value();
 
-      if (mode === "subscribe" && token === whatsappVerifyToken.value()) {
+      if (!verifyToken) {
+        res.status(500).send("WhatsApp webhook verification failed: Verify Token is unconfigured.");
+        return;
+      }
+
+      if (mode === "subscribe" && token === verifyToken) {
         res.status(200).send(challenge);
         return;
       }
@@ -176,6 +181,14 @@ export const whatsappWebhook = onRequest(
     if (req.method !== "POST") {
       res.set("Allow", "GET, POST");
       res.status(405).send("Method not allowed.");
+      return;
+    }
+
+    const token = whatsappToken.value();
+    const phoneId = whatsappPhoneNumberId.value();
+    if (!token || !phoneId) {
+      console.error("WhatsApp Cloud API configuration is missing. Webhook disabled.");
+      res.status(500).json({ ok: false, error: "WHATSAPP_CONFIG_MISSING" });
       return;
     }
 

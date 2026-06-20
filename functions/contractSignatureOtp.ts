@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
@@ -63,9 +63,15 @@ async function sendOtpEmail(args: { to: string; otp: string; contractId: string;
 }
 
 export const requestContractSignatureOtp = onCall(
-  { cors: true, region: "europe-west3", secrets: [smtpUser, smtpPass] },
+  { cors: true, region: "europe-west3" },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before requesting a contract signature OTP.");
+
+    const user = smtpUser.value() || process.env.SMTP_USER || "";
+    const pass = smtpPass.value() || process.env.SMTP_PASS || "";
+    if (!user || !pass) {
+      throw new HttpsError("failed-precondition", "SMTP email service is not configured. Contract signature OTP cannot be requested.");
+    }
 
     const uid = request.auth.uid;
     const email = normalizeEmail(request.data?.email || request.auth.token?.email);
