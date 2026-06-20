@@ -1596,6 +1596,9 @@ export const getMissionGuidance = onCall({ cors: true }, async (request) => {
             ? `You are BIN GROUP's property intelligence AI. Analyze this property data and provide a concise strategic maintenance recommendation (2-3 sentences):\n${JSON.stringify(context).substring(0, 2000)}`
             : 'Provide general property maintenance guidance for a UAE property.');
         const apiKey = openAiKey.value();
+        if (!apiKey) {
+            throw new HttpsError("failed-precondition", "AI service is not configured. OpenAI API key is missing.");
+        }
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -1642,6 +1645,9 @@ export const generateDesignConcept = onCall({ cors: true }, async (request) => {
     try {
         const { requestId, scope, designStyle, imageBase64, mimeType } = request.data;
         const apiKey = geminiApiKey.value();
+        if (!apiKey) {
+            throw new HttpsError("failed-precondition", "AI service is not configured. Gemini API key is missing.");
+        }
 
         const fullPrompt = `You are the Sovereign AI Architect for BIN GROUP LLC. 
             Redesign this ${scope?.zoneType || 'space'} using a ${designStyle} interior design style. 
@@ -1774,13 +1780,19 @@ export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, 
     const snap = event.data;
     if (!snap) return;
     try {
+        const user = smtpUserSecret.value();
+        const pass = smtpPassSecret.value();
+        if (!user || !pass) {
+            await snap.ref.update({ delivery: { state: 'ERROR', error: 'SMTP credentials are not configured. Mail cannot be processed.' } });
+            return;
+        }
         const mailTransport = nodemailer.createTransport({
             host: 'smtp.gmail.com', port: 465, secure: true,
-            auth: { user: smtpUserSecret.value(), pass: smtpPassSecret.value() }
+            auth: { user, pass }
         });
         const mailData = snap.data();
         await mailTransport.sendMail({
-            from: `"BIN GROUP" <${smtpUserSecret.value()}>`,
+            from: `"BIN GROUP" <${user}>`,
             to: mailData.to,
             subject: mailData.message?.subject || 'Update',
             html: mailData.message?.html || ''

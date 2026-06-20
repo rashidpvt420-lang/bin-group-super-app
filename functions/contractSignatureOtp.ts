@@ -67,6 +67,12 @@ export const requestContractSignatureOtp = onCall(
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before requesting a contract signature OTP.");
 
+    const user = smtpUser.value() || process.env.SMTP_USER || "";
+    const pass = smtpPass.value() || process.env.SMTP_PASS || "";
+    if (!user || !pass) {
+      throw new HttpsError("failed-precondition", "SMTP email service is not configured. Contract signature OTP cannot be requested.");
+    }
+
     const uid = request.auth.uid;
     const email = normalizeEmail(request.data?.email || request.auth.token?.email);
     if (!email) throw new HttpsError("invalid-argument", "A verified email address is required to deliver the OTP.");

@@ -124,7 +124,12 @@ export const whatsappBotWebhook = onRequest({
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && token === waVerifyToken.value()) {
+    const verifyToken = waVerifyToken.value();
+    if (!verifyToken) {
+      res.status(500).send("WhatsApp webhook verification failed: Verify Token is unconfigured.");
+      return;
+    }
+    if (mode === "subscribe" && token === verifyToken) {
       res.status(200).send(challenge);
     } else {
       res.status(403).send("Forbidden");
@@ -134,6 +139,13 @@ export const whatsappBotWebhook = onRequest({
 
   // POST — incoming message
   if (req.method === "POST") {
+    const phoneId = waPhoneId.value();
+    const token = waToken.value();
+    if (!phoneId || !token) {
+      console.error("WhatsApp Bot configuration is missing. Webhook disabled.");
+      res.status(500).send("WhatsApp configuration is missing.");
+      return;
+    }
     res.status(200).send("OK"); // Acknowledge immediately
     try {
       const body = req.body;
@@ -145,8 +157,6 @@ export const whatsappBotWebhook = onRequest({
 
       const msg = messages[0];
       const from = msg.from;
-      const phoneId = waPhoneId.value();
-      const token = waToken.value();
 
       // Log to Firestore for admin visibility
       await db.collection("whatsappMessages").add({

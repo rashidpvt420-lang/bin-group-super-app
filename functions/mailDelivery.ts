@@ -117,6 +117,11 @@ export const sendQueuedMailOnCreate = onDocumentCreated({ document: "mail/{mailI
 
 export const adminRetryMailDelivery = onCall({ cors: true }, async (request) => {
   await assertAdmin(request.auth);
+  const user = smtpUser.value() || process.env.SMTP_USER || "";
+  const pass = smtpPass.value() || process.env.SMTP_PASS || "";
+  if (!user || !pass) {
+    throw new HttpsError("failed-precondition", "SMTP email service is not configured. Configure SMTP_USER and SMTP_PASS.");
+  }
   const mailId = asText(request.data?.mailId);
   const limit = Math.min(Number(request.data?.limit || 10), 50);
   const results: any[] = [];
