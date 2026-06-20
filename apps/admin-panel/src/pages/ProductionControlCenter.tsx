@@ -64,7 +64,7 @@ export default function ProductionControlCenter() {
                 });
 
                 // Invitations
-                const failedInviteSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('status', '==', 'failed')));
+                const failedInviteSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('emailStatus', '==', 'failed')));
                 
                 // Tenants
                 const tenantSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'tenant')));
@@ -151,7 +151,7 @@ export default function ProductionControlCenter() {
         if (!window.confirm("RESEND ALL FAILED INVITATIONS?")) return;
         setActionRunning('invitations');
         try {
-            const failedSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('status', '==', 'failed')));
+            const failedSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('emailStatus', '==', 'failed')));
             const resend = httpsCallable(functions, 'resendTenantInvitation');
             const results = await Promise.allSettled(failedSnap.docs.map((d) => resend({ invitationId: d.id })));
             const failed = results.filter((r) => r.status === 'rejected').length;
