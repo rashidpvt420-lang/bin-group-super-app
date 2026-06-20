@@ -2371,6 +2371,9 @@ export const onLedgerChangedSyncPassport = onDocumentUpdated("tenant_ledger/{led
 
 export const recalculatePropertyPassport = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
+
     const { propertyId } = request.data;
     if (!propertyId) throw new HttpsError("invalid-argument", "Property ID required.");
 
