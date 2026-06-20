@@ -41,8 +41,11 @@ function hasAdminAccess(token: any, dbRole?: string, dbIsAdmin?: boolean) {
   );
 }
 
+import { randomBytes } from "crypto";
+
 function generatedPassword() {
-  return `BinPilot#${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}!`;
+  const secureRandom = randomBytes(6).toString("hex"); // Generates 12 cryptographically secure hex characters
+  return `BinPilot#${secureRandom}!`;
 }
 
 export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, async (request) => {
