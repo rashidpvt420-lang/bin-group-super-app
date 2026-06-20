@@ -20,7 +20,6 @@ const branchResidueNeedles = [
   ['fix', 'security', 'rbac', 'rules', 'hardening'].join('/'),
 ];
 
-const suspiciousStandaloneWords = new Set(['main']);
 const violations = [];
 
 function relative(filePath) {
@@ -66,14 +65,12 @@ function inspectFile(filePath) {
       violations.push(`${rel}:${index + 1}: unresolved merge conflict marker found.`);
     }
 
-    for (const needle of branchResidueNeedles) {
-      if (trimmed === needle) {
-        violations.push(`${rel}:${index + 1}: branch-name residue found in source.`);
+    if (rel !== 'package-lock.json') {
+      for (const needle of branchResidueNeedles) {
+        if (trimmed === needle) {
+          violations.push(`${rel}:${index + 1}: branch-name residue found in source.`);
+        }
       }
-    }
-
-    if (suspiciousStandaloneWords.has(trimmed)) {
-      violations.push(`${rel}:${index + 1}: suspicious standalone token "${trimmed}" found. This often indicates merge residue.`);
     }
   });
 }

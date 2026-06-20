@@ -12,6 +12,8 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
+import PilotCompletionPage from '../components/PilotCompletionPage';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
@@ -148,6 +150,8 @@ export default function TenantApp() {
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/gate-pass" element={<TenantGatePassPage />} />
                 <Route path="/amenities" element={<TenantAmenitiesPage />} />
+                <Route path="/bin-connect" element={<BinConnectInboxPage role="tenant" dark />} />
+                <Route path="/pilot-completion" element={<PilotCompletionPage role="tenant" dark />} />
             </Routes>
         </TenantLayout>
     );

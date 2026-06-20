@@ -9,6 +9,8 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
+import PilotCompletionPage from '../components/PilotCompletionPage';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
 import TechnicianJobsPage from './pages/TechnicianJobsPage';
@@ -149,6 +151,8 @@ export default function TechnicianApp() {
                 <Route path="/hr" element={<TechnicianHRPage />} />
                 <Route path="/offline" element={<TechnicianOfflinePage />} />
                 <Route path="/support" element={<SupportPage />} />
+                <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />
+                <Route path="/pilot-completion" element={<PilotCompletionPage role="technician" />} />
             </Routes>
         </TechnicianLayout>
     );

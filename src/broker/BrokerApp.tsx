@@ -21,6 +21,8 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
+import PilotCompletionPage from '../components/PilotCompletionPage';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
@@ -138,6 +140,8 @@ export default function BrokerApp() {
         <Route path="/commissions" element={<BrokerCommissionsPage />} />
         <Route path="/documents" element={<BrokerDocumentsPage />} />
         <Route path="/profile" element={<BrokerProfilePage />} />
+        <Route path="/bin-connect" element={<BinConnectInboxPage role="broker" />} />
+        <Route path="/pilot-completion" element={<PilotCompletionPage role="broker" />} />
       </Routes>
     </BrokerLayout>
   );

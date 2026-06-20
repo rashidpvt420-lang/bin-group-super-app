@@ -10,6 +10,7 @@ import OwnerActivationGuard from '../components/owner/OwnerActivationGuard';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
+import PilotCompletionPage from '../components/PilotCompletionPage';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
@@ -153,6 +154,7 @@ export default function OwnerApp() {
                 <Route path="/contractor-marketplace" element={<ContractorMarketplacePage />} />
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
+                <Route path="/pilot-completion" element={<PilotCompletionPage role="owner" />} />
             </Routes>
         </OwnerLayout>
     );

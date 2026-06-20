@@ -3,15 +3,29 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
 
+    function adminProfileGrantsAccess() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ceo == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']
+      );
+    }
+
     function isAdmin() {
       return signedIn() && (
         ('admin' in request.auth.token && request.auth.token.admin == true) ||
         ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
+        ('superAdmin' in request.auth.token && request.auth.token.superAdmin == true) ||
+        ('super_admin' in request.auth.token && request.auth.token.super_admin == true) ||
         ('ceo' in request.auth.token && request.auth.token.ceo == true) ||
         ('manager' in request.auth.token && request.auth.token.manager == true) ||
         ('role' in request.auth.token && request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        ('userRole' in request.auth.token && request.auth.token.userRole == 'admin') ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'admin')
+        ('userRole' in request.auth.token && request.auth.token.userRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
+        adminProfileGrantsAccess()
       );
     }
 
@@ -98,6 +112,7 @@ service cloud.firestore {
     function isConfidentialRequest(data) {
       return ('requestType' in data && data.requestType == 'manager_issue') || ('category' in data && data.category == 'confidential');
     }
+
     function isTechnicianActor() {
       return signedIn() && (
         ('role' in request.auth.token && request.auth.token.role == 'technician') ||
@@ -109,7 +124,11 @@ service cloud.firestore {
     }
 
     function hasTechnicianDispatchAuthority() {
-      return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
+      return signedIn() && (
+        request.auth.token.role in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
+        request.auth.token.userRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
+        request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']
+      );
     }
 
     function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
@@ -812,13 +831,21 @@ service cloud.firestore {
     match /owner_approval_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if isAdmin();
-      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin() || (
+        signedIn() &&
+        resource.data.ownerId == request.auth.uid &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) &&
+        request.resource.data.ownerDecisionBy == request.auth.uid &&
+        request.resource.data.decision in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
+        request.resource.data.status in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
+      );
       allow delete: if isAdmin();
     }
 
     match /maintenance_ledger/{ledgerId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || (signedIn() && request.resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
