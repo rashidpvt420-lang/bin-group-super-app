@@ -31,26 +31,33 @@ interface SystemSettings {
   smsNotificationsEnabled: boolean;
 }
 
+const DEFAULT_SETTINGS: SystemSettings = {
+  maintenanceMode: false,
+  autoDispatchEnabled: true,
+  maxTicketsPerTechnician: 8,
+  sosResponseTimeMinutes: 30,
+  turnoverQuoteAutoGeneration: true,
+  paymentReminderDays: 3,
+  suspensionThreshold: 2,
+  binGroupFeePercent: 5,
+  partsMarkupPercent: 20,
+  emailNotificationsEnabled: true,
+  smsNotificationsEnabled: true,
+};
+
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings>({
-    maintenanceMode: false,
-    autoDispatchEnabled: true,
-    maxTicketsPerTechnician: 8,
-    sosResponseTimeMinutes: 30,
-    turnoverQuoteAutoGeneration: true,
-    paymentReminderDays: 3,
-    suspensionThreshold: 2,
-    binGroupFeePercent: 5,
-    partsMarkupPercent: 20,
-    emailNotificationsEnabled: true,
-    smsNotificationsEnabled: true,
-  });
+  const [settings, setSettings] = useState<SystemSettings>({ ...DEFAULT_SETTINGS });
 
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (key: keyof SystemSettings, value: any) => {
     setSettings({ ...settings, [key]: value });
+    setSaved(false);
+  };
+
+  const handleReset = () => {
+    setSettings({ ...DEFAULT_SETTINGS });
     setSaved(false);
   };
 
@@ -260,7 +267,8 @@ export default function SettingsPage() {
         </Button>
         <Button
           variant="outlined"
-          onClick={() => alert('Settings reset to defaults')}
+          onClick={handleReset}
+          disabled={loading}
         >
           Reset to Defaults
         </Button>
