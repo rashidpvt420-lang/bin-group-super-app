@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
 
@@ -287,8 +287,7 @@ async function saveRender(uid: string, requestId: string, conceptId: string, buf
 export const generateAIDesignConceptImages = onCall({
   cors: true,
   timeoutSeconds: 180,
-  memory: "1GiB",
-  secrets: [openAiKey, imageGenerationKey]
+  memory: "1GiB"
 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in before generating AI design renders.");

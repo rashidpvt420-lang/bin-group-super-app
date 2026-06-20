@@ -1,5 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 
 const whatsappToken = defineSecret("WHATSAPP_TOKEN");
@@ -155,7 +155,6 @@ async function persistInboundMessage(args: {
 export const whatsappWebhook = onRequest(
   {
     region: "us-central1",
-    secrets: [whatsappToken, whatsappPhoneNumberId, whatsappVerifyToken],
     cors: false,
   },
   async (req, res) => {

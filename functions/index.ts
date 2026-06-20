@@ -2,7 +2,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
@@ -722,7 +722,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -803,7 +803,7 @@ export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waP
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
-export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after || before?.status === after.status) return;
@@ -974,13 +974,13 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
     }
 }
 
-export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     await attemptAutoAssignment(snap.ref, snap.data());
 });
 
-export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1025,7 +1025,7 @@ export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken,
     return { status: "SUCCESS", ticketId: ticketRef.id };
 });
 
-export const approveMaintenanceProposal = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const approveMaintenanceProposal = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1263,8 +1263,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
 });
 
 export const generateAndEmailPayslip = onCall({
-    cors: true,
-    secrets: [smtpUserSecret, smtpPassSecret]
+    cors: true
 }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
     const hasPayrollAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "ceo", "hr_manager", "finance_admin"]));
@@ -1589,7 +1588,7 @@ export const notifyRole = onCall({ cors: true }, async (request) => {
     }
 });
 
-export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
+export const getMissionGuidance = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
         const { context, input: rawInput } = request.data;
@@ -1625,7 +1624,7 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
  * [V11] SECURE ARCHITECTURAL CONCEPT GENERATOR
  * Calls Gemini from backend-only using Secret Manager.
  */
-export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey] }, async (request) => {
+export const generateDesignConcept = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
 
     const uid = request.auth.uid;
@@ -1713,7 +1712,7 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
 
 // ─── SCHEDULED MISSIONS ────────────────────────────────────────────────────
 
-export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours", secrets: [waToken, waPhoneId] }, async () => {
+export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, async () => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const pending = await db.collection("maintenanceTickets")
         .where("status", "==", "AWAITING_OWNER_APPROVAL")
@@ -1771,7 +1770,7 @@ export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", asy
     }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }));
 });
 
-export const processMailQueue = onDocumentCreated({ document: "mail/{docId}", secrets: [smtpUserSecret, smtpPassSecret] }, async (event) => {
+export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     try {
@@ -3141,7 +3140,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
 
 // ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
 
-export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
 
@@ -3308,7 +3307,7 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
     }
 });
 
-export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;

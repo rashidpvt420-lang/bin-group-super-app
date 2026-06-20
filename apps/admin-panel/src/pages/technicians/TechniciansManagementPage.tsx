@@ -30,10 +30,10 @@ import {
   Checkbox,
   ListItemText,
 } from '@mui/material';
-import { db, auth } from '../../lib/firebase';
+import { db, functions } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import axios from 'axios';
 import { useLanguage } from '@bin/shared';
 
 interface Technician {
@@ -112,34 +112,29 @@ export default function TechniciansManagementPage() {
   const handleAddTech = async () => {
     setSubmitting(true);
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
-
-      const token = await user.getIdToken(true);
-      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
-      const functionUrl = 'https://admincreateuser-sc33mcrduq-uc.a.run.app'; // Production URL for the region
+      const registerFn = httpsCallable(functions, 'adminCreateUser');
       
-      const response = await axios.post(functionUrl, {
-        data: {
-          ...newTech,
-          role: 'technician',
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await registerFn({
+        email: newTech.email,
+        displayName: newTech.displayName,
+        fullName: newTech.displayName,
+        phoneNumber: newTech.phoneNumber,
+        phone: newTech.phoneNumber,
+        role: 'technician',
+        specialization: newTech.specialization,
+        trade: newTech.specialization,
       });
 
-      if (response.data?.result?.success) {
+      const result = response.data as any;
+      if (result?.success) {
         setOpenAdd(false);
         setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
       } else {
-        throw new Error(response.data?.result?.message || t('admin.tech.provision_failed'));
+        throw new Error(result?.message || t('admin.tech.provision_failed'));
       }
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.tech.provision_failed');
+      const errorMsg = error.message || t('admin.tech.provision_failed');
       alert(errorMsg);
     } finally {
       setSubmitting(false);

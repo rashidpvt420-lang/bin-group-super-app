@@ -12,6 +12,7 @@ export * from "./mailDelivery";
 export * from "./notificationDelivery";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
+export * from "./adminUserProvisioning";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./contractSignatureOtp";

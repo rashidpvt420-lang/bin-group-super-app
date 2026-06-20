@@ -1,6 +1,6 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 
@@ -109,13 +109,13 @@ async function deliverMail(mailId: string, data: any) {
   }
 }
 
-export const sendQueuedMailOnCreate = onDocumentCreated({ document: "mail/{mailId}", secrets: [smtpUser, smtpPass] }, async (event) => {
+export const sendQueuedMailOnCreate = onDocumentCreated({ document: "mail/{mailId}" }, async (event) => {
   const snap = event.data;
   if (!snap) return;
   await deliverMail(event.params.mailId, snap.data() || {});
 });
 
-export const adminRetryMailDelivery = onCall({ cors: true, secrets: [smtpUser, smtpPass] }, async (request) => {
+export const adminRetryMailDelivery = onCall({ cors: true }, async (request) => {
   await assertAdmin(request.auth);
   const mailId = asText(request.data?.mailId);
   const limit = Math.min(Number(request.data?.limit || 10), 50);

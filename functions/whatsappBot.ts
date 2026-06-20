@@ -1,5 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -117,7 +117,6 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
 export const whatsappBotWebhook = onRequest({
   cors: false,
   timeoutSeconds: 30,
-  secrets: [waToken, waVerifyToken, waPhoneId],
   maxInstances: 20,
 }, async (req, res) => {
   // GET — Meta webhook verification
