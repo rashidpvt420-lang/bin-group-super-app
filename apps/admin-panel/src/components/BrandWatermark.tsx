@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, alpha } from '@mui/material';
-import { binThemeTokens } from '../theme/binGroupTheme';
+import { binThemeTokens } from '../theme/adminTheme';
 
 type BrandWatermarkProps = {
   label?: string;
