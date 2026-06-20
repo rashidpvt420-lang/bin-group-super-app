@@ -10,10 +10,8 @@ import {
   Grid,
   Box,
   Typography,
-  CircularProgress,
   Alert,
   IconButton,
-  alpha,
   Divider,
   Stack,
   Checkbox,
@@ -40,7 +38,6 @@ const ROLES = [
 ];
 
 export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDialogProps) {
-    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     
@@ -80,7 +77,6 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
 
     const handleSubmit = async (e: React.FormEvent) => {
         if (e) e.preventDefault();
-        setLoading(true);
         setError(null);
 
         try {
@@ -171,8 +167,6 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         } catch (err: any) {
             console.error('[HR] Registration failed:', err);
             setError(err.message || 'Failed to submit registration request.');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -204,6 +198,9 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
             </DialogTitle>
 
             <DialogContent dividers sx={{ borderColor: 'rgba(198,167,94,0.1)', p: 3 }}>
+                <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
+                    Staff account creation requires manual Firebase Auth setup until backend provisioning is enabled.
+                </Alert>
                 {success ? (
                     <Alert severity="success" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid #10b981', fontWeight: 700 }}>
                         Staff member registered and provisioned successfully!
@@ -475,16 +472,16 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 <Button 
                     variant="contained" 
                     onClick={handleSubmit}
-                    disabled={loading || success}
+                    disabled={true}
                     sx={{ 
-                        bgcolor: binThemeTokens.gold, 
-                        color: '#000', 
+                        bgcolor: '#334155', 
+                        color: '#94a3b8', 
                         fontWeight: 900,
                         minWidth: 140,
-                        '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.8) }
+                        cursor: 'not-allowed'
                     }}
                 >
-                    {loading ? <CircularProgress size={24} color="inherit" /> : 'REGISTER STAFF'}
+                    MANUAL SETUP REQUIRED
                 </Button>
             </DialogActions>
         </Dialog>

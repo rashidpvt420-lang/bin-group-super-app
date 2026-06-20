@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth, functions, httpsCallable } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { 
-  collection, query, where, onSnapshot 
+  collection, query, where, onSnapshot, addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Chip, CircularProgress,
   TextField, Stack, Dialog, DialogTitle, DialogContent, DialogActions,
-  alpha, Grid
+  alpha, Grid, Alert
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -79,22 +79,18 @@ export default function AdminPaymentApproval() {
       const user = auth.currentUser;
       if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
 
-      const approveFn = httpsCallable(functions, 'adminApprovePayment');
-      const response = await approveFn({
-        paymentId: selectedContract.paymentId,
-        paymentReferenceId: referenceId.trim(),
-        amountReceived: Number(amountReceived) || selectedContract.amount,
-        notes: notes.trim() || "Standard manual verification via Admin Hub.",
-        method: selectedContract.provider,
-        receivedAt: new Date().toISOString()
+      // Safe-mode patch: write directly to audit_logs instead of calling the undeployed adminApprovePayment function
+      await addDoc(collection(db, 'audit_logs'), {
+        actorId: user.uid,
+        actorRole: 'admin',
+        targetType: 'payment_verification',
+        targetId: selectedContract.paymentId,
+        action: 'manual_verification_logged',
+        notes: `Manual verification logged offline. Ref: ${referenceId.trim()}. Amount: ${Number(amountReceived) || selectedContract.amount}. Notes: ${notes.trim()}`,
+        createdAt: serverTimestamp()
       });
 
-      const result = response.data as any;
-      if (result?.status === 'SUCCESS') {
-        alert(t('admin.payment_settled'));
-      } else {
-        throw new Error(result?.message || t('admin.payment_rejected'));
-      }
+      alert("Manual verification required. Confirm cash/cheque payment offline, then update records manually. (Manual review note successfully logged in audit trail).");
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Verification Failure:", error);
       const errorMsg = error.message || t('admin.failed_verify_settlement');
@@ -238,6 +234,9 @@ export default function AdminPaymentApproval() {
           {t('admin.confirm_settlement')}
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
+            Manual verification required. Confirm cash/cheque payment offline, then update records manually.
+          </Alert>
           <Stack spacing={3}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>

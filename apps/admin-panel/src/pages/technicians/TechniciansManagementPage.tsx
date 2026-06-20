@@ -20,7 +20,6 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
-  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -29,6 +28,7 @@ import {
   Switch,
   Checkbox,
   ListItemText,
+  Alert,
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -66,7 +66,6 @@ export default function TechniciansManagementPage() {
   const { t, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
@@ -110,7 +109,6 @@ export default function TechniciansManagementPage() {
   }, []);
 
   const handleAddTech = async () => {
-    setSubmitting(true);
     try {
       const registerFn = httpsCallable(functions, 'adminCreateUser');
       
@@ -136,8 +134,6 @@ export default function TechniciansManagementPage() {
       console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
       const errorMsg = error.message || t('admin.tech.provision_failed');
       alert(errorMsg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -296,6 +292,9 @@ export default function TechniciansManagementPage() {
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.onboard_title')}</DialogTitle>
         <DialogContent>
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
+            Staff account creation requires manual Firebase Auth setup until backend provisioning is enabled.
+          </Alert>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
               label={t('admin.tech.field.fullname')} 
@@ -328,10 +327,10 @@ export default function TechniciansManagementPage() {
           <Button 
             variant="contained" 
             onClick={handleAddTech} 
-            disabled={submitting}
-            sx={{ borderRadius: 100, bgcolor: '#10b981', minWidth: 150 }}
+            disabled={true}
+            sx={{ borderRadius: 100, bgcolor: '#334155', color: '#94a3b8', minWidth: 150, cursor: 'not-allowed' }}
           >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tech.deploy_btn')}
+            MANUAL SETUP REQUIRED
           </Button>
         </DialogActions>
       </Dialog>
