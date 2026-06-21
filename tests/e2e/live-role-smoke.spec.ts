@@ -3,7 +3,7 @@ import { expect, Page, test } from '@playwright/test';
 type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 
 const roleRoutes: Record<RoleName, string> = {
-  admin: '/admin/dashboard',
+  admin: '/dashboard',
   owner: '/owner/dashboard',
   tenant: '/tenant/dashboard',
   technician: '/technician/dashboard',
@@ -92,9 +92,9 @@ async function expectHealthyPublicRoute(page: Page, route: string) {
   throw new Error(`Public route smoke failed for ${route}. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
-async function login(page: Page, email: string, password: string) {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await expectNoCriticalRuntimeCrash(page, '/login');
+async function login(page: Page, email: string, password: string, targetBase: string) {
+  await page.goto(`${targetBase}/login`, { waitUntil: 'domcontentloaded' });
+  await expectNoCriticalRuntimeCrash(page, `${targetBase}/login`);
 
   const emailInput = page.locator('input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
   const passwordInput = page.locator('input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
@@ -147,12 +147,15 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
         console.log(`[BROWSER REQUESTFAILED]: ${request.url()} - ${request.failure()?.errorText}`);
       });
 
-      await login(page, email!, password!);
+      const targetBase = role === 'admin' ? 'https://bin-group-admin-panel.web.app' : (process.env.E2E_BASE_URL || 'https://bin-group-57c60.web.app');
+      
+      await login(page, email!, password!, targetBase);
       await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
+      await page.waitForTimeout(2_500);
 
-      await page.goto(roleRoutes[role], { waitUntil: 'domcontentloaded' });
-      await expectNoCriticalRuntimeCrash(page, roleRoutes[role]);
+      const targetPath = `${targetBase}${roleRoutes[role]}`;
+      await page.goto(targetPath, { waitUntil: 'domcontentloaded' });
+      await expectNoCriticalRuntimeCrash(page, targetPath);
       await expectDashboardControls(page, role);
 
       const currentPath = new URL(page.url()).pathname;
