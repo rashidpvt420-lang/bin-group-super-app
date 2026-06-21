@@ -2,27 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, Chip, alpha } from '@mui/material';
 import { db, collection, query, where, getDocs, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { FileText, Download, FileCheck, Info, Eye } from 'lucide-react';
+
+const FILE_UNAVAILABLE_MSG = {
+    en: 'This document file is not available yet. Please contact BIN GROUP support.',
+    ar: 'ملف هذا المستند غير متاح بعد. يرجى التواصل مع دعم بن جروب.',
+};
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const documentUrlOf = (doc: any) => doc?.downloadUrl || doc?.pdfUrl || doc?.fileUrl || doc?.documentUrl || doc?.signedPdfUrl || doc?.leasePdfUrl || doc?.invoicePdfUrl || doc?.receiptUrl || doc?.url || '';
 const documentNameOf = (doc: any) => String(doc?.title || doc?.name || doc?.fileName || doc?.type || 'BIN-GROUP-tenant-document').replace(/[^a-z0-9._-]/gi, '_');
 const dateOf = (doc: any) => doc?.date || doc?.createdAt?.toDate?.() || (doc?.createdAt?.seconds ? new Date(doc.createdAt.seconds * 1000) : null) || doc?.uploadedAt?.toDate?.() || (doc?.uploadedAt?.seconds ? new Date(doc.uploadedAt.seconds * 1000) : null) || new Date();
 
-const openDocument = (doc: any) => {
+const openDocument = (doc: any, unavailableMsg = FILE_UNAVAILABLE_MSG.en) => {
     const url = documentUrlOf(doc);
     if (!url) {
-        alert('This document file is not available yet. Please contact BIN GROUP support.');
+        alert(unavailableMsg);
         return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
 };
 
-const downloadDocument = async (doc: any) => {
+const downloadDocument = async (doc: any, unavailableMsg = FILE_UNAVAILABLE_MSG.en) => {
     const url = documentUrlOf(doc);
     if (!url) {
-        alert('This document file is not available yet. Please contact BIN GROUP support.');
+        alert(unavailableMsg);
         return;
     }
 
@@ -40,7 +46,7 @@ const downloadDocument = async (doc: any) => {
         window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
         console.warn('[TenantDocuments] direct download failed, opening file instead:', error);
-        openDocument(doc);
+        openDocument(doc, unavailableMsg);
     }
 };
 
@@ -67,6 +73,9 @@ async function queryGeneralDocs() {
 
 export default function TenantDocumentsPage() {
     const { user } = useRole();
+    const { lang, isRTL } = useLanguage();
+    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+    const unavailableMsg = lang === 'ar' ? FILE_UNAVAILABLE_MSG.ar : FILE_UNAVAILABLE_MSG.en;
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState<any[]>([]);
 
@@ -105,9 +114,9 @@ export default function TenantDocumentsPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box>
-            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>Documents & Notices</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4 }}>Download your lease, invoices, receipts, notices, service documents, and building files shared by BIN GROUP.</Typography>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{label('Documents & Notices', 'المستندات والإشعارات')}</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4 }}>{label('Download your lease, invoices, receipts, notices, service documents, and building files shared by BIN GROUP.', 'نزّل عقد الإيجار والفواتير والإيصالات والإشعارات ومستندات الخدمة وملفات المبنى التي تشاركها بن جروب.')}</Typography>
 
             <Grid container spacing={3}>
                 {documents.map(doc => {
@@ -121,20 +130,20 @@ export default function TenantDocumentsPage() {
                                         {doc.type === 'NOTICE' ? <Info size={24} color={binThemeTokens.gold} /> : <FileText size={24} color={binThemeTokens.gold} />}
                                     </Box>
                                     <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || 'Tenant Document'}</Typography>
-                                        <Typography variant="caption" color="textSecondary">Added: {new Date(dateOf(doc)).toLocaleDateString()}</Typography>
+                                        <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || label('Tenant Document', 'مستند المستأجر')}</Typography>
+                                        <Typography variant="caption" color="textSecondary">{label('Added', 'أُضيف')}: {new Date(dateOf(doc)).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}</Typography>
                                         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                                            <Chip size="small" label={doc.type || doc.category || 'DOCUMENT'} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900 }} />
-                                            <Chip size="small" label={hasFile ? 'READY' : 'PENDING FILE'} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
+                                            <Chip size="small" label={doc.type || doc.category || label('DOCUMENT', 'مستند')} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900 }} />
+                                            <Chip size="small" label={hasFile ? label('READY', 'جاهز') : label('PENDING FILE', 'بانتظار الملف')} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
                                         </Stack>
                                     </Box>
                                 </Stack>
                                 <Stack direction="row" spacing={1}>
-                                    <Button variant="outlined" size="small" startIcon={<Eye size={15} />} disabled={!hasFile} onClick={() => openDocument(doc)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900 }}>
-                                        VIEW
+                                    <Button variant="outlined" size="small" startIcon={<Eye size={15} />} disabled={!hasFile} onClick={() => openDocument(doc, unavailableMsg)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900 }}>
+                                        {label('VIEW', 'عرض')}
                                     </Button>
-                                    <Button variant="contained" size="small" startIcon={hasFile ? <Download size={15} /> : <FileCheck size={15} />} disabled={!hasFile} onClick={() => downloadDocument(doc)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                        DOWNLOAD
+                                    <Button variant="contained" size="small" startIcon={hasFile ? <Download size={15} /> : <FileCheck size={15} />} disabled={!hasFile} onClick={() => downloadDocument(doc, unavailableMsg)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                        {label('DOWNLOAD', 'تنزيل')}
                                     </Button>
                                 </Stack>
                             </Stack>
@@ -145,7 +154,7 @@ export default function TenantDocumentsPage() {
             {documents.length === 0 && (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
                     <Typography variant="body1" color="textSecondary">
-                        No downloadable documents available yet.
+                        {label('No downloadable documents available yet.', 'لا توجد مستندات قابلة للتنزيل حتى الآن.')}
                     </Typography>
                 </Paper>
             )}
