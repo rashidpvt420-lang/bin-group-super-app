@@ -1,7 +1,7 @@
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import fs from 'fs';
 
 let testEnv;
@@ -330,6 +330,41 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(tenantADb, 'paymentConfirmations/confirm_4')));
     await assertSucceeds(getDoc(doc(adminDb, 'paymentConfirmations/confirm_4')));
     await assertFails(getDoc(doc(tenantBDb, 'paymentConfirmations/confirm_4')));
+  });
+
+  it('amenitySlots: a tenant can claim a free slot but cannot overwrite another tenant\'s lock', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant A claims the slot.
+    await assertSucceeds(setDoc(doc(tenantADb, 'amenitySlots/pool__2026-07-01__9AM'), {
+      tenantUid: 'tenant_a', amenityName: 'Community Pool', bookingDate: '2026-07-01', timeSlot: '9AM',
+    }));
+    // Tenant B can read it (needed to detect the conflict) but cannot overwrite it.
+    await assertSucceeds(getDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM')));
+    await assertFails(setDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM'), {
+      tenantUid: 'tenant_b', amenityName: 'Community Pool', bookingDate: '2026-07-01', timeSlot: '9AM',
+    }));
+    // Tenant B cannot free Tenant A's lock; Tenant A can.
+    await assertFails(deleteDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM')));
+    await assertSucceeds(deleteDoc(doc(tenantADb, 'amenitySlots/pool__2026-07-01__9AM')));
+  });
+
+  it('amenitySlots: a tenant cannot create a lock owned by someone else', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'amenitySlots/gym__2026-07-02__10AM'), {
+      tenantUid: 'tenant_b', amenityName: 'Fitness Center', bookingDate: '2026-07-02', timeSlot: '10AM',
+    }));
+  });
+
+  it('amenities catalog: any signed-in user can read, only admin can write', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await assertSucceeds(setDoc(doc(adminDb, 'amenities/pool'), { name: 'Community Pool', active: true }));
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertSucceeds(getDoc(doc(tenantADb, 'amenities/pool')));
+    await assertFails(setDoc(doc(tenantADb, 'amenities/pool'), { name: 'Hacked', active: true }));
   });
 
   it('paymentConfirmations: tenant cannot update or delete after creation', async () => {
