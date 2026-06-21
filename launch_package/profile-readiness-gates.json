@@ -1,0 +1,10 @@
+{
+  "version": "profile-readiness-v1",
+  "profiles": {
+    "owner": ["ownerOnboardingFullPath", "ownerPaymentApproveReject", "ownerPostPaymentDashboard"],
+    "tenant": ["tenantPhotoMaintenanceRequest", "tenantSosAdminVisibility", "tenantUnitBindingAndArabic"],
+    "technician": ["technicianMissionLifecycle", "technicianGpsAndDeniedFallback", "technicianCompletionAudit"],
+    "broker": ["brokerReferralCommissionLifecycle", "brokerDocsPolicyFraud"],
+    "admin": ["adminFreshLoginAndCorePages", "adminStaffProvisioning", "adminPaymentUnlockAudit"]
+  }
+}
