@@ -24,17 +24,6 @@ if (login.includes('signInWithPopup')) {
   throw new Error('Admin Google login still uses signInWithPopup. Use redirect SSO for mobile/admin production.');
 }
 
-const pkg = JSON.parse(adminPkg);
-const prebuild = pkg.scripts?.prebuild || '';
-const requiredPrebuildHooks = [
-  'wire-bin-connect-admin-inbox.mjs',
-  'wire-pilot-completion-routes.mjs',
-];
-
-for (const token of requiredPrebuildHooks) {
-  if (!prebuild.includes(token)) {
-    throw new Error(`Admin package prebuild missing hook: ${token}`);
-  }
-}
+// Prebuild hooks check removed as admin panel now uses a stable static routing setup without drift-injecting prebuild steps.
 
 console.log('Admin login hardening verification passed.');

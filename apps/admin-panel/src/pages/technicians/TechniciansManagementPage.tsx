@@ -20,7 +20,6 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
-  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -29,11 +28,12 @@ import {
   Switch,
   Checkbox,
   ListItemText,
+  Alert,
 } from '@mui/material';
-import { db, auth } from '../../lib/firebase';
+import { db, functions } from '../../lib/firebase';
 import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import axios from 'axios';
 import { useLanguage } from '@bin/shared';
 
 interface Technician {
@@ -66,7 +66,6 @@ export default function TechniciansManagementPage() {
   const { t, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
@@ -110,39 +109,31 @@ export default function TechniciansManagementPage() {
   }, []);
 
   const handleAddTech = async () => {
-    setSubmitting(true);
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
-
-      const token = await user.getIdToken(true);
-      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
-      const functionUrl = 'https://admincreateuser-sc33mcrduq-uc.a.run.app'; // Production URL for the region
+      const registerFn = httpsCallable(functions, 'adminCreateUser');
       
-      const response = await axios.post(functionUrl, {
-        data: {
-          ...newTech,
-          role: 'technician',
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await registerFn({
+        email: newTech.email,
+        displayName: newTech.displayName,
+        fullName: newTech.displayName,
+        phoneNumber: newTech.phoneNumber,
+        phone: newTech.phoneNumber,
+        role: 'technician',
+        specialization: newTech.specialization,
+        trade: newTech.specialization,
       });
 
-      if (response.data?.result?.success) {
+      const result = response.data as any;
+      if (result?.success) {
         setOpenAdd(false);
         setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
       } else {
-        throw new Error(response.data?.result?.message || t('admin.tech.provision_failed'));
+        throw new Error(result?.message || t('admin.tech.provision_failed'));
       }
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.tech.provision_failed');
+      const errorMsg = error.message || t('admin.tech.provision_failed');
       alert(errorMsg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -301,6 +292,9 @@ export default function TechniciansManagementPage() {
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.onboard_title')}</DialogTitle>
         <DialogContent>
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
+            Staff account creation requires manual Firebase Auth setup until backend provisioning is enabled.
+          </Alert>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField 
               label={t('admin.tech.field.fullname')} 
@@ -333,10 +327,10 @@ export default function TechniciansManagementPage() {
           <Button 
             variant="contained" 
             onClick={handleAddTech} 
-            disabled={submitting}
-            sx={{ borderRadius: 100, bgcolor: '#10b981', minWidth: 150 }}
+            disabled={true}
+            sx={{ borderRadius: 100, bgcolor: '#334155', color: '#94a3b8', minWidth: 150, cursor: 'not-allowed' }}
           >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tech.deploy_btn')}
+            MANUAL SETUP REQUIRED
           </Button>
         </DialogActions>
       </Dialog>

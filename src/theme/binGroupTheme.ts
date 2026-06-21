@@ -1,5 +1,4 @@
 import { createTheme, alpha } from '@mui/material/styles';
-import type { ThemeOptions } from '@mui/material/styles';
 
 /**
  * BIN GROUP Sovereign Identity System
@@ -35,7 +34,7 @@ export const binThemeTokens = {
   goldGradient: 'linear-gradient(135deg, #C9A646, #E5E4E2)',
 };
 
-const themeConfig: ThemeOptions = {
+const themeConfig = {
   palette: {
     mode: 'light',
     primary: {

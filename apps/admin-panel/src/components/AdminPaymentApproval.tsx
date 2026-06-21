@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
 import { 
-  collection, query, where, onSnapshot 
+  collection, query, where, onSnapshot, addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Button, Chip, CircularProgress,
   TextField, Stack, Dialog, DialogTitle, DialogContent, DialogActions,
-  alpha, Grid
+  alpha, Grid, Alert
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Receipt, History } from 'lucide-react';
-import axios from 'axios';
 import { useLanguage } from '@bin/shared';
 
 interface Contract {
@@ -80,35 +79,21 @@ export default function AdminPaymentApproval() {
       const user = auth.currentUser;
       if (!user) throw new Error("UNAUTHENTICATED: No active administrative session.");
 
-      const token = await user.getIdToken(true);
-      // [SOVEREIGN-DISPATCH] Manual Token Injection for Secure Backend Routing
-      const functionUrl = 'https://adminverifypayment-sc33mcrduq-uc.a.run.app';
-      
-      const response = await axios.post(functionUrl, {
-        data: {
-          contractId: selectedContract.id,
-          paymentId: selectedContract.paymentId,
-          method: selectedContract.provider,
-          referenceId,
-          amountReceived: amountReceived || selectedContract.amount,
-          notes: notes || "Standard manual verification via Admin Hub.",
-          receivedAt: new Date().toISOString()
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      // Safe-mode patch: write directly to audit_logs instead of calling the undeployed adminApprovePayment function
+      await addDoc(collection(db, 'audit_logs'), {
+        actorId: user.uid,
+        actorRole: 'admin',
+        targetType: 'payment_verification',
+        targetId: selectedContract.paymentId,
+        action: 'manual_verification_logged',
+        notes: `Manual verification logged offline. Ref: ${referenceId.trim()}. Amount: ${Number(amountReceived) || selectedContract.amount}. Notes: ${notes.trim()}`,
+        createdAt: serverTimestamp()
       });
 
-      if (response.data?.result?.success) {
-        alert(t('admin.payment_settled'));
-      } else {
-        throw new Error(response.data?.result?.message || t('admin.payment_rejected'));
-      }
+      alert("Manual verification required. Confirm cash/cheque payment offline, then update records manually. (Manual review note successfully logged in audit trail).");
     } catch (error: any) {
       console.error("🚨 [ADMIN-AUTH] Verification Failure:", error);
-      const errorMsg = error.response?.data?.error?.message || error.message || t('admin.failed_verify_settlement');
+      const errorMsg = error.message || t('admin.failed_verify_settlement');
       alert(errorMsg);
     } finally {
       setProcessingId(null);
@@ -249,6 +234,9 @@ export default function AdminPaymentApproval() {
           {t('admin.confirm_settlement')}
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
+          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
+            Manual verification required. Confirm cash/cheque payment offline, then update records manually.
+          </Alert>
           <Stack spacing={3}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="caption" sx={{ color: '#94a3b8', textTransform: 'uppercase', fontWeight: 900 }}>

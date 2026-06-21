@@ -72,6 +72,25 @@ service cloud.firestore {
     function isTenantId(tenantId) { return signedIn() && tenantId != null && tenantId == request.auth.uid; }
     function isTechnicianId(techId) { return signedIn() && techId != null && techId == request.auth.uid; }
 
+    function getTenantPropertyId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId : null;
+    }
+    function isUnitTenant(unitId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/units/$(unitId)) && (
+          get(/databases/$(database)/documents/units/$(unitId)).data.tenantId == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.tenantUid == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.userId == request.auth.uid
+        );
+    }
+    function isPropertyOwner(propertyId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/properties/$(propertyId)) && (
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerUid == request.auth.uid
+        );
+    }
+
     function owns(data) {
       return isOwnerId(data.ownerId) || isOwnerId(data.ownerUid) || isOwnerId(data.authUid) || isOwnerId(data.userId) || isOwnerId(data.createdBy) || isOwnerId(data.createdByUid);
     }
@@ -712,11 +731,25 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
     }
 
+    match /amenities/{amenityId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
     match /amenityBookings/{bookingId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'cancellationReason']));
-      allow delete: if isAdmin();
+      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && (resource.data.tenantUid == request.auth.uid || getTenantPropertyId() == resource.data.propertyId));
+      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId;
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
     }
 
     // Amenity catalog: readable by any signed-in resident; only admins curate it.
@@ -745,6 +778,90 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /documentLibrary/{documentId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    match /keyRegister/{keyId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (isUnitTenant(resource.data.unitId) && getTenantPropertyId() == resource.data.propertyId));
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    match /keyMovements/{movementId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (isUnitTenant(resource.data.unitId) && getTenantPropertyId() == resource.data.propertyId));
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    match /parcels/{parcelId} {
+      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
+      allow delete: if isAdmin();
+    }
+
+    match /visitorParkingRequests/{requestId} {
+      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId && isUnitTenant(request.resource.data.unitId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'visitStartAt', 'visitEndAt', 'visitorName', 'vehiclePlate']));
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    match /marketplaceProviders/{providerId} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /marketplaceOffers/{offerId} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /staffDirectory/{staffId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
+      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.participantUids);
+      allow create: if signedIn() && request.auth.uid in request.resource.data.participantUids;
+      allow update: if isAdmin() || (signedIn() && request.auth.uid in resource.data.participantUids && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'status']));
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids);
+        allow create: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids) && request.resource.data.senderUid == request.auth.uid;
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /communityPosts/{postId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (getTenantPropertyId() == resource.data.propertyId && (resource.data.status == 'approved' || resource.data.authorUid == request.auth.uid)));
+      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid && request.resource.data.authorUid == request.auth.uid && request.resource.data.status == resource.data.status && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+
+    match /communityComments/{commentId} {
+      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
+      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId;
+      allow update: if isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid && request.resource.data.authorUid == request.auth.uid);
+      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid);
     }
 
     match /pricingAuditLogs/{logId} {

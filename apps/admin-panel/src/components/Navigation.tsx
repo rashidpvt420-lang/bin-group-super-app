@@ -25,7 +25,7 @@ const Navigation = () => {
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
+        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials/payroll', color: '#6366f1' },
         { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
         { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
         { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
@@ -55,6 +55,17 @@ const Navigation = () => {
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
         ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
+        // Resident Experience & Building Operations
+        { text: tx('nav.amenity_control', 'Amenity Control'), icon: <PendingActionsIcon />, path: '/ops/amenity-control', color: binThemeTokens.gold },
+        { text: tx('nav.announcements', 'Announcements'), icon: <ReceiptIcon />, path: '/ops/announcements', color: binThemeTokens.gold },
+        { text: tx('nav.document_library', 'Document Library'), icon: <FileTextIcon />, path: '/ops/document-library', color: binThemeTokens.gold },
+        { text: tx('nav.key_register', 'Key Register'), icon: <SecurityIcon />, path: '/ops/key-register', color: binThemeTokens.gold },
+        { text: tx('nav.parcel_desk', 'Parcel Desk'), icon: <PendingActionsIcon />, path: '/ops/parcel-desk', color: binThemeTokens.gold },
+        { text: tx('nav.visitor_parking', 'Visitor Parking'), icon: <PendingActionsIcon />, path: '/ops/visitor-parking', color: binThemeTokens.gold },
+        { text: tx('nav.marketplace_approvals', 'Marketplace Approvals'), icon: <PendingActionsIcon />, path: '/ops/marketplace-approvals', color: binThemeTokens.gold },
+        { text: tx('nav.staff_directory', 'Staff Directory'), icon: <PeopleIcon />, path: '/ops/staff-directory', color: binThemeTokens.gold },
+        { text: tx('nav.messages', 'Messages'), icon: <ReceiptIcon />, path: '/ops/messages', color: binThemeTokens.gold },
+        { text: tx('nav.community_moderation', 'Community Moderation'), icon: <SecurityIcon />, path: '/ops/community-moderation', color: binThemeTokens.gold },
     ];
 
     const systemMenu = [
