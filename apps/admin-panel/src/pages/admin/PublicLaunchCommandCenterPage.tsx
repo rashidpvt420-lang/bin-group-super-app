@@ -81,13 +81,6 @@ const statusColor: Record<GateStatus, string> = {
   waived: '#94a3b8',
 };
 
-const statusRank: Record<GateStatus, number> = {
-  pending: 0,
-  waived: 1,
-  passed: 2,
-  blocked: 3,
-};
-
 const getEvidenceTime = (item?: LaunchEvidence) => {
   const raw = item?.createdAt;
   if (!raw) return 'No evidence yet';
@@ -155,8 +148,8 @@ export default function PublicLaunchCommandCenterPage() {
     const groups = Array.from(new Set(LAUNCH_GATES.map((gate) => gate.group)));
     return groups.map((group) => {
       const gates = LAUNCH_GATES.filter((gate) => gate.group === group && gate.required);
-      const passed = gates.filter((gate) => ['passed', 'waived'].includes(gateStatus(gate))).length;
-      const blocked = gates.filter((gate) => gateStatus(gate) === 'blocked').length;
+      const passed = gates.filter((gate) => ['passed', 'waived'].includes(latestByGate.get(gate.id)?.status || 'pending')).length;
+      const blocked = gates.filter((gate) => (latestByGate.get(gate.id)?.status || 'pending') === 'blocked').length;
       const pending = gates.length - passed - blocked;
       return { group, total: gates.length, passed, blocked, pending, score: Math.round((passed / Math.max(gates.length, 1)) * 100) };
     });

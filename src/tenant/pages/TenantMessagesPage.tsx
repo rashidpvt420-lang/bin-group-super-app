@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, Button, alpha, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { Box, Container, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, Button, alpha, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, List, ListItem, ListItemText, Divider } from '@mui/material';
 import { Send, MessageSquare, Plus, ArrowLeft } from 'lucide-react';
-import { db, doc, collection, addDoc, getDocs, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc } from '../../lib/firebase';
+import { db, doc, collection, addDoc, getDocs, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -265,4 +265,3 @@ export default function TenantMessagesPage() {
 function isMobileView() {
     return window.innerWidth < 900;
 }
-import { limit } from '../../lib/firebase';

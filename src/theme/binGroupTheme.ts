@@ -36,7 +36,7 @@ export const binThemeTokens = {
 
 const themeConfig = {
   palette: {
-    mode: 'light',
+    mode: 'light' as const,
     primary: {
       main: binThemeTokens.gold,
       light: binThemeTokens.goldLight,

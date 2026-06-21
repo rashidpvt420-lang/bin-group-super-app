@@ -6,7 +6,7 @@ import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, delete
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function DocumentLibraryPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState<any[]>([]);
     const [openAdd, setOpenAdd] = useState(false);
