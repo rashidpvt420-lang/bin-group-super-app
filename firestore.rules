@@ -163,6 +163,13 @@ service cloud.firestore {
         (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
     }
 
+    function paymentConfirmationCreate(data) {
+      return signedIn() && tenantOwns(data) &&
+        (!('status' in data) || data.status in ['pending_verification', 'pending']) &&
+        (!('paymentVerified' in data) || data.paymentVerified == false) &&
+        (!('approved' in data) || data.approved == false);
+    }
+
     function safeOwnerContractUpdate() {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
@@ -420,6 +427,13 @@ service cloud.firestore {
       allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageContracts');
       allow delete: if isAdmin() || hasPermission('canManageContracts');
+    }
+
+    match /paymentConfirmations/{confirmationId} {
+      allow read: if isAdmin() || hasPermission('canManageContracts') || tenantOwns(resource.data);
+      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentConfirmationCreate(request.resource.data);
+      allow update: if isAdmin() || hasPermission('canManageContracts');
+      allow delete: if isAdmin();
     }
 
     match /tickets/{ticketId} {

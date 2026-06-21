@@ -66,6 +66,10 @@ jobs:
           E2E_STRICT_ROLES: 'true'
         run: node scripts/verify-e2e-env.mjs
 
+      - name: Seed/repair E2E auth accounts and role claims
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/seed-e2e-auth.mjs
+
       - name: Seed tenant launch residence data
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-live-role-test-data.mjs

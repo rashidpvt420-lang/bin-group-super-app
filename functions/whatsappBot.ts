@@ -1,6 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { verifyWhatsAppSignature } from "./whatsappSignature";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -8,6 +9,7 @@ const db = admin.firestore();
 const waToken = defineSecret("WHATSAPP_TOKEN");
 const waVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
 const waPhoneId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+const waAppSecret = defineSecret("WHATSAPP_APP_SECRET");
 
 // ─── RESPONSE TEMPLATES ───────────────────────────────────────────────────
 
@@ -117,7 +119,7 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
 export const whatsappBotWebhook = onRequest({
   cors: false,
   timeoutSeconds: 30,
-  secrets: [waToken, waVerifyToken, waPhoneId],
+  secrets: [waToken, waVerifyToken, waPhoneId, waAppSecret],
   maxInstances: 20,
 }, async (req, res) => {
   // GET — Meta webhook verification
@@ -135,6 +137,11 @@ export const whatsappBotWebhook = onRequest({
 
   // POST — incoming message
   if (req.method === "POST") {
+    if (!verifyWhatsAppSignature(req, waAppSecret.value())) {
+      console.warn("WhatsApp webhook: rejected request with invalid X-Hub-Signature-256.");
+      res.status(401).send("Invalid signature");
+      return;
+    }
     res.status(200).send("OK"); // Acknowledge immediately
     try {
       const body = req.body;

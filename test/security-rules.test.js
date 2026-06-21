@@ -282,4 +282,67 @@ describe('Firestore Security Rules', () => {
     // Owner B (does not own prop_a) should fail
     await assertFails(getDoc(doc(ownerBDb, 'users/tenant_a')));
   });
+
+  it('paymentConfirmations: tenant can create their own pending confirmation', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertSucceeds(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_1'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_1',
+      amount: 5000,
+      method: 'bank_transfer_whatsapp_confirmation',
+      status: 'pending_verification',
+    }));
+  });
+
+  it('paymentConfirmations: tenant cannot create a confirmation for another tenant', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_2'), {
+      tenantId: 'tenant_b',
+      invoiceId: 'inv_2',
+      amount: 5000,
+      status: 'pending_verification',
+    }));
+  });
+
+  it('paymentConfirmations: tenant cannot self-verify on create', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_3'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_3',
+      amount: 5000,
+      status: 'pending_verification',
+      paymentVerified: true,
+    }));
+  });
+
+  it('paymentConfirmations: only the owning tenant or admin can read it', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'paymentConfirmations/confirm_4'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_4',
+      amount: 5000,
+      status: 'pending_verification',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+    await assertSucceeds(getDoc(doc(tenantADb, 'paymentConfirmations/confirm_4')));
+    await assertSucceeds(getDoc(doc(adminDb, 'paymentConfirmations/confirm_4')));
+    await assertFails(getDoc(doc(tenantBDb, 'paymentConfirmations/confirm_4')));
+  });
+
+  it('paymentConfirmations: tenant cannot update or delete after creation', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'paymentConfirmations/confirm_5'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_5',
+      amount: 5000,
+      status: 'pending_verification',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(updateDoc(doc(tenantADb, 'paymentConfirmations/confirm_5'), { status: 'verified' }));
+  });
 });

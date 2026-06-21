@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Divider,
-  Grid, Paper, Stack, Tab, Tabs, Typography, alpha
+  Grid, Paper, Snackbar, Stack, Tab, Tabs, Typography, alpha
 } from '@mui/material';
 import {
   Building2, CheckCircle2, Clock, Copy, CreditCard,
@@ -50,6 +50,7 @@ export default function TenantPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -99,6 +100,7 @@ export default function TenantPaymentsPage() {
       setTimeout(() => setConfirmSent(null), 5000);
     } catch (err) {
       console.warn('[TenantPayments] Payment confirmation log failed:', err);
+      setConfirmError('We could not save your confirmation. Your WhatsApp message was still sent — our finance team will follow up, or you can call them directly.');
     }
   };
 
@@ -385,6 +387,12 @@ export default function TenantPaymentsPage() {
           )}
         </Stack>
       )}
+
+      <Snackbar open={!!confirmError} autoHideDuration={8000} onClose={() => setConfirmError(null)}>
+        <Alert severity="error" onClose={() => setConfirmError(null)} sx={{ fontWeight: 700 }}>
+          {confirmError}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

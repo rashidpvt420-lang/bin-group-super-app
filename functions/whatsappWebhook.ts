@@ -1,10 +1,12 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { verifyWhatsAppSignature } from "./whatsappSignature";
 
 const whatsappToken = defineSecret("WHATSAPP_TOKEN");
 const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 const whatsappVerifyToken = defineSecret("WHATSAPP_VERIFY_TOKEN");
+const whatsappAppSecret = defineSecret("WHATSAPP_APP_SECRET");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -155,7 +157,7 @@ async function persistInboundMessage(args: {
 export const whatsappWebhook = onRequest(
   {
     region: "us-central1",
-    secrets: [whatsappToken, whatsappPhoneNumberId, whatsappVerifyToken],
+    secrets: [whatsappToken, whatsappPhoneNumberId, whatsappVerifyToken, whatsappAppSecret],
     cors: false,
   },
   async (req, res) => {
@@ -176,6 +178,12 @@ export const whatsappWebhook = onRequest(
     if (req.method !== "POST") {
       res.set("Allow", "GET, POST");
       res.status(405).send("Method not allowed.");
+      return;
+    }
+
+    if (!verifyWhatsAppSignature(req, whatsappAppSecret.value())) {
+      console.warn("WhatsApp webhook: rejected request with invalid X-Hub-Signature-256.");
+      res.status(401).json({ ok: false, error: "INVALID_SIGNATURE" });
       return;
     }
 

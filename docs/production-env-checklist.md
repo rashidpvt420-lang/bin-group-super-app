@@ -82,13 +82,14 @@ firebase functions:secrets:set GEMINI_API_KEY
 firebase functions:secrets:set WHATSAPP_TOKEN
 firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID
 firebase functions:secrets:set WHATSAPP_VERIFY_TOKEN
+firebase functions:secrets:set WHATSAPP_APP_SECRET
 ```
 
 > [!NOTE]
 > The production mail function reads `SMTP_USER` and `SMTP_PASS`. Do not use the old `SMTP_PASSWORD` name; it will not satisfy the deployed function.
 
 > [!WARNING]
-> Two separate WhatsApp inbound webhook functions are currently deployed: `whatsappBotWebhook` (menu-driven bot, auto-creates `maintenanceTickets` directly) and `whatsappWebhook` (writes to `communication_intake` for human review in the admin Triage Queue). Meta only allows one callback URL per WhatsApp Business app, so confirm which function's HTTPS URL is registered in the Meta Developer Console before assuming either one is receiving live traffic.
+> Two separate WhatsApp inbound webhook functions are deployed and independently reachable: `whatsappBotWebhook` (menu-driven bot, auto-creates `maintenanceTickets` directly) and `whatsappWebhook` (writes to `communication_intake` for human review in the admin Triage Queue). Both are wired into the real deploy chain (`functions/runtimeAll.ts` re-exports `./whatsappWebhook` directly, and re-exports `./runtime` → `./index` → `./whatsappBot`) — neither is dead code, so the codebase cannot tell you which one Meta is actually calling. Meta only allows one callback URL per WhatsApp Business app, so confirm which function's HTTPS URL is registered in the Meta Developer Console, and deprecate the other to reduce confusion. Both handlers now verify the inbound `X-Hub-Signature-256` HMAC against `WHATSAPP_APP_SECRET` (from the Meta Developer Console → App Settings → Basic → App Secret) — until that secret is set, signature verification is skipped with a logged warning rather than rejecting live traffic, so set it as soon as possible after deploy.
 
 Recommended non-secret runtime values:
 

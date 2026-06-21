@@ -30,9 +30,11 @@ import {
     signInWithEmailAndPassword,
     signInWithPopup,
     signInWithRedirect,
+    signOut,
 } from 'firebase/auth';
-import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import { CeoContactButtons } from '../components/CeoContactButtons';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -53,7 +55,8 @@ const LoginPage: React.FC = () => {
     const { t, tx, isRTL, lang, setLang } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
-    const { role, isAdmin, loading: roleLoading, refreshRole } = useRole();
+    const { role, isAdmin, loading: roleLoading, status: roleStatus, refreshRole } = useRole();
+    const [signingOut, setSigningOut] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -220,6 +223,60 @@ const LoginPage: React.FC = () => {
                     <CircularProgress sx={{ color: palette.gold }} />
                     <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{t('common.auth_sync')}</Typography>
                 </Stack>
+            </Box>
+        );
+    }
+
+    if (!role && roleStatus === 'role_required') {
+        const handleTryDifferentAccount = async () => {
+            setSigningOut(true);
+            try {
+                await signOut(auth);
+            } catch (err) {
+                console.error('[AUTH] Sign-out failed while clearing a role_required session.', err);
+            } finally {
+                setSigningOut(false);
+            }
+        };
+        return (
+            <Box sx={{
+                minHeight: '100vh',
+                bgcolor: palette.canvas,
+                display: 'grid',
+                placeItems: 'center',
+                p: 2,
+                direction: isRTL ? 'rtl' : 'ltr',
+            }}>
+                <Container maxWidth="sm">
+                    <Card sx={{
+                        bgcolor: palette.card,
+                        border: `1px solid ${palette.border}`,
+                        borderTop: `3px solid ${palette.gold}`,
+                        borderRadius: 3,
+                        boxShadow: '0 22px 60px rgba(17,24,39,0.12)',
+                    }}>
+                        <CardContent sx={{ p: { xs: 2.5, sm: 4 }, textAlign: 'center' }}>
+                            <SafeIcon icon={AlertTriangle} size={36} style={{ color: palette.gold, marginBottom: 12 }} />
+                            <Typography variant="h6" fontWeight={950} sx={{ color: palette.ink, mb: 1 }}>
+                                {tx('login.role_required.title', 'Account Setup Incomplete')}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: palette.muted, fontWeight: 600, mb: 3 }}>
+                                {tx('login.role_required.body', 'Your account is signed in, but no role has been assigned yet. Please contact support or try a different account.')}
+                            </Typography>
+                            <Stack spacing={1.5} alignItems="center">
+                                <Button
+                                    variant="contained"
+                                    disabled={signingOut}
+                                    onClick={handleTryDifferentAccount}
+                                    sx={{ bgcolor: palette.gold, color: '#111827', fontWeight: 900, px: 3, '&:hover': { bgcolor: palette.gold } }}
+                                >
+                                    {signingOut ? <CircularProgress size={20} sx={{ color: '#111827' }} /> : tx('login.role_required.retry', 'Try a Different Account')}
+                                </Button>
+                                <CeoContactButtons />
+                            </Stack>
+                        </CardContent>
+                    </Card>
+                </Container>
             </Box>
         );
     }
