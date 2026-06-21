@@ -41,6 +41,13 @@ import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import TenantInvitePage from './pages/TenantInvitePage';
 
+// Owner Portal Experience Pack
+import OwnerAnnouncementsPage from './pages/owner/OwnerAnnouncementsPage';
+import OwnerDocumentsPage from './pages/owner/OwnerDocumentsPage';
+import OwnerAmenitiesPage from './pages/owner/OwnerAmenitiesPage';
+import OwnerParcelsParkingPage from './pages/owner/OwnerParcelsParkingPage';
+import OwnerMessagesPage from './pages/owner/OwnerMessagesPage';
+
 import ProtectedRoute from './components/ProtectedRoute';
 import BinGroupHeader from './components/SovereignHeader';
 
@@ -217,6 +224,13 @@ function AppContent() {
         <Route path="/design-studio" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignStudioPage /></ProtectedRoute>} />
         <Route path="/design-studio/request/:id" element={<ProtectedRoute allowedRoles={['owner', 'tenant']}><DesignRequestDetailPage /></ProtectedRoute>} />
         <Route path="/invoices/:id" element={<InvoiceDetailsPage />} />
+        
+        {/* Owner Experience Pack */}
+        <Route path="/owner/announcements" element={<ProtectedRoute allowedRoles={['owner']}><OwnerAnnouncementsPage /></ProtectedRoute>} />
+        <Route path="/owner/documents" element={<ProtectedRoute allowedRoles={['owner']}><OwnerDocumentsPage /></ProtectedRoute>} />
+        <Route path="/owner/amenities" element={<ProtectedRoute allowedRoles={['owner']}><OwnerAmenitiesPage /></ProtectedRoute>} />
+        <Route path="/owner/parcels-parking" element={<ProtectedRoute allowedRoles={['owner']}><OwnerParcelsParkingPage /></ProtectedRoute>} />
+        <Route path="/owner/messages" element={<ProtectedRoute allowedRoles={['owner']}><OwnerMessagesPage /></ProtectedRoute>} />
         
         {/* Sector Portals */}
         <Route path="/tenant/*" element={<ProtectedRoute allowedRoles={['tenant']}><TenantSOSPage /></ProtectedRoute>} />

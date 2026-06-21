@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -130,6 +130,14 @@ export default function TenantDashboardPage() {
     { label: tx('nav.ai_studio', 'AI Design Studio'), icon: <Paintbrush size={20} />, route: '/tenant/design-studio', visible: true },
     { label: tx('service.gatePass', 'Gate Pass'), icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass', visible: showManagement },
     { label: tx('service.amenities', 'Amenities'), icon: <Dumbbell size={20} />, route: '/tenant/amenities', visible: showManagement },
+    { label: tx('service.notices', 'Notices'), icon: <Bell size={20} />, route: '/tenant/notices', visible: true },
+    { label: tx('service.keys', 'Keys'), icon: <Key size={20} />, route: '/tenant/keys', visible: showManagement },
+    { label: tx('service.parcels', 'Parcels'), icon: <Package size={20} />, route: '/tenant/parcels', visible: showManagement },
+    { label: tx('service.visitor_parking', 'Visitor Parking'), icon: <Car size={20} />, route: '/tenant/visitor-parking', visible: showManagement },
+    { label: tx('service.marketplace', 'Marketplace'), icon: <Store size={20} />, route: '/tenant/marketplace', visible: true },
+    { label: tx('service.staff', 'Staff Directory'), icon: <Contact size={20} />, route: '/tenant/staff-directory', visible: showManagement },
+    { label: tx('service.messages', 'Messages'), icon: <MessageSquare size={20} />, route: '/tenant/messages', visible: true },
+    { label: tx('service.community', 'Community Board'), icon: <Users size={20} />, route: '/tenant/community', visible: true },
   ].filter((button) => button.visible), [showMaintenance, showManagement, tx]);
 
   if (loading) {
