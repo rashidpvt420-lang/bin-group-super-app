@@ -30,6 +30,15 @@ import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 import TenantGatePassPage from './pages/TenantGatePassPage';
 import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
 
+import TenantNoticesPage from './pages/TenantNoticesPage';
+import TenantKeysPage from './pages/TenantKeysPage';
+import TenantParcelsPage from './pages/TenantParcelsPage';
+import TenantVisitorParkingPage from './pages/TenantVisitorParkingPage';
+import TenantMarketplacePage from './pages/TenantMarketplacePage';
+import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
+import TenantMessagesPage from './pages/TenantMessagesPage';
+import TenantCommunityPage from './pages/TenantCommunityPage';
+
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -150,6 +159,14 @@ export default function TenantApp() {
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/gate-pass" element={<TenantGatePassPage />} />
                 <Route path="/amenities" element={<TenantAmenitiesPage />} />
+                <Route path="/notices" element={<TenantNoticesPage />} />
+                <Route path="/keys" element={<TenantKeysPage />} />
+                <Route path="/parcels" element={<TenantParcelsPage />} />
+                <Route path="/visitor-parking" element={<TenantVisitorParkingPage />} />
+                <Route path="/marketplace" element={<TenantMarketplacePage />} />
+                <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
+                <Route path="/messages" element={<TenantMessagesPage />} />
+                <Route path="/community" element={<TenantCommunityPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="tenant" dark />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="tenant" dark />} />
             </Routes>
