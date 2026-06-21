@@ -2,7 +2,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
@@ -722,7 +722,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -803,7 +803,7 @@ export const updateTicketLifecycle = onCall({ cors: true, secrets: [waToken, waP
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
-export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after || before?.status === after.status) return;
@@ -974,13 +974,13 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
     }
 }
 
-export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     await attemptAutoAssignment(snap.ref, snap.data());
 });
 
-export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1025,7 +1025,7 @@ export const createAiMaintenanceTicket = onCall({ cors: true, secrets: [waToken,
     return { status: "SUCCESS", ticketId: ticketRef.id };
 });
 
-export const approveMaintenanceProposal = onCall({ cors: true, secrets: [waToken, waPhoneId] }, async (request) => {
+export const approveMaintenanceProposal = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1263,8 +1263,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
 });
 
 export const generateAndEmailPayslip = onCall({
-    cors: true,
-    secrets: [smtpUserSecret, smtpPassSecret]
+    cors: true
 }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
     const hasPayrollAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "ceo", "hr_manager", "finance_admin"]));
@@ -1589,7 +1588,7 @@ export const notifyRole = onCall({ cors: true }, async (request) => {
     }
 });
 
-export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
+export const getMissionGuidance = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
         const { context, input: rawInput } = request.data;
@@ -1597,6 +1596,9 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
             ? `You are BIN GROUP's property intelligence AI. Analyze this property data and provide a concise strategic maintenance recommendation (2-3 sentences):\n${JSON.stringify(context).substring(0, 2000)}`
             : 'Provide general property maintenance guidance for a UAE property.');
         const apiKey = openAiKey.value();
+        if (!apiKey) {
+            throw new HttpsError("failed-precondition", "AI service is not configured. OpenAI API key is missing.");
+        }
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -1625,7 +1627,7 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
  * [V11] SECURE ARCHITECTURAL CONCEPT GENERATOR
  * Calls Gemini from backend-only using Secret Manager.
  */
-export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey] }, async (request) => {
+export const generateDesignConcept = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
 
     const uid = request.auth.uid;
@@ -1643,6 +1645,9 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
     try {
         const { requestId, scope, designStyle, imageBase64, mimeType } = request.data;
         const apiKey = geminiApiKey.value();
+        if (!apiKey) {
+            throw new HttpsError("failed-precondition", "AI service is not configured. Gemini API key is missing.");
+        }
 
         const fullPrompt = `You are the Sovereign AI Architect for BIN GROUP LLC. 
             Redesign this ${scope?.zoneType || 'space'} using a ${designStyle} interior design style. 
@@ -1713,7 +1718,7 @@ export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey
 
 // ─── SCHEDULED MISSIONS ────────────────────────────────────────────────────
 
-export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours", secrets: [waToken, waPhoneId] }, async () => {
+export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, async () => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const pending = await db.collection("maintenanceTickets")
         .where("status", "==", "AWAITING_OWNER_APPROVAL")
@@ -1771,17 +1776,23 @@ export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", asy
     }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }));
 });
 
-export const processMailQueue = onDocumentCreated({ document: "mail/{docId}", secrets: [smtpUserSecret, smtpPassSecret] }, async (event) => {
+export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
     try {
+        const user = smtpUserSecret.value();
+        const pass = smtpPassSecret.value();
+        if (!user || !pass) {
+            await snap.ref.update({ delivery: { state: 'ERROR', error: 'SMTP credentials are not configured. Mail cannot be processed.' } });
+            return;
+        }
         const mailTransport = nodemailer.createTransport({
             host: 'smtp.gmail.com', port: 465, secure: true,
-            auth: { user: smtpUserSecret.value(), pass: smtpPassSecret.value() }
+            auth: { user, pass }
         });
         const mailData = snap.data();
         await mailTransport.sendMail({
-            from: `"BIN GROUP" <${smtpUserSecret.value()}>`,
+            from: `"BIN GROUP" <${user}>`,
             to: mailData.to,
             subject: mailData.message?.subject || 'Update',
             html: mailData.message?.html || ''
@@ -3144,7 +3155,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
 
 // ─── LIVE CHAT & PUSH NOTIFICATIONS ────────────────────────────────────────
 
-export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onChatMessageSent = onDocumentCreated({ document: "maintenanceTickets/{ticketId}/messages/{messageId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
 
@@ -3311,7 +3322,7 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
     }
 });
 
-export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}", secrets: [waToken, waPhoneId] }, async (event) => {
+export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;

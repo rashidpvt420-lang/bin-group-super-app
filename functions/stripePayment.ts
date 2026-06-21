@@ -1,5 +1,5 @@
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
 
@@ -26,7 +26,7 @@ function onboardingPaymentId(intakeId: string) {
   return `${intakeId}_mobilization`;
 }
 
-export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripeSecretKey] }, async (request) => {
+export const createStripeCheckoutSession = onCall({ cors: true }, async (request) => {
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
@@ -91,7 +91,7 @@ export const createStripeCheckoutSession = onCall({ cors: true, secrets: [stripe
   }
 });
 
-export const stripeWebhook = onRequest({ cors: true, secrets: [stripeSecretKey, stripeWebhookSecret] }, async (request, response) => {
+export const stripeWebhook = onRequest({ cors: true }, async (request, response) => {
   const sig = request.headers["stripe-signature"];
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   const webhookSecret = stripeWebhookSecret.value() || process.env.STRIPE_WEBHOOK_SECRET;

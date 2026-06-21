@@ -1,5 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import OpenAI from "openai";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
@@ -144,8 +144,7 @@ async function askOpenAI(apiKey: string, prompt: string) {
 
 export const runSovereignAI = onCall({
   cors: true,
-  timeoutSeconds: 60,
-  secrets: [geminiApiKey, openAiKey]
+  timeoutSeconds: 60
 }, async (request) => {
   const signedIn = Boolean(request.auth?.uid);
   const uid = request.auth?.uid || "public-session";

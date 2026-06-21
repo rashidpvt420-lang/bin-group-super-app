@@ -1,5 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import { verifyWhatsAppSignature } from "./whatsappSignature";
 
@@ -119,7 +119,6 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
 export const whatsappBotWebhook = onRequest({
   cors: false,
   timeoutSeconds: 30,
-  secrets: [waToken, waVerifyToken, waPhoneId, waAppSecret],
   maxInstances: 20,
 }, async (req, res) => {
   // GET — Meta webhook verification
@@ -127,7 +126,12 @@ export const whatsappBotWebhook = onRequest({
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && token === waVerifyToken.value()) {
+    const verifyToken = waVerifyToken.value();
+    if (!verifyToken) {
+      res.status(500).send("WhatsApp webhook verification failed: Verify Token is unconfigured.");
+      return;
+    }
+    if (mode === "subscribe" && token === verifyToken) {
       res.status(200).send(challenge);
     } else {
       res.status(403).send("Forbidden");
@@ -142,6 +146,14 @@ export const whatsappBotWebhook = onRequest({
       res.status(401).send("Invalid signature");
       return;
     }
+
+    const phoneId = waPhoneId.value();
+    const token = waToken.value();
+    if (!phoneId || !token) {
+      console.error("WhatsApp Bot configuration is missing. Webhook disabled.");
+      res.status(500).send("WhatsApp configuration is missing.");
+      return;
+    }
     res.status(200).send("OK"); // Acknowledge immediately
     try {
       const body = req.body;
@@ -153,8 +165,6 @@ export const whatsappBotWebhook = onRequest({
 
       const msg = messages[0];
       const from = msg.from;
-      const phoneId = waPhoneId.value();
-      const token = waToken.value();
 
       // Log to Firestore for admin visibility
       await db.collection("whatsappMessages").add({

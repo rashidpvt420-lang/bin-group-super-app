@@ -1,5 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import { verifyWhatsAppSignature } from "./whatsappSignature";
 
@@ -157,7 +157,6 @@ async function persistInboundMessage(args: {
 export const whatsappWebhook = onRequest(
   {
     region: "us-central1",
-    secrets: [whatsappToken, whatsappPhoneNumberId, whatsappVerifyToken, whatsappAppSecret],
     cors: false,
   },
   async (req, res) => {
@@ -165,8 +164,14 @@ export const whatsappWebhook = onRequest(
       const mode = String(req.query["hub.mode"] || "");
       const token = String(req.query["hub.verify_token"] || "");
       const challenge = String(req.query["hub.challenge"] || "");
+      const verifyToken = whatsappVerifyToken.value();
 
-      if (mode === "subscribe" && token === whatsappVerifyToken.value()) {
+      if (!verifyToken) {
+        res.status(500).send("WhatsApp webhook verification failed: Verify Token is unconfigured.");
+        return;
+      }
+
+      if (mode === "subscribe" && token === verifyToken) {
         res.status(200).send(challenge);
         return;
       }
@@ -184,6 +189,14 @@ export const whatsappWebhook = onRequest(
     if (!verifyWhatsAppSignature(req, whatsappAppSecret.value())) {
       console.warn("WhatsApp webhook: rejected request with invalid X-Hub-Signature-256.");
       res.status(401).json({ ok: false, error: "INVALID_SIGNATURE" });
+      return;
+    }
+
+    const token = whatsappToken.value();
+    const phoneId = whatsappPhoneNumberId.value();
+    if (!token || !phoneId) {
+      console.error("WhatsApp Cloud API configuration is missing. Webhook disabled.");
+      res.status(500).json({ ok: false, error: "WHATSAPP_CONFIG_MISSING" });
       return;
     }
 

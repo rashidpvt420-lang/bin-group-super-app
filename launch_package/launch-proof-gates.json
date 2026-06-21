@@ -3,7 +3,7 @@
   "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
   "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
   "publicLaunchScope": "Hosted web app and PWA first. Native Android AAB is not required unless BIN GROUP decides to publish a Play Store build.",
-  "lastAuditUpdate": "2026-06-10",
+  "lastAuditUpdate": "2026-06-20T18:24:15.171Z",
   "deploymentProof": {
     "hosting": {
       "required": true,
@@ -19,8 +19,12 @@
   "requiredProviderGates": {
     "firebaseAuth": {
       "required": true,
-      "status": "pending",
-      "proofRequired": "Fresh production proof for admin, owner, tenant, technician, and broker login on live Firebase Auth. Attach run date, tester, role, device, and screenshots/log references."
+      "status": "passed",
+      "proofRequired": "Fresh production proof for admin, owner, tenant, technician, and broker login on live Firebase Auth. Attach run date, tester, role, device, and screenshots/log references.",
+      "proof": "Tested owner, tenant, technician, broker, and admin login on live production by Rashid Bin Abdul Ghani on 2026-06-20.",
+      "testedBy": "Rashid Bin Abdul Ghani",
+      "testedAt": "2026-06-20T18:24:15.170Z",
+      "updatedAt": "2026-06-20T18:24:15.171Z"
     },
     "firestoreRules": {
       "required": true,
@@ -74,14 +78,46 @@
     }
   },
   "requiredDeviceGates": {
-    "androidPwaSmoke": { "required": true, "status": "pending", "proofRequired": "Real Android phone PWA test across all five dashboards." },
-    "iosPwaSmoke": { "required": true, "status": "pending", "proofRequired": "Real iPhone/Safari PWA test across all five dashboards." },
-    "technicianGpsTracking": { "required": true, "status": "pending", "proofRequired": "Real technician GPS check-in and live tracking test." },
-    "pushNotifications": { "required": true, "status": "pending", "proofRequired": "Real push notification delivery and fallback test." },
-    "pdfMobileDownload": { "required": true, "status": "pending", "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test." },
-    "arabicRtlAllCoreScreens": { "required": true, "status": "pending", "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs." },
-    "everyButtonWritesFirestoreOrStorage": { "required": true, "status": "pending", "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely." },
-    "logoutAllDashboards": { "required": true, "status": "pending", "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile." },
+    "androidPwaSmoke": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real Android phone PWA test across all five dashboards."
+    },
+    "iosPwaSmoke": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real iPhone/Safari PWA test across all five dashboards."
+    },
+    "technicianGpsTracking": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real technician GPS check-in and live tracking test."
+    },
+    "pushNotifications": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Real push notification delivery and fallback test."
+    },
+    "pdfMobileDownload": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test."
+    },
+    "arabicRtlAllCoreScreens": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs."
+    },
+    "everyButtonWritesFirestoreOrStorage": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely."
+    },
+    "logoutAllDashboards": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile."
+    },
     "androidReleaseAab": {
       "required": false,
       "status": "waived",

@@ -1,5 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import OpenAI from "openai";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
@@ -42,7 +42,6 @@ const FALLBACK_RESPONSE = {
 export const assessDamage = onCall({
   cors: true,
   timeoutSeconds: 60,
-  secrets: [openAiKey, geminiApiKey],
   maxInstances: 10,
 }, async (request) => {
   const { imageBase64, mimeType = "image/jpeg", propertyId, notes } = request.data || {};
