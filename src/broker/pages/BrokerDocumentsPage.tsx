@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Grid, Stack, Button, CircularProgress, 
-    Chip, alpha, LinearProgress, IconButton, Tooltip 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    Box, Typography, Paper, Grid, Stack, Button, CircularProgress,
+    Chip, alpha, LinearProgress, IconButton, Tooltip, Snackbar, Alert
 } from '@mui/material';
-import { 
-    FileUp, FileText, CheckCircle2, Clock, AlertCircle, 
+import {
+    FileUp, FileText, CheckCircle2, Clock, AlertCircle,
     ShieldCheck, Eye, Trash2, Download, Info,
     Lock, Share2, MoreVertical
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from '../../lib/firebase';
+import { db, storage, collection, query, where, addDoc, serverTimestamp, onSnapshot, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -19,7 +19,10 @@ export default function BrokerDocumentsPage() {
     const { t, isRTL } = useLanguage();
     const [documents, setDocuments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(false);
+    const [uploading, setUploading] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const pendingDocType = useRef<string | null>(null);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -31,21 +34,46 @@ export default function BrokerDocumentsPage() {
         return () => unsub();
     }, [user]);
 
-    const handleUpload = async (docType: string) => {
-        if (!user?.uid) return;
-        setUploading(true);
+    const handleUpload = (docType: string) => {
+        if (!user?.uid || uploading) return;
+        pendingDocType.current = docType;
+        fileInputRef.current?.click();
+    };
+
+    const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const docType = pendingDocType.current;
+        // Reset the input so selecting the same file again still fires onChange.
+        e.target.value = '';
+        if (!file || !docType || !user?.uid) return;
+
+        if (file.size > 15 * 1024 * 1024) {
+            setUploadError('File is too large. Please upload a PDF or image under 15 MB.');
+            return;
+        }
+
+        setUploading(docType);
         try {
+            const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+            const fileRef = ref(storage, `brokerDocuments/${user.uid}/${docType}/${Date.now()}_${safeName}`);
+            await uploadBytes(fileRef, file);
+            const fileUrl = await getDownloadURL(fileRef);
             await addDoc(collection(db, 'brokerDocuments'), {
                 brokerId: user.uid,
-                fileName: `${docType.toUpperCase()}_${user.uid.substring(0,4)}.pdf`,
+                fileName: file.name,
+                fileUrl,
+                fileSize: file.size,
+                contentType: file.type || 'application/octet-stream',
                 docType,
                 status: 'pending_review',
                 uploadedAt: serverTimestamp()
             });
         } catch (err) {
-            console.error(err);
+            console.error('[BrokerDocuments] Upload failed:', err);
+            setUploadError('Upload failed. Please check your connection and try again.');
         } finally {
-            setUploading(false);
+            setUploading(null);
+            pendingDocType.current = null;
         }
     };
 
@@ -86,7 +114,8 @@ export default function BrokerDocumentsPage() {
                 {requiredDocs.map(req => {
                     const status = getDocStatus(req.type);
                     const isUploaded = status.status !== 'missing';
-                    
+                    const uploadedDoc = documents.find(d => d.docType === req.type);
+
                     return (
                         <Grid item xs={12} md={6} key={req.type}>
                             <Paper sx={{ 
@@ -111,24 +140,29 @@ export default function BrokerDocumentsPage() {
                                     />
                                 </Stack>
 
-                                {uploading && !isUploaded ? (
+                                {uploading === req.type ? (
                                     <Box sx={{ mt: 3 }}>
                                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>ENCRYPTING ASSET...</Typography>
                                         <LinearProgress sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                                     </Box>
                                 ) : isUploaded ? (
                                     <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
-                                        <Button 
-                                            variant="contained" 
-                                            fullWidth 
+                                        <Button
+                                            variant="contained"
+                                            fullWidth
+                                            component="a"
+                                            href={uploadedDoc?.fileUrl || undefined}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            disabled={!uploadedDoc?.fileUrl}
                                             startIcon={<Eye size={18} />}
                                             sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF', fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
                                         >
                                             PREVIEW
                                         </Button>
-                                        <Tooltip title="Manage Asset">
-                                            <IconButton sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: 'rgba(255,255,255,0.4)' }}>
-                                                <MoreVertical size={20} />
+                                        <Tooltip title="Replace Asset">
+                                            <IconButton onClick={() => handleUpload(req.type)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: 'rgba(255,255,255,0.4)' }}>
+                                                <FileUp size={20} />
                                             </IconButton>
                                         </Tooltip>
                                     </Stack>
@@ -171,13 +205,14 @@ export default function BrokerDocumentsPage() {
                     Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin.
                 </Typography>
                 <Stack direction="row" spacing={2} justifyContent="center">
-                    <Button 
-                        variant="contained" 
-                        startIcon={<FileUp size={18} />}
+                    <Button
+                        variant="contained"
+                        startIcon={uploading === 'evidence' ? <CircularProgress size={16} sx={{ color: '#000' }} /> : <FileUp size={18} />}
                         onClick={() => handleUpload('evidence')}
+                        disabled={!!uploading}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 6, py: 1.5, borderRadius: 3 }}
                     >
-                        INITIALIZE UPLOAD
+                        {uploading === 'evidence' ? 'UPLOADING...' : 'INITIALIZE UPLOAD'}
                     </Button>
                 </Stack>
             </Paper>
@@ -188,6 +223,20 @@ export default function BrokerDocumentsPage() {
                     Security Protocol: Files are scanned for malware upon upload. Sensitive personal information is redacted automatically where necessary for institutional compliance.
                 </Typography>
             </Box>
+
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                style={{ display: 'none' }}
+                onChange={handleFileSelected}
+            />
+
+            <Snackbar open={!!uploadError} autoHideDuration={7000} onClose={() => setUploadError(null)}>
+                <Alert severity="error" onClose={() => setUploadError(null)} sx={{ fontWeight: 700 }}>
+                    {uploadError}
+                </Alert>
+            </Snackbar>
         </BrokerPageFrame>
     );
 }

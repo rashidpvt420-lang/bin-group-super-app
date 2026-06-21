@@ -6,7 +6,7 @@ import {
     ChevronRight, Briefcase, Plus, ShieldCheck, 
     Clock, ArrowUpRight, MessageSquare, PlusCircle, Send, FileText, DollarSign
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, limit, orderBy } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit, orderBy, doc, getDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -18,6 +18,8 @@ export default function BrokerDashboardPage() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [recentLeads, setRecentLeads] = useState<any[]>([]);
+    const [reraVerified, setReraVerified] = useState(false);
+    const [reraStatus, setReraStatus] = useState<string>('NOT_SUBMITTED');
     const [stats, setStats] = useState({
         leadsTotal: 0,
         leadsActive: 0,
@@ -34,6 +36,14 @@ export default function BrokerDashboardPage() {
         let unsubRef: () => void;
         let unsubCom: () => void;
         let unsubRecent: () => void;
+
+        getDoc(doc(db, 'users', user.uid))
+            .then((snap) => {
+                const data = snap.exists() ? snap.data() : {};
+                setReraVerified(Boolean(data.reraVerified));
+                setReraStatus(String(data.reraStatus || 'NOT_SUBMITTED'));
+            })
+            .catch((err) => console.warn('[BrokerDashboard] RERA status fetch failed:', err));
 
         try {
             const leadsQ = query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid));
@@ -99,11 +109,24 @@ export default function BrokerDashboardPage() {
         { label: tx('broker.dash.lifetime_paid', 'Lifetime Paid'), value: `AED ${stats.commissionPaid.toLocaleString()}`, desc: tx('broker.dash.lifetime_desc', 'Total successful settlements'), icon: <TrendingUp size={22} />, color: '#3b82f6', path: '/broker/commissions' },
     ], [stats, tx]);
 
+    const reraBanner = useMemo(() => {
+        if (reraVerified) {
+            return { severity: 'success' as const, text: tx('broker.dash.rera_verified', 'RERA certificate verified. You are eligible for automated commission payouts.') };
+        }
+        if (reraStatus === 'PENDING') {
+            return { severity: 'info' as const, text: tx('broker.dash.rera_pending', 'RERA license submitted and under review. Commission payouts unlock once verification is approved.') };
+        }
+        if (reraStatus === 'REJECTED') {
+            return { severity: 'error' as const, text: tx('broker.dash.rera_rejected', 'RERA verification was not approved. Please update your license number in your profile and resubmit.') };
+        }
+        return { severity: 'warning' as const, text: tx('broker.dash.rera_required', 'Add your RERA license number in your profile to unlock automated commission payouts.') };
+    }, [reraVerified, reraStatus, tx]);
+
     const quickCommands = useMemo(() => [
-        { label: tx('broker.dash.add_lead', 'Add New Lead'), path: '/broker/leads/new', icon: <PlusCircle size={18} />, color: '#10b981' },
-        { label: tx('broker.dash.submit_referral', 'Submit Referral'), path: '/broker/referrals/new', icon: <Send size={18} />, color: binThemeTokens.gold },
-        { label: tx('broker.dash.view_payouts', 'View Payouts'), path: '/broker/payouts', icon: <DollarSign size={18} />, color: '#f59e0b' },
-        { label: tx('broker.dash.doc_vault', 'Document Vault'), path: '/broker/vault', icon: <FileText size={18} />, color: '#6366f1' },
+        { label: tx('broker.dash.add_lead', 'Add New Lead'), path: '/broker/leads?new=1', icon: <PlusCircle size={18} />, color: '#10b981' },
+        { label: tx('broker.dash.submit_referral', 'Submit Referral'), path: '/broker/referrals?new=1', icon: <Send size={18} />, color: binThemeTokens.gold },
+        { label: tx('broker.dash.view_payouts', 'View Payouts'), path: '/broker/commissions', icon: <DollarSign size={18} />, color: '#f59e0b' },
+        { label: tx('broker.dash.doc_vault', 'Document Vault'), path: '/broker/documents', icon: <FileText size={18} />, color: '#6366f1' },
     ], [tx]);
 
     return (
@@ -196,10 +219,16 @@ export default function BrokerDashboardPage() {
                                 <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: '50%' }}>
                                     <ShieldCheck color={binThemeTokens.gold} />
                                 </Box>
-                                <Box>
+                                <Box sx={{ flex: 1 }}>
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('broker.dash.sovereign_compliance', 'SOVEREIGN COMPLIANCE')}</Typography>
-                                    <Alert severity="success" sx={{ bgcolor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16,185,129,0.15)', color: '#10b981', borderRadius: 3 }}>
-                                        {tx('broker.dash.rera_verified', 'RERA certificate verified. You are eligible for automated commission payouts.')}
+                                    <Alert severity={reraBanner.severity} sx={{ borderRadius: 3 }} action={
+                                        !reraVerified ? (
+                                            <Button color="inherit" size="small" onClick={() => navigate('/broker/profile')} sx={{ fontWeight: 900 }}>
+                                                {tx('broker.dash.rera_cta', 'UPDATE PROFILE')}
+                                            </Button>
+                                        ) : undefined
+                                    }>
+                                        {reraBanner.text}
                                     </Alert>
                                 </Box>
                             </Stack>

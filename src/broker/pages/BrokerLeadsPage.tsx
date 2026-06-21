@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import { useSearchParams } from 'react-router-dom';
+import {
     Box, Typography, Paper, Grid, Stack, Button, CircularProgress, 
     Chip, TextField, MenuItem, Select, Dialog, DialogTitle, 
     DialogContent, DialogActions, alpha, InputAdornment, 
@@ -25,7 +26,17 @@ export default function BrokerLeadsPage() {
 
     const [openAdd, setOpenAdd] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Auto-open the "Register New Lead" dialog when arriving via a ?new=1 quick command.
+    useEffect(() => {
+        if (searchParams.get('new') === '1') {
+            setOpenAdd(true);
+            searchParams.delete('new');
+            setSearchParams(searchParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
+
     // Form state
     const [leadName, setLeadName] = useState('');
     const [phone, setPhone] = useState('');
