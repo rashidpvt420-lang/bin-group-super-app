@@ -31,7 +31,7 @@ import {
     People as PeopleIcon
 } from '@mui/icons-material';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 interface Broker {
@@ -47,6 +47,9 @@ interface Broker {
     iban?: string;
     emiratesId?: string;
     kycDocumentUrl?: string; // from signup
+    reraLicense?: string;
+    reraVerified?: boolean;
+    reraStatus?: string;
 }
 
 export default function BrokerManagementPage() {
@@ -54,6 +57,7 @@ export default function BrokerManagementPage() {
     const [brokers, setBrokers] = useState<Broker[]>([]);
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
     const [isViewOpen, setIsViewOpen] = useState(false);
+    const [reraBusy, setReraBusy] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
         pending: 0,
@@ -107,6 +111,25 @@ export default function BrokerManagementPage() {
     const handleView = (broker: Broker) => {
         setSelectedBroker(broker);
         setIsViewOpen(true);
+    };
+
+    const handleReraDecision = async (broker: Broker, verified: boolean) => {
+        if (!verified && !window.confirm(t('broker.reject_confirm'))) return;
+        setReraBusy(true);
+        try {
+            const callable = httpsCallable(functions, 'setBrokerReraVerification');
+            const res: any = await callable({ brokerId: broker.id, verified });
+            const released = res?.data?.releasedCommissions ?? 0;
+            setSelectedBroker(prev => prev ? { ...prev, reraVerified: verified, reraStatus: verified ? 'VERIFIED' : 'REJECTED' } : prev);
+            alert(verified
+                ? `RERA verified.${released ? ` ${released} held commission(s) released for approval.` : ''}`
+                : 'RERA verification rejected.');
+        } catch (err: any) {
+            console.error('[BROKER_MGT] RERA decision failed:', err);
+            alert(err?.message || 'Could not update RERA verification.');
+        } finally {
+            setReraBusy(false);
+        }
     };
 
     return (
@@ -226,6 +249,26 @@ export default function BrokerManagementPage() {
                                 <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="caption" color="text.secondary" display="block">{t('broker.affiliate_code')}</Typography>
                                     <Typography color="secondary" sx={{ fontWeight: 900 }}>{selectedBroker.brokerCode || selectedBroker.affiliateCode}</Typography>
+                                </Box>
+                                <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>RERA / BRN Verification</Typography>
+                                    <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', mb: 1 }}>{selectedBroker.reraLicense || t('broker.not_provided')}</Typography>
+                                    <Chip
+                                        label={selectedBroker.reraVerified ? 'VERIFIED' : (selectedBroker.reraStatus || 'NOT VERIFIED')}
+                                        color={selectedBroker.reraVerified ? 'success' : (selectedBroker.reraStatus === 'PENDING' ? 'warning' : 'default')}
+                                        size="small"
+                                        sx={{ fontWeight: 800, mb: 2 }}
+                                    />
+                                    <Box sx={{ display: 'flex', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        {!selectedBroker.reraVerified && (
+                                            <Button variant="contained" color="success" size="small" disabled={reraBusy} onClick={() => handleReraDecision(selectedBroker, true)} sx={{ fontWeight: 800, borderRadius: 2 }}>
+                                                Verify RERA
+                                            </Button>
+                                        )}
+                                        <Button variant="outlined" color="error" size="small" disabled={reraBusy} onClick={() => handleReraDecision(selectedBroker, false)} sx={{ fontWeight: 800, borderRadius: 2 }}>
+                                            Reject
+                                        </Button>
+                                    </Box>
                                 </Box>
                             </Grid>
                             <Grid item xs={12} md={6}>
