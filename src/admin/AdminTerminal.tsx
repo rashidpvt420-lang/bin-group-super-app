@@ -89,12 +89,21 @@ export default function AdminTerminal() {
         <Typography variant="h3" sx={{ mt: 2, mb: 2, fontWeight: 950, letterSpacing: -1.5 }}>
           {tx('admin.bridge.title', 'Redirecting to Admin Command Center')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 4, lineHeight: 1.7 }}>
+        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 3, lineHeight: 1.7 }}>
           {tx(
             'admin.bridge.desc',
             'The main app does not contain the admin login form. You are being sent to the dedicated production admin panel for owner approvals, tickets, technicians, contracts, payments, and sovereign operations.'
           )}
         </Typography>
+
+        <Box sx={{ mb: 4, px: 2.5, py: 1.5, borderRadius: 2, bgcolor: 'rgba(201,166,70,0.10)', border: '1px solid rgba(201,166,70,0.30)' }}>
+          <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 800, lineHeight: 1.6 }}>
+            {tx(
+              'admin.bridge.reauth_notice',
+              'Heads up: the admin panel is a separate secure app. You may need to sign in again with your admin credentials when you arrive.'
+            )}
+          </Typography>
+        </Box>
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="center">
           <Button
