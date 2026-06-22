@@ -62,8 +62,21 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
   const activeTicket = activeTickets[0] || null;
   const upcomingBooking = useMemo(() => firstRecent(bookings.filter((item) => !['cancelled', 'rejected'].includes(String(item.status || '').toLowerCase())), ['slotStartAt', 'createdAt']), [bookings]);
   const parcelWaiting = useMemo(() => parcels.find((item) => ['received', 'notified', 'waiting'].includes(String(item.status || '').toLowerCase())) || null, [parcels]);
-  const parkingPass = useMemo(() => firstRecent(parkingPasses.filter((item) => ['approved', 'pending'].includes(String(item.status || '').toLowerCase())), ['visitStartAt', 'createdAt']), [parkingPasses]);
+  const parkingPass = useMemo(() => firstRecent(parkingPasses.filter((item) => ['approved', 'pending'].includes(String(item.status || '').toLowerCase())), ['slotStartAt', 'createdAt']), [parkingPasses]);
   const latestNotice = notices[0] || null;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const parcelAgeHours = parcelWaiting ? (nowSeconds - getSeconds(parcelWaiting.receivedAt || parcelWaiting.createdAt)) / 3600 : 0;
+  const isUrgentParcel = parcelWaiting && parcelAgeHours > 48;
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 
+    ? (isRTL ? 'صباح الخير' : 'Good morning') 
+    : hour < 17 
+      ? (isRTL ? 'مساء الخير' : 'Good afternoon') 
+      : (isRTL ? 'مساء الخير' : 'Good evening');
+  const name = user?.displayName || (isRTL ? 'الساكن' : 'Resident');
+  const fullGreeting = isRTL ? `${greeting}، ${name}` : `${greeting}, ${name}!`;
 
   const tracker = [
     { key: 'accepted', label: tx('tracker.accepted', 'Accepted'), active: ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase()) },
@@ -113,7 +126,21 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
       <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={3} sx={{ position: 'relative', zIndex: 1, mb: 3 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('smart.home_status', 'MY HOME STATUS')}</Typography>
-          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{tx('smart.daily_control', 'Daily control without calling anyone')}</Typography>
+          <Typography 
+            variant="h5" 
+            sx={{ 
+              color: '#fff', 
+              fontWeight: 950, 
+              mt: 0.5,
+              animation: 'slideInFade 1s ease-out',
+              '@keyframes slideInFade': {
+                '0%': { opacity: 0, transform: 'translateY(-10px)' },
+                '100%': { opacity: 1, transform: 'translateY(0)' }
+              }
+            }}
+          >
+            {fullGreeting}
+          </Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.52)', mt: 1 }}>{tx('smart.daily_desc', 'Issue, booking, parcel, visitor pass, notice, and emergency access in one trusted screen.')}</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ minWidth: { md: 330 } }}>
@@ -122,19 +149,99 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
         </Stack>
       </Stack>
 
+      {isUrgentParcel && (
+        <Box sx={{ 
+          mb: 3, 
+          p: 2, 
+          borderRadius: 4, 
+          bgcolor: alpha('#ef4444', 0.12), 
+          border: '1px solid #ef4444', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1.5,
+          position: 'relative',
+          zIndex: 1,
+          animation: 'slideDownFade 0.6s ease-out',
+          '@keyframes slideDownFade': {
+            '0%': { opacity: 0, transform: 'translateY(-10px)' },
+            '100%': { opacity: 1, transform: 'translateY(0)' }
+          }
+        }}>
+          <SafeIcon icon={Package} size={20} style={{ color: '#ef4444' }} />
+          <Box sx={{ flexGrow: 1, textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography sx={{ color: '#fff', fontWeight: 950 }}>
+              {isRTL ? 'طرد عاجل بانتظارك!' : 'Urgent Parcel Awaiting Pick-up!'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+              {isRTL 
+                ? `وصل طردك من ${parcelWaiting.courierName || 'شركة التوصيل'} منذ أكثر من 48 ساعة. يرجى استلامه من مكتب الاستقبال.` 
+                : `Your parcel from ${parcelWaiting.courierName || 'Courier'} has been waiting for over 48 hours. Please collect it from the reception.`}
+            </Typography>
+          </Box>
+          <Button 
+            variant="contained" 
+            size="small" 
+            onClick={() => navigate('/tenant/parcels')}
+            sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 950, '&:hover': { bgcolor: '#dc2626' } }}
+          >
+            {isRTL ? 'عرض الطرود' : 'View Parcels'}
+          </Button>
+        </Box>
+      )}
+
       <Grid container spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
-        {statusCards.map((item) => (
-          <Grid item xs={12} sm={6} md={3} key={item.title}>
-            <Paper onClick={() => navigate(item.route)} sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(255,255,255,0.035)', border: `1px solid ${alpha(item.color, 0.22)}`, borderRadius: 4, cursor: 'pointer', transition: 'all .18s ease', '&:hover': { transform: 'translateY(-2px)', borderColor: item.color } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                <Box sx={{ color: item.color }}>{item.icon}</Box>
-                <Chip size="small" label={item.chip} sx={{ bgcolor: alpha(item.color, 0.12), color: item.color, fontWeight: 950, fontSize: '0.62rem' }} />
-              </Stack>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900, letterSpacing: 1 }}>{item.title.toUpperCase()}</Typography>
-              <Typography sx={{ color: '#fff', fontWeight: 950, mt: 0.6, minHeight: 44, lineHeight: 1.25 }}>{item.value}</Typography>
-            </Paper>
-          </Grid>
-        ))}
+        {statusCards.map((item) => {
+          const isActiveIssueCard = item.title === tx('smart.active_issue', 'Active issue') && activeTicket;
+          return (
+            <Grid item xs={12} sm={6} md={3} key={item.title}>
+              <Paper 
+                onClick={() => navigate(item.route)} 
+                sx={{ 
+                  p: 2.5, 
+                  height: '100%', 
+                  bgcolor: 'rgba(255,255,255,0.035)', 
+                  border: `1px solid ${alpha(item.color, 0.22)}`, 
+                  borderRadius: 4, 
+                  cursor: 'pointer', 
+                  transition: 'all .18s ease', 
+                  '&:hover': { 
+                    transform: 'translateY(-2px)', 
+                    borderColor: item.color 
+                  },
+                  ...(isActiveIssueCard && {
+                    animation: 'activeIssuePulse 2.5s infinite ease-in-out',
+                    '@keyframes activeIssuePulse': {
+                      '0%, 100%': { borderColor: alpha(binThemeTokens.gold, 0.3), boxShadow: `0 0 4px ${alpha(binThemeTokens.gold, 0.1)}` },
+                      '50%': { borderColor: binThemeTokens.gold, boxShadow: `0 0 12px ${alpha(binThemeTokens.gold, 0.4)}` }
+                    }
+                  })
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                  <Box sx={{ color: item.color }}>{item.icon}</Box>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    {isActiveIssueCard && (
+                      <Box sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        bgcolor: binThemeTokens.gold,
+                        animation: 'dotPulse 1.5s infinite ease-in-out',
+                        '@keyframes dotPulse': {
+                          '0%, 100%': { transform: 'scale(0.8)', opacity: 0.5 },
+                          '50%': { transform: 'scale(1.3)', opacity: 1 }
+                        }
+                      }} />
+                    )}
+                    <Chip size="small" label={item.chip} sx={{ bgcolor: alpha(item.color, 0.12), color: item.color, fontWeight: 950, fontSize: '0.62rem' }} />
+                  </Stack>
+                </Stack>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 900, letterSpacing: 1 }}>{item.title.toUpperCase()}</Typography>
+                <Typography sx={{ color: '#fff', fontWeight: 950, mt: 0.6, minHeight: 44, lineHeight: 1.25 }}>{item.value}</Typography>
+              </Paper>
+            </Grid>
+          );
+        })}
       </Grid>
 
       {activeTicket && (

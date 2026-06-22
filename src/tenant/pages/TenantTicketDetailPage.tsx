@@ -15,6 +15,13 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
+import { 
+    getTechnicianLocation, 
+    getTicketJobLocation, 
+    calculateDistanceKm, 
+    calculateEtaMinutes,
+    normalizeTicketStatus
+} from '../../utils/liveTracking';
 
 export default function TenantTicketDetailPage() {
     const { id } = useParams();
@@ -62,6 +69,7 @@ export default function TenantTicketDetailPage() {
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'CLOSED',
                 tenantApproved: true,
+                tenantApproval: 'approved',
                 rating: safeRating,
                 feedback: cleanFeedback,
                 closedAt: serverTimestamp(),
@@ -76,7 +84,7 @@ export default function TenantTicketDetailPage() {
                 feedback: cleanFeedback,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true, rating: safeRating, feedback: cleanFeedback }));
+            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true, tenantApproval: 'approved', rating: safeRating, feedback: cleanFeedback }));
             notifyTenantApproved(id, user.displayName || 'Tenant').catch(console.warn);
         } catch (err) {
             console.error(err);
@@ -97,6 +105,7 @@ export default function TenantTicketDetailPage() {
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'DISPUTED',
                 tenantApproved: false,
+                tenantApproval: 'disputed',
                 rating: rating || 1,
                 feedback: cleanReason,
                 rejectionReason: cleanReason,
@@ -111,7 +120,7 @@ export default function TenantTicketDetailPage() {
                 reason: cleanReason,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false, rating: rating || 1, feedback: cleanReason, rejectionReason: cleanReason }));
+            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false, tenantApproval: 'disputed', rating: rating || 1, feedback: cleanReason, rejectionReason: cleanReason }));
             notifyTenantRejected(id, user.displayName || 'Tenant', cleanReason).catch(console.warn);
             setShowRejectInput(false);
         } catch (err) {
@@ -124,6 +133,14 @@ export default function TenantTicketDetailPage() {
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (!ticket) return null;
+
+    const techLoc = getTechnicianLocation(ticket);
+    const jobLoc = getTicketJobLocation(ticket);
+    const distKm = calculateDistanceKm(techLoc, jobLoc);
+    const etaMin = calculateEtaMinutes(distKm);
+    
+    const s = normalizeTicketStatus(ticket.status);
+    const showEtaCountdown = s === 'on_the_way' || s === 'arrived';
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
     const isCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL'].includes(normalizedStatus) && ticket.tenantApproved !== true;
@@ -143,6 +160,59 @@ export default function TenantTicketDetailPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1 }}>#{ticket.id.substring(0,8)}</Typography>
                 </Box>
             </Stack>
+
+            {showEtaCountdown && (
+                <Paper sx={{ 
+                    p: 3, 
+                    mb: 4, 
+                    bgcolor: alpha(binThemeTokens.gold, 0.08), 
+                    border: `1px solid ${binThemeTokens.gold}`, 
+                    borderRadius: 6,
+                    animation: 'pulseGlow 2.5s infinite ease-in-out',
+                    '@keyframes pulseGlow': {
+                        '0%, 100%': { boxShadow: `0 0 4px ${alpha(binThemeTokens.gold, 0.15)}` },
+                        '50%': { boxShadow: `0 0 16px ${alpha(binThemeTokens.gold, 0.45)}` }
+                    }
+                }}>
+                    <Stack direction="row" alignItems="center" spacing={2} justifyContent="space-between">
+                        <Box>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+                                {s === 'arrived' 
+                                    ? label('TECHNICIAN ONSITE', 'الفني في الموقع') 
+                                    : label('LIVE TRACKING EN ROUTE', 'الفني في الطريق - تتبع مباشر')}
+                            </Typography>
+                            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>
+                                {s === 'arrived' 
+                                    ? label('Technician Has Arrived at Your Unit', 'لقد وصل الفني إلى وحدتك') 
+                                    : etaMin !== null 
+                                        ? label(`Arriving in ~${etaMin} minutes`, `يصل خلال حوالي ${etaMin} دقائق`) 
+                                        : label('Technician is en route', 'الفني في الطريق إليك')}
+                            </Typography>
+                            {s !== 'arrived' && distKm !== null && (
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700, mt: 0.5, display: 'block' }}>
+                                    {label(`${distKm.toFixed(1)} km away from your location`, `على بعد ${distKm.toFixed(1)} كم من موقعك`)}
+                                </Typography>
+                            )}
+                        </Box>
+                        {s !== 'arrived' && etaMin !== null && (
+                            <Box sx={{ 
+                                width: 70, 
+                                height: 70, 
+                                borderRadius: '50%', 
+                                border: `3px solid ${binThemeTokens.gold}`, 
+                                display: 'grid', 
+                                placeItems: 'center',
+                                flexShrink: 0
+                            }}>
+                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold} sx={{ mt: 0.5 }}>{etaMin}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.55rem', mt: -1.5, fontWeight: 900 }}>
+                                    {label('MINS', 'دقائق')}
+                                </Typography>
+                            </Box>
+                        )}
+                    </Stack>
+                </Paper>
+            )}
 
             <Grid container spacing={4}>
                 <Grid item xs={12} lg={8}>

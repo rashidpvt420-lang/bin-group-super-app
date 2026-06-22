@@ -53,6 +53,7 @@ const Navigation = () => {
         { text: 'Vendor Command', icon: <PeopleIcon />, path: '/ops/vendors', color: binThemeTokens.gold },
         { text: 'PDPL Governance', icon: <SecurityIcon />, path: '/ops/data-governance', color: binThemeTokens.gold },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
+        { text: tx('nav.emergency_command', 'Emergency Command'), icon: <SecurityIcon />, path: '/ops/emergency-command', color: '#ef4444' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
         ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
         // Resident Experience & Building Operations
