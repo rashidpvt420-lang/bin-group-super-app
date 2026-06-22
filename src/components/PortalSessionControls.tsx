@@ -48,7 +48,10 @@ export default function PortalSessionControls({
     } catch (error) {
       console.warn(`[${role}] Secure logout fallback triggered.`, error);
     } finally {
-      window.location.replace(logoutRedirect || `/login?intendedRole=${role}&logout=1`);
+      const safeRedirect = (logoutRedirect && (logoutRedirect.startsWith('/') || logoutRedirect.startsWith(window.location.origin)))
+        ? logoutRedirect
+        : `/login?intendedRole=${role}&logout=1`;
+      window.location.replace(safeRedirect);
     }
   };
 
