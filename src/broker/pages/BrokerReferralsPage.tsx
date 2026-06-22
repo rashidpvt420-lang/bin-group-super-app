@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import { useSearchParams } from 'react-router-dom';
+import {
     Box, Typography, Paper, Grid, Stack, Button, CircularProgress, 
     Chip, TextField, MenuItem, Select, Dialog, DialogTitle, 
     DialogContent, DialogActions, alpha, Divider, IconButton, Tooltip 
@@ -23,7 +24,17 @@ export default function BrokerReferralsPage() {
 
     const [openAdd, setOpenAdd] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Auto-open the "Submit New Referral" dialog when arriving via a ?new=1 quick command.
+    useEffect(() => {
+        if (searchParams.get('new') === '1') {
+            setOpenAdd(true);
+            searchParams.delete('new');
+            setSearchParams(searchParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
+
     // Form state
     const [referralType, setReferralType] = useState('property');
     const [clientName, setClientName] = useState('');

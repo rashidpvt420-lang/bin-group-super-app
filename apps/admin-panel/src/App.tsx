@@ -62,6 +62,18 @@ import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
 import BinConnectInboxPage from './pages/admin/BinConnectInboxPage';
 import PilotCompletionCommandPage from './pages/admin/PilotCompletionCommandPage';
 import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
+// Resident Experience & Building Operations Pages
+import AmenityControlPage from './pages/ops/AmenityControlPage';
+import AnnouncementsPage from './pages/ops/AnnouncementsPage';
+import DocumentLibraryPage from './pages/ops/DocumentLibraryPage';
+import KeyRegisterPage from './pages/ops/KeyRegisterPage';
+import ParcelDeskPage from './pages/ops/ParcelDeskPage';
+import VisitorParkingPage from './pages/ops/VisitorParkingPage';
+import MarketplaceApprovalsPage from './pages/ops/MarketplaceApprovalsPage';
+import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
+import MessagesPage from './pages/ops/MessagesPage';
+import CommunityModerationPage from './pages/ops/CommunityModerationPage';
+
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -149,12 +161,24 @@ function AppContent() {
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
                     <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
-                    <Route path="/hr" element={<ProtectedRoute adminOnly><HRManagementPage /></ProtectedRoute>} />
+                    <Route path="/hr" element={<ProtectedRoute adminOnly extraRoles={['hr_manager', 'hr_staff']}><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
                     <Route path="/admin/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    
+                    {/* Resident Experience & Building Operations */}
+                    <Route path="/ops/amenity-control" element={<ProtectedRoute adminOnly><AmenityControlPage /></ProtectedRoute>} />
+                    <Route path="/ops/announcements" element={<ProtectedRoute adminOnly><AnnouncementsPage /></ProtectedRoute>} />
+                    <Route path="/ops/document-library" element={<ProtectedRoute adminOnly><DocumentLibraryPage /></ProtectedRoute>} />
+                    <Route path="/ops/key-register" element={<ProtectedRoute adminOnly><KeyRegisterPage /></ProtectedRoute>} />
+                    <Route path="/ops/parcel-desk" element={<ProtectedRoute adminOnly><ParcelDeskPage /></ProtectedRoute>} />
+                    <Route path="/ops/visitor-parking" element={<ProtectedRoute adminOnly><VisitorParkingPage /></ProtectedRoute>} />
+                    <Route path="/ops/marketplace-approvals" element={<ProtectedRoute adminOnly><MarketplaceApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/ops/staff-directory" element={<ProtectedRoute adminOnly><StaffDirectoryPage /></ProtectedRoute>} />
+                    <Route path="/ops/messages" element={<ProtectedRoute adminOnly><MessagesPage /></ProtectedRoute>} />
+                    <Route path="/ops/community-moderation" element={<ProtectedRoute adminOnly><CommunityModerationPage /></ProtectedRoute>} />
                 </Route>
             )}
 

@@ -190,6 +190,12 @@ service firebase.storage {
       allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) && isDocumentUpload(15);
     }
 
+    match /brokerDocuments/{brokerId}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == brokerId || isAdmin() || isAuditor());
+      allow write: if isAuth() && (request.auth.uid == brokerId || isAdmin()) && isDocumentUpload(15);
+      allow delete: if isAuth() && (request.auth.uid == brokerId || isAdmin());
+    }
+
     match /staffDocuments/{staffId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
       allow write: if isAuth() && (request.auth.uid == staffId || isHrRole()) && isDocumentUpload(15);

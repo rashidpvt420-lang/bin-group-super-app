@@ -1,3 +1,3 @@
 export * from './runtime';
 export * from './whatsappWebhook';
-export { onOwnerApprovalDecision } from './ownerTrustWorkflow';
+export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';

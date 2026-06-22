@@ -21,7 +21,7 @@ const content = {
     title: 'BIN GROUP',
     headline: 'A UAE property operations company built for owner trust, tenant comfort, technician accountability, and portfolio ROI.',
     subline: 'Maintenance, property management, tenant service, technician dispatch, broker onboarding, RFQ/vendor control, HR readiness, AI triage, WhatsApp intake, contracts, invoices, and proof-based reporting in one operating system.',
-    license: 'All Kind Building Projects Contracting LLC S.P.C · Licensed in Abu Dhabi, UAE · Trade licence available on request',
+    license: 'All Kind Building Projects Contracting LLC S.P.C · Licensed in Abu Dhabi, UAE · Trade Licence No. CN-5914744',
     stats: [['2010', 'Founded in Al Ain'], ['5', 'Role portals'], ['8', 'UAE emirates'], ['500+', 'Portfolio-ready scale']],
     navStart: 'Start Property Details', navLogin: 'Portal Login', navHome: 'Home', lang: 'AR',
     aboutTitle: 'What BIN GROUP Does',
@@ -54,7 +54,7 @@ const content = {
   ar: {
     badge: 'ملف الشركة', title: 'BIN GROUP', headline: 'شركة تشغيل عقاري في الإمارات مبنية على ثقة المالك، راحة المستأجر، محاسبة الفني، وقيمة العائد.',
     subline: 'صيانة، إدارة عقارات، خدمة مستأجر، إرسال فنيين، وسطاء، RFQ وموردين، جاهزية HR، فرز AI، واتساب، عقود، فواتير، وتقارير إثبات في نظام واحد.',
-    license: 'All Kind Building Projects Contracting LLC S.P.C · مرخصة في أبوظبي، الإمارات · رخصة التجارة متاحة عند الطلب',
+    license: 'All Kind Building Projects Contracting LLC S.P.C · مرخصة في أبوظبي، الإمارات · رخصة تجارية رقم CN-5914744',
     stats: [['2010', 'تأسست في العين'], ['5', 'بوابات تشغيل'], ['8', 'إمارات'], ['500+', 'جاهزية محافظ']],
     navStart: 'ابدأ تفاصيل العقار', navLogin: 'دخول البوابة', navHome: 'الرئيسية', lang: 'EN',
     aboutTitle: 'ماذا تفعل BIN GROUP',

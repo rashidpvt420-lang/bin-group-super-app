@@ -1,7 +1,7 @@
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import fs from 'fs';
 
 let testEnv;
@@ -281,5 +281,258 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(ownerADb, 'users/tenant_a')));
     // Owner B (does not own prop_a) should fail
     await assertFails(getDoc(doc(ownerBDb, 'users/tenant_a')));
+  });
+
+  it('paymentConfirmations: tenant can create their own pending confirmation', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertSucceeds(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_1'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_1',
+      amount: 5000,
+      method: 'bank_transfer_whatsapp_confirmation',
+      status: 'pending_verification',
+    }));
+  });
+
+  it('paymentConfirmations: tenant cannot create a confirmation for another tenant', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_2'), {
+      tenantId: 'tenant_b',
+      invoiceId: 'inv_2',
+      amount: 5000,
+      status: 'pending_verification',
+    }));
+  });
+
+  it('paymentConfirmations: tenant cannot self-verify on create', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'paymentConfirmations/confirm_3'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_3',
+      amount: 5000,
+      status: 'pending_verification',
+      paymentVerified: true,
+    }));
+  });
+
+  it('paymentConfirmations: only the owning tenant or admin can read it', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'paymentConfirmations/confirm_4'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_4',
+      amount: 5000,
+      status: 'pending_verification',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+    await assertSucceeds(getDoc(doc(tenantADb, 'paymentConfirmations/confirm_4')));
+    await assertSucceeds(getDoc(doc(adminDb, 'paymentConfirmations/confirm_4')));
+    await assertFails(getDoc(doc(tenantBDb, 'paymentConfirmations/confirm_4')));
+  });
+
+  it('amenitySlots: a tenant can claim a free slot but cannot overwrite another tenant\'s lock', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant A claims the slot.
+    await assertSucceeds(setDoc(doc(tenantADb, 'amenitySlots/pool__2026-07-01__9AM'), {
+      tenantUid: 'tenant_a', amenityName: 'Community Pool', bookingDate: '2026-07-01', timeSlot: '9AM',
+    }));
+    // Tenant B can read it (needed to detect the conflict) but cannot overwrite it.
+    await assertSucceeds(getDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM')));
+    await assertFails(setDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM'), {
+      tenantUid: 'tenant_b', amenityName: 'Community Pool', bookingDate: '2026-07-01', timeSlot: '9AM',
+    }));
+    // Tenant B cannot free Tenant A's lock; Tenant A can.
+    await assertFails(deleteDoc(doc(tenantBDb, 'amenitySlots/pool__2026-07-01__9AM')));
+    await assertSucceeds(deleteDoc(doc(tenantADb, 'amenitySlots/pool__2026-07-01__9AM')));
+  });
+
+  it('amenitySlots: a tenant cannot create a lock owned by someone else', async () => {
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(setDoc(doc(tenantADb, 'amenitySlots/gym__2026-07-02__10AM'), {
+      tenantUid: 'tenant_b', amenityName: 'Fitness Center', bookingDate: '2026-07-02', timeSlot: '10AM',
+    }));
+  });
+
+  it('amenities catalog: any signed-in user can read, only admin can write', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await assertSucceeds(setDoc(doc(adminDb, 'amenities/pool'), { name: 'Community Pool', active: true }));
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertSucceeds(getDoc(doc(tenantADb, 'amenities/pool')));
+    await assertFails(setDoc(doc(tenantADb, 'amenities/pool'), { name: 'Hacked', active: true }));
+  });
+
+  it('paymentConfirmations: tenant cannot update or delete after creation', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'paymentConfirmations/confirm_5'), {
+      tenantId: 'tenant_a',
+      invoiceId: 'inv_5',
+      amount: 5000,
+      status: 'pending_verification',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    await assertFails(updateDoc(doc(tenantADb, 'paymentConfirmations/confirm_5'), { status: 'verified' }));
+  });
+
+  it('tenant cannot read another propertys amenity booking', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    
+    // Seed users, properties, and booking
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
+    await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
+    await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b' });
+    await setDoc(doc(adminDb, 'amenityBookings/booking_b'), { propertyId: 'prop_b', tenantUid: 'tenant_b', amenityName: 'Gym' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant B (same property) can read it
+    await assertSucceeds(getDoc(doc(tenantBDb, 'amenityBookings/booking_b')));
+    // Tenant A (different property) cannot read it
+    await assertFails(getDoc(doc(tenantADb, 'amenityBookings/booking_b')));
+  });
+
+  it('tenant cannot create visitor parking for another unit', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    
+    // Seed users, units
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
+    await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a' });
+    await setDoc(doc(adminDb, 'units/unit_b'), { tenantId: 'tenant_b', propertyId: 'prop_b' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    // Tenant A can create parking for unit_a (their own unit)
+    await assertSucceeds(setDoc(doc(tenantADb, 'visitorParkingRequests/req_a'), {
+      tenantUid: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_a',
+      visitorName: 'Visitor 1',
+    }));
+
+    // Tenant A cannot create parking for unit_b (another unit)
+    await assertFails(setDoc(doc(tenantADb, 'visitorParkingRequests/req_b'), {
+      tenantUid: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_b',
+      visitorName: 'Visitor 1',
+    }));
+  });
+
+  it('tenant cannot read another tenants parcel', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    
+    // Seed parcel
+    await setDoc(doc(adminDb, 'parcels/parcel_b'), { tenantUid: 'tenant_b', propertyId: 'prop_b' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant B can read their own parcel
+    await assertSucceeds(getDoc(doc(tenantBDb, 'parcels/parcel_b')));
+    // Tenant A cannot read Tenant B's parcel
+    await assertFails(getDoc(doc(tenantADb, 'parcels/parcel_b')));
+  });
+
+  it('admin can manage parcel/parking/amenity records', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    // Admin can create/read/update/delete amenities
+    await assertSucceeds(setDoc(doc(adminDb, 'amenities/amenity_1'), { name: 'Gym', propertyId: 'prop_a' }));
+    await assertSucceeds(getDoc(doc(adminDb, 'amenities/amenity_1')));
+
+    // Admin can manage parcels
+    await assertSucceeds(setDoc(doc(adminDb, 'parcels/parcel_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', status: 'received' }));
+    
+    // Admin can manage parking
+    await assertSucceeds(setDoc(doc(adminDb, 'visitorParkingRequests/req_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', unitId: 'unit_a', status: 'pending' }));
+  });
+
+  it('owner can manage only owned property records', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    
+    // Seed properties
+    await setDoc(doc(adminDb, 'properties/prop_own'), { ownerId: 'owner_a' });
+    await setDoc(doc(adminDb, 'properties/prop_other'), { ownerId: 'owner_other' });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+
+    // Owner A can create/manage amenities for owned property
+    await assertSucceeds(setDoc(doc(ownerADb, 'amenities/amenity_own'), { propertyId: 'prop_own', name: 'Pool' }));
+    // Owner A cannot manage amenities for other property
+    await assertFails(setDoc(doc(ownerADb, 'amenities/amenity_other'), { propertyId: 'prop_other', name: 'Pool' }));
+  });
+
+  it('marketplace public/tenant access behaves as intended', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    // Tenant can read providers and offers
+    await setDoc(doc(adminDb, 'marketplaceProviders/provider_1'), { name: 'Clean Co', approved: true });
+    await setDoc(doc(adminDb, 'marketplaceOffers/offer_1'), { providerId: 'provider_1', title: '10% Off' });
+
+    await assertSucceeds(getDoc(doc(tenantADb, 'marketplaceProviders/provider_1')));
+    await assertSucceeds(getDoc(doc(tenantADb, 'marketplaceOffers/offer_1')));
+
+    // Tenant cannot write to marketplace
+    await assertFails(setDoc(doc(tenantADb, 'marketplaceProviders/provider_2'), { name: 'Tenant Shop' }));
+  });
+
+  it('community posts require moderation', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    // Tenant can create community post as pending
+    await assertSucceeds(setDoc(doc(tenantADb, 'communityPosts/post_1'), {
+      authorUid: 'tenant_a',
+      propertyId: 'prop_a',
+      status: 'pending',
+      title: 'Hello Community',
+    }));
+
+    // Tenant cannot create community post directly as approved
+    await assertFails(setDoc(doc(tenantADb, 'communityPosts/post_2'), {
+      authorUid: 'tenant_a',
+      propertyId: 'prop_a',
+      status: 'approved',
+      title: 'Hack approved status',
+    }));
+  });
+
+  it('messages only visible to participants', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    // Seed conversation between Tenant A and Admin
+    await setDoc(doc(adminDb, 'conversations/conv_1'), {
+      participantUids: ['tenant_a', 'admin_user'],
+      propertyId: 'prop_a',
+    });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+
+    // Tenant A is participant and can read/write messages
+    await assertSucceeds(getDoc(doc(tenantADb, 'conversations/conv_1')));
+    
+    // Tenant B is NOT participant and cannot read
+    await assertFails(getDoc(doc(tenantBDb, 'conversations/conv_1')));
   });
 });

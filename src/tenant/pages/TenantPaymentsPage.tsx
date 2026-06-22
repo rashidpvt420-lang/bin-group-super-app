@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Divider,
-  Grid, Paper, Stack, Tab, Tabs, Typography, alpha
+  Grid, Paper, Snackbar, Stack, Tab, Tabs, Typography, alpha
 } from '@mui/material';
 import {
   Building2, CheckCircle2, Clock, Copy, CreditCard,
@@ -44,12 +44,14 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TenantPaymentsPage() {
   const { user } = useRole();
-  const { isRTL } = useLanguage();
+  const { isRTL, lang } = useLanguage();
+  const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
   const [tab, setTab] = useState(0);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -99,6 +101,10 @@ export default function TenantPaymentsPage() {
       setTimeout(() => setConfirmSent(null), 5000);
     } catch (err) {
       console.warn('[TenantPayments] Payment confirmation log failed:', err);
+      setConfirmError(label(
+        'We could not save your confirmation. Your WhatsApp message was still sent — our finance team will follow up, or you can call them directly.',
+        'تعذّر حفظ تأكيدك. تم إرسال رسالة واتساب على أي حال — سيتابع فريقنا المالي معك، أو يمكنك الاتصال بهم مباشرة.'
+      ));
     }
   };
 
@@ -113,10 +119,10 @@ export default function TenantPaymentsPage() {
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 3 }}>
-        TENANT LEDGER
+        {label('TENANT LEDGER', 'سجل المستأجر')}
       </Typography>
       <Typography variant="h3" fontWeight="950" color="#111827" sx={{ mb: 1 }}>
-        Payments & Invoices
+        {label('Payments & Invoices', 'المدفوعات والفواتير')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
         View all rent invoices and maintenance charges. Current accepted payment methods are Cash and Cheque at BIN GROUP HQ (Bank Transfer coming soon, Credit Card/Stripe deferred to Phase 2).
@@ -129,13 +135,13 @@ export default function TenantPaymentsPage() {
             <Typography variant="h4" fontWeight="950" color={totalDue > 0 ? '#ef4444' : '#10b981'}>
               {formatMoney(totalDue)}
             </Typography>
-            <Typography variant="caption" fontWeight="800" color="text.secondary">AMOUNT DUE</Typography>
+            <Typography variant="caption" fontWeight="800" color="text.secondary">{label('AMOUNT DUE', 'المبلغ المستحق')}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 3, borderRadius: 4, border: '1px solid #E5E7EB', textAlign: 'center' }}>
             <Typography variant="h4" fontWeight="950" color="#111827">{invoices.length}</Typography>
-            <Typography variant="caption" fontWeight="800" color="text.secondary">TOTAL INVOICES</Typography>
+            <Typography variant="caption" fontWeight="800" color="text.secondary">{label('TOTAL INVOICES', 'إجمالي الفواتير')}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -143,7 +149,7 @@ export default function TenantPaymentsPage() {
             <Typography variant="h4" fontWeight="950" color="#10b981">
               {invoices.filter((inv) => inv.status === 'paid').length}
             </Typography>
-            <Typography variant="caption" fontWeight="800" color="text.secondary">PAID</Typography>
+            <Typography variant="caption" fontWeight="800" color="text.secondary">{label('PAID', 'مدفوع')}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -151,7 +157,7 @@ export default function TenantPaymentsPage() {
             <Typography variant="h4" fontWeight="950" color={gold}>
               {dueInvoices.filter((inv) => inv.status === 'overdue').length}
             </Typography>
-            <Typography variant="caption" fontWeight="800" color="text.secondary">OVERDUE</Typography>
+            <Typography variant="caption" fontWeight="800" color="text.secondary">{label('OVERDUE', 'متأخر')}</Typography>
           </Paper>
         </Grid>
       </Grid>
@@ -161,9 +167,9 @@ export default function TenantPaymentsPage() {
         onChange={(_, v) => setTab(v)}
         sx={{ mb: 3, '& .MuiTab-root': { fontWeight: 900 }, '& .Mui-selected': { color: `${gold} !important` } }}
       >
-        <Tab label="INVOICES" />
-        <Tab label="BANK TRANSFER" />
-        <Tab label="PAYMENT HISTORY" />
+        <Tab label={label('INVOICES', 'الفواتير')} />
+        <Tab label={label('BANK TRANSFER', 'تحويل بنكي')} />
+        <Tab label={label('PAYMENT HISTORY', 'سجل المدفوعات')} />
       </Tabs>
 
       {/* Tab 0: Invoice list */}
@@ -172,7 +178,7 @@ export default function TenantPaymentsPage() {
           {invoices.length === 0 ? (
             <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 4, border: '1px solid #E5E7EB' }}>
               <FileText size={48} color="#CBD5E1" style={{ margin: '0 auto 16px' }} />
-              <Typography color="text.secondary">No invoices found for your account yet.</Typography>
+              <Typography color="text.secondary">{label('No invoices found for your account yet.', 'لا توجد فواتير على حسابك حتى الآن.')}</Typography>
             </Paper>
           ) : (
             invoices.map((inv) => {
@@ -197,7 +203,7 @@ export default function TenantPaymentsPage() {
                         )}
                       </Stack>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {inv.description || 'Rent / Service Charge'} · Due: {formatDate(inv.dueDate)}
+                        {inv.description || label('Rent / Service Charge', 'إيجار / رسوم خدمة')} · {label('Due', 'الاستحقاق')}: {formatDate(inv.dueDate)}
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={2} alignItems="center">
@@ -206,7 +212,7 @@ export default function TenantPaymentsPage() {
                           {formatMoney(inv.amount)}
                         </Typography>
                         {inv.paidDate && (
-                          <Typography variant="caption" color="#10b981">Paid: {formatDate(inv.paidDate)}</Typography>
+                          <Typography variant="caption" color="#10b981">{label('Paid', 'دُفع')}: {formatDate(inv.paidDate)}</Typography>
                         )}
                       </Box>
                       {(isPending || isOverdue) && (
@@ -218,7 +224,7 @@ export default function TenantPaymentsPage() {
                             onClick={() => sendWhatsAppConfirmation(inv)}
                             sx={{ bgcolor: '#25D366', color: '#FFF', fontWeight: 900, borderRadius: 2, fontSize: '0.72rem', whiteSpace: 'nowrap' }}
                           >
-                            {confirmSent === inv.id ? 'SENT ✓' : 'PAY & CONFIRM'}
+                            {confirmSent === inv.id ? label('SENT ✓', 'تم الإرسال ✓') : label('PAY & CONFIRM', 'ادفع وأكّد')}
                           </Button>
                           <Button
                             variant="outlined"
@@ -227,7 +233,7 @@ export default function TenantPaymentsPage() {
                             onClick={() => setTab(1)}
                             sx={{ borderColor: gold, color: gold, fontWeight: 900, borderRadius: 2, fontSize: '0.72rem' }}
                           >
-                            BANK DETAILS
+                            {label('BANK DETAILS', 'بيانات البنك')}
                           </Button>
                         </Stack>
                       )}
@@ -255,14 +261,14 @@ export default function TenantPaymentsPage() {
               </Alert>
 
               {[
-                { label: 'Bank', value: BANK_NAME, key: 'bank' },
-                { label: 'Account Name', value: ACCOUNT_NAME, key: 'name' },
-                { label: 'IBAN', value: IBAN, key: 'iban' },
-                { label: 'SWIFT / BIC', value: SWIFT, key: 'swift' },
-              ].map(({ label, value, key }) => (
+                { fieldLabel: label('Bank', 'البنك'), value: BANK_NAME, key: 'bank' },
+                { fieldLabel: label('Account Name', 'اسم الحساب'), value: ACCOUNT_NAME, key: 'name' },
+                { fieldLabel: label('IBAN', 'الآيبان'), value: IBAN, key: 'iban' },
+                { fieldLabel: label('SWIFT / BIC', 'سويفت / BIC'), value: SWIFT, key: 'swift' },
+              ].map(({ fieldLabel, value, key }) => (
                 <Box key={key} sx={{ mb: 2.5 }}>
                   <Typography variant="caption" fontWeight="800" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-                    {label}
+                    {fieldLabel}
                   </Typography>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                     <Typography fontWeight="900" color="#111827" sx={{ fontFamily: 'monospace', fontSize: key === 'name' ? '0.9rem' : '1rem' }}>
@@ -276,7 +282,7 @@ export default function TenantPaymentsPage() {
                       <Copy size={14} />
                     </Button>
                     {copied === key && (
-                      <Typography variant="caption" color="#10b981" fontWeight="900">Copied!</Typography>
+                      <Typography variant="caption" color="#10b981" fontWeight="900">{label('Copied!', 'تم النسخ!')}</Typography>
                     )}
                   </Stack>
                   <Divider sx={{ mt: 1.5 }} />
@@ -318,7 +324,7 @@ export default function TenantPaymentsPage() {
                 href={`tel:+${WHATSAPP_NUMBER}`}
                 sx={{ borderColor: '#E5E7EB', color: '#374151', fontWeight: 900, borderRadius: 3, py: 1.5 }}
               >
-                CALL FINANCE TEAM
+                {label('CALL FINANCE TEAM', 'اتصل بالفريق المالي')}
               </Button>
 
               <Divider sx={{ my: 3 }} />
@@ -355,7 +361,7 @@ export default function TenantPaymentsPage() {
           {invoices.filter((inv) => inv.status === 'paid').length === 0 ? (
             <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 4, border: '1px solid #E5E7EB' }}>
               <Clock size={48} color="#CBD5E1" style={{ margin: '0 auto 16px' }} />
-              <Typography color="text.secondary">No paid invoices yet. Payment history will appear here.</Typography>
+              <Typography color="text.secondary">{label('No paid invoices yet. Payment history will appear here.', 'لا توجد فواتير مدفوعة بعد. سيظهر سجل المدفوعات هنا.')}</Typography>
             </Paper>
           ) : (
             invoices
@@ -369,14 +375,14 @@ export default function TenantPaymentsPage() {
                         <Typography fontWeight="950" color="#111827">
                           {inv.invoiceNumber || `INV-${inv.id.slice(-6).toUpperCase()}`}
                         </Typography>
-                        <Chip size="small" label="PAID" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900 }} />
+                        <Chip size="small" label={label('PAID', 'مدفوع')} sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900 }} />
                       </Stack>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {inv.description || 'Rent / Service Charge'} · Paid: {formatDate(inv.paidDate)}
+                        {inv.description || label('Rent / Service Charge', 'إيجار / رسوم خدمة')} · {label('Paid', 'دُفع')}: {formatDate(inv.paidDate)}
                       </Typography>
                       {inv.paymentMethod && (
                         <Typography variant="caption" color="text.secondary">
-                          Method: {String(inv.paymentMethod).replace(/_/g, ' ').toUpperCase()}
+                          {label('Method', 'طريقة الدفع')}: {String(inv.paymentMethod).replace(/_/g, ' ').toUpperCase()}
                         </Typography>
                       )}
                     </Box>
@@ -389,6 +395,12 @@ export default function TenantPaymentsPage() {
           )}
         </Stack>
       )}
+
+      <Snackbar open={!!confirmError} autoHideDuration={8000} onClose={() => setConfirmError(null)}>
+        <Alert severity="error" onClose={() => setConfirmError(null)} sx={{ fontWeight: 700 }}>
+          {confirmError}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
