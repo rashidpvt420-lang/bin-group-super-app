@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, onAuthStateChanged, app } from '../lib/firebase';
-import { signOut, getIdTokenResult } from 'firebase/auth';
+import { signOut, getIdTokenResult, signInWithCustomToken } from 'firebase/auth';
 import { getDoc, doc, updateDoc, setDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken } from 'firebase/messaging';
 
@@ -106,7 +106,29 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
 
     useEffect(() => {
         console.log("🔍 [DIAG] Admin AuthProvider Mounted. Monitoring state...");
-        
+
+        // Redeem a one-time bridge token minted by the main app so staff/admins
+        // coming from the cross-domain redirect don't have to sign in a second
+        // time. Stripped from the URL immediately regardless of outcome so it
+        // never lingers in history. The resulting sign-in (or its absence) is
+        // picked up by onAuthStateChanged below; see the `usr === null` branch,
+        // which waits on this before treating the session as logged out so the
+        // login page doesn't flash while the exchange is still in flight.
+        let bridgeExchange: Promise<unknown> | null = null;
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const bridgeToken = params.get('bridge_token');
+            if (bridgeToken) {
+                params.delete('bridge_token');
+                const remaining = params.toString();
+                const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash}`;
+                window.history.replaceState({}, document.title, cleanUrl);
+                bridgeExchange = timeout(signInWithCustomToken(auth, bridgeToken), 10000, 'BRIDGE_TOKEN_TIMEOUT').catch((err) => {
+                    console.warn('[ADMIN-AUTH] Bridge token exchange failed; falling back to manual login.', err);
+                });
+            }
+        }
+
         let authHandshakeResolved = false;
         const markAuthReady = () => {
             if (authHandshakeResolved) return;
@@ -134,6 +156,16 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             
             if (!usr) {
+                if (bridgeExchange) {
+                    const pending = bridgeExchange;
+                    bridgeExchange = null;
+                    await pending;
+                    if (auth.currentUser) {
+                        // Exchange succeeded; a fresh onAuthStateChanged(user) call
+                        // is already in flight and will drive state from here.
+                        return;
+                    }
+                }
                 setIsAuthenticated(false);
                 setUser(null);
                 markAuthReady();

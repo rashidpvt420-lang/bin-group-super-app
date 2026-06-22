@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 
@@ -13,6 +14,25 @@ const currentAdminPath = () => {
   return path.startsWith('/') ? path : `/${path}`;
 };
 
+// Best-effort: exchange the session already open here for a one-time custom
+// token the admin-panel origin can redeem, so staff don't have to sign in a
+// second time after the cross-domain redirect. Any failure (offline, the
+// function not deployed yet, etc.) just falls back to the plain URL, which
+// still lands on the admin-panel's own login form exactly as it does today.
+const withBridgeToken = async (url: string) => {
+  try {
+    const mintBridgeToken = httpsCallable(functions, 'mintAdminBridgeToken');
+    const result: any = await mintBridgeToken();
+    const token = result?.data?.token;
+    if (!token) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}bridge_token=${encodeURIComponent(token)}`;
+  } catch (err) {
+    console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual re-login.', err);
+    return url;
+  }
+};
+
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
   const targetPath = currentAdminPath();
@@ -20,14 +40,19 @@ export default function AdminTerminal() {
   const loginUrl = `${ADMIN_PANEL_URL}/login`;
 
   React.useEffect(() => {
-    const timer = window.setTimeout(() => {
-      window.location.replace(targetUrl);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const url = await withBridgeToken(targetUrl);
+      if (!cancelled) window.location.replace(url);
     }, 900);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [targetUrl]);
 
-  const openAdminPanel = () => {
-    window.location.href = targetUrl;
+  const openAdminPanel = async () => {
+    window.location.href = await withBridgeToken(targetUrl);
   };
 
   const openAdminLogin = () => {
@@ -100,7 +125,7 @@ export default function AdminTerminal() {
           <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 800, lineHeight: 1.6 }}>
             {tx(
               'admin.bridge.reauth_notice',
-              'Heads up: the admin panel is a separate secure app. You may need to sign in again with your admin credentials when you arrive.'
+              'Heads up: the admin panel is a separate secure app. We try to carry your session over automatically; if that fails, sign in again with your admin credentials when you arrive.'
             )}
           </Typography>
         </Box>
