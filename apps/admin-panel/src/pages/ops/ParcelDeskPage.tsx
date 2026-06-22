@@ -6,7 +6,7 @@ import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, update
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function ParcelDeskPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [parcels, setParcels] = useState<any[]>([]);
     const [openAdd, setOpenAdd] = useState(false);

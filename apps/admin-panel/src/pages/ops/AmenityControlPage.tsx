@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel, Switch, FormControlLabel, IconButton } from '@mui/material';
 import { Check, X, Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } from '../../lib/firebase';
+import { db, collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, deleteDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 export default function AmenityControlPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [amenities, setAmenities] = useState<any[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
