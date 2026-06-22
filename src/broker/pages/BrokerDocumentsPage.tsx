@@ -54,7 +54,7 @@ export default function BrokerDocumentsPage() {
 
         setUploading(docType);
         try {
-            const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+            const safeName = file.name.replace(/[^\w.-]+/g, '_');
             const fileRef = ref(storage, `brokerDocuments/${user.uid}/${docType}/${Date.now()}_${safeName}`);
             await uploadBytes(fileRef, file);
             const fileUrl = await getDownloadURL(fileRef);
