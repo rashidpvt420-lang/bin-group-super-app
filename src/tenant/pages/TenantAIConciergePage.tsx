@@ -1,10 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Box, Button, Chip, CircularProgress, Container, IconButton,
   LinearProgress, Paper, Stack, TextField, Typography, alpha,
 } from '@mui/material';
 import { AlertCircle, Bot, Camera, CheckCircle2, ChevronRight, Send, Sparkles, Wrench, X } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp } from '../../lib/firebase';
+import { 
+  addDoc, collection, db, serverTimestamp, 
+  storage, ref, uploadBytes, getDownloadURL, 
+  query, where, getDocs, getDoc, doc, updateDoc 
+} from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -80,16 +84,9 @@ function getBotText(step: Step, ctx: ConversationContext): string {
   return typeof template === 'function' ? template(ctx) : template;
 }
 
-// ── Upload helper (no Cloud Functions — direct Storage REST not available from browser, use data URL fallback) ──
+// ── Temporary preview helper (uses browser local URL; uploaded to Storage on submit) ──
 async function uploadPhotoToStorage(file: File, uid: string): Promise<string> {
-  // We store the photo as a base64 data URL in Firestore since direct Storage SDK upload is not available here
-  // In production with Storage SDK available this would use uploadBytes → getDownloadURL
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => resolve(String(event.target?.result || ''));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  return URL.createObjectURL(file);
 }
 
 export default function TenantAIConciergePage() {
@@ -105,6 +102,44 @@ export default function TenantAIConciergePage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Load residence properties/units on mount
+  const [propertyData, setPropertyData] = useState<any>(null);
+  const [unitData, setUnitData] = useState<any>(null);
+  const [loadingResidence, setLoadingResidence] = useState(true);
+
+  useEffect(() => {
+    const fetchResidence = async () => {
+      if (!user?.uid) {
+        setLoadingResidence(false);
+        return;
+      }
+      try {
+        let unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
+        if (unitSnap.empty && user.email) {
+          unitSnap = await getDocs(query(collection(db, "units"), where("tenantEmail", "==", user.email.toLowerCase())));
+        }
+        
+        if (!unitSnap.empty) {
+          const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
+          setUnitData(uData);
+
+          if (uData.propertyId) {
+            const propSnap = await getDoc(doc(db, "properties", uData.propertyId));
+            if (propSnap.exists()) {
+              const pData: any = { id: propSnap.id, ...propSnap.data() };
+              setPropertyData(pData);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Fetch residence failed:", err);
+      } finally {
+        setLoadingResidence(false);
+      }
+    };
+    fetchResidence();
+  }, [user]);
 
   const pushMessage = (from: 'bot' | 'user', text: string) => {
     const msg: Message = { id: makeMsgId(), from, text, timestamp: new Date() };
@@ -144,11 +179,18 @@ export default function TenantAIConciergePage() {
   const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (!ctx.description || !ctx.location) {
+      pushMessage('bot', 'Please describe the issue and provide a location before attaching a photo.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setUploadingPhoto(true);
     pushMessage('user', `📷 Photo attached: ${file.name}`);
     try {
-      const dataUrl = await uploadPhotoToStorage(file, user?.uid || 'anon');
-      const nextCtx: ConversationContext = { ...ctx, photoUrl: dataUrl, photoFile: file };
+      const previewUrl = await uploadPhotoToStorage(file, user?.uid || 'anon');
+      const nextCtx: ConversationContext = { ...ctx, photoUrl: previewUrl, photoFile: file };
       advanceBot('confirm', nextCtx);
     } catch {
       pushMessage('bot', 'Could not attach photo. Tap **Skip** to continue without it.');
@@ -164,25 +206,100 @@ export default function TenantAIConciergePage() {
   };
 
   const handleSubmit = async () => {
+    if (!user || !unitData) {
+      pushMessage('bot', 'No property or unit assigned to your account. Cannot submit a maintenance ticket. Please contact management.');
+      return;
+    }
     setSubmitting(true);
+    let createdTicketId = '';
     try {
-      await addDoc(collection(db, 'maintenanceRequests'), {
-        tenantId: user?.uid || null,
-        tenantEmail: user?.email || null,
-        tenantName: user?.displayName || null,
-        description: ctx.description,
+      const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
+      const jobLocation = locationSource ? {
+        lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
+        lng: Number(locationSource.lng ?? locationSource.longitude ?? 0),
+        latitude: Number(locationSource.lat ?? locationSource.latitude ?? 0),
+        longitude: Number(locationSource.lng ?? locationSource.longitude ?? 0),
+        address: propertyData?.address || propertyData?.locationAddress || '',
+        source: 'property',
+      } : null;
+
+      const priorityLower = String(ctx.priority || 'normal').toLowerCase();
+
+      // Create canonical ticket
+      const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
+        requesterRole: 'tenant',
+        tenantId: user.uid,
+        tenantUid: user.uid,
+        tenantName: user.displayName || 'Resident',
+        tenantPhone: user.phoneNumber || '',
+        propertyId: unitData.propertyId || '',
+        propertyName: propertyData?.name || propertyData?.propertyName || '',
+        ownerId: propertyData?.ownerId || '',
+        ownerUid: propertyData?.ownerUid || propertyData?.ownerId || '',
+        ownerEmail: propertyData?.ownerEmail || '',
+        unitId: unitData.id,
+        unitNumber: unitData.unitNumber || '',
+        floor: unitData.floorNumber || '',
         category: ctx.category,
-        location: ctx.location,
-        priority: ctx.priority,
-        photoUrl: ctx.photoUrl || null,
+        priority: priorityLower,
+        description: ctx.description,
+        specificLocation: ctx.location,
+        photos: [],
+        primaryPhotoUrl: null,
+        jobLocation,
+        photoEvidenceRequired: true,
+        evidenceStatus: ctx.photoFile ? 'PENDING_TENANT_UPLOAD' : 'NO_EVIDENCE_ATTACHED',
         source: 'AI_CONCIERGE',
         status: 'OPEN',
+        dispatchStatus: 'PENDING_ASSIGNMENT',
+        trackingStatus: 'WAITING_FOR_TECHNICIAN',
+        technicianId: null,
+        assignedTechnicianId: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        slaMinutes: priorityLower === 'emergency' ? 60 : priorityLower === 'urgent' ? 240 : 1440,
       });
+      createdTicketId = docRef.id;
+
+      // Handle actual Firebase Storage upload if file exists
+      if (ctx.photoFile) {
+        const file = ctx.photoFile;
+        const timestamp = Date.now();
+        const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
+        const fileName = `${timestamp}_ai_${sanitizeFileName(file.name)}`;
+        const storagePath = `maintenanceTickets/${createdTicketId}/tenant/${fileName}`;
+        const fileRef = ref(storage, storagePath);
+
+        await uploadBytes(fileRef, file, {
+          contentType: file.type || 'image/jpeg',
+          customMetadata: {
+            ticketId: createdTicketId,
+            uploadedBy: user.uid,
+            evidenceRole: 'tenant',
+          },
+        });
+
+        const downloadUrl = await getDownloadURL(fileRef);
+        
+        await updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
+          photos: [downloadUrl],
+          primaryPhotoUrl: downloadUrl,
+          evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+          evidenceUploadedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
       advanceBot('submitted', ctx);
     } catch (err) {
       console.error('[BIN AI] ticket submit failed', err);
+      if (createdTicketId && ctx.photoFile) {
+        await updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
+          evidenceStatus: 'TENANT_EVIDENCE_UPLOAD_FAILED',
+          evidenceUploadError: err instanceof Error ? err.message : String(err),
+          updatedAt: serverTimestamp(),
+        }).catch(console.warn);
+      }
       advanceBot('error', ctx);
     } finally {
       setSubmitting(false);
@@ -197,6 +314,7 @@ export default function TenantAIConciergePage() {
   };
 
   const priorityColor = PRIORITY_COLOR[ctx.priority] || '#10b981';
+
 
   const renderBotText = (text: string) =>
     text.split('\n').map((line, idx) => (
@@ -384,13 +502,6 @@ export default function TenantAIConciergePage() {
               >
                 <ChevronRight size={22} />
               </IconButton>
-              <IconButton
-                onClick={() => fileInputRef.current?.click()}
-                sx={{ width: 48, height: 48, flexShrink: 0, bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', borderRadius: 3, '&:hover': { color: binThemeTokens.gold } }}
-              >
-                <Camera size={20} />
-              </IconButton>
-              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhotoSelect} />
             </Stack>
           )}
 
