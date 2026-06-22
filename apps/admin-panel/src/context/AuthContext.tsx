@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, onAuthStateChanged, app } from '../lib/firebase';
-import { signOut, getIdTokenResult } from 'firebase/auth';
+import { signOut, getIdTokenResult, signInWithCustomToken } from 'firebase/auth';
 import { getDoc, doc, updateDoc, setDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { isSupported, getMessaging, getToken } from 'firebase/messaging';
 
@@ -24,6 +24,17 @@ const ADMIN_ROLES = new Set([
     'finance_admin',
     'hr_admin',
     'support_admin',
+]);
+
+// Staff-tier roles provisioned via adminCreateUser that need read access to this
+// panel (e.g. HRManagementPage) but must never be granted isAdmin.
+const STAFF_ROLES = new Set([
+    'hr_manager',
+    'hr_staff',
+    'finance_staff',
+    'account_manager',
+    'dispatcher',
+    'operations_manager',
 ]);
 
 const DEFAULT_FOUNDER_ADMIN_EMAILS = [
@@ -95,7 +106,32 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
 
     useEffect(() => {
         console.log("🔍 [DIAG] Admin AuthProvider Mounted. Monitoring state...");
-        
+
+        // Redeem a one-time bridge token minted by the main app so staff/admins
+        // coming from the cross-domain redirect don't have to sign in a second
+        // time. Stripped from the URL immediately regardless of outcome so it
+        // never lingers in history. The resulting sign-in (or its absence) is
+        // picked up by onAuthStateChanged below; see the `usr === null` branch,
+        // which waits on this before treating the session as logged out so the
+        // login page doesn't flash while the exchange is still in flight.
+        let bridgeExchange: Promise<unknown> | null = null;
+        if (typeof window !== 'undefined') {
+            // Read from the URL fragment, not the query string: fragments are
+            // never transmitted to the server (no access-log or Referer-header
+            // exposure of the bearer token), unlike a ?bridge_token= query param.
+            const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+            const bridgeToken = hashParams.get('bridge_token');
+            if (bridgeToken) {
+                hashParams.delete('bridge_token');
+                const remainingHash = hashParams.toString();
+                const cleanUrl = `${window.location.pathname}${window.location.search}${remainingHash ? `#${remainingHash}` : ''}`;
+                window.history.replaceState({}, document.title, cleanUrl);
+                bridgeExchange = timeout(signInWithCustomToken(auth, bridgeToken), 10000, 'BRIDGE_TOKEN_TIMEOUT').catch((err) => {
+                    console.warn('[ADMIN-AUTH] Bridge token exchange failed; falling back to manual login.', err);
+                });
+            }
+        }
+
         let authHandshakeResolved = false;
         const markAuthReady = () => {
             if (authHandshakeResolved) return;
@@ -123,6 +159,16 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             console.log("🛡️ [AUTH] State Changed:", usr ? usr.email : "LOGGED_OUT");
             
             if (!usr) {
+                if (bridgeExchange) {
+                    const pending = bridgeExchange;
+                    bridgeExchange = null;
+                    await pending;
+                    if (auth.currentUser) {
+                        // Exchange succeeded; a fresh onAuthStateChanged(user) call
+                        // is already in flight and will drive state from here.
+                        return;
+                    }
+                }
                 setIsAuthenticated(false);
                 setUser(null);
                 markAuthReady();
@@ -150,8 +196,9 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 const profileAdmin = profileGrantsAdmin(profile);
                 const isAdmin = claimsAdmin || profileAdmin || isFounderBootstrap;
                 const role = isFounderBootstrap ? 'super_admin' : (claimRole || profileRole || '');
+                const isStaff = STAFF_ROLES.has(claimRole) || STAFF_ROLES.has(profileRole);
 
-                if (!isAdmin) {
+                if (!isAdmin && !isStaff) {
                     if (profileReadError && !claimsAdmin) {
                         throw new Error('ADMIN_PROFILE_LOOKUP_FAILED');
                     }
@@ -177,7 +224,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                     }, { merge: true }).catch((repairErr) => console.warn('[ADMIN-AUTH] Founder profile repair deferred:', repairErr));
                 }
 
-                setUser({ ...usr, ...profile, role, isAdmin: true, claims, bootstrapAdmin: isFounderBootstrap });
+                setUser({ ...usr, ...profile, role, isAdmin, claims, bootstrapAdmin: isFounderBootstrap });
                 setIsAuthenticated(true);
                 setError(null);
 

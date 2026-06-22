@@ -182,6 +182,13 @@ service cloud.firestore {
         (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
     }
 
+    function paymentConfirmationCreate(data) {
+      return signedIn() && tenantOwns(data) &&
+        (!('status' in data) || data.status in ['pending_verification', 'pending']) &&
+        (!('paymentVerified' in data) || data.paymentVerified == false) &&
+        (!('approved' in data) || data.approved == false);
+    }
+
     function safeOwnerContractUpdate() {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
@@ -319,6 +326,9 @@ service cloud.firestore {
           'onboardingLastSeenAt',
           'dutyStatus',
           'onDuty',
+          'companyName',
+          'reraLicense',
+          'primaryRegion',
           'updatedAt'
         ]) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
@@ -439,6 +449,13 @@ service cloud.firestore {
       allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
       allow update: if isAdmin() || hasPermission('canManageContracts');
       allow delete: if isAdmin() || hasPermission('canManageContracts');
+    }
+
+    match /paymentConfirmations/{confirmationId} {
+      allow read: if isAdmin() || hasPermission('canManageContracts') || tenantOwns(resource.data);
+      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentConfirmationCreate(request.resource.data);
+      allow update: if isAdmin() || hasPermission('canManageContracts');
+      allow delete: if isAdmin();
     }
 
     match /tickets/{ticketId} {
@@ -736,6 +753,21 @@ service cloud.firestore {
       allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
       allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
       allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+    }
+
+    // Amenity catalog: readable by any signed-in resident; only admins curate it.
+    match /amenities/{amenityId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Deterministic-id slot locks that enforce one booking per amenity/date/time
+    // across all tenants. Readable by any signed-in user (so a client transaction
+    // can detect a conflict) but immutable once created; owner or admin may free it.
+    match /amenitySlots/{slotId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
     }
 
     match /tenantDocuments/{documentId} {

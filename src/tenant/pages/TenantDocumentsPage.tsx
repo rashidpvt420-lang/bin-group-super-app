@@ -7,24 +7,29 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { FileText, Download, FileCheck, Info, Eye, ClipboardList } from 'lucide-react';
 import SafeIcon from '../../components/SafeIcon';
 
+const FILE_UNAVAILABLE_MSG = {
+    en: 'This document file is not available yet. Please contact BIN GROUP support.',
+    ar: 'ملف هذا المستند غير متاح بعد. يرجى التواصل مع دعم بن جروب.',
+};
+
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const documentUrlOf = (doc: any) => doc?.downloadUrl || doc?.pdfUrl || doc?.fileUrl || doc?.documentUrl || doc?.signedPdfUrl || doc?.leasePdfUrl || doc?.invoicePdfUrl || doc?.receiptUrl || doc?.url || '';
 const documentNameOf = (doc: any) => String(doc?.title || doc?.name || doc?.fileName || doc?.type || 'BIN-GROUP-tenant-document').replace(/[^a-z0-9._-]/gi, '_');
 const dateOf = (doc: any) => doc?.date || doc?.createdAt?.toDate?.() || (doc?.createdAt?.seconds ? new Date(doc.createdAt.seconds * 1000) : null) || doc?.uploadedAt?.toDate?.() || (doc?.uploadedAt?.seconds ? new Date(doc.uploadedAt.seconds * 1000) : null) || new Date();
 
-const openDocument = (doc: any) => {
+const openDocument = (doc: any, unavailableMsg = FILE_UNAVAILABLE_MSG.en) => {
     const url = documentUrlOf(doc);
     if (!url) {
-        alert('This document file is not available yet. Please contact BIN GROUP support.');
+        alert(unavailableMsg);
         return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
 };
 
-const downloadDocument = async (doc: any) => {
+const downloadDocument = async (doc: any, unavailableMsg = FILE_UNAVAILABLE_MSG.en) => {
     const url = documentUrlOf(doc);
     if (!url) {
-        alert('This document file is not available yet. Please contact BIN GROUP support.');
+        alert(unavailableMsg);
         return;
     }
 
@@ -42,13 +47,15 @@ const downloadDocument = async (doc: any) => {
         window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
         console.warn('[TenantDocuments] direct download failed, opening file instead:', error);
-        openDocument(doc);
+        openDocument(doc, unavailableMsg);
     }
 };
 
 export default function TenantDocumentsPage() {
     const { user } = useRole();
-    const { tx, isRTL } = useLanguage();
+    const { lang, isRTL } = useLanguage();
+    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+    const unavailableMsg = lang === 'ar' ? FILE_UNAVAILABLE_MSG.ar : FILE_UNAVAILABLE_MSG.en;
     const [loading, setLoading] = useState(true);
     const [personalDocs, setPersonalDocs] = useState<any[]>([]);
     const [libraryDocs, setLibraryDocs] = useState<any[]>([]);
@@ -147,17 +154,17 @@ export default function TenantDocumentsPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', textAlign: isRTL ? 'right' : 'left' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textTransform: 'uppercase' }}>
-                {tx('tenant.documents.title', 'Documents & Vault')}
+                {label('Documents & Vault', 'المستندات والخزنة')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4 }}>
-                {tx('tenant.documents.desc', 'Securely view and download leases, receipts, official forms, rules, and community documents.')}
+                {label('Securely view and download leases, receipts, official forms, rules, and community documents.', 'اعرض ونزّل بأمان عقود الإيجار والإيصالات والنماذج الرسمية واللوائح ومستندات المجتمع.')}
             </Typography>
 
             <Box sx={{ borderBottom: 1, borderColor: 'rgba(255,255,255,0.08)', mb: 4 }}>
-                <Tabs 
-                    value={activeTab} 
+                <Tabs
+                    value={activeTab}
                     onChange={(e, val) => setActiveTab(val)}
                     textColor="inherit"
                     TabIndicatorProps={{ sx: { bgcolor: binThemeTokens.gold } }}
@@ -166,8 +173,8 @@ export default function TenantDocumentsPage() {
                         '& .Mui-selected': { color: binThemeTokens.gold }
                     }}
                 >
-                    <Tab label={tx('tenant.documents.personal', 'PERSONAL VAULT')} />
-                    <Tab label={tx('tenant.documents.library', 'SHARED LIBRARY & FORMS')} />
+                    <Tab label={label('PERSONAL VAULT', 'الخزنة الشخصية')} />
+                    <Tab label={label('SHARED LIBRARY & FORMS', 'المكتبة المشتركة والنماذج')} />
                 </Tabs>
             </Box>
 
@@ -183,20 +190,20 @@ export default function TenantDocumentsPage() {
                                             {activeTab === 0 ? <SafeIcon icon={FileText} size={24} style={{ color: binThemeTokens.gold }} /> : <SafeIcon icon={ClipboardList} size={24} style={{ color: binThemeTokens.gold }} />}
                                         </Box>
                                         <Box sx={{ minWidth: 0 }}>
-                                            <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || 'Tenant Document'}</Typography>
-                                            <Typography variant="caption" color="textSecondary" display="block">{doc.description || `Added: ${new Date(dateOf(doc)).toLocaleDateString()}`}</Typography>
+                                            <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || label('Tenant Document', 'مستند المستأجر')}</Typography>
+                                            <Typography variant="caption" color="textSecondary" display="block">{doc.description || `${label('Added', 'أُضيف')}: ${new Date(dateOf(doc)).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}`}</Typography>
                                             <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                                                <Chip size="small" label={doc.category || 'DOCUMENT'} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, fontSize: '0.65rem' }} />
-                                                <Chip size="small" label={hasFile ? 'READY' : 'PENDING FILE'} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: '0.65rem' }} />
+                                                <Chip size="small" label={doc.category || label('DOCUMENT', 'مستند')} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, fontSize: '0.65rem' }} />
+                                                <Chip size="small" label={hasFile ? label('READY', 'جاهز') : label('PENDING FILE', 'بانتظار الملف')} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: '0.65rem' }} />
                                             </Stack>
                                         </Box>
                                     </Stack>
                                     <Stack direction="row" spacing={1} sx={{ alignSelf: { xs: 'flex-end', sm: 'center' }, mt: { xs: 2, sm: 0 } }}>
-                                        <Button variant="outlined" size="small" startIcon={<SafeIcon icon={Eye} size={15} />} disabled={!hasFile} onClick={() => openDocument(doc)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900 }}>
-                                            VIEW
+                                        <Button variant="outlined" size="small" startIcon={<SafeIcon icon={Eye} size={15} />} disabled={!hasFile} onClick={() => openDocument(doc, unavailableMsg)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900 }}>
+                                            {label('VIEW', 'عرض')}
                                         </Button>
-                                        <Button variant="contained" size="small" startIcon={hasFile ? <SafeIcon icon={Download} size={15} /> : <SafeIcon icon={FileCheck} size={15} />} disabled={!hasFile} onClick={() => downloadDocument(doc)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                            DOWNLOAD
+                                        <Button variant="contained" size="small" startIcon={hasFile ? <SafeIcon icon={Download} size={15} /> : <SafeIcon icon={FileCheck} size={15} />} disabled={!hasFile} onClick={() => downloadDocument(doc, unavailableMsg)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                            {label('DOWNLOAD', 'تنزيل')}
                                         </Button>
                                     </Stack>
                                 </Stack>
@@ -209,7 +216,7 @@ export default function TenantDocumentsPage() {
             {displayedDocs.length === 0 && (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
                     <Typography variant="body1" color="textSecondary">
-                        {tx('tenant.documents.empty', 'No documents available in this folder.')}
+                        {label('No documents available in this folder.', 'لا توجد مستندات في هذا المجلد.')}
                     </Typography>
                 </Paper>
             )}

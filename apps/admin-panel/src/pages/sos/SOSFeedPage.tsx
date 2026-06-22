@@ -14,7 +14,7 @@ import {
   ListItemText,
   ListItemAvatar,
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { db, auth, collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 
 interface SOSEvent {
   sosId: string;
@@ -22,12 +22,34 @@ interface SOSEvent {
   unitId: string;
   status: 'ACTIVE' | 'RESPONDED' | 'RESOLVED';
   description: string;
-  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  priority: 'EMERGENCY' | 'CRITICAL' | 'HIGH' | 'MEDIUM';
   createdAt: string;
   respondedAt?: string;
   resolvedAt?: string;
   assignedTechnician?: string;
   emergencyChargeApplied: number;
+}
+
+const toIso = (value: any): string => {
+  if (value?.toDate) return value.toDate().toISOString();
+  if (value) return new Date(value).toISOString();
+  return new Date().toISOString();
+};
+
+function mapTicketToSOSEvent(id: string, t: any): SOSEvent {
+  return {
+    sosId: id,
+    tenantId: t.tenantId || '',
+    unitId: t.unitNumber || t.unitId || '',
+    status: t.sosStatus || 'ACTIVE',
+    description: t.description || '',
+    priority: t.priority || 'EMERGENCY',
+    createdAt: toIso(t.createdAt),
+    respondedAt: t.sosRespondedAt ? toIso(t.sosRespondedAt) : undefined,
+    resolvedAt: t.sosResolvedAt ? toIso(t.sosResolvedAt) : undefined,
+    assignedTechnician: t.assignedTechnicianName || undefined,
+    emergencyChargeApplied: Number(t.emergencyCharge || 0),
+  };
 }
 
 export default function SOSFeedPage() {
@@ -36,30 +58,40 @@ export default function SOSFeedPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
-    fetchSOSFeed();
-
-    if (autoRefresh) {
-      const interval = setInterval(fetchSOSFeed, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh]);
-
-  const fetchSOSFeed = async () => {
-    try {
-      const response = await apiClient.get('/api/admin/sos-feed');
-      setSOSEvents(response?.data?.sosEvents || []);
-    } catch (error) {
-      console.error('Failed to fetch SOS feed:', error);
-    } finally {
+    if (!autoRefresh) {
       setLoading(false);
+      return;
     }
-  };
+
+    setLoading(true);
+    const q = query(
+      collection(db, 'maintenanceTickets'),
+      where('priority', '==', 'EMERGENCY'),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setSOSEvents(snap.docs.map((d) => mapTicketToSOSEvent(d.id, d.data())));
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Failed to fetch SOS feed:', error);
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [autoRefresh]);
 
   const handleRespond = async (sosId: string) => {
     try {
-      await apiClient.post(`/api/admin/sos/${sosId}/respond`);
+      await updateDoc(doc(db, 'maintenanceTickets', sosId), {
+        sosStatus: 'RESPONDED',
+        sosRespondedAt: serverTimestamp(),
+        sosRespondedBy: auth.currentUser?.uid || null,
+      });
       alert('SOS acknowledged');
-      fetchSOSFeed();
     } catch (error) {
       console.error('Failed to respond to SOS:', error);
       alert('Failed to respond');
@@ -68,9 +100,12 @@ export default function SOSFeedPage() {
 
   const handleResolve = async (sosId: string) => {
     try {
-      await apiClient.post(`/api/admin/sos/${sosId}/resolve`);
+      await updateDoc(doc(db, 'maintenanceTickets', sosId), {
+        sosStatus: 'RESOLVED',
+        sosResolvedAt: serverTimestamp(),
+        sosResolvedBy: auth.currentUser?.uid || null,
+      });
       alert('SOS resolved');
-      fetchSOSFeed();
     } catch (error) {
       console.error('Failed to resolve SOS:', error);
       alert('Failed to resolve');
@@ -92,6 +127,7 @@ export default function SOSFeedPage() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
+      case 'EMERGENCY':
       case 'CRITICAL':
         return '#d32f2f';
       case 'HIGH':

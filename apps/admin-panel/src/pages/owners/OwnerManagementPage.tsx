@@ -19,7 +19,7 @@ import {
   Grid,
   Typography,
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { db, functions, httpsCallable, collection, query, where, getDocs } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 interface Owner {
@@ -50,8 +50,58 @@ export default function OwnerManagementPage() {
   const fetchOwners = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/admin/owners');
-      setOwners(response?.data?.owners || []);
+      const usersSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'owner')));
+
+      const ownerRows = await Promise.all(usersSnap.docs.map(async (userDoc) => {
+        const u: any = userDoc.data();
+        const ownerId = userDoc.id;
+        const ownerEmail = String(u.email || '').toLowerCase();
+
+        const [passportsSnap, ledgerByOwnerId, ledgerByOwnerUid, ledgerByOwnerEmail] = await Promise.all([
+          getDocs(query(collection(db, 'property_passports'), where('ownerId', '==', ownerId))),
+          getDocs(query(collection(db, 'tenant_ledger'), where('ownerId', '==', ownerId))),
+          getDocs(query(collection(db, 'tenant_ledger'), where('ownerUid', '==', ownerId))),
+          ownerEmail
+            ? getDocs(query(collection(db, 'tenant_ledger'), where('ownerEmail', '==', ownerEmail)))
+            : Promise.resolve(null),
+        ]);
+
+        let totalBuildings = 0;
+        let totalUnits = 0;
+        let monthlyRentCollected = 0;
+        passportsSnap.forEach((d) => {
+          const p: any = d.data();
+          totalBuildings += 1;
+          totalUnits += Number(p.totalUnits || 0);
+          monthlyRentCollected += Number(p.rentCollectedTotal || 0);
+        });
+
+        const ledgerDocs = new Map<string, any>();
+        [ledgerByOwnerId, ledgerByOwnerUid, ledgerByOwnerEmail].forEach((snap) => {
+          snap?.forEach((d) => ledgerDocs.set(d.id, d.data()));
+        });
+        let unpaidInvoiceCount = 0;
+        ledgerDocs.forEach((l) => {
+          if (Number(l.outstandingBalance || 0) > 0) unpaidInvoiceCount += 1;
+        });
+
+        const statusValue = String(u.status || '').toLowerCase();
+        const joinedAt = u.createdAt?.toDate ? u.createdAt.toDate() : (u.approvedAt?.toDate ? u.approvedAt.toDate() : null);
+
+        return {
+          ownerId,
+          name: u.name || u.displayName || u.fullName || 'Owner',
+          email: u.email || '',
+          totalBuildings,
+          totalUnits,
+          monthlyRentCollected,
+          unpaidInvoiceCount,
+          suspensionStatus: statusValue === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
+          joinedDate: joinedAt ? joinedAt.toLocaleDateString() : '—',
+        } as Owner;
+      }));
+
+      setOwners(ownerRows);
     } catch (error) {
       console.error('Failed to fetch owners:', error);
       alert(t('admin.load_owners_failed'));
@@ -64,9 +114,8 @@ export default function OwnerManagementPage() {
     if (!selectedOwner) return;
 
     try {
-      await apiClient.post(`/api/admin/owners/${selectedOwner.ownerId}/suspend`, {
-        reason: suspensionReason,
-      });
+      const adminSuspendOwner = httpsCallable(functions, 'adminSuspendOwner');
+      await adminSuspendOwner({ ownerId: selectedOwner.ownerId, reason: suspensionReason });
 
       alert(t('admin.owner_suspended', { name: selectedOwner.name }));
       setSuspendDialogOpen(false);
@@ -79,7 +128,8 @@ export default function OwnerManagementPage() {
 
   const handleResume = async (ownerId: string) => {
     try {
-      await apiClient.post(`/api/admin/owners/${ownerId}/resume`);
+      const adminResumeOwner = httpsCallable(functions, 'adminResumeOwner');
+      await adminResumeOwner({ ownerId });
       alert(t('admin.owner_resumed'));
       fetchOwners();
     } catch (error) {

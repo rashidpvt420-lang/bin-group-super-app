@@ -472,3 +472,42 @@ export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request
   await batch.commit();
   return { status: "TENANT_INVITED", tenantId, inviteUrl, locationInherited: Boolean(tenantLocation) };
 });
+
+export const adminSuspendOwner = onCall({ cors: true }, async (request) => {
+  await assertAdmin(request.auth);
+  const ownerId = s(request.data?.ownerId);
+  if (!ownerId) throw new HttpsError("invalid-argument", "ownerId is required.");
+  const reason = s(request.data?.reason, "No reason provided.");
+  const ref = db.collection("users").doc(ownerId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Owner not found.");
+  const owner = snap.data() || {};
+  if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
+  const actorId = request.auth?.uid || "admin";
+  const patch = { status: "suspended", suspensionReason: reason, suspendedAt: ts(), suspendedBy: actorId, updatedAt: ts() };
+  const batch = db.batch();
+  batch.set(ref, patch, { merge: true });
+  batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
+  batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_SUSPEND_OWNER", targetType: "users", targetId: ownerId, metadata: { reason }, createdAt: ts() });
+  await batch.commit();
+  return { status: "SUSPENDED", ownerId };
+});
+
+export const adminResumeOwner = onCall({ cors: true }, async (request) => {
+  await assertAdmin(request.auth);
+  const ownerId = s(request.data?.ownerId);
+  if (!ownerId) throw new HttpsError("invalid-argument", "ownerId is required.");
+  const ref = db.collection("users").doc(ownerId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Owner not found.");
+  const owner = snap.data() || {};
+  if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
+  const actorId = request.auth?.uid || "admin";
+  const patch = { status: "active", suspensionReason: null, resumedAt: ts(), resumedBy: actorId, updatedAt: ts() };
+  const batch = db.batch();
+  batch.set(ref, patch, { merge: true });
+  batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
+  batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_RESUME_OWNER", targetType: "users", targetId: ownerId, createdAt: ts() });
+  await batch.commit();
+  return { status: "ACTIVE", ownerId };
+});

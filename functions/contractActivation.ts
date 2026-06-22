@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { createBrokerCommissionForContract } from "./brokerCommissions";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -110,6 +111,27 @@ export const adminApproveContractActivation = onCall({ cors: true }, async (requ
   });
 
   await batch.commit();
+
+  // Generate the broker commission record for this deal (if a broker is attached),
+  // exactly once. Non-fatal: a commission failure must never block owner activation.
+  if (contract.commissionGenerated !== true) {
+    try {
+      const commissionResult = await createBrokerCommissionForContract(contractId, contract, {
+        amountReceived,
+        annualContractValue: Number(request.data?.annualContractValue || contract.annualContractValue || 0),
+      });
+      if (commissionResult) {
+        await ref.set({
+          commissionGenerated: true,
+          commissionId: commissionResult.commissionId,
+          updatedAt: ts(),
+        }, { merge: true });
+      }
+    } catch (commissionError) {
+      console.error("Broker commission creation failed (non-fatal):", commissionError);
+    }
+  }
+
   return { status: "SUCCESS", contractId, ownerUid };
 });
 

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { createBrokerCommissionForContract } from "./brokerCommissions";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -55,6 +56,8 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   }
 
   const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
+  const contractSnap = contractId ? await db.collection("contracts").doc(contractId).get() : null;
+  const contractData = contractSnap?.data() || {};
   const ownerUid = String(request.data?.ownerUid || payment.ownerUid || payment.ownerId || "").trim();
   const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || "").trim();
   const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || 0);
@@ -156,6 +159,29 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   }
 
   await batch.commit();
+
+  // Generate the broker commission record for this deal (if a broker is attached),
+  // exactly once. Non-fatal: a commission failure must never block payment approval.
+  // This is the real admin payment-approval path (apps/admin-panel PaymentApprovalsPage),
+  // distinct from the adminApproveContractActivation callable which has no caller today.
+  if (contractId && contractData.commissionGenerated !== true) {
+    try {
+      const commissionResult = await createBrokerCommissionForContract(contractId, contractData, {
+        amountReceived,
+        annualContractValue: Number(contractData.annualContractValue || 0),
+      });
+      if (commissionResult) {
+        await db.collection("contracts").doc(contractId).set({
+          commissionGenerated: true,
+          commissionId: commissionResult.commissionId,
+          updatedAt: ts(),
+        }, { merge: true });
+      }
+    } catch (commissionError) {
+      console.error("Broker commission creation failed (non-fatal):", commissionError);
+    }
+  }
+
   return { status: "SUCCESS", paymentId, contractId: contractId || null, intakeId: intakeId || null, ownerUid: ownerUid || null, idempotent: false };
 });
 

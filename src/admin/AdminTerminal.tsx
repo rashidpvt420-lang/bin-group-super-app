@@ -1,11 +1,13 @@
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '@/lib/firebase';
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 
 const ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
+const ADMIN_PANEL_ORIGIN = new URL(ADMIN_PANEL_URL).origin;
 
 const currentAdminPath = () => {
   if (typeof window === 'undefined') return '/dashboard';
@@ -13,21 +15,55 @@ const currentAdminPath = () => {
   return path.startsWith('/') ? path : `/${path}`;
 };
 
+// Resolve the deep-link path against the fixed admin-panel origin and verify
+// the result still resolves to that exact origin before it's ever used to
+// navigate, so this can never be coerced into leaving bin-group-admin-panel.
+// web.app no matter what currentAdminPath() returns.
+const resolveAdminUrl = (path: string) => {
+  const resolved = new URL(path, ADMIN_PANEL_URL);
+  return resolved.origin === ADMIN_PANEL_ORIGIN ? resolved.toString() : `${ADMIN_PANEL_URL}/dashboard`;
+};
+
+// Best-effort: exchange the session already open here for a one-time custom
+// token the admin-panel origin can redeem, so staff don't have to sign in a
+// second time after the cross-domain redirect. Any failure (offline, the
+// function not deployed yet, etc.) just falls back to the plain URL, which
+// still lands on the admin-panel's own login form exactly as it does today.
+const withBridgeToken = async (url: string) => {
+  try {
+    const mintBridgeToken = httpsCallable(functions, 'mintAdminBridgeToken');
+    const result: any = await mintBridgeToken();
+    const token = result?.data?.token;
+    if (!token) return url;
+    // Carried in the fragment, not the query string: fragments are never sent
+    // to the server, so the token can't leak into access logs or Referer headers.
+    return `${url}#bridge_token=${encodeURIComponent(token)}`;
+  } catch (err) {
+    console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual re-login.', err);
+    return url;
+  }
+};
+
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
   const targetPath = currentAdminPath();
-  const targetUrl = `${ADMIN_PANEL_URL}${targetPath}`;
+  const targetUrl = resolveAdminUrl(targetPath);
   const loginUrl = `${ADMIN_PANEL_URL}/login`;
 
   React.useEffect(() => {
-    const timer = window.setTimeout(() => {
-      window.location.replace(targetUrl);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const url = await withBridgeToken(targetUrl);
+      if (!cancelled) window.location.replace(url);
     }, 900);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [targetUrl]);
 
-  const openAdminPanel = () => {
-    window.location.href = targetUrl;
+  const openAdminPanel = async () => {
+    window.location.href = await withBridgeToken(targetUrl);
   };
 
   const openAdminLogin = () => {
@@ -89,12 +125,21 @@ export default function AdminTerminal() {
         <Typography variant="h3" sx={{ mt: 2, mb: 2, fontWeight: 950, letterSpacing: -1.5 }}>
           {tx('admin.bridge.title', 'Redirecting to Admin Command Center')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 4, lineHeight: 1.7 }}>
+        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 3, lineHeight: 1.7 }}>
           {tx(
             'admin.bridge.desc',
             'The main app does not contain the admin login form. You are being sent to the dedicated production admin panel for owner approvals, tickets, technicians, contracts, payments, and sovereign operations.'
           )}
         </Typography>
+
+        <Box sx={{ mb: 4, px: 2.5, py: 1.5, borderRadius: 2, bgcolor: 'rgba(201,166,70,0.10)', border: '1px solid rgba(201,166,70,0.30)' }}>
+          <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 800, lineHeight: 1.6 }}>
+            {tx(
+              'admin.bridge.reauth_notice',
+              'Heads up: the admin panel is a separate secure app. We try to carry your session over automatically; if that fails, sign in again with your admin credentials when you arrive.'
+            )}
+          </Typography>
+        </Box>
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="center">
           <Button

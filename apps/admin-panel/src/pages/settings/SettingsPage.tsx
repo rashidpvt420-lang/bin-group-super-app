@@ -1,5 +1,5 @@
 // admin-panel/src/pages/settings/SettingsPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -15,7 +15,9 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../../lib/firebase';
+
+const SETTINGS_DOC = () => doc(db, 'settings', 'systemConfig');
 
 interface SystemSettings {
   maintenanceMode: boolean;
@@ -50,6 +52,24 @@ export default function SettingsPage() {
 
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const snap = await getDoc(SETTINGS_DOC());
+        if (snap.exists()) {
+          const stored = snap.data() as Partial<SystemSettings>;
+          setSettings({ ...DEFAULT_SETTINGS, ...stored });
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      } finally {
+        setInitializing(false);
+      }
+    };
+    loadSettings();
+  }, []);
 
   const handleChange = (key: keyof SystemSettings, value: any) => {
     setSettings({ ...settings, [key]: value });
@@ -64,7 +84,11 @@ export default function SettingsPage() {
   const handleSave = async () => {
     try {
       setLoading(true);
-      await apiClient.post('/api/admin/settings', settings);
+      await setDoc(SETTINGS_DOC(), {
+        ...settings,
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.uid || null,
+      }, { merge: true });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
@@ -74,6 +98,14 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+  if (initializing) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Typography>Loading settings...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
