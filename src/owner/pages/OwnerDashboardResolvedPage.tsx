@@ -12,6 +12,7 @@ import OwnerAuthorizedReportersSection from '../components/OwnerAuthorizedReport
 import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCenter';
 import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
 import OwnerContractModeMatrix from '../components/OwnerContractModeMatrix';
+import OwnerMoneyRiskDashboardSection from '../components/OwnerMoneyRiskDashboardSection';
 import { resolveOwnerFinancials } from '../utils/ownerFinancialResolver';
 import { resolveOwnerComplaint } from '../utils/ownerComplaintResolver';
 import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
@@ -524,6 +525,16 @@ export default function OwnerDashboardResolvedPage() {
           <OwnerComplaintCommandCenter complaints={complaints} properties={properties} />
         </Box>
       )}
+
+      <Box sx={{ mt: 5 }}>
+        <OwnerMoneyRiskDashboardSection 
+          properties={properties} 
+          financials={financials} 
+          complaints={complaints} 
+          tickets={tickets} 
+          tenantCount={tenantCount} 
+        />
+      </Box>
     </Box>
   );
 }
