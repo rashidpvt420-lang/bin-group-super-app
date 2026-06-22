@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Box, alpha, Button } from '@mui/material';
+import { Container, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Box, alpha } from '@mui/material';
 import { Send, ArrowLeft } from 'lucide-react';
 import { db, doc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, updateDoc } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
@@ -7,7 +7,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 export default function MessagesPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [conversations, setConversations] = useState<any[]>([]);
     const [selectedConv, setSelectedConv] = useState<any>(null);
     const [messages, setMessages] = useState<any[]>([]);

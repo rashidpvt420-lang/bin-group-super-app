@@ -7,7 +7,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 export default function CommunityModerationPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [posts, setPosts] = useState<any[]>([]);
 

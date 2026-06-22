@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton } from '@mui/material';
+import { Container, Typography, Paper, Grid, Stack, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton } from '@mui/material';
 import { Check, X } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { db, collection, query, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
@@ -7,7 +7,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
 export default function VisitorParkingPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
 
