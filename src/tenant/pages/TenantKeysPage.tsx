@@ -192,15 +192,8 @@ export default function TenantKeysPage() {
                           </TableCell>
                           <TableCell sx={{ fontWeight: 800 }}>{m.toCustodian || m.fromCustodian || '—'}</TableCell>
                           <TableCell>{m.handledBy || 'Security'}</TableCell>
-< claude/quirky-carson-x5ygtk
                           <TableCell sx={{ fontSize: '0.75rem' }}>
                             {m.createdAt?.toDate ? m.createdAt.toDate().toLocaleString() : '—'}
-=
-                          <TableCell>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                              {m.createdAt?.toDate ? m.createdAt.toDate().toLocaleString() : '—'}
-                            </Typography>
-> main
                           </TableCell>
                         </TableRow>
                       ))}
