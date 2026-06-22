@@ -755,12 +755,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
     }
 
-    // Amenity catalog: readable by any signed-in resident; only admins curate it.
-    match /amenities/{amenityId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
     // Deterministic-id slot locks that enforce one booking per amenity/date/time
     // across all tenants. Readable by any signed-in user (so a client transaction
     // can detect a conflict) but immutable once created; owner or admin may free it.

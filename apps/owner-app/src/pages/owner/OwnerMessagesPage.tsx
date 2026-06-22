@@ -86,7 +86,6 @@ export default function OwnerMessagesPage() {
         if (!newMessageText.trim() || !selectedConv?.id || !user?.uid) return;
         setSending(true);
         const text = newMessageText.trim();
-        setNewMessageText('');
         try {
             await addDoc(collection(db, 'conversations', selectedConv.id, 'messages'), {
                 senderUid: user.uid,
@@ -99,8 +98,10 @@ export default function OwnerMessagesPage() {
             await updateDoc(doc(db, 'conversations', selectedConv.id), {
                 lastMessageAt: serverTimestamp()
             });
+            setNewMessageText('');
         } catch (err) {
             console.error("Failed to send message:", err);
+            alert('Failed to send message. Please try again.');
         } finally {
             setSending(false);
         }
