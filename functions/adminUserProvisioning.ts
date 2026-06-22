@@ -7,11 +7,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
- review/deployed-hosting-state
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "hr_manager"]);
-
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "hr_manager", "finance_admin"]);
- main
 const STAFF_ROLES = new Set([
   "technician",
   "hr_staff",
@@ -120,11 +116,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     primaryRole: role,
     staff: true,
     technician: role === "technician",
- review/deployed-hosting-state
-    admin: false,
-
     admin: ADMIN_ROLES.has(role),
- main
   });
 
   const commonProfile = {
@@ -142,11 +134,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     trade: specialization,
     status: "active",
     isStaff: true,
- review/deployed-hosting-state
-    isAdmin: false,
-
     isAdmin: ADMIN_ROLES.has(role),
- main
     onboardingComplete: true,
     createdAt: now,
     updatedAt: now,
