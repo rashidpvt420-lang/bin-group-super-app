@@ -13,6 +13,7 @@ export const LanguageSwitcher: React.FC = () => {
     return (
         <Button
             onClick={toggleLanguage}
+            data-testid="admin-language-toggle"
             startIcon={<LanguageIcon sx={{ fontSize: 18 }} />}
             sx={{
                 color: '#DAA520',

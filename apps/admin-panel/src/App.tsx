@@ -262,6 +262,7 @@ function Layout() {
 
                         <Button 
                             onClick={handleLogout}
+                            data-testid="admin-logout"
                             startIcon={<LogOut size={16} />}
                             sx={{ 
                                 color: '#ef4444', 

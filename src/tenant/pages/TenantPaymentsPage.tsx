@@ -125,10 +125,7 @@ export default function TenantPaymentsPage() {
         {label('Payments & Invoices', 'المدفوعات والفواتير')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-        {label(
-          'View all rent invoices and maintenance charges. Current accepted payment methods are Cash and Cheque at BIN GROUP HQ (Bank Transfer coming soon, Credit Card/Stripe deferred to Phase 2).',
-          'اطّلع على جميع فواتير الإيجار ورسوم الصيانة. طرق الدفع المقبولة حاليًا هي النقد والشيك في مقر بن جروب (التحويل البنكي قريبًا، وبطاقة الائتمان/سترايب مؤجلة إلى المرحلة الثانية).'
-        )}
+        View all rent invoices and maintenance charges. Current accepted payment methods are Cash and Cheque at BIN GROUP HQ (Bank Transfer coming soon, Credit Card/Stripe deferred to Phase 2).
       </Typography>
 
       {/* Summary row */}
@@ -256,14 +253,11 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 4, borderRadius: 4, border: `1px solid ${alpha(gold, 0.3)}` }}>
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
                 <Building2 color={gold} size={24} />
-                <Typography variant="h6" fontWeight="950" color="#111827">{label('UAE Bank Transfer (Coming Soon)', 'التحويل البنكي في الإمارات (قريبًا)')}</Typography>
+                <Typography variant="h6" fontWeight="950" color="#111827">UAE Bank Transfer (Coming Soon)</Typography>
               </Stack>
 
               <Alert severity="warning" sx={{ mb: 3 }}>
-                {label(
-                  'Bank transfer is coming soon. Currently, the accepted payment methods are Cash and Cheque.',
-                  'التحويل البنكي قريبًا. طرق الدفع المقبولة حاليًا هي النقد والشيك.'
-                )}
+                Bank transfer is coming soon. Currently, the accepted payment methods are Cash and Cheque.
               </Alert>
 
               {[
@@ -296,10 +290,7 @@ export default function TenantPaymentsPage() {
               ))}
 
               <Alert severity="info" sx={{ mt: 2 }}>
-                {label(
-                  'Use your invoice number or unit number as the payment reference so finance can reconcile your transfer once active.',
-                  'استخدم رقم الفاتورة أو رقم الوحدة كمرجع للدفع حتى يتمكن قسم المالية من مطابقة تحويلك عند التفعيل.'
-                )}
+                Use your <strong>invoice number</strong> or <strong>unit number</strong> as the payment reference so finance can reconcile your transfer once active.
               </Alert>
             </Paper>
           </Grid>
@@ -308,13 +299,10 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 4, borderRadius: 4, border: '1px solid #E5E7EB', bgcolor: '#FAFAFA' }}>
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
                 <MessageCircle color="#25D366" size={24} />
-                <Typography variant="h6" fontWeight="950" color="#111827">{label('Confirm Payment via WhatsApp', 'تأكيد الدفع عبر واتساب')}</Typography>
+                <Typography variant="h6" fontWeight="950" color="#111827">Confirm Payment via WhatsApp</Typography>
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {label(
-                  'Currently accepted payment methods are Cash and Cheque. Please contact us on WhatsApp to arrange payment, schedule a pickup, or send your receipt.',
-                  'طرق الدفع المقبولة حاليًا هي النقد والشيك. يرجى التواصل معنا عبر واتساب لترتيب الدفع أو تحديد موعد للاستلام أو إرسال الإيصال.'
-                )}
+                Currently accepted payment methods are Cash and Cheque. Please contact us on WhatsApp to arrange payment, schedule a pickup, or send your receipt.
               </Typography>
               <Button
                 fullWidth
@@ -327,7 +315,7 @@ export default function TenantPaymentsPage() {
                 }}
                 sx={{ bgcolor: '#25D366', color: '#FFF', fontWeight: 950, borderRadius: 3, py: 1.5, mb: 2 }}
               >
-                {label('CONTACT VIA WHATSAPP', 'تواصل عبر واتساب')}
+                CONTACT VIA WHATSAPP
               </Button>
               <Button
                 fullWidth
@@ -344,13 +332,10 @@ export default function TenantPaymentsPage() {
               <Box sx={{ p: 2.5, bgcolor: alpha(gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(gold, 0.2)}` }}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                   <CreditCard size={18} color={gold} />
-                  <Typography fontWeight="950" color="#111827">{label('Online Card Payment (Coming Soon - Phase 2)', 'الدفع الإلكتروني بالبطاقة (قريبًا - المرحلة الثانية)')}</Typography>
+                  <Typography fontWeight="950" color="#111827">Online Card Payment (Coming Soon - Phase 2)</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {label(
-                    'Secure card payment via Stripe is deferred to Phase 2. Currently, please pay via Cash or Cheque.',
-                    'الدفع الآمن بالبطاقة عبر سترايب مؤجل إلى المرحلة الثانية. يرجى حاليًا الدفع نقدًا أو بشيك.'
-                  )}
+                  Secure card payment via Stripe is deferred to Phase 2. Currently, please pay via Cash or Cheque.
                 </Typography>
                 <Button
                   fullWidth
@@ -362,7 +347,7 @@ export default function TenantPaymentsPage() {
                   }}
                   sx={{ borderColor: gold, color: gold, fontWeight: 900, borderRadius: 2 }}
                 >
-                  {label('REQUEST PAYMENT INFO', 'اطلب معلومات الدفع')}
+                  REQUEST PAYMENT INFO
                 </Button>
               </Box>
             </Paper>

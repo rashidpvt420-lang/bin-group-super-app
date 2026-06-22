@@ -141,12 +141,15 @@ export const whatsappBotWebhook = onRequest({
 
   // POST — incoming message
   if (req.method === "POST") {
+ review/deployed-hosting-state
+
     if (!verifyWhatsAppSignature(req, waAppSecret.value())) {
       console.warn("WhatsApp webhook: rejected request with invalid X-Hub-Signature-256.");
       res.status(401).send("Invalid signature");
       return;
     }
 
+ main
     const phoneId = waPhoneId.value();
     const token = waToken.value();
     if (!phoneId || !token) {
