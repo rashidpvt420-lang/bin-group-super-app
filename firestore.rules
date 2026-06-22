@@ -326,6 +326,9 @@ service cloud.firestore {
           'onboardingLastSeenAt',
           'dutyStatus',
           'onDuty',
+          'companyName',
+          'reraLicense',
+          'primaryRegion',
           'updatedAt'
         ]) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
