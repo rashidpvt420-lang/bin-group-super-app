@@ -25,8 +25,9 @@ const withBridgeToken = async (url: string) => {
     const result: any = await mintBridgeToken();
     const token = result?.data?.token;
     if (!token) return url;
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}bridge_token=${encodeURIComponent(token)}`;
+    // Carried in the fragment, not the query string: fragments are never sent
+    // to the server, so the token can't leak into access logs or Referer headers.
+    return `${url}#bridge_token=${encodeURIComponent(token)}`;
   } catch (err) {
     console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual re-login.', err);
     return url;

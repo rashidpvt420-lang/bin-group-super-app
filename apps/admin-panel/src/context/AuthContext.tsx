@@ -116,12 +116,15 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         // login page doesn't flash while the exchange is still in flight.
         let bridgeExchange: Promise<unknown> | null = null;
         if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const bridgeToken = params.get('bridge_token');
+            // Read from the URL fragment, not the query string: fragments are
+            // never transmitted to the server (no access-log or Referer-header
+            // exposure of the bearer token), unlike a ?bridge_token= query param.
+            const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+            const bridgeToken = hashParams.get('bridge_token');
             if (bridgeToken) {
-                params.delete('bridge_token');
-                const remaining = params.toString();
-                const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash}`;
+                hashParams.delete('bridge_token');
+                const remainingHash = hashParams.toString();
+                const cleanUrl = `${window.location.pathname}${window.location.search}${remainingHash ? `#${remainingHash}` : ''}`;
                 window.history.replaceState({}, document.title, cleanUrl);
                 bridgeExchange = timeout(signInWithCustomToken(auth, bridgeToken), 10000, 'BRIDGE_TOKEN_TIMEOUT').catch((err) => {
                     console.warn('[ADMIN-AUTH] Bridge token exchange failed; falling back to manual login.', err);
