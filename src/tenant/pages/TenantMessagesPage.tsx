@@ -91,8 +91,7 @@ export default function TenantMessagesPage() {
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim() || !selectedConv?.id || !user) return;
-        const body = newMessage;
-        setNewMessage('');
+        const body = newMessage.trim();
         try {
             await addDoc(collection(db, `conversations/${selectedConv.id}/messages`), {
                 senderUid: user.uid,
@@ -104,8 +103,10 @@ export default function TenantMessagesPage() {
             await updateDoc(doc(db, 'conversations', selectedConv.id), {
                 lastMessageAt: serverTimestamp()
             });
+            setNewMessage('');
         } catch (err) {
             console.error('Failed to send message:', err);
+            alert('Failed to send message. Please try again.');
         }
     };
 
