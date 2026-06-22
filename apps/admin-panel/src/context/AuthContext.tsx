@@ -26,6 +26,17 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
+// Staff-tier roles provisioned via adminCreateUser that need read access to this
+// panel (e.g. HRManagementPage) but must never be granted isAdmin.
+const STAFF_ROLES = new Set([
+    'hr_manager',
+    'hr_staff',
+    'finance_staff',
+    'account_manager',
+    'dispatcher',
+    'operations_manager',
+]);
+
 const DEFAULT_FOUNDER_ADMIN_EMAILS = [
     'ceo@bin-groups.com',
     'ceo@bin-group.com',
@@ -150,8 +161,9 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 const profileAdmin = profileGrantsAdmin(profile);
                 const isAdmin = claimsAdmin || profileAdmin || isFounderBootstrap;
                 const role = isFounderBootstrap ? 'super_admin' : (claimRole || profileRole || '');
+                const isStaff = STAFF_ROLES.has(claimRole) || STAFF_ROLES.has(profileRole);
 
-                if (!isAdmin) {
+                if (!isAdmin && !isStaff) {
                     if (profileReadError && !claimsAdmin) {
                         throw new Error('ADMIN_PROFILE_LOOKUP_FAILED');
                     }
@@ -177,7 +189,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                     }, { merge: true }).catch((repairErr) => console.warn('[ADMIN-AUTH] Founder profile repair deferred:', repairErr));
                 }
 
-                setUser({ ...usr, ...profile, role, isAdmin: true, claims, bootstrapAdmin: isFounderBootstrap });
+                setUser({ ...usr, ...profile, role, isAdmin, claims, bootstrapAdmin: isFounderBootstrap });
                 setIsAuthenticated(true);
                 setError(null);
 
