@@ -73,6 +73,7 @@ import MarketplaceApprovalsPage from './pages/ops/MarketplaceApprovalsPage';
 import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
 import MessagesPage from './pages/ops/MessagesPage';
 import CommunityModerationPage from './pages/ops/CommunityModerationPage';
+import EmergencyCommandCenterPage from './pages/ops/EmergencyCommandCenterPage';
 
 import { adminTheme } from './theme/adminTheme';
 
@@ -179,6 +180,7 @@ function AppContent() {
                     <Route path="/ops/staff-directory" element={<ProtectedRoute adminOnly><StaffDirectoryPage /></ProtectedRoute>} />
                     <Route path="/ops/messages" element={<ProtectedRoute adminOnly><MessagesPage /></ProtectedRoute>} />
                     <Route path="/ops/community-moderation" element={<ProtectedRoute adminOnly><CommunityModerationPage /></ProtectedRoute>} />
+                    <Route path="/ops/emergency-command" element={<ProtectedRoute adminOnly><EmergencyCommandCenterPage /></ProtectedRoute>} />
                 </Route>
             )}
 
@@ -262,6 +264,7 @@ function Layout() {
 
                         <Button 
                             onClick={handleLogout}
+                            data-testid="admin-logout"
                             startIcon={<LogOut size={16} />}
                             sx={{ 
                                 color: '#ef4444', 

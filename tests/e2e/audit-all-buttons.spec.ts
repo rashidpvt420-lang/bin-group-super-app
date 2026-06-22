@@ -31,7 +31,6 @@ async function waitForLoader(page: Page) {
 
 test.describe('Admin Button & Menu Verification Audit', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!EMAIL || !PASSWORD, 'Missing E2E_ADMIN_EMAIL/PASSWORD.');
     await login(page);
   });
 
