@@ -19,6 +19,7 @@
     "build:owner": "npm --prefix apps/owner-app install --legacy-peer-deps && npm --prefix apps/owner-app run build",
     "build:functions": "npm run build --workspace=functions",
     "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "preview": "vite preview",
     "deploy": "npm run prepare:rules && firebase deploy --project bin-group-57c60",
     "deploy:raw": "firebase deploy --project bin-group-57c60",

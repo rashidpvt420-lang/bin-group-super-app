@@ -356,7 +356,6 @@ export default function TenantAIConciergePage() {
                 placeholder={
                   step === 'location' ? 'e.g. Master bedroom, Kitchen, Unit 304…'
                     : step === 'error' ? 'Type anything to restart…'
-                    : step === 'submitted' ? 'Type to start a new request…'
                     : 'Describe your issue in English or Arabic…'
                 }
                 sx={{
