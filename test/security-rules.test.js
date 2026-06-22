@@ -357,14 +357,26 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
-  it('amenities catalog: any signed-in user can read, only admin can write', async () => {
+  it('amenities catalog: scoped to the property tenant/owner/admin, not any signed-in user', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await assertSucceeds(setDoc(doc(adminDb, 'amenities/pool'), { name: 'Community Pool', active: true }));
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
+    await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
+    await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
+    await assertSucceeds(setDoc(doc(adminDb, 'amenities/pool'), { name: 'Community Pool', active: true, propertyId: 'prop_a' }));
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+    const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
+
+    // Tenant of the same property can read
     await assertSucceeds(getDoc(doc(tenantADb, 'amenities/pool')));
-    await assertFails(setDoc(doc(tenantADb, 'amenities/pool'), { name: 'Hacked', active: true }));
+    // Tenant of a different property cannot read
+    await assertFails(getDoc(doc(tenantBDb, 'amenities/pool')));
+    // Tenant cannot write
+    await assertFails(setDoc(doc(tenantADb, 'amenities/pool'), { name: 'Hacked', active: true, propertyId: 'prop_a' }));
+    // The property's own owner can update its amenities
+    await assertSucceeds(updateDoc(doc(ownerADb, 'amenities/pool'), { active: false }));
   });
 
   it('paymentConfirmations: tenant cannot update or delete after creation', async () => {
