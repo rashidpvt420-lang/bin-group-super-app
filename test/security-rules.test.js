@@ -535,4 +535,71 @@ describe('Firestore Security Rules', () => {
     // Tenant B is NOT participant and cannot read
     await assertFails(getDoc(doc(tenantBDb, 'conversations/conv_1')));
   });
+
+  it('inspections: tenant can create own inspection and read it back', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    // Tenant can create inspection for themselves
+    await assertSucceeds(setDoc(doc(tenantDb, 'inspections/insp_1'), {
+      tenantId: 'tenant_a',
+      type: 'move_in',
+      status: 'submitted',
+    }));
+
+    // Tenant can read their own inspection
+    await assertSucceeds(getDoc(doc(tenantDb, 'inspections/insp_1')));
+
+    // Another tenant cannot read it
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+    await assertFails(getDoc(doc(tenantBDb, 'inspections/insp_1')));
+
+    // Admin can read it
+    await assertSucceeds(getDoc(doc(adminDb, 'inspections/insp_1')));
+  });
+
+  it('inspections: tenant cannot create inspection for another tenant', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    // Creating with someone else's tenantId must fail
+    await assertFails(setDoc(doc(tenantDb, 'inspections/insp_2'), {
+      tenantId: 'tenant_b',
+      type: 'move_out',
+      status: 'submitted',
+    }));
+  });
+
+  it('maintenanceRequests: tenant can create and read own request', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    // Tenant creates their own request
+    await assertSucceeds(setDoc(doc(tenantDb, 'maintenanceRequests/req_1'), {
+      tenantId: 'tenant_a',
+      description: 'AC not cooling',
+      category: 'AC / Cooling',
+      priority: 'HIGH',
+      source: 'AI_CONCIERGE',
+      status: 'OPEN',
+    }));
+
+    // Tenant can read their own request
+    await assertSucceeds(getDoc(doc(tenantDb, 'maintenanceRequests/req_1')));
+
+    // Another tenant cannot read it
+    const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
+    await assertFails(getDoc(doc(tenantBDb, 'maintenanceRequests/req_1')));
+  });
+
+  it('maintenanceRequests: tenant cannot create request for another tenant', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    await assertFails(setDoc(doc(tenantDb, 'maintenanceRequests/req_2'), {
+      tenantId: 'tenant_b',
+      description: 'Water leak',
+      status: 'OPEN',
+    }));
+  });
 });
