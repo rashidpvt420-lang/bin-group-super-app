@@ -7,7 +7,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "hr_manager", "finance_admin"]);
+const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 const STAFF_ROLES = new Set([
   "technician",
   "hr_staff",
