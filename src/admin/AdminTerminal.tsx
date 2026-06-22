@@ -7,11 +7,21 @@ import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 
 const ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
+const ADMIN_PANEL_ORIGIN = new URL(ADMIN_PANEL_URL).origin;
 
 const currentAdminPath = () => {
   if (typeof window === 'undefined') return '/dashboard';
   const path = window.location.pathname.replace(/^\/admin/, '') || '/dashboard';
   return path.startsWith('/') ? path : `/${path}`;
+};
+
+// Resolve the deep-link path against the fixed admin-panel origin and verify
+// the result still resolves to that exact origin before it's ever used to
+// navigate, so this can never be coerced into leaving bin-group-admin-panel.
+// web.app no matter what currentAdminPath() returns.
+const resolveAdminUrl = (path: string) => {
+  const resolved = new URL(path, ADMIN_PANEL_URL);
+  return resolved.origin === ADMIN_PANEL_ORIGIN ? resolved.toString() : `${ADMIN_PANEL_URL}/dashboard`;
 };
 
 // Best-effort: exchange the session already open here for a one-time custom
@@ -37,7 +47,7 @@ const withBridgeToken = async (url: string) => {
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
   const targetPath = currentAdminPath();
-  const targetUrl = `${ADMIN_PANEL_URL}${targetPath}`;
+  const targetUrl = resolveAdminUrl(targetPath);
   const loginUrl = `${ADMIN_PANEL_URL}/login`;
 
   React.useEffect(() => {
