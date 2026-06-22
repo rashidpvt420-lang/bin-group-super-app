@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel, Switch, FormControlLabel } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from '../../lib/firebase';
+import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function StaffDirectoryPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [staff, setStaff] = useState<any[]>([]);
     const [openAdd, setOpenAdd] = useState(false);
