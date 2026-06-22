@@ -1048,6 +1048,22 @@ service cloud.firestore {
       }
     }
 
+    // ── inspections: move-in / move-out digital inspection records ──────────
+    match /inspections/{inspectionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.tenantId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── maintenanceRequests: AI concierge ticket submissions ─────────────────
+    match /maintenanceRequests/{requestId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.tenantId == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read: if isAdmin();
       allow create: if isAdmin();
