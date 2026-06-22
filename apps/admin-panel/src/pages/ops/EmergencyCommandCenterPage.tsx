@@ -26,7 +26,10 @@ export default function EmergencyCommandCenterPage() {
     useEffect(() => {
         // Monitor all emergency tickets
         // priority = 'emergency' or category = 'emergency' or status = 'emergency_submitted'
-        const q = query(collection(db, 'maintenanceTickets'), where('priority', '==', 'emergency'));
+        const q = query(
+            collection(db, 'maintenanceTickets'),
+            where('priority', 'in', ['emergency', 'EMERGENCY', 'urgent', 'URGENT', 'high', 'HIGH', 'sos', 'SOS'])
+        );
         const unsubEmergencies = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             list.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
