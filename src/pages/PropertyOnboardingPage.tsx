@@ -17,8 +17,10 @@ import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
 import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
 const INTERNAL_STEP_COUNT = 11;
-const VISIBLE_STAGE_COUNT = 7;
-const stageByInternalStep = [1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7];
+const VISIBLE_STAGE_COUNT = 5;
+// Groups the 11 data-collection steps into 5 owner-facing stages:
+// Company(1) | Property(2-4: asset+location+systems) | Service Plan(5) | Account(6-8: proof+signup+review) | Contract & Payment(9-11)
+const stageByInternalStep = [1, 2, 2, 2, 3, 4, 4, 4, 5, 5, 5];
 
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
 const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
@@ -33,12 +35,10 @@ export default function PropertyOnboardingPage() {
 
     const visibleStages = [
         readable(t('onboarding.company'), label('Company', 'الشركة')),
-        readable(t('onboarding.asset'), label('Asset', 'الأصل')),
-        readable(t('onboarding.systems'), label('Systems', 'الأنظمة')),
+        readable(t('onboarding.property'), label('Property', 'العقار')),
         readable(t('onboarding.service_plan'), label('Service Plan', 'خطة الخدمة')),
         readable(t('onboarding.verification'), label('Account', 'الحساب')),
-        readable(t('onboarding.contract'), label('Contract', 'العقد')),
-        readable(t('onboarding.payment_options'), label('Payment', 'الدفع')),
+        readable(t('onboarding.contract_payment'), label('Contract & Payment', 'العقد والدفع')),
     ];
 
     const safeStep = clampStep(step, INTERNAL_STEP_COUNT);
