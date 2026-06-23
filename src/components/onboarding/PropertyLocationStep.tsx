@@ -20,12 +20,30 @@ const EMIRATES_LIST = [
     { id: 'Fujairah', key: 'onboarding.emirate.fujairah', label: 'Fujairah', lat: 25.1288, lng: 56.3265 }
 ];
 
+const GOOGLE_MAPS_URL_PATTERN = /https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|(?:www\.)?google\.[^\s/]+\/maps|maps\.google\.[^\s/]+)/i;
+const GOOGLE_MAPS_SHORT_URL_PATTERN = /https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)\//i;
+
 const readable = (value: string | undefined, fallback: string) => {
     if (!value || value.includes('.')) return fallback;
     return value;
 };
 
 const getEmirate = (emirate?: string) => EMIRATES_LIST.find((em) => em.id === emirate) || EMIRATES_LIST[0];
+
+const safeDecode = (value: string) => {
+    try {
+        return decodeURIComponent(value || '');
+    } catch {
+        return value || '';
+    }
+};
+
+const looksLikeGoogleMapsUrl = (value?: string | null) => GOOGLE_MAPS_URL_PATTERN.test(value || '');
+const isShortGoogleMapsUrl = (value?: string | null) => GOOGLE_MAPS_SHORT_URL_PATTERN.test(value || '');
+
+const findGoogleMapsInput = (...values: Array<string | undefined | null>) => (
+    values.find((value) => looksLikeGoogleMapsUrl(value)) || ''
+).trim();
 
 type RemoteAddressResult = {
     lat: number;
@@ -38,10 +56,26 @@ type RemoteAddressResult = {
 };
 
 const parseCoordinatesFromText = (value: string): { lat: number; lng: number } | null => {
-    const decoded = decodeURIComponent(value || '');
+    const decoded = safeDecode(value || '');
+
+    const googleLatLng = decoded.match(/!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/);
+    if (googleLatLng) {
+        const lat = Number(googleLatLng[1]);
+        const lng = Number(googleLatLng[2]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+    }
+
+    const googleLngLat = decoded.match(/!4d(-?\d{1,3}(?:\.\d+)?)!3d(-?\d{1,2}(?:\.\d+)?)/);
+    if (googleLngLat) {
+        const lat = Number(googleLngLat[2]);
+        const lng = Number(googleLngLat[1]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+    }
+
     const patterns = [
         /@(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
-        /[?&](?:q|ll|query)=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /[?&](?:q|ll|query|center|destination|origin)=loc:(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+        /[?&](?:q|ll|query|center|destination|origin)=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
         /(?:^|\s)(-?\d{1,2}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})(?:\s|$)/
     ];
 
@@ -91,12 +125,18 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         }
     }, []);
 
-    const googleMapsUrl = useMemo(() => buildGoogleMapsSearchUrl({
+    const directGoogleMapsInput = useMemo(
+        () => findGoogleMapsInput(googleMapsUrlField, activeProperty?.address),
+        [googleMapsUrlField, activeProperty?.address]
+    );
+    const hasShortGoogleMapsLink = isShortGoogleMapsUrl(directGoogleMapsInput);
+
+    const googleMapsUrl = useMemo(() => directGoogleMapsInput || buildGoogleMapsSearchUrl({
         lat: manualLat,
         lng: manualLng,
         address: activeProperty?.address,
         emirate: activeProperty?.emirate || fallbackEmirate.id
-    }), [manualLat, manualLng, activeProperty?.address, activeProperty?.emirate, fallbackEmirate.id]);
+    }), [directGoogleMapsInput, manualLat, manualLng, activeProperty?.address, activeProperty?.emirate, fallbackEmirate.id]);
 
     const osmPreviewUrl = useMemo(() => {
         const lat = Number(manualLat) || fallbackEmirate.lat;
@@ -104,6 +144,20 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const padding = 0.004;
         return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - padding},${lat - padding},${lng + padding},${lat + padding}&layer=mapnik&marker=${lat},${lng}`;
     }, [manualLat, manualLng, fallbackEmirate.lat, fallbackEmirate.lng]);
+
+    const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        const patch: any = { address: val };
+        if (looksLikeGoogleMapsUrl(val)) {
+            setGoogleMapsUrlField(val);
+            patch.googleMapsUrl = val;
+            patch.location = {
+                ...(activeProperty?.location || {}),
+                googleMapsUrl: val
+            };
+        }
+        updateProperty(0, patch);
+    };
 
     const handleGoogleMapsUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -177,7 +231,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     longitude: geo.lng,
                     address: geo.address,
                     emirate: geo.emirate,
-                    googleMapsUrl: googleMapsUrlField,
+                    googleMapsUrl: googleMapsUrlField || directGoogleMapsInput,
                     plusCode: plusCodeField,
                     quality: 'EXACT_GPS',
                     updatedAt: new Date().toISOString(),
@@ -187,7 +241,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 lng: geo.lng,
                 latitude: geo.lat,
                 longitude: geo.lng,
-                googleMapsUrl: googleMapsUrlField,
+                googleMapsUrl: googleMapsUrlField || directGoogleMapsInput,
                 plusCode: plusCodeField
             } as any);
 
@@ -286,6 +340,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const handleRemotePropertySearch = async () => {
         const enteredAddress = (activeProperty?.address || '').trim();
         const selectedEmirate = activeProperty?.emirate || fallbackEmirate.id;
+        const mapsInput = findGoogleMapsInput(enteredAddress, googleMapsUrlField);
         const searchableText = [enteredAddress, googleMapsUrlField, plusCodeField].filter(Boolean).join(' ');
 
         if (!enteredAddress && !googleMapsUrlField && !plusCodeField) {
@@ -298,23 +353,34 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         try {
             const parsed = parseCoordinatesFromText(searchableText);
             if (parsed) {
+                const addressIsMapLink = looksLikeGoogleMapsUrl(enteredAddress);
                 commitGeoAnchor({
                     lat: parsed.lat,
                     lng: parsed.lng,
-                    address: enteredAddress || `${selectedEmirate}, UAE`,
+                    address: addressIsMapLink ? `${selectedEmirate}, UAE` : enteredAddress || `${selectedEmirate}, UAE`,
                     emirate: selectedEmirate,
                     city: activeProperty?.city || selectedEmirate,
                     area: activeProperty?.area || '',
-                    source: 'admin_manual',
-                    placeId: 'MANUAL',
-                    verified: false,
-                    requiresGeoReview: true,
-                    dispatchReady: false
+                    source: mapsInput ? 'google_maps' : 'admin_manual',
+                    placeId: mapsInput ? 'GOOGLE_MAPS_LINK' : 'MANUAL',
+                    verified: Boolean(mapsInput),
+                    requiresGeoReview: !mapsInput,
+                    dispatchReady: Boolean(mapsInput)
                 });
                 return;
             }
 
-            const queryText = `${enteredAddress || plusCodeField}, ${selectedEmirate}, UAE`;
+            if (mapsInput) {
+                if (isShortGoogleMapsUrl(mapsInput)) {
+                    setLocationError('This is a short Google Maps share link. Open it in Google Maps, copy the full expanded URL that includes @latitude,longitude, or paste the coordinates directly. The Open Google Maps button can still open this link.');
+                } else {
+                    setLocationError('This Google Maps link does not expose coordinates. Copy the full URL after the map loads, or paste exact latitude and longitude manually.');
+                }
+                return;
+            }
+
+            const cleanAddress = looksLikeGoogleMapsUrl(enteredAddress) ? '' : enteredAddress;
+            const queryText = `${cleanAddress || plusCodeField}, ${selectedEmirate}, UAE`;
             const resolved = await resolveWithOpenStreetMap(queryText);
 
             if (!resolved || !isValidLatLng(resolved.lat, resolved.lng)) {
@@ -406,9 +472,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 label={readable(t('onboarding.address'), 'Property Address')}
                                 placeholder="Building name, street, area, emirate — or paste a Google Maps link"
                                 value={activeProperty?.address || ''}
-                                onChange={(e) => updateProperty(0, { address: e.target.value } as any)}
+                                onChange={handleAddressChange}
                                 autoComplete="off"
-                                helperText="Owner can be at home. Type the actual property address, then click Find Property Address. Use My Current Location only if you are standing at the property."
+                                helperText="Owner can be at home. Paste full Google Maps URLs with @latitude,longitude for auto-preview. Short maps.app.goo.gl links can be opened but must be expanded first."
                                 FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.48)', fontWeight: 700 } }}
                                 sx={fieldSx}
                             />
@@ -447,7 +513,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                     <TextField
                                         fullWidth
                                         label="Google Maps URL"
-                                        placeholder="Paste link if the property is elsewhere"
+                                        placeholder="Paste full link if the property is elsewhere"
                                         value={googleMapsUrlField}
                                         onChange={handleGoogleMapsUrlChange}
                                         autoComplete="off"
@@ -473,6 +539,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 <Button variant="outlined" onClick={useCurrentLocation} disabled={locating} startIcon={locating ? <CircularProgress size={14} /> : <LocateFixed size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Use My Current Location</Button>
                                 <Button variant="outlined" href={googleMapsUrl} target="_blank" rel="noreferrer" startIcon={<ExternalLink size={16} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>Open in Google Maps</Button>
                             </Stack>
+
+                            {hasShortGoogleMapsLink && (
+                                <Alert severity="info">
+                                    Short Google Maps share links open correctly, but browsers cannot read their hidden coordinates. Open the link, copy the full URL after Google Maps loads, or paste exact coordinates to update the preview.
+                                </Alert>
+                            )}
                         </Stack>
 
                         <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -484,7 +556,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                         <Navigation size={20} color={binThemeTokens.gold} /> Live coordinate map preview
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
-                                        Type the property address or paste a Google Maps link, then click Find Property Address. The owner does not need to be physically at the property.
+                                        Type the property address, paste a full Google Maps URL, or enter coordinates, then click Find Property Address. The owner does not need to be physically at the property.
                                     </Typography>
                                 </Box>
                                 <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
