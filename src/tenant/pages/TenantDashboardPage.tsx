@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
-import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -10,6 +10,7 @@ import { getContractModeProfile, getPropertyIntelligenceProfile, resolveContract
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const CLOSED_TICKET_STATUSES = new Set(['CLOSED', 'DISPUTED', 'COMPLETED', 'CANCELLED', 'CANCELED']);
 
 const formatDate = (value: any) => {
   if (!value) return 'Pending';
@@ -19,6 +20,17 @@ const formatDate = (value: any) => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? 'Pending' : parsed.toLocaleDateString();
 };
+
+const getMillis = (value: any) => {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (value?.seconds) return value.seconds * 1000;
+  if (value?._seconds) return value._seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const isActiveTicket = (ticket: any) => !CLOSED_TICKET_STATUSES.has(String(ticket?.status || '').trim().toUpperCase());
 
 async function safeGetDocument(collectionName: string, id?: string) {
   if (!id) return null;
@@ -52,6 +64,8 @@ export default function TenantDashboardPage() {
   const [contractData, setContractData] = useState<any>(null);
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
+  const [permissionWarning, setPermissionWarning] = useState('');
+  const [ticketReadWarning, setTicketReadWarning] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +75,7 @@ export default function TenantDashboardPage() {
         return;
       }
       try {
+        setPermissionWarning('');
         let nextUnit: any = null;
         let nextProperty: any = null;
         let nextContract: any = null;
@@ -93,7 +108,8 @@ export default function TenantDashboardPage() {
           err?.message?.includes('permission-denied') ||
           err?.message?.includes('insufficient permissions');
         if (isPermissionDenied) {
-          console.warn('[TenantDashboard] residence fetch failed: permission-denied. Failing silently with empty state.');
+          console.warn('[TenantDashboard] residence fetch failed: permission-denied.', err);
+          if (!cancelled) setPermissionWarning(tx('dash.permissionWarning', 'Some residence records could not load because access rules blocked them. Please contact BIN GROUP Operations if this does not refresh.'));
         } else {
           console.error('[TenantDashboard] residence fetch failed:', err);
         }
@@ -103,19 +119,61 @@ export default function TenantDashboardPage() {
     }
     loadResidence();
     return () => { cancelled = true; };
-  }, [user?.uid, user?.email]);
+  }, [user?.uid, user?.email, tx]);
 
   useEffect(() => {
     if (!user?.uid) return;
-    const qActive = query(collection(db, 'maintenanceTickets'), where('tenantId', '==', user.uid), where('status', 'not-in', ['CLOSED', 'DISPUTED']), orderBy('status'), orderBy('createdAt', 'desc'), limit(3));
-    const unsubActive = onSnapshot(qActive, (snap) => setActiveTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] active tickets listener failed:', err));
+    setTicketReadWarning('');
+    const normalizedEmail = normalizeEmail(user.email);
+    const ticketSources = [
+      { field: 'tenantId', value: user.uid },
+      { field: 'createdBy', value: user.uid },
+      { field: 'requesterId', value: user.uid },
+      { field: 'tenantEmail', value: normalizedEmail },
+      { field: 'reporterEmail', value: normalizedEmail },
+      { field: 'requesterEmail', value: normalizedEmail },
+      { field: 'unitId', value: unitData?.id || unitData?.unitId },
+      { field: 'propertyId', value: unitData?.propertyId || propertyData?.id || contractData?.propertyId },
+    ].filter((source) => source.value);
+
+    const uniqueSources = Array.from(new Map(ticketSources.map((source) => [`${source.field}:${source.value}`, source])).values());
+    const buckets: Record<string, any[]> = {};
+    const publish = () => {
+      const deduped = new Map<string, any>();
+      Object.values(buckets).flat().forEach((ticket) => {
+        if (ticket?.id && isActiveTicket(ticket)) deduped.set(ticket.id, ticket);
+      });
+      const rows = Array.from(deduped.values())
+        .sort((a, b) => getMillis(b.updatedAt || b.createdAt) - getMillis(a.updatedAt || a.createdAt))
+        .slice(0, 3);
+      setActiveTickets(rows);
+    };
+
+    const unsubs = uniqueSources.map((source) => {
+      const key = `${source.field}:${source.value}`;
+      try {
+        const qActive = query(collection(db, 'maintenanceTickets'), where(source.field, '==', source.value), limit(20));
+        return onSnapshot(qActive, (snap) => {
+          buckets[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          publish();
+        }, (err) => {
+          console.warn(`[TenantDashboard] active tickets listener failed for ${key}:`, err);
+          setTicketReadWarning(tx('dash.ticketReadWarning', 'Some ticket records could not load. Your visible list may be incomplete until access rules are refreshed.'));
+        });
+      } catch (err) {
+        console.warn(`[TenantDashboard] active ticket query could not start for ${key}:`, err);
+        return () => undefined;
+      }
+    });
+
+    return () => unsubs.forEach((unsub) => unsub());
+  }, [user?.uid, user?.email, unitData?.id, unitData?.unitId, unitData?.propertyId, propertyData?.id, contractData?.propertyId, tx]);
+
+  useEffect(() => {
     const qNotices = query(collection(db, 'systemLogs'), where('type', '==', 'TENANT_NOTICE'), limit(2));
     const unsubNotices = onSnapshot(qNotices, (snap) => setNotices(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] notices listener failed:', err));
-    return () => {
-      unsubActive();
-      unsubNotices();
-    };
-  }, [user?.uid]);
+    return () => unsubNotices();
+  }, []);
 
   const contractMode = useMemo(() => resolveContractMode(contractData || {}), [contractData]);
   const contractProfile = useMemo(() => getContractModeProfile(contractMode), [contractMode]);
@@ -129,6 +187,7 @@ export default function TenantDashboardPage() {
     { label: tx('service.moving', 'Moving & Packing'), icon: <Truck size={20} />, route: '/tenant/request?category=moving', visible: true },
     { label: showMaintenance ? tx('nav.maintenance', 'Maintenance') : tx('service.contactMgmt', 'Contact Management'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management', visible: true },
     { label: tx('nav.ai_studio', 'AI Design Studio'), icon: <Paintbrush size={20} />, route: '/tenant/design-studio', visible: true },
+    { label: tx('service.handover', 'Move-In / Move-Out'), icon: <Home size={20} />, route: '/tenant/documents?type=handover', visible: true },
     { label: tx('service.gatePass', 'Gate Pass'), icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass', visible: showManagement },
     { label: tx('service.amenities', 'Amenities'), icon: <Dumbbell size={20} />, route: '/tenant/amenities', visible: showManagement },
     { label: tx('service.notices', 'Notices'), icon: <Bell size={20} />, route: '/tenant/notices', visible: true },
@@ -187,21 +246,18 @@ export default function TenantDashboardPage() {
 
         <Grid container spacing={4}>
           <Grid item xs={12} lg={8}>
-            {showLedger ? (
-              <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                  <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {tx('dash.lease_financials', 'Lease & Financials')}</Typography>
-                  <Chip label={contractData?.status === 'ACTIVE' ? tx('dash.activeLease', 'ACTIVE LEASE') : (contractData?.status || tx('dash.noActiveLease', 'NO ACTIVE LEASE')).replace(/_/g, ' ')} sx={{ bgcolor: contractData?.status === 'ACTIVE' ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', color: contractData?.status === 'ACTIVE' ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950 }} />
-                </Stack>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.contractTerm', 'CONTRACT TERM')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>{formatDate(contractData?.startDate || contractData?.validFrom)} - {formatDate(contractData?.endDate || contractData?.validTo)}</Typography></Box></Grid>
-                  <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.upcomingPayment', 'UPCOMING PAYMENT')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>{contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : '—'}</Typography></Box></Grid>
-                  <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{tx('dash.viewLedgerDocs', 'VIEW LEDGER / DOCUMENTS')}</Button></Grid>
-                </Grid>
-              </Paper>
-            ) : (
-              <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger are not shown for this access mode. This dashboard focuses on service requests, property access, notices, and available management tools.')}</Alert>
-            )}
+            <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {showLedger ? tx('dash.lease_financials', 'Lease & Financials') : tx('dash.paymentsDocsReceipts', 'Payments, Documents & Receipts')}</Typography>
+                <Chip label={showLedger ? (contractData?.status === 'ACTIVE' ? tx('dash.activeLease', 'ACTIVE LEASE') : (contractData?.status || tx('dash.noActiveLease', 'NO ACTIVE LEASE')).replace(/_/g, ' ')) : tx('dash.accessControlled', 'ACCESS CONTROLLED')} sx={{ bgcolor: showLedger && contractData?.status === 'ACTIVE' ? alpha('#10b981', 0.1) : 'rgba(255,255,255,0.05)', color: showLedger && contractData?.status === 'ACTIVE' ? '#10b981' : 'rgba(255,255,255,0.65)', fontWeight: 950 }} />
+              </Stack>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.contractTerm', 'CONTRACT TERM')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>{formatDate(contractData?.startDate || contractData?.validFrom)} - {formatDate(contractData?.endDate || contractData?.validTo)}</Typography></Box></Grid>
+                <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{showLedger ? tx('dash.upcomingPayment', 'UPCOMING PAYMENT') : tx('dash.receiptAccess', 'RECEIPT ACCESS')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>{showLedger && contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : tx('dash.viaDocsVault', 'Documents Vault')}</Typography></Box></Grid>
+                <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showLedger ? '/tenant/payments' : '/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{showLedger ? tx('dash.viewPayments', 'VIEW PAYMENTS') : tx('dash.viewDocsReceipts', 'VIEW DOCS / RECEIPTS')}</Button></Grid>
+              </Grid>
+              {!showLedger && <Alert severity="info" sx={{ mt: 3, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger are not shown for this access mode. This dashboard still keeps service requests, property access, notices, documents, and receipts reachable.')}</Alert>}
+            </Paper>
 
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
