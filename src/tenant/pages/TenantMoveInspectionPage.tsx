@@ -9,7 +9,7 @@ import {
   Camera, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, FileText,
   Home, Key, Minus, Plus, Save, X, Zap, Droplets,
 } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp } from '../../lib/firebase';
+import { addDoc, collection, db, serverTimestamp, storage, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -124,24 +124,32 @@ export default function TenantMoveInspectionPage() {
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingFor) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = String(ev.target?.result || '');
+    
+    try {
       const { roomId, item } = uploadingFor;
+      const path = `inspections/${user?.uid || 'anonymous'}/${Date.now()}_${roomId}_${item.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const storageRef = ref(storage, path);
+      
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+
       setState(prev => ({
         ...prev,
         roomChecks: {
           ...prev.roomChecks,
           [roomId]: {
             ...prev.roomChecks[roomId],
-            [item]: { ...prev.roomChecks[roomId][item], photoUrl: dataUrl },
+            [item]: { ...prev.roomChecks[roomId][item], photoUrl: downloadUrl },
           },
         },
       }));
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+      setError('Failed to upload photo. Please try again.');
+    } finally {
       setUploadingFor(null);
-    };
-    reader.readAsDataURL(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const roomProgress = (roomId: string) => {
