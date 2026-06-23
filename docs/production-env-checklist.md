@@ -7,6 +7,18 @@
 
 ---
 
+## 0. Firebase Billing Plan (Blaze) — Required Before Any Provider Secret Below Works
+
+> [!CAUTION]
+> Firebase's free **Spark** plan blocks all outbound networking from Cloud Functions. On Spark, every secret configured in Section 5 below (Stripe, SMTP, OpenAI, Gemini, WhatsApp/Meta Graph API) and the Twilio SMS fallback will deploy successfully and then fail silently at runtime — deployment succeeding proves nothing about outbound network access, which Spark restricts separately.
+
+1. Firebase Console → **Project Settings** (gear icon) → **Usage and billing**
+2. Confirm the plan is **Blaze (Pay as you go)**, not Spark
+3. If still on Spark, upgrade before testing or relying on any function that calls Stripe, Twilio, Meta/WhatsApp, OpenAI, or Gemini
+4. Record confirmation in `launch_package/launch-proof-gates.json` under the `firebaseBillingPlan` gate
+
+---
+
 ## 1. Firebase Core Secrets
 
 | Secret Name | Where to Get It | Notes |
@@ -124,6 +136,7 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 
 ## 8. Verification Checklist Before Launch
 
+- [ ] Firebase project confirmed on **Blaze (pay-as-you-go)** plan, not Spark
 - [ ] All 6 `VITE_FIREBASE_*` keys set in GitHub Secrets
 - [ ] `VITE_APP_CHECK_SITE_KEY` set and registered in Firebase App Check console
 - [ ] `VITE_ENABLE_FIREBASE_APPCHECK=true` set in GitHub Secrets (production only)
