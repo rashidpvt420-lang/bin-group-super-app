@@ -125,7 +125,7 @@ const ReportingDashboard: React.FC = () => {
 
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text("This document is a certified institutional export. BIN GROUP Dubai HQ.", 105, 280, { align: 'center' });
+        doc.text("This document is a certified institutional export. BIN GROUP HQ, Al Ain, Abu Dhabi, UAE.", 105, 280, { align: 'center' });
         doc.save(`Sovereign_Report_${selectedEmirate}_${Date.now()}.pdf`);
     };
 
