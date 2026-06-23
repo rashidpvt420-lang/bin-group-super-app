@@ -177,17 +177,17 @@ export default function BrokerDashboardPage() {
                                 <Box sx={{ p: 1.5, width: 'fit-content', bgcolor: alpha(card.color, 0.1), borderRadius: 3, color: card.color, mb: 1 }}>
                                     {card.icon}
                                 </Box>
-                                <Typography variant="h4" fontWeight="950" color="#FFF">{card.value}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, letterSpacing: 1.5 }}>{card.label}</Typography>
-                                <Typography variant="caption" sx={{ color: alpha(card.color, 0.6), fontWeight: 700, mt: 1 }}>{card.desc}</Typography>
+                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.textPrimary}>{card.value}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1.5 }}>{card.label}</Typography>
+                                <Typography variant="caption" sx={{ color: card.color, fontWeight: 700, mt: 1 }}>{card.desc}</Typography>
                             </Stack>
                         </Paper>
                     </Grid>
                 ))}
 
                 <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 4, borderRadius: 8, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                        <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Paper sx={{ p: 4, borderRadius: 8, bgcolor: binThemeTokens.softCanvas, border: '1px solid #E5E7EB', height: '100%' }}>
+                        <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                             <ArrowUpRight size={20} color={binThemeTokens.gold} /> {tx('broker.dash.rapid_commands', 'RAPID COMMANDS')}
                         </Typography>
                         <Grid container spacing={3}>
@@ -198,16 +198,16 @@ export default function BrokerDashboardPage() {
                                         variant="outlined"
                                         onClick={() => navigate(action.path)}
                                         startIcon={React.cloneElement(action.icon as React.ReactElement, { size: 18 })}
-                                        sx={{ 
-                                            py: 3, 
-                                            borderRadius: 4, 
-                                            fontWeight: 950, 
+                                        sx={{
+                                            py: 3,
+                                            borderRadius: 4,
+                                            fontWeight: 950,
                                             fontSize: '0.85rem',
-                                            color: '#FFF',
-                                            borderColor: 'rgba(255,255,255,0.1)',
+                                            color: binThemeTokens.textPrimary,
+                                            borderColor: '#E5E7EB',
                                             '&:hover': {
-                                                bgcolor: 'rgba(255,255,255,0.05)',
-                                                borderColor: '#FFF'
+                                                bgcolor: '#F3F4F6',
+                                                borderColor: binThemeTokens.gold
                                             }
                                         }}
                                     >
@@ -240,24 +240,24 @@ export default function BrokerDashboardPage() {
                 </Grid>
 
                 <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: 4, borderRadius: 8, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                        <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4 }}>{tx('broker.dash.recent_activity', 'RECENT ACTIVITY')}</Typography>
+                    <Paper sx={{ p: 4, borderRadius: 8, bgcolor: binThemeTokens.softCanvas, border: '1px solid #E5E7EB', height: '100%' }}>
+                        <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ mb: 4 }}>{tx('broker.dash.recent_activity', 'RECENT ACTIVITY')}</Typography>
                         <Stack spacing={3}>
                             {recentLeads.map((lead, idx) => (
                                 <Box key={lead.id}>
                                     <Stack direction="row" spacing={2} alignItems="center">
-                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: idx === 0 ? binThemeTokens.gold : 'rgba(255,255,255,0.1)' }} />
+                                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: idx === 0 ? binThemeTokens.gold : '#E5E7EB' }} />
                                         <Box sx={{ flex: 1 }}>
-                                            <Typography variant="body2" fontWeight="900" color="#FFF">{lead.leadName}</Typography>
+                                            <Typography variant="body2" fontWeight="900" color={binThemeTokens.textPrimary}>{lead.leadName}</Typography>
                                             <Typography variant="caption" color="textSecondary">{lead.status.toUpperCase()} • {lead.createdAt?.toDate ? lead.createdAt.toDate().toLocaleDateString() : 'Just now'}</Typography>
                                         </Box>
-                                        <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
+                                        <ChevronRight size={16} color="#9CA3AF" />
                                     </Stack>
-                                    {idx < recentLeads.length - 1 && <Divider sx={{ mt: 2, borderColor: 'rgba(255,255,255,0.03)' }} />}
+                                    {idx < recentLeads.length - 1 && <Divider sx={{ mt: 2, borderColor: '#F1F2F4' }} />}
                                 </Box>
                             ))}
                             {recentLeads.length === 0 && (
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>{tx('broker.dash.no_activity', 'No recent activity found.')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#9CA3AF', textAlign: 'center', py: 4 }}>{tx('broker.dash.no_activity', 'No recent activity found.')}</Typography>
                             )}
                         </Stack>
                         <Button 

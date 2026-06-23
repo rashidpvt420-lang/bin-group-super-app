@@ -104,7 +104,7 @@ export default function BrokerLeadsPage() {
             case 'negotiation': return '#f59e0b';
             case 'converted': return '#10b981';
             case 'rejected': return '#ef4444';
-            default: return 'rgba(255,255,255,0.4)';
+            default: return binThemeTokens.textSecondary;
         }
     };
 
@@ -130,33 +130,33 @@ export default function BrokerLeadsPage() {
             }
         >
             {/* ─── FILTERS & SEARCH ───────────────────────────────────────────── */}
-            <Paper sx={{ p: 2, mb: 4, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
+            <Paper sx={{ p: 2, mb: 4, bgcolor: binThemeTokens.softCanvas, border: '1px solid #E5E7EB', borderRadius: 4 }}>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                    <TextField 
-                        fullWidth 
-                        placeholder="Search leads by name or interest..." 
-                        variant="standard" 
+                    <TextField
+                        fullWidth
+                        placeholder="Search leads by name or interest..."
+                        variant="standard"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{ 
-                            disableUnderline: true, 
-                            startAdornment: <Search size={18} color="rgba(255,255,255,0.3)" style={{ marginRight: 12 }} />,
-                            sx: { color: '#FFF', fontWeight: 800, px: 2 }
+                        InputProps={{
+                            disableUnderline: true,
+                            startAdornment: <Search size={18} color="#9CA3AF" style={{ marginRight: 12 }} />,
+                            sx: { color: binThemeTokens.textPrimary, fontWeight: 800, px: 2 }
                         }}
                     />
-                    <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-                    <IconButton sx={{ color: 'rgba(255,255,255,0.4)' }}><Filter size={20} /></IconButton>
+                    <Divider orientation="vertical" flexItem sx={{ borderColor: '#E5E7EB' }} />
+                    <IconButton sx={{ color: binThemeTokens.textSecondary }}><Filter size={20} /></IconButton>
                 </Stack>
             </Paper>
 
             {/* ─── LEADS GRID ────────────────────────────────────────────────── */}
             {filteredLeads.length === 0 ? (
-                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)' }}>
-                    <Users size={48} color="rgba(255,255,255,0.1)" />
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 900, mt: 2 }}>
+                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: binThemeTokens.softCanvas, borderRadius: 6, border: '1px dashed #E5E7EB' }}>
+                    <Users size={48} color="#9CA3AF" />
+                    <Typography variant="h6" sx={{ color: '#9CA3AF', fontWeight: 900, mt: 2 }}>
                         NO ACTIVE LEADS IN PIPELINE
                     </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1 }}>
+                    <Typography variant="body2" sx={{ color: '#9CA3AF', mt: 1 }}>
                         Start by clicking the "Add New Lead" button above.
                     </Typography>
                 </Paper>
@@ -164,23 +164,23 @@ export default function BrokerLeadsPage() {
                 <Grid container spacing={3}>
                     {filteredLeads.map(lead => (
                         <Grid item xs={12} md={6} lg={4} key={lead.id}>
-                            <Paper sx={{ 
-                                p: 0, 
-                                bgcolor: 'rgba(22, 22, 24, 0.7)', 
-                                borderRadius: 6, 
-                                border: '1px solid rgba(255,255,255,0.05)',
+                            <Paper sx={{
+                                p: 0,
+                                bgcolor: binThemeTokens.softCanvas,
+                                borderRadius: 6,
+                                border: '1px solid #E5E7EB',
                                 overflow: 'hidden',
                                 transition: 'all 0.3s ease',
                                 '&:hover': { transform: 'translateY(-4px)', borderColor: alpha(getStatusColor(lead.status), 0.3), boxShadow: `0 10px 30px -10px ${alpha(getStatusColor(lead.status), 0.2)}` }
                             }}>
                                 {/* Status Header */}
-                                <Box sx={{ p: 1, bgcolor: alpha(getStatusColor(lead.status), 0.05), borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3 }}>
-                                    <Chip 
-                                        label={lead.status.toUpperCase()} 
-                                        size="small" 
-                                        sx={{ bgcolor: alpha(getStatusColor(lead.status), 0.1), color: getStatusColor(lead.status), fontWeight: 950, fontSize: '0.65rem' }} 
+                                <Box sx={{ p: 1, bgcolor: alpha(getStatusColor(lead.status), 0.05), borderBottom: '1px solid #F1F2F4', display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3 }}>
+                                    <Chip
+                                        label={lead.status.toUpperCase()}
+                                        size="small"
+                                        sx={{ bgcolor: alpha(getStatusColor(lead.status), 0.1), color: getStatusColor(lead.status), fontWeight: 950, fontSize: '0.65rem' }}
                                     />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>
+                                    <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 800 }}>
                                         {lead.createdAt?.toDate ? lead.createdAt.toDate().toLocaleDateString() : 'N/A'}
                                     </Typography>
                                 </Box>
@@ -188,9 +188,9 @@ export default function BrokerLeadsPage() {
                                 <Box sx={{ p: 3 }}>
                                     <Stack spacing={2}>
                                         <Box>
-                                            <Typography variant="h6" fontWeight="950" color="#FFF">{lead.leadName}</Typography>
+                                            <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>{lead.leadName}</Typography>
                                             <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                                                <Chip label={lead.leadType.toUpperCase()} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', borderColor: 'rgba(255,255,255,0.1)' }} />
+                                                <Chip label={lead.leadType.toUpperCase()} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', color: binThemeTokens.textSecondary, borderColor: '#E5E7EB' }} />
                                             </Stack>
                                         </Box>
 
@@ -209,29 +209,29 @@ export default function BrokerLeadsPage() {
                                             </Box>
                                         </Stack>
 
-                                        <Divider sx={{ borderColor: 'rgba(255,255,255,0.03)' }} />
+                                        <Divider sx={{ borderColor: '#F1F2F4' }} />
 
                                         <Box>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, letterSpacing: 1 }}>INTEREST / BUDGET</Typography>
-                                            <Typography variant="body2" fontWeight="800" color="#FFF" sx={{ mt: 0.5 }}>
-                                                {lead.propertyInterest || 'General Interest'} 
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>INTEREST / BUDGET</Typography>
+                                            <Typography variant="body2" fontWeight="800" color={binThemeTokens.textPrimary} sx={{ mt: 0.5 }}>
+                                                {lead.propertyInterest || 'General Interest'}
                                                 {lead.budget && <Typography component="span" sx={{ color: '#10b981', ml: 1 }}>• AED {lead.budget}</Typography>}
                                             </Typography>
                                         </Box>
 
                                         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                                            <Select 
+                                            <Select
                                                 fullWidth
-                                                size="small" 
-                                                value={lead.status} 
+                                                size="small"
+                                                value={lead.status}
                                                 onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
-                                                sx={{ 
-                                                    bgcolor: 'rgba(255,255,255,0.03)', 
-                                                    color: '#FFF', 
-                                                    fontWeight: 900, 
+                                                sx={{
+                                                    bgcolor: '#FFFFFF',
+                                                    color: binThemeTokens.textPrimary,
+                                                    fontWeight: 900,
                                                     fontSize: '0.75rem',
                                                     borderRadius: 2,
-                                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.05)' } 
+                                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E5E7EB' }
                                                 }}
                                             >
                                                 <MenuItem value="new">NEW</MenuItem>
@@ -242,7 +242,7 @@ export default function BrokerLeadsPage() {
                                                 <MenuItem value="rejected">REJECTED</MenuItem>
                                             </Select>
                                             <Tooltip title="View Details">
-                                                <IconButton sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: 'rgba(255,255,255,0.4)' }}>
+                                                <IconButton sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 2, color: binThemeTokens.textSecondary }}>
                                                     <ExternalLink size={18} />
                                                 </IconButton>
                                             </Tooltip>

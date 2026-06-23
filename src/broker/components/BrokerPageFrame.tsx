@@ -39,30 +39,30 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                     <Box>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ mb: 1 }}>
                             {showBack && (
-                                <Button 
-                                    onClick={() => navigate(-1)} 
+                                <Button
+                                    onClick={() => navigate(-1)}
                                     size="small"
-                                    sx={{ color: 'rgba(255,255,255,0.4)', minWidth: 0, p: 0.5 }}
+                                    sx={{ color: binThemeTokens.textSecondary, minWidth: 0, p: 0.5 }}
                                 >
                                     <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                 </Button>
                             )}
-                            <Typography 
-                                variant="overline" 
-                                sx={{ 
-                                    color: binThemeTokens.gold, 
-                                    fontWeight: 950, 
-                                    letterSpacing: 4 
+                            <Typography
+                                variant="overline"
+                                sx={{
+                                    color: binThemeTokens.gold,
+                                    fontWeight: 950,
+                                    letterSpacing: 4
                                 }}
                             >
                                 {t('dash.terminal.broker') || 'SOVEREIGN BROKERAGE'}
                             </Typography>
                         </Stack>
-                        <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ letterSpacing: -1 }}>
+                        <Typography variant="h3" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ letterSpacing: -1 }}>
                             {title}
                         </Typography>
                         {subtitle && (
-                            <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, mt: 1 }}>
+                            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, mt: 1 }}>
                                 {subtitle}
                             </Typography>
                         )}
@@ -71,24 +71,24 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                 </Stack>
 
                 {breadcrumbs.length > 0 && (
-                    <Breadcrumbs 
-                        separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: 'rgba(255,255,255,0.2)' }} />}
+                    <Breadcrumbs
+                        separator={<ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none', color: '#9CA3AF' }} />}
                         sx={{ mt: 2, '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' } }}
                     >
-                        <MuiLink 
-                            component="button" 
-                            onClick={() => navigate('/broker')} 
-                            sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 0.5 }}
+                        <MuiLink
+                            component="button"
+                            onClick={() => navigate('/broker')}
+                            sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 0.5 }}
                         >
                             <Home size={14} /> {t('nav.dashboard') || 'DASHBOARD'}
                         </MuiLink>
                         {breadcrumbs.map((bc, idx) => (
-                            <Typography 
-                                key={idx} 
-                                sx={{ 
-                                    color: idx === breadcrumbs.length - 1 ? binThemeTokens.gold : 'rgba(255,255,255,0.4)', 
-                                    fontWeight: 900, 
-                                    fontSize: '0.8rem' 
+                            <Typography
+                                key={idx}
+                                sx={{
+                                    color: idx === breadcrumbs.length - 1 ? binThemeTokens.gold : binThemeTokens.textSecondary,
+                                    fontWeight: 900,
+                                    fontSize: '0.8rem'
                                 }}
                             >
                                 {bc.label}
