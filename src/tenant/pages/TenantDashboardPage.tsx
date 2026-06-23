@@ -217,8 +217,6 @@ export default function TenantDashboardPage() {
         </Box>
 
         <RoleJourneyStrip role="tenant" dark />
-        {permissionWarning && <Alert severity="warning" sx={{ bgcolor: alpha('#f59e0b', 0.1), color: '#fff', border: `1px solid ${alpha('#f59e0b', 0.35)}`, borderRadius: 3 }}>{permissionWarning}</Alert>}
-        {ticketReadWarning && <Alert severity="warning" sx={{ bgcolor: alpha('#f59e0b', 0.1), color: '#fff', border: `1px solid ${alpha('#f59e0b', 0.35)}`, borderRadius: 3 }}>{ticketReadWarning}</Alert>}
 
         <Button variant="contained" onClick={() => navigate('/tenant/request')} data-testid="tenant-new-request" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 4, fontWeight: 950, px: 4, py: 1.5 }}>
           {tx('dash.newRequestBtn', 'New Request')}
