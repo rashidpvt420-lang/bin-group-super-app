@@ -11,6 +11,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 export default function BrokerDashboardPage() {
     const { user } = useRole();
@@ -145,6 +146,8 @@ export default function BrokerDashboardPage() {
                 </Button>
             }
         >
+            <RoleJourneyStrip role="broker" />
+
             <Grid container spacing={3}>
                 {statCards.map((card, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>

@@ -60,6 +60,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, logAuditAction, onSnapshotSplitIn } from '../../shared-exports';
+import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { formatUiDate, normalizeEmail, textOrPending, uniqueRows } from '../utils/technicianDashboardFields';
 import {
@@ -326,6 +327,8 @@ export default function TechnicianDashboardPage() {
                 </Box>
                 <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(ui.gold, 0.12), border: `2px solid ${alpha(ui.gold, 0.55)}`, color: ui.gold, fontWeight: 950, fontSize: 26, borderRadius: 2 }}>{String(technicianName).charAt(0) || 'T'}</Avatar>
             </Box>
+
+            <RoleJourneyStrip role="technician" />
 
             <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
