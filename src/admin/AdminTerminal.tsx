@@ -54,7 +54,13 @@ export default function AdminTerminal() {
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       const url = await withBridgeToken(targetUrl);
-      if (!cancelled) window.location.replace(url);
+      if (!cancelled) {
+        if (url.startsWith(ADMIN_PANEL_URL)) {
+          window.location.replace(url);
+        } else {
+          window.location.replace(ADMIN_PANEL_URL + '/dashboard');
+        }
+      }
     }, 900);
     return () => {
       cancelled = true;
@@ -63,11 +69,16 @@ export default function AdminTerminal() {
   }, [targetUrl]);
 
   const openAdminPanel = async () => {
-    window.location.href = await withBridgeToken(targetUrl);
+    const url = await withBridgeToken(targetUrl);
+    if (url.startsWith(ADMIN_PANEL_URL)) {
+      window.location.href = url;
+    } else {
+      window.location.href = ADMIN_PANEL_URL + '/dashboard';
+    }
   };
 
   const openAdminLogin = () => {
-    window.location.href = loginUrl;
+    window.location.href = 'https://bin-group-admin-panel.web.app/login';
   };
 
   const resetAndLogin = async () => {
@@ -86,7 +97,7 @@ export default function AdminTerminal() {
     } catch {
       // Ignore storage failures and continue navigation.
     }
-    window.location.href = loginUrl;
+    window.location.href = 'https://bin-group-admin-panel.web.app/login';
   };
 
   return (
