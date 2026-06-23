@@ -14,8 +14,13 @@ const testedAt = new Date().toISOString();
 
 const proofs = {
   // Provider Gates
-  storageRules: "Verified upload, download, and delete permission rules for tenant ticket photos, technician before/after photos, contracts, and invoices under the security rule emulator and verified in live staging.",
-  firebaseFunctionsLiveSmoke: "Ran successful live callables/triggers for submitOwnerApprovalDecision, OTP signatures, manual bank payments, and SLA tickets in staging.",
+  //
+  // storageRules and firebaseFunctionsLiveSmoke are deliberately omitted here.
+  // Both require proof from a genuine production run (or an explicit `waived`
+  // entry using the allowedWaiverFormat block), never auto-generated
+  // boilerplate text — a staging-only run is not sufficient evidence for a
+  // production launch gate. Set their `proof`/`testedBy`/`testedAt` fields by
+  // hand after a real production verification.
   firebaseCloudMessaging: "Tested FCM token registration and background/foreground notification receipt on Android Chrome PWA and iOS Safari PWA.",
   googleMaps: "Verified live GPS location capture, maps render, technician check-in, tracking widgets, and location-disabled fallbacks in Dubai Silicon Oasis test.",
   aiVisionOrTriage: "Tested the runSovereignAI callable with signed-in user queries, verifying automated classification, urgency prediction, and safe API key hiding.",

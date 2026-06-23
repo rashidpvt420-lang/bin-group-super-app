@@ -121,6 +121,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
             // exposure of the bearer token), unlike a ?bridge_token= query param.
             const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
             const bridgeToken = hashParams.get('bridge_token');
+            const ssoFailed = hashParams.get('sso_failed');
             if (bridgeToken) {
                 hashParams.delete('bridge_token');
                 const remainingHash = hashParams.toString();
@@ -129,6 +130,16 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 bridgeExchange = timeout(signInWithCustomToken(auth, bridgeToken), 10000, 'BRIDGE_TOKEN_TIMEOUT').catch((err) => {
                     console.warn('[ADMIN-AUTH] Bridge token exchange failed; falling back to manual login.', err);
                 });
+            } else if (ssoFailed) {
+                // The main app couldn't mint/redeem a bridge token (cold start,
+                // network blip, etc.) and sent the user here to log in manually.
+                // Surface that explicitly instead of leaving them on what looks
+                // like an unprompted, ordinary login form.
+                hashParams.delete('sso_failed');
+                const remainingHash = hashParams.toString();
+                const cleanUrl = `${window.location.pathname}${window.location.search}${remainingHash ? `#${remainingHash}` : ''}`;
+                window.history.replaceState({}, document.title, cleanUrl);
+                setError('Single sign-on from the main app failed. Please sign in with your admin credentials below.');
             }
         }
 
@@ -150,7 +161,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         const authStateWatchdog = window.setTimeout(() => {
             if (authHandshakeResolved) return;
             console.error('🛡️ [AUTH] onAuthStateChanged did not fire within watchdog window.');
-            setError('Admin token check timed out. Use Reset & Login, then retry.');
+            setError('Admin token check timed out. Use Reset & Login, then retry. If this persists, confirm bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com are both listed under Firebase Authentication > Settings > Authorized domains.');
             markAuthReady();
         }, 12000);
 
@@ -268,7 +279,7 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
                 setUser(null);
 
                 if (err.message === 'AUTH_TOKEN_TIMEOUT' || err.message === 'AUTH_SYNC_TIMEOUT') {
-                    setError('Admin token check timed out. Use Reset & Login, then retry.');
+                    setError('Admin token check timed out. Use Reset & Login, then retry. If this persists, confirm bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com are both listed under Firebase Authentication > Settings > Authorized domains.');
                 } else if (err.message === 'ADMIN_PROFILE_TIMEOUT' || err.message === 'ADMIN_PROFILE_LOOKUP_FAILED') {
                     setError('Admin profile could not be verified from Firestore. Use the founder admin email or repair the /users profile/admin claims.');
                     await signOut(auth);

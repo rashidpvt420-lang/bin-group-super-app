@@ -80,12 +80,18 @@ const ADMIN_ROLES = new Set([
     'finance_admin',
     'hr_admin',
     'support_admin',
+]);
+
+// Staff-tier roles get into /admin/* (read-only) but must never be granted
+// blanket isAdmin trust — mirrors apps/admin-panel's AuthContext.tsx STAFF_ROLES
+// split so the same role carries the same trust level in both apps.
+const STAFF_ROLES = new Set([
     'hr_manager',
     'hr_staff',
     'finance_staff',
     'account_manager',
     'dispatcher',
-    'operations_manager'
+    'operations_manager',
 ]);
 
 const BREAK_GLASS_ADMIN_EMAILS = new Set([
@@ -104,6 +110,7 @@ const canonicalEmail = (value: unknown): string => {
 };
 const founderEmailGrantsAdmin = (value: unknown): boolean => BREAK_GLASS_ADMIN_EMAILS.has(canonicalEmail(value));
 const roleIsAdmin = (value: unknown): boolean => ADMIN_ROLES.has(normalizeRole(value));
+const roleIsStaff = (value: unknown): boolean => STAFF_ROLES.has(normalizeRole(value));
 const roleIsValid = (value: unknown): boolean => VALID_PORTAL_ROLES.has(normalizeRole(value));
 
 const claimRoleFrom = (claims: Record<string, unknown>): string => normalizeRole(claims.role || claims.userRole || claims.primaryRole);
@@ -197,18 +204,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 const finalRole = founderBootstrap ? 'super_admin' : (roleIsValid(claimRole) ? claimRole : firestoreRole);
                 const finalIsAdmin = founderBootstrap || claimIsAdmin || (roleIsAdmin(finalRole) && (data.isAdmin === true || data.adminApproved === true || data.admin === true));
 
-                try {
-                    const grantEmailKey = (currentUser.email || '').toLowerCase().replace(/[.@]/g, '_');
-                    const grantRef = doc(db, "pending_admin_grants", grantEmailKey);
-                    const grantSnap = await getDoc(grantRef);
-
-                    if (grantSnap.exists() && grantSnap.data().status === 'pending_first_login' && !finalIsAdmin) {
-                        console.warn("[AUTH] Pending admin grant exists, but no verified admin profile or immutable admin custom claim is present. Admin access withheld.");
-                    }
-                } catch (grantErr) {
-                    console.warn("[REPAIR] Grant check bypassed:", grantErr);
-                }
-
                 if (!roleIsValid(finalRole)) {
                     await updateDoc(userDocRef, {
                         status: 'role_required',
@@ -271,7 +266,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setRole(resolvedRole);
                 setStatus(resolvedStatus);
                 setIsAdmin(resolvedIsAdmin);
-                setPermissions(resolvedIsAdmin ? (data.permissions || {}) : {});
+                setPermissions((resolvedIsAdmin || roleIsStaff(resolvedRole)) ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
                 setLegalAccepted(founderBootstrap ? true : !!data.legalAcceptedAt);
 
