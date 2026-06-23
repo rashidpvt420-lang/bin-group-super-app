@@ -138,6 +138,11 @@ service firebase.storage {
       allow write: if false;
     }
 
+    match /inspections/{tenantId}/{fileName} {
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
+      allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+    }
+
     match /maintenanceTickets/{ticketId}/tenant/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if isAuth() && ticketExists(ticketId) && (
