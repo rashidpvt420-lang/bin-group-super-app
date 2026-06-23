@@ -75,6 +75,16 @@
       "required": true,
       "status": "pending",
       "proofRequired": "Document data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording before public launch."
+    },
+    "firebaseBillingPlan": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "Confirm in Firebase Console -> Project Settings -> Usage and billing that the production project is on the Blaze (pay-as-you-go) plan, not Spark. Spark blocks all outbound networking from Cloud Functions, which silently breaks Stripe (functions/stripePayment.ts), Twilio SMS (functions/index.ts), WhatsApp/Meta Graph API (functions/whatsappWebhook.ts), OpenAI, and Gemini calls even though deployment itself succeeds on Spark."
+    },
+    "appCheckEnforcement": {
+      "required": true,
+      "status": "pending",
+      "proofRequired": "App Check is initialized client-side (src/lib/firebase.ts, apps/admin-panel/src/lib/firebase.ts) behind VITE_ENABLE_FIREBASE_APPCHECK, but firestore.rules and storage.rules contain no request.app checks and no callable Function checks context.app/request.app, so a valid token is never verified server-side. Before enforcing, confirm in Firebase Console -> App Check -> Apps that verified-token traffic is consistently high for every client surface (main app, owner-app, admin-panel), then enable enforcement for Firestore, Storage, and callable/HTTP Functions."
     }
   },
   "requiredDeviceGates": {
