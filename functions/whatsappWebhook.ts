@@ -188,7 +188,7 @@ export const whatsappWebhook = onRequest(
 
     if (!verifyWhatsAppSignature(req, whatsappAppSecret.value())) {
       console.warn("WhatsApp webhook: rejected request with invalid X-Hub-Signature-256.");
-      res.status(401).send("Invalid signature");
+      res.status(401).json({ ok: false, error: "INVALID_SIGNATURE" });
       return;
     }
 

@@ -3,7 +3,7 @@
   "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
   "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
   "publicLaunchScope": "Hosted web app and PWA first. Native Android AAB is not required unless BIN GROUP decides to publish a Play Store build.",
-  "lastAuditUpdate": "2026-06-22T20:46:55.691Z",
+  "lastAuditUpdate": "2026-06-20T18:24:15.171Z",
   "deploymentProof": {
     "hosting": {
       "required": true,
@@ -33,158 +33,90 @@
     },
     "storageRules": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Fresh upload/download/delete permission test for tenant issue photos, technician before/after photos, contracts, invoices, and admin evidence access.",
-      "proof": "Verified upload, download, and delete permission rules for tenant ticket photos, technician before/after photos, contracts, and invoices under the security rule emulator and verified in live staging.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Fresh upload/download/delete permission test for tenant issue photos, technician before/after photos, contracts, invoices, and admin evidence access."
     },
     "firebaseFunctionsLiveSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI. Deployment alone is not enough for this gate.",
-      "proof": "Ran successful live callables/triggers for submitOwnerApprovalDecision, OTP signatures, manual bank payments, and SLA tickets in staging.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI. Deployment alone is not enough for this gate."
     },
     "firebaseCloudMessaging": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real Android/iOS/PWA push notification delivery test with token registration, foreground/background delivery, and disabled-permission fallback.",
-      "proof": "Tested FCM token registration and background/foreground notification receipt on Android Chrome PWA and iOS Safari PWA.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real Android/iOS/PWA push notification delivery test with token registration, foreground/background delivery, and disabled-permission fallback."
     },
     "googleMaps": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real mobile GPS permission, map render, technician check-in, arrival tracking, and location-denied fallback test.",
-      "proof": "Verified live GPS location capture, maps render, technician check-in, tracking widgets, and location-disabled fallbacks in Dubai Silicon Oasis test.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real mobile GPS permission, map render, technician check-in, arrival tracking, and location-denied fallback test."
     },
     "aiVisionOrTriage": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Production runSovereignAI callable must be tested with a signed-in user. Confirm server-side secrets/fallback behavior and no client-exposed AI keys.",
-      "proof": "Tested the runSovereignAI callable with signed-in user queries, verifying automated classification, urgency prediction, and safe API key hiding.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Production runSovereignAI callable must be tested with a signed-in user. Confirm server-side secrets/fallback behavior and no client-exposed AI keys."
     },
     "paymentGatewayOrManualBank": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Live owner contract -> 15% mobilization/manual bank/admin verification -> dashboard unlock path, including rejection path.",
-      "proof": "Validated owner mobilization 15% payment workflow, manual bank transfer upload, and administrative verification/rejection paths.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Live owner contract -> 15% mobilization/manual bank/admin verification -> dashboard unlock path, including rejection path."
     },
     "whatsappBusiness": {
       "required": false,
-      "status": "passed",
-      "proofRequired": "Optional: business verification, approved templates, opt-in, send logs.",
-      "proof": "Configured sandbox webhook for WhatsApp Business API and verified intake routing to Admin WhatsApp Triage Page.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Optional: business verification, approved templates, opt-in, send logs."
     },
     "smsVoiceFallback": {
       "required": false,
-      "status": "passed",
-      "proofRequired": "Optional: carrier approval, cost control, emergency fallback test.",
-      "proof": "Integrated Twilio SMS fallback for OTP verification codes and critical notifications when push is offline.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Optional: carrier approval, cost control, emergency fallback test."
     },
     "uaeDataResidencyPosition": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Document data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording before public launch.",
-      "proof": "Formulated complete compliance register outlining data categories, UAE ADGM/DIFC alignment, hosting on Firebase europe-west3/me-central2, and strict retention rules.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Document data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording before public launch."
     }
   },
   "requiredDeviceGates": {
     "androidPwaSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real Android phone PWA test across all five dashboards.",
-      "proof": "Executed smoke test on Android Chrome PWA across all five portal dashboards (Owner, Tenant, Technician, Broker, Admin), verifying no layout issues.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real Android phone PWA test across all five dashboards."
     },
     "iosPwaSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real iPhone/Safari PWA test across all five dashboards.",
-      "proof": "Completed Safari iOS PWA simulation and real-device checklist across all five user roles with clean navigation.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real iPhone/Safari PWA test across all five dashboards."
     },
     "technicianGpsTracking": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real technician GPS check-in and live tracking test.",
-      "proof": "Verified live technician tracking widget on the tenant side and coordinates update trigger from technician's en-route status change.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real technician GPS check-in and live tracking test."
     },
     "pushNotifications": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real push notification delivery and fallback test.",
-      "proof": "Tested push notifications delivery on mock service workers and confirmed fallback to SMS/in-app alert inbox when denied.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Real push notification delivery and fallback test."
     },
     "pdfMobileDownload": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test.",
-      "proof": "Tested contract, lease agreement, and payment invoice PDF generation and mobile download on iOS and Android devices, verifying font rendering.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test."
     },
     "arabicRtlAllCoreScreens": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs.",
-      "proof": "Completed Arabic locale sweep using the RTL theme provider across all forms, dialogs, dashboards, and PDF templates with no overlaps.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs."
     },
     "everyButtonWritesFirestoreOrStorage": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely.",
-      "proof": "Conducted a full UI click-stream audit confirming every form submit and interactive action writes correctly to Firestore/Storage or fails with elegant toasts.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely."
     },
     "logoutAllDashboards": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile.",
-      "proof": "Tested logout action in all 5 portal shells (Owner, Tenant, Technician, Broker, Admin), confirming token clear and redirect to /login.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile."
     },
     "androidReleaseAab": {
       "required": false,
