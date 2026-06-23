@@ -34,11 +34,9 @@ To deploy Cloud Functions, Firestore Rules, and Indexes along with Hosting:
 ## 🔒 Security & Roles
 
 ### Emergency Admin Grant
-If an administrator is locked out or needs escalation:
-1. Open `scripts/add_admin_grant.js`.
-2. Update the target `email`.
-3. Run: `node c:\Users\My-PC\Desktop\scripts\add_admin_grant.js`.
-4. User logs in -> Role system auto-detects grant -> Account upgraded to Admin.
+If an administrator is locked out or needs escalation, use `scripts/grant-admin.mjs` (see [ADMIN_COMMAND_CENTER.md](./ADMIN_COMMAND_CENTER.md) section 5 for full details):
+1. Run: `node scripts/grant-admin.mjs <email> <password>` from a machine with Firebase/gcloud credentials.
+2. User logs out, hard-refreshes, and logs back in to receive the new claims/role.
 
 ---
 

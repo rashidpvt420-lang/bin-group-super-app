@@ -51,8 +51,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const currentStatus = (status || '').toLowerCase();
     const normalizedRole = (role || '').toLowerCase();
     const isAdminRoute = location.pathname.startsWith('/admin');
+    // Staff-tier roles (hr_staff, dispatcher, etc.) are not granted isAdmin —
+    // they get read-only access to /admin/* via the explicit allowedRoles list
+    // instead, so they don't get redirect-looped back into the route they need.
+    const isAllowedStaffRole = Boolean(allowedRoles && allowedRoles.includes(normalizedRole));
 
-    if (isAdminRoute && !isAdmin) {
+    if (isAdminRoute && !isAdmin && !isAllowedStaffRole) {
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
