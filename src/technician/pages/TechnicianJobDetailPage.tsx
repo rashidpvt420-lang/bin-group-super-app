@@ -26,6 +26,7 @@ type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
 
 const norm = (status?: string) => String(status || '').toUpperCase();
+const listLength = (value: any) => Array.isArray(value) ? value.length : 0;
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -75,14 +76,29 @@ export default function TechnicianJobDetailPage() {
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
     const hasAnyPhoto = photos.length > 0;
-    const hasExistingProof = Boolean(ticket?.beforePhotoUrl || ticket?.afterPhotoUrl)
-        || (Array.isArray(ticket?.proofPhotos) && ticket.proofPhotos.length > 0)
-        || (Array.isArray(ticket?.evidencePhotos) && ticket.evidencePhotos.length > 0)
-        || (Array.isArray(ticket?.completionPhotos) && ticket.completionPhotos.length > 0);
-    const hasTenantBeforeProof = (Array.isArray(ticket?.tenantPhotos) && ticket.tenantPhotos.length > 0)
-        || (Array.isArray(ticket?.photos) && ticket.photos.length > 0)
-        || (Array.isArray(ticket?.initialPhotoUrls) && ticket.initialPhotoUrls.length > 0);
-    const canComplete = notes.trim().length >= 10 && (hasAnyPhoto || hasExistingProof) && hasTenantBeforeProof;
+    const hasExistingAfterProof = Boolean(ticket?.afterPhotoUrl)
+        || listLength(ticket?.afterPhotos) > 0
+        || listLength(ticket?.proofPhotos) > 0
+        || listLength(ticket?.evidencePhotos) > 0
+        || listLength(ticket?.completionPhotos) > 0;
+    const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
+        || listLength(ticket?.beforePhotos) > 0
+        || listLength(ticket?.tenantPhotos) > 0
+        || listLength(ticket?.photos) > 0
+        || listLength(ticket?.initialPhotoUrls) > 0;
+    const hasAfterProof = hasAnyPhoto || hasExistingAfterProof;
+    const hasResolutionNotes = notes.trim().length >= 10 || String(ticket?.technicianNotes || ticket?.notes || '').trim().length >= 10;
+    const hasPartsDisposition = materials.trim().length >= 2 || listLength(ticket?.materialsUsed) > 0 || Boolean(ticket?.partsUsed || ticket?.noPartsRequired);
+    const proofChecks = [
+        { label: tx('tech.job.proof.before', 'Before fault photo'), ready: hasTenantBeforeProof },
+        { label: tx('tech.job.proof.after', 'After-work photo'), ready: hasAfterProof },
+        { label: tx('tech.job.proof.notes', 'Resolution notes'), ready: hasResolutionNotes },
+        { label: tx('tech.job.proof.parts', 'Parts/materials disposition'), ready: hasPartsDisposition },
+        { label: tx('tech.job.proof.tenant', 'Tenant approval requested after close'), ready: true },
+    ];
+    const closeBlockers = proofChecks.filter((check) => !check.ready).map((check) => check.label);
+    const proofReadyCount = proofChecks.length - closeBlockers.length;
+    const canComplete = closeBlockers.length === 0;
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const next = Array.from(e.target.files || []).slice(0, 5);
@@ -118,6 +134,10 @@ export default function TechnicianJobDetailPage() {
 
     const updateLifecycle = async (nextStatus: Step) => {
         if (!id || !user?.uid) return;
+        if (nextStatus === 'COMPLETED' && closeBlockers.length > 0) {
+            alert(`${tx('tech.job.close_blocked', 'Cannot close mission. Missing proof:')} ${closeBlockers.join(', ')}`);
+            return;
+        }
         setActionLoading(true);
         setGpsError(null);
         try {
@@ -141,14 +161,23 @@ export default function TechnicianJobDetailPage() {
                 const mergedCompletion = [...(ticket?.completionPhotos || []), ...uploaded];
 
                 await updateDoc(doc(db, 'maintenanceTickets', id), {
-                    technicianNotes: notes.trim(),
-                    notes: notes.trim(),
+                    technicianNotes: notes.trim() || ticket?.technicianNotes || ticket?.notes || '',
+                    notes: notes.trim() || ticket?.notes || ticket?.technicianNotes || '',
                     materialsUsed: materials.split(',').map((x) => x.trim()).filter(Boolean),
+                    partsDisposition: materials.trim() || ticket?.partsDisposition || 'No parts entered',
+                    proofReadiness: {
+                        beforePhoto: hasTenantBeforeProof,
+                        afterPhoto: hasAfterProof,
+                        notes: hasResolutionNotes,
+                        partsDisposition: hasPartsDisposition,
+                        checkedAt: serverTimestamp(),
+                    },
                     proofPhotos: mergedProof,
                     evidencePhotos: mergedEvidence,
                     completionPhotos: mergedCompletion,
                     afterPhotos: mergedCompletion,
                     afterPhotoUrl: mergedCompletion[0] || ticket?.afterPhotoUrl || null,
+                    tenantApprovalStatus: ticket?.tenantApprovalStatus || 'PENDING_TENANT_REVIEW',
                     updatedAt: serverTimestamp()
                 });
             }
@@ -242,9 +271,18 @@ export default function TechnicianJobDetailPage() {
 
                         {status === 'IN_PROGRESS' && (
                             <Box sx={{ mt: 4, p: 3, borderRadius: 4, border: `1px dashed ${alpha(binThemeTokens.gold, 0.35)}` }}>
-                                {!hasTenantBeforeProof && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.tenant_proof_missing', 'Tenant before-photo proof is missing. Ask tenant/admin to add a fault photo before closing.')}</Alert>}
+                                <Paper sx={{ p: 2, mb: 2, bgcolor: alpha(canComplete ? '#10b981' : '#f59e0b', 0.08), border: `1px solid ${alpha(canComplete ? '#10b981' : '#f59e0b', 0.22)}`, borderRadius: 3 }}>
+                                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                                        <Typography sx={{ color: '#FFF', fontWeight: 950 }}>{tx('tech.job.proof_readiness', 'Proof readiness')}</Typography>
+                                        <Chip label={`${proofReadyCount}/${proofChecks.length}`} sx={{ bgcolor: canComplete ? '#10b981' : '#f59e0b', color: '#fff', fontWeight: 950 }} />
+                                    </Stack>
+                                    <Stack direction="row" flexWrap="wrap" gap={1}>
+                                        {proofChecks.map((check) => <Chip key={check.label} size="small" label={`${check.ready ? '✓' : '•'} ${check.label}`} sx={{ bgcolor: check.ready ? alpha('#10b981', 0.16) : alpha('#f59e0b', 0.16), color: check.ready ? '#10b981' : '#f59e0b', fontWeight: 900 }} />)}
+                                    </Stack>
+                                </Paper>
+                                {closeBlockers.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.close_blockers', 'Mission cannot close until these proof items are complete:')} {closeBlockers.join(', ')}</Alert>}
                                 <TextField fullWidth multiline rows={3} label={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
-                                <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
+                                <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
                                 <Button component="label" variant="outlined" startIcon={<Camera />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.25)', mb: 2 }}>
                                     {tx('tech.job.add_photos', 'Add after-work proof photos')}
                                     <input hidden type="file" accept="image/*" multiple onChange={handlePhotoChange} />
@@ -278,7 +316,7 @@ export default function TechnicianJobDetailPage() {
                                 <Button fullWidth variant="outlined" startIcon={<MessageSquare />} onClick={() => navigate(`/technician/chat/${id}`)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.5), fontWeight: 950 }}>{tx('tech.job.chat_tenant', 'Chat with Tenant')}</Button>
                                 <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<Phone />} onClick={() => window.open(`tel:${contactPhone}`)} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.25)', fontWeight: 950 }}>{tx('tech.job.call_tenant', 'Call Tenant')}</Button>
                                 <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<MessageSquare />} onClick={() => window.open(`https://wa.me/${String(contactPhone).replace(/\D/g, '')}`, '_blank')} sx={{ color: '#25D366', borderColor: alpha('#25D366', 0.5), fontWeight: 950 }}>{tx('tech.job.whatsapp_tenant', 'WhatsApp Tenant')}</Button>
-                                <Button fullWidth variant="outlined" startIcon={<ShieldCheck />} onClick={() => navigate('/technician/support')} sx={{ color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.18)', fontWeight: 950 }}>{tx('tech.job.contact_admin', 'Contact Admin Base')}</Button>
+                                <Button fullWidth variant="outlined" startIcon={<ShieldCheck />} onClick={() => navigate('/technician/support')} sx={{ color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.18)', fontWeight: 950 }}>{tx('tech.job.contact_admin', 'Contact Operations Base')}</Button>
                             </Stack>
                         </Paper>
 
