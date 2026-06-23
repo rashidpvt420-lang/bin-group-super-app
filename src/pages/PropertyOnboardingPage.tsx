@@ -18,7 +18,7 @@ import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionSte
 
 const INTERNAL_STEP_COUNT = 11;
 const VISIBLE_STAGE_COUNT = 5;
-const stageByInternalStep = [1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5];
+const stageByInternalStep = [1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 5];
 
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
 const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
