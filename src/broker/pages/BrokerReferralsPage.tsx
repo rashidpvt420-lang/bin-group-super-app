@@ -118,12 +118,12 @@ export default function BrokerReferralsPage() {
             }
         >
             {referrals.length === 0 ? (
-                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)' }}>
-                    <Building2 size={48} color="rgba(255,255,255,0.1)" />
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 900, mt: 2 }}>
+                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: binThemeTokens.softCanvas, borderRadius: 6, border: '1px dashed #E5E7EB' }}>
+                    <Building2 size={48} color="#9CA3AF" />
+                    <Typography variant="h6" sx={{ color: '#9CA3AF', fontWeight: 900, mt: 2 }}>
                         NO REFERRALS RECORDED
                     </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1 }}>
+                    <Typography variant="body2" sx={{ color: '#9CA3AF', mt: 1 }}>
                         Start by clicking the "Submit Referral" button above.
                     </Typography>
                 </Paper>
@@ -132,18 +132,18 @@ export default function BrokerReferralsPage() {
                     {referrals.map(ref => {
                         const status = getStatusConfig(ref.status);
                         return (
-                            <Paper key={ref.id} sx={{ 
-                                p: 0, 
-                                bgcolor: 'rgba(22, 22, 24, 0.7)', 
-                                borderRadius: 6, 
-                                border: '1px solid rgba(255,255,255,0.05)',
+                            <Paper key={ref.id} sx={{
+                                p: 0,
+                                bgcolor: binThemeTokens.softCanvas,
+                                borderRadius: 6,
+                                border: '1px solid #E5E7EB',
                                 overflow: 'hidden',
                                 transition: 'all 0.3s ease',
-                                '&:hover': { borderColor: alpha(status.color, 0.3), bgcolor: 'rgba(22, 22, 24, 0.9)' }
+                                '&:hover': { borderColor: alpha(status.color, 0.3), bgcolor: '#FFFFFF' }
                             }}>
                                 <Grid container>
                                     {/* Left Status Bar */}
-                                    <Grid item xs={1} md={0.5} sx={{ bgcolor: alpha(status.color, 0.1), borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Grid item xs={1} md={0.5} sx={{ bgcolor: alpha(status.color, 0.1), borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <Box sx={{ transform: 'rotate(-90deg)', whiteSpace: 'nowrap', color: status.color, fontWeight: 950, fontSize: '0.6rem', letterSpacing: 2 }}>
                                             {status.label}
                                         </Box>
@@ -154,11 +154,11 @@ export default function BrokerReferralsPage() {
                                         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3}>
                                             <Box sx={{ flex: 1 }}>
                                                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-                                                    <Typography variant="h6" fontWeight="950" color="#FFF">{ref.clientName}</Typography>
-                                                    <Chip 
-                                                        label={ref.referralType.toUpperCase()} 
-                                                        size="small" 
-                                                        sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.6rem' }} 
+                                                    <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.clientName}</Typography>
+                                                    <Chip
+                                                        label={ref.referralType.toUpperCase()}
+                                                        size="small"
+                                                        sx={{ bgcolor: '#F3F4F6', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.6rem' }}
                                                     />
                                                 </Stack>
                                                 <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -168,20 +168,20 @@ export default function BrokerReferralsPage() {
 
                                             <Stack direction="row" spacing={4} sx={{ minWidth: 400 }}>
                                                 <Box>
-                                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>EST. VALUE</Typography>
-                                                    <Typography variant="body1" fontWeight="950" color="#FFF">
+                                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>EST. VALUE</Typography>
+                                                    <Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>
                                                         {ref.estimatedValue ? `AED ${ref.estimatedValue}` : 'N/A'}
                                                     </Typography>
                                                 </Box>
                                                 <Box>
-                                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 950, letterSpacing: 1 }}>SUBMITTED</Typography>
-                                                    <Typography variant="body1" fontWeight="950" color="#FFF">
+                                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>SUBMITTED</Typography>
+                                                    <Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>
                                                         {ref.createdAt?.toDate ? ref.createdAt.toDate().toLocaleDateString() : 'N/A'}
                                                     </Typography>
                                                 </Box>
                                                 <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                                                     <Tooltip title="View Referral Audit">
-                                                        <IconButton sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: 'rgba(255,255,255,0.4)' }}>
+                                                        <IconButton sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}>
                                                             <FileText size={20} />
                                                         </IconButton>
                                                     </Tooltip>
@@ -190,9 +190,9 @@ export default function BrokerReferralsPage() {
                                         </Stack>
 
                                         {ref.notes && (
-                                            <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.03)' }}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>NOTES</Typography>
-                                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 0.5 }}>{ref.notes}</Typography>
+                                            <Box sx={{ mt: 3, p: 2, bgcolor: '#F3F4F6', borderRadius: 3, border: '1px solid #E5E7EB' }}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>NOTES</Typography>
+                                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{ref.notes}</Typography>
                                             </Box>
                                         )}
                                     </Grid>

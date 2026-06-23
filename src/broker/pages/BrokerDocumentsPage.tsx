@@ -101,12 +101,12 @@ export default function BrokerDocumentsPage() {
                     <ShieldCheck size={20} color="#10b981" />
                     <Box>
                         <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block' }}>COMPLIANCE STATUS</Typography>
-                        <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
+                        <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
                     </Box>
                 </Box>
             }
         >
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
                 MANDATORY COMPLIANCE ASSETS
             </Typography>
 
@@ -118,32 +118,32 @@ export default function BrokerDocumentsPage() {
 
                     return (
                         <Grid item xs={12} md={6} key={req.type}>
-                            <Paper sx={{ 
-                                p: 4, 
-                                bgcolor: 'rgba(22, 22, 24, 0.7)', 
-                                border: `1px solid ${alpha(status.color, 0.15)}`, 
+                            <Paper sx={{
+                                p: 4,
+                                bgcolor: binThemeTokens.softCanvas,
+                                border: `1px solid ${alpha(status.color, 0.15)}`,
                                 borderRadius: 6,
                                 position: 'relative',
                                 transition: 'all 0.3s ease',
-                                '&:hover': { bgcolor: 'rgba(22, 22, 24, 0.9)', borderColor: status.color }
+                                '&:hover': { bgcolor: '#FFFFFF', borderColor: status.color }
                             }}>
                                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
                                     <Box>
-                                        <Typography variant="h6" fontWeight="950" color="#FFF">{req.title}</Typography>
-                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 0.5, fontWeight: 700 }}>{req.desc}</Typography>
+                                        <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>{req.title}</Typography>
+                                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5, fontWeight: 700 }}>{req.desc}</Typography>
                                     </Box>
-                                    <Chip 
-                                        label={status.label} 
-                                        size="small" 
+                                    <Chip
+                                        label={status.label}
+                                        size="small"
                                         icon={status.icon}
-                                        sx={{ bgcolor: alpha(status.color, 0.1), color: status.color, fontWeight: 950, fontSize: '0.65rem' }} 
+                                        sx={{ bgcolor: alpha(status.color, 0.1), color: status.color, fontWeight: 950, fontSize: '0.65rem' }}
                                     />
                                 </Stack>
 
                                 {uploading === req.type ? (
                                     <Box sx={{ mt: 3 }}>
                                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>ENCRYPTING ASSET...</Typography>
-                                        <LinearProgress sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                                        <LinearProgress sx={{ height: 4, borderRadius: 2, bgcolor: '#E5E7EB', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                                     </Box>
                                 ) : isUploaded ? (
                                     <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
@@ -156,12 +156,12 @@ export default function BrokerDocumentsPage() {
                                             rel="noopener noreferrer"
                                             disabled={!uploadedDoc?.fileUrl}
                                             startIcon={<Eye size={18} />}
-                                            sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF', fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+                                            sx={{ bgcolor: '#F3F4F6', color: binThemeTokens.textPrimary, fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: '#E5E7EB' } }}
                                         >
                                             PREVIEW
                                         </Button>
                                         <Tooltip title="Replace Asset">
-                                            <IconButton onClick={() => handleUpload(req.type)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, color: 'rgba(255,255,255,0.4)' }}>
+                                            <IconButton onClick={() => handleUpload(req.type)} sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}>
                                                 <FileUp size={20} />
                                             </IconButton>
                                         </Tooltip>
@@ -184,14 +184,14 @@ export default function BrokerDocumentsPage() {
             </Grid>
 
             {/* ─── ADD-ON REPOSITORY ─────────────────────────────────────────── */}
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
                 SUPPLEMENTARY REPOSITORY
             </Typography>
-            <Paper sx={{ 
-                p: 6, 
-                bgcolor: 'rgba(255,255,255,0.01)', 
-                border: '1px dashed rgba(255,255,255,0.1)', 
-                borderRadius: 8, 
+            <Paper sx={{
+                p: 6,
+                bgcolor: binThemeTokens.softCanvas,
+                border: '1px dashed #E5E7EB',
+                borderRadius: 8,
                 textAlign: 'center',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
@@ -200,8 +200,8 @@ export default function BrokerDocumentsPage() {
                 <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.1), width: 'fit-content', borderRadius: '50%', margin: '0 auto 24px auto' }}>
                     <Lock size={32} color={binThemeTokens.gold} />
                 </Box>
-                <Typography variant="h5" fontWeight="950" color="#FFF">Referral Supporting Evidence</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', maxWidth: 400, margin: '12px auto 32px auto', fontWeight: 700 }}>
+                <Typography variant="h5" fontWeight="950" color={binThemeTokens.textPrimary}>Referral Supporting Evidence</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, maxWidth: 400, margin: '12px auto 32px auto', fontWeight: 700 }}>
                     Upload NDAs, signed mandates, or valuation reports. All files are encrypted at rest and accessible only by Sovereign Admin.
                 </Typography>
                 <Stack direction="row" spacing={2} justifyContent="center">
@@ -219,7 +219,7 @@ export default function BrokerDocumentsPage() {
 
             <Box sx={{ mt: 6, p: 3, bgcolor: alpha('#3b82f6', 0.05), borderRadius: 4, border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', gap: 3 }}>
                 <Info size={24} color="#3b82f6" />
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
                     Security Protocol: Files are scanned for malware upon upload. Sensitive personal information is redacted automatically where necessary for institutional compliance.
                 </Typography>
             </Box>

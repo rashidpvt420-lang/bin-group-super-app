@@ -7,6 +7,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { getContractModeProfile, getPropertyIntelligenceProfile, resolveContractMode } from '../../utils/contractIntelligence';
+import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 
@@ -155,6 +156,8 @@ export default function TenantDashboardPage() {
           </Box>
           <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, fontWeight: 950 }}>{user?.displayName?.charAt(0) || 'R'}</Avatar>
         </Box>
+
+        <RoleJourneyStrip role="tenant" dark />
 
         <Button variant="contained" onClick={() => navigate('/tenant/request')} data-testid="tenant-new-request" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 4, fontWeight: 950, px: 4, py: 1.5 }}>
           {tx('dash.newRequestBtn', 'New Request')}
