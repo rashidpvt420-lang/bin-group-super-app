@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box, Typography, Grid, Paper, TextField,
     Button, Stack, Divider, Container, Alert, MenuItem, CircularProgress, alpha
@@ -8,7 +8,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
-import { buildGoogleMapsSearchUrl } from '../../lib/maps';
+import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', label: 'Dubai', lat: 25.2048, lng: 55.2708 },
@@ -114,6 +114,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
+
+    const { isLoaded: mapsLoaded } = useGoogleMaps();
+    const mapDivRef = useRef<HTMLDivElement | null>(null);
+    const mapObjRef = useRef<any>(null);
+    const markerObjRef = useRef<any>(null);
+    const commitGeoAnchorRef = useRef<(payload: any) => void>(() => {});
 
     useEffect(() => {
         if (!activeProperty?.emirate) {
@@ -253,6 +259,89 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             setLocationError(err?.message || 'Location verification failed.');
         }
     };
+
+    useEffect(() => {
+        commitGeoAnchorRef.current = commitGeoAnchor;
+    });
+
+    useEffect(() => {
+        if (!mapsLoaded || !mapDivRef.current) return;
+        const g = (window as any).google;
+        if (!g?.maps) return;
+
+        const initialLat = Number(manualLat) || fallbackEmirate.lat;
+        const initialLng = Number(manualLng) || fallbackEmirate.lng;
+        const hasPreciseAnchor = Boolean(activeProperty?.geo?.lat || activeProperty?.location?.lat);
+
+        const map = new g.maps.Map(mapDivRef.current, {
+            center: { lat: initialLat, lng: initialLng },
+            zoom: hasPreciseAnchor ? 18 : 12,
+            mapTypeId: 'hybrid',
+            streetViewControl: false,
+            fullscreenControl: true,
+            mapTypeControl: true,
+            clickableIcons: false
+        });
+
+        const marker = new g.maps.Marker({
+            position: { lat: initialLat, lng: initialLng },
+            map,
+            draggable: true,
+            title: 'Drag to the exact property location'
+        });
+
+        const geocoder = new g.maps.Geocoder();
+
+        const applyPin = (lat: number, lng: number) => {
+            geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+                const resolved = status === 'OK' ? results?.[0] : null;
+                commitGeoAnchorRef.current({
+                    lat,
+                    lng,
+                    address: resolved?.formatted_address,
+                    placeId: resolved?.place_id || 'MAP_PIN',
+                    source: 'google_maps',
+                    verified: true,
+                    requiresGeoReview: false,
+                    dispatchReady: true
+                });
+            });
+        };
+
+        marker.addListener('dragend', () => {
+            const pos = marker.getPosition();
+            if (!pos) return;
+            applyPin(Number(pos.lat().toFixed(7)), Number(pos.lng().toFixed(7)));
+        });
+
+        map.addListener('click', (event: any) => {
+            if (!event.latLng) return;
+            const lat = Number(event.latLng.lat().toFixed(7));
+            const lng = Number(event.latLng.lng().toFixed(7));
+            marker.setPosition({ lat, lng });
+            applyPin(lat, lng);
+        });
+
+        mapObjRef.current = map;
+        markerObjRef.current = marker;
+
+        return () => {
+            g.maps.event.clearInstanceListeners(marker);
+            g.maps.event.clearInstanceListeners(map);
+            mapObjRef.current = null;
+            markerObjRef.current = null;
+        };
+    }, [mapsLoaded]);
+
+    useEffect(() => {
+        if (!mapObjRef.current || !markerObjRef.current) return;
+        const lat = Number(manualLat);
+        const lng = Number(manualLng);
+        if (!isValidLatLng(lat, lng)) return;
+        const position = { lat, lng };
+        markerObjRef.current.setPosition(position);
+        mapObjRef.current.panTo(position);
+    }, [manualLat, manualLng]);
 
     const handleEmirateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = e.target.value;
@@ -438,7 +527,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     return (
         <Box sx={{ py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
             <style>{`
-                .pac-container, .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message, .gm-style {
+                .pac-container, .gm-err-container, .gm-err-icon, .gm-err-title, .gm-err-message {
                     display: none !important;
                     visibility: hidden !important;
                     pointer-events: none !important;
@@ -449,7 +538,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     {readable(t('onboarding.location_title'), 'Property Location')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    Search by property address, paste a Google Maps link, or enter coordinates. You do not need to be at the property.
+                    Search by property address, drag the pin on the map below, paste a Google Maps link, or enter coordinates. You do not need to be at the property.
                 </Typography>
             </Box>
 
@@ -553,10 +642,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             <Box sx={{ p: 2.5, display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                                 <Box>
                                     <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Navigation size={20} color={binThemeTokens.gold} /> Live coordinate map preview
+                                        <Navigation size={20} color={binThemeTokens.gold} /> {mapsLoaded ? 'Tap or drag the pin to mark the exact property' : 'Live coordinate map preview'}
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
-                                        Type the property address, paste a full Google Maps URL, or enter coordinates, then click Find Property Address. The owner does not need to be physically at the property.
+                                        {mapsLoaded
+                                            ? 'Click anywhere on the map, or drag the gold pin, to set the exact property location. The address and coordinates fields above update automatically.'
+                                            : 'Type the property address, paste a full Google Maps URL, or enter coordinates, then click Find Property Address. The owner does not need to be physically at the property.'}
                                     </Typography>
                                 </Box>
                                 <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
@@ -564,14 +655,18 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                                 </Button>
                             </Box>
 
-                            <Box sx={{ height: { xs: 260, md: 340 }, width: '100%', bgcolor: '#050505', borderTop: '1px solid rgba(198,167,94,0.16)' }}>
-                                <Box
-                                    component="iframe"
-                                    title="Property coordinate map preview"
-                                    src={osmPreviewUrl}
-                                    loading="lazy"
-                                    sx={{ width: '100%', height: '100%', border: 0 }}
-                                />
+                            <Box sx={{ height: { xs: 320, md: 420 }, width: '100%', bgcolor: '#050505', borderTop: '1px solid rgba(198,167,94,0.16)' }}>
+                                {mapsLoaded ? (
+                                    <Box ref={mapDivRef} sx={{ width: '100%', height: '100%' }} />
+                                ) : (
+                                    <Box
+                                        component="iframe"
+                                        title="Property coordinate map preview"
+                                        src={osmPreviewUrl}
+                                        loading="lazy"
+                                        sx={{ width: '100%', height: '100%', border: 0 }}
+                                    />
+                                )}
                             </Box>
                         </Paper>
 
