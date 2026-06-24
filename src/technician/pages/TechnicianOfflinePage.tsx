@@ -93,20 +93,27 @@ export default function TechnicianOfflinePage() {
     setQueue([]);
   };
 
+  // NOTE: This page has no real network retry path today — nothing in the app currently
+  // pushes items into this local queue, and there is no backend re-submission call wired
+  // up here. We do not claim a sync succeeded; we only let the technician clear an item
+  // they know is stale/duplicated from the local list. Evidence photo uploads specifically
+  // are NOT retried from here — they must be re-taken/re-uploaded from the job screen.
   const retrySingle = async (item: QueueItem) => {
     if (!online) return;
     const updated = queue.map((q) =>
-      q.id === item.id ? { ...q, status: 'retrying' as const } : q
+      q.id === item.id ? { ...q, status: 'retrying' as const, attempts: q.attempts + 1 } : q
     );
     saveQueue(updated);
     setQueue(updated);
 
-    // Firebase is already listening via onSnapshot — writing is auto-retried by the SDK.
-    // Mark as resolved after a short delay (the SDK will have flushed it).
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const resolved = queue.filter((q) => q.id !== item.id);
-    saveQueue(resolved);
-    setQueue(resolved);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const final = updated.map((q) =>
+      q.id === item.id
+        ? { ...q, status: (q.attempts >= MAX_ATTEMPTS ? 'failed' : 'pending') as QueueItem['status'] }
+        : q
+    );
+    saveQueue(final);
+    setQueue(final);
   };
 
   const syncAll = async () => {
@@ -114,17 +121,18 @@ export default function TechnicianOfflinePage() {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const pending = [...queue];
-      // Firebase SDK auto-retries pending writes when connection is restored.
-      // Flush local queue items that have exceeded max attempts or are resolvable.
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      const failed = pending.filter((item) => item.attempts >= MAX_ATTEMPTS);
-      saveQueue(failed);
-      setQueue(failed);
-      const synced = pending.length - failed.length;
-      setSyncResult(synced > 0 ? `${synced} item${synced > 1 ? 's' : ''} synced successfully.` : 'No items could sync — check connection and retry.');
+      // Honest behavior: this page cannot itself confirm a Firestore write succeeded —
+      // it has no backend re-submission wired up. We only re-check connectivity and report
+      // status truthfully instead of marking items as "synced."
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (!navigator.onLine) {
+        setOnline(false);
+        setSyncResult('Connection dropped — items remain queued locally and were not confirmed sent.');
+        return;
+      }
+      setSyncResult('Still offline-queue items can only be cleared once you confirm (from the job screen) that the action actually went through. This page does not verify delivery — discard items you have already redone, or retry individually.');
     } catch (err: any) {
-      setSyncResult(`Sync error: ${err?.message || 'Unknown error'}`);
+      setSyncResult(`Could not check status: ${err?.message || 'Unknown error'}`);
     } finally {
       setSyncing(false);
     }
@@ -142,7 +150,7 @@ export default function TechnicianOfflinePage() {
         Offline Sync Queue
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 640 }}>
-        When you have no internet connection, job actions, evidence uploads, and check-ins are queued here. They sync automatically when connectivity returns — no data is lost.
+        When you have no internet connection, some text-based job actions and check-ins may be cached locally by your browser. This screen cannot confirm that a queued item actually reached the server — if you went offline mid-action, treat it as not saved and redo it once you are back online. Evidence photo uploads always require a live connection at the moment you upload them; they are not queued here.
       </Typography>
 
       {/* Connection status banner */}
@@ -158,12 +166,12 @@ export default function TechnicianOfflinePage() {
             {online ? <Wifi color="#10b981" size={24} /> : <WifiOff color="#ef4444" size={24} />}
             <Box>
               <Typography fontWeight="950" color={online ? '#10b981' : '#ef4444'} sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-                {online ? 'Connected — Firebase sync active' : 'No connection — Queue mode active'}
+                {online ? 'Connected' : 'No connection — your last action may not have been saved'}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {online
-                  ? 'All pending writes are being flushed to Firestore automatically.'
-                  : 'All job actions are saved locally and will sync when you reconnect.'}
+                  ? 'You are online. Items below were queued while offline and have not been confirmed sent — redo the underlying action from the job screen, then discard the queued entry here.'
+                  : 'You are offline right now. Anything you just submitted (job actions, notes, check-in/out) has NOT been confirmed saved and may be lost. Reconnect before relying on it being recorded.'}
               </Typography>
             </Box>
           </Stack>
