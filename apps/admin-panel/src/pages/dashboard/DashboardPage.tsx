@@ -17,7 +17,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
     db, collection, query, where, onSnapshot,
-    orderBy, doc, limit, Timestamp
+    orderBy, doc, limit, Timestamp, getDocs
 } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
@@ -76,6 +76,15 @@ const PENDING_PAYMENT_STATES = [
     'ADMIN_VERIFICATION_REQUIRED'
 ];
 
+// Approval queue rows are summaries assembled from multiple collections
+// (intake_submissions, technician users); the full approval/reject workflow
+// lives on dedicated pages, so REVIEW routes there instead of duplicating it.
+const approvalReviewPath = (item: { type?: string }) => {
+    if (item.type === 'OWNER_ONBOARDING') return '/vault';
+    if (item.type === 'TECH_ONBOARD') return '/technicians';
+    return '/dashboard';
+};
+
 export default function DashboardPage() {
     const navigate = useNavigate();
 
@@ -85,7 +94,7 @@ export default function DashboardPage() {
 
     // KPIs State
     const [kpis, setKpis] = useState<Record<string, KPIState>>({
-        totalProperties: { label: 'Total Properties', value: null, status: 'loading', icon: <Home size={18} />, color: '#3b82f6', path: '/properties' },
+        totalProperties: { label: 'Total Properties', value: null, status: 'loading', icon: <Home size={18} />, color: '#3b82f6', path: '/properties/passport' },
         totalUnits: { label: 'Total Units', value: null, status: 'loading', icon: <Building2 size={18} />, color: '#8b5cf6' },
         activeTenants: { label: 'Active Tenants', value: null, status: 'loading', icon: <Users size={18} />, color: '#10b981', path: '/tenants' },
         pendingTenantInvites: { label: 'Pending Invites', value: null, status: 'loading', icon: <Users size={18} />, color: '#f59e0b' },
@@ -111,6 +120,8 @@ export default function DashboardPage() {
     const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
     const [operationsMissions, setOperationsMissions] = useState<any[]>([]);
     const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+    const [propertyNamesById, setPropertyNamesById] = useState<Record<string, string>>({});
+    const [revenueTrend, setRevenueTrend] = useState<{ status: 'loading' | 'success' | 'error'; current: number; growthPercent: number | null }>({ status: 'loading', current: 0, growthPercent: null });
 
     // --- Helper for updating KPI state ---
     const updateKPI = (key: string, value: number | string, status: KPIState['status'] = 'success') => {
@@ -128,6 +139,25 @@ export default function DashboardPage() {
         }));
     };
 
+    // Tickets are written with an SLA budget (slaMinutes) and a createdAt
+    // timestamp at every intake surface (tenant requests, SOS, AI concierge,
+    // owner complaints). Remaining time is real elapsed-vs-budget, not a
+    // display placeholder. Tickets created before this field existed have no
+    // slaMinutes, so we say so rather than inventing a number.
+    const formatSlaRemaining = (job: any): string => {
+        const slaMinutes = Number(job?.slaMinutes);
+        const createdAt = job?.createdAt?.toDate ? job.createdAt.toDate() : null;
+        if (!Number.isFinite(slaMinutes) || slaMinutes <= 0 || !createdAt) return 'No SLA recorded';
+
+        const elapsedMinutes = (Date.now() - createdAt.getTime()) / 60000;
+        const remainingMinutes = Math.round(slaMinutes - elapsedMinutes);
+        if (remainingMinutes <= 0) return 'SLA breached';
+
+        const hours = Math.floor(remainingMinutes / 60);
+        const minutes = remainingMinutes % 60;
+        return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    };
+
     // --- Listeners Setup ---
     useEffect(() => {
         const unsubscribers: (() => void)[] = [];
@@ -137,8 +167,15 @@ export default function DashboardPage() {
             (snap) => {
                 updateKPI('totalProperties', snap.size);
                 let totalUnits = 0;
-                snap.docs.forEach(doc => totalUnits += Number(doc.data().units || doc.data().totalUnits || 0));
+                const namesById: Record<string, string> = {};
+                snap.docs.forEach(doc => {
+                    const data = doc.data();
+                    totalUnits += Number(data.units || data.totalUnits || 0);
+                    const name = data.propertyName || data.name;
+                    if (name) namesById[doc.id] = name;
+                });
                 updateKPI('totalUnits', totalUnits);
+                setPropertyNamesById(namesById);
             },
             (err) => { handleKPIError('totalProperties', err); handleKPIError('totalUnits', err); }
         ));
@@ -285,6 +322,37 @@ export default function DashboardPage() {
             setRecentActivity(activities);
         }));
 
+        // 11. Revenue trend (MRR growth) — same confirmed-payment-status
+        // aggregation pattern already used by ReportsPage.tsx, comparing the
+        // trailing 30 days of verified payment_transactions against the
+        // preceding 30 days.
+        const CONFIRMED_PAYMENT_STATUSES = new Set(['VERIFIED', 'APPROVED', 'PAID']);
+        const now = new Date();
+        const periodStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const priorPeriodStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+        getDocs(query(
+            collection(db, "payment_transactions"),
+            where("createdAt", ">=", Timestamp.fromDate(priorPeriodStart)),
+            where("createdAt", "<=", Timestamp.fromDate(now))
+        )).then((snap) => {
+            let current = 0;
+            let prior = 0;
+            snap.docs.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!CONFIRMED_PAYMENT_STATUSES.has(String(data.status || '').toUpperCase())) return;
+                const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+                if (!ts) return;
+                const amount = Number(data.amount || 0);
+                if (ts >= periodStart) current += amount;
+                else prior += amount;
+            });
+            const growthPercent = prior > 0 ? ((current - prior) / prior) * 100 : null;
+            setRevenueTrend({ status: 'success', current, growthPercent });
+        }).catch((err) => {
+            console.warn('[Dashboard] revenue trend fetch failed:', err);
+            setRevenueTrend({ status: 'error', current: 0, growthPercent: null });
+        });
+
         setLastSync(new Date());
 
         return () => unsubscribers.forEach(unsub => unsub());
@@ -416,7 +484,14 @@ export default function DashboardPage() {
                                                     {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'Recent'}
                                                 </TableCell>
                                                 <TableCell align="right">
-                                                    <Button size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem' }}>REVIEW</Button>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        sx={{ fontWeight: 900, fontSize: '0.65rem' }}
+                                                        onClick={() => navigate(approvalReviewPath(item))}
+                                                    >
+                                                        REVIEW
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -456,11 +531,11 @@ export default function DashboardPage() {
                                             />
                                         </Box>
                                         <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>{job.title || job.issueType}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{job.propertyName || 'Tower Pilot'}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{job.propertyName || propertyNamesById[job.propertyId] || 'Property not linked'}</Typography>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5 }}>
                                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                 <Clock size={12} style={{ color: 'rgba(255,255,255,0.3)' }} />
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>SLA: {job.slaRemaining || '2h 15m'}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>SLA: {formatSlaRemaining(job)}</Typography>
                                             </Box>
                                             <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{job.status}</Typography>
                                         </Box>
@@ -483,10 +558,22 @@ export default function DashboardPage() {
                             </Typography>
                             <Stack spacing={3}>
                                 <Box>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MRR GROWTH</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>30-DAY REVENUE</Typography>
                                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                                        <Typography variant="h4" fontWeight="950">AED 1.2M</Typography>
-                                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>+12%</Typography>
+                                        <Typography variant="h4" fontWeight="950">
+                                            {revenueTrend.status === 'loading' ? <Skeleton width={120} /> : `AED ${Math.round(revenueTrend.current).toLocaleString()}`}
+                                        </Typography>
+                                        {revenueTrend.status === 'success' && revenueTrend.growthPercent !== null && (
+                                            <Typography variant="caption" sx={{ color: revenueTrend.growthPercent >= 0 ? '#10b981' : binThemeTokens.danger, fontWeight: 900 }}>
+                                                {revenueTrend.growthPercent >= 0 ? '+' : ''}{revenueTrend.growthPercent.toFixed(1)}%
+                                            </Typography>
+                                        )}
+                                        {revenueTrend.status === 'success' && revenueTrend.growthPercent === null && (
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>No prior period</Typography>
+                                        )}
+                                        {revenueTrend.status === 'error' && (
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.danger, fontWeight: 900 }}>Error loading</Typography>
+                                        )}
                                     </Box>
                                 </Box>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
