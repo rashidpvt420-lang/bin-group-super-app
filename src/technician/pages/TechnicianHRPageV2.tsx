@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Bot, CloudUpload, FileText, HeartPulse, Plus } from 'lucide-react';
+import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
+import { addDoc, collection, db, doc, getDoc, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
+import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
+import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
 
 const quickPrompts = [
   'I need annual leave next week',
@@ -42,6 +44,12 @@ const sortByNewest = (items: any[]) => [...items].sort((a, b) => {
   const bTime = b.createdAt?.toMillis?.() || Date.parse(b.createdAtLocal || '') || 0;
   return bTime - aTime;
 });
+const toJsDate = (value: any): Date | null => {
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') return value.toDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
 
 export default function TechnicianHRPageV2() {
   const { user } = useRole();
@@ -54,6 +62,8 @@ export default function TechnicianHRPageV2() {
   const [documentType, setDocumentType] = useState('emirates_id');
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [hrProfile, setHrProfile] = useState<any>(null);
+  const [eosbScenario, setEosbScenario] = useState<EosbTerminationReason>('resignation');
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -75,6 +85,23 @@ export default function TechnicianHRPageV2() {
     }, (error) => {
       console.warn('Staff document vault realtime failed:', error);
     });
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const q = query(collection(db, 'staffLetters'), where('uid', '==', user.uid));
+    return onSnapshot(q, (snap) => {
+      setLetters(sortByNewest(snap.docs.map((item) => ({ id: item.id, ...item.data() }))));
+    }, (error) => {
+      console.warn('Staff letters realtime failed:', error);
+    });
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db, 'users', user.uid)).then((snap) => {
+      if (snap.exists()) setHrProfile(snap.data());
+    }).catch((error) => console.warn('HR profile read failed:', error));
   }, [user?.uid]);
 
   const identity = () => ({
@@ -192,6 +219,23 @@ export default function TechnicianHRPageV2() {
     }
   };
 
+  const heatStress = useMemo(() => getHeatStressSeasonStatus(), []);
+
+  const eosbBaseSalary = Number(hrProfile?.baseSalary) || 0;
+  const eosbJoiningDate = useMemo(
+    () => toJsDate(hrProfile?.joiningDate || hrProfile?.joinedAt || hrProfile?.hireDate || hrProfile?.createdAt),
+    [hrProfile]
+  );
+  const eosbEstimate = useMemo(() => {
+    if (!eosbBaseSalary || !eosbJoiningDate) return null;
+    return calculateEosbEstimate({
+      basicMonthlySalaryAed: eosbBaseSalary,
+      joiningDate: eosbJoiningDate,
+      lastWorkingDate: new Date(),
+      terminationReason: eosbScenario,
+    });
+  }, [eosbBaseSalary, eosbJoiningDate, eosbScenario]);
+
   return (
     <Box sx={{ pb: 6 }}>
       <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
@@ -229,6 +273,23 @@ export default function TechnicianHRPageV2() {
         </Stack>
         {uploadMessage && <Alert severity={uploadMessage.startsWith('Upload failed') || uploadMessage.startsWith('File is too') ? 'error' : 'success'} sx={{ mt: 2 }}>{uploadMessage}</Alert>}
         {documents.length > 0 && <Stack spacing={1.2} sx={{ mt: 3 }}>{documents.slice(0, 8).map((doc) => <Paper key={doc.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><FileText color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{doc.documentLabel || requestTitle(doc.documentType)}</Typography><Typography variant="caption" color="textSecondary">{doc.fileName}</Typography></Box></Stack><Chip label={String(doc.status || 'pending_hr_review').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Wallet color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Estimated End-of-Service Gratuity</Typography></Stack>
+        {!eosbBaseSalary || !eosbJoiningDate ? (
+          <Typography color="rgba(255,255,255,0.5)">Your basic salary and/or joining date are not on file yet. Ask HR to update your profile to see an estimate here.</Typography>
+        ) : (
+          <>
+            <Stack direction="row" spacing={1.2} sx={{ mb: 2 }}>
+              <Button size="small" variant={eosbScenario === 'resignation' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('resignation')} sx={eosbScenario === 'resignation' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>IF I RESIGN</Button>
+              <Button size="small" variant={eosbScenario === 'employer_terminated' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('employer_terminated')} sx={eosbScenario === 'employer_terminated' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>CONTRACT END / EMPLOYER-INITIATED</Button>
+            </Stack>
+            <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.gold }}>AED {eosbEstimate!.finalEstimateAed.toLocaleString()}</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 1 }}>{eosbEstimate!.note} Based on {eosbEstimate!.serviceYears} years of service to date.</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 2 }}>{eosbEstimate!.disclaimer}</Typography>
+          </>
+        )}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>

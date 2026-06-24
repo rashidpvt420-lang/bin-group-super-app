@@ -11,6 +11,8 @@ import {
     getTechnicianLocation, getTicketJobLocation, normalizeTicketStatus
 } from '../../utils/liveTracking';
 
+const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'OPEN': { color: 'rgba(255,255,255,0.4)', icon: Clock },
     'open': { color: 'rgba(255,255,255,0.4)', icon: Clock },
@@ -41,19 +43,52 @@ export default function TenantTicketsPage() {
 
     useEffect(() => {
         if (!user?.uid) return;
-        
-        const q = query(
+
+        // Merge two listeners: tickets tagged by tenantId (uid) and tickets tagged by tenantEmail
+        // (e.g. filed by admin/owner/WhatsApp-triage on behalf of a tenant who is still linked to
+        // their unit by email only, before a UID-linked account exists). Mirrors the dashboard's
+        // residence resolver, which already falls back to tenantEmail for units/contracts.
+        const ticketsById = new Map<string, any>();
+        const emitMerged = () => {
+            const merged = Array.from(ticketsById.values()).sort((a, b) => {
+                const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ?? 0) * 1000;
+                const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ?? 0) * 1000;
+                return bTime - aTime;
+            });
+            setTickets(merged);
+            setLoading(false);
+        };
+
+        const qById = query(
             collection(db, 'maintenanceTickets'),
             where('tenantId', '==', user.uid),
             orderBy('createdAt', 'desc')
         );
+        const unsubById = onSnapshot(qById, (snapshot) => {
+            for (const t of ticketsById.values()) { if (t.__source === 'tenantId') ticketsById.delete(t.id); }
+            snapshot.docs.forEach(doc => ticketsById.set(doc.id, { id: doc.id, ...doc.data(), __source: 'tenantId' }));
+            emitMerged();
+        }, (err) => console.warn('[TenantTickets] listener (tenantId) failed:', err));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false);
-        });
+        let unsubByEmail: (() => void) | null = null;
+        const normalizedEmail = normalizeEmail(user.email);
+        if (normalizedEmail) {
+            const qByEmail = query(
+                collection(db, 'maintenanceTickets'),
+                where('tenantEmail', '==', normalizedEmail),
+                orderBy('createdAt', 'desc')
+            );
+            unsubByEmail = onSnapshot(qByEmail, (snapshot) => {
+                for (const t of ticketsById.values()) { if (t.__source === 'tenantEmail') ticketsById.delete(t.id); }
+                snapshot.docs.forEach(doc => ticketsById.set(doc.id, { id: doc.id, ...doc.data(), __source: 'tenantEmail' }));
+                emitMerged();
+            }, (err) => console.warn('[TenantTickets] listener (tenantEmail) failed:', err));
+        }
 
-        return () => unsubscribe();
+        return () => {
+            unsubById();
+            unsubByEmail?.();
+        };
     }, [user]);
 
     if (loading) return (

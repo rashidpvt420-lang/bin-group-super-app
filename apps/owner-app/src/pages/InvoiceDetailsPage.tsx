@@ -12,6 +12,11 @@ import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 
+// Issuer's own TRN — not yet confirmed against FTA registration. Replace with the real
+// registered number once verified; until then this must not assert an unverified figure,
+// same honesty standard already applied to the recipient's TRN fallback below.
+const BIN_GROUP_TRN = 'Pending Verification';
+
 export default function InvoiceDetailsPage() {
     const { id } = useParams();
     const { user } = useRole();
@@ -151,7 +156,7 @@ export default function InvoiceDetailsPage() {
                         <Stack spacing={0.5}>
                             <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>Institutional Asset Management Headquarters</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Business Bay, One Central Tower, Dubai, UAE</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRN: 100345678900003</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRN: {BIN_GROUP_TRN}</Typography>
                         </Stack>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>

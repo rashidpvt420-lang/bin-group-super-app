@@ -217,6 +217,10 @@ export default function LiveMapPage() {
     doc.save(`GatePass_${ticket.id}_${tech.name}.pdf`);
   };
 
+  const openTicketsCount = (tickets || []).filter((t) => t.status === 'UNASSIGNED').length;
+  const dispatchedTicketsCount = (tickets || []).filter((t) => t.status && t.status !== 'UNASSIGNED').length;
+  const availableTechniciansCount = (technicians || []).filter((t) => t.status === 'Available').length;
+
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#020617', overflow: 'hidden' }}>
       
@@ -240,16 +244,16 @@ export default function LiveMapPage() {
 
         <Box sx={{ display: 'flex', gap: 6 }}>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>DAILY AI SAVINGS</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#10b981' }}>AED 42,880.00</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>OPEN TICKETS</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: '#10b981' }}>{openTicketsCount}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>AUTONOMOUS DISPATCHES</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#3b82f6' }}>142 <Box component="span" sx={{ fontSize: 10, color: '#64748b' }}>TIC/24H</Box></Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>DISPATCHED TICKETS</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: '#3b82f6' }}>{dispatchedTicketsCount}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>FORENSIC SYNC UPTIME</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff' }}>99.99%</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>TECHNICIANS AVAILABLE</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff' }}>{availableTechniciansCount}/{(technicians || []).length}</Typography>
           </Box>
         </Box>
       </Box>
@@ -353,7 +357,7 @@ export default function LiveMapPage() {
              <Paper sx={{ px: 2, py: 1, ml: 'auto', bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>SLA HEALTH: 98.4%</Typography>
+                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>LIVE TICKETS: {(tickets || []).length}</Typography>
                 </Box>
                 <Box sx={{ width: 1, height: 20, bgcolor: 'rgba(255,255,255,0.1)' }} />
                 <Typography variant="caption" sx={{ color: '#64748b' }}>LIVE CLUSTER: MARINA BRIDGES</Typography>

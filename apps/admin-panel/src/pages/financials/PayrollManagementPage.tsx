@@ -77,11 +77,21 @@ export default function PayrollManagementPage() {
     setProcessing(true);
     try {
       const batch = writeBatch(db);
+      const skippedNames: string[] = [];
+      let processedCount = 0;
+
       for (const tech of techs) {
         const existing = payroll.find(p => p.techId === tech.uid && p.month === currentMonth);
         if (existing) continue;
 
-        const amount = tech.baseSalary || 3500;
+        // No fabricated default: a technician with no real base salary on file
+        // is skipped rather than silently entered into a real payroll/transactions ledger.
+        if (!tech.baseSalary || tech.baseSalary <= 0) {
+          skippedNames.push(tech.displayName || tech.email);
+          continue;
+        }
+        const amount = tech.baseSalary;
+
         const payrollRef = doc(collection(db, 'payroll'));
         batch.set(payrollRef, {
           techId: tech.uid,
@@ -102,10 +112,15 @@ export default function PayrollManagementPage() {
           status: 'PENDING',
           createdAt: serverTimestamp(),
         });
+        processedCount++;
       }
 
       await batch.commit();
-      alert(t('fin.payroll_gen_success', { month: currentMonth }));
+      const successMsg = t('fin.payroll_gen_success', { month: currentMonth });
+      const skippedMsg = skippedNames.length > 0
+        ? t('fin.gen_payroll_skipped', { count: skippedNames.length, names: skippedNames.join(', ') })
+        : '';
+      alert(processedCount === 0 && skippedMsg ? skippedMsg : (skippedMsg ? `${successMsg}\n\n${skippedMsg}` : successMsg));
       setOpenAdd(false);
     } catch (err) {
       console.error('Payroll failure:', err);
@@ -133,8 +148,18 @@ export default function PayrollManagementPage() {
     }
   };
 
-  const totalPayroll = payroll.filter(p => p.month === currentMonth).reduce((sum, p) => sum + p.amount, 0);
-  const formatAED = (val: number) => val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
+  const totalPayroll = payroll
+    .filter(p => p.month === currentMonth)
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const eligibleTechs = techs.filter(tech => !payroll.find(p => p.techId === tech.uid && p.month === currentMonth));
+  const payableTechs = eligibleTechs.filter(tech => (tech.baseSalary || 0) > 0);
+  const skippedTechs = eligibleTechs.filter(tech => !((tech.baseSalary || 0) > 0));
+  const previewTotal = payableTechs.reduce((sum, tech) => sum + (tech.baseSalary || 0), 0);
+
+  const formatAED = (val: number) => {
+    return val.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
+  };
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -210,7 +235,17 @@ export default function PayrollManagementPage() {
       <Dialog open={openProcess} onClose={() => setOpenAdd(false)}>
         <DialogTitle>{t('fin.generate_payroll')}</DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mt: 1 }}>{t('fin.generate_payroll_confirm', { month: currentMonth })}</Alert>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+            {t('fin.gen_payroll_desc')}
+          </Typography>
+          <Alert severity="info" sx={{ textAlign: isRTL ? 'right' : 'left', direction: isRTL ? 'rtl' : 'ltr' }}>
+            {t('fin.gen_payroll_info', { count: payableTechs.length, currency: t('common.currency_aed'), amount: formatAED(previewTotal) })}
+          </Alert>
+          {skippedTechs.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2, textAlign: isRTL ? 'right' : 'left', direction: isRTL ? 'rtl' : 'ltr' }}>
+              {t('fin.gen_payroll_skipped', { count: skippedTechs.length, names: skippedTechs.map(tech => tech.displayName || tech.email).join(', ') })}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>

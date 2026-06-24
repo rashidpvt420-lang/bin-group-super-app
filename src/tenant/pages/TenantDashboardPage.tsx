@@ -217,8 +217,6 @@ export default function TenantDashboardPage() {
         </Box>
 
         <RoleJourneyStrip role="tenant" dark />
-        {permissionWarning && <Alert severity="warning" sx={{ bgcolor: alpha('#f59e0b', 0.1), color: '#fff', border: `1px solid ${alpha('#f59e0b', 0.35)}`, borderRadius: 3 }}>{permissionWarning}</Alert>}
-        {ticketReadWarning && <Alert severity="warning" sx={{ bgcolor: alpha('#f59e0b', 0.1), color: '#fff', border: `1px solid ${alpha('#f59e0b', 0.35)}`, borderRadius: 3 }}>{ticketReadWarning}</Alert>}
 
         <Button variant="contained" onClick={() => navigate('/tenant/request')} data-testid="tenant-new-request" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 4, fontWeight: 950, px: 4, py: 1.5 }}>
           {tx('dash.newRequestBtn', 'New Request')}
@@ -256,7 +254,14 @@ export default function TenantDashboardPage() {
               <Grid container spacing={3}>
                 <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{tx('dash.contractTerm', 'CONTRACT TERM')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '0.9rem' }}>{formatDate(contractData?.startDate || contractData?.validFrom)} - {formatDate(contractData?.endDate || contractData?.validTo)}</Typography></Box></Grid>
                 <Grid item xs={12} md={4}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950 }}>{showLedger ? tx('dash.upcomingPayment', 'UPCOMING PAYMENT') : tx('dash.receiptAccess', 'RECEIPT ACCESS')}</Typography><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5, fontSize: '1.1rem' }}>{showLedger && contractData?.rentAmount ? `AED ${Number(contractData.rentAmount).toLocaleString()}` : tx('dash.viaDocsVault', 'Documents Vault')}</Typography></Box></Grid>
-                <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate(showLedger ? '/tenant/payments' : '/tenant/documents')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{showLedger ? tx('dash.viewPayments', 'VIEW PAYMENTS') : tx('dash.viewDocsReceipts', 'VIEW DOCS / RECEIPTS')}</Button></Grid>
+                {showLedger ? (
+                  <Grid item xs={12} md={4}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/payments')} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{tx('dash.viewPayments', 'VIEW PAYMENTS')}</Button></Grid>
+                ) : (
+                  <>
+                    <Grid item xs={6} md={2}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/payments')} startIcon={<CreditCard size={18} />} sx={{ height: '100%', minHeight: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950, fontSize: '0.78rem' }}>{tx('dash.viewPayments', 'VIEW PAYMENTS')}</Button></Grid>
+                    <Grid item xs={6} md={2}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/documents')} startIcon={<FileText size={18} />} sx={{ height: '100%', minHeight: 80, borderColor: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: 4, fontWeight: 950, fontSize: '0.78rem' }}>{tx('dash.viewDocsReceipts', 'VIEW DOCS / RECEIPTS')}</Button></Grid>
+                  </>
+                )}
               </Grid>
               {!showLedger && <Alert severity="info" sx={{ mt: 3, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger are not shown for this access mode. This dashboard still keeps service requests, property access, notices, documents, and receipts reachable.')}</Alert>}
             </Paper>

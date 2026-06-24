@@ -4,6 +4,8 @@
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "ASCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantEmail", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantEmail", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "assignedTechnicianId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "assignedTechnicianId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "completedAt", "order": "ASCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "assignedTechnicianId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
