@@ -17,6 +17,8 @@ const getMillis = (value: any) => {
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const money = (value: any) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const hasValue = (value: any) => value !== undefined && value !== null && value !== '';
+const normalizedInspectionType = (inspection: any) => String(inspection.inspectionType || inspection.type || '').toUpperCase().replace(/[-\s]+/g, '_');
 
 const statusColor = (status: any) => {
   const normalized = String(status || '').toUpperCase();
@@ -40,7 +42,14 @@ const evidenceUrls = (inspection: any) => [
 const settlementLedger = (inspection: any) => {
   const depositHeld = Number(inspection.depositHeld || inspection.securityDeposit || inspection.depositAmount || 0);
   const damageEstimate = Number(inspection.damageEstimate || inspection.damageCostEstimate || inspection.estimatedDamageCost || 0);
-  const proposedDeduction = Number(inspection.proposedDeduction || inspection.depositDeduction || inspection.deductionAmount || damageEstimate || 0);
+  const rawDeduction = hasValue(inspection.proposedDeduction)
+    ? inspection.proposedDeduction
+    : hasValue(inspection.depositDeduction)
+      ? inspection.depositDeduction
+      : hasValue(inspection.deductionAmount)
+        ? inspection.deductionAmount
+        : damageEstimate;
+  const proposedDeduction = Number(rawDeduction || 0);
   const balanceToTenant = Math.max(0, depositHeld - proposedDeduction);
   const balanceDue = Math.max(0, proposedDeduction - depositHeld);
   return { depositHeld, damageEstimate, proposedDeduction, balanceToTenant, balanceDue };
@@ -94,7 +103,7 @@ export default function OwnerInspectionsPage() {
       if (action === 'APPROVED') {
         payload.approvedByOwner = true;
         payload.ownerApprovedAt = serverTimestamp();
-        payload.settlementStatus = inspection.inspectionType === 'MOVE_OUT' ? 'APPROVED_FOR_SETTLEMENT' : 'NO_SETTLEMENT_REQUIRED';
+        payload.settlementStatus = normalizedInspectionType(inspection) === 'MOVE_OUT' ? 'APPROVED_FOR_SETTLEMENT' : 'NO_SETTLEMENT_REQUIRED';
       }
       if (action === 'REINSPECTION_REQUESTED') {
         payload.damageClaimStatus = 'OWNER_REQUESTED_REINSPECTION';
@@ -117,8 +126,8 @@ export default function OwnerInspectionsPage() {
   };
 
   const pending = inspections.filter((item) => ['SUBMITTED', 'OWNER_REVIEW', 'DISPUTED', 'REINSPECTION_REQUESTED'].includes(String(item.status || '').toUpperCase())).length;
-  const moveIns = inspections.filter((item) => String(item.inspectionType || item.type || '').toUpperCase().replace('-', '_') === 'MOVE_IN').length;
-  const moveOuts = inspections.filter((item) => String(item.inspectionType || item.type || '').toUpperCase().replace('-', '_') === 'MOVE_OUT').length;
+  const moveIns = inspections.filter((item) => normalizedInspectionType(item) === 'MOVE_IN').length;
+  const moveOuts = inspections.filter((item) => normalizedInspectionType(item) === 'MOVE_OUT').length;
   const settlementCount = inspections.filter((item) => Number(settlementLedger(item).proposedDeduction || 0) > 0 || item.settlementStatus).length;
 
   return (
@@ -179,7 +188,7 @@ export default function OwnerInspectionsPage() {
                     </Paper>
 
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      {urls.slice(0, 4).map((url, index) => (
+                      {urls.map((url, index) => (
                         <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
                           Evidence {index + 1}
                         </Button>
