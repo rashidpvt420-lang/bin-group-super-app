@@ -43,7 +43,12 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   const { user } = useRole();
 
   const handleEvidenceExport = async () => {
-    exportComplaintsToCsv([complaint], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
+    const proofNotes = [
+      complaint.resolutionNotes || '',
+      `Before proof links: ${(complaint.photosBefore || []).join(' | ') || 'none'}`,
+      `After proof links: ${(complaint.proofPhotosAfter || []).join(' | ') || 'none'}`,
+    ].filter(Boolean).join('\n');
+    exportComplaintsToCsv([{ ...complaint, resolutionNotes: proofNotes }], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
     await addDoc(collection(db, 'audit_logs'), {
       actorId: user?.uid || 'owner',
       actorRole: 'owner',
