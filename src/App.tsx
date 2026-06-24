@@ -288,8 +288,13 @@ function AppContent() {
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        <Route path="/verify" element={<InvoiceVerificationPage />} />
+        <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
+        <Route path="/verify-cert" element={<CertificateVerificationPage />} />
+        <Route path="/verify-cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
+        <Route path="/verify/certificate/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
