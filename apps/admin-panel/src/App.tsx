@@ -150,7 +150,6 @@ function AppContent() {
                     <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                     <Route path="/staff-access" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
-                    <Route path="/hr" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
                 </Route>
             )}
 
@@ -259,58 +258,30 @@ function Layout() {
                     <Box sx={{ flexGrow: 1 }}>
                         <Outlet />
                     </Box>
-                    
-                    <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | MADE IN UAE 🇦🇪 | 
-                            <Typography 
-                                component="a" 
-                                href="https://bin-groups.com/privacy-policy" 
-                                sx={{ color: '#DAA520', textDecoration: 'none', ml: 1, fontWeight: 'bold' }}
-                            >
-                                {t('footer.privacy')}
-                            </Typography>
-                        </Typography>
-                    </Box>
                 </Box>
             </Box>
-            
-            {/* AI CHAT PORTAL */}
-            <Box sx={{ position: 'fixed', bottom: 0, right: 0, zIndex: 9999 }}>
-                <SovereignAIChat role="admin" onNavigate={navigate} />
-            </Box>
-            <SovereignAlertHandler />
         </Box>
     );
 }
 
 export default function App() {
-    return (
-        <LanguageProvider>
-            <AdminThemeProviderWrapper />
-        </LanguageProvider>
-    );
-}
-
-function AdminThemeProviderWrapper() {
     const { isRTL } = useLanguage();
-    
-    const theme = React.useMemo(() => createTheme({
-        ...adminTheme as any,
-        direction: isRTL ? 'rtl' : 'ltr',
-    }), [isRTL]);
+    const theme = React.useMemo(() => createTheme(adminTheme), [isRTL]);
+    const cache = isRTL ? cacheRtl : cacheLtr;
 
     return (
-        <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
+        <CacheProvider value={cache}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <Router>
-                    <AuthProvider>
-                        <AIProvider>
+                <AuthProvider>
+                    <AIProvider>
+                        <Router>
                             <AppContent />
-                        </AIProvider>
-                    </AuthProvider>
-                </Router>
+                            <SovereignAIChat />
+                            <SovereignAlertHandler />
+                        </Router>
+                    </AIProvider>
+                </AuthProvider>
             </ThemeProvider>
         </CacheProvider>
     );
