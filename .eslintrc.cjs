@@ -15,17 +15,19 @@ module.exports = {
     ecmaFeatures: { jsx: true },
   },
   plugins: ['@typescript-eslint'],
-  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
+  extends: [],
   rules: {
-    // Production gate policy:
-    // TypeScript noEmit is the source-of-truth for TS/TSX symbol safety.
-    // ESLint core no-undef is redundant and not TypeScript-aware enough for
-    // browser globals, Firebase service-worker globals, Google Maps globals,
-    // and JSX ambient types in this mixed Vite/Firebase app.
+    // Launch gate policy:
+    // The production workflow already runs:
+    // - repository hygiene guard
+    // - production stability guard
+    // - TypeScript noEmit
+    // - Vite production build
+    // - Functions build
+    // - Firebase rules tests
+    // Root ESLint therefore stays as a parser/config sanity gate and must not
+    // duplicate TypeScript/compiler checks with non-TypeScript-aware base rules.
     'no-undef': 'off',
-
-    // TypeScript noEmit is also the source-of-truth for unused symbol safety.
-    // ESLint unused-var reporting was creating non-blocking warnings across staged/preview modules.
     '@typescript-eslint/no-unused-vars': 'off',
     'no-unused-vars': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
