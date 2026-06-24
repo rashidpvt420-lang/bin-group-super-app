@@ -107,15 +107,49 @@ export default function TenantDashboardPage() {
 
   useEffect(() => {
     if (!user?.uid) return;
-    const qActive = query(collection(db, 'maintenanceTickets'), where('tenantId', '==', user.uid), where('status', 'not-in', ['CLOSED', 'DISPUTED']), orderBy('status'), orderBy('createdAt', 'desc'), limit(3));
-    const unsubActive = onSnapshot(qActive, (snap) => setActiveTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] active tickets listener failed:', err));
+    // Two tenant identity listeners are merged here because tickets can be tagged either way:
+    // - tenantId == uid: the normal path when the tenant self-files (TenantRequestPage, etc).
+    // - tenantEmail == email: tickets filed on behalf of a tenant who is still linked by email only
+    //   (e.g. invited but not yet UID-linked, or created via admin/owner/WhatsApp-triage flows that
+    //   copy whatever identity the unit document currently has). Mirrors the same dual lookup already
+    //   used for residence resolution above (units/contracts by tenantId then tenantEmail fallback).
+    const ticketsById = new Map<string, any>();
+    const emitMergedTickets = () => {
+      const merged = Array.from(ticketsById.values());
+      merged.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ?? a.createdAt?._seconds ?? 0;
+        const bTime = b.createdAt?.seconds ?? b.createdAt?._seconds ?? 0;
+        return bTime - aTime;
+      });
+      setActiveTickets(merged.slice(0, 3));
+    };
+
+    const qActiveById = query(collection(db, 'maintenanceTickets'), where('tenantId', '==', user.uid), where('status', 'not-in', ['CLOSED', 'DISPUTED']), orderBy('status'), orderBy('createdAt', 'desc'), limit(3));
+    const unsubActiveById = onSnapshot(qActiveById, (snap) => {
+      for (const removed of ticketsById.values()) { if (removed.__source === 'tenantId') ticketsById.delete(removed.id); }
+      snap.docs.forEach((d) => ticketsById.set(d.id, { id: d.id, ...d.data(), __source: 'tenantId' }));
+      emitMergedTickets();
+    }, (err) => console.warn('[TenantDashboard] active tickets listener (tenantId) failed:', err));
+
+    let unsubActiveByEmail: (() => void) | null = null;
+    const normalizedEmail = normalizeEmail(user.email);
+    if (normalizedEmail) {
+      const qActiveByEmail = query(collection(db, 'maintenanceTickets'), where('tenantEmail', '==', normalizedEmail), where('status', 'not-in', ['CLOSED', 'DISPUTED']), orderBy('status'), orderBy('createdAt', 'desc'), limit(3));
+      unsubActiveByEmail = onSnapshot(qActiveByEmail, (snap) => {
+        for (const removed of ticketsById.values()) { if (removed.__source === 'tenantEmail') ticketsById.delete(removed.id); }
+        snap.docs.forEach((d) => ticketsById.set(d.id, { id: d.id, ...d.data(), __source: 'tenantEmail' }));
+        emitMergedTickets();
+      }, (err) => console.warn('[TenantDashboard] active tickets listener (tenantEmail) failed:', err));
+    }
+
     const qNotices = query(collection(db, 'systemLogs'), where('type', '==', 'TENANT_NOTICE'), limit(2));
     const unsubNotices = onSnapshot(qNotices, (snap) => setNotices(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] notices listener failed:', err));
     return () => {
-      unsubActive();
+      unsubActiveById();
+      unsubActiveByEmail?.();
       unsubNotices();
     };
-  }, [user?.uid]);
+  }, [user?.uid, user?.email]);
 
   const contractMode = useMemo(() => resolveContractMode(contractData || {}), [contractData]);
   const contractProfile = useMemo(() => getContractModeProfile(contractMode), [contractMode]);
@@ -200,7 +234,17 @@ export default function TenantDashboardPage() {
                 </Grid>
               </Paper>
             ) : (
-              <Alert severity="info" sx={{ mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger are not shown for this access mode. This dashboard focuses on service requests, property access, notices, and available management tools.')}</Alert>
+              <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.2 }}><CreditCard size={20} /> {tx('dash.payments_documents', 'Payments / Documents')}</Typography>
+                  <Chip label={tx('dash.reporterAccess', 'Reporter Access')} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', fontWeight: 950 }} />
+                </Stack>
+                <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, color: '#fff', borderRadius: 4 }}>{tx('dash.ledgerHiddenInfo', 'Lease and rent ledger figures are not shown for this access mode. You can still submit payments and view receipts/documents below.')}</Alert>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}><Button fullWidth variant="contained" onClick={() => navigate('/tenant/payments')} startIcon={<CreditCard size={20} />} sx={{ height: 80, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, borderRadius: 4, fontWeight: 950 }}>{tx('dash.viewPayments', 'VIEW PAYMENTS')}</Button></Grid>
+                  <Grid item xs={12} md={6}><Button fullWidth variant="outlined" onClick={() => navigate('/tenant/documents')} startIcon={<FileText size={20} />} sx={{ height: 80, borderColor: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: 4, fontWeight: 950 }}>{tx('dash.viewReceiptsDocs', 'RECEIPTS / DOCUMENTS')}</Button></Grid>
+                </Grid>
+              </Paper>
             )}
 
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
