@@ -14,6 +14,7 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
+  plugins: ['react-hooks'],
   extends: [],
   rules: {
     // Launch gate policy:
@@ -22,6 +23,7 @@ module.exports = {
     // Root ESLint remains a parser/config sanity gate and must not duplicate
     // compiler checks with rule packs that are not aligned with this app.
     'no-undef': 'off',
+    'react-hooks/exhaustive-deps': 'off',
     '@typescript-eslint/no-unused-vars': 'off',
     'no-unused-vars': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
