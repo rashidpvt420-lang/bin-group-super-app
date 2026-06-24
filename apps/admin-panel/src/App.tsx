@@ -56,6 +56,8 @@ import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import StaffAccessPage from './pages/admin/StaffAccessPage';
+import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsPage';
+import ContractTerminationPage from './pages/admin/ContractTerminationPage';
 import { adminTheme } from './theme/adminTheme';
 
 // Create RTL/LTR Caches
@@ -120,6 +122,8 @@ function AppContent() {
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
                     <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
                     <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
+                    <Route path="/properties/approvals" element={<ProtectedRoute adminOnly><AdminPropertyApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/contracts/termination" element={<ProtectedRoute adminOnly><ContractTerminationPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
