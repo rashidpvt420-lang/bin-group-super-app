@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Container, Typography, Box, Paper, Grid, Stack, Button, 
+import { useNavigate } from 'react-router-dom';
+import {
+    Container, Typography, Box, Paper, Grid, Stack, Button,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
     IconButton, Alert
@@ -18,8 +19,10 @@ import RegisterStaffDialog from '../../components/RegisterStaffDialog';
 
 export default function HRManagementPage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [tab, setTab] = useState(0);
     const [staff, setStaff] = useState<any[]>([]);
+    const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -38,6 +41,31 @@ export default function HRManagementPage() {
         });
         return () => unsub();
     }, []);
+
+    useEffect(() => {
+        // Real payroll ledger, used by the Payroll Hub tab instead of placeholder rows
+        const q = query(collection(db, 'payroll'));
+        const unsub = onSnapshot(q, (snap) => {
+            setPayrollRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, []);
+
+    const treasuryLogsByMonth = Object.values(
+        payrollRecords.reduce((acc: Record<string, { month: string; total: number; allPaid: boolean }>, rec: any) => {
+            const key = rec.month || 'UNKNOWN';
+            if (!acc[key]) acc[key] = { month: key, total: 0, allPaid: true };
+            acc[key].total += Number(rec.amount) || 0;
+            if (rec.status !== 'paid') acc[key].allPaid = false;
+            return acc;
+        }, {})
+    ).sort((a: any, b: any) => b.month.localeCompare(a.month)).slice(0, 6);
+
+    const nextDispatchDate = (() => {
+        const now = new Date();
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return next.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    })();
 
     const getStatusColor = (status: string) => {
         switch (status?.toUpperCase()) {
@@ -176,7 +204,9 @@ export default function HRManagementPage() {
                                                 </Stack>
                                             </TableCell>
                                             <TableCell>
-                                                <Typography variant="body2" fontWeight="900" color="#10b981">{s.performanceScore || '98'}%</Typography>
+                                                <Typography variant="body2" fontWeight="900" color={s.performanceScore ? '#10b981' : 'rgba(255,255,255,0.3)'}>
+                                                    {s.performanceScore ? `${s.performanceScore}%` : 'N/A'}
+                                                </Typography>
                                             </TableCell>
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
@@ -194,21 +224,26 @@ export default function HRManagementPage() {
                                                                         setPayrollError('Your admin session is not active. Sign in again before generating payslips.');
                                                                         return;
                                                                     }
+                                                                    if (!s.salary || s.salary <= 0) {
+                                                                        setPayrollError(`${s.displayName || 'This staff member'} has no salary on file. Set a salary before generating a payslip.`);
+                                                                        return;
+                                                                    }
                                                                     await auth.currentUser.getIdToken(true);
-                                                                    
+
                                                                     // The function in index.ts is generateAndEmailPayslip
                                                                     const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
+                                                                    const payPeriod = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                                                                     const result: any = await genFn({
                                                                         staffId: s.id,
                                                                         staffName: s.displayName,
                                                                         staffEmail: s.email,
-                                                                        payPeriod: 'April 2026',
-                                                                        basicSalary: s.salary || 12000,
-                                                                        allowances: 3000,
-                                                                        overtime: 500,
-                                                                        deductions: 0
+                                                                        payPeriod,
+                                                                        basicSalary: s.salary,
+                                                                        allowances: s.allowances || 0,
+                                                                        overtime: s.overtime || 0,
+                                                                        deductions: s.deductions || 0
                                                                     });
-                                                                    
+
                                                                     if (result.data.success) {
                                                                         alert("Sovereign Pay Advice secured and dispatched via email.");
                                                                     }
@@ -249,9 +284,9 @@ export default function HRManagementPage() {
                                 <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4, textAlign: 'center' }}>
                                     <DollarSign size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
                                     <Typography variant="h5" fontWeight="950" color="#FFF">NEXT DISPATCH</Typography>
-                                    <Typography variant="h3" fontWeight="950" color={binThemeTokens.gold} sx={{ my: 2 }}>May 28</Typography>
-                                    <Typography variant="body2" color="textSecondary">Institutional Cycle V7.1</Typography>
-                                    <Button fullWidth variant="contained" sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                    <Typography variant="h3" fontWeight="950" color={binThemeTokens.gold} sx={{ my: 2 }}>{nextDispatchDate}</Typography>
+                                    <Typography variant="body2" color="textSecondary">Start of next payroll cycle</Typography>
+                                    <Button fullWidth variant="contained" onClick={() => navigate('/financials/payroll')} sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                                         GENERATE LEDGER
                                     </Button>
                                 </Paper>
@@ -268,11 +303,24 @@ export default function HRManagementPage() {
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {['April', 'March', 'February'].map(m => (
-                                                <TableRow key={m}>
-                                                    <TableCell sx={{ fontWeight: 900 }}>{m} 2026</TableCell>
-                                                    <TableCell>AED 142,500.00</TableCell>
-                                                    <TableCell><Chip label="SETTLED" size="small" color="success" sx={{ fontWeight: 900, fontSize: 10 }} /></TableCell>
+                                            {treasuryLogsByMonth.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={3} sx={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', py: 4 }}>
+                                                        No payroll runs recorded yet.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : treasuryLogsByMonth.map((log: any) => (
+                                                <TableRow key={log.month}>
+                                                    <TableCell sx={{ fontWeight: 900 }}>{log.month}</TableCell>
+                                                    <TableCell>AED {log.total.toLocaleString('en-AE')}</TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={log.allPaid ? 'SETTLED' : 'PENDING'}
+                                                            size="small"
+                                                            color={log.allPaid ? 'success' : 'warning'}
+                                                            sx={{ fontWeight: 900, fontSize: 10 }}
+                                                        />
+                                                    </TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>

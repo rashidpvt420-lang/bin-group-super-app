@@ -29,6 +29,9 @@ type CompanyContent = {
   oneMinuteTitle: string;
   oneMinuteSubtitle: string;
   roles: [string, string, string][];
+  whyUsTitle: string;
+  whyUsSubtitle: string;
+  whyUs: [string, string][];
   proofTitle: string;
   proofItems: string[];
   flowTitle: string;

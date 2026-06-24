@@ -212,7 +212,7 @@ export default function BrokerProfilePage() {
                 {[
                   { label: label('Joined', 'تاريخ الانضمام'), value: brokerData?.joinedLabel || label('Active Partner', 'شريك نشط'), icon: <Calendar /> },
                   { label: label('Primary Region', 'المنطقة الرئيسية'), value: primaryRegion || label('UAE', 'الإمارات'), icon: <MapPin /> },
-                  { label: label('Mission Success', 'نجاح المهام'), value: brokerData?.missionSuccess || '94%', icon: <Zap /> },
+                  { label: label('Mission Success', 'نجاح المهام'), value: brokerData?.missionSuccess || label('Not available yet', 'غير متوفر بعد'), icon: <Zap /> },
                 ].map((m, i) => (
                   <Grid item xs={12} sm={4} key={i}>
                     <Box sx={{ p: 3, bgcolor: '#F3F4F6', borderRadius: 6, border: '1px solid #E5E7EB', textAlign: isRTL ? 'right' : 'left' }}>
