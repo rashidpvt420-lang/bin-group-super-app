@@ -14,19 +14,13 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
-  plugins: ['@typescript-eslint'],
   extends: [],
   rules: {
     // Launch gate policy:
-    // The production workflow already runs:
-    // - repository hygiene guard
-    // - production stability guard
-    // - TypeScript noEmit
-    // - Vite production build
-    // - Functions build
-    // - Firebase rules tests
-    // Root ESLint therefore stays as a parser/config sanity gate and must not
-    // duplicate TypeScript/compiler checks with non-TypeScript-aware base rules.
+    // The production workflow already runs repository hygiene, stability,
+    // TypeScript noEmit, Vite build, Functions build, and Firebase rules tests.
+    // Root ESLint remains a parser/config sanity gate and must not duplicate
+    // compiler checks with rule packs that are not aligned with this app.
     'no-undef': 'off',
     '@typescript-eslint/no-unused-vars': 'off',
     'no-unused-vars': 'off',
