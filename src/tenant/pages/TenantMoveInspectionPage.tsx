@@ -2,14 +2,14 @@ import React, { useRef, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Container, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, Grid, IconButton,
-  LinearProgress, Paper, Radio, RadioGroup, FormControlLabel, Stack, TextField,
+  LinearProgress, Paper, Radio, RadioGroup, FormControlLabel, Snackbar, Stack, TextField,
   Typography, alpha,
 } from '@mui/material';
 import {
   Camera, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, FileText,
   Home, Key, Minus, Plus, Save, X, Zap, Droplets,
 } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp, storage, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
+import { addDoc, collection, db, getDownloadURL, ref, serverTimestamp, storage, uploadBytes } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -66,6 +66,8 @@ export default function TenantMoveInspectionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState('');
 
   const initRoomChecks = (): Record<string, RoomChecks> => {
     const result: Record<string, RoomChecks> = {};
@@ -123,34 +125,40 @@ export default function TenantMoveInspectionPage() {
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file || !uploadingFor) return;
-    
+    const { roomId, item } = uploadingFor;
+    setUploadingFor(null);
+    if (!user?.uid) {
+      setPhotoError('You must be signed in to attach a photo.');
+      return;
+    }
+    const uploadKey = `${roomId}:${item}`;
+    setPhotoUploading(uploadKey);
+    setPhotoError('');
     try {
-      const { roomId, item } = uploadingFor;
-      const path = `inspections/${user?.uid || 'anonymous'}/${Date.now()}_${roomId}_${item.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const storageRef = ref(storage, path);
-      
-      await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(storageRef);
-
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const safeItem = item.replace(/[^a-z0-9]+/gi, '_');
+      const storageRef = ref(storage, `inspections/${user.uid}/${Date.now()}_${roomId}_${safeItem}.${ext}`);
+      await uploadBytes(storageRef, file, { contentType: file.type });
+      const photoUrl = await getDownloadURL(storageRef);
       setState(prev => ({
         ...prev,
         roomChecks: {
           ...prev.roomChecks,
           [roomId]: {
             ...prev.roomChecks[roomId],
-            [item]: { ...prev.roomChecks[roomId][item], photoUrl: downloadUrl },
+            [item]: { ...prev.roomChecks[roomId][item], photoUrl },
           },
         },
       }));
-    } catch (err) {
-      console.error('Photo upload failed:', err);
-      setError('Failed to upload photo. Please try again.');
+    } catch (err: any) {
+      setPhotoError(err?.message || 'Photo upload failed. Please try again.');
     } finally {
-      setUploadingFor(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setPhotoUploading(null);
     }
   };
+
 
   const roomProgress = (roomId: string) => {
     const checks = Object.values(state.roomChecks[roomId] || {});
@@ -345,10 +353,13 @@ export default function TenantMoveInspectionPage() {
                                   ))}
                                   <IconButton
                                     size="small"
+                                    disabled={photoUploading === `${room.id}:${item}`}
                                     onClick={() => { setUploadingFor({ roomId: room.id, item }); fileInputRef.current?.click(); }}
                                     sx={{ color: check.photoUrl ? '#10b981' : 'rgba(255,255,255,0.3)', border: `1px solid ${check.photoUrl ? alpha('#10b981', 0.3) : 'rgba(255,255,255,0.1)'}`, borderRadius: 1.5 }}
                                   >
-                                    <SafeIcon icon={Camera} size={14} />
+                                    {photoUploading === `${room.id}:${item}`
+                                      ? <CircularProgress size={14} sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                                      : <SafeIcon icon={Camera} size={14} />}
                                   </IconButton>
                                 </Stack>
                               </Stack>
@@ -592,6 +603,11 @@ export default function TenantMoveInspectionPage() {
           {previewPhoto && <Box component="img" src={previewPhoto} sx={{ maxWidth: '100%', maxHeight: '80vh', display: 'block' }} />}
         </Box>
       </Dialog>
+
+      {/* Photo upload error */}
+      <Snackbar open={!!photoError} autoHideDuration={6000} onClose={() => setPhotoError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity="error" onClose={() => setPhotoError('')} sx={{ width: '100%' }}>{photoError}</Alert>
+      </Snackbar>
     </Container>
   );
 }

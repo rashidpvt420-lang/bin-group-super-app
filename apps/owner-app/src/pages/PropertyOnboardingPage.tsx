@@ -10,7 +10,8 @@ import {
   useTheme,
   useMediaQuery,
   alpha,
-  Button
+  Button,
+  LinearProgress
 } from '@mui/material';
 import { Shield as ShieldIcon } from 'lucide-react';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -29,25 +30,31 @@ import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitS
 import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
 import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
+const INTERNAL_STEP_COUNT = 10;
+const VISIBLE_STAGE_COUNT = 5;
+const stageByInternalStep = [1, 2, 2, 2, 3, 3, 4, 4, 5, 5];
+const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
+const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
+const visibleStageProgress = (step: number) => Math.round((visibleStageForInternalStep(step) / VISIBLE_STAGE_COUNT) * 100);
+
 const PropertyOnboardingPage = () => {
     const { step, nextStep, prevStep } = useOnboardingStore();
     const { lang, setLang, t, isRTL } = useLanguage();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
-    const onboardingSteps = [
-        t('onboarding.company'),
-        t('onboarding.asset'),
-        t('onboarding.location'),
-        t('onboarding.systems'),
-        t('onboarding.service_plan'),
-
-        t('onboarding.documents'),
-        t('onboarding.verification'),
-        t('onboarding.review'),
-        'Payment Options',
-        t('onboarding.payment')
+    const visibleStages = [
+        t('onboarding.company') || label('Company', 'الشركة'),
+        label('Property', 'العقار'),
+        t('onboarding.service_plan') || label('Plan', 'الخطة'),
+        label('Account & Review', 'الحساب والمراجعة'),
+        t('onboarding.payment') || label('Contract & Payment', 'العقد والدفع')
     ];
+
+    const safeStep = clampStep(step, INTERNAL_STEP_COUNT);
+    const activeVisibleStageIndex = clampStep(visibleStageForInternalStep(safeStep), VISIBLE_STAGE_COUNT) - 1;
+    const currentStageProgress = visibleStageProgress(safeStep);
 
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
@@ -93,8 +100,8 @@ const PropertyOnboardingPage = () => {
                         </Box>
                     </Box>
 
-                    <Stepper activeStep={step - 1} alternativeLabel={!isMobile} sx={{ minHeight: isMobile ? 34 : 'auto', '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' }, '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr' } }}>
-                        {onboardingSteps.map((label) => (
+                    <Stepper activeStep={activeVisibleStageIndex} alternativeLabel={!isMobile} sx={{ minHeight: isMobile ? 34 : 'auto', '& .MuiStepLabel-labelContainer': { display: isMobile ? 'none' : 'block' }, '& .MuiStep-root': { direction: isRTL ? 'rtl' : 'ltr' } }}>
+                        {visibleStages.map((label) => (
                             <Step key={label}>
                                 <StepLabel StepIconProps={{ sx: { '&.Mui-active': { color: binThemeTokens.gold }, '&.Mui-completed': { color: '#4ADE80' } } }}>
                                     {!isMobile && <Typography variant="caption" fontWeight="700" sx={{ color: 'rgba(255,255,255,0.7)' }}>{label}</Typography>}
@@ -102,11 +109,12 @@ const PropertyOnboardingPage = () => {
                             </Step>
                         ))}
                     </Stepper>
+                    <LinearProgress variant="determinate" value={currentStageProgress} sx={{ mt: 2, height: 8, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                 </Container>
             </Box>
 
             <Container maxWidth="lg" sx={{ py: 6, minHeight: '60vh' }}>
-                {renderStepContent(step)}
+                {renderStepContent(safeStep)}
             </Container>
         </Box>
     );

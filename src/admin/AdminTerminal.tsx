@@ -27,20 +27,21 @@ const resolveAdminUrl = (path: string) => {
 // Best-effort: exchange the session already open here for a one-time custom
 // token the admin-panel origin can redeem, so staff don't have to sign in a
 // second time after the cross-domain redirect. Any failure (offline, the
-// function not deployed yet, etc.) just falls back to the plain URL, which
-// still lands on the admin-panel's own login form exactly as it does today.
+// function not deployed yet, etc.) falls back to the plain login flow, tagged
+// with #sso_failed=1 so the admin-panel can tell the user SSO was attempted
+// and failed, instead of silently landing on what looks like a fresh login.
 const withBridgeToken = async (url: string) => {
   try {
     const mintBridgeToken = httpsCallable(functions, 'mintAdminBridgeToken');
     const result: any = await mintBridgeToken();
     const token = result?.data?.token;
-    if (!token) return url;
+    if (!token) return `${url}#sso_failed=1`;
     // Carried in the fragment, not the query string: fragments are never sent
     // to the server, so the token can't leak into access logs or Referer headers.
     return `${url}#bridge_token=${encodeURIComponent(token)}`;
   } catch (err) {
     console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual re-login.', err);
-    return url;
+    return `${url}#sso_failed=1`;
   }
 };
 

@@ -18,6 +18,7 @@ import { resolveOwnerComplaint } from '../utils/ownerComplaintResolver';
 import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
 import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
+import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'SIGNED']);
 const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'SIGNED']);
@@ -478,8 +479,8 @@ export default function OwnerDashboardResolvedPage() {
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>
-          <Typography variant="h3" fontWeight={950} sx={{ color: '#fff', mt: 1 }}>{tx('dash.owner.active', 'Dashboard Active')}</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.55)', mt: 1 }}>{tx('dash.owner.desc', 'Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.')}</Typography>
+          <Typography variant="h3" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('dash.owner.active', 'Dashboard Active')}</Typography>
+          <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>{tx('dash.owner.desc', 'Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.')}</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
           {contract.contractUrl && (
@@ -491,6 +492,8 @@ export default function OwnerDashboardResolvedPage() {
           <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.addPerson', 'Add Person')}</Button>
         </Stack>
       </Box>
+
+      <RoleJourneyStrip role="owner" />
 
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {KPI_CARDS.map((card, idx) => (

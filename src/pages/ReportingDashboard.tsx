@@ -1,6 +1,5 @@
 // apps/owner-app/src/pages/ReportingDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { registerArabicFont } from '../utils/arabicPdfFont';
@@ -22,7 +21,6 @@ import { formatAED } from '../utils/formatters';
 
 const ReportingDashboard: React.FC = () => {
     const { user, role } = useRole();
-    const navigate = useNavigate();
     const [stats, setStats] = useState<any>(null);
     const [selectedEmirate, setSelectedEmirate] = useState('ALL');
     const [loading, setLoading] = useState(true);
@@ -125,7 +123,7 @@ const ReportingDashboard: React.FC = () => {
 
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text("This document is a certified institutional export. BIN GROUP HQ, Al Ain, Abu Dhabi, UAE.", 105, 280, { align: 'center' });
+        doc.text("This document is a certified institutional export. BIN GROUP Dubai HQ.", 105, 280, { align: 'center' });
         doc.save(`Sovereign_Report_${selectedEmirate}_${Date.now()}.pdf`);
     };
 
@@ -231,7 +229,7 @@ const ReportingDashboard: React.FC = () => {
                                     <Typography variant="h1" fontWeight="950" color="#FFF">{stats.renewalRisk}%</Typography>
                                     <Typography variant="body2" color="textSecondary">Retention Hedge Layer</Typography>
                                 </Box>
-                                <Button fullWidth variant="contained" onClick={() => navigate('/tenants')} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>MITIGATE RISK</Button>
+                                <Button fullWidth variant="contained" sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>MITIGATE RISK</Button>
                             </Paper>
                         </Grid>
                     </Grid>

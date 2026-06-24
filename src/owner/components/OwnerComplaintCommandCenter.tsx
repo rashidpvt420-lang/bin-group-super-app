@@ -5,6 +5,8 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
 import { exportComplaintsToCsv } from './OwnerComplaintReportExport';
+import { db, doc, updateDoc, addDoc, collection, serverTimestamp } from '../../lib/firebase';
+import { useRole } from '../../context/RoleContext';
 
 interface OwnerComplaintCommandCenterProps {
   complaints: OwnerComplaint[];
@@ -38,6 +40,40 @@ const getStatusColor = (status: string) => {
 
 function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   const [open, setOpen] = useState(false);
+  const { user } = useRole();
+
+  const handleUpdateStatus = async (newStatus: string) => {
+    try {
+      const ticketRef = doc(db, 'maintenanceTickets', complaint.ticketId);
+      await updateDoc(ticketRef, {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      // Write to audit log
+      await addDoc(collection(db, 'audit_logs'), {
+        actorId: user?.uid || 'owner',
+        actorRole: 'owner',
+        action: `OWNER_${newStatus}`,
+        targetType: 'MAINTENANCE_TICKET',
+        targetId: complaint.ticketId,
+        before: { status: complaint.status },
+        after: { status: newStatus },
+        metadata: { propertyName: complaint.propertyName || '' },
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM',
+        createdAt: serverTimestamp()
+      });
+
+      alert(`Ticket ${complaint.ticketId} status updated to ${newStatus}.`);
+      window.location.reload();
+    } catch (err: any) {
+      console.error("Failed to update ticket status:", err);
+      alert("Error: " + err.message);
+    }
+  };
+
+  const showReviewActions = ['COMPLETED', 'RESOLVED', 'CLOSED_VERIFIED'].includes(complaint.status.toUpperCase());
+  const showOpenActions = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(complaint.status.toUpperCase());
   
   return (
     <React.Fragment>
@@ -99,7 +135,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
               </Stack>
 
               {(complaint.photosBefore.length > 0 || complaint.proofPhotosAfter.length > 0) && (
-                <Box sx={{ mt: 3 }}>
+                <Box sx={{ mt: 3, mb: 2 }}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, mb: 1, display: 'block' }}>EVIDENCE & PROOF</Typography>
                   <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1 }}>
                     {complaint.photosBefore.map((url, i) => (
@@ -117,6 +153,57 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
                   </Stack>
                 </Box>
               )}
+
+              <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                {showReviewActions && (
+                  <>
+                    <Button 
+                      variant="contained" 
+                      color="success" 
+                      size="small"
+                      onClick={() => handleUpdateStatus('CLOSED')}
+                    >
+                      Approve & Close
+                    </Button>
+                    <Button 
+                      variant="contained" 
+                      color="error" 
+                      size="small"
+                      onClick={() => handleUpdateStatus('DISPUTED')}
+                    >
+                      Dispute Resolution
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      color="warning" 
+                      size="small"
+                      onClick={() => handleUpdateStatus('REOPENED')}
+                    >
+                      Request Revisit
+                    </Button>
+                  </>
+                )}
+                {showOpenActions && (
+                  <>
+                    <Button 
+                      variant="outlined" 
+                      color="error" 
+                      size="small"
+                      onClick={() => handleUpdateStatus('ESCALATED')}
+                    >
+                      Escalate Ticket
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      color="warning" 
+                      size="small"
+                      onClick={() => handleUpdateStatus('DISPUTED')}
+                    >
+                      Dispute Ticket
+                    </Button>
+                  </>
+                )}
+              </Stack>
             </Box>
           </Collapse>
         </TableCell>

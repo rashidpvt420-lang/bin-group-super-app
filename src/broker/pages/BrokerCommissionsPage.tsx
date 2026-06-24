@@ -102,7 +102,7 @@ export default function BrokerCommissionsPage() {
             case 'approved': return '#3b82f6';
             case 'rejected': return '#ef4444';
             case 'pending': return binThemeTokens.gold;
-            default: return 'rgba(255,255,255,0.4)';
+            default: return binThemeTokens.textSecondary;
         }
     };
 
@@ -122,7 +122,7 @@ export default function BrokerCommissionsPage() {
                     variant="outlined"
                     startIcon={<Download size={18} />}
                     onClick={exportReport}
-                    sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 900, px: 3, borderRadius: 3 }}
+                    sx={{ color: binThemeTokens.textPrimary, borderColor: '#E5E7EB', fontWeight: 900, px: 3, borderRadius: 3 }}
                 >
                     EXPORT REPORT
                 </Button>
@@ -146,8 +146,8 @@ export default function BrokerCommissionsPage() {
                             <Box sx={{ position: 'absolute', top: -10, right: -10, opacity: 0.1, color: stat.color }}>
                                 {stat.icon}
                             </Box>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, letterSpacing: 1.5 }}>{stat.label}</Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1, letterSpacing: -1 }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1.5 }}>{stat.label}</Typography>
+                            <Typography variant="h3" fontWeight="950" sx={{ color: stat.color, mt: 1, letterSpacing: -1 }}>
                                 <Typography component="span" variant="h5" sx={{ color: stat.color, mr: 1, fontWeight: 950 }}>AED</Typography>
                                 {stat.value.toLocaleString()}
                             </Typography>
@@ -157,23 +157,23 @@ export default function BrokerCommissionsPage() {
             </Grid>
 
             {/* ─── COMMISSIONS TABLE ─────────────────────────────────────────── */}
-            <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+            <TableContainer component={Paper} sx={{ bgcolor: binThemeTokens.softCanvas, borderRadius: 8, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
                 <Table>
-                    <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+                    <TableHead sx={{ bgcolor: '#F3F4F6' }}>
                         <TableRow>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>MISSION REF</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>SOURCE / PROPERTY</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>ALLOCATION</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>STATUS</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>SETTLEMENT</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 950, borderBottom: '1px solid rgba(255,255,255,0.05)' }} align="right">ACTIONS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>MISSION REF</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>SOURCE / PROPERTY</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>ALLOCATION</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>STATUS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>SETTLEMENT</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }} align="right">ACTIONS</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {commissions.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ py: 10, border: 'none' }}>
-                                    <Box sx={{ opacity: 0.2 }}>
+                                    <Box sx={{ color: '#9CA3AF' }}>
                                         <Wallet size={48} />
                                         <Typography variant="body2" sx={{ mt: 2, fontWeight: 900 }}>NO FINANCIAL RECORDS DETECTED</Typography>
                                     </Box>
@@ -181,42 +181,42 @@ export default function BrokerCommissionsPage() {
                             </TableRow>
                         ) : (
                             commissions.map((c) => (
-                                <TableRow key={c.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.01)' } }}>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                <TableRow key={c.id} sx={{ '&:hover': { bgcolor: '#F3F4F6' } }}>
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
                                         <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950, fontFamily: 'monospace' }}>#{c.id.substring(0,8).toUpperCase()}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}</Typography>
+                                        <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 800 }}>{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}</Typography>
                                     </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{c.linkedLeadName || c.linkedReferralName || c.brokerName || 'Direct Mission'}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.linkedProperty || c.propertyName || 'Portfolio Wide'}</Typography>
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
+                                        <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{c.linkedLeadName || c.linkedReferralName || c.brokerName || 'Direct Mission'}</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.linkedProperty || c.propertyName || 'Portfolio Wide'}</Typography>
                                     </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 950 }}>AED {c.amount?.toLocaleString()}</Typography>
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
+                                        <Typography variant="body1" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>AED {c.amount?.toLocaleString()}</Typography>
                                         {c.percentage && <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{c.percentage}% Yield</Typography>}
                                     </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                                        <Chip 
-                                            label={String(c.status || '').toUpperCase()} 
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
+                                        <Chip
+                                            label={String(c.status || '').toUpperCase()}
                                             size="small"
-                                            sx={{ bgcolor: alpha(getStatusColor(c.status), 0.1), color: getStatusColor(c.status), fontWeight: 950, fontSize: '0.65rem' }} 
+                                            sx={{ bgcolor: alpha(getStatusColor(c.status), 0.1), color: getStatusColor(c.status), fontWeight: 950, fontSize: '0.65rem' }}
                                         />
                                     </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
                                         {String(c.status || '').toLowerCase() === 'paid' ? (
                                             <Box>
                                                 <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>SETTLED</Typography>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : 'N/A'}</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : 'N/A'}</Typography>
                                             </Box>
                                         ) : (
                                             <Box>
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ESTIMATED</Typography>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{c.expectedPayoutDate?.toDate ? c.expectedPayoutDate.toDate().toLocaleDateString() : 'Cycle End'}</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.expectedPayoutDate?.toDate ? c.expectedPayoutDate.toDate().toLocaleDateString() : 'Cycle End'}</Typography>
                                             </Box>
                                         )}
                                     </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }} align="right">
+                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }} align="right">
                                         <Tooltip title="View Statement">
-                                            <IconButton onClick={() => viewStatement(c)} sx={{ color: 'rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 }}>
+                                            <IconButton onClick={() => viewStatement(c)} sx={{ color: binThemeTokens.textSecondary, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 2 }}>
                                                 <ExternalLink size={18} />
                                             </IconButton>
                                         </Tooltip>
@@ -232,7 +232,7 @@ export default function BrokerCommissionsPage() {
             <Paper sx={{ mt: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, borderRadius: 4 }}>
                 <Stack direction="row" spacing={2} alignItems="center">
                     <Info size={20} color={binThemeTokens.gold} />
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
                         All commissions are subject to local tax laws and RERA brokerage fee regulations. Payments are processed within 14 business days of institutional approval.
                     </Typography>
                 </Stack>

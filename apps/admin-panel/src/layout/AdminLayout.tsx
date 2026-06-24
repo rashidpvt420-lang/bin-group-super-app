@@ -30,8 +30,10 @@ import {
   AccountBalance as TreasuryIcon,
   History as AuditIcon,
 } from '@mui/icons-material';
+import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
+import { auth } from '../lib/firebase';
 
 const DRAWER_WIDTH = 260;
 
@@ -54,22 +56,28 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    alert(t('nav.logout'));
-    navigate('/login');
+  const handleLogout = async () => {
+    handleMenuClose();
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.warn('[ADMIN] Firebase sign-out failed; forcing login redirect.', error);
+    } finally {
+      window.location.replace('/login?intendedRole=admin&logout=1');
+    }
   };
 
   const menuItems = [
-    { label: t('nav.dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-    { label: t('nav.live_map'), icon: <MapIcon />, path: '/live-map' },
-    { label: t('nav.tenants'), icon: <PeopleIcon />, path: '/owners' },
-    { label: t('nav.tickets'), icon: <BuildIcon />, path: '/tickets' },
-    { label: t('nav.technicians'), icon: <PeopleIcon />, path: '/technicians' },
-    { label: t('nav.financials'), icon: <TreasuryIcon />, path: '/financials' },
-    { label: t('nav.sos_feed'), icon: <Badge badgeContent={sosCount} color="error"><WarningIcon /></Badge>, path: '/sos' },
-    { label: t('nav.audit'), icon: <AuditIcon />, path: '/audit' },
-    { label: t('nav.reports'), icon: <BarChartIcon />, path: '/reports' },
-    { label: t('nav.settings'), icon: <SettingsIcon />, path: '/settings' },
+    { label: t('nav.dashboard'), icon: <DashboardIcon />, path: '/admin/dashboard' },
+    { label: t('nav.live_map'), icon: <MapIcon />, path: '/admin/live-map' },
+    { label: t('nav.tenants'), icon: <PeopleIcon />, path: '/admin/owners' },
+    { label: t('nav.tickets'), icon: <BuildIcon />, path: '/admin/tickets' },
+    { label: t('nav.technicians'), icon: <PeopleIcon />, path: '/admin/technicians' },
+    { label: t('nav.financials'), icon: <TreasuryIcon />, path: '/admin/financials' },
+    { label: t('nav.sos_feed'), icon: <Badge badgeContent={sosCount} color="error"><WarningIcon /></Badge>, path: '/admin/sos' },
+    { label: t('nav.audit'), icon: <AuditIcon />, path: '/admin/audit' },
+    { label: t('nav.reports'), icon: <BarChartIcon />, path: '/admin/reports' },
+    { label: t('nav.settings'), icon: <SettingsIcon />, path: '/admin/settings' },
   ];
 
   return (

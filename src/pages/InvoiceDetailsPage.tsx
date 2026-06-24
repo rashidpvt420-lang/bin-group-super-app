@@ -152,7 +152,7 @@ export default function InvoiceDetailsPage() {
                         <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1.5, letterSpacing: -1 }}>BIN-GROUP</Typography>
                         <Stack spacing={0.5}>
                             <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>Institutional Asset Management Headquarters</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>BIN GROUP HQ, Al Ain, Abu Dhabi, UAE</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Business Bay, One Central Tower, Dubai, UAE</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRN: 100345678900003</Typography>
                         </Stack>
                     </Box>

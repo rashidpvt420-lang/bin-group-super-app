@@ -204,7 +204,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                 </Grid>
                             </Grid>
                             <TextField select fullWidth label={t('onboarding.payment_method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as any)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                <MenuItem value="BANK_TRANSFER" disabled>{t('onboarding.bank_transfer')} (Coming Soon)</MenuItem>
+                                <MenuItem value="BANK_TRANSFER">{t('onboarding.bank_transfer')}</MenuItem>
                                 <MenuItem value="CHEQUE">{t('onboarding.corp_cheque')}</MenuItem>
                                 <MenuItem value="CASH">{t('onboarding.cash_payment')}</MenuItem>
                             </TextField>

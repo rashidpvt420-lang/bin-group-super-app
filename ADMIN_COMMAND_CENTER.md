@@ -40,17 +40,16 @@ Every admin action is recorded in the `action_logs` collection with a SHA-256 ha
 
 ## 🛠️ 5. Role System Repair (Emergency Admin Access)
 
-If an administrator is locked out or requires role escalation, use the `add_admin_grant.js` script to manually insert a grant into the system.
+If an administrator is locked out or requires role escalation, use `scripts/grant-admin.mjs`. It is the one real, end-to-end repair path: it creates the Firebase Auth user if missing, sets the `{ admin: true, role: 'admin' }` custom claims, upserts the Firestore `users/{uid}` profile (`role`/`isAdmin`/`adminApproved`/`status`), and logs an audit entry — satisfying both the main app's (`src/context/RoleContext.tsx`) and the admin panel's (`apps/admin-panel/src/context/AuthContext.tsx`) admin checks in one step.
 
 **Usage:**
-1. Update the `email` variable in `scripts/add_admin_grant.js`.
-2. Run the command:
-   ```powershell
-   node c:\Users\My-PC\Desktop\scripts\add_admin_grant.js
+1. From a machine with Firebase/gcloud credentials (a local service-account key at `service-account.json`/`serviceAccountKey.json`, or Application Default Credentials):
+   ```bash
+   node scripts/grant-admin.mjs <email> <password>
    ```
-3. The user will be added to the `pending_admin_grants` collection. The `AdminTerminal` (via its `RoleRedirector`) will detect this record upon the user's next login and automatically escalate their account to `admin`.
+2. Have the user log out, hard-refresh, and log back in so the browser receives the new token.
 
-**Note:** This bypasses standard UI workflows and should only be used by the Lead Production Engineer.
+**Note:** This bypasses standard UI workflows and should only be used by the Lead Production Engineer. There is no `pending_admin_grants`/`RoleRedirector` auto-escalation in the deployed app — that path was dead code in the main app and has been removed. `grant-admin.mjs` is the only supported repair path.
 
 ---
 

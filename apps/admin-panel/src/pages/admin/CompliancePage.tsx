@@ -12,9 +12,9 @@ import {
 import DownloadIcon from '@mui/icons-material/Download';
 import ShieldIcon from '@mui/icons-material/Shield';
 import VerifiedIcon from '@mui/icons-material/Verified';
-import { db, functions } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface AuditLog {
     id: string;
@@ -57,7 +57,8 @@ export default function CompliancePage() {
     const handleExport = async () => {
         setExporting(true);
         try {
-            const result = await httpsCallable(functions, 'exportComplianceReport')({ months: 12 }) as any;
+            const fns = getFunctions();
+            const result = await httpsCallable(fns, 'exportComplianceReport')({ months: 12 }) as any;
             const report = result.data.report;
             setSummary(report.summary);
             downloadJSON(report, `BIN_Group_Compliance_Report_${new Date().toISOString().slice(0, 10)}.json`);

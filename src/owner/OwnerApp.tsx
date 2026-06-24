@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, Breadcrumbs, Link as MuiLink, alpha, Stack, Button } from '@mui/material';
-import { ArrowLeft, Brain, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
+import { ArrowLeft, Brain, ClipboardCheck, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -17,6 +17,7 @@ import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
 import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
+import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
@@ -27,6 +28,7 @@ import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage
 import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
+import OwnerInspectionsPage from './pages/OwnerInspectionsPage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 import OwnerComplaintPage from './pages/OwnerComplaintPage';
@@ -41,7 +43,7 @@ import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { lang, isRTL, t, tx } = useLanguage();
+    const { isRTL, t, tx } = useLanguage();
     const pathnames = location.pathname.split('/').filter(Boolean);
     const label = (key: string, en: string) => tx(key, en);
 
@@ -75,6 +77,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </Button>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.owner_approvals', 'Approvals')}
+                        </Button>
+                        <Button onClick={() => navigate('/owner/inspections')} startIcon={renderSafeIcon(ClipboardCheck, { size: 17 })} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
+                            {label('nav.owner_inspections', 'Handover')}
                         </Button>
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.property_passport', 'Property Passport')}
@@ -134,6 +139,7 @@ export default function OwnerApp() {
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
+                <Route path="/payment-proof" element={<OwnerPaymentProofPage />} />
                 <Route path="/iban" element={<OwnerIbanPage />} />
                 <Route path="/profile" element={<OwnerProfilePage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
@@ -143,6 +149,7 @@ export default function OwnerApp() {
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
+                <Route path="/inspections" element={<OwnerInspectionsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/complaint" element={<OwnerComplaintPage />} />

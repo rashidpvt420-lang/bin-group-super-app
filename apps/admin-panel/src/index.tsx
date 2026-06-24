@@ -5,13 +5,14 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { setupSovereignAlertInterceptor } from '@bin/shared';
 
-try {
-  setupSovereignAlertInterceptor();
-} catch (err) {
-  console.warn('[ADMIN-BOOT] Alert interceptor startup skipped:', err);
-}
+setupSovereignAlertInterceptor();
 
-const renderFatalBootFallback = (msg: unknown, error: unknown) => {
+let reactMounted = false;
+
+// [STABILITY-PROTOCOL] Global System Recovery
+// Only replace the root during true pre-mount bootstrap failures. After React is mounted,
+// log recoverable promise rejections instead of wiping the whole admin console.
+const renderBootError = (msg: any, error: any) => {
   const debugId = `ADMIN-BOOT-${Date.now().toString(36).toUpperCase()}`;
   console.error(`[${debugId}] Admin bootstrap error:`, msg, error);
   const root = document.getElementById('root');
@@ -24,57 +25,32 @@ const renderFatalBootFallback = (msg: unknown, error: unknown) => {
   }
 };
 
-const isKnownRecoverableBootNoise = (message: string) => {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('resizeobserver loop') ||
-    normalized.includes('failed to register a serviceworker') ||
-    normalized.includes('service worker') ||
-    normalized.includes('messaging') ||
-    normalized.includes('notification') ||
-    normalized.includes('permission-denied') ||
-    normalized.includes('popup-closed-by-user')
-  );
-};
-
 (window as any).onerror = (msg: any, url: any, line: any, col: any, error: any) => {
-  const message = String(error?.message || msg || '');
-  if (isKnownRecoverableBootNoise(message)) {
-    console.warn('[ADMIN-BOOT] Recoverable browser/runtime event:', message);
-    return true;
-  }
-  console.error('[ADMIN-BOOT] Runtime error after shell boot:', { msg, url, line, col, error });
-  return false;
+  if (!reactMounted) renderBootError(msg, error);
+  else console.error('[ADMIN-RUNTIME] Window error after mount:', msg, error);
 };
 
 (window as any).onunhandledrejection = (event: any) => {
-  const reason = event?.reason;
-  const message = String(reason?.message || reason || 'Unhandled Promise Rejection');
-  if (isKnownRecoverableBootNoise(message)) {
-    console.warn('[ADMIN-BOOT] Recoverable async event:', message);
-    event?.preventDefault?.();
-    return;
-  }
-  console.error('[ADMIN-BOOT] Async startup event:', reason);
+  const reason = event?.reason || 'Unknown';
+  if (!reactMounted) renderBootError('Unhandled Promise Rejection: ' + reason, reason);
+  else console.warn('[ADMIN-RUNTIME] Recoverable promise rejection after mount:', reason);
 };
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
     const root = ReactDOM.createRoot(rootElement as HTMLElement);
 
+    // [STABILITY] Unregister Service Workers without allowing a cache purge failure
+    // to crash the entire admin console.
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations()
-            .then((registrations) => {
-                for (const registration of registrations) {
-                    registration.unregister().catch((err) => {
-                        console.warn('[ADMIN-BOOT] Service worker unregister skipped:', err);
-                    });
-                }
-                console.log('🛡️ [INIT] Administrative cache checked.');
-            })
-            .catch((err) => {
-                console.warn('[ADMIN-BOOT] Service worker cleanup skipped:', err);
-            });
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+                registration.unregister();
+                console.log('🛡️ [INIT] Purged Administrative Cache.');
+            }
+        }).catch((error) => {
+            console.warn('[ADMIN-INIT] Service worker cleanup skipped:', error);
+        });
     }
 
     try {
@@ -85,9 +61,9 @@ if (rootElement) {
                 </ErrorBoundary>
             </React.StrictMode>
         );
+        reactMounted = true;
     } catch (err) {
-        renderFatalBootFallback('Bootstrap Execution Fault', err);
+        console.error('[ADMIN-SYSTEM] Critical Mount Error:', err);
+        renderBootError('Bootstrap Execution Fault', err);
     }
-} else {
-    renderFatalBootFallback('Missing root element', null);
 }

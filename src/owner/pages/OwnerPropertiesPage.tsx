@@ -3,10 +3,10 @@ import {
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Grid, alpha, Button, IconButton, Divider
 } from '@mui/material';
-import {
-    Building2, MapPin, Activity,
+import { 
+    Building2, MapPin, Activity, 
     Shield, ArrowUpRight,
-    Layout, QrCode, ShieldCheck
+    Layout
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
@@ -122,43 +122,21 @@ export default function OwnerPropertiesPage() {
                                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 3 }} />
 
                                     <Stack direction="row" spacing={2}>
-                                        <Button
-                                            fullWidth
-                                            variant="outlined"
+                                        <Button 
+                                            fullWidth 
+                                            variant="outlined" 
                                             startIcon={<Shield size={16} />}
-                                            onClick={() => window.open(`/passport/${prop.id}`, '_blank')}
                                             sx={{ borderRadius: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}
                                         >
                                             PASSPORT
                                         </Button>
-                                        <Button
-                                            fullWidth
-                                            variant="outlined"
+                                        <Button 
+                                            fullWidth 
+                                            variant="outlined" 
                                             startIcon={<Activity size={16} />}
-                                            onClick={() => navigate('/owner/tickets')}
                                             sx={{ borderRadius: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}
                                         >
                                             HISTORY
-                                        </Button>
-                                    </Stack>
-                                    <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
-                                        <Button
-                                            fullWidth
-                                            size="small"
-                                            startIcon={<QrCode size={14} />}
-                                            onClick={() => window.open(`/passport/${prop.id}`, '_blank')}
-                                            sx={{ borderRadius: 3, borderColor: alpha(binThemeTokens.gold, 0.3), color: binThemeTokens.gold, fontWeight: 900, border: '1px solid' }}
-                                        >
-                                            QR Passport
-                                        </Button>
-                                        <Button
-                                            fullWidth
-                                            size="small"
-                                            startIcon={<ShieldCheck size={14} />}
-                                            onClick={() => navigate(`/verify/property/${prop.id}`)}
-                                            sx={{ borderRadius: 3, borderColor: alpha(binThemeTokens.gold, 0.3), color: binThemeTokens.gold, fontWeight: 900, border: '1px solid' }}
-                                        >
-                                            Verify Badge
                                         </Button>
                                     </Stack>
                                 </Box>
