@@ -25,7 +25,8 @@ import {
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { db, collection, query, getDocs, orderBy, limit, where } from '../../lib/firebase';
+import { apiClient } from '../../services/api';
+import { db, collection, query, getDocs, orderBy, limit } from '../../lib/firebase';
 
 interface ReportData {
   date: string;
@@ -53,42 +54,16 @@ export default function ReportsPage() {
           const q = query(collection(db, 'sla_breaches'), orderBy('detectedAt', 'desc'), limit(100));
           const snap = await getDocs(q);
           setBreaches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-          setData([]);
+          setData([]); 
       } else {
-          const startTs = new Date(`${startDate}T00:00:00`);
-          const endTs = new Date(`${endDate}T23:59:59.999`);
-
-          const [paymentsSnap, ticketsSnap] = await Promise.all([
-            getDocs(query(collection(db, 'payment_transactions'), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs))),
-            getDocs(query(collection(db, 'maintenanceTickets'), where('createdAt', '>=', startTs), where('createdAt', '<=', endTs))),
-          ]);
-
-          const CONFIRMED_PAYMENT_STATUSES = new Set(['VERIFIED', 'APPROVED', 'PAID']);
-          const dayKey = (ts: any) => (ts?.toDate ? ts.toDate() : new Date(ts)).toISOString().split('T')[0];
-          const byDate = new Map<string, ReportData>();
-          const ensureDay = (key: string) => {
-            if (!byDate.has(key)) byDate.set(key, { date: key, revenue: 0, costs: 0, tickets: 0, completedJobs: 0 });
-            return byDate.get(key)!;
-          };
-
-          paymentsSnap.forEach((docSnap) => {
-            const p = docSnap.data();
-            if (!p.createdAt || !CONFIRMED_PAYMENT_STATUSES.has(String(p.status || '').toUpperCase())) return;
-            ensureDay(dayKey(p.createdAt)).revenue += Number(p.amount || 0);
+          const response = await apiClient.get('/api/admin/reports', {
+            params: {
+              startDate,
+              endDate,
+              type: reportType,
+            },
           });
-
-          ticketsSnap.forEach((docSnap) => {
-            const t = docSnap.data();
-            if (!t.createdAt) return;
-            const row = ensureDay(dayKey(t.createdAt));
-            row.tickets += 1;
-            if (String(t.status || '').toUpperCase() === 'COMPLETED') {
-              row.completedJobs += 1;
-              row.costs += Number(t.estimatedCost || 0);
-            }
-          });
-
-          setData(Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date)));
+          setData(Array.isArray(response.data?.data) ? response.data.data : []);
           setBreaches([]);
       }
     } catch (error) {

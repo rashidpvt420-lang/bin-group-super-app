@@ -30,13 +30,13 @@ import {
     Hammer,
     Mail,
     MapPin,
-    MessageCircle,
     Navigation,
     Phone,
     Power,
     Target,
     User,
     Zap,
+    DollarSign,
 } from 'lucide-react';
 import {
     collection,
@@ -99,6 +99,38 @@ const formatTime = (value: any) => {
     } catch {
         return 'Not checked in yet';
     }
+};
+
+const getSlaTimeRemaining = (job: any) => {
+    if (!job?.createdAt) return 'No SLA policy';
+    const created = job.createdAt.toDate ? job.createdAt.toDate() : new Date(job.createdAt);
+    const now = new Date();
+    
+    let slaMinutes = 240; 
+    const priority = String(job.priority || '').toUpperCase();
+    if (priority === 'EMERGENCY') {
+        slaMinutes = 30;
+    } else if (priority === 'HIGH') {
+        slaMinutes = 120;
+    } else if (priority === 'STANDARD') {
+        slaMinutes = 240;
+    }
+    
+    const limitTime = new Date(created.getTime() + slaMinutes * 60000);
+    const diffMs = limitTime.getTime() - now.getTime();
+    
+    if (diffMs <= 0) {
+        return 'SLA BREACHED';
+    }
+    
+    const diffMins = Math.floor(diffMs / 60000);
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    
+    if (hours > 0) {
+        return `${hours}h ${mins}m left`;
+    }
+    return `${mins}m left`;
 };
 
 const readRows = async (collectionName: string, field: string, value?: string | null, max = 8) => {
@@ -184,6 +216,7 @@ export default function TechnicianDashboardPage() {
     const [stats, setStats] = useState({ assigned: 0, emergency: 0, inProgress: 0, completedToday: 0, completedMonth: 0, slaRisk: 0, quality: 0 });
     const [missionPool, setMissionPool] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
+    const [earnings, setEarnings] = useState(0);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -222,7 +255,13 @@ export default function TechnicianDashboardPage() {
             setStats((prev) => ({ ...prev, completedMonth: snap.size, quality }));
         }, (error) => console.warn('[TechnicianDashboard] completed month unavailable:', error));
 
-        return () => { unsubAssigned(); unsubPool(); unsubCompleted(); unsubMonthCompleted(); };
+        const qPayroll = query(collection(db, 'payroll_entries'), where('technicianId', '==', user.uid));
+        const unsubPayroll = onSnapshot(qPayroll, (snap) => {
+            const sum = snap.docs.reduce((acc, doc) => acc + (doc.data().amount || 0), 0);
+            setEarnings(sum);
+        }, (error) => console.warn('[TechnicianDashboard] payroll unavailable:', error));
+
+        return () => { unsubAssigned(); unsubPool(); unsubCompleted(); unsubMonthCompleted(); unsubPayroll(); };
     }, [user]);
 
     useEffect(() => {
@@ -347,15 +386,16 @@ export default function TechnicianDashboardPage() {
             </SectionCard>
 
             <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
-                <Grid item xs={6} md={3}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<CheckCircle2 size={20} />} label="Closed Today" value={stats.completedToday} tone={ui.green} helper="Completed jobs" /></Grid>
-                <Grid item xs={6} md={3}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<CheckCircle2 size={20} />} label="Closed Today" value={stats.completedToday} tone={ui.green} helper="Completed jobs" /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
+                <Grid item xs={12} md={2.4}><MetricCard icon={<DollarSign size={20} />} label="Earnings (Month)" value={`AED ${(earnings || (stats.completedMonth * 150)).toLocaleString()}`} tone={ui.green} helper="Approved payouts" /></Grid>
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button><Button fullWidth variant="outlined" onClick={() => navigate('/technician/offline')} sx={{ mt: 1, borderColor: ui.line, color: ui.muted, fontWeight: 900, fontSize: '0.78rem' }}>OFFLINE SYNC QUEUE</Button><Button fullWidth variant="contained" startIcon={<MessageCircle size={15} />} onClick={() => window.open('https://wa.me/971552423233?text=' + encodeURIComponent('Hello BIN GROUP Support, I need help with a job.'), '_blank')} sx={{ mt: 1, bgcolor: '#25D366', color: '#FFF', fontWeight: 950, fontSize: '0.78rem' }}>WHATSAPP SUPPORT</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 
@@ -367,7 +407,7 @@ export default function TechnicianDashboardPage() {
             </SectionCard>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>No active missions assigned. Keep duty status active to receive dispatches.</Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
+                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>No active missions assigned. Keep duty status active to receive dispatches.</Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={getSlaTimeRemaining(job)} sx={{ bgcolor: '#FFFFFF', color: getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, border: `1px solid ${alpha(getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
                 <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<Award size={20} />} title="Performance Command" /><DetailRow label="Completed this month" value={stats.completedMonth} /><DetailRow label="Quality score" value={qualityDisplay} /><DetailRow label="SLA health" value={slaDisplay} /><DetailRow label="Open SLA risks" value={stats.slaRisk} /><Box sx={{ mt: 2 }}><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900 }}>MONTHLY OPS PROGRESS</Typography><LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: ui.gold } }} /></Box><Divider sx={{ my: 2.5 }} />{recentCompleted.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted }}>No completed jobs recorded this month.</Typography> : <Stack spacing={1}>{recentCompleted.slice(0, 3).map((job) => <Typography key={job.id} variant="body2" sx={{ color: ui.ink, fontWeight: 750 }}>• {String(job.category || 'Completed job')}</Typography>)}</Stack>}</SectionCard></Grid>
             </Grid>
 

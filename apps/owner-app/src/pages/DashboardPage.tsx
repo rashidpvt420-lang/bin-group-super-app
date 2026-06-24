@@ -240,44 +240,6 @@ export default function DashboardPage() {
                 </Box>
             )}
 
-            {/* Resident Experience & Operations Quick Actions */}
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 900, color: binThemeTokens.gold, letterSpacing: 1 }}>
-                Resident Experience & Operations
-            </Typography>
-            <Grid container spacing={3} sx={{ mb: 6 }}>
-                {[
-                    { label: 'Announcements', desc: 'Broadcast notices to tenants', path: '/owner/announcements', icon: <NotificationsActiveIcon /> },
-                    { label: 'Documents Vault', desc: 'Access tenancy documents & forms', path: '/owner/documents', icon: <AssignmentIcon /> },
-                    { label: 'Amenities Control', desc: 'Manage slots & booking approvals', path: '/owner/amenities', icon: <SpeedIcon /> },
-                    { label: 'Logistics & Parking', desc: 'Overview of parcels & visitor parking', path: '/owner/parcels-parking', icon: <SignalCellularAltIcon /> },
-                    { label: 'Desk Messages', desc: 'Direct message threads with admin', path: '/owner/messages', icon: <SecurityIcon /> }
-                ].map((act, i) => (
-                    <Grid item xs={12} sm={6} md={2.4} key={i}>
-                        <Card 
-                            onClick={() => window.location.href = act.path}
-                            sx={{ 
-                                cursor: 'pointer',
-                                bgcolor: 'rgba(198, 167, 94, 0.03)', 
-                                border: '1px solid rgba(198, 167, 94, 0.15)',
-                                p: 1,
-                                transition: 'all 0.2s ease',
-                                '&:hover': {
-                                    transform: 'translateY(-4px)',
-                                    borderColor: binThemeTokens.gold,
-                                    bgcolor: 'rgba(198, 167, 94, 0.08)'
-                                }
-                            }}
-                        >
-                            <CardContent>
-                                <Box sx={{ color: binThemeTokens.gold, mb: 1 }}>{act.icon}</Box>
-                                <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#FFF' }}>{act.label}</Typography>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block', mt: 0.5 }}>{act.desc}</Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                ))}
-            </Grid>
-
             {/* Economic Powergrid */}
             <Grid container spacing={4} sx={{ mb: 8 }}>
                 {kpis.map((kpi, i) => (

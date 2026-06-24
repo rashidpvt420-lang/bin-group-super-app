@@ -1,7 +1,5 @@
 import React from 'react';
-import { Box, Button, Chip, CircularProgress, Container, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
-import { db } from '../../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { Box, Button, Chip, Container, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { Building2, CheckCircle2, FileText, Languages, Mail, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -75,75 +73,4 @@ function Trust() { return <Grid container spacing={2} sx={{ mt: 5 }}>{[['Soverei
 function Problems({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950}>{c.proofTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.66)', my: 2, maxWidth: 980 }}>{c.proofDesc}</Typography><Grid container spacing={2}>{problems.map((p) => <Grid item xs={12} sm={6} md={3} key={p}><Paper sx={{ p: 2.2, height: '100%', bgcolor: alpha(binThemeTokens.gold,.07), border: '1px solid rgba(198,167,94,.18)' }}><Sparkles size={20} color={binThemeTokens.gold} /><Typography fontWeight={900} sx={{ mt: 1 }}>{p}</Typography></Paper></Grid>)}</Grid></Box>; }
 function Pricing({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950} sx={{ mb: 3 }}>{c.pricingTitle}</Typography><Grid container spacing={2}>{pricing.map(([a,b]) => <Grid item xs={12} md={3} key={a}><Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)', fontWeight: 950 }}>{a}</Typography><Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold }}>{b}</Typography></Paper></Grid>)}</Grid></Box>; }
 function Coverage({ c }: any) { return <Box sx={{ mt: 8 }}><Typography variant="h4" fontWeight={950} sx={{ mb: 2 }}>{c.coverageTitle}</Typography><Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>{coverage.map((x) => <Chip key={x} label={x} sx={{ color: '#fff', bgcolor: alpha(binThemeTokens.gold,.1), border: '1px solid rgba(198,167,94,.22)', fontWeight: 800 }} />)}</Stack></Box>; }
-function Inquiry({ c }: any) {
-  const [form, setForm] = React.useState({ name: '', contact: '', propType: '', emirate: '', details: '' });
-  const [submitting, setSubmitting] = React.useState(false);
-  const [submitted, setSubmitted] = React.useState(false);
-  const [error, setError] = React.useState('');
-
-  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
-
-  const handleSubmit = async () => {
-    if (!form.name.trim() || !form.contact.trim()) { setError('Name and contact are required.'); return; }
-    setError(''); setSubmitting(true);
-    try {
-      await addDoc(collection(db, 'inquiries'), {
-        name: form.name.trim(), contact: form.contact.trim(),
-        propType: form.propType.trim(), emirate: form.emirate.trim(),
-        details: form.details.trim(), source: 'public_marketing',
-        status: 'NEW', createdAt: serverTimestamp(),
-      });
-      setSubmitted(true);
-    } catch (err) { setError('Submission failed. Please try again.'); }
-    setSubmitting(false);
-  };
-
-  return (
-    <Box sx={{ mt: 8 }}>
-      <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(22,22,24,.82)', border: '1px solid rgba(198,167,94,.2)' }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={5}>
-            <Typography variant="h4" fontWeight={950}>{c.inquiryTitle}</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,.66)', mt: 1 }}>{c.inquiryDesc}</Typography>
-            <Stack spacing={1} sx={{ my: 3 }}>
-              <Stack direction="row" spacing={1}><Mail size={18} color={binThemeTokens.gold}/><Typography>owner@bin-group.com</Typography></Stack>
-              <Stack direction="row" spacing={1}><Phone size={18} color={binThemeTokens.gold}/><Typography>+971 50 123 4567</Typography></Stack>
-              <Stack direction="row" spacing={1}><MapPin size={18} color={binThemeTokens.gold}/><Typography>United Arab Emirates</Typography></Stack>
-            </Stack>
-            <CeoContactButtons />
-          </Grid>
-          <Grid item xs={12} md={7}>
-            {submitted ? (
-              <Box sx={{ py: 6, textAlign: 'center' }}>
-                <CheckCircle2 size={48} color={binThemeTokens.gold} />
-                <Typography variant="h5" fontWeight={950} sx={{ mt: 2 }}>Inquiry Received</Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,.66)', mt: 1 }}>BIN GROUP will contact you within 24 hours.</Typography>
-              </Box>
-            ) : (
-              <Grid container spacing={2}>
-                {[['Name', 'name'], ['Phone / Email', 'contact'], ['Property Type', 'propType'], ['Emirate', 'emirate']].map(([label, field]) => (
-                  <Grid item xs={12} md={6} key={field}>
-                    <TextField fullWidth label={label} value={(form as any)[field]} onChange={set(field)}
-                      sx={{ '& .MuiOutlinedInput-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.5)' } }} />
-                  </Grid>
-                ))}
-                <Grid item xs={12}>
-                  <TextField fullWidth multiline minRows={4} label="Portfolio Details" value={form.details} onChange={set('details')}
-                    sx={{ '& .MuiOutlinedInput-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.5)' } }} />
-                </Grid>
-                {error && <Grid item xs={12}><Typography color="error" variant="caption">{error}</Typography></Grid>}
-                <Grid item xs={12}>
-                  <Button onClick={handleSubmit} disabled={submitting} fullWidth variant="contained"
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>
-                    {submitting ? <CircularProgress size={20} sx={{ color: '#000' }} /> : c.primary}
-                  </Button>
-                </Grid>
-              </Grid>
-            )}
-          </Grid>
-        </Grid>
-      </Paper>
-    </Box>
-  );
-}
+function Inquiry({ c }: any) { return <Box sx={{ mt: 8 }}><Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(22,22,24,.82)', border: '1px solid rgba(198,167,94,.2)' }}><Grid container spacing={3}><Grid item xs={12} md={5}><Typography variant="h4" fontWeight={950}>{c.inquiryTitle}</Typography><Typography sx={{ color: 'rgba(255,255,255,.66)', mt: 1 }}>{c.inquiryDesc}</Typography><Stack spacing={1} sx={{ my: 3 }}><Stack direction="row" spacing={1}><Mail size={18} color={binThemeTokens.gold}/><Typography>owner@bin-group.com</Typography></Stack><Stack direction="row" spacing={1}><Phone size={18} color={binThemeTokens.gold}/><Typography>+971 50 123 4567</Typography></Stack><Stack direction="row" spacing={1}><MapPin size={18} color={binThemeTokens.gold}/><Typography>United Arab Emirates</Typography></Stack></Stack><CeoContactButtons /></Grid><Grid item xs={12} md={7}><Grid container spacing={2}>{['Name','Phone / Email','Property Type','Emirate'].map((l)=><Grid item xs={12} md={6} key={l}><TextField fullWidth label={l}/></Grid>)}<Grid item xs={12}><TextField fullWidth multiline minRows={4} label="Portfolio Details"/></Grid><Grid item xs={12}><Button disabled fullWidth variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{c.primary}</Button></Grid></Grid></Grid></Grid></Paper></Box>; }

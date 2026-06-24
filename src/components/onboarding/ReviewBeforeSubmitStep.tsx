@@ -75,24 +75,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{copy(`onboarding.type.${primaryProperty?.propertyType?.toLowerCase()}`, primaryProperty?.propertyType || 'Property')} · {copy('onboarding.zone', 'Zone / Area')} {primaryProperty?.zone}</Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{primaryProperty?.address || primaryProperty?.emirate || 'UAE'}</Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>
-                            {primaryProperty?.propertyType === 'Hotel' || primaryProperty?.propertyType === 'Resort'
-                                ? `${(primaryProperty as any)?.hotelProfile?.roomsCount || primaryProperty?.rooms || 0} rooms · ${(primaryProperty as any)?.hotelProfile?.starRating || 3}★`
-                                : primaryProperty?.propertyType === 'School'
-                                ? `${(primaryProperty as any)?.schoolProfile?.classroomsCount || primaryProperty?.units || 0} classrooms · ${(primaryProperty as any)?.schoolProfile?.studentCapacity || 0} students`
-                                : primaryProperty?.propertyType === 'Hospital' || primaryProperty?.propertyType === 'Clinic'
-                                ? `${(primaryProperty as any)?.hospitalProfile?.bedsCount || (primaryProperty as any)?.beds || 0} beds · ${(primaryProperty as any)?.hospitalProfile?.icuBeds || 0} ICU`
-                                : primaryProperty?.propertyType === 'Mosque / Masjid'
-                                ? `${(primaryProperty as any)?.mosqueProfile?.maxWorshipperCapacity || primaryProperty?.rooms || 0} capacity · ${(primaryProperty as any)?.mosqueProfile?.wuduAreasCount || primaryProperty?.units || 0} wudu areas`
-                                : primaryProperty?.propertyType && ['Stadium', 'Sports Complex', 'Event Venue'].includes(primaryProperty.propertyType)
-                                ? `${(primaryProperty as any)?.stadiumProfile?.seatingCapacity?.toLocaleString() || 0} seats`
-                                : `${primaryProperty?.units} ${copy('onboarding.units', 'Units')}`
-                            } · {primaryProperty?.sqft} {copy('onboarding.sqft', 'Sq Ft')} · {primaryProperty?.age} {copy('onboarding.age', 'Age')}
+                            {primaryProperty?.units} {copy('onboarding.units', 'Units')} · {primaryProperty?.sqft} {copy('onboarding.sqft', 'Sq Ft')} · {primaryProperty?.age} {copy('onboarding.age', 'Age')}
                         </Typography>
-                        {(primaryProperty as any)?.missions?.length > 0 && (
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', mt: 0.5, display: 'block' }}>
-                                {((primaryProperty as any)?.missions || []).slice(0, 3).join(' · ')}
-                            </Typography>
-                        )}
                     </Paper>
                 </Grid>
 

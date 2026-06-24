@@ -4,14 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import { db, doc, getDoc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantChatPage() {
     const { ticketId } = useParams();
     const { user } = useRole();
-    const { lang, isRTL } = useLanguage();
-    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
     const navigate = useNavigate();
     const [ticket, setTicket] = useState<any>(null);
     const [messages, setMessages] = useState<any[]>([]);
@@ -27,7 +24,7 @@ export default function TenantChatPage() {
             if (snap.exists() && snap.data().tenantId === user.uid) {
                 setTicket({ id: snap.id, ...snap.data() });
             } else {
-                alert(label('Unauthorized', 'غير مصرّح'));
+                alert("Unauthorized");
                 navigate('/tenant/tickets');
             }
         };
@@ -66,9 +63,9 @@ export default function TenantChatPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column', direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                {label('Chat', 'محادثة')}: {ticket?.assignedTechnicianName || label('Technician', 'الفني')}
+                Chat: {ticket?.assignedTechnicianName || 'Technician'}
             </Typography>
 
             <Paper sx={{ flex: 1, p: 3, mb: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflowY: 'auto' }}>
@@ -91,7 +88,7 @@ export default function TenantChatPage() {
                     })}
                     {messages.length === 0 && (
                         <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 10 }}>
-                            {label('Send a message to the technician.', 'أرسل رسالة إلى الفني.')}
+                            Send a message to the technician.
                         </Typography>
                     )}
                     <div ref={messagesEndRef} />
@@ -100,10 +97,10 @@ export default function TenantChatPage() {
 
             <form onSubmit={handleSendMessage}>
                 <Paper sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 10, display: 'flex', alignItems: 'center' }}>
-                    <TextField
-                        fullWidth
-                        placeholder={label('Type your message...', 'اكتب رسالتك...')}
-                        variant="standard"
+                    <TextField 
+                        fullWidth 
+                        placeholder="Type your message..." 
+                        variant="standard" 
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         sx={{ px: 2, '& .MuiInput-root': { color: '#FFF' }, '& .MuiInput-root:before, & .MuiInput-root:after': { display: 'none' } }}

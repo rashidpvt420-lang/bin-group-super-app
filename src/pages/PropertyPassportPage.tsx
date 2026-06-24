@@ -5,7 +5,6 @@ import { ShieldCheck, MapPin, FileText, Activity, ArrowLeft, Ruler, Building, Ca
 import { db, doc, getDoc, collection, query, where, getDocs, orderBy, limit } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-import { jsPDF } from 'jspdf';
 
 export default function PropertyPassportPage() {
     const { id } = useParams();
@@ -46,40 +45,6 @@ export default function PropertyPassportPage() {
 
     const isVerified = property.titleDeedStatus === 'verified' || property.geo?.verified === true;
 
-    const exportPdf = () => {
-        const pdf = new jsPDF();
-        const gold = [198, 167, 94] as const;
-        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
-        pdf.setTextColor(198, 167, 94); pdf.setFontSize(18); pdf.setFont('helvetica', 'bold');
-        pdf.text('PROPERTY PASSPORT', 14, 20);
-        pdf.setFontSize(10); pdf.setTextColor(255, 255, 255);
-        pdf.text(`REF: ${property.id?.substring(0, 8) || '—'}`, 14, 30);
-        pdf.text(`STATUS: ${isVerified ? 'SOVEREIGN VERIFIED' : 'PENDING VERIFICATION'}`, 14, 38);
-        pdf.setDrawColor(...gold); pdf.line(14, 43, 196, 43);
-        const rows: [string, string][] = [
-            ['Property Name', property.name || property.propertyName || '—'],
-            ['Type', property.propertyType || '—'],
-            ['Grade', property.assetGrade || 'Standard'],
-            ['Area (sq ft)', (property.sqft || property.totalSqFt || 0).toLocaleString()],
-            ['Units', String(property.units || property.numberOfUnits || '1')],
-            ['Floors', String(property.floors || property.floorsCount || '—')],
-            ['Lifts', String(property.lifts ?? '—')],
-            ['Asset Age', property.age ? `${property.age} yrs` : '—'],
-            ['Compliance', property.complianceStatus || 'PENDING REVIEW'],
-            ['Emirate', property.geo?.emirate || property.emirate || '—'],
-            ['Address', property.geo?.address || property.address || '—'],
-        ];
-        let y = 52;
-        rows.forEach(([k, v]) => {
-            pdf.setTextColor(198, 167, 94); pdf.setFontSize(8); pdf.text(k.toUpperCase(), 14, y);
-            pdf.setTextColor(255, 255, 255); pdf.setFontSize(10); pdf.text(v, 80, y);
-            y += 9;
-        });
-        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
-        pdf.text(`Generated: ${new Date().toLocaleDateString()} | BIN GROUP Sovereign Platform`, 14, 285);
-        pdf.save(`passport-${property.id?.substring(0, 8) || 'export'}.pdf`);
-    };
-
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -95,7 +60,7 @@ export default function PropertyPassportPage() {
                         />
                     </Stack>
                 </Box>
-                <Button variant="contained" startIcon={<Download size={18}/>} onClick={exportPdf} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 2 }}>
+                <Button variant="contained" startIcon={<Download size={18}/>} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 2 }}>
                     EXPORT PASSPORT (PDF)
                 </Button>
             </Box>
@@ -129,56 +94,6 @@ export default function PropertyPassportPage() {
                                     <Stack spacing={0.5}>
                                         <Typography variant="caption" color="textSecondary">UNITS</Typography>
                                         <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Key size={16} color={binThemeTokens.gold}/> {property.units || property.numberOfUnits || '1'}</Typography>
-                                    </Stack>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Stack spacing={0.5}>
-                                        <Typography variant="caption" color="textSecondary">FLOORS</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Building size={16} color={binThemeTokens.gold}/> {property.floors || property.floorsCount || '—'}</Typography>
-                                    </Stack>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Stack spacing={0.5}>
-                                        <Typography variant="caption" color="textSecondary">LIFTS</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={16} color={binThemeTokens.gold}/> {property.lifts ?? '—'}</Typography>
-                                    </Stack>
-                                </Grid>
-                                {(property.offices > 0) && (
-                                    <Grid item xs={6}>
-                                        <Stack spacing={0.5}>
-                                            <Typography variant="caption" color="textSecondary">OFFICES</Typography>
-                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Landmark size={16} color={binThemeTokens.gold}/> {property.offices}</Typography>
-                                        </Stack>
-                                    </Grid>
-                                )}
-                                {(property.shops > 0) && (
-                                    <Grid item xs={6}>
-                                        <Stack spacing={0.5}>
-                                            <Typography variant="caption" color="textSecondary">SHOPS</Typography>
-                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Landmark size={16} color={binThemeTokens.gold}/> {property.shops}</Typography>
-                                        </Stack>
-                                    </Grid>
-                                )}
-                                {(property.parkingCapacity > 0 || property.parking > 0) && (
-                                    <Grid item xs={6}>
-                                        <Stack spacing={0.5}>
-                                            <Typography variant="caption" color="textSecondary">PARKING</Typography>
-                                            <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><MapPin size={16} color={binThemeTokens.gold}/> {property.parkingCapacity || property.parking} bays</Typography>
-                                        </Stack>
-                                    </Grid>
-                                )}
-                                <Grid item xs={6}>
-                                    <Stack spacing={0.5}>
-                                        <Typography variant="caption" color="textSecondary">ASSET AGE</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Calendar size={16} color={binThemeTokens.gold}/> {property.age ? `${property.age} yrs` : '—'}</Typography>
-                                    </Stack>
-                                </Grid>
-                                <Grid item xs={6}>
-                                    <Stack spacing={0.5}>
-                                        <Typography variant="caption" color="textSecondary">COMPLIANCE</Typography>
-                                        <Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: property.complianceStatus === 'COMPLIANT' ? '#10b981' : '#f59e0b' }}>
-                                            <CheckCircle2 size={16}/> {property.complianceStatus || 'PENDING REVIEW'}
-                                        </Typography>
                                     </Stack>
                                 </Grid>
                             </Grid>
@@ -309,3 +224,4 @@ export default function PropertyPassportPage() {
         </Container>
     );
 }
+

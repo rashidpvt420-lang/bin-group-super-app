@@ -1,45 +1,34 @@
 // apps/admin-panel/src/pages/dashboard/DashboardPage.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    Box,
-    Button,
-    Chip,
-    Divider,
-    Grid,
-    LinearProgress,
-    Paper,
-    Snackbar,
-    Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Typography,
-    alpha
+  Box,
+  Button,
+  Chip,
+  Grid,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  alpha,
 } from '@mui/material';
 import {
-    Activity,
-    AlertTriangle,
-    Briefcase,
-    Building2,
-    CheckCircle2,
-    Clock,
-    DollarSign,
-    FileText,
-    FileWarning,
-    Gavel,
-    Home,
-    Lock,
-    Plus,
-    Shield,
-    TrendingUp,
-    Upload,
-    Wrench,
-    Zap
+  Activity,
+  AlertTriangle,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  FileText,
+  Home,
+  Shield,
+  Wrench,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -58,80 +47,100 @@ import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
 
-type KPIStatus = 'loading' | 'success' | 'error' | 'denied';
+type RecordRow = { id: string; [key: string]: any };
 
-type KPIState = {
-    value: number | string | null;
-    status: KPIStatus;
-    label: string;
-    icon: React.ReactNode;
-    color: string;
-    path?: string;
+type Metric = {
+  label: string;
+  value: number | string;
+  icon: React.ReactNode;
+  tone: string;
+  route?: string;
 };
 
-type ActivityItem = {
-    id: string;
-    timestamp: Timestamp | Date;
-    actor: string;
-    action: string;
-    module: string;
-    status: string;
-};
-
-type LaunchHealthRow = {
-    label: string;
-    status: string;
-    detail?: string;
+type MrrStats = {
+  currentMonth: number;
+  previousMonth: number;
+  trendPercent: number;
 };
 
 const ACTIVE_TICKET_STATUSES = [
-    'OPEN',
-    'PENDING',
-    'PENDING_ASSIGNMENT',
-    'ASSIGNED',
-    'ACCEPTED',
-    'EN_ROUTE',
-    'ARRIVED',
-    'IN_PROGRESS',
-    'open',
-    'accepted'
+  'OPEN',
+  'PENDING',
+  'PENDING_ASSIGNMENT',
+  'ASSIGNED',
+  'ACCEPTED',
+  'EN_ROUTE',
+  'ARRIVED',
+  'IN_PROGRESS',
+  'open',
+  'accepted',
 ];
 
-const PENDING_OWNER_STATUSES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'ADMIN_REVIEW', 'pending_admin_approval', 'pending_approval'];
-const PENDING_TECHNICIAN_STATUSES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'pending_admin_approval', 'pending_approval'];
 const PENDING_PAYMENT_STATES = ['PENDING', 'ADMIN_VERIFICATION_REQUIRED', 'pending', 'pending_verification'];
 const PENDING_COMMISSION_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'pending', 'pending_admin_approval'];
+const OPEN_REVIEW_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'ADMIN_REVIEW', 'pending_admin_approval', 'pending_approval'];
+const TECH_PENDING_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'pending', 'pending_admin_approval', 'pending_approval'];
+const APPROVED_PAYMENT_STATES = ['PAID', 'PAID_MANUAL', 'RECONCILED', 'ADMIN_VERIFIED', 'VERIFIED', 'paid', 'reconciled', 'verified'];
+
+const money = (value: any) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 
 const getMillis = (value: any) => {
-    if (!value) return 0;
-    if (typeof value?.toMillis === 'function') return value.toMillis();
-    if (typeof value?.toDate === 'function') return value.toDate().getTime();
-    if (value?.seconds) return value.seconds * 1000;
-    if (value?._seconds) return value._seconds * 1000;
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : 0;
+  if (!value) return 0;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (value?.seconds) return value.seconds * 1000;
+  if (value?._seconds) return value._seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 };
-
-const formatDate = (value: any) => {
-    const millis = getMillis(value);
-    return millis ? new Date(millis).toLocaleDateString() : 'Recent';
-};
-
-const money = (value: any) => `AED ${Number(value || 0).toLocaleString()}`;
 
 const normalizeStatus = (value: any) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
+const normalizeKey = (value: string) => value.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
-const statusColor = (status: any) => {
-    const normalized = normalizeStatus(status);
-    if (['PASS', 'PASSED', 'READY', 'GREEN', 'ACTIVE', 'SECURE', 'VERIFIED'].some((word) => normalized.includes(word))) return '#10b981';
-    if (['FAIL', 'FAILED', 'RED', 'ERROR', 'BLOCKED', 'EXPIRED', 'DENIED'].some((word) => normalized.includes(word))) return binThemeTokens.danger;
-    if (['PENDING', 'WARNING', 'AMBER', 'UNKNOWN', 'REVIEW'].some((word) => normalized.includes(word))) return '#f59e0b';
-    return 'rgba(255,255,255,0.55)';
+const resolveSlaPolicyMs = (mission: RecordRow) => {
+  const severity = normalizeStatus(mission.severity || mission.priority || mission.urgency || mission.category);
+  if (severity.includes('EMERGENCY') || severity.includes('CRITICAL')) return 30 * 60 * 1000;
+  if (severity.includes('HIGH') || severity.includes('URGENT')) return 2 * 60 * 60 * 1000;
+  return 4 * 60 * 60 * 1000;
 };
 
-const isExpired = (value: any) => {
-    const millis = getMillis(value);
-    return millis > 0 && millis < Date.now();
+const resolveSlaDueAt = (mission: RecordRow) => {
+  const explicitDue = getMillis(mission.slaDueAt || mission.slaDeadline || mission.dueAt);
+  if (explicitDue) return explicitDue;
+  const created = getMillis(mission.createdAt || mission.reportedAt || mission.openedAt);
+  return created ? created + resolveSlaPolicyMs(mission) : 0;
+};
+
+const isBreached = (mission: RecordRow) => {
+  if (mission.slaBreached === true || String(mission.slaStatus || '').toUpperCase() === 'BREACHED') return true;
+  const due = resolveSlaDueAt(mission);
+  return due > 0 && due < Date.now();
+};
+
+const isNearBreach = (mission: RecordRow) => {
+  const due = resolveSlaDueAt(mission);
+  if (!due) return false;
+  const remainingMs = due - Date.now();
+  return remainingMs > 0 && remainingMs <= 60 * 60 * 1000;
+};
+
+const formatSla = (mission: RecordRow) => {
+  if (mission.slaRemaining || mission.slaText) return String(mission.slaRemaining || mission.slaText);
+  const due = resolveSlaDueAt(mission);
+  if (!due) return 'SLA not configured';
+  const diff = due - Date.now();
+  const absolute = Math.abs(diff);
+  const hours = Math.floor(absolute / 3_600_000);
+  const minutes = Math.floor((absolute % 3_600_000) / 60_000);
+  return diff < 0 ? `Breached by ${hours}h ${minutes}m` : `${hours}h ${minutes}m remaining`;
+};
+
+const statusTone = (value: any) => {
+  const status = normalizeStatus(value);
+  if (['READY', 'ACTIVE', 'PASS', 'GREEN', 'VERIFIED', 'CLEAR', 'PAID', 'RECONCILED', 'HEALTHY'].some((word) => status.includes(word))) return '#10b981';
+  if (['BLOCKED', 'FAIL', 'ERROR', 'BREACH', 'EXPIRED', 'DENIED', 'DOWN'].some((word) => status.includes(word))) return '#ef4444';
+  if (['PENDING', 'REVIEW', 'UNKNOWN', 'WARNING', 'DEGRADED'].some((word) => status.includes(word))) return '#f59e0b';
+  return 'rgba(255,255,255,0.62)';
 };
 
 // Tickets are written with an SLA budget (slaMinutes) and a createdAt
@@ -187,45 +196,39 @@ const reviewPathFor = (item: any) => {
     return '/dashboard';
 };
 
-const getHealth = (source: any, key: string) => source?.launchHealth?.[key] || source?.gates?.[key] || source?.[key] || 'UNKNOWN';
+const formatDateTime = (value: any) => {
+  const millis = getMillis(value);
+  return millis ? new Date(millis).toLocaleString('en-AE') : 'Not recorded';
+};
 
 export default function DashboardPage() {
-    const navigate = useNavigate();
-    const [lastSync, setLastSync] = useState<Date>(new Date());
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-    const [summary, setSummary] = useState<any>({});
-    const [expiredDocuments, setExpiredDocuments] = useState(0);
-    const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
-    const [operationsMissions, setOperationsMissions] = useState<any[]>([]);
-    const [paymentProofs, setPaymentProofs] = useState<any[]>([]);
-    const [commissionQueue, setCommissionQueue] = useState<any[]>([]);
-    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const navigate = useNavigate();
+  const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [properties, setProperties] = useState(0);
+  const [units, setUnits] = useState(0);
+  const [missions, setMissions] = useState<RecordRow[]>([]);
+  const [paymentQueue, setPaymentQueue] = useState<RecordRow[]>([]);
+  const [commissionQueue, setCommissionQueue] = useState<RecordRow[]>([]);
+  const [approvalQueue, setApprovalQueue] = useState<RecordRow[]>([]);
+  const [summary, setSummary] = useState<Record<string, any>>({});
+  const [mrrStats, setMrrStats] = useState<MrrStats>({ currentMonth: 0, previousMonth: 0, trendPercent: 0 });
+  const [expiredDocuments, setExpiredDocuments] = useState<RecordRow[]>([]);
+  const [systemHealth, setSystemHealth] = useState<Record<string, any>>({});
 
-    const [kpis, setKpis] = useState<Record<string, KPIState>>({
-        totalProperties: { label: 'Total Properties', value: null, status: 'loading', icon: <Home size={18} />, color: '#3b82f6', path: '/properties/passport' },
-        totalUnits: { label: 'Total Units', value: null, status: 'loading', icon: <Building2 size={18} />, color: '#8b5cf6' },
-        activeTenants: { label: 'Active Tenants', value: null, status: 'loading', icon: <UsersIcon />, color: '#10b981', path: '/tenants' },
-        pendingTenantInvites: { label: 'Pending Invites', value: null, status: 'loading', icon: <UsersIcon />, color: '#f59e0b' },
-        openMissions: { label: 'Open Missions', value: null, status: 'loading', icon: <Wrench size={18} />, color: '#f59e0b', path: '/tickets' },
-        slaBreaches: { label: 'SLA Breaches', value: null, status: 'loading', icon: <AlertTriangle size={18} />, color: binThemeTokens.danger, path: '/tickets?sla=breached' },
-        nearBreaches: { label: 'SLA Near Breach', value: null, status: 'loading', icon: <Clock size={18} />, color: '#f59e0b', path: '/tickets?sla=near' },
-        emergencyRequests: { label: 'Emergency SOS', value: null, status: 'loading', icon: <AlertTriangle size={18} />, color: binThemeTokens.danger, path: '/sos' },
-        activeTechnicians: { label: 'Active Technicians', value: null, status: 'loading', icon: <Wrench size={18} />, color: '#10b981', path: '/technicians' },
-        activeBrokers: { label: 'Active Brokers', value: null, status: 'loading', icon: <Briefcase size={18} />, color: '#8b5cf6', path: '/broker' },
-        pendingOwnerApprovals: { label: 'Owner Approvals', value: null, status: 'loading', icon: <Shield size={18} />, color: '#f59e0b', path: '/manual-approvals?type=owner' },
-        pendingTechnicianApprovals: { label: 'Tech Approvals', value: null, status: 'loading', icon: <Shield size={18} />, color: '#f59e0b', path: '/manual-approvals?type=technician' },
-        pendingPaymentVerifications: { label: 'Payment Verifications', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#f59e0b', path: '/manual-approvals?type=payment' },
-        pendingBrokerCommissions: { label: 'Broker Commissions', value: null, status: 'loading', icon: <Briefcase size={18} />, color: '#f59e0b', path: '/broker' },
-        activeContracts: { label: 'Active Contracts', value: null, status: 'loading', icon: <FileText size={18} />, color: '#10b981' },
-        propertyPassports: { label: 'Property Passports', value: null, status: 'loading', icon: <FileText size={18} />, color: '#3b82f6', path: '/properties/passport' },
-        documentsUploaded: { label: 'Documents', value: null, status: 'loading', icon: <FileText size={18} />, color: '#8b5cf6', path: '/document-vault' },
-        expiredDocs: { label: 'Expired Documents', value: null, status: 'loading', icon: <FileWarning size={18} />, color: '#f59e0b', path: '/document-vault?filter=expired' },
-        auditEventsToday: { label: 'Audit Events Today', value: null, status: 'loading', icon: <Activity size={18} />, color: '#3b82f6', path: '/audit' },
-        orphanRecords: { label: 'Orphan Records', value: null, status: 'loading', icon: <FileWarning size={18} />, color: binThemeTokens.danger, path: '/orphans' },
-        totalCollections: { label: 'Total Collections', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#10b981', path: '/transactions' },
-        pendingLiquidity: { label: 'Pending Liquidity', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#f59e0b' },
-        overduePayments: { label: 'Overdue Payments', value: null, status: 'loading', icon: <AlertTriangle size={18} />, color: binThemeTokens.danger },
-        payrollPending: { label: 'Payroll Pending', value: null, status: 'loading', icon: <Gavel size={18} />, color: '#f59e0b', path: '/financials/payroll' }
+  useEffect(() => {
+    const unsubscribers: Array<() => void> = [];
+    const listen = (label: string, source: any, onNext: (snap: any) => void) => {
+      const unsubscribe = onSnapshot(source, onNext, (error: any) => {
+        console.warn(`[ADMIN_DASHBOARD] ${label} stream failed`, error);
+      });
+      unsubscribers.push(unsubscribe);
+    };
+
+    listen('properties', collection(db, 'properties'), (snap) => {
+      const rows = snap.docs.map((row: any) => ({ id: row.id, ...(row.data() as Record<string, any>) })) as RecordRow[];
+      setProperties(rows.length);
+      setUnits(rows.reduce((sum, row) => sum + Number(row.units || row.totalUnits || row.unitsCount || 0), 0));
+      setLastSync(new Date());
     });
 
     const [propertyNamesById, setPropertyNamesById] = useState<Record<string, string>>({});
@@ -235,10 +238,11 @@ export default function DashboardPage() {
         setKpis((prev) => ({ ...prev, [key]: { ...prev[key], value, status } }));
     };
 
-    const handleKPIError = (key: string, error: any) => {
-        const status = error?.code === 'permission-denied' ? 'denied' : 'error';
-        setKpis((prev) => ({ ...prev, [key]: { ...prev[key], status } }));
-    };
+    listen('payment queue', query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATES), limit(10)), (snap) => {
+      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'PAYMENT_PROOF', origin: 'Payment verification', ...(row.data() as Record<string, any>) })) as RecordRow[];
+      setPaymentQueue(rows.sort((a, b) => getMillis(b.createdAt || b.submittedAt) - getMillis(a.createdAt || a.submittedAt)));
+      setLastSync(new Date());
+    });
 
     useEffect(() => {
         const unsubscribers: (() => void)[] = [];
@@ -417,31 +421,11 @@ export default function DashboardPage() {
         );
     };
 
-    const renderQueueRows = (rows: any[], empty: string) => rows.length ? rows.map((item) => (
-        <TableRow key={`${item.type}-${item.id}`} hover>
-            <TableCell sx={{ fontWeight: 700 }}>{item.origin}</TableCell>
-            <TableCell><Chip label={item.type || 'Standard'} size="small" sx={{ fontSize: '0.65rem', height: 20, fontWeight: 900 }} /></TableCell>
-            <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{item.linkedName || item.userId || 'Not linked'}</TableCell>
-            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{formatDate(item.createdAt || item.submittedAt)}</TableCell>
-            <TableCell align="right"><Button size="small" variant="outlined" onClick={() => navigate(reviewPathFor(item))} sx={{ fontWeight: 900, fontSize: '0.65rem' }}>REVIEW</Button></TableCell>
-        </TableRow>
-    )) : (
-        <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{empty}</TableCell></TableRow>
-    );
-
-    return (
-        <AdminPageFrame title="Executive Command Center" subtitle="HARD-LIVE OPERATIONS TERMINAL" lastUpdated={lastSync} onRefresh={() => window.location.reload()}>
-            <Box sx={{ pb: 8 }}>
-                <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1, mb: 4, '&::-webkit-scrollbar': { height: 4 } }}>
-                    <Button startIcon={<Plus />} variant="contained" onClick={() => navigate('/onboard-property')}>Add Property</Button>
-                    <Button startIcon={<Upload />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/bulk-import')}>Import Tenants</Button>
-                    <Button startIcon={<CheckCircle2 />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/manual-approvals')}>Verify Payments</Button>
-                    <Button startIcon={<FileText />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/document-vault')}>Document Vault</Button>
-                    <Button startIcon={<Zap />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/admin/pricing-matrix')}>Pricing Matrix</Button>
-                    <Button startIcon={<Shield />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/orphans')}>Orphan War Room</Button>
-                    <Button startIcon={<Activity />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/ops/technicians')}>Duty Command</Button>
-                    <Button startIcon={<TrendingUp />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/reports')}>Command Report</Button>
-                </Stack>
+    listen('broker commissions', query(collection(db, 'broker_commissions'), where('status', 'in', PENDING_COMMISSION_STATES), limit(10)), (snap) => {
+      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'BROKER_COMMISSION', origin: 'Broker commission', ...(row.data() as Record<string, any>) })) as RecordRow[];
+      setCommissionQueue(rows.sort((a, b) => getMillis(b.createdAt || b.submittedAt) - getMillis(a.createdAt || a.submittedAt)));
+      setLastSync(new Date());
+    });
 
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>PORTFOLIO KPIs</Typography>
                 <Grid container spacing={2} sx={{ mb: 6 }}>
@@ -516,11 +500,39 @@ export default function DashboardPage() {
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center"><Box><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>COMMAND SUPPORT TERMINAL</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 600 }}>Support channels are available for critical infrastructure failure. Standard audit logs and system monitoring remain the primary path for routine operations.</Typography></Box><CeoContactButtons compact /></Stack>
                 </Paper>
             </Box>
-            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}><Alert severity={snackbar.severity} sx={{ fontWeight: 900, borderRadius: 3 }}>{snackbar.message}</Alert></Snackbar>
-        </AdminPageFrame>
-    );
+            <CeoContactButtons compact />
+          </Stack>
+        </Paper>
+      </Stack>
+    </AdminPageFrame>
+  );
 }
 
-function UsersIcon() {
-    return <Building2 size={18} />;
+function StatusPanel({ title, icon, rows }: { title: string; icon: React.ReactNode; rows: Array<[string, any]> }) {
+  return (
+    <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, height: '100%' }}>
+      <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+        {icon} {title}
+      </Typography>
+      <Grid container spacing={1.5}>
+        {rows.map(([label, value]) => (
+          <Grid item xs={12} sm={6} key={label}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ color: '#fff', fontWeight: 800 }}>{label}</Typography>
+              <Chip size="small" label={normalizeStatus(value)} sx={{ bgcolor: alpha(statusTone(value), 0.12), color: statusTone(value), fontWeight: 900 }} />
+            </Stack>
+          </Grid>
+        ))}
+      </Grid>
+    </Paper>
+  );
+}
+
+function MetricLine({ label, value, muted, color }: { label: string; value: string; muted?: boolean; color?: string }) {
+  return (
+    <Box>
+      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>{label}</Typography>
+      <Typography sx={{ color: color || (muted ? 'rgba(255,255,255,0.72)' : '#fff'), fontWeight: 950 }}>{value}</Typography>
+    </Box>
+  );
 }

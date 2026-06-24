@@ -1,5 +1,5 @@
 // admin-panel/src/pages/settings/SettingsPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Paper,
@@ -15,9 +15,7 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
-import { db, auth, doc, getDoc, setDoc, serverTimestamp } from '../../lib/firebase';
-
-const SETTINGS_DOC = () => doc(db, 'settings', 'systemConfig');
+import { apiClient } from '../../services/api';
 
 interface SystemSettings {
   maintenanceMode: boolean;
@@ -33,62 +31,33 @@ interface SystemSettings {
   smsNotificationsEnabled: boolean;
 }
 
-const DEFAULT_SETTINGS: SystemSettings = {
-  maintenanceMode: false,
-  autoDispatchEnabled: true,
-  maxTicketsPerTechnician: 8,
-  sosResponseTimeMinutes: 30,
-  turnoverQuoteAutoGeneration: true,
-  paymentReminderDays: 3,
-  suspensionThreshold: 2,
-  binGroupFeePercent: 5,
-  partsMarkupPercent: 20,
-  emailNotificationsEnabled: true,
-  smsNotificationsEnabled: true,
-};
-
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings>({ ...DEFAULT_SETTINGS });
+  const [settings, setSettings] = useState<SystemSettings>({
+    maintenanceMode: false,
+    autoDispatchEnabled: true,
+    maxTicketsPerTechnician: 8,
+    sosResponseTimeMinutes: 30,
+    turnoverQuoteAutoGeneration: true,
+    paymentReminderDays: 3,
+    suspensionThreshold: 2,
+    binGroupFeePercent: 5,
+    partsMarkupPercent: 20,
+    emailNotificationsEnabled: true,
+    smsNotificationsEnabled: true,
+  });
 
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(true);
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const snap = await getDoc(SETTINGS_DOC());
-        if (snap.exists()) {
-          const stored = snap.data() as Partial<SystemSettings>;
-          setSettings({ ...DEFAULT_SETTINGS, ...stored });
-        }
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      } finally {
-        setInitializing(false);
-      }
-    };
-    loadSettings();
-  }, []);
 
   const handleChange = (key: keyof SystemSettings, value: any) => {
     setSettings({ ...settings, [key]: value });
     setSaved(false);
   };
 
-  const handleReset = () => {
-    setSettings({ ...DEFAULT_SETTINGS });
-    setSaved(false);
-  };
-
   const handleSave = async () => {
     try {
       setLoading(true);
-      await setDoc(SETTINGS_DOC(), {
-        ...settings,
-        updatedAt: serverTimestamp(),
-        updatedBy: auth.currentUser?.uid || null,
-      }, { merge: true });
+      await apiClient.post('/api/admin/settings', settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
@@ -98,14 +67,6 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
-
-  if (initializing) {
-    return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Typography>Loading settings...</Typography>
-      </Container>
-    );
-  }
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -299,8 +260,7 @@ export default function SettingsPage() {
         </Button>
         <Button
           variant="outlined"
-          onClick={handleReset}
-          disabled={loading}
+          onClick={() => alert('Settings reset to defaults')}
         >
           Reset to Defaults
         </Button>

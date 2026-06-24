@@ -74,7 +74,7 @@ function extractTranslationKeys(source, lang) {
 
 const languageContext = read('src/context/LanguageContext.tsx');
 const firebaseRuntime = read('src/lib/firebase.ts');
-const adminFirebaseRuntime = read('src/admin/lib/firebase.ts');
+const adminFirebaseRuntime = read('apps/admin-panel/src/lib/firebase.ts');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
 const firebaseJson = read('firebase.json');

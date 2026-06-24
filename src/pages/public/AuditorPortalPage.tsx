@@ -9,6 +9,7 @@ import { ShieldCheck, Lock, Download, Bell, Activity, Database, Key } from 'luci
 import { useRole } from '../../context/RoleContext';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { db, collection, getDocs, query, limit } from '../../lib/firebase';
 
 export default function AuditorPortalPage() {
     const { role, loading, user } = useRole();
@@ -27,8 +28,6 @@ export default function AuditorPortalPage() {
         async function checkAuditIntegrity() {
             if (!user) return;
             try {
-                const { collection, getDocs, query, limit } = await import('../../lib/firebase');
-                const { db } = await import('../../lib/firebase');
                 const snap = await getDocs(query(collection(db, 'auditLogs'), limit(10)));
                 if (!snap.empty) {
                     setAuditData(snap.docs.map(d => ({ id: d.id, ...d.data() })));

@@ -920,6 +920,9 @@ const translations: Record<Language, Record<string, string>> = {
         'owner.fin.escrow_compliance': 'Escrow Compliance',
         'owner.fin.escrow_desc': 'Rental collections are calculated through the Owner Ledger Cascade: Gross Rent, BIN GROUP 5% management fee, approved maintenance deductions, then net owner payout.',
         'owner.fin.securing': 'Securing financial broadcast...',
+        'admin.dashboard': 'Admin Dashboard',
+        'admin.total_revenue': 'Total Revenue',
+        'common.currency_aed': 'AED',
     },
     ar: {
         'common.currency': 'درهم',

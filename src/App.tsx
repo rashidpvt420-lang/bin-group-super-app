@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
-import LegalRedirect from './pages/public/LegalRedirect';
+import PrivacyPage from './pages/public/PrivacyPage';
+import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
@@ -50,13 +51,10 @@ const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
 const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
-const TrustCenterPage = lazyWithRetry(() => import('./pages/public/TrustCenterPage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
 const TenantInvitePage = lazyWithRetry(() => import('./pages/TenantInvitePage'));
-const PropertyPassportPublicPage = lazyWithRetry(() => import('./pages/public/PropertyPassportPublicPage'));
-const PropertyVerifiedBadgePage = lazyWithRetry(() => import('./pages/public/PropertyVerifiedBadgePage'));
 
 const AuthenticatedShell = lazyWithRetry(() => import('./components/AuthenticatedShell'));
 const ProtectedRoute = lazyWithRetry(() => import('./components/ProtectedRoute'));
@@ -222,6 +220,10 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
+function publicLanding() {
+  return withAuth(<LandingPage />, { publicAuth: true, showChrome: false });
+}
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
@@ -233,15 +235,15 @@ function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={<PublicMarketingPage page="home" />} />
+        <Route path="/" element={publicLanding()} />
         <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/v1" element={publicLanding()} />
         <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/terms-of-service" element={<LegalRedirect to="/terms-of-service.html" />} />
-        <Route path="/privacy-policy" element={<LegalRedirect to="/privacy-policy.html" />} />
-        <Route path="/terms" element={<LegalRedirect to="/terms-of-service.html" />} />
-        <Route path="/privacy" element={<LegalRedirect to="/privacy-policy.html" />} />
+        <Route path="/terms-of-service" element={<TermsPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/feedback" element={<PilotFeedbackPage />} />
         <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
@@ -264,12 +266,10 @@ function AppContent() {
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<CompanyProfilePage />} />
+        <Route path="/company" element={publicLanding()} />
         <Route path="/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/about" element={<CompanyProfilePage />} />
-        <Route path="/about-us" element={<CompanyProfilePage />} />
-        <Route path="/trust" element={<TrustCenterPage />} />
-        <Route path="/trust-center" element={<TrustCenterPage />} />
+        <Route path="/about" element={publicLanding()} />
+        <Route path="/about-us" element={publicLanding()} />
         <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
@@ -292,10 +292,13 @@ function AppContent() {
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        <Route path="/verify" element={<InvoiceVerificationPage />} />
+        <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
+        <Route path="/verify-cert" element={<CertificateVerificationPage />} />
+        <Route path="/verify-cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
-        <Route path="/passport/:id" element={<PropertyPassportPublicPage />} />
-        <Route path="/verify/property/:id" element={<PropertyVerifiedBadgePage />} />
+        <Route path="/verify/certificate/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

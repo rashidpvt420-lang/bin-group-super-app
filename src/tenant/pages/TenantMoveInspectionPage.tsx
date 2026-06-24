@@ -159,6 +159,7 @@ export default function TenantMoveInspectionPage() {
     }
   };
 
+
   const roomProgress = (roomId: string) => {
     const checks = Object.values(state.roomChecks[roomId] || {});
     const done = checks.filter(c => c.condition !== '').length;
