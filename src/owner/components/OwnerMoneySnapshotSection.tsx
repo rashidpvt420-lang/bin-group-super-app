@@ -60,7 +60,6 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localRows, setLocalRows] = useState<ResolvedTenantLedgerRow[]>([]);
-  const [localPendingPayments, setLocalPendingPayments] = useState(0);
   const [form, setForm] = useState<RentRecordPayload>({
     tenantName: '',
     propertyId: String(properties[0]?.id || properties[0]?.propertyId || ''),
@@ -84,7 +83,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
     return { totalRentDue, totalRentPaid, totalRentBalance, collectionRate, ledgerPending };
   }, [rows]);
   const overdueTenants = useMemo(() => rows.filter((row) => row.overdueDays > 0).length, [rows]);
-  const effectivePendingPayments = Math.max(pendingPayments, totals.ledgerPending) + localPendingPayments;
+  const effectivePendingPayments = Math.max(pendingPayments, totals.ledgerPending);
 
   const cards = [
     { label: 'Rent Due', value: money(totals.totalRentDue), icon: <ReceiptText size={20} />, tone: binThemeTokens.gold },
@@ -164,7 +163,6 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         leaseStart: null,
         leaseEnd: null,
       }, ...current]);
-      setLocalPendingPayments((current) => current + 1);
       setOpen(false);
       setForm({
         tenantName: '',
