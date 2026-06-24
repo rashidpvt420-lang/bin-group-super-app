@@ -70,9 +70,11 @@ export function createProofVerificationPayload(input: ProofVerificationInput): P
   const canonical = createProofCanonical(input);
   const hash = fallbackHash(canonical);
   const shortHash = hash.slice(0, 12).toUpperCase();
+  const ref = encodeURIComponent(input.reference || '');
+  const id = encodeURIComponent(input.id);
   const verifyPath = input.type === 'certificate'
-    ? `/verify-cert?hash=${encodeURIComponent(hash)}&id=${encodeURIComponent(input.id)}`
-    : `/verify?type=${encodeURIComponent(input.type)}&hash=${encodeURIComponent(hash)}&id=${encodeURIComponent(input.id)}`;
+    ? `/verify/cert/${encodeURIComponent(hash)}?id=${id}&ref=${ref}`
+    : `/verify/invoice/${encodeURIComponent(hash)}?type=${encodeURIComponent(input.type)}&id=${id}&ref=${ref}`;
   const host = String(input.host || 'https://bin-group-57c60.web.app').replace(/\/$/, '');
   const verifyUrl = `${host}${verifyPath}`;
   return { ...input, canonical, hash, shortHash, verifyPath, verifyUrl, qrPayload: verifyUrl };
