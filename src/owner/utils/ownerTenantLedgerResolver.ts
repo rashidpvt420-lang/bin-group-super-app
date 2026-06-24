@@ -74,6 +74,19 @@ function uniqBy(items: any[], keyFn: (item: any) => string) {
   return Array.from(map.values());
 }
 
+function normalizePaymentLedgerRows(payments: any[]) {
+  return payments
+    .filter((payment) => String(payment.recordType || payment.transactionType || '').toUpperCase().includes('RENT') || payment.rentDue !== undefined || payment.rentPaid !== undefined)
+    .map((payment) => ({
+      ...payment,
+      id: payment.id || payment.paymentId || payment.transactionId,
+      status: payment.paymentStatus || payment.status || 'PENDING_VERIFICATION',
+      rentDue: payment.rentDue ?? payment.amountDue ?? payment.expectedAmount ?? payment.amount,
+      rentPaid: payment.rentPaid ?? payment.amountPaid ?? payment.paidAmount ?? payment.amount,
+      lastPaymentDate: payment.lastPaymentDate || payment.paymentDate || payment.createdAt,
+    }));
+}
+
 export function resolveTenantLedger(
   properties: any[],
   occupancies: any[],
@@ -99,23 +112,21 @@ export function resolveTenantLedger(
 
   const vacantUnits = Math.max(0, totalUnits - activeTenants);
 
-  // Group raw items to form rows
+  const paymentLedgerRows = normalizePaymentLedgerRows(payments);
   const rawRows = uniqBy(
-    [...occupancies, ...leases, ...ledger],
-    (item) => item.tenantUid || item.tenantId || item.tenantEmail || item.id || item.leaseId || ''
+    [...occupancies, ...leases, ...ledger, ...paymentLedgerRows],
+    (item) => item.tenantUid || item.tenantId || item.tenantEmail || item.id || item.leaseId || item.paymentId || item.transactionId || ''
   );
 
   const ledgerRows: ResolvedTenantLedgerRow[] = rawRows.map((item) => {
-    const due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount, 0);
-    const paid = toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount, 0);
+    const due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount || item.expectedAmount, 0);
+    const paid = toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amount, 0);
     const balance = Math.max(0, due - paid);
-    
-    // Attempt to determine overdue days
     const dueDate = item.dueDate || item.paymentDueDate || item.nextDueDate || item.leaseEndDate || item.endDate;
     const overdueDays = balance > 0 ? getDaysDifference(dueDate) : 0;
 
     let lastPaymentDate: string | null = null;
-    const itemLastPay = item.lastPaymentDate || item.paymentDate || item.lastPaidAt;
+    const itemLastPay = item.lastPaymentDate || item.paymentDate || item.lastPaidAt || item.createdAt;
     if (itemLastPay) {
       if (typeof itemLastPay === 'string') {
         lastPaymentDate = itemLastPay;
@@ -128,11 +139,11 @@ export function resolveTenantLedger(
     const leaseEnd = item.leaseEnd || item.endDate || item.leaseEndDate || null;
 
     return {
-      id: item.id || item.leaseId || `${item.propertyId}-${item.unitId}`,
+      id: item.id || item.leaseId || item.paymentId || item.transactionId || `${item.propertyId}-${item.unitId}`,
       name: tenantDisplayName(item),
       property: propertyDisplayName(item, properties),
       unit: item.unitNumber || item.unitId || '—',
-      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.status, 'ACTIVE'),
+      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.paymentStatus || item.status, 'ACTIVE'),
       due,
       paid,
       balance,
