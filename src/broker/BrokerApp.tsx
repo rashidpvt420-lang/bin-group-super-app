@@ -13,7 +13,7 @@ import {
   Typography,
   alpha,
 } from '@mui/material';
-import { Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
+import { Briefcase, Building, FileUp, Home, Link2, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { NotificationBell } from '../components/NotificationBell';
@@ -30,6 +30,7 @@ import BrokerReferralsPage from './pages/BrokerReferralsPage';
 import BrokerCommissionsPage from './pages/BrokerCommissionsPage';
 import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
 import BrokerProfilePage from './pages/BrokerProfilePage';
+import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
 
 type BrokerMenuItem = {
   key: string;
@@ -51,6 +52,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
     { key: 'broker.nav.referrals', label: label('broker.nav.referrals', 'Referrals', 'الإحالات'), path: '/broker/referrals', icon: Building },
     { key: 'broker.nav.commissions', label: label('broker.nav.commissions', 'Commissions', 'العمولات'), path: '/broker/commissions', icon: Wallet },
+    { key: 'broker.nav.attribution', label: label('broker.nav.attribution', 'Attribution', 'الإسناد'), path: '/broker/attribution', icon: Link2 },
     { key: 'broker.nav.documents', label: label('broker.nav.documents', 'Documents', 'المستندات'), path: '/broker/documents', icon: FileUp },
   ];
 
@@ -138,6 +140,7 @@ export default function BrokerApp() {
         <Route path="/leads" element={<BrokerLeadsPage />} />
         <Route path="/referrals" element={<BrokerReferralsPage />} />
         <Route path="/commissions" element={<BrokerCommissionsPage />} />
+        <Route path="/attribution" element={<BrokerAttributionProofPage />} />
         <Route path="/documents" element={<BrokerDocumentsPage />} />
         <Route path="/profile" element={<BrokerProfilePage />} />
         <Route path="/bin-connect" element={<BinConnectInboxPage role="broker" />} />
