@@ -1,4 +1,3 @@
-// @ts-nocheck
 // apps/admin-panel/src/pages/dashboard/DashboardPage.tsx
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -148,6 +147,17 @@ const approvedPayment = (row: RecordRow) => {
 
 const transactionAmount = (row: RecordRow) => Number(row.amountReceived || row.mobilizationAmount || row.amount || row.totalAmount || row.contractValue || row.annualValue || 0);
 
+const paymentEventMillis = (row: RecordRow) => getMillis(
+  row.approvedAt
+  || row.paymentApprovedAt
+  || row.adminApprovedAt
+  || row.reconciledAt
+  || row.verifiedAt
+  || row.paidAt
+  || row.createdAt
+  || row.updatedAt,
+);
+
 const calculateMrr = (rows: RecordRow[]): MrrStats => {
   const now = new Date();
   const currentStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -156,7 +166,7 @@ const calculateMrr = (rows: RecordRow[]): MrrStats => {
   let previousMonth = 0;
 
   rows.filter(approvedPayment).forEach((row) => {
-    const paidAt = getMillis(row.reconciledAt || row.verifiedAt || row.paidAt || row.createdAt || row.updatedAt);
+    const paidAt = paymentEventMillis(row);
     const amount = transactionAmount(row);
     if (!paidAt || !amount) return;
     if (paidAt >= currentStart) currentMonth += amount;
@@ -290,6 +300,13 @@ export default function DashboardPage() {
   const breachedMissions = useMemo(() => missions.filter(isBreached), [missions]);
   const nearBreach = useMemo(() => missions.filter(isNearBreach).length, [missions]);
   const actionQueue = useMemo(() => [...approvalQueue, ...paymentQueue, ...commissionQueue].slice(0, 12), [approvalQueue, paymentQueue, commissionQueue]);
+  const pendingReviewRoute = useMemo(() => {
+    const hasTech = approvalQueue.some((row) => row.type === 'TECH_ONBOARD');
+    const hasOwner = approvalQueue.some((row) => row.type === 'OWNER_ONBOARDING');
+    if (hasTech && !hasOwner) return '/technicians?review=pending';
+    if (hasOwner && !hasTech) return '/vault?filter=pending';
+    return '/manual-approvals';
+  }, [approvalQueue]);
   const launchHealth = summary.launchHealth || summary.gates || {};
   const smokeStatus = summary.smokeStatus || summary.profileSmoke || summary.fiveProfileSmoke || {};
   const webhook = systemHealth.whatsappwebhook || systemHealth.whatsapp_webhook || summary.whatsappWebhook || summary.webhookHealth || {};
@@ -313,7 +330,7 @@ export default function DashboardPage() {
     { label: 'SLA Near Breach', value: nearBreach, icon: <Clock size={18} />, tone: nearBreach ? '#f59e0b' : '#10b981', route: '/tickets?sla=near' },
     { label: 'Payment Verifications', value: paymentQueue.length, icon: <DollarSign size={18} />, tone: paymentQueue.length ? '#f59e0b' : '#10b981', route: '/admin/payments' },
     { label: 'Broker Commissions', value: commissionQueue.length, icon: <Briefcase size={18} />, tone: commissionQueue.length ? '#f59e0b' : '#10b981', route: '/broker' },
-    { label: 'Pending Reviews', value: approvalQueue.length, icon: <Shield size={18} />, tone: approvalQueue.length ? '#f59e0b' : '#10b981', route: '/vault' },
+    { label: 'Pending Reviews', value: approvalQueue.length, icon: <Shield size={18} />, tone: approvalQueue.length ? '#f59e0b' : '#10b981', route: pendingReviewRoute },
     { label: 'Expired Documents', value: expiredDocuments.length, icon: <FileText size={18} />, tone: expiredDocuments.length ? '#ef4444' : '#10b981', route: '/document-vault' },
   ];
 
