@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ClipboardCheck, Eye, FileText, Home, ShieldAlert } from 'lucide-react';
-import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
+import { collection, db, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -20,16 +20,27 @@ const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCas
 const statusColor = (status: any) => {
   const normalized = String(status || '').toUpperCase();
   if (['APPROVED', 'SETTLED', 'CLOSED'].includes(normalized)) return '#10b981';
-  if (['DISPUTED', 'OWNER_REVIEW', 'SUBMITTED'].includes(normalized)) return '#f59e0b';
-  if (['REJECTED', 'ESCALATED'].includes(normalized)) return '#ef4444';
+  if (['DISPUTED', 'OWNER_REVIEW', 'SUBMITTED', 'REINSPECTION_REQUESTED'].includes(normalized)) return '#f59e0b';
+  if (['REJECTED', 'ESCALATED', 'DAMAGE_CLAIMED'].includes(normalized)) return '#ef4444';
   return binThemeTokens.goldHover;
 };
+
+const evidenceUrls = (inspection: any) => [
+  ...(Array.isArray(inspection.evidencePhotos) ? inspection.evidencePhotos : []),
+  ...(Array.isArray(inspection.photos) ? inspection.photos : []),
+  ...(Array.isArray(inspection.moveInPhotos) ? inspection.moveInPhotos : []),
+  ...(Array.isArray(inspection.moveOutPhotos) ? inspection.moveOutPhotos : []),
+  inspection.reportUrl,
+  inspection.evidenceUrl,
+  inspection.pdfUrl,
+].filter(Boolean);
 
 export default function OwnerInspectionsPage() {
   const { user } = useRole();
   const { tx } = useLanguage();
   const [inspections, setInspections] = useState<any[]>([]);
   const [warning, setWarning] = useState('');
+  const [busyId, setBusyId] = useState('');
 
   useEffect(() => {
     if (!user?.uid && !user?.email) return;
@@ -57,7 +68,41 @@ export default function OwnerInspectionsPage() {
     return () => unsubs.forEach((unsub) => unsub());
   }, [user?.uid, user?.email, tx]);
 
-  const pending = inspections.filter((item) => ['SUBMITTED', 'OWNER_REVIEW', 'DISPUTED'].includes(String(item.status || '').toUpperCase())).length;
+  const updateInspection = async (inspection: any, action: 'APPROVED' | 'REINSPECTION_REQUESTED' | 'SETTLEMENT_REQUESTED') => {
+    if (!inspection?.id || !user?.uid) return;
+    setBusyId(`${inspection.id}:${action}`);
+    try {
+      const payload: Record<string, any> = {
+        status: action,
+        ownerAction: action,
+        ownerActionAt: serverTimestamp(),
+        ownerActionBy: user.uid,
+        ownerActionByEmail: normalizeEmail(user.email),
+        updatedAt: serverTimestamp(),
+      };
+      if (action === 'APPROVED') {
+        payload.approvedByOwner = true;
+        payload.ownerApprovedAt = serverTimestamp();
+      }
+      if (action === 'REINSPECTION_REQUESTED') {
+        payload.damageClaimStatus = 'OWNER_REQUESTED_REINSPECTION';
+        payload.reinspectionRequestedAt = serverTimestamp();
+      }
+      if (action === 'SETTLEMENT_REQUESTED') {
+        payload.settlementStatus = 'OWNER_REQUESTED_SETTLEMENT';
+        payload.settlementRequestedAt = serverTimestamp();
+      }
+      await updateDoc(doc(db, 'propertyInspections', inspection.id), payload);
+      setWarning('');
+    } catch (err) {
+      console.error('[OwnerInspections] action failed:', err);
+      setWarning(tx('owner.inspections.actionFailed', 'Could not update this inspection. Check access rules or try again.'));
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const pending = inspections.filter((item) => ['SUBMITTED', 'OWNER_REVIEW', 'DISPUTED', 'REINSPECTION_REQUESTED'].includes(String(item.status || '').toUpperCase())).length;
   const moveIns = inspections.filter((item) => String(item.inspectionType || '').toUpperCase() === 'MOVE_IN').length;
   const moveOuts = inspections.filter((item) => String(item.inspectionType || '').toUpperCase() === 'MOVE_OUT').length;
 
@@ -89,6 +134,8 @@ export default function OwnerInspectionsPage() {
         <Grid container spacing={2}>
           {inspections.map((inspection) => {
             const color = statusColor(inspection.status);
+            const urls = evidenceUrls(inspection);
+            const firstUrl = urls[0];
             return (
               <Grid item xs={12} md={6} key={inspection.id}>
                 <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(color, 0.18)}`, bgcolor: '#fff' }}>
@@ -101,10 +148,12 @@ export default function OwnerInspectionsPage() {
                       <Chip label={String(inspection.status || 'SUBMITTED').replace(/_/g, ' ')} sx={{ bgcolor: alpha(color, 0.1), color, fontWeight: 950 }} />
                     </Stack>
                     <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{inspection.summary || inspection.notes || tx('owner.inspections.noSummary', 'Room-by-room evidence is ready for review when uploaded.')}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{urls.length ? `${urls.length} evidence file(s) attached` : 'No evidence files attached yet'}</Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      <Button variant="outlined" startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>{tx('owner.inspections.review', 'Review Evidence')}</Button>
-                      <Button variant="outlined" sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
-                      <Button variant="outlined" sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{tx('owner.inspections.settlement', 'Settlement')}</Button>
+                      <Button variant="outlined" disabled={!firstUrl} onClick={() => firstUrl && window.open(firstUrl, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>{tx('owner.inspections.review', 'Review Evidence')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:APPROVED`} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:REINSPECTION_REQUESTED`} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:SETTLEMENT_REQUESTED`} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
                     </Stack>
                   </Stack>
                 </Paper>
