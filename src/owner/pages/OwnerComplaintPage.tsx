@@ -151,6 +151,7 @@ export default function OwnerComplaintPage() {
                 floor: selectedUnit?.floorNumber || null,
                 tenantId: selectedUnit?.tenantId || null,
                 tenantName: selectedUnit?.tenantName || null,
+                tenantEmail: selectedUnit?.tenantEmail || null,
                 category,
                 priority,
                 description,

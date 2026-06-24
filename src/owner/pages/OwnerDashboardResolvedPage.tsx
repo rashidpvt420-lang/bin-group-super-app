@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, CreditCard, Shield, Wrench } from 'lucide-react';
+import { Building2, ClipboardCheck, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -8,6 +8,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import OwnerExecutiveDashboardSection from '../components/OwnerExecutiveDashboardSection';
 import OwnerRoiFinancialSection from '../components/OwnerRoiFinancialSection';
+import OwnerRentCollectionSection from '../components/OwnerRentCollectionSection';
 import OwnerAuthorizedReportersSection from '../components/OwnerAuthorizedReportersSection';
 import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCenter';
 import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
@@ -87,13 +88,21 @@ const isActiveContract = (contract: any) => {
 
 const sortByRecent = (a: any, b: any) => getSeconds(b.updatedAt || b.createdAt) - getSeconds(a.updatedAt || a.createdAt);
 
+// Tracks collections skipped due to permission-denied errors during a single load() pass,
+// so the UI can surface a visible warning instead of failing silently to console only.
+let permissionDeniedCollections: Set<string> = new Set();
+
 async function safeGetDocument(collectionName: string, id: string) {
   if (!id) return null;
   try {
     const snap = await getDoc(doc(db, collectionName, id));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   } catch (err) {
-    if (!isPermissionDenied(err)) console.warn(`[OwnerDashboardResolved] ${collectionName}/${id} read failed:`, err);
+    if (isPermissionDenied(err)) {
+      permissionDeniedCollections.add(collectionName);
+    } else {
+      console.warn(`[OwnerDashboardResolved] ${collectionName}/${id} read failed:`, err);
+    }
     return null;
   }
 }
@@ -104,7 +113,11 @@ async function getCollectionDocs(collectionName: string, field: string, value: s
     const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    console.warn(`[OwnerDashboardResolved] Skipped ${collectionName}.${field} == ${value}:`, err);
+    if (isPermissionDenied(err)) {
+      permissionDeniedCollections.add(collectionName);
+    } else {
+      console.warn(`[OwnerDashboardResolved] Skipped ${collectionName}.${field} == ${value}:`, err);
+    }
     return [] as any[];
   }
 }
@@ -191,6 +204,8 @@ export default function OwnerDashboardResolvedPage() {
   const [tenantCount, setTenantCount] = useState(0);
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [permissionWarning, setPermissionWarning] = useState('');
   // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
 
@@ -203,6 +218,7 @@ export default function OwnerDashboardResolvedPage() {
       }
       try {
         setLoadError('');
+        permissionDeniedCollections = new Set();
         const resolved = await resolveOwner(user);
         if (!alive) return;
         setResolution(resolved);
@@ -293,13 +309,20 @@ export default function OwnerDashboardResolvedPage() {
           setLedgerSummary(resolvedLedger);
           setTenantCount(resolvedLedger.activeTenants);
           setLoadingExtras(false);
+          if (permissionDeniedCollections.size > 0) {
+            console.warn('[OwnerDashboardResolved] Permission denied for collections:', Array.from(permissionDeniedCollections));
+            setPermissionWarning(`Some data could not be loaded due to a permissions issue (${Array.from(permissionDeniedCollections).join(', ')}). Figures on this dashboard may be incomplete. Please contact support if this persists.`);
+          } else {
+            setPermissionWarning('');
+          }
         }
       } catch (err: any) {
-        const isPermissionDenied = err?.code === 'permission-denied' || 
-                                   err?.message?.includes('permission-denied') || 
+        const isPermissionDenied = err?.code === 'permission-denied' ||
+                                   err?.message?.includes('permission-denied') ||
                                    err?.message?.includes('insufficient permissions');
         if (isPermissionDenied) {
-          console.warn('[OwnerDashboardResolved] load failed: permission-denied. Failing silently with empty state.');
+          console.warn('[OwnerDashboardResolved] load failed: permission-denied.');
+          if (alive) setPermissionWarning('Dashboard data could not be fully loaded due to a permissions issue. Some figures may be missing or incomplete. Please contact support if this persists.');
         } else {
           console.error('[OwnerDashboardResolved] load failed:', err);
         }
@@ -328,6 +351,11 @@ export default function OwnerDashboardResolvedPage() {
     const isPermDenied = (err: any) =>
       err?.code === 'permission-denied' || String(err?.message || '').includes('permission-denied');
 
+    const warnLiveDenied = (label: string) => {
+      console.warn(`[OwnerDashboard] Live ${label} listener denied by permissions.`);
+      setPermissionWarning((current) => current || `Live ${label} updates are unavailable due to a permissions issue. Figures may be out of date. Please contact support if this persists.`);
+    };
+
     // Live open-ticket count
     try {
       const ticketQuery = query(
@@ -339,7 +367,8 @@ export default function OwnerDashboardResolvedPage() {
         ticketQuery,
         (snap) => { setTickets(snap.size); },
         (err) => {
-          if (!isPermDenied(err)) console.warn('[OwnerDashboard] Live ticket count error:', err);
+          if (isPermDenied(err)) warnLiveDenied('ticket count');
+          else console.warn('[OwnerDashboard] Live ticket count error:', err);
         }
       );
       liveUnsubs.current.push(unsubTickets);
@@ -358,12 +387,38 @@ export default function OwnerDashboardResolvedPage() {
         payQuery,
         (snap) => { setPendingPayments(snap.size); },
         (err) => {
-          if (!isPermDenied(err)) console.warn('[OwnerDashboard] Live payment count error:', err);
+          if (isPermDenied(err)) warnLiveDenied('pending payment count');
+          else console.warn('[OwnerDashboard] Live payment count error:', err);
         }
       );
       liveUnsubs.current.push(unsubPay);
     } catch (e) {
       console.warn('[OwnerDashboard] Could not attach live payment listener:', e);
+    }
+
+    // Live pending owner-approval count.
+    // Mirrors OwnerApprovalCenterPage (the actual /owner/approvals consumer), which queries
+    // by ownerId only and shows every request. "Pending" here means no decision has been
+    // recorded yet (decision is only ever set by submitOwnerApprovalDecision).
+    try {
+      const approvalQuery = query(
+        collection(db, 'owner_approval_requests'),
+        where('ownerId', '==', authUid)
+      );
+      const unsubApprovals = onSnapshot(
+        approvalQuery,
+        (snap) => {
+          const pending = snap.docs.filter((d) => !d.data()?.decision).length;
+          setPendingApprovals(pending);
+        },
+        (err) => {
+          if (isPermDenied(err)) warnLiveDenied('approval count');
+          else console.warn('[OwnerDashboard] Live approval count error:', err);
+        }
+      );
+      liveUnsubs.current.push(unsubApprovals);
+    } catch (e) {
+      console.warn('[OwnerDashboard] Could not attach live approval listener:', e);
     }
 
     return () => {
@@ -471,11 +526,14 @@ export default function OwnerDashboardResolvedPage() {
     { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
     { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
     { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
+    { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <Wallet size={20} />, color: '#f59e0b', to: '/owner/financials' },
+    { label: tx('dash.kpi.pendingApprovals', 'Pending Owner Approvals'), value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: '#8b5cf6', to: '/owner/approvals' },
   ];
 
   return (
     <Box sx={{ pb: { xs: 12, md: 6 }, pr: { xs: 9, md: 0 }, direction: isRTL ? 'rtl' : 'ltr' }}>
       {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
+      {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>
@@ -498,7 +556,10 @@ export default function OwnerDashboardResolvedPage() {
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {KPI_CARDS.map((card, idx) => (
           <Grid item xs={12} sm={6} md={3} key={idx}>
-            <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.42)', border: `1px solid ${alpha(card.color, .22)}`, borderRadius: 5 }}>
+            <Paper
+              onClick={card.to ? () => navigate(card.to) : undefined}
+              sx={{ p: 3, bgcolor: 'rgba(15,23,42,.42)', border: `1px solid ${alpha(card.color, .22)}`, borderRadius: 5, cursor: card.to ? 'pointer' : 'default', transition: 'border-color .15s', '&:hover': card.to ? { borderColor: alpha(card.color, .55) } : undefined }}
+            >
               <Box sx={{ color: card.color, mb: 2 }}>{card.icon}</Box>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>{card.value}</Typography>
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 900, letterSpacing: 1 }}>{card.label.toUpperCase()}</Typography>
@@ -517,6 +578,8 @@ export default function OwnerDashboardResolvedPage() {
         <OwnerExecutiveDashboardSection properties={properties} stats={executiveStats} contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''} missingInfo={missingInfo} user={user} contract={contract} />
       </Box>
       
+      <Box sx={{ mt: 5 }}><OwnerRentCollectionSection ledgerSummary={ledgerSummary} /></Box>
+
       <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}</Box>
 
       <Box sx={{ mt: 5 }} id="authorized-property-reporters">
