@@ -105,6 +105,7 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Chip label={`NEXT: ${nextAction}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
           <Button size="small" variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Financials</Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/payment-proof')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Payment Proof</Button>
           <Button size="small" variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Approvals</Button>
           <Button size="small" variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Move-In / Move-Out</Button>
         </Stack>
@@ -146,7 +147,7 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
                   <TableCell align="right" sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</TableCell>
                   <TableCell align="right" sx={{ color: row.balance ? '#f59e0b' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</TableCell>
                   <TableCell><Chip size="small" label={status.label} sx={{ bgcolor: alpha(status.color, 0.12), color: status.color, fontWeight: 950 }} /></TableCell>
-                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/financials?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>View Proof</Button></TableCell>
+                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/payment-proof?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>View Proof</Button></TableCell>
                 </TableRow>
               );
             })}
