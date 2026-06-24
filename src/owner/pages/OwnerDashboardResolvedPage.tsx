@@ -13,10 +13,11 @@ import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCent
 import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
 import OwnerContractModeMatrix from '../components/OwnerContractModeMatrix';
 import OwnerMoneyRiskDashboardSection from '../components/OwnerMoneyRiskDashboardSection';
+import OwnerMoneySnapshotSection from '../components/OwnerMoneySnapshotSection';
 import { resolveOwnerFinancials } from '../utils/ownerFinancialResolver';
 import { resolveOwnerComplaint } from '../utils/ownerComplaintResolver';
 import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
-import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
+import { detectContractMode, canSeeMaintenance } from '../utils/ownerServiceMode';
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
@@ -191,7 +192,6 @@ export default function OwnerDashboardResolvedPage() {
   const [tenantCount, setTenantCount] = useState(0);
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
-  // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
 
   useEffect(() => {
@@ -295,10 +295,8 @@ export default function OwnerDashboardResolvedPage() {
           setLoadingExtras(false);
         }
       } catch (err: any) {
-        const isPermissionDenied = err?.code === 'permission-denied' || 
-                                   err?.message?.includes('permission-denied') || 
-                                   err?.message?.includes('insufficient permissions');
-        if (isPermissionDenied) {
+        const denied = err?.code === 'permission-denied' || err?.message?.includes('permission-denied') || err?.message?.includes('insufficient permissions');
+        if (denied) {
           console.warn('[OwnerDashboardResolved] load failed: permission-denied. Failing silently with empty state.');
         } else {
           console.error('[OwnerDashboardResolved] load failed:', err);
@@ -314,21 +312,15 @@ export default function OwnerDashboardResolvedPage() {
     return () => { alive = false; };
   }, [user?.uid, user?.email]);
 
-  // ── Real-time counters: open tickets + pending payments ──────────────────
-  // Fires after the owner resolution completes to layer live updates on top
-  // of the initial one-time load, without re-running the full resolver.
   useEffect(() => {
-    // Clean up any previous listeners before attaching new ones
     liveUnsubs.current.forEach((unsub) => unsub());
     liveUnsubs.current = [];
 
     const authUid = user?.uid;
     if (!authUid || resolution.state !== 'active') return;
 
-    const isPermDenied = (err: any) =>
-      err?.code === 'permission-denied' || String(err?.message || '').includes('permission-denied');
+    const isPermDenied = (err: any) => err?.code === 'permission-denied' || String(err?.message || '').includes('permission-denied');
 
-    // Live open-ticket count
     try {
       const ticketQuery = query(
         collection(db, 'maintenanceTickets'),
@@ -347,7 +339,6 @@ export default function OwnerDashboardResolvedPage() {
       console.warn('[OwnerDashboard] Could not attach live ticket listener:', e);
     }
 
-    // Live pending-payment count
     try {
       const payQuery = query(
         collection(db, 'payment_transactions'),
@@ -437,6 +428,98 @@ export default function OwnerDashboardResolvedPage() {
     setReporters((current) => current.map((reporter) => reporter.id === reporterId ? { ...reporter, accessStatus: 'SUSPENDED', canCreateComplaints: false } : reporter));
   };
 
+  const handleRecordRentPayment = async (rentData: any) => {
+    const ownerId = String(user?.uid || resolution.contract?.ownerId || resolution.contract?.ownerUid || '').trim();
+    if (!ownerId) throw new Error('Owner UID is required before recording rent.');
+
+    const rentDue = Number(rentData.rentDue || 0);
+    const rentPaid = Number(rentData.rentPaid || 0);
+    const balance = Math.max(0, rentDue - rentPaid);
+    const recordId = `owner_rent_${ownerId}_${Date.now()}`;
+    const ownerEmail = normalizeEmail(user?.email || resolution.profile?.email || resolution.contract?.ownerEmail);
+    const todayLabel = new Date().toLocaleDateString('en-GB');
+    const status = balance > 0 ? 'PARTIAL' : 'PAID';
+
+    const payload = {
+      recordType: 'OWNER_RENT_PAYMENT',
+      ownerId,
+      ownerUid: ownerId,
+      ownerEmail,
+      contractId: resolution.contract?.id || '',
+      tenantName: String(rentData.tenantName || '').trim(),
+      propertyId: String(rentData.propertyId || ''),
+      propertyName: String(rentData.propertyName || 'Property'),
+      unitNumber: String(rentData.unitNumber || ''),
+      rentDue,
+      rentPaid,
+      amountDue: rentDue,
+      amountPaid: rentPaid,
+      balance,
+      status,
+      paymentStatus: status,
+      paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER'),
+      paymentReference: String(rentData.paymentReference || ''),
+      notes: String(rentData.notes || ''),
+      lastPaymentDate: new Date().toISOString(),
+      createdByOwnerUid: ownerId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, 'tenant_ledger', recordId), payload);
+    await setDoc(doc(db, 'audit_logs', `audit_${recordId}`), {
+      actorId: ownerId,
+      actorRole: 'owner',
+      action: 'OWNER_RENT_PAYMENT_RECORDED',
+      targetType: 'TENANT_LEDGER',
+      targetId: recordId,
+      module: 'owner_money_snapshot',
+      status: 'RECORDED',
+      metadata: {
+        propertyId: payload.propertyId,
+        propertyName: payload.propertyName,
+        tenantName: payload.tenantName,
+        amountPaid: rentPaid,
+        balance,
+      },
+      createdAt: serverTimestamp(),
+    });
+
+    setLedgerSummary((current: any) => {
+      const row = {
+        id: recordId,
+        name: payload.tenantName || 'Tenant',
+        property: payload.propertyName,
+        unit: payload.unitNumber || '—',
+        status,
+        due: rentDue,
+        paid: rentPaid,
+        balance,
+        overdueDays: 0,
+        lastPaymentDate: todayLabel,
+        leaseStart: null,
+        leaseEnd: null,
+      };
+      const ledgerRows = [row, ...(current?.ledgerRows || [])];
+      const totalRentDue = ledgerRows.reduce((sum, item) => sum + Number(item.due || 0), 0);
+      const totalRentPaid = ledgerRows.reduce((sum, item) => sum + Number(item.paid || 0), 0);
+      const totalRentBalance = ledgerRows.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+      const collectionRate = totalRentDue > 0 ? Math.round((totalRentPaid / totalRentDue) * 100) : 0;
+      return {
+        ...(current || {}),
+        totalUnits: current?.totalUnits || stats.units,
+        activeTenants: current?.activeTenants || tenantCount,
+        pendingTenants: current?.pendingTenants || 0,
+        vacantUnits: current?.vacantUnits ?? Math.max(0, stats.units - tenantCount),
+        totalRentDue,
+        totalRentPaid,
+        totalRentBalance,
+        collectionRate,
+        ledgerRows,
+      };
+    });
+  };
+
   if (resolution.state === 'loading') {
     return <Box sx={{ height: '70vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
   }
@@ -462,7 +545,7 @@ export default function OwnerDashboardResolvedPage() {
   const contract = resolution.contract || {};
   const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
   const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
-  const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: stats.rent, payoutsPending: 0, maintenanceCost: stats.maintenance };
+  const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: ledgerSummary?.totalRentPaid ?? stats.rent, payoutsPending: pendingPayments, maintenanceCost: stats.maintenance };
   const missingInfo = { iban: false, units: stats.units === 0 };
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
@@ -471,6 +554,7 @@ export default function OwnerDashboardResolvedPage() {
     { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
     { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
     { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
+    { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <CreditCard size={20} />, color: pendingPayments > 0 ? '#f59e0b' : '#10b981' },
   ];
 
   return (
@@ -488,6 +572,7 @@ export default function OwnerDashboardResolvedPage() {
           )}
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.contracts', 'Contracts')}</Button>
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.propPassport', 'Property Passport')}</Button>
+          <Button variant="outlined" onClick={() => scrollToObject('owner-money-snapshot')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{tx('dash.owner.money', 'Money')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>{tx('dash.owner.complaints', 'Complaints')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.addPerson', 'Add Person')}</Button>
         </Stack>
@@ -513,11 +598,15 @@ export default function OwnerDashboardResolvedPage() {
         <OwnerContractModeMatrix user={user} contract={contract} properties={properties} />
       </Box>
 
+      <Box sx={{ mt: 5 }} id="owner-money-snapshot">
+        <OwnerMoneySnapshotSection ledgerSummary={ledgerSummary} pendingPayments={pendingPayments} properties={properties} onRecordRentPayment={handleRecordRentPayment} />
+      </Box>
+
       <Box sx={{ mt: 5 }}>
         <OwnerExecutiveDashboardSection properties={properties} stats={executiveStats} contractScope={contract.packageName || contract.selectedPlan?.name || contract.planType || contract.serviceType || ''} missingInfo={missingInfo} user={user} contract={contract} />
       </Box>
       
-      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}</Box>
+      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => scrollToObject('owner-money-snapshot')} />}</Box>
 
       <Box sx={{ mt: 5 }} id="authorized-property-reporters">
         <OwnerAuthorizedReportersSection properties={properties} reporters={reporters} onAddReporter={handleAddReporter} onRemoveReporter={handleRemoveReporter} loading={loadingExtras} />

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Card, CardContent, Typography, alpha, Stack, Button, Chip, Select, MenuItem, FormControl, InputLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Collapse } from '@mui/material';
-import { Wrench, Download, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Wrench, Download, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
@@ -42,6 +42,25 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   const [open, setOpen] = useState(false);
   const { user } = useRole();
 
+  const handleEvidenceExport = async () => {
+    exportComplaintsToCsv([complaint], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
+    await addDoc(collection(db, 'audit_logs'), {
+      actorId: user?.uid || 'owner',
+      actorRole: 'owner',
+      action: 'OWNER_EVIDENCE_PACK_EXPORTED',
+      targetType: 'MAINTENANCE_TICKET',
+      targetId: complaint.ticketId,
+      module: 'owner_complaint_command_center',
+      status: 'EXPORTED',
+      metadata: {
+        propertyName: complaint.propertyName || '',
+        beforePhotoCount: complaint.photosBefore?.length || 0,
+        afterPhotoCount: complaint.proofPhotosAfter?.length || 0,
+      },
+      createdAt: serverTimestamp(),
+    });
+  };
+
   const handleUpdateStatus = async (newStatus: string) => {
     try {
       const ticketRef = doc(db, 'maintenanceTickets', complaint.ticketId);
@@ -50,7 +69,6 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         updatedAt: serverTimestamp()
       });
 
-      // Write to audit log
       await addDoc(collection(db, 'audit_logs'), {
         actorId: user?.uid || 'owner',
         actorRole: 'owner',
@@ -67,8 +85,8 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
       alert(`Ticket ${complaint.ticketId} status updated to ${newStatus}.`);
       window.location.reload();
     } catch (err: any) {
-      console.error("Failed to update ticket status:", err);
-      alert("Error: " + err.message);
+      console.error('Failed to update ticket status:', err);
+      alert('Error: ' + err.message);
     }
   };
 
@@ -154,55 +172,23 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
                 </Box>
               )}
 
-              <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }} flexWrap="wrap" useFlexGap>
                 {showReviewActions && (
                   <>
-                    <Button 
-                      variant="contained" 
-                      color="success" 
-                      size="small"
-                      onClick={() => handleUpdateStatus('CLOSED')}
-                    >
-                      Approve & Close
-                    </Button>
-                    <Button 
-                      variant="contained" 
-                      color="error" 
-                      size="small"
-                      onClick={() => handleUpdateStatus('DISPUTED')}
-                    >
-                      Dispute Resolution
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      color="warning" 
-                      size="small"
-                      onClick={() => handleUpdateStatus('REOPENED')}
-                    >
-                      Request Revisit
-                    </Button>
+                    <Button variant="contained" color="success" size="small" onClick={() => handleUpdateStatus('CLOSED')}>Approve & Close</Button>
+                    <Button variant="contained" color="error" size="small" onClick={() => handleUpdateStatus('DISPUTED')}>Dispute Resolution</Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => handleUpdateStatus('REOPENED')}>Request Revisit</Button>
                   </>
                 )}
                 {showOpenActions && (
                   <>
-                    <Button 
-                      variant="outlined" 
-                      color="error" 
-                      size="small"
-                      onClick={() => handleUpdateStatus('ESCALATED')}
-                    >
-                      Escalate Ticket
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      color="warning" 
-                      size="small"
-                      onClick={() => handleUpdateStatus('DISPUTED')}
-                    >
-                      Dispute Ticket
-                    </Button>
+                    <Button variant="outlined" color="error" size="small" onClick={() => handleUpdateStatus('ESCALATED')}>Escalate Ticket</Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => handleUpdateStatus('DISPUTED')}>Dispute Ticket</Button>
                   </>
                 )}
+                <Button variant="outlined" size="small" startIcon={<Download size={14} />} onClick={handleEvidenceExport} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
+                  Download Evidence Pack
+                </Button>
               </Stack>
             </Box>
           </Collapse>
