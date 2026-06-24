@@ -43,7 +43,12 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   const { user } = useRole();
 
   const handleEvidenceExport = async () => {
-    exportComplaintsToCsv([complaint], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
+    const proofNotes = [
+      complaint.resolutionNotes || '',
+      `Before proof references: ${(complaint.photosBefore || []).join(' | ') || 'none'}`,
+      `After proof references: ${(complaint.proofPhotosAfter || []).join(' | ') || 'none'}`,
+    ].filter(Boolean).join('\n');
+    exportComplaintsToCsv([{ ...complaint, resolutionNotes: proofNotes }], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
     await addDoc(collection(db, 'audit_logs'), {
       actorId: user?.uid || 'owner',
       actorRole: 'owner',
@@ -119,7 +124,6 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2, my: 2 }}>
               <Typography variant="subtitle2" fontWeight={950} sx={{ color: binThemeTokens.gold, mb: 2 }}>TICKET DETAILS: {complaint.ticketId}</Typography>
-              
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} sx={{ mb: 2 }}>
                 <Box flex={1}>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DESCRIPTION</Typography>
