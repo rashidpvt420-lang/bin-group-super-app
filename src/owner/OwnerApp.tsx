@@ -17,6 +17,7 @@ import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
 import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
+import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
@@ -138,6 +139,7 @@ export default function OwnerApp() {
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
+                <Route path="/payment-proof" element={<OwnerPaymentProofPage />} />
                 <Route path="/iban" element={<OwnerIbanPage />} />
                 <Route path="/profile" element={<OwnerProfilePage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
