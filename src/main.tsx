@@ -135,9 +135,3 @@ if (document.readyState === 'loading') {
 } else {
     mountApp();
 }
-
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => { /* SW registration is best-effort */ });
-    });
-}

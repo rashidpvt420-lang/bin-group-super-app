@@ -39,7 +39,7 @@ export default function BrokerAttributionProofPage() {
     const bind = (collectionName: string, setter: React.Dispatch<React.SetStateAction<Row[]>>) => {
       const q = query(collection(db, collectionName), where('brokerId', '==', user.uid));
       return onSnapshot(q, (snap) => {
-        setter(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => getMillis(b.updatedAt || b.createdAt || b.submittedAt) - getMillis(a.updatedAt || a.createdAt || a.submittedAt)));
+        setter(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Row)).sort((a, b) => getMillis(b.updatedAt || b.createdAt || b.submittedAt) - getMillis(a.updatedAt || a.createdAt || a.submittedAt)));
       }, (err) => {
         console.warn(`[BrokerAttributionProof] ${collectionName} listener failed:`, err);
         setWarning('Some attribution records could not load. Check Firestore rules if the chain looks incomplete.');

@@ -1,4 +1,4 @@
-import { httpsCallable } from '../../lib/firebase';
+import { httpsCallable, functions } from '../../lib/firebase';
 import { enqueueOfflineQueueItem } from './offlineQueue';
 
 type CallableFactory = typeof httpsCallable;
@@ -24,7 +24,7 @@ export async function callJobActionWithOfflineQueue<TPayload extends Record<stri
   payload: TPayload;
   meta: QueueMeta;
 }) {
-  const callable = (params.callableFactory || httpsCallable)(params.functionName);
+  const callable = (params.callableFactory || httpsCallable)(functions, params.functionName);
   try {
     return await callable(params.payload);
   } catch (err: any) {

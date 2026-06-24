@@ -78,10 +78,9 @@ export default function BrokerProfilePage() {
     setNotice(null);
     try {
       if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-      // reraVerified/reraStatus are deliberately omitted: those are admin-server-controlled
-      // only (set exclusively by the setBrokerReraVerification callable), so a broker can never
-      // self-certify their own verification state. firestore.rules rejects the write if they're
-      // included here. The license number itself is broker-editable and triggers admin re-review.
+      const isLicenseChanged = reraLicense.trim() !== (brokerData?.reraLicense || '').trim();
+      const reraStatus = isLicenseChanged ? (reraLicense.trim() ? 'PENDING' : 'NOT_SUBMITTED') : (brokerData?.reraStatus || 'NOT_SUBMITTED');
+      const reraVerified = isLicenseChanged ? false : Boolean(brokerData?.reraVerified);
       const payload = {
         uid: user.uid,
         email: user.email || brokerData?.email || '',
@@ -91,6 +90,8 @@ export default function BrokerProfilePage() {
         phone: phone.trim(),
         companyName: companyName.trim(),
         reraLicense: reraLicense.trim(),
+        reraVerified,
+        reraStatus,
         primaryRegion: primaryRegion.trim(),
         language: lang,
         updatedAt: serverTimestamp(),

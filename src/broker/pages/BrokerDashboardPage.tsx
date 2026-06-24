@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, alpha, Divider, Alert } from '@mui/material';
+import { Box, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, Divider, Alert, LinearProgress, Table, TableBody, TableCell, TableHead, TableRow, TableContainer } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
     Users, Building, Wallet, FileUp, TrendingUp, 
     ChevronRight, Briefcase, Plus, ShieldCheck, 
-    Clock, ArrowUpRight, MessageSquare, PlusCircle, Send, FileText, DollarSign
+    Clock, ArrowUpRight, MessageSquare, PlusCircle, Send, FileText, DollarSign, CheckCircle2
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, limit, orderBy, doc, getDoc } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit, orderBy } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -19,8 +19,8 @@ export default function BrokerDashboardPage() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [recentLeads, setRecentLeads] = useState<any[]>([]);
-    const [reraVerified, setReraVerified] = useState(false);
-    const [reraStatus, setReraStatus] = useState<string>('NOT_SUBMITTED');
+    const [referrals, setReferrals] = useState<any[]>([]);
+    const [listings, setListings] = useState<any[]>([]);
     const [stats, setStats] = useState({
         leadsTotal: 0,
         leadsActive: 0,
@@ -38,14 +38,6 @@ export default function BrokerDashboardPage() {
         let unsubCom: () => void;
         let unsubRecent: () => void;
 
-        getDoc(doc(db, 'users', user.uid))
-            .then((snap) => {
-                const data = snap.exists() ? snap.data() : {};
-                setReraVerified(Boolean(data.reraVerified));
-                setReraStatus(String(data.reraStatus || 'NOT_SUBMITTED'));
-            })
-            .catch((err) => console.warn('[BrokerDashboard] RERA status fetch failed:', err));
-
         try {
             const leadsQ = query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid));
             unsubLeads = onSnapshot(leadsQ, (snap) => {
@@ -57,51 +49,62 @@ export default function BrokerDashboardPage() {
                 setStats(prev => ({ ...prev, leadsTotal: lTotal, leadsActive: lActive }));
             });
 
-            const refQ = query(collection(db, 'referrals'), where('brokerId', '==', user.uid));
-            unsubRef = onSnapshot(refQ, (snap) => {
-                let rPend = 0, rAppr = 0;
-                snap.docs.forEach(d => {
-                    const status = d.data().status;
-                    if (['submitted', 'under_review'].includes(status)) rPend++;
-                    if (status === 'approved') rAppr++;
-                });
-                setStats(prev => ({ ...prev, referralsPending: rPend, referralsApproved: rAppr }));
+        // Listen referrals for attribution table
+        const refQ = query(collection(db, 'referrals'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(10));
+        unsubRef = onSnapshot(refQ, (snap) => {
+            let rPend = 0, rAppr = 0;
+            const rows: any[] = [];
+            snap.docs.forEach(d => {
+                const status = d.data().status;
+                if (['submitted', 'under_review'].includes(status)) rPend++;
+                if (status === 'approved') rAppr++;
+                rows.push({ id: d.id, ...d.data() });
             });
+            setStats(prev => ({ ...prev, referralsPending: rPend, referralsApproved: rAppr }));
+            setReferrals(rows);
+        });
 
-            const comQ = query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid));
-            unsubCom = onSnapshot(comQ, (snap) => {
-                let cPend = 0, cPaid = 0;
-                snap.docs.forEach(d => {
-                    const status = String(d.data().status || '').toLowerCase();
-                    const amount = d.data().amount || 0;
-                    if (status === 'pending') cPend += amount;
-                    if (status === 'paid') cPaid += amount;
-                });
-                setStats(prev => ({ ...prev, commissionPending: cPend, commissionPaid: cPaid }));
+        const comQ = query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid));
+        unsubCom = onSnapshot(comQ, (snap) => {
+            let cPend = 0, cPaid = 0;
+            snap.docs.forEach(d => {
+                const status = String(d.data().status || '').toLowerCase();
+                const amount = d.data().amount || 0;
+                if (status === 'pending') cPend += amount;
+                if (status === 'paid') cPaid += amount;
             });
+            setStats(prev => ({ ...prev, commissionPending: cPend, commissionPaid: cPaid }));
+        });
 
-            const recentQ = query(
-                collection(db, 'brokerLeads'), 
-                where('brokerId', '==', user.uid),
-                orderBy('createdAt', 'desc'),
-                limit(5)
-            );
-            unsubRecent = onSnapshot(recentQ, (snap) => {
-                setRecentLeads(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                setLoading(false);
-            });
-        } catch (err: any) {
-            console.error("Dashboard fetch error:", err);
+        const recentQ = query(
+            collection(db, 'brokerLeads'), 
+            where('brokerId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(5)
+        );
+        unsubRecent = onSnapshot(recentQ, (snap) => {
+            setRecentLeads(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
-        }
+        }, () => setLoading(false));
 
-        return () => {
-            if (unsubLeads) unsubLeads();
-            if (unsubRef) unsubRef();
-            if (unsubCom) unsubCom();
-            if (unsubRecent) unsubRecent();
-        };
-    }, [user]);
+        // Also grab any property listings linked to this broker
+        try {
+            const listingsQ = query(collection(db, 'properties'), where('assignedBrokerId', '==', user.uid));
+            onSnapshot(listingsQ, (snap) => setListings(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+        } catch { /* silent fail */ }
+
+    } catch (err: any) {
+        console.error("Dashboard fetch error:", err);
+        setLoading(false);
+    }
+
+    return () => {
+        if (unsubLeads) unsubLeads();
+        if (unsubRef) unsubRef();
+        if (unsubCom) unsubCom();
+        if (unsubRecent) unsubRecent();
+    };
+}, [user]);
 
     const statCards = useMemo(() => [
         { label: tx('broker.dash.active_leads', 'Active Leads'), value: stats.leadsActive, desc: tx('broker.dash.leads_desc', 'Clients in pipeline'), icon: <Users size={22} />, color: '#10b981', path: '/broker/leads' },
@@ -110,24 +113,11 @@ export default function BrokerDashboardPage() {
         { label: tx('broker.dash.lifetime_paid', 'Lifetime Paid'), value: `AED ${stats.commissionPaid.toLocaleString()}`, desc: tx('broker.dash.lifetime_desc', 'Total successful settlements'), icon: <TrendingUp size={22} />, color: '#3b82f6', path: '/broker/commissions' },
     ], [stats, tx]);
 
-    const reraBanner = useMemo(() => {
-        if (reraVerified) {
-            return { severity: 'success' as const, text: tx('broker.dash.rera_verified', 'RERA certificate verified. You are eligible for automated commission payouts.') };
-        }
-        if (reraStatus === 'PENDING') {
-            return { severity: 'info' as const, text: tx('broker.dash.rera_pending', 'RERA license submitted and under review. Commission payouts unlock once verification is approved.') };
-        }
-        if (reraStatus === 'REJECTED') {
-            return { severity: 'error' as const, text: tx('broker.dash.rera_rejected', 'RERA verification was not approved. Please update your license number in your profile and resubmit.') };
-        }
-        return { severity: 'warning' as const, text: tx('broker.dash.rera_required', 'Add your RERA license number in your profile to unlock automated commission payouts.') };
-    }, [reraVerified, reraStatus, tx]);
-
     const quickCommands = useMemo(() => [
-        { label: tx('broker.dash.add_lead', 'Add New Lead'), path: '/broker/leads?new=1', icon: <PlusCircle size={18} />, color: '#10b981' },
-        { label: tx('broker.dash.submit_referral', 'Submit Referral'), path: '/broker/referrals?new=1', icon: <Send size={18} />, color: binThemeTokens.gold },
-        { label: tx('broker.dash.view_payouts', 'View Payouts'), path: '/broker/commissions', icon: <DollarSign size={18} />, color: '#f59e0b' },
-        { label: tx('broker.dash.doc_vault', 'Document Vault'), path: '/broker/documents', icon: <FileText size={18} />, color: '#6366f1' },
+        { label: tx('broker.dash.add_lead', 'Add New Lead'), path: '/broker/leads/new', icon: <PlusCircle size={18} />, color: '#10b981' },
+        { label: tx('broker.dash.submit_referral', 'Submit Referral'), path: '/broker/referrals/new', icon: <Send size={18} />, color: binThemeTokens.gold },
+        { label: tx('broker.dash.view_payouts', 'View Payouts'), path: '/broker/payouts', icon: <DollarSign size={18} />, color: '#f59e0b' },
+        { label: tx('broker.dash.doc_vault', 'Document Vault'), path: '/broker/vault', icon: <FileText size={18} />, color: '#6366f1' },
     ], [tx]);
 
     return (
@@ -222,16 +212,10 @@ export default function BrokerDashboardPage() {
                                 <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: '50%' }}>
                                     <ShieldCheck color={binThemeTokens.gold} />
                                 </Box>
-                                <Box sx={{ flex: 1 }}>
+                                <Box>
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('broker.dash.sovereign_compliance', 'SOVEREIGN COMPLIANCE')}</Typography>
-                                    <Alert severity={reraBanner.severity} sx={{ borderRadius: 3 }} action={
-                                        !reraVerified ? (
-                                            <Button color="inherit" size="small" onClick={() => navigate('/broker/profile')} sx={{ fontWeight: 900 }}>
-                                                {tx('broker.dash.rera_cta', 'UPDATE PROFILE')}
-                                            </Button>
-                                        ) : undefined
-                                    }>
-                                        {reraBanner.text}
+                                    <Alert severity="success" sx={{ bgcolor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16,185,129,0.15)', color: '#10b981', borderRadius: 3 }}>
+                                        {tx('broker.dash.rera_verified', 'RERA certificate verified. You are eligible for automated commission payouts.')}
                                     </Alert>
                                 </Box>
                             </Stack>
@@ -270,6 +254,117 @@ export default function BrokerDashboardPage() {
                     </Paper>
                 </Grid>
             </Grid>
+
+            {/* Commission Payout Progress */}
+            {(stats.commissionPending > 0 || stats.commissionPaid > 0) && (
+                <Paper sx={{ mt: 4, p: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                        <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <DollarSign size={20} color={binThemeTokens.gold} /> COMMISSION PAYOUT TRACKER
+                        </Typography>
+                        <Button size="small" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }} onClick={() => navigate('/broker/commissions')}>
+                            FULL HISTORY
+                        </Button>
+                    </Stack>
+                    <Grid container spacing={3}>
+                        <Grid item xs={12} md={8}>
+                            <Box sx={{ mb: 1.5 }}>
+                                <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}>Payout Progress</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
+                                        AED {stats.commissionPaid.toLocaleString()} / AED {(stats.commissionPaid + stats.commissionPending).toLocaleString()}
+                                    </Typography>
+                                </Stack>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={(stats.commissionPaid + stats.commissionPending) > 0 ? Math.round((stats.commissionPaid / (stats.commissionPaid + stats.commissionPending)) * 100) : 0}
+                                    sx={{ height: 10, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { background: `linear-gradient(90deg, ${binThemeTokens.gold}, #10b981)`, borderRadius: 5 } }}
+                                />
+                            </Box>
+                            <Stack direction="row" spacing={3} sx={{ mt: 2 }}>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#10b981' }} />
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>AED {stats.commissionPaid.toLocaleString()} Paid</Typography>
+                                </Stack>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#f59e0b' }} />
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>AED {stats.commissionPending.toLocaleString()} Pending</Typography>
+                                </Stack>
+                            </Stack>
+                        </Grid>
+                        <Grid item xs={12} md={4}>
+                            <Paper sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, textAlign: 'center' }}>
+                                <Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.gold }}>AED {stats.commissionPending.toLocaleString()}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>AWAITING SETTLEMENT</Typography>
+                                <Button size="small" fullWidth sx={{ mt: 1.5, color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.7rem' }} onClick={() => navigate('/broker/payouts')}>REQUEST PAYOUT</Button>
+                            </Paper>
+                        </Grid>
+                    </Grid>
+                </Paper>
+            )}
+
+            {/* Referral Attribution Table */}
+            {referrals.length > 0 && (
+                <Paper sx={{ mt: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                    <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Briefcase size={20} color={binThemeTokens.gold} /> REFERRAL ATTRIBUTION
+                        </Typography>
+                        <Button size="small" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }} onClick={() => navigate('/broker/referrals')}>VIEW ALL</Button>
+                    </Box>
+                    <TableContainer sx={{ maxHeight: 320 }}>
+                        <Table size="small" stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>REFERRAL NAME</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>PROPERTY</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>COMMISSION</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>STATUS</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>DATE</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {referrals.map((ref) => {
+                                    const statusColors: Record<string, string> = { approved: '#10b981', submitted: '#f59e0b', under_review: '#3b82f6', rejected: '#ef4444' };
+                                    const sc = statusColors[ref.status] || 'rgba(255,255,255,0.4)';
+                                    return (
+                                        <TableRow key={ref.id} hover>
+                                            <TableCell sx={{ color: '#fff', fontWeight: 700 }}>{ref.clientName || ref.referralName || '—'}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{ref.propertyName || '—'}</TableCell>
+                                            <TableCell sx={{ color: ref.commissionAmount ? '#10b981' : 'rgba(255,255,255,0.3)', fontWeight: 700 }}>{ref.commissionAmount ? `AED ${Number(ref.commissionAmount).toLocaleString()}` : '—'}</TableCell>
+                                            <TableCell><Chip label={(ref.status || '').toUpperCase().replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(sc, 0.1), color: sc, fontWeight: 900, fontSize: '0.6rem' }} /></TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem' }}>{ref.createdAt?.toDate ? ref.createdAt.toDate().toLocaleDateString() : '—'}</TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            )}
+
+            {/* Assigned Property Listings */}
+            {listings.length > 0 && (
+                <Paper sx={{ mt: 4, p: 4, borderRadius: 6, bgcolor: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <Typography variant="h6" fontWeight={950} sx={{ color: '#fff', mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Building size={20} color={binThemeTokens.gold} /> YOUR ASSIGNED LISTINGS
+                    </Typography>
+                    <Grid container spacing={2}>
+                        {listings.slice(0, 6).map(listing => (
+                            <Grid item xs={12} md={4} key={listing.id}>
+                                <Paper sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
+                                    <Typography variant="body1" sx={{ color: '#fff', fontWeight: 700, mb: 0.5 }}>{listing.propertyName || listing.name || 'Property'}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{listing.emirate || listing.location || 'UAE'} · {listing.totalUnits || listing.units || 0} units</Typography>
+                                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                                        <Chip label={listing.status || 'LISTED'} size="small" sx={{ bgcolor: alpha('#10b981', 0.08), color: '#10b981', fontWeight: 900, fontSize: '0.55rem', height: 18 }} />
+                                        {listing.rentAmount && <Chip label={`AED ${Number(listing.rentAmount).toLocaleString()}/yr`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.55rem', height: 18 }} />}
+                                    </Stack>
+                                </Paper>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Paper>
+            )}
         </BrokerPageFrame>
     );
 }

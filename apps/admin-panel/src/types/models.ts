@@ -5,19 +5,9 @@
  */
 
 // ─── RBAC ────────────────────────────────────────────────────────────────────
-export type UserRole = 'ADMIN' | 'OWNER' | 'TECHNICIAN' | 'TENANT';
-
-export interface BinUser {
-    uid: string;
-    phoneNumber: string;
-    role: UserRole;
-    isSuspended: boolean;
-    hasActiveContract: boolean;
-    displayName?: string;
-    email?: string;
-    createdAt: string;
-    lastLoginAt?: string;
-}
+// Re-exported from canonical types. Previously defined inline with UPPERCASE
+// roles which conflicted with Firestore security rules.
+export { type UserRole, type BinUser } from './user';
 
 // ─── SLA Tiers ───────────────────────────────────────────────────────────────
 export type SlaTier = 'EMERGENCY' | 'URGENT' | 'NORMAL';

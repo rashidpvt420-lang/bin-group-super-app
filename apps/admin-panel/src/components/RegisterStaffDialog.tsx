@@ -10,8 +10,10 @@ import {
   Grid,
   Box,
   Typography,
+  CircularProgress,
   Alert,
   IconButton,
+  alpha,
   Divider,
   Stack,
   Checkbox,
@@ -22,8 +24,7 @@ import {
 } from '@mui/material';
 import { X, UserPlus, Shield, Smartphone, Mail, Briefcase } from 'lucide-react';
 import { binThemeTokens } from '../theme/adminTheme';
-import { functions } from '../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db, collection, addDoc, serverTimestamp, auth } from '../lib/firebase';
 
 interface RegisterStaffDialogProps {
     open: boolean;
@@ -38,6 +39,7 @@ const ROLES = [
 ];
 
 export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDialogProps) {
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     
@@ -49,124 +51,117 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
         employeeId: '',
         emiratesId: '',
         department: '',
-        initialPassword: 'BinGroupPass2026!',
-        monthlySalary: '',
-        basicSalary: '',
-        housingAllowance: '',
-        transportAllowance: '',
-        foodAllowance: '',
-        otherAllowance: '',
-        salaryPaymentDay: '1',
-        salaryGrade: '',
-        contractEndDate: '',
-        employmentType: 'full_time',
-        overtimeEligible: true,
-        companyAccommodationProvided: false,
-        companyTransportProvided: false,
-        companyMedicalInsuranceProvided: true,
+        initialPassword: 'BinGroupPass2026!'
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    
     const moneyValue = (value: any) => {
         const parsed = parseFloat(String(value || '0').replace(/,/g, ''));
         return Number.isFinite(parsed) ? parsed : 0;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        if (e) e.preventDefault();
+    const buildAutoSalaryPackage = () => {
+        const monthlySalary =
+            moneyValue((formData as any).monthlySalary) ||
+            moneyValue((formData as any).salary) ||
+            moneyValue((formData as any).grossSalary);
+
+        const basicInput = moneyValue((formData as any).basicSalary);
+        const manualAllowances = moneyValue((formData as any).allowances);
+
+        const housingAllowance = moneyValue((formData as any).housingAllowance);
+        const transportAllowance = moneyValue((formData as any).transportAllowance);
+        const foodAllowance = moneyValue((formData as any).foodAllowance);
+        const otherAllowance = moneyValue((formData as any).otherAllowance);
+        const splitAllowances = housingAllowance + transportAllowance + foodAllowance + otherAllowance;
+
+        let basicSalary = basicInput;
+        let totalAllowances = splitAllowances > 0 ? splitAllowances : manualAllowances;
+
+        // If Admin enters only Monthly Salary, auto-split package:
+        // 60% basic salary, 40% allowances.
+        if (monthlySalary > 0 && basicSalary <= 0 && totalAllowances <= 0) {
+            basicSalary = Math.round(monthlySalary * 0.60);
+            totalAllowances = monthlySalary - basicSalary;
+        }
+
+        // If Admin enters Monthly Salary + Basic Salary only, allowances become the difference.
+        if (monthlySalary > 0 && basicSalary > 0 && totalAllowances <= 0) {
+            totalAllowances = Math.max(monthlySalary - basicSalary, 0);
+        }
+
+        // If Admin enters Monthly Salary + Allowances only, basic becomes the difference.
+        if (monthlySalary > 0 && basicSalary <= 0 && totalAllowances > 0) {
+            basicSalary = Math.max(monthlySalary - totalAllowances, 0);
+        }
+
+        const grossSalary = monthlySalary > 0 ? monthlySalary : basicSalary + totalAllowances;
+
+        return {
+            currency: 'AED',
+            monthlySalary: grossSalary,
+            basicSalary,
+            housingAllowance,
+            transportAllowance,
+            foodAllowance,
+            otherAllowance,
+            totalAllowances,
+            allowances: totalAllowances,
+            grossSalary,
+            wpsSalary: grossSalary,
+            salaryGrade: (formData as any).salaryGrade || '',
+            salaryPaymentDay: (formData as any).salaryPaymentDay || '1',
+            overtimeEligible: (formData as any).overtimeEligible !== false,
+            overtimeCalculationBase: 'basic_salary',
+            companyAccommodationProvided: (formData as any).companyAccommodationProvided || false,
+            companyTransportProvided: (formData as any).companyTransportProvided || false,
+            companyMedicalInsuranceProvided: (formData as any).companyMedicalInsuranceProvided !== false,
+            contractEndDate: (formData as any).contractEndDate || null,
+            employmentType: (formData as any).employmentType || 'full_time'
+        };
+    };
+
+    const salaryPackage = buildAutoSalaryPackage();
+
+const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
         setError(null);
 
         try {
-            const registerFn = httpsCallable(functions, 'adminCreateUser');
-            
-            const housing = moneyValue(formData.housingAllowance);
-            const transport = moneyValue(formData.transportAllowance);
-            const food = moneyValue(formData.foodAllowance);
-            const other = moneyValue(formData.otherAllowance);
-            
-            const allowances = housing + transport + food + other;
-            const basicSalary = moneyValue(formData.basicSalary);
-            const monthlySalary = moneyValue(formData.monthlySalary);
-            
-            let finalBasic = basicSalary;
-            let finalAllowances = allowances;
-            
-            if (monthlySalary > 0 && finalBasic <= 0 && finalAllowances <= 0) {
-                finalBasic = Math.round(monthlySalary * 0.60);
-                finalAllowances = monthlySalary - finalBasic;
-            } else if (monthlySalary > 0 && finalBasic > 0 && finalAllowances <= 0) {
-                finalAllowances = Math.max(monthlySalary - finalBasic, 0);
-            } else if (monthlySalary > 0 && finalBasic <= 0 && finalAllowances > 0) {
-                finalBasic = Math.max(monthlySalary - finalAllowances, 0);
-            }
-
-            const response = await registerFn({
-                email: formData.email,
-                displayName: formData.fullName,
-                fullName: formData.fullName,
-                phoneNumber: formData.mobile,
-                phone: formData.mobile,
-                role: formData.role,
-                employeeId: formData.employeeId,
-                emiratesId: formData.emiratesId,
-                department: formData.department,
-                initialPassword: formData.initialPassword,
-                basicSalary: finalBasic,
-                allowances: finalAllowances,
-                housingAllowance: housing,
-                transportAllowance: transport,
-                foodAllowance: food,
-                otherAllowance: other,
-                salaryPaymentDay: formData.salaryPaymentDay,
-                salaryGrade: formData.salaryGrade,
-                contractEndDate: formData.contractEndDate || null,
-                employmentType: formData.employmentType,
-                overtimeEligible: formData.overtimeEligible,
-                companyAccommodationProvided: formData.companyAccommodationProvided,
-                companyTransportProvided: formData.companyTransportProvided,
-                companyMedicalInsuranceProvided: formData.companyMedicalInsuranceProvided,
+            const staffRef = collection(db, 'staff_registration_requests');
+            await addDoc(staffRef, {
+                ...formData,
+                status: 'pending_provisioning',
+                requestedBy: auth.currentUser?.uid,
+                requestedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
             });
 
-            const result = response.data as any;
-            if (result?.success) {
-                setSuccess(true);
-                setTimeout(() => {
-                    onClose();
-                    setSuccess(false);
-                    setFormData({
-                        fullName: '',
-                        email: '',
-                        mobile: '',
-                        role: 'technician',
-                        employeeId: '',
-                        emiratesId: '',
-                        department: '',
-                        initialPassword: 'BinGroupPass2026!',
-                        monthlySalary: '',
-                        basicSalary: '',
-                        housingAllowance: '',
-                        transportAllowance: '',
-                        foodAllowance: '',
-                        otherAllowance: '',
-                        salaryPaymentDay: '1',
-                        salaryGrade: '',
-                        contractEndDate: '',
-                        employmentType: 'full_time',
-                        overtimeEligible: true,
-                        companyAccommodationProvided: false,
-                        companyTransportProvided: false,
-                        companyMedicalInsuranceProvided: true,
-                    });
-                }, 2500);
-            } else {
-                throw new Error(result?.message || 'Failed to create user account.');
-            }
+            setSuccess(true);
+            setTimeout(() => {
+                onClose();
+                setSuccess(false);
+                setFormData({
+                    fullName: '',
+                    email: '',
+                    mobile: '',
+                    role: 'technician',
+                    employeeId: '',
+                    emiratesId: '',
+                    department: '',
+                    initialPassword: 'BinGroupPass2026!'
+                });
+            }, 2000);
         } catch (err: any) {
             console.error('[HR] Registration failed:', err);
             setError(err.message || 'Failed to submit registration request.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -198,12 +193,9 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
             </DialogTitle>
 
             <DialogContent dividers sx={{ borderColor: 'rgba(198,167,94,0.1)', p: 3 }}>
-                <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
-                    Staff account creation requires manual Firebase Auth setup until backend provisioning is enabled.
-                </Alert>
                 {success ? (
                     <Alert severity="success" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid #10b981', fontWeight: 700 }}>
-                        Staff member registered and provisioned successfully!
+                        Staff registration request submitted successfully!
                     </Alert>
                 ) : (
                     <Box component="form" onSubmit={handleSubmit}>
@@ -217,7 +209,7 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                                     onChange={handleChange}
                                     required
                                     variant="outlined"
-                                    InputProps={{ startAdornment: <Shield size={18} style={{ marginRight: 12, opacity: 0.5, color: '#fff' }} /> }}
+                                    InputProps={{ startAdornment: <Shield size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
                                 />
                             </Grid>
                             <Grid item xs={12} sm={6}>
@@ -229,7 +221,7 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                                     value={formData.email}
                                     onChange={handleChange}
                                     required
-                                    InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, opacity: 0.5, color: '#fff' }} /> }}
+                                    InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
                                 />
                             </Grid>
                             <Grid item xs={12} sm={6}>
@@ -240,7 +232,7 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                                     value={formData.mobile}
                                     onChange={handleChange}
                                     required
-                                    InputProps={{ startAdornment: <Smartphone size={18} style={{ marginRight: 12, opacity: 0.5, color: '#fff' }} /> }}
+                                    InputProps={{ startAdornment: <Smartphone size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
                                 />
                             </Grid>
                             <Grid item xs={12} sm={6}>
@@ -252,7 +244,7 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                                     value={formData.role}
                                     onChange={handleChange}
                                     required
-                                    InputProps={{ startAdornment: <Briefcase size={18} style={{ marginRight: 12, opacity: 0.5, color: '#fff' }} /> }}
+                                    InputProps={{ startAdornment: <Briefcase size={18} style={{ marginRight: 12, opacity: 0.5 }} /> }}
                                 >
                                     {ROLES.map((option) => (
                                         <MenuItem key={option.value} value={option.value}>
@@ -291,169 +283,6 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                                     placeholder="e.g. Facilities Management"
                                 />
                             </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Initial Password"
-                                    name="initialPassword"
-                                    value={formData.initialPassword}
-                                    onChange={handleChange}
-                                    required
-                                />
-                            </Grid>
-
-                            <Grid item xs={12}>
-                                <Divider sx={{ my: 1, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                                <Typography variant="overline" sx={{ color: '#C6A75E', fontWeight: 900, mb: 1, display: 'block' }}>
-                                    SALARY PACKAGE / CONTRACT DETAILS
-                                </Typography>
-                            </Grid>
-
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Monthly Salary (AED)"
-                                    name="monthlySalary"
-                                    type="number"
-                                    value={formData.monthlySalary}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Basic Salary (AED)"
-                                    name="basicSalary"
-                                    type="number"
-                                    value={formData.basicSalary}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Housing Allowance (AED)"
-                                    name="housingAllowance"
-                                    type="number"
-                                    value={formData.housingAllowance}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Transport Allowance (AED)"
-                                    name="transportAllowance"
-                                    type="number"
-                                    value={formData.transportAllowance}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Food Allowance (AED)"
-                                    name="foodAllowance"
-                                    type="number"
-                                    value={formData.foodAllowance}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Other Allowance (AED)"
-                                    name="otherAllowance"
-                                    type="number"
-                                    value={formData.otherAllowance}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Salary Payment Day"
-                                    name="salaryPaymentDay"
-                                    type="number"
-                                    value={formData.salaryPaymentDay}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Salary Grade"
-                                    name="salaryGrade"
-                                    value={formData.salaryGrade}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    label="Contract End Date"
-                                    name="contractEndDate"
-                                    type="date"
-                                    value={formData.contractEndDate}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
-                                />
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <FormControl fullWidth variant="outlined">
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Employment Type</InputLabel>
-                                    <Select
-                                        name="employmentType"
-                                        value={formData.employmentType}
-                                        onChange={(event) => setFormData(prev => ({ ...prev, employmentType: event.target.value } as any))}
-                                        label="Employment Type"
-                                        sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
-                                    >
-                                        <MenuItem value="full_time">Full Time</MenuItem>
-                                        <MenuItem value="part_time">Part Time</MenuItem>
-                                        <MenuItem value="fixed_term">Fixed Term</MenuItem>
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            <Grid item xs={12}>
-                                <Stack direction="row" spacing={2} flexWrap="wrap">
-                                    <FormControlLabel
-                                        control={<Checkbox checked={formData.overtimeEligible} onChange={(e) => setFormData(prev => ({ ...prev, overtimeEligible: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
-                                        label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>OVERTIME ELIGIBLE</Typography>}
-                                    />
-                                    <FormControlLabel
-                                        control={<Checkbox checked={formData.companyAccommodationProvided} onChange={(e) => setFormData(prev => ({ ...prev, companyAccommodationProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
-                                        label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>COMPANY ACCOMMODATION</Typography>}
-                                    />
-                                    <FormControlLabel
-                                        control={<Checkbox checked={formData.companyTransportProvided} onChange={(e) => setFormData(prev => ({ ...prev, companyTransportProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
-                                        label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>COMPANY TRANSPORT</Typography>}
-                                    />
-                                    <FormControlLabel
-                                        control={<Checkbox checked={formData.companyMedicalInsuranceProvided} onChange={(e) => setFormData(prev => ({ ...prev, companyMedicalInsuranceProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
-                                        label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>MEDICAL INSURANCE</Typography>}
-                                    />
-                                </Stack>
-                            </Grid>
                         </Grid>
 
                         {error && (
@@ -463,7 +292,137 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                         )}
                     </Box>
                 )}
-            </DialogContent>
+            
+                    <Grid item xs={12}>
+                        <Divider sx={{ my: 2, bgcolor: 'rgba(255,255,255,0.1)' }} />
+                        <Typography variant="overline" sx={{ color: '#C6A75E', fontWeight: 900, mb: 2, display: 'block' }}>
+                            SALARY PACKAGE / CONTRACT DETAILS
+                        </Typography>
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Housing Allowance (AED)"
+                            name="housingAllowance"
+                            type="number"
+                            value={(formData as any).housingAllowance || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Transport Allowance (AED)"
+                            name="transportAllowance"
+                            type="number"
+                            value={(formData as any).transportAllowance || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Food Allowance (AED)"
+                            name="foodAllowance"
+                            type="number"
+                            value={(formData as any).foodAllowance || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Other Allowance (AED)"
+                            name="otherAllowance"
+                            type="number"
+                            value={(formData as any).otherAllowance || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Salary Payment Day"
+                            name="salaryPaymentDay"
+                            type="number"
+                            value={(formData as any).salaryPaymentDay || '1'}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Salary Grade"
+                            name="salaryGrade"
+                            value={(formData as any).salaryGrade || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Contract End Date"
+                            name="contractEndDate"
+                            type="date"
+                            value={(formData as any).contractEndDate || ''}
+                            onChange={handleChange}
+                            variant="outlined"
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ input: { color: '#fff' }, label: { color: 'rgba(255,255,255,0.5)' } }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <FormControl fullWidth variant="outlined">
+                            <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Employment Type</InputLabel>
+                            <Select
+                                name="employmentType"
+                                value={(formData as any).employmentType || 'full_time'}
+                                onChange={(event) => setFormData(prev => ({ ...prev, employmentType: event.target.value } as any))}
+                                label="Employment Type"
+                                sx={{ color: '#fff', '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            >
+                                <MenuItem value="full_time">Full Time</MenuItem>
+                                <MenuItem value="part_time">Part Time</MenuItem>
+                                <MenuItem value="fixed_term">Fixed Term</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <Stack direction="row" spacing={2} flexWrap="wrap">
+                            <FormControlLabel
+                                control={<Checkbox checked={(formData as any).overtimeEligible !== false} onChange={(e) => setFormData(prev => ({ ...prev, overtimeEligible: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
+                                label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>OVERTIME ELIGIBLE</Typography>}
+                            />
+                            <FormControlLabel
+                                control={<Checkbox checked={(formData as any).companyAccommodationProvided || false} onChange={(e) => setFormData(prev => ({ ...prev, companyAccommodationProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
+                                label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>COMPANY ACCOMMODATION</Typography>}
+                            />
+                            <FormControlLabel
+                                control={<Checkbox checked={(formData as any).companyTransportProvided || false} onChange={(e) => setFormData(prev => ({ ...prev, companyTransportProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
+                                label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>COMPANY TRANSPORT</Typography>}
+                            />
+                            <FormControlLabel
+                                control={<Checkbox checked={(formData as any).companyMedicalInsuranceProvided !== false} onChange={(e) => setFormData(prev => ({ ...prev, companyMedicalInsuranceProvided: e.target.checked } as any))} sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#C6A75E' } }} />}
+                                label={<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>MEDICAL INSURANCE</Typography>}
+                            />
+                        </Stack>
+                    </Grid>
+
+</DialogContent>
 
             <DialogActions sx={{ p: 3, bgcolor: 'rgba(0,0,0,0.2)' }}>
                 <Button onClick={onClose} sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
@@ -472,16 +431,16 @@ export default function RegisterStaffDialog({ open, onClose }: RegisterStaffDial
                 <Button 
                     variant="contained" 
                     onClick={handleSubmit}
-                    disabled={true}
+                    disabled={loading || success}
                     sx={{ 
-                        bgcolor: '#334155', 
-                        color: '#94a3b8', 
+                        bgcolor: binThemeTokens.gold, 
+                        color: '#000', 
                         fontWeight: 900,
                         minWidth: 140,
-                        cursor: 'not-allowed'
+                        '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.8) }
                     }}
                 >
-                    MANUAL SETUP REQUIRED
+                    {loading ? <CircularProgress size={24} color="inherit" /> : 'REGISTER STAFF'}
                 </Button>
             </DialogActions>
         </Dialog>

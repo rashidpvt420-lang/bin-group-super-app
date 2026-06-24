@@ -33,9 +33,6 @@ export interface HistoricalContext {
 export interface AssetResiliencePrediction {
   healthIndex: number;
   predictedDecay12Months: number;
-  overallRiskLevel?: string;
-  decayProbability?: number;
-  topRiskCategory?: string;
   criticalFailureWindows: Array<{
     assetCategory: string;
     probability: number;
@@ -46,8 +43,6 @@ export interface AssetResiliencePrediction {
 
 export interface FinancialYieldForecast {
   expectedNetROI: number;
-  projectedAnnualYield?: number;
-  maintenanceCostEstimate?: number;
   quarterlyProjections: Array<{
     quarter: string;
     projectedIncome: number;

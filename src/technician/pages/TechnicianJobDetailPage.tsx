@@ -131,7 +131,6 @@ export default function TechnicianJobDetailPage() {
             setActionLoading(false);
         }
     };
-
     const updateLifecycle = async (nextStatus: Step) => {
         if (!id || !user?.uid) return;
         if (nextStatus === 'COMPLETED' && closeBlockers.length > 0) {
@@ -152,6 +151,26 @@ export default function TechnicianJobDetailPage() {
             if (nextStatus !== 'EN_ROUTE' && isTracking) {
                 await stopLiveTracking(user.uid);
                 setIsTracking(false);
+            }
+
+            if (nextStatus === 'ARRIVED') {
+                // Capture GPS coordinates for check-in on arrival
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        await updateDoc(doc(db, 'maintenanceTickets', id), {
+                            arrivedAt: serverTimestamp(),
+                            arrivedLocation: { lat, lng }
+                        });
+                    },
+                    async (err) => {
+                        console.warn("GPS check-in failed, proceeding with fallback timestamp:", err);
+                        await updateDoc(doc(db, 'maintenanceTickets', id), {
+                            arrivedAt: serverTimestamp()
+                        });
+                    }
+                );
             }
 
             if (nextStatus === 'COMPLETED') {
@@ -192,7 +211,6 @@ export default function TechnicianJobDetailPage() {
             setActionLoading(false);
         }
     };
-
     if (loading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     }

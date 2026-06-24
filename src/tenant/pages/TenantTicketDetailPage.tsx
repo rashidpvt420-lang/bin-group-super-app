@@ -11,23 +11,13 @@ import {
 } from 'lucide-react';
 import { db, doc, onSnapshot, updateDoc, serverTimestamp, addDoc, collection } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
-import { 
-    getTechnicianLocation, 
-    getTicketJobLocation, 
-    calculateDistanceKm, 
-    calculateEtaMinutes,
-    normalizeTicketStatus
-} from '../../utils/liveTracking';
 
 export default function TenantTicketDetailPage() {
     const { id } = useParams();
     const { user } = useRole();
-    const { lang, isRTL } = useLanguage();
-    const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
     const navigate = useNavigate();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -48,7 +38,7 @@ export default function TenantTicketDetailPage() {
                     if (data.rating && !rating) setRating(Number(data.rating));
                     if (data.feedback && !feedback) setFeedback(String(data.feedback));
                 } else {
-                    alert(label('Ticket not found or unauthorized', 'التذكرة غير موجودة أو غير مصرّح بها'));
+                    alert('Ticket not found or unauthorized');
                     navigate('/tenant/tickets');
                 }
             }
@@ -64,12 +54,11 @@ export default function TenantTicketDetailPage() {
         if (!id || !user || !rating) return;
         setActionLoading(true);
         const safeRating = Math.max(1, Math.min(5, Number(rating || 5)));
-        const cleanFeedback = feedback.trim() || label('Approved by tenant. Service completed successfully.', 'تمت الموافقة من قبل المستأجر. اكتملت الخدمة بنجاح.');
+        const cleanFeedback = feedback.trim() || 'Approved by tenant. Service completed successfully.';
         try {
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'CLOSED',
                 tenantApproved: true,
-                tenantApproval: 'approved',
                 rating: safeRating,
                 feedback: cleanFeedback,
                 closedAt: serverTimestamp(),
@@ -84,11 +73,11 @@ export default function TenantTicketDetailPage() {
                 feedback: cleanFeedback,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true, tenantApproval: 'approved', rating: safeRating, feedback: cleanFeedback }));
+            setTicket((prev: any) => ({ ...prev, status: 'CLOSED', tenantApproved: true, rating: safeRating, feedback: cleanFeedback }));
             notifyTenantApproved(id, user.displayName || 'Tenant').catch(console.warn);
         } catch (err) {
             console.error(err);
-            alert(label('Could not submit feedback. Please try again.', 'تعذّر إرسال التقييم. يرجى المحاولة مرة أخرى.'));
+            alert('Could not submit feedback. Please try again.');
         } finally {
             setActionLoading(false);
         }
@@ -105,7 +94,6 @@ export default function TenantTicketDetailPage() {
             await updateDoc(doc(db, 'maintenanceTickets', id), {
                 status: 'DISPUTED',
                 tenantApproved: false,
-                tenantApproval: 'disputed',
                 rating: rating || 1,
                 feedback: cleanReason,
                 rejectionReason: cleanReason,
@@ -120,12 +108,12 @@ export default function TenantTicketDetailPage() {
                 reason: cleanReason,
                 timestamp: serverTimestamp()
             });
-            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false, tenantApproval: 'disputed', rating: rating || 1, feedback: cleanReason, rejectionReason: cleanReason }));
+            setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', tenantApproved: false, rating: rating || 1, feedback: cleanReason, rejectionReason: cleanReason }));
             notifyTenantRejected(id, user.displayName || 'Tenant', cleanReason).catch(console.warn);
             setShowRejectInput(false);
         } catch (err) {
             console.error(err);
-            alert(label('Could not submit dispute. Please try again.', 'تعذّر إرسال الاعتراض. يرجى المحاولة مرة أخرى.'));
+            alert('Could not submit dispute. Please try again.');
         } finally {
             setActionLoading(false);
         }
@@ -133,14 +121,6 @@ export default function TenantTicketDetailPage() {
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (!ticket) return null;
-
-    const techLoc = getTechnicianLocation(ticket);
-    const jobLoc = getTicketJobLocation(ticket);
-    const distKm = calculateDistanceKm(techLoc, jobLoc);
-    const etaMin = calculateEtaMinutes(distKm);
-    
-    const s = normalizeTicketStatus(ticket.status);
-    const showEtaCountdown = s === 'on_the_way' || s === 'arrived';
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
     const isCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL'].includes(normalizedStatus) && ticket.tenantApproved !== true;
@@ -150,78 +130,25 @@ export default function TenantTicketDetailPage() {
     const beforeProof = ticket.beforePhotos?.[0] || ticket.beforePhotoUrl || ticket.photos?.[0] || ticket.tenantPhotos?.[0];
 
     return (
-        <Box sx={{ maxWidth: 900, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
+        <Box sx={{ maxWidth: 900, mx: 'auto', pb: 10 }}>
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
                 <IconButton onClick={() => navigate('/tenant/tickets')} sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    <ChevronLeft style={{ transform: isRTL ? 'scaleX(-1)' : 'none' }} />
+                    <ChevronLeft />
                 </IconButton>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{label('TICKET RECORD', 'سجل التذكرة')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>TICKET RECORD</Typography>
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1 }}>#{ticket.id.substring(0,8)}</Typography>
                 </Box>
             </Stack>
-
-            {showEtaCountdown && (
-                <Paper sx={{ 
-                    p: 3, 
-                    mb: 4, 
-                    bgcolor: alpha(binThemeTokens.gold, 0.08), 
-                    border: `1px solid ${binThemeTokens.gold}`, 
-                    borderRadius: 6,
-                    animation: 'pulseGlow 2.5s infinite ease-in-out',
-                    '@keyframes pulseGlow': {
-                        '0%, 100%': { boxShadow: `0 0 4px ${alpha(binThemeTokens.gold, 0.15)}` },
-                        '50%': { boxShadow: `0 0 16px ${alpha(binThemeTokens.gold, 0.45)}` }
-                    }
-                }}>
-                    <Stack direction="row" alignItems="center" spacing={2} justifyContent="space-between">
-                        <Box>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
-                                {s === 'arrived' 
-                                    ? label('TECHNICIAN ONSITE', 'الفني في الموقع') 
-                                    : label('LIVE TRACKING EN ROUTE', 'الفني في الطريق - تتبع مباشر')}
-                            </Typography>
-                            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>
-                                {s === 'arrived' 
-                                    ? label('Technician Has Arrived at Your Unit', 'لقد وصل الفني إلى وحدتك') 
-                                    : etaMin !== null 
-                                        ? label(`Arriving in ~${etaMin} minutes`, `يصل خلال حوالي ${etaMin} دقائق`) 
-                                        : label('Technician is en route', 'الفني في الطريق إليك')}
-                            </Typography>
-                            {s !== 'arrived' && distKm !== null && (
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700, mt: 0.5, display: 'block' }}>
-                                    {label(`${distKm.toFixed(1)} km away from your location`, `على بعد ${distKm.toFixed(1)} كم من موقعك`)}
-                                </Typography>
-                            )}
-                        </Box>
-                        {s !== 'arrived' && etaMin !== null && (
-                            <Box sx={{ 
-                                width: 70, 
-                                height: 70, 
-                                borderRadius: '50%', 
-                                border: `3px solid ${binThemeTokens.gold}`, 
-                                display: 'grid', 
-                                placeItems: 'center',
-                                flexShrink: 0
-                            }}>
-                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold} sx={{ mt: 0.5 }}>{etaMin}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.55rem', mt: -1.5, fontWeight: 900 }}>
-                                    {label('MINS', 'دقائق')}
-                                </Typography>
-                            </Box>
-                        )}
-                    </Stack>
-                </Paper>
-            )}
 
             <Grid container spacing={4}>
                 <Grid item xs={12} lg={8}>
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4 }}>
                             <Box>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category || ticket.complaintCategory || ticket.trade || label('Maintenance Request', 'طلب صيانة')}</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category || ticket.complaintCategory || ticket.trade || 'Maintenance Request'}</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                    <Calendar size={12} /> {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString(isRTL ? 'ar-AE' : 'en-AE') : label('Just now', 'الآن')}
+                                    <Calendar size={12} /> {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : 'Just now'}
                                 </Typography>
                             </Box>
                             <Chip 
@@ -234,18 +161,18 @@ export default function TenantTicketDetailPage() {
 
                         <Stack spacing={3}>
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{label('SPECIFIC LOCATION', 'الموقع المحدد')}</Typography>
-                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5, fontWeight: 700 }}>{ticket.specificLocation || ticket.propertyLocation?.address || ticket.address || label('General Residence', 'السكن العام')}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>SPECIFIC LOCATION</Typography>
+                                <Typography variant="body1" color="#FFF" sx={{ mt: 0.5, fontWeight: 700 }}>{ticket.specificLocation || ticket.propertyLocation?.address || ticket.address || 'General Residence'}</Typography>
                             </Box>
 
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>{label('DESCRIPTION', 'الوصف')}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>DESCRIPTION</Typography>
                                 <Typography variant="body1" color="rgba(255,255,255,0.8)" sx={{ mt: 1, lineHeight: 1.7 }}>{ticket.description}</Typography>
                             </Box>
 
                             {ticket.photos && ticket.photos.length > 0 && (
                                 <Box>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, mb: 2, display: 'block' }}>{label('SUBMITTED PHOTOS', 'الصور المرفقة')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, mb: 2, display: 'block' }}>SUBMITTED PHOTOS</Typography>
                                     <ImageList sx={{ width: '100%', borderRadius: 4, overflow: 'hidden' }} cols={3} gap={8}>
                                         {ticket.photos.map((url: string, index: number) => (
                                             <ImageListItem key={index}>
@@ -261,18 +188,15 @@ export default function TenantTicketDetailPage() {
                     {isCompleted && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid #10b981', borderRadius: 6 }}>
                             <Typography variant="h6" fontWeight="950" color="#10b981" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <CheckCircle2 /> {label('WORK COMPLETED — REVIEW REQUIRED', 'اكتمل العمل — مطلوب المراجعة')}
+                                <CheckCircle2 /> WORK COMPLETED — REVIEW REQUIRED
                             </Typography>
                             <Typography variant="body2" color="rgba(255,255,255,0.6)" sx={{ mb: 4 }}>
-                                {label(
-                                    'Please check the work, rate the technician, and either approve the service or dispute it with a reason. Your rating will be saved on the ticket record.',
-                                    'يرجى فحص العمل، وتقييم الفني، ثم الموافقة على الخدمة أو الاعتراض عليها مع ذكر السبب. سيُحفظ تقييمك في سجل التذكرة.'
-                                )}
+                                Please check the work, rate the technician, and either approve the service or dispute it with a reason. Your rating will be saved on the ticket record.
                             </Typography>
-
+                            
                             {ticket.technicianNotes && (
                                 <Box sx={{ mb: 4, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{label('TECHNICIAN RESOLUTION NOTES', 'ملاحظات الفني عن الحل')}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>TECHNICIAN RESOLUTION NOTES</Typography>
                                     <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>{ticket.technicianNotes}</Typography>
                                 </Box>
                             )}
@@ -280,13 +204,13 @@ export default function TenantTicketDetailPage() {
                             {(beforeProof || afterProof) && (
                                 <Grid container spacing={2} sx={{ mb: 4 }}>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>{label('BEFORE', 'قبل')}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>BEFORE</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
                                             {beforeProof ? <img src={beforeProof} alt="Before maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>{label('AFTER', 'بعد')}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>AFTER</Typography>
                                         <Box sx={{ borderRadius: 3, overflow: 'hidden', pt: '75%', position: 'relative', bgcolor: 'rgba(0,0,0,0.3)' }}>
                                             {afterProof ? <img src={afterProof} alt="After maintenance" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <Info style={{ position: 'absolute', top: '40%', left: '40%', opacity: 0.2 }} />}
                                         </Box>
@@ -295,7 +219,7 @@ export default function TenantTicketDetailPage() {
                             )}
 
                             <Box sx={{ mb: 3, p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', mb: 1 }}>{label('RATE TECHNICIAN SERVICE', 'قيّم خدمة الفني')}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', mb: 1 }}>RATE TECHNICIAN SERVICE</Typography>
                                 <Rating
                                     value={rating}
                                     onChange={(_, nextValue) => setRating(nextValue || 1)}
@@ -306,10 +230,10 @@ export default function TenantTicketDetailPage() {
                                     fullWidth
                                     multiline
                                     rows={3}
-                                    label={label('Feedback for technician / BIN GROUP', 'ملاحظات للفني / بن جروب')}
+                                    label="Feedback for technician / BIN GROUP"
                                     value={feedback}
                                     onChange={(e) => setFeedback(e.target.value)}
-                                    placeholder={label('Example: Technician arrived on time and fixed the issue properly.', 'مثال: وصل الفني في الوقت المحدد وأصلح المشكلة بشكل صحيح.')}
+                                    placeholder="Example: Technician arrived on time and fixed the issue properly."
                                     sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }}
                                 />
                             </Box>
@@ -317,21 +241,21 @@ export default function TenantTicketDetailPage() {
                             {!showRejectInput ? (
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                                     <Button fullWidth variant="contained" color="success" startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <Check />} onClick={handleApprove} disabled={actionLoading || !rating} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
-                                        {label('APPROVE, RATE & CLOSE', 'الموافقة والتقييم والإغلاق')}
+                                        APPROVE, RATE & CLOSE
                                     </Button>
                                     <Button fullWidth variant="outlined" color="error" startIcon={<X />} onClick={() => setShowRejectInput(true)} disabled={actionLoading} sx={{ fontWeight: 950, py: 1.5, borderRadius: 3 }}>
-                                        {label('DISPUTE SERVICE', 'الاعتراض على الخدمة')}
+                                        DISPUTE SERVICE
                                     </Button>
                                 </Stack>
                             ) : (
                                 <Stack spacing={2}>
-                                    <TextField fullWidth multiline rows={3} label={label('Reason for disputing resolution', 'سبب الاعتراض على الحل')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
+                                    <TextField fullWidth multiline rows={3} label="Reason for disputing resolution" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
                                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                                         <Button fullWidth variant="contained" color="error" onClick={handleReject} disabled={actionLoading || !(rejectReason || feedback).trim()} sx={{ fontWeight: 950, borderRadius: 3 }}>
-                                            {label('CONFIRM DISPUTE', 'تأكيد الاعتراض')}
+                                            CONFIRM DISPUTE
                                         </Button>
                                         <Button fullWidth variant="text" onClick={() => setShowRejectInput(false)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>
-                                            {label('CANCEL', 'إلغاء')}
+                                            CANCEL
                                         </Button>
                                     </Stack>
                                 </Stack>
@@ -342,13 +266,13 @@ export default function TenantTicketDetailPage() {
                     {isDisputed && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#ef4444', 0.05), border: '1px solid #ef4444', borderRadius: 6 }}>
                             <Typography variant="h6" fontWeight="950" color="#ef4444" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <AlertCircle /> {label('JOB DISPUTED', 'تم الاعتراض على المهمة')}
+                                <AlertCircle /> JOB DISPUTED
                             </Typography>
                             <Typography variant="body2" color="rgba(255,255,255,0.6)">
-                                {label('You have rejected the resolution. Property Management is reviewing the case.', 'لقد رفضت الحل. إدارة العقارات تراجع الحالة.')}
+                                You have rejected the resolution. Property Management is reviewing the case.
                             </Typography>
                             <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{label('YOUR DISPUTE REASON', 'سبب اعتراضك')}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>YOUR DISPUTE REASON</Typography>
                                 <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>{ticket.rejectionReason || ticket.feedback}</Typography>
                             </Box>
                         </Paper>
@@ -357,8 +281,8 @@ export default function TenantTicketDetailPage() {
                     {isClosed && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 6, textAlign: 'center' }}>
                             <CheckCircle2 size={48} color="#10b981" style={{ margin: '0 auto 16px' }} />
-                            <Typography variant="h6" fontWeight="950" color="#10b981">{label('SERVICE FINALIZED', 'اكتملت الخدمة')}</Typography>
-                            <Typography variant="body2" color="rgba(255,255,255,0.4)" sx={{ mb: ticket.rating || ticket.feedback ? 2 : 0 }}>{label('This ticket has been successfully closed and archived.', 'تم إغلاق هذه التذكرة وأرشفتها بنجاح.')}</Typography>
+                            <Typography variant="h6" fontWeight="950" color="#10b981">SERVICE FINALIZED</Typography>
+                            <Typography variant="body2" color="rgba(255,255,255,0.4)" sx={{ mb: ticket.rating || ticket.feedback ? 2 : 0 }}>This ticket has been successfully closed and archived.</Typography>
                             {ticket.rating && <Rating readOnly value={Number(ticket.rating)} sx={{ '& .MuiRating-iconFilled': { color: binThemeTokens.gold } }} />}
                             {ticket.feedback && <Typography variant="body2" color="rgba(255,255,255,0.75)" sx={{ mt: 1, fontStyle: 'italic' }}>“{ticket.feedback}”</Typography>}
                         </Paper>
@@ -380,13 +304,11 @@ export default function TenantTicketDetailPage() {
 
                     <Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 5 }}>
                         <Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Info size={16} /> {label('NEED ASSISTANCE?', 'تحتاج مساعدة؟')}
+                            <Info size={16} /> NEED ASSISTANCE?
                         </Typography>
                         <Typography variant="caption" color="rgba(255,255,255,0.4)" sx={{ fontWeight: 700, display: 'block', minWidth: 0, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                            {label(
-                                'Use the chat or call button above to reach your technician directly. For escalations, contact BIN GROUP concierge.',
-                                'استخدم زر المحادثة أو الاتصال أعلاه للتواصل مع الفني مباشرة. للتصعيد، تواصل مع خدمة عملاء بن جروب.'
-                            )}
+                            Use the chat or call button above to reach your technician directly.
+                            For escalations, contact BIN GROUP concierge.
                         </Typography>
                     </Paper>
                 </Grid>

@@ -1,5 +1,5 @@
 // admin-panel/src/pages/technicians/TechniciansManagementPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Container,
@@ -20,6 +20,7 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -30,11 +31,10 @@ import {
   ListItemText,
   Alert,
 } from '@mui/material';
-import { db, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
+import { auth, db, functions, httpsCallable } from '../../lib/firebase';
 
 interface Technician {
   uid: string;
@@ -44,32 +44,28 @@ interface Technician {
   status: 'active' | 'pending' | 'inactive' | 'on-duty';
   specialization: string;
   role: 'technician';
-  
-  // Advanced Institutional Fields
   emiratesCovered?: string[];
-  citiesCovered?: string[];
-  areasCovered?: string[];
   primaryEmirate?: string;
-  primaryCity?: string;
-  primaryArea?: string;
   onDuty?: boolean;
   available?: boolean;
   currentJobCount?: number;
   maxConcurrentJobs?: number;
-  shiftStart?: string;
-  shiftEnd?: string;
-  rating?: number;
   emergencyEligible?: boolean;
 }
+
+const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
 
 export default function TechniciansManagementPage() {
   const { t, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [selectedTech, setSelectedTech] = useState<Technician | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const [newTech, setNewTech] = useState({
     email: '',
@@ -92,48 +88,57 @@ export default function TechniciansManagementPage() {
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'technician'));
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
+      const fetched = snapshot.docs.map((item) => ({
+        uid: item.id,
+        ...item.data(),
       })) as Technician[];
       setTechs(fetched);
       setLoading(false);
     }, (error) => {
-      console.error("Firestore error:", error);
+      console.error('[ADMIN-TECH] Firestore technician sync failed:', error);
+      setActionError(`Technician registry sync failed: ${error.message || error.code || 'unknown error'}`);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
+  const resetNewTech = () => setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
+
   const handleAddTech = async () => {
+    setSubmitting(true);
+    setActionError(null);
+    setActionSuccess(null);
     try {
-      const registerFn = httpsCallable(functions, 'adminCreateUser');
-      
-      const response = await registerFn({
-        email: newTech.email,
-        displayName: newTech.displayName,
-        fullName: newTech.displayName,
-        phoneNumber: newTech.phoneNumber,
-        phone: newTech.phoneNumber,
+      const user = auth.currentUser;
+      if (!user) throw new Error('UNAUTHENTICATED: No active administrative session.');
+      if (!newTech.displayName.trim() || !newTech.email.trim()) throw new Error('Full name and email are required.');
+
+      await user.getIdToken(true);
+      const provisionStaff = httpsCallable(functions, 'adminCreateUser');
+      const response: any = await provisionStaff({
+        displayName: newTech.displayName.trim(),
+        email: newTech.email.trim().toLowerCase(),
+        phoneNumber: newTech.phoneNumber.trim(),
+        specialization: newTech.specialization.trim() || 'General Maintenance',
+        department: 'Technical',
         role: 'technician',
-        specialization: newTech.specialization,
-        trade: newTech.specialization,
       });
 
-      const result = response.data as any;
-      if (result?.success) {
-        setOpenAdd(false);
-        setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
-      } else {
-        throw new Error(result?.message || t('admin.tech.provision_failed'));
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || t('admin.tech.provision_failed') || 'Technician provisioning failed.');
       }
+
+      setActionSuccess(response.data?.message || 'Technician provisioned successfully. Ask the technician to reset password before first login.');
+      setOpenAdd(false);
+      resetNewTech();
     } catch (error: any) {
-      console.error("🚨 [ADMIN-AUTH] Provisioning Failure:", error);
-      const errorMsg = error.message || t('admin.tech.provision_failed');
-      alert(errorMsg);
+      console.error('🚨 [ADMIN-AUTH] Provisioning Failure:', error);
+      const message = error?.message || error?.code || t('admin.tech.provision_failed') || 'Technician provisioning failed.';
+      setActionError(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -155,14 +160,15 @@ export default function TechniciansManagementPage() {
 
   const handleUpdateTech = async () => {
     if (!selectedTech) return;
+    setActionError(null);
+    setActionSuccess(null);
     try {
       const userRef = doc(db, 'users', selectedTech.uid);
       await updateDoc(userRef, {
         ...editTech,
         updatedAt: serverTimestamp(),
       });
-      
-      // Update in technicians collection
+
       const techRef = doc(db, 'technicians', selectedTech.uid);
       await updateDoc(techRef, {
         displayName: editTech.displayName,
@@ -174,26 +180,33 @@ export default function TechniciansManagementPage() {
         maxConcurrentJobs: editTech.maxConcurrentJobs,
         emergencyEligible: editTech.emergencyEligible,
         onDuty: editTech.onDuty,
-      }).catch(() => {/* tech doc might not exist yet */});
+        updatedAt: serverTimestamp(),
+      }).catch((error) => console.warn('[ADMIN-TECH] Technician mirror update skipped:', error));
 
+      setActionSuccess('Technician updated successfully.');
       setOpenEdit(false);
-    } catch (error) {
-      console.error("Error updating technician:", error);
+    } catch (error: any) {
+      console.error('Error updating technician:', error);
+      setActionError(error?.message || 'Technician update failed.');
     }
   };
 
   const handleDeleteTech = async (uid: string) => {
     if (window.confirm(t('admin.tech.delete_confirm'))) {
+      setActionError(null);
+      setActionSuccess(null);
       try {
         await deleteDoc(doc(db, 'users', uid));
-        await deleteDoc(doc(db, 'technicians', uid)).catch(() => {});
-      } catch (error) {
-        console.error("Error deleting technician:", error);
+        await deleteDoc(doc(db, 'technicians', uid)).catch(() => undefined);
+        setActionSuccess('Technician removed from Firestore registry. Disable the Firebase Auth user separately if needed.');
+      } catch (error: any) {
+        console.error('Error deleting technician:', error);
+        setActionError(error?.message || 'Technician delete failed.');
       }
     }
   };
 
-  const filteredTechs = techs.filter((tech) => 
+  const filteredTechs = techs.filter((tech) =>
     tech.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tech.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tech.specialization?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -213,15 +226,18 @@ export default function TechniciansManagementPage() {
         <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#10b981' }}>{t('admin.tech.force')}</Box>
         </Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<AddIcon />} 
-          onClick={() => setOpenAdd(true)}
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => { setActionError(null); setActionSuccess(null); setOpenAdd(true); }}
           sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
         >
           {t('admin.tech.add_btn')}
         </Button>
       </Box>
+
+      {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
+      {actionSuccess && <Alert severity="success" sx={{ mb: 3 }}>{actionSuccess}</Alert>}
 
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: '1px solid rgba(0,0,0,0.05)' }}>
         <TextField
@@ -252,34 +268,23 @@ export default function TechniciansManagementPage() {
             {filteredTechs.map((tech) => (
               <TableRow key={tech.uid} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                        <BuildIcon sx={{ fontSize: 16, color: '#10b981' }} />
-                        {tech.displayName || 'N/A'}
-                    </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <BuildIcon sx={{ fontSize: 16, color: '#10b981' }} />
+                    {tech.displayName || 'N/A'}
+                  </Box>
                 </TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Chip label={tech.specialization || 'General'} size="small" variant="outlined" />
-                </TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={tech.specialization || 'General'} size="small" variant="outlined" /></TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tech.email}</TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tech.phoneNumber || 'N/A'}</TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Chip 
-                    label={tech.status?.toUpperCase() || 'ACTIVE'} 
-                    color={tech.status === 'on-duty' ? 'info' : 'success'} 
-                    size="small" 
-                    sx={{ fontWeight: 'bold', fontSize: 10 }} 
-                  />
+                  <Chip label={tech.status?.toUpperCase() || 'ACTIVE'} color={tech.status === 'on-duty' ? 'info' : 'success'} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
                 </TableCell>
                 <TableCell align={isRTL ? 'left' : 'right'}>
                   <Tooltip title={t('admin.tech.edit_tooltip')}>
-                    <IconButton onClick={() => handleEditOpen(tech)} size="small" sx={{ color: '#10b981' }}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                    <IconButton onClick={() => handleEditOpen(tech)} size="small" sx={{ color: '#10b981' }}><EditIcon fontSize="small" /></IconButton>
                   </Tooltip>
                   <Tooltip title={t('admin.tech.delete_tooltip')}>
-                    <IconButton onClick={() => handleDeleteTech(tech.uid)} size="small" color="error">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <IconButton onClick={() => handleDeleteTech(tech.uid)} size="small" color="error"><DeleteIcon fontSize="small" /></IconButton>
                   </Tooltip>
                 </TableCell>
               </TableRow>
@@ -288,87 +293,36 @@ export default function TechniciansManagementPage() {
         </Table>
       </TableContainer>
 
-      {/* Add Dialog */}
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.onboard_title')}</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid #d97706', fontWeight: 700 }}>
-            Staff account creation requires manual Firebase Auth setup until backend provisioning is enabled.
-          </Alert>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField 
-              label={t('admin.tech.field.fullname')} 
-              fullWidth 
-              value={newTech.displayName} 
-              onChange={(e) => setNewTech({...newTech, displayName: e.target.value})} 
-            />
-            <TextField 
-              label={t('admin.tech.field.email')} 
-              fullWidth 
-              value={newTech.email} 
-              onChange={(e) => setNewTech({...newTech, email: e.target.value})} 
-            />
-            <TextField 
-              label={t('admin.tech.field.phone')} 
-              fullWidth 
-              value={newTech.phoneNumber} 
-              onChange={(e) => setNewTech({...newTech, phoneNumber: e.target.value})} 
-            />
-            <TextField 
-              label={t('admin.tech.field.specialization')} 
-              fullWidth 
-              value={newTech.specialization} 
-              onChange={(e) => setNewTech({...newTech, specialization: e.target.value})} 
-            />
+            <TextField label={t('admin.tech.field.fullname')} fullWidth value={newTech.displayName} onChange={(e) => setNewTech({ ...newTech, displayName: e.target.value })} />
+            <TextField label={t('admin.tech.field.email')} fullWidth value={newTech.email} onChange={(e) => setNewTech({ ...newTech, email: e.target.value })} />
+            <TextField label={t('admin.tech.field.phone')} fullWidth value={newTech.phoneNumber} onChange={(e) => setNewTech({ ...newTech, phoneNumber: e.target.value })} />
+            <TextField label={t('admin.tech.field.specialization')} fullWidth value={newTech.specialization} onChange={(e) => setNewTech({ ...newTech, specialization: e.target.value })} />
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>
-          <Button 
-            variant="contained" 
-            onClick={handleAddTech} 
-            disabled={true}
-            sx={{ borderRadius: 100, bgcolor: '#334155', color: '#94a3b8', minWidth: 150, cursor: 'not-allowed' }}
-          >
-            MANUAL SETUP REQUIRED
+          <Button variant="contained" onClick={handleAddTech} disabled={submitting} sx={{ borderRadius: 100, bgcolor: '#10b981', minWidth: 150 }}>
+            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tech.deploy_btn')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Edit Dialog */}
       <Dialog open={openEdit} onClose={() => setOpenEdit(false)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.tech.update_title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField 
-              label={t('admin.tech.field.fullname')} 
-              fullWidth 
-              value={editTech.displayName} 
-              onChange={(e) => setEditTech({...editTech, displayName: e.target.value})} 
-            />
-            <TextField 
-              label={t('admin.tech.field.phone')} 
-              fullWidth 
-              value={editTech.phoneNumber} 
-              onChange={(e) => setEditTech({...editTech, phoneNumber: e.target.value})} 
-            />
-            <TextField 
-              label={t('admin.tech.field.specialization')} 
-              fullWidth 
-              value={editTech.specialization} 
-              onChange={(e) => setEditTech({...editTech, specialization: e.target.value})} 
-            />
+            <TextField label={t('admin.tech.field.fullname')} fullWidth value={editTech.displayName} onChange={(e) => setEditTech({ ...editTech, displayName: e.target.value })} />
+            <TextField label={t('admin.tech.field.phone')} fullWidth value={editTech.phoneNumber} onChange={(e) => setEditTech({ ...editTech, phoneNumber: e.target.value })} />
+            <TextField label={t('admin.tech.field.specialization')} fullWidth value={editTech.specialization} onChange={(e) => setEditTech({ ...editTech, specialization: e.target.value })} />
 
             <FormControl fullWidth>
               <InputLabel>Primary Emirate</InputLabel>
-              <Select
-                value={editTech.primaryEmirate}
-                label="Primary Emirate"
-                onChange={(e) => setEditTech({...editTech, primaryEmirate: e.target.value})}
-              >
-                {['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'].map(e => (
-                  <MenuItem key={e} value={e}>{e}</MenuItem>
-                ))}
+              <Select value={editTech.primaryEmirate} label="Primary Emirate" onChange={(e) => setEditTech({ ...editTech, primaryEmirate: e.target.value })}>
+                {EMIRATES.map((emirate) => <MenuItem key={emirate} value={emirate}>{emirate}</MenuItem>)}
               </Select>
             </FormControl>
 
@@ -378,16 +332,14 @@ export default function TechniciansManagementPage() {
                 multiple
                 value={editTech.emiratesCovered}
                 label="Emirates Covered"
-                onChange={(e) => setEditTech({...editTech, emiratesCovered: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value})}
+                onChange={(e) => setEditTech({ ...editTech, emiratesCovered: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value })}
                 renderValue={(selected) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => (
-                      <Chip key={value} label={value} size="small" />
-                    ))}
+                    {selected.map((value) => <Chip key={value} label={value} size="small" />)}
                   </Box>
                 )}
               >
-                {['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'].map((name) => (
+                {EMIRATES.map((name) => (
                   <MenuItem key={name} value={name}>
                     <Checkbox checked={editTech.emiratesCovered.indexOf(name) > -1} />
                     <ListItemText primary={name} />
@@ -396,23 +348,11 @@ export default function TechniciansManagementPage() {
               </Select>
             </FormControl>
 
-            <TextField 
-                label="Max Concurrent Jobs" 
-                type="number"
-                fullWidth 
-                value={editTech.maxConcurrentJobs} 
-                onChange={(e) => setEditTech({...editTech, maxConcurrentJobs: parseInt(e.target.value) || 0})} 
-            />
+            <TextField label="Max Concurrent Jobs" type="number" fullWidth value={editTech.maxConcurrentJobs} onChange={(e) => setEditTech({ ...editTech, maxConcurrentJobs: parseInt(e.target.value, 10) || 0 })} />
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <FormControlLabel
-                    control={<Switch checked={editTech.onDuty} onChange={(e) => setEditTech({...editTech, onDuty: e.target.checked})} />}
-                    label="On Duty"
-                />
-                <FormControlLabel
-                    control={<Switch checked={editTech.emergencyEligible} onChange={(e) => setEditTech({...editTech, emergencyEligible: e.target.checked})} />}
-                    label="Emergency SOS Eligible"
-                />
+              <FormControlLabel control={<Switch checked={editTech.onDuty} onChange={(e) => setEditTech({ ...editTech, onDuty: e.target.checked })} />} label="On Duty" />
+              <FormControlLabel control={<Switch checked={editTech.emergencyEligible} onChange={(e) => setEditTech({ ...editTech, emergencyEligible: e.target.checked })} />} label="Emergency SOS Eligible" />
             </Box>
           </Box>
         </DialogContent>

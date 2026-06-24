@@ -308,35 +308,18 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                                         <Button
                                             variant="outlined"
                                             fullWidth
-                                            disabled={true}
+                                            onClick={() => handleGenerateManifest('STRIPE')}
+                                            disabled={isGenerating || !hasValidAmount}
                                             sx={{
-                                                py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.1)',
-                                                color: 'rgba(255,255,255,0.3)', display: 'flex', justifyContent: 'space-between',
+                                                py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)',
+                                                color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
                                                 flexDirection: isRTL ? 'row-reverse' : 'row',
-                                                '&.Mui-disabled': { borderColor: 'rgba(198,167,94,0.05)', color: 'rgba(255,255,255,0.3)' }
+                                                '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
                                             }}
                                         >
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                                <ReceiptText size={24} color="rgba(255,255,255,0.3)" />
-                                                <Typography fontWeight={700}>Bank Transfer (Coming Soon)</Typography>
-                                            </Box>
-                                            <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                                        </Button>
-
-                                        <Button
-                                            variant="outlined"
-                                            fullWidth
-                                            disabled={true}
-                                            sx={{
-                                                py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.1)',
-                                                color: 'rgba(255,255,255,0.3)', display: 'flex', justifyContent: 'space-between',
-                                                flexDirection: isRTL ? 'row-reverse' : 'row',
-                                                '&.Mui-disabled': { borderColor: 'rgba(198,167,94,0.05)', color: 'rgba(255,255,255,0.3)' }
-                                            }}
-                                        >
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                                <ShieldCheck size={24} color="rgba(255,255,255,0.3)" />
-                                                <Typography fontWeight={700}>Online Card Payment (Coming Soon - Phase 2)</Typography>
+                                                <ShieldCheck size={24} color={binThemeTokens.gold} />
+                                                <Typography fontWeight={700}>{readable(t('onboarding.payment.stripe'), 'Stripe')}</Typography>
                                             </Box>
                                             <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                         </Button>

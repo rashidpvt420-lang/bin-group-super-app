@@ -11,9 +11,6 @@ import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon from '../components/SafeIcon';
-import BinConnectChatBox from '../components/BinConnectChatBox';
-import PilotCompletionPage from '../components/PilotCompletionPage';
-import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
@@ -23,21 +20,13 @@ import TenantChatPage from './pages/TenantChatPage';
 import TenantEmergencyPage from './pages/TenantEmergencyPage';
 import TenantProfilePage from './pages/TenantProfilePage';
 import TenantDocumentsPage from './pages/TenantDocumentsPage';
-import TenantPaymentsPage from './pages/TenantPaymentsPage';
 import TenantUnitPage from './pages/TenantUnitPage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 import TenantGatePassPage from './pages/TenantGatePassPage';
 import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
-
-import TenantNoticesPage from './pages/TenantNoticesPage';
-import TenantKeysPage from './pages/TenantKeysPage';
-import TenantParcelsPage from './pages/TenantParcelsPage';
-import TenantVisitorParkingPage from './pages/TenantVisitorParkingPage';
-import TenantMarketplacePage from './pages/TenantMarketplacePage';
-import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
-import TenantMessagesPage from './pages/TenantMessagesPage';
-import TenantCommunityPage from './pages/TenantCommunityPage';
+import TenantPaymentsPage from './pages/TenantPaymentsPage';
+import TenantMoveInspectionPage from './pages/TenantMoveInspectionPage';
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -126,8 +115,6 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 </Box>
             </Container>
 
-            <BinConnectChatBox role="tenant" dark />
-
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
                     © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS · MADE IN UAE 🇦🇪
@@ -154,21 +141,13 @@ export default function TenantApp() {
                 <Route path="/emergency" element={<TenantEmergencyPage />} />
                 <Route path="/profile" element={<TenantProfilePage />} />
                 <Route path="/documents" element={<TenantDocumentsPage />} />
-                <Route path="/payments" element={<TenantPaymentsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/gate-pass" element={<TenantGatePassPage />} />
                 <Route path="/amenities" element={<TenantAmenitiesPage />} />
-                <Route path="/notices" element={<TenantNoticesPage />} />
-                <Route path="/keys" element={<TenantKeysPage />} />
-                <Route path="/parcels" element={<TenantParcelsPage />} />
-                <Route path="/visitor-parking" element={<TenantVisitorParkingPage />} />
-                <Route path="/marketplace" element={<TenantMarketplacePage />} />
-                <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
-                <Route path="/messages" element={<TenantMessagesPage />} />
-                <Route path="/community" element={<TenantCommunityPage />} />
-                <Route path="/bin-connect" element={<BinConnectInboxPage role="tenant" dark />} />
-                <Route path="/pilot-completion" element={<PilotCompletionPage role="tenant" dark />} />
+                <Route path="/payments" element={<TenantPaymentsPage />} />
+                <Route path="/move-inspection" element={<TenantMoveInspectionPage />} />
+                <Route path="/move-inspection/:type" element={<TenantMoveInspectionPage />} />
             </Routes>
         </TenantLayout>
     );
