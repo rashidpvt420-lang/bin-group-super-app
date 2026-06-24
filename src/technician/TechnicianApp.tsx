@@ -21,6 +21,7 @@ import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
+import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import SupportPage from '../pages/public/SupportPage';
 
 const shell = {
@@ -98,6 +99,9 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.5 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <NotificationBell />
+                        <Button onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>
+                            Proof
+                        </Button>
                         <Button onClick={() => navigate('/technician/profile')} startIcon={renderSafeIcon(User, { size: 18 })} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>
                             {label('nav.profile', 'Profile', 'الملف الشخصي')}
                         </Button>
@@ -143,6 +147,7 @@ export default function TechnicianApp() {
                 <Route path="/dashboard" element={<TechnicianDashboardPage />} />
                 <Route path="/jobs" element={<TechnicianJobsPage />} />
                 <Route path="/job/:id" element={<TechnicianJobDetailPage />} />
+                <Route path="/proof-readiness" element={<TechnicianProofReadinessPage />} />
                 <Route path="/chat" element={<TechnicianChatPage />} />
                 <Route path="/chat/:ticketId" element={<TechnicianChatPage />} />
                 <Route path="/map" element={<TechnicianMapPage />} />
