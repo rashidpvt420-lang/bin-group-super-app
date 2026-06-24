@@ -220,6 +220,10 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
+function publicLanding() {
+  return withAuth(<LandingPage />, { publicAuth: true, showChrome: false });
+}
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
@@ -231,9 +235,9 @@ function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={<PublicMarketingPage page="home" />} />
+        <Route path="/" element={publicLanding()} />
         <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/v1" element={publicLanding()} />
         <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/terms-of-service" element={<TermsPage />} />
@@ -262,10 +266,10 @@ function AppContent() {
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<CompanyProfilePage />} />
+        <Route path="/company" element={publicLanding()} />
         <Route path="/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/about" element={<CompanyProfilePage />} />
-        <Route path="/about-us" element={<CompanyProfilePage />} />
+        <Route path="/about" element={publicLanding()} />
+        <Route path="/about-us" element={publicLanding()} />
         <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
