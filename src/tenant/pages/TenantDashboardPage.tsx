@@ -200,6 +200,30 @@ export default function TenantDashboardPage() {
     { label: tx('service.community', 'Community Board'), icon: <Users size={20} />, route: '/tenant/community', visible: true },
   ].filter((button) => button.visible), [showMaintenance, showManagement, tx]);
 
+  const tenantWorkflowSteps = [
+    {
+      title: tx('tenant.workflow.report.title', '1. Report the issue'),
+      desc: tx('tenant.workflow.report.desc', 'Create a request with category, notes and photos so BIN GROUP can triage it without phone calls.'),
+      icon: <Wrench size={22} />,
+      action: tx('tenant.workflow.report.action', 'New Request'),
+      route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management',
+    },
+    {
+      title: tx('tenant.workflow.track.title', '2. Track technician / status'),
+      desc: tx('tenant.workflow.track.desc', 'Watch active requests, technician assignment, field status, ETA and updates from the ticket detail page.'),
+      icon: <MapPin size={22} />,
+      action: tx('tenant.workflow.track.action', 'View Tickets'),
+      route: '/tenant/tickets',
+    },
+    {
+      title: tx('tenant.workflow.proof.title', '3. Approve or dispute proof'),
+      desc: tx('tenant.workflow.proof.desc', 'After resolution, review before/after evidence and approve, dispute or request revisit when available.'),
+      icon: <CheckCircle2 size={22} />,
+      action: tx('tenant.workflow.proof.action', 'Documents / Proof'),
+      route: '/tenant/documents',
+    },
+  ];
+
   if (loading) {
     return <Box sx={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
   }
@@ -217,6 +241,35 @@ export default function TenantDashboardPage() {
         </Box>
 
         <RoleJourneyStrip role="tenant" dark />
+
+        <Paper sx={{ p: { xs: 2.5, md: 3 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
+          <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+            <Box>
+              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{tx('tenant.workflow.overline', 'NO-CALL SERVICE WORKFLOW')}</Typography>
+              <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950 }}>{tx('tenant.workflow.title', 'Report, track, then approve or dispute with proof')}</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,0.58)', mt: 0.75 }}>{tx('tenant.workflow.desc', 'For live testing, use this strip first: submit a request, track the assigned work, then verify the evidence after completion.')}</Typography>
+            </Box>
+            <Grid container spacing={2}>
+              {tenantWorkflowSteps.map((step) => (
+                <Grid item xs={12} md={4} key={step.title}>
+                  <Box sx={{ p: 2.25, height: '100%', bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
+                    <Box sx={{ color: binThemeTokens.gold, mb: 1 }}>{step.icon}</Box>
+                    <Typography sx={{ color: '#fff', fontWeight: 950 }}>{step.title}</Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', minHeight: 58, mt: 0.75 }}>{step.desc}</Typography>
+                    <Button size="small" onClick={() => navigate(step.route)} sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 1 }}>{step.action}</Button>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Stack>
+        </Paper>
+
+        {(permissionWarning || ticketReadWarning) && (
+          <Stack spacing={1.5}>
+            {permissionWarning && <Alert severity="warning" sx={{ borderRadius: 3 }}>{permissionWarning}</Alert>}
+            {ticketReadWarning && <Alert severity="warning" sx={{ borderRadius: 3 }}>{ticketReadWarning}</Alert>}
+          </Stack>
+        )}
 
         <Button variant="contained" onClick={() => navigate('/tenant/request')} data-testid="tenant-new-request" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 4, fontWeight: 950, px: 4, py: 1.5 }}>
           {tx('dash.newRequestBtn', 'New Request')}
