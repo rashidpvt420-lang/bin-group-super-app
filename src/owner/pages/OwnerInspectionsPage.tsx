@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { ClipboardCheck, Eye, FileText, Home, ReceiptText, ShieldAlert } from 'lucide-react';
+import { ClipboardCheck, Eye, Home, ReceiptText, ShieldAlert } from 'lucide-react';
 import { collection, db, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
