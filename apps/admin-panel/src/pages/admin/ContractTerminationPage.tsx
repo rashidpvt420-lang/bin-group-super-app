@@ -13,6 +13,7 @@ export default function ContractTerminationPage() {
   const [reason, setReason] = React.useState('OWNER_REQUEST');
   const [note, setNote] = React.useState('');
   const [message, setMessage] = React.useState('');
+  const [closingId, setClosingId] = React.useState('');
 
   React.useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'contracts'), (snapshot) => {
@@ -32,28 +33,44 @@ export default function ContractTerminationPage() {
       setMessage('Admin note is required for audit evidence.');
       return;
     }
-    await updateDoc(doc(db, 'contracts', row.id), {
-      status: 'CLOSED',
-      contractStatus: 'CLOSED',
-      closureReason: reason,
-      closureNote: note.trim(),
-      closedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    await addDoc(collection(db, 'auditLogs'), {
+
+    const trimmedNote = note.trim();
+    const auditPayload = {
       action: 'CONTRACT_CLOSED',
       entityType: 'contract',
       entityId: row.id,
       contractNumber: row.contractNumber || row.id,
       ownerEmail: row.ownerEmail || '',
       propertyId: row.propertyId || '',
+      propertyName: row.propertyName || '',
       reason,
-      note: note.trim(),
+      note: trimmedNote,
       createdAt: serverTimestamp(),
       source: 'admin_contract_control',
-    });
-    setNote('');
-    setMessage('Contract closed and audit logged.');
+    };
+
+    setClosingId(row.id);
+    try {
+      await updateDoc(doc(db, 'contracts', row.id), {
+        status: 'CLOSED',
+        contractStatus: 'CLOSED',
+        closureReason: reason,
+        closureNote: trimmedNote,
+        closedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await Promise.all([
+        addDoc(collection(db, 'audit_logs'), auditPayload),
+        addDoc(collection(db, 'auditLogs'), auditPayload),
+      ]);
+      setNote('');
+      setMessage('Contract closed and audit logged.');
+    } catch (error: any) {
+      console.error('[ContractTerminationPage] close failed:', error);
+      setMessage(error?.message || 'Could not close contract. Check admin permissions and retry.');
+    } finally {
+      setClosingId('');
+    }
   };
 
   return (
@@ -96,7 +113,7 @@ export default function ContractTerminationPage() {
                   <TableCell>{row.propertyName || row.propertyId || 'Not linked'}</TableCell>
                   <TableCell>{money(row.totalValue || row.contractValue || row.annualValue)}</TableCell>
                   <TableCell><Chip size="small" label={normalize(row.contractStatus || row.status || 'ACTIVE')} /></TableCell>
-                  <TableCell align="right"><Button size="small" color="warning" variant="outlined" onClick={() => closeContract(row)}>Close</Button></TableCell>
+                  <TableCell align="right"><Button size="small" color="warning" variant="outlined" disabled={closingId === row.id} onClick={() => closeContract(row)}>{closingId === row.id ? 'Closing...' : 'Close'}</Button></TableCell>
                 </TableRow>
               ))}
               {!loading && openContracts.length === 0 && <TableRow><TableCell colSpan={6} align="center">No open contracts found.</TableCell></TableRow>}
