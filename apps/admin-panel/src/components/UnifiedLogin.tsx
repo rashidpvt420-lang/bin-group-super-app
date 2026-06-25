@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 
 export default function UnifiedLogin() {
-    const { loading: authLoading, error: authError } = useAuth();
+    const { error: authError } = useAuth();
     const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
