@@ -184,7 +184,7 @@ export default function OwnerInspectionsPage() {
                         <Grid item xs={6}><Typography variant="caption" color="text.secondary">Tenant Refund / Balance Due</Typography><Typography fontWeight={950}>{ledger.balanceDue > 0 ? `${money(ledger.balanceDue)} due` : `${money(ledger.balanceToTenant)} refund`}</Typography></Grid>
                       </Grid>
                       {inspection.depositNotes && <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: binThemeTokens.textSecondary }}>Notes: {inspection.depositNotes}</Typography>}
-                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)}</Typography>}
+                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
                     </Paper>
 
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
