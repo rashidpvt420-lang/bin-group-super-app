@@ -291,7 +291,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        <Route path="/admin/*" element={withAuth(<AdminTerminal />, { publicAuth: true, showChrome: false })} />
         <Route path="/verify" element={<InvoiceVerificationPage />} />
         <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
