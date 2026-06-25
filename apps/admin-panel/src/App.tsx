@@ -60,7 +60,6 @@ import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsPage
 import ContractTerminationPage from './pages/admin/ContractTerminationPage';
 import { adminTheme } from './theme/adminTheme';
 
-// Create RTL/LTR Caches
 const cacheRtl = createCache({
     key: 'muirtl-admin',
     stylisPlugins: [prefixer, rtlPlugin],
@@ -94,7 +93,7 @@ function AppContent() {
         }, 4500);
         const releaseTimer = setTimeout(() => {
             if (loading) {
-                console.warn("[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.");
+                console.warn('[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.');
                 setSafetyReleased(true);
             }
         }, 12000);
@@ -192,7 +191,7 @@ function AppContent() {
                 </Route>
             )}
 
-            <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
         </Routes>
     );
 }
@@ -204,25 +203,25 @@ function Layout() {
 
     const handleLogout = async () => {
         try {
-            console.log("[ADMIN] Initiating global logout sequence...");
+            console.log('[ADMIN] Initiating global logout sequence...');
             await logout();
         } catch (err) {
-            console.error("Logout failure:", err);
+            console.error('Logout failure:', err);
             window.location.href = '/login';
         }
     };
-    
+
     return (
         <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#F5F5F5', direction: isRTL ? 'rtl' : 'ltr' }}>
             <CssBaseline />
-            <Navigation user={user} onLogout={handleLogout} />
+            <Navigation />
             <Box component="main" sx={{ flexGrow: 1, p: 3, overflowY: 'auto' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2, gap: 2 }}>
                     <LanguageSwitcher />
                     <Button
                         onClick={() => navigate('/settings')}
                         startIcon={<UserIcon size={18} />}
-                        sx={{ color: adminTheme.colors.navy }}
+                        sx={{ color: '#111827' }}
                     >
                         {user?.email || 'Admin'}
                     </Button>
@@ -232,7 +231,7 @@ function Layout() {
                         startIcon={<LogOut size={18} />}
                         onClick={handleLogout}
                     >
-                        {t('common.logout')}
+                        {t('common.logout') || t('nav.logout') || 'Logout'}
                     </Button>
                 </Box>
                 <Outlet />
@@ -243,7 +242,7 @@ function Layout() {
 }
 
 function App() {
-    const { lang, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const cache = isRTL ? cacheRtl : cacheLtr;
     const theme = createTheme({ ...adminTheme, direction: isRTL ? 'rtl' : 'ltr' } as any);
 
@@ -252,13 +251,12 @@ function App() {
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <AIProvider>
-                    <SovereignAlertHandler>
-                        <AuthProvider>
-                            <Router>
-                                <AppContent />
-                            </Router>
-                        </AuthProvider>
-                    </SovereignAlertHandler>
+                    <AuthProvider>
+                        <Router>
+                            <AppContent />
+                            <SovereignAlertHandler />
+                        </Router>
+                    </AuthProvider>
                 </AIProvider>
             </ThemeProvider>
         </CacheProvider>
