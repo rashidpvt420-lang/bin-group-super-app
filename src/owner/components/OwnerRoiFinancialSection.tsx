@@ -38,9 +38,10 @@ function formatCurrency(amount: number) {
   return `AED ${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export default function OwnerRoiFinancialSection({ financials, onAddRentDetails }: OwnerRoiFinancialSectionProps) {
-  const { t, isRTL } = useLanguage();
+export default function OwnerRoiFinancialSection({ financials }: OwnerRoiFinancialSectionProps) {
+  const { t } = useLanguage();
   const pmEnabled = financials.contractMode === 'PROPERTY_MANAGEMENT_ONLY' || financials.contractMode === 'HYBRID';
+  const openMoneySnapshot = () => document.getElementById('owner-money-snapshot')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const renderMetric = (label: string, value: React.ReactNode, icon?: React.ReactNode, color = '#fff') => (
     <Grid item xs={12} sm={6} md={3}>
@@ -81,11 +82,11 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
               <AlertCircle color="#f59e0b" />
               <Box>
                 <Typography fontWeight={900} sx={{ color: '#fff' }}>ROI pending rent setup</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>Use the Owner Money Snapshot to record tenant rent due, rent paid, payment method, reference, and balance.</Typography>
               </Box>
             </Stack>
-            <Button variant="contained" onClick={onAddRentDetails} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
-              {t('owner.addRentIncome') || 'Add Rent Income'}
+            <Button variant="contained" onClick={openMoneySnapshot} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
+              {t('owner.openMoneySnapshot') || 'Open Money Snapshot'}
             </Button>
           </Box>
         )}
