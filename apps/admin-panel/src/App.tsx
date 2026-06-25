@@ -3,7 +3,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress, Stack } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
@@ -70,28 +70,60 @@ const cacheLtr = createCache({
     key: 'muiltr-admin',
 });
 
+function resetAdminSession() {
+    try {
+        const lang = localStorage.getItem('bin_language');
+        localStorage.clear();
+        sessionStorage.clear();
+        if (lang) localStorage.setItem('bin_language', lang);
+    } catch {
+        // Continue navigation even if storage is blocked.
+    }
+    window.location.href = '/login#sso_failed=1';
+}
+
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
     const { t, isRTL } = useLanguage();
     const [safetyReleased, setSafetyReleased] = React.useState(false);
+    const [showRecovery, setShowRecovery] = React.useState(false);
 
     React.useEffect(() => {
-        const timer = setTimeout(() => {
+        const recoveryTimer = setTimeout(() => {
+            if (loading) setShowRecovery(true);
+        }, 4500);
+        const releaseTimer = setTimeout(() => {
             if (loading) {
                 console.warn("[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.");
                 setSafetyReleased(true);
             }
         }, 12000);
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(recoveryTimer);
+            clearTimeout(releaseTimer);
+        };
     }, [loading]);
 
     if (loading && !safetyReleased) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr', textAlign: 'center' }}>
                 <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
-                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                    {t('dash.command_subtitle')}
+                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: 'center' }}>
+                    {t('dash.command_subtitle') || 'AUTHENTICATING SOVEREIGN IDENTITY...'}
                 </Typography>
+                {showRecovery && (
+                    <Stack spacing={1.5} sx={{ mt: 4, width: '100%', maxWidth: 420 }}>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>
+                            Admin authentication is taking longer than expected. This is usually a stale session, blocked Firebase Auth domain, or expired cross-domain handoff.
+                        </Typography>
+                        <Button variant="contained" onClick={resetAdminSession} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
+                            Reset Session & Open Admin Login
+                        </Button>
+                        <Button variant="outlined" onClick={() => window.location.reload()} sx={{ borderColor: '#DAA520', color: '#DAA520', fontWeight: 950 }}>
+                            Retry Authentication
+                        </Button>
+                    </Stack>
+                )}
             </Box>
         );
     }
@@ -101,7 +133,10 @@ function AppContent() {
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.sys_init_fault')}</Typography>
                 <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{error}</Typography>
-                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <Button variant="contained" onClick={resetAdminSession} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>RESET & LOGIN</Button>
+                    <Button variant="outlined" onClick={() => window.location.reload()} sx={{ borderColor: '#DAA520', color: '#DAA520', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
+                </Stack>
             </Box>
         );
     }
@@ -178,115 +213,62 @@ function Layout() {
     };
     
     return (
-        <Box sx={{ 
-            display: 'flex', 
-            height: '100vh', 
-            width: '100vw',
-            bgcolor: '#020617',
-            overflow: 'hidden',
-            direction: isRTL ? 'rtl' : 'ltr'
-        }}>
-            <Navigation />
-            
-            <Box sx={{ 
-                flexGrow: 1, 
-                display: 'flex', 
-                flexDirection: 'column',
-                height: '100vh',
-                overflow: 'hidden',
-                position: 'relative'
-            }}>
-                {/* GLOBAL ADMIN TOP BAR */}
-                <Box sx={{ 
-                    px: 4,
-                    py: 1.5,
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    bgcolor: 'rgba(2, 6, 23, 0.8)', 
-                    backdropFilter: 'blur(10px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    zIndex: 1100
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                            {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND · UAE 🇦🇪</Box>
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <LanguageSwitcher />
-                        
-                        <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                        
-                        {/* User Badge */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <UserIcon size={14} color="#000" />
-                            </Box>
-                            <Box>
-                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>
-                                    {user?.displayName?.split(' ')[0] || 'ADMIN'}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>
-                                    {user?.role || 'operator'}
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Button 
-                            onClick={handleLogout}
-                            startIcon={<LogOut size={16} />}
-                            sx={{ 
-                                color: '#ef4444', 
-                                fontWeight: 900, 
-                                fontSize: '0.75rem',
-                                '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' }
-                            }}
-                        >
-                            {t('nav.logout') || 'LOGOUT'}
-                        </Button>
-                    </Box>
+        <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#F5F5F5', direction: isRTL ? 'rtl' : 'ltr' }}>
+            <CssBaseline />
+            <Navigation user={user} onLogout={handleLogout} />
+            <Box component="main" sx={{ flexGrow: 1, p: 3, overflowY: 'auto' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2, gap: 2 }}>
+                    <LanguageSwitcher />
+                    <Button
+                        onClick={() => navigate('/settings')}
+                        startIcon={<UserIcon size={18} />}
+                        sx={{ color: adminTheme.colors.navy }}
+                    >
+                        {user?.email || 'Admin'}
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<LogOut size={18} />}
+                        onClick={handleLogout}
+                    >
+                        {t('common.logout')}
+                    </Button>
                 </Box>
-
-                <Box component="main" sx={{ 
-                    flexGrow: 1, 
-                    overflowY: 'auto',
-                    p: 0,
-                    bgcolor: '#020617',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    '&::-webkit-scrollbar': { width: '8px' },
-                    '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }
-                }}>
-                    <Box sx={{ flexGrow: 1 }}>
-                        <Outlet />
-                    </Box>
-                </Box>
+                <Outlet />
             </Box>
+            <SovereignAIChat role="admin" />
         </Box>
     );
 }
 
-export default function App() {
-    const { isRTL } = useLanguage();
-    const theme = React.useMemo(() => createTheme(adminTheme), [isRTL]);
+function App() {
+    const { lang, isRTL } = useLanguage();
     const cache = isRTL ? cacheRtl : cacheLtr;
+    const theme = createTheme({ ...adminTheme, direction: isRTL ? 'rtl' : 'ltr' } as any);
 
     return (
         <CacheProvider value={cache}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <AuthProvider>
-                    <AIProvider>
-                        <Router>
-                            <AppContent />
-                            <SovereignAIChat />
-                            <SovereignAlertHandler />
-                        </Router>
-                    </AIProvider>
-                </AuthProvider>
+                <AIProvider>
+                    <SovereignAlertHandler>
+                        <AuthProvider>
+                            <Router>
+                                <AppContent />
+                            </Router>
+                        </AuthProvider>
+                    </SovereignAlertHandler>
+                </AIProvider>
             </ThemeProvider>
         </CacheProvider>
+    );
+}
+
+export default function RootApp() {
+    return (
+        <LanguageProvider>
+            <App />
+        </LanguageProvider>
     );
 }
