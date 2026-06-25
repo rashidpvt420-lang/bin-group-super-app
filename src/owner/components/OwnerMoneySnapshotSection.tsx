@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -47,6 +47,23 @@ type Props = {
 };
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const propertyIdOf = (property: any) => String(property?.id || property?.propertyId || '');
+const propertyNameOf = (property: any) => String(property?.propertyName || property?.name || propertyIdOf(property) || 'Property');
+
+const emptyRentForm = (properties: any[]): RentRecordPayload => {
+  const property = properties[0];
+  return {
+    tenantName: '',
+    propertyId: propertyIdOf(property),
+    propertyName: propertyNameOf(property),
+    unitNumber: '',
+    rentDue: 0,
+    rentPaid: 0,
+    paymentMethod: 'BANK_TRANSFER',
+    paymentReference: '',
+    notes: '',
+  };
+};
 
 function statusTone(status: string, balance: number, overdueDays: number) {
   if (overdueDays > 0) return '#ef4444';
@@ -59,23 +76,23 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   const { user } = useRole();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<RentRecordPayload>({
-    tenantName: '',
-    propertyId: String(properties[0]?.id || properties[0]?.propertyId || ''),
-    propertyName: String(properties[0]?.propertyName || properties[0]?.name || ''),
-    unitNumber: '',
-    rentDue: 0,
-    rentPaid: 0,
-    paymentMethod: 'BANK_TRANSFER',
-    paymentReference: '',
-    notes: '',
-  });
+  const [form, setForm] = useState<RentRecordPayload>(() => emptyRentForm(properties));
   void onRecordRentPayment;
+
+  useEffect(() => {
+    if (!properties.length) return;
+    setForm((current) => {
+      if (current.propertyId) return current;
+      const next = emptyRentForm(properties);
+      return { ...current, propertyId: next.propertyId, propertyName: next.propertyName };
+    });
+  }, [properties]);
 
   const rows = ledgerSummary?.ledgerRows || [];
   const overdueTenants = useMemo(() => rows.filter((row) => row.overdueDays > 0).length, [rows]);
   const ledgerPendingPayments = useMemo(() => rows.filter((row) => String(row.status || '').toUpperCase().includes('PENDING')).length, [rows]);
   const effectivePendingPayments = Math.max(pendingPayments, ledgerPendingPayments);
+  const isRentRecordValid = form.tenantName.trim().length > 0 && !!form.propertyId && Number(form.rentPaid || 0) > 0;
 
   const cards = [
     { label: 'Rent Due', value: money(ledgerSummary?.totalRentDue || 0), icon: <ReceiptText size={20} />, tone: binThemeTokens.gold },
@@ -91,16 +108,17 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   };
 
   const selectProperty = (propertyId: string) => {
-    const property = properties.find((item) => String(item.id || item.propertyId) === propertyId);
+    const property = properties.find((item) => propertyIdOf(item) === propertyId);
     setForm((current) => ({
       ...current,
       propertyId,
-      propertyName: String(property?.propertyName || property?.name || current.propertyName || 'Property'),
+      propertyName: propertyNameOf(property) || current.propertyName || 'Property',
     }));
   };
 
   const submit = async () => {
     if (!user?.uid) throw new Error('Owner login is required before recording rent.');
+    if (!isRentRecordValid) return;
     setSaving(true);
     try {
       const rentDue = Number(form.rentDue || 0);
@@ -116,10 +134,10 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         ownerEmail: user.email || '',
         userId: user.uid,
         payerId: user.uid,
-        tenantName: String(form.tenantName || '').trim(),
+        tenantName: form.tenantName.trim(),
         propertyId: String(form.propertyId || ''),
         propertyName: String(form.propertyName || 'Property'),
-        unitNumber: String(form.unitNumber || ''),
+        unitNumber: form.unitNumber.trim(),
         rentDue,
         rentPaid,
         amountDue: rentDue,
@@ -133,25 +151,15 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         contractActivated: false,
         unlocksDashboard: false,
         paymentMethod: String(form.paymentMethod || 'BANK_TRANSFER'),
-        paymentReference: String(form.paymentReference || ''),
-        notes: String(form.notes || ''),
+        paymentReference: form.paymentReference.trim(),
+        notes: form.notes.trim(),
         lastPaymentDate: new Date().toISOString(),
         createdByOwnerUid: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       setOpen(false);
-      setForm({
-        tenantName: '',
-        propertyId: String(properties[0]?.id || properties[0]?.propertyId || ''),
-        propertyName: String(properties[0]?.propertyName || properties[0]?.name || ''),
-        unitNumber: '',
-        rentDue: 0,
-        rentPaid: 0,
-        paymentMethod: 'BANK_TRANSFER',
-        paymentReference: '',
-        notes: '',
-      });
+      setForm(emptyRentForm(properties));
     } finally {
       setSaving(false);
     }
@@ -233,16 +241,16 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 1 }}>
             <TextField label="Tenant name" value={form.tenantName} onChange={(event) => updateForm('tenantName', event.target.value)} fullWidth required />
-            <TextField select label="Property" value={form.propertyId} onChange={(event) => selectProperty(event.target.value)} fullWidth>
+            <TextField select label="Property" value={form.propertyId} onChange={(event) => selectProperty(event.target.value)} fullWidth required>
               {properties.map((property) => {
-                const id = String(property.id || property.propertyId || '');
-                return <MenuItem key={id} value={id}>{property.propertyName || property.name || id || 'Property'}</MenuItem>;
+                const id = propertyIdOf(property);
+                return <MenuItem key={id} value={id}>{propertyNameOf(property)}</MenuItem>;
               })}
             </TextField>
             <TextField label="Unit" value={form.unitNumber} onChange={(event) => updateForm('unitNumber', event.target.value)} fullWidth />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField type="number" label="Rent due" value={form.rentDue} onChange={(event) => updateForm('rentDue', Number(event.target.value))} fullWidth />
-              <TextField type="number" label="Rent paid" value={form.rentPaid} onChange={(event) => updateForm('rentPaid', Number(event.target.value))} fullWidth />
+              <TextField type="number" label="Rent paid" value={form.rentPaid} onChange={(event) => updateForm('rentPaid', Number(event.target.value))} fullWidth required />
             </Stack>
             <TextField select label="Payment method" value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)} fullWidth>
               <MenuItem value="BANK_TRANSFER">Bank transfer</MenuItem>
@@ -257,7 +265,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button disabled={saving || !form.tenantName || !form.propertyId} onClick={submit} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+          <Button disabled={saving || !isRentRecordValid} onClick={submit} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
             {saving ? 'Saving...' : 'Save rent record'}
           </Button>
         </DialogActions>
