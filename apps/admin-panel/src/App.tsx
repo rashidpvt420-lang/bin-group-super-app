@@ -60,7 +60,6 @@ import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsPage
 import ContractTerminationPage from './pages/admin/ContractTerminationPage';
 import { adminTheme } from './theme/adminTheme';
 
-// Create RTL/LTR Caches
 const cacheRtl = createCache({
     key: 'muirtl-admin',
     stylisPlugins: [prefixer, rtlPlugin],
@@ -194,7 +193,7 @@ function AppContent() {
                 </Route>
             )}
 
-            <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
         </Routes>
     );
 }
@@ -206,123 +205,61 @@ function Layout() {
 
     const handleLogout = async () => {
         try {
-            console.log("[ADMIN] Initiating global logout sequence...");
+            console.log('[ADMIN] Initiating global logout sequence...');
             await logout();
         } catch (err) {
-            console.error("Logout failure:", err);
+            console.error('Logout failure:', err);
             window.location.href = '/login';
         }
     };
-    
+
     return (
-        <Box sx={{ 
-            display: 'flex', 
-            height: '100vh', 
-            width: '100vw',
-            bgcolor: '#020617',
-            overflow: 'hidden',
-            direction: isRTL ? 'rtl' : 'ltr'
-        }}>
+        <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#F5F5F5', direction: isRTL ? 'rtl' : 'ltr' }}>
+            <CssBaseline />
             <Navigation />
-            
-            <Box sx={{ 
-                flexGrow: 1, 
-                display: 'flex', 
-                flexDirection: 'column',
-                height: '100vh',
-                overflow: 'hidden',
-                position: 'relative'
-            }}>
-                {/* GLOBAL ADMIN TOP BAR */}
-                <Box sx={{ 
-                    px: 4,
-                    py: 1.5,
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    bgcolor: 'rgba(2, 6, 23, 0.8)', 
-                    backdropFilter: 'blur(10px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    zIndex: 1100
-                }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                            {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND · UAE 🇦🇪</Box>
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <LanguageSwitcher />
-                        
-                        <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                        
-                        {/* User Badge */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <UserIcon size={14} color="#000" />
-                            </Box>
-                            <Box>
-                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>
-                                    {user?.displayName?.split(' ')[0] || 'ADMIN'}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>
-                                    {user?.role || 'operator'}
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Button 
-                            onClick={handleLogout}
-                            startIcon={<LogOut size={16} />}
-                            sx={{ 
-                                color: '#ef4444', 
-                                fontWeight: 900, 
-                                fontSize: '0.75rem',
-                                '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' }
-                            }}
-                        >
-                            {t('nav.logout') || 'LOGOUT'}
-                        </Button>
-                    </Box>
+            <Box component="main" sx={{ flexGrow: 1, p: 3, overflowY: 'auto' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2, gap: 2 }}>
+                    <LanguageSwitcher />
+                    <Button
+                        onClick={() => navigate('/settings')}
+                        startIcon={<UserIcon size={18} />}
+                        sx={{ color: '#111827' }}
+                    >
+                        {user?.email || 'Admin'}
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<LogOut size={18} />}
+                        onClick={handleLogout}
+                    >
+                        {t('common.logout') || t('nav.logout') || 'Logout'}
+                    </Button>
                 </Box>
-
-                <Box component="main" sx={{ 
-                    flexGrow: 1, 
-                    overflowY: 'auto',
-                    p: 0,
-                    bgcolor: '#020617',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    '&::-webkit-scrollbar': { width: '8px' },
-                    '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }
-                }}>
-                    <Box sx={{ flexGrow: 1 }}>
-                        <Outlet />
-                    </Box>
-                </Box>
+                <Outlet />
             </Box>
+            <SovereignAIChat role="admin" />
         </Box>
     );
 }
 
-export default function App() {
+function App() {
     const { isRTL } = useLanguage();
-    const theme = React.useMemo(() => createTheme(adminTheme), [isRTL]);
     const cache = isRTL ? cacheRtl : cacheLtr;
+    const theme = createTheme({ ...adminTheme, direction: isRTL ? 'rtl' : 'ltr' } as any);
 
     return (
         <CacheProvider value={cache}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <AuthProvider>
-                    <AIProvider>
+                <AIProvider>
+                    <AuthProvider>
                         <Router>
                             <AppContent />
-                            <SovereignAIChat />
                             <SovereignAlertHandler />
                         </Router>
-                    </AIProvider>
-                </AuthProvider>
+                    </AuthProvider>
+                </AIProvider>
             </ThemeProvider>
         </CacheProvider>
     );
