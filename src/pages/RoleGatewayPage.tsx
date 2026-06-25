@@ -58,24 +58,20 @@ const RoleGatewayPage: React.FC = () => {
             id: 'admin', 
             label: tx('gateway.role.admin', 'Continue as Admin'), 
             icon: <ShieldCheck size={40} />, 
-            desc: 'Global war room and systemic oversight.'
+            desc: 'Dedicated Admin Command Center bridge.'
         }
     ];
 
     const handleRoleSelect = async (roleId: string) => {
         setNotice(null);
 
-        if (!auth.currentUser && !user) {
-            navigate(`/login?intendedRole=${roleId}`);
+        if (roleId === 'admin') {
+            navigate('/admin/dashboard');
             return;
         }
 
-        if (roleId === 'admin') {
-            if (isAdmin || role === 'admin') {
-                navigate('/admin/dashboard');
-                return;
-            }
-            setNotice('Admin access cannot be self-assigned. Use an approved admin account or contact BIN GROUP administration.');
+        if (!auth.currentUser && !user) {
+            navigate(`/login?intendedRole=${roleId}`);
             return;
         }
 
