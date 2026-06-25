@@ -17,6 +17,9 @@ export interface ResolvedTenantLedgerRow {
   method?: string | null;
   reviewNote?: string | null;
   returnReason?: string | null;
+  referenceFileUrl?: string | null;
+  referenceFileName?: string | null;
+  referenceFilePath?: string | null;
 }
 
 export interface TenantLedgerSummary {
@@ -161,6 +164,9 @@ export function resolveTenantLedger(
       method: item.paymentMethod || null,
       reviewNote: item.adminNotes || item.reviewNote || null,
       returnReason: item.rejectionReason || item.returnReason || null,
+      referenceFileUrl: item.referenceFileUrl || item.receiptUrl || item.proofUrl || item.attachmentUrl || null,
+      referenceFileName: item.referenceFileName || item.proofFileName || null,
+      referenceFilePath: item.referenceFilePath || null,
     };
   });
 
