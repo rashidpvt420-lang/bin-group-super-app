@@ -1,9 +1,9 @@
 // admin-panel/src/App.tsx
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress, Stack } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { CacheProvider } from '@emotion/react';
 import createCache from '@emotion/cache';
@@ -70,38 +70,75 @@ const cacheLtr = createCache({
     key: 'muiltr-admin',
 });
 
+function resetAdminSession() {
+    try {
+        const lang = localStorage.getItem('bin_language');
+        localStorage.clear();
+        sessionStorage.clear();
+        if (lang) localStorage.setItem('bin_language', lang);
+    } catch {
+        // Continue navigation even if storage is blocked.
+    }
+    window.location.href = '/login';
+}
+
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
     const { t, isRTL } = useLanguage();
+    const location = useLocation();
     const [safetyReleased, setSafetyReleased] = React.useState(false);
+    const [showRecovery, setShowRecovery] = React.useState(false);
+    const isLoginRoute = location.pathname === '/login' || location.pathname.startsWith('/login/');
 
     React.useEffect(() => {
-        const timer = setTimeout(() => {
+        const recoveryTimer = setTimeout(() => {
+            if (loading) setShowRecovery(true);
+        }, 4500);
+        const releaseTimer = setTimeout(() => {
             if (loading) {
-                console.warn("[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.");
+                console.warn('[ADMIN-SHELL] Boot timeout. Releasing UI for deep recovery.');
                 setSafetyReleased(true);
             }
         }, 12000);
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(recoveryTimer);
+            clearTimeout(releaseTimer);
+        };
     }, [loading]);
 
     if (loading && !safetyReleased) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr', textAlign: 'center' }}>
                 <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
-                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                    {t('dash.command_subtitle')}
+                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: 'center' }}>
+                    {t('dash.command_subtitle') || 'AUTHENTICATING SOVEREIGN IDENTITY...'}
                 </Typography>
+                {showRecovery && (
+                    <Stack spacing={1.5} sx={{ mt: 4, width: '100%', maxWidth: 420 }}>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>
+                            Admin authentication is taking longer than expected. This is usually a stale session, blocked Firebase Auth domain, or expired cross-domain handoff.
+                        </Typography>
+                        <Button variant="contained" onClick={resetAdminSession} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
+                            Reset Session & Open Admin Login
+                        </Button>
+                        <Button variant="outlined" onClick={() => window.location.reload()} sx={{ borderColor: '#DAA520', color: '#DAA520', fontWeight: 950 }}>
+                            Retry Authentication
+                        </Button>
+                    </Stack>
+                )}
             </Box>
         );
     }
 
-    if (error && !isAuthenticated) {
+    if (error && !isAuthenticated && !isLoginRoute) {
         return (
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.sys_init_fault')}</Typography>
                 <Typography variant="body1" sx={{ color: '#fff', opacity: 0.8, mb: 4, maxWidth: 600 }}>{error}</Typography>
-                <Button variant="contained" onClick={() => window.location.reload()} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <Button variant="contained" onClick={resetAdminSession} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900 }}>RESET & LOGIN</Button>
+                    <Button variant="outlined" onClick={() => window.location.reload()} sx={{ borderColor: '#DAA520', color: '#DAA520', fontWeight: 900 }}>{t('common.reload_sys')}</Button>
+                </Stack>
             </Box>
         );
     }
