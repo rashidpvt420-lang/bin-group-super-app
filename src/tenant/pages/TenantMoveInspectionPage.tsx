@@ -26,7 +26,6 @@ import {
   ChevronLeft,
   ChevronUp,
   ClipboardCheck,
-  Droplets,
   FileText,
   Key,
   Minus,
@@ -36,16 +35,16 @@ import {
   Zap,
 } from 'lucide-react';
 import {
-  addDoc,
   collection,
   db,
   doc,
+  functions,
   getDoc,
   getDocs,
   getDownloadURL,
+  httpsCallable,
   query,
   ref,
-  serverTimestamp,
   storage,
   uploadBytes,
   where,
@@ -120,7 +119,7 @@ export default function TenantMoveInspectionPage() {
   const { user } = useRole();
   const { type } = useParams();
   const navigate = useNavigate();
-  const { tx, isRTL } = useLanguage();
+  const { isRTL } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [unitData, setUnitData] = useState<any>(null);
   const [propertyData, setPropertyData] = useState<any>(null);
@@ -290,9 +289,6 @@ export default function TenantMoveInspectionPage() {
       status: 'SUBMITTED',
       ownerReviewStatus: 'PENDING',
       source: 'TENANT_PORTAL',
-      submittedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     };
   };
 
@@ -303,13 +299,8 @@ export default function TenantMoveInspectionPage() {
     setSubmitting(true);
     setError('');
     try {
-      const payload = submitPayload();
-      const ownerReviewRef = await addDoc(collection(db, 'propertyInspections'), payload);
-      await addDoc(collection(db, 'inspections'), {
-        ...payload,
-        ownerReviewInspectionId: ownerReviewRef.id,
-        status: 'submitted',
-      });
+      const submitTenantMoveInspection = httpsCallable(functions, 'submitTenantMoveInspection');
+      await submitTenantMoveInspection(submitPayload());
       setState((prev) => ({ ...prev, step: 'done' }));
     } catch (err: any) {
       console.error('[TenantMoveInspection] submission failed:', err);
@@ -328,7 +319,7 @@ export default function TenantMoveInspectionPage() {
         <CheckCircle2 size={72} color="#10b981" style={{ marginBottom: 24 }} />
         <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, mb: 2 }}>Inspection Submitted</Typography>
         <Typography sx={{ color: 'rgba(255,255,255,0.55)', mb: 4, lineHeight: 1.8 }}>
-          Your {state.type === 'move_in' ? 'move-in' : 'move-out'} inspection has been sent to the Owner Handover Center.
+          Your {state.type === 'move_in' ? 'move-in' : 'move-out'} inspection has been securely sent to the Owner Handover Center.
           {poorItems.length > 0 && ` ${poorItems.length} poor-condition item(s) are flagged for review.`}
         </Typography>
         <Button variant="contained" onClick={() => navigate('/tenant/dashboard')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
@@ -417,7 +408,7 @@ export default function TenantMoveInspectionPage() {
 
       {state.step === 'handover' && <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, mt: 1.5 }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><SafeIcon icon={Key} size={22} style={{ color: binThemeTokens.gold }} /> Key Handover</Typography><Stack spacing={3}><Grid container spacing={2}><Grid item xs={6}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 1 }}>Door Keys</Typography><Stack direction="row" alignItems="center" spacing={1.5}><IconButton size="small" onClick={() => setState((prev) => ({ ...prev, keyCount: String(Math.max(0, Number(prev.keyCount) - 1)) }))} sx={{ border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 2 }}><SafeIcon icon={Minus} size={14} /></IconButton><Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, minWidth: 36, textAlign: 'center' }}>{state.keyCount}</Typography><IconButton size="small" onClick={() => setState((prev) => ({ ...prev, keyCount: String(Number(prev.keyCount) + 1) }))} sx={{ border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 2 }}><SafeIcon icon={Plus} size={14} /></IconButton></Stack></Grid><Grid item xs={6}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 1 }}>Key Fobs / Access Cards</Typography><Stack direction="row" alignItems="center" spacing={1.5}><IconButton size="small" onClick={() => setState((prev) => ({ ...prev, fobCount: String(Math.max(0, Number(prev.fobCount) - 1)) }))} sx={{ border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 2 }}><SafeIcon icon={Minus} size={14} /></IconButton><Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, minWidth: 36, textAlign: 'center' }}>{state.fobCount}</Typography><IconButton size="small" onClick={() => setState((prev) => ({ ...prev, fobCount: String(Number(prev.fobCount) + 1) }))} sx={{ border: '1px solid rgba(255,255,255,0.15)', color: '#fff', borderRadius: 2 }}><SafeIcon icon={Plus} size={14} /></IconButton></Stack></Grid></Grid><Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap><Chip label="Parking Remote" onClick={() => setState((prev) => ({ ...prev, parkingRemote: !prev.parkingRemote }))} sx={{ bgcolor: state.parkingRemote ? alpha('#10b981', 0.15) : 'rgba(255,255,255,0.06)', color: state.parkingRemote ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950, cursor: 'pointer' }} /><Chip label="Mailbox Key" onClick={() => setState((prev) => ({ ...prev, mailboxKey: !prev.mailboxKey }))} sx={{ bgcolor: state.mailboxKey ? alpha('#10b981', 0.15) : 'rgba(255,255,255,0.06)', color: state.mailboxKey ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 950, cursor: 'pointer' }} /></Stack>{state.type === 'move_out' && <TextField fullWidth multiline rows={3} label="Deposit deduction notes (if any)" value={state.depositNotes} onChange={(event) => setState((prev) => ({ ...prev, depositNotes: event.target.value }))} placeholder="Describe any items to be deducted from deposit..." sx={{ '& .MuiOutlinedInput-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' } }} />}</Stack></Paper>}
 
-      {state.step === 'sign' && <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, mt: 1.5 }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><SafeIcon icon={FileText} size={22} style={{ color: binThemeTokens.gold }} /> Sign & Submit</Typography>{poorItems.length > 0 && <Alert severity="warning" sx={{ mb: 3 }}><strong>{poorItems.length} item(s) marked as Poor:</strong><Box component="ul" sx={{ m: '8px 0 0', pl: 2.5 }}>{poorItems.map((item) => <li key={item}>{item}</li>)}</Box></Alert>}<Stack spacing={3}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, letterSpacing: 1 }}>OWNER-REVIEW SUBMISSION SUMMARY</Typography><Grid container spacing={2} sx={{ mt: 1 }}><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Type</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{titleFor(state.type)}</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Owner Review Collection</Typography><Typography sx={{ color: '#10b981', fontWeight: 950 }}>propertyInspections</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Property</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{propertyData?.propertyName || propertyData?.name || unitData?.propertyId || 'Pending'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Evidence Photos</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{collectEvidenceUrls(state.roomChecks).length}</Typography></Grid></Grid></Box><TextField fullWidth label="Tenant Full Name (acts as signature) *" required value={state.tenantSignature} onChange={(event) => setState((prev) => ({ ...prev, tenantSignature: event.target.value }))} placeholder="Type your full name to confirm and sign" sx={{ '& .MuiOutlinedInput-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' } }} /><TextField fullWidth label="Owner / BIN GROUP Representative Name (optional)" value={state.ownerSignature} onChange={(event) => setState((prev) => ({ ...prev, ownerSignature: event.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' } }} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', lineHeight: 1.7 }}>By typing your name, you confirm that this inspection record is accurate. It will be sent to the Owner Handover Center for review and settlement action.</Typography>{error && <Alert severity="error">{error}</Alert>}</Stack></Paper>}
+      {state.step === 'sign' && <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, mt: 1.5 }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><SafeIcon icon={FileText} size={22} style={{ color: binThemeTokens.gold }} /> Sign & Submit</Typography>{poorItems.length > 0 && <Alert severity="warning" sx={{ mb: 3 }}><strong>{poorItems.length} item(s) marked as Poor:</strong><Box component="ul" sx={{ m: '8px 0 0', pl: 2.5 }}>{poorItems.map((item) => <li key={item}>{item}</li>)}</Box></Alert>}<Stack spacing={3}><Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, letterSpacing: 1 }}>OWNER-REVIEW SUBMISSION SUMMARY</Typography><Grid container spacing={2} sx={{ mt: 1 }}><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Type</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{titleFor(state.type)}</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Secure Submit Path</Typography><Typography sx={{ color: '#10b981', fontWeight: 950 }}>Cloud Function</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Property</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{propertyData?.propertyName || propertyData?.name || unitData?.propertyId || 'Pending'}</Typography></Grid><Grid item xs={6}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Evidence Photos</Typography><Typography sx={{ color: '#fff', fontWeight: 950 }}>{collectEvidenceUrls(state.roomChecks).length}</Typography></Grid></Grid></Box><TextField fullWidth label="Tenant Full Name (acts as signature) *" required value={state.tenantSignature} onChange={(event) => setState((prev) => ({ ...prev, tenantSignature: event.target.value }))} placeholder="Type your full name to confirm and sign" sx={{ '& .MuiOutlinedInput-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' } }} /><TextField fullWidth label="Owner / BIN GROUP Representative Name (optional)" value={state.ownerSignature} onChange={(event) => setState((prev) => ({ ...prev, ownerSignature: event.target.value }))} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' } }} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', lineHeight: 1.7 }}>By typing your name, you confirm that this inspection record is accurate. It will be sent securely to the Owner Handover Center for review and settlement action.</Typography>{error && <Alert severity="error">{error}</Alert>}</Stack></Paper>}
 
       <Paper sx={{ p: 3, mt: 1.5, bgcolor: 'rgba(15,23,42,.88)', border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, borderRadius: '0 0 24px 24px' }}>
         <Stack direction="row" justifyContent="space-between" spacing={2}>
