@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Container, AppBar, Toolbar, Typography, IconButton,
     Breadcrumbs, Link as MuiLink, alpha, Stack
@@ -31,8 +31,8 @@ import TenantMoveInspectionPage from './pages/TenantMoveInspectionPage';
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isRTL, lang, t, tx } = useLanguage();
-    const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
+    const { isRTL, t, tx } = useLanguage();
+    const label = (key: string, en: string) => tx(key, en);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
 
@@ -70,10 +70,10 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         </IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
-                                {label('portal.tenant.title', 'TENANT PORTAL', 'بوابة المستأجر')}
+                                {label('portal.tenant.title', 'TENANT PORTAL')}
                             </Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE · UAE 🇦🇪', 'عقدة السكن السيادية · الإمارات 🇦🇪')}
+                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE')}
                             </Typography>
                         </Box>
                     </Box>
@@ -104,7 +104,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                             const isLast = index === pathnames.slice(1).length - 1;
                             return (
                                 <Typography key={index} sx={{ color: isLast ? '#FFF' : 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                    {label(`nav.${value.replace('-', '_')}`, value.replace('-', ' '), value.replace('-', ' '))}
+                                    {label(`nav.${value.replace('-', '_')}`, value.replace('-', ' '))}
                                 </Typography>
                             );
                         })}
@@ -117,7 +117,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
-                    © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS · MADE IN UAE 🇦🇪
+                    2026 BIN GROUP PROPERTY OPERATIONS OS
                 </Typography>
             </Box>
 
@@ -146,8 +146,17 @@ export default function TenantApp() {
                 <Route path="/gate-pass" element={<TenantGatePassPage />} />
                 <Route path="/amenities" element={<TenantAmenitiesPage />} />
                 <Route path="/payments" element={<TenantPaymentsPage />} />
+                <Route path="/handover" element={<Navigate to="/tenant/move-inspection" replace />} />
                 <Route path="/move-inspection" element={<TenantMoveInspectionPage />} />
                 <Route path="/move-inspection/:type" element={<TenantMoveInspectionPage />} />
+                <Route path="/notices" element={<Navigate to="/tenant/documents" replace />} />
+                <Route path="/keys" element={<Navigate to="/tenant/request?category=keys" replace />} />
+                <Route path="/parcels" element={<Navigate to="/tenant/request?category=parcels" replace />} />
+                <Route path="/visitor-parking" element={<Navigate to="/tenant/request?category=visitor-parking" replace />} />
+                <Route path="/marketplace" element={<Navigate to="/tenant/request?category=marketplace" replace />} />
+                <Route path="/staff-directory" element={<Navigate to="/tenant/request?category=staff-directory" replace />} />
+                <Route path="/messages" element={<TenantChatPage />} />
+                <Route path="/community" element={<Navigate to="/tenant/request?category=community" replace />} />
             </Routes>
         </TenantLayout>
     );
