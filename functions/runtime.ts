@@ -19,6 +19,7 @@ export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./contractSignatureOtp";
 export * from "./tenantHandoverInspections";
+export * from "./ownerHandoverInspections";
 
 if (!admin.apps.length) {
   admin.initializeApp();
