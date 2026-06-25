@@ -17,7 +17,7 @@ export default function UnifiedLogin() {
     const [password, setPassword] = useState('');
 
     const error = authError || localError;
-    const loading = authLoading || localLoading;
+    const loading = localLoading;
 
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
