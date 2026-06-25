@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Container, AppBar, Toolbar, Typography, IconButton,
-    Breadcrumbs, Link as MuiLink, alpha, Stack
+    Breadcrumbs, Link as MuiLink, alpha, Stack, Button
 } from '@mui/material';
 import { ArrowLeft, Home, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -35,6 +35,16 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
     const pathnames = location.pathname.split('/').filter((x) => x);
+    const quickButtonSx = {
+        display: { xs: 'none', md: 'inline-flex' },
+        color: binThemeTokens.gold,
+        border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`,
+        borderRadius: 3,
+        fontWeight: 950,
+        bgcolor: 'rgba(255,255,255,0.04)',
+        textTransform: 'none',
+        whiteSpace: 'nowrap',
+    } as const;
 
     return (
         <Box sx={{
@@ -79,6 +89,10 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                        <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{label('tenant.quick.report', 'Report Issue', 'إبلاغ عن مشكلة')}</Button>
+                        <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: '#ef4444', borderColor: alpha('#ef4444', 0.42) }}>{label('tenant.quick.emergency', 'Emergency', 'طوارئ')}</Button>
+                        <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{label('tenant.quick.payments', 'Payments', 'المدفوعات')}</Button>
+                        <Button onClick={() => navigate('/tenant/move-inspection/move-out')} sx={quickButtonSx}>{label('tenant.quick.handover', 'Move In/Out', 'تسليم الوحدة')}</Button>
                         <NotificationBell />
                         <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
                             <SafeIcon icon={User} size={18} />
