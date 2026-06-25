@@ -35,13 +35,13 @@ const withBridgeToken = async (url: string) => {
     const mintBridgeToken = httpsCallable(functions, 'mintAdminBridgeToken');
     const result: any = await mintBridgeToken();
     const token = result?.data?.token;
-    if (!token) return `${url}#sso_failed=1`;
+    if (!token) return `${ADMIN_PANEL_URL}/login#sso_failed=1`;
     // Carried in the fragment, not the query string: fragments are never sent
     // to the server, so the token can't leak into access logs or Referer headers.
     return `${url}#bridge_token=${encodeURIComponent(token)}`;
   } catch (err) {
-    console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual re-login.', err);
-    return `${url}#sso_failed=1`;
+    console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual admin login.', err);
+    return `${ADMIN_PANEL_URL}/login#sso_failed=1`;
   }
 };
 
@@ -49,18 +49,13 @@ export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
   const targetPath = currentAdminPath();
   const targetUrl = resolveAdminUrl(targetPath);
-  const loginUrl = `${ADMIN_PANEL_URL}/login`;
 
   React.useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       const url = await withBridgeToken(targetUrl);
       if (!cancelled) {
-        if (url.startsWith(ADMIN_PANEL_URL)) {
-          window.location.replace(url);
-        } else {
-          window.location.replace(ADMIN_PANEL_URL + '/dashboard');
-        }
+        window.location.replace(url.startsWith(ADMIN_PANEL_URL) ? url : `${ADMIN_PANEL_URL}/login#sso_failed=1`);
       }
     }, 900);
     return () => {
@@ -71,15 +66,7 @@ export default function AdminTerminal() {
 
   const openAdminPanel = async () => {
     const url = await withBridgeToken(targetUrl);
-    if (url.startsWith(ADMIN_PANEL_URL)) {
-      window.location.href = url;
-    } else {
-      window.location.href = ADMIN_PANEL_URL + '/dashboard';
-    }
-  };
-
-  const openAdminLogin = () => {
-    window.location.href = 'https://bin-group-admin-panel.web.app/login';
+    window.location.href = url.startsWith(ADMIN_PANEL_URL) ? url : `${ADMIN_PANEL_URL}/login#sso_failed=1`;
   };
 
   const resetAndLogin = async () => {
@@ -98,7 +85,7 @@ export default function AdminTerminal() {
     } catch {
       // Ignore storage failures and continue navigation.
     }
-    window.location.href = 'https://bin-group-admin-panel.web.app/login';
+    window.location.href = `${ADMIN_PANEL_URL}/login#sso_failed=1`;
   };
 
   return (
@@ -135,12 +122,12 @@ export default function AdminTerminal() {
           BIN GROUP ADMIN
         </Typography>
         <Typography variant="h3" sx={{ mt: 2, mb: 2, fontWeight: 950, letterSpacing: -1.5 }}>
-          {tx('admin.bridge.title', 'Redirecting to Admin Command Center')}
+          {tx('admin.bridge.title', 'Opening Admin Command Center')}
         </Typography>
         <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 3, lineHeight: 1.7 }}>
           {tx(
             'admin.bridge.desc',
-            'The main app does not contain the admin login form. You are being sent to the dedicated production admin panel for owner approvals, tickets, technicians, contracts, payments, and sovereign operations.'
+            'The public app does not contain admin credentials. You are being sent to the dedicated production admin panel for approvals, tickets, technicians, contracts, payments, and sovereign operations.'
           )}
         </Typography>
 
@@ -148,12 +135,12 @@ export default function AdminTerminal() {
           <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 800, lineHeight: 1.6 }}>
             {tx(
               'admin.bridge.reauth_notice',
-              'Heads up: the admin panel is a separate secure app. We try to carry your session over automatically; if that fails, sign in again with your admin credentials when you arrive.'
+              'Single admin entrypoint: we first try secure session handoff. If that fails, the same button opens the dedicated admin login with a clear SSO failure notice.'
             )}
           </Typography>
         </Box>
 
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} justifyContent="center">
+        <Stack direction="column" spacing={2} justifyContent="center">
           <Button
             variant="contained"
             onClick={openAdminPanel}
@@ -167,22 +154,7 @@ export default function AdminTerminal() {
               '&:hover': { bgcolor: '#E5C86B' },
             }}
           >
-            {tx('admin.bridge.open', 'Open Admin Panel')}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={openAdminLogin}
-            sx={{
-              borderColor: 'rgba(201,166,70,0.65)',
-              color: '#E5C86B',
-              fontWeight: 950,
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              '&:hover': { borderColor: '#E5C86B', bgcolor: 'rgba(201,166,70,0.08)' },
-            }}
-          >
-            {tx('admin.bridge.login', 'Open Admin Login')}
+            {tx('admin.bridge.open', 'Continue to Admin Command Center')}
           </Button>
           <Button
             variant="outlined"
@@ -197,7 +169,7 @@ export default function AdminTerminal() {
               '&:hover': { borderColor: '#FCA5A5', bgcolor: 'rgba(239,68,68,0.08)' },
             }}
           >
-            {tx('admin.bridge.reset', 'Reset & Login')}
+            {tx('admin.bridge.reset', 'Reset Session & Open Admin Login')}
           </Button>
         </Stack>
 
