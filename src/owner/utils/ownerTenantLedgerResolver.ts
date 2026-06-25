@@ -13,6 +13,8 @@ export interface ResolvedTenantLedgerRow {
   leaseEnd: string | null;
   paymentTransactionId?: string | null;
   tenantLedgerId?: string | null;
+  referenceId?: string | null;
+  method?: string | null;
 }
 
 export interface TenantLedgerSummary {
@@ -153,6 +155,8 @@ export function resolveTenantLedger(
       leaseEnd: leaseEnd ? (typeof leaseEnd === 'string' ? leaseEnd : new Date((leaseEnd.seconds || leaseEnd._seconds) * 1000).toLocaleDateString('en-GB')) : null,
       paymentTransactionId: item.paymentTransactionId || item.paymentId || null,
       tenantLedgerId: item.tenantLedgerId || null,
+      referenceId: item.paymentReference || item.paymentReferenceId || item.referenceId || null,
+      method: item.paymentMethod || null,
     };
   });
 
