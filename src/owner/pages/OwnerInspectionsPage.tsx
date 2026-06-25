@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { ClipboardCheck, Eye, FileText, Home, ShieldAlert } from 'lucide-react';
+import { ClipboardCheck, Eye, FileText, Home, ReceiptText, ShieldAlert } from 'lucide-react';
 import { collection, db, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -16,6 +16,9 @@ const getMillis = (value: any) => {
 };
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const money = (value: any) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const hasValue = (value: any) => value !== undefined && value !== null && value !== '';
+const normalizedInspectionType = (inspection: any) => String(inspection.inspectionType || inspection.type || '').toUpperCase().replace(/[-\s]+/g, '_');
 
 const statusColor = (status: any) => {
   const normalized = String(status || '').toUpperCase();
@@ -30,10 +33,27 @@ const evidenceUrls = (inspection: any) => [
   ...(Array.isArray(inspection.photos) ? inspection.photos : []),
   ...(Array.isArray(inspection.moveInPhotos) ? inspection.moveInPhotos : []),
   ...(Array.isArray(inspection.moveOutPhotos) ? inspection.moveOutPhotos : []),
+  ...Object.values(inspection.roomChecks || {}).flatMap((room: any) => Object.values(room || {}).map((check: any) => check?.photoUrl).filter(Boolean)),
   inspection.reportUrl,
   inspection.evidenceUrl,
   inspection.pdfUrl,
 ].filter(Boolean);
+
+const settlementLedger = (inspection: any) => {
+  const depositHeld = Number(inspection.depositHeld || inspection.securityDeposit || inspection.depositAmount || 0);
+  const damageEstimate = Number(inspection.damageEstimate || inspection.damageCostEstimate || inspection.estimatedDamageCost || 0);
+  const rawDeduction = hasValue(inspection.proposedDeduction)
+    ? inspection.proposedDeduction
+    : hasValue(inspection.depositDeduction)
+      ? inspection.depositDeduction
+      : hasValue(inspection.deductionAmount)
+        ? inspection.deductionAmount
+        : damageEstimate;
+  const proposedDeduction = Number(rawDeduction || 0);
+  const balanceToTenant = Math.max(0, depositHeld - proposedDeduction);
+  const balanceDue = Math.max(0, proposedDeduction - depositHeld);
+  return { depositHeld, damageEstimate, proposedDeduction, balanceToTenant, balanceDue };
+};
 
 export default function OwnerInspectionsPage() {
   const { user } = useRole();
@@ -83,14 +103,17 @@ export default function OwnerInspectionsPage() {
       if (action === 'APPROVED') {
         payload.approvedByOwner = true;
         payload.ownerApprovedAt = serverTimestamp();
+        payload.settlementStatus = normalizedInspectionType(inspection) === 'MOVE_OUT' ? 'APPROVED_FOR_SETTLEMENT' : 'NO_SETTLEMENT_REQUIRED';
       }
       if (action === 'REINSPECTION_REQUESTED') {
         payload.damageClaimStatus = 'OWNER_REQUESTED_REINSPECTION';
         payload.reinspectionRequestedAt = serverTimestamp();
       }
       if (action === 'SETTLEMENT_REQUESTED') {
+        const ledger = settlementLedger(inspection);
         payload.settlementStatus = 'OWNER_REQUESTED_SETTLEMENT';
         payload.settlementRequestedAt = serverTimestamp();
+        payload.settlementLedger = ledger;
       }
       await updateDoc(doc(db, 'propertyInspections', inspection.id), payload);
       setWarning('');
@@ -103,8 +126,9 @@ export default function OwnerInspectionsPage() {
   };
 
   const pending = inspections.filter((item) => ['SUBMITTED', 'OWNER_REVIEW', 'DISPUTED', 'REINSPECTION_REQUESTED'].includes(String(item.status || '').toUpperCase())).length;
-  const moveIns = inspections.filter((item) => String(item.inspectionType || '').toUpperCase() === 'MOVE_IN').length;
-  const moveOuts = inspections.filter((item) => String(item.inspectionType || '').toUpperCase() === 'MOVE_OUT').length;
+  const moveIns = inspections.filter((item) => normalizedInspectionType(item) === 'MOVE_IN').length;
+  const moveOuts = inspections.filter((item) => normalizedInspectionType(item) === 'MOVE_OUT').length;
+  const settlementCount = inspections.filter((item) => Number(settlementLedger(item).proposedDeduction || 0) > 0 || item.settlementStatus).length;
 
   return (
     <Box>
@@ -120,7 +144,7 @@ export default function OwnerInspectionsPage() {
             { label: tx('owner.inspections.pending', 'Pending Reviews'), value: pending, icon: <ShieldAlert size={22} />, color: pending ? '#f59e0b' : '#10b981' },
             { label: tx('owner.inspections.moveIns', 'Move-In Reports'), value: moveIns, icon: <Home size={22} />, color: binThemeTokens.goldHover },
             { label: tx('owner.inspections.moveOuts', 'Move-Out Reports'), value: moveOuts, icon: <ClipboardCheck size={22} />, color: binThemeTokens.goldHover },
-            { label: tx('owner.inspections.total', 'Total Evidence Files'), value: inspections.length, icon: <FileText size={22} />, color: '#3b82f6' },
+            { label: tx('owner.inspections.settlements', 'Settlement Ledgers'), value: settlementCount, icon: <ReceiptText size={22} />, color: '#3b82f6' },
           ].map((card) => (
             <Grid item xs={12} sm={6} md={3} key={card.label}>
               <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(card.color, 0.2)}`, bgcolor: alpha(card.color, 0.06) }}>
@@ -135,7 +159,8 @@ export default function OwnerInspectionsPage() {
           {inspections.map((inspection) => {
             const color = statusColor(inspection.status);
             const urls = evidenceUrls(inspection);
-            const firstUrl = urls[0];
+            const ledger = settlementLedger(inspection);
+            const poorItems = Array.isArray(inspection.poorConditionItems) ? inspection.poorConditionItems : [];
             return (
               <Grid item xs={12} md={6} key={inspection.id}>
                 <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(color, 0.18)}`, bgcolor: '#fff' }}>
@@ -143,14 +168,31 @@ export default function OwnerInspectionsPage() {
                     <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
                       <Box>
                         <Typography sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>{inspection.propertyName || inspection.propertyId || tx('owner.inspections.property', 'Property')}</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{String(inspection.inspectionType || 'INSPECTION').replace(/_/g, ' ')} · {inspection.unitNumber || inspection.unitId || tx('owner.inspections.unitPending', 'Unit pending')}</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{String(inspection.inspectionType || inspection.type || 'INSPECTION').replace(/_/g, ' ')} · {inspection.unitNumber || inspection.unitId || tx('owner.inspections.unitPending', 'Unit pending')}</Typography>
                       </Box>
                       <Chip label={String(inspection.status || 'SUBMITTED').replace(/_/g, ' ')} sx={{ bgcolor: alpha(color, 0.1), color, fontWeight: 950 }} />
                     </Stack>
                     <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{inspection.summary || inspection.notes || tx('owner.inspections.noSummary', 'Room-by-room evidence is ready for review when uploaded.')}</Typography>
                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{urls.length ? `${urls.length} evidence file(s) attached` : 'No evidence files attached yet'}</Typography>
+
+                    <Paper sx={{ p: 2, bgcolor: alpha('#0f172a', 0.03), border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
+                      <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>DEPOSIT / DAMAGE SETTLEMENT LEDGER</Typography>
+                      <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Deposit Held</Typography><Typography fontWeight={950}>{money(ledger.depositHeld)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Damage Estimate</Typography><Typography fontWeight={950}>{money(ledger.damageEstimate)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Proposed Deduction</Typography><Typography fontWeight={950} color={ledger.proposedDeduction > 0 ? '#ef4444' : '#10b981'}>{money(ledger.proposedDeduction)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Tenant Refund / Balance Due</Typography><Typography fontWeight={950}>{ledger.balanceDue > 0 ? `${money(ledger.balanceDue)} due` : `${money(ledger.balanceToTenant)} refund`}</Typography></Grid>
+                      </Grid>
+                      {inspection.depositNotes && <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: binThemeTokens.textSecondary }}>Notes: {inspection.depositNotes}</Typography>}
+                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
+                    </Paper>
+
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                      <Button variant="outlined" disabled={!firstUrl} onClick={() => firstUrl && window.open(firstUrl, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>{tx('owner.inspections.review', 'Review Evidence')}</Button>
+                      {urls.map((url, index) => (
+                        <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                          Evidence {index + 1}
+                        </Button>
+                      ))}
                       <Button variant="outlined" disabled={busyId === `${inspection.id}:APPROVED`} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
                       <Button variant="outlined" disabled={busyId === `${inspection.id}:REINSPECTION_REQUESTED`} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
                       <Button variant="outlined" disabled={busyId === `${inspection.id}:SETTLEMENT_REQUESTED`} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
