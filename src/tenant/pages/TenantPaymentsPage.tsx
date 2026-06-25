@@ -8,7 +8,7 @@ import {
   ExternalLink, FileText, MessageCircle, Phone, RefreshCw
 } from 'lucide-react';
 import {
-  collection, db, onSnapshot, orderBy, query, serverTimestamp, where, addDoc
+  collection, db, onSnapshot, orderBy, query, serverTimestamp, where, addDoc, functions, httpsCallable
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -40,6 +40,7 @@ const STATUS_COLORS: Record<string, string> = {
   overdue: '#ef4444',
   partial: '#f59e0b',
   cancelled: '#94a3b8',
+  refunded: '#6366f1',
 };
 
 export default function TenantPaymentsPage() {
@@ -52,6 +53,18 @@ export default function TenantPaymentsPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [cardPaymentBusyId, setCardPaymentBusyId] = useState<string | null>(null);
+  const [cardPaymentError, setCardPaymentError] = useState<string | null>(null);
+  const [paymentBanner, setPaymentBanner] = useState<'success' | 'failed' | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_success') === 'true') {
+      setPaymentBanner('success');
+    } else if (params.get('payment_failed') === 'true') {
+      setPaymentBanner('failed');
+    }
+  }, []);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -108,6 +121,31 @@ export default function TenantPaymentsPage() {
     }
   };
 
+  const handleCardPayment = async (invoice: any) => {
+    if (!user?.uid) return;
+    setCardPaymentError(null);
+    setCardPaymentBusyId(invoice.id);
+    try {
+      const callable = httpsCallable(functions, 'createStripeCheckoutSession');
+      const result: any = await callable({
+        ownerUid: user.uid,
+        ownerEmail: user.email,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+      });
+      const url = result?.data?.url;
+      if (!url) throw new Error('No checkout URL returned.');
+      window.location.href = url;
+    } catch (err) {
+      console.warn('[TenantPayments] Card payment session failed:', err);
+      setCardPaymentError(label(
+        'We could not start the card payment. Please try again or use Cash/Cheque.',
+        'تعذّر بدء الدفع بالبطاقة. يرجى المحاولة مرة أخرى أو استخدام النقد/الشيك.'
+      ));
+      setCardPaymentBusyId(null);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
@@ -126,10 +164,27 @@ export default function TenantPaymentsPage() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
         {label(
-          'View all rent invoices and maintenance charges. Current accepted payment methods are Cash and Cheque at BIN GROUP HQ (Bank Transfer coming soon, Credit Card/Stripe deferred to Phase 2).',
-          'اطّلع على جميع فواتير الإيجار ورسوم الصيانة. طرق الدفع المقبولة حاليًا هي النقد والشيك في مقر بن جروب (التحويل البنكي قريبًا، وبطاقة الائتمان/سترايب مؤجلة إلى المرحلة الثانية).'
+          'View all rent invoices and maintenance charges. Pay securely online by card, or use Cash/Cheque at BIN GROUP HQ. Automated bank transfer reconciliation is coming soon.',
+          'اطّلع على جميع فواتير الإيجار ورسوم الصيانة. ادفع بأمان عبر الإنترنت بالبطاقة، أو استخدم النقد/الشيك في مقر بن جروب. مطابقة التحويل البنكي التلقائي قريبًا.'
         )}
       </Typography>
+
+      {paymentBanner && (
+        <Alert
+          severity={paymentBanner === 'success' ? 'success' : 'error'}
+          sx={{ mb: 3 }}
+          onClose={() => setPaymentBanner(null)}
+        >
+          {paymentBanner === 'success'
+            ? label('Payment received! Your invoice will update to Paid shortly.', 'تم استلام الدفعة! ستتحدث حالة الفاتورة إلى "مدفوعة" قريبًا.')
+            : label('Card payment was cancelled or did not complete. Please try again or use Cash/Cheque.', 'تم إلغاء الدفع بالبطاقة أو لم يكتمل. يرجى المحاولة مرة أخرى أو استخدام النقد/الشيك.')}
+        </Alert>
+      )}
+      {cardPaymentError && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setCardPaymentError(null)}>
+          {cardPaymentError}
+        </Alert>
+      )}
 
       {/* Summary row */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
@@ -223,6 +278,16 @@ export default function TenantPaymentsPage() {
                           <Button
                             variant="contained"
                             size="small"
+                            disabled={cardPaymentBusyId === inv.id}
+                            startIcon={cardPaymentBusyId === inv.id ? <CircularProgress size={14} sx={{ color: '#1f2937' }} /> : <CreditCard size={14} />}
+                            onClick={() => handleCardPayment(inv)}
+                            sx={{ bgcolor: gold, color: '#1f2937', fontWeight: 900, borderRadius: 2, fontSize: '0.72rem', whiteSpace: 'nowrap' }}
+                          >
+                            {cardPaymentBusyId === inv.id ? label('REDIRECTING…', 'جارٍ التحويل…') : label('PAY WITH CARD', 'ادفع بالبطاقة')}
+                          </Button>
+                          <Button
+                            variant="contained"
+                            size="small"
                             startIcon={<MessageCircle size={14} />}
                             onClick={() => sendWhatsAppConfirmation(inv)}
                             sx={{ bgcolor: '#25D366', color: '#FFF', fontWeight: 900, borderRadius: 2, fontSize: '0.72rem', whiteSpace: 'nowrap' }}
@@ -232,7 +297,7 @@ export default function TenantPaymentsPage() {
                           <Button
                             variant="outlined"
                             size="small"
-                            startIcon={<CreditCard size={14} />}
+                            startIcon={<Building2 size={14} />}
                             onClick={() => setTab(1)}
                             sx={{ borderColor: gold, color: gold, fontWeight: 900, borderRadius: 2, fontSize: '0.72rem' }}
                           >
@@ -261,8 +326,8 @@ export default function TenantPaymentsPage() {
 
               <Alert severity="warning" sx={{ mb: 3 }}>
                 {label(
-                  'Bank transfer is coming soon. Currently, the accepted payment methods are Cash and Cheque.',
-                  'التحويل البنكي قريبًا. طرق الدفع المقبولة حاليًا هي النقد والشيك.'
+                  'Automated bank transfer reconciliation is coming soon. Currently, you can pay instantly online by card from the Invoices tab, or use Cash/Cheque.',
+                  'مطابقة التحويل البنكي التلقائي قريبًا. يمكنك حاليًا الدفع فورًا عبر الإنترنت بالبطاقة من تبويب الفواتير، أو استخدام النقد/الشيك.'
                 )}
               </Alert>
 
@@ -312,8 +377,8 @@ export default function TenantPaymentsPage() {
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 {label(
-                  'Currently accepted payment methods are Cash and Cheque. Please contact us on WhatsApp to arrange payment, schedule a pickup, or send your receipt.',
-                  'طرق الدفع المقبولة حاليًا هي النقد والشيك. يرجى التواصل معنا عبر واتساب لترتيب الدفع أو تحديد موعد للاستلام أو إرسال الإيصال.'
+                  'Prefer Cash or Cheque instead of card? Contact us on WhatsApp to arrange payment, schedule a pickup, or send your receipt.',
+                  'تفضّل الدفع نقدًا أو بشيك بدلًا من البطاقة؟ تواصل معنا عبر واتساب لترتيب الدفع أو تحديد موعد للاستلام أو إرسال الإيصال.'
                 )}
               </Typography>
               <Button
@@ -344,25 +409,22 @@ export default function TenantPaymentsPage() {
               <Box sx={{ p: 2.5, bgcolor: alpha(gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(gold, 0.2)}` }}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                   <CreditCard size={18} color={gold} />
-                  <Typography fontWeight="950" color="#111827">{label('Online Card Payment (Coming Soon - Phase 2)', 'الدفع الإلكتروني بالبطاقة (قريبًا - المرحلة الثانية)')}</Typography>
+                  <Typography fontWeight="950" color="#111827">{label('Online Card Payment — Now Live', 'الدفع الإلكتروني بالبطاقة - متاح الآن')}</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {label(
-                    'Secure card payment via Stripe is deferred to Phase 2. Currently, please pay via Cash or Cheque.',
-                    'الدفع الآمن بالبطاقة عبر سترايب مؤجل إلى المرحلة الثانية. يرجى حاليًا الدفع نقدًا أو بشيك.'
+                    'Secure card payment via Stripe is now available. Open the Invoices tab and tap "Pay with Card" on any pending invoice.',
+                    'الدفع الآمن بالبطاقة عبر سترايب متاح الآن. افتح تبويب الفواتير واضغط على "ادفع بالبطاقة" في أي فاتورة معلّقة.'
                   )}
                 </Typography>
                 <Button
                   fullWidth
-                  variant="outlined"
-                  startIcon={<ExternalLink size={16} />}
-                  onClick={() => {
-                    const msg = encodeURIComponent('Hello BIN GROUP,\n\nI would like to make a payment. What are the Cash/Cheque instructions? Thank you.');
-                    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
-                  }}
-                  sx={{ borderColor: gold, color: gold, fontWeight: 900, borderRadius: 2 }}
+                  variant="contained"
+                  startIcon={<CreditCard size={16} />}
+                  onClick={() => setTab(0)}
+                  sx={{ bgcolor: gold, color: '#1f2937', fontWeight: 900, borderRadius: 2 }}
                 >
-                  {label('REQUEST PAYMENT INFO', 'اطلب معلومات الدفع')}
+                  {label('GO TO INVOICES TO PAY', 'الانتقال إلى الفواتير للدفع')}
                 </Button>
               </Box>
             </Paper>

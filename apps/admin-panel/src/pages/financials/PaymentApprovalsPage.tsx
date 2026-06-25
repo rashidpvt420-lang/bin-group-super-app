@@ -19,7 +19,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import {
     collection,
     db,
@@ -52,6 +52,11 @@ type PaymentRecord = {
     currency?: string;
     createdAt?: any;
     activationRequestedAt?: any;
+    invoiceId?: string;
+    tenantId?: string;
+    paymentType?: string;
+    gateway?: string;
+    stripePaymentIntentId?: string;
 };
 
 const PENDING_PAYMENT_STATUSES = [
@@ -84,6 +89,11 @@ export default function PaymentApprovalsPage() {
     const [paymentReferenceId, setPaymentReferenceId] = React.useState('');
     const [amountReceived, setAmountReceived] = React.useState('');
     const [internalNotes, setInternalNotes] = React.useState('');
+    const [cardRows, setCardRows] = React.useState<PaymentRecord[]>([]);
+    const [cardLoading, setCardLoading] = React.useState(true);
+    const [refundTarget, setRefundTarget] = React.useState<PaymentRecord | null>(null);
+    const [refundReason, setRefundReason] = React.useState('');
+    const [refundBusyId, setRefundBusyId] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         const q = query(
@@ -104,6 +114,30 @@ export default function PaymentApprovalsPage() {
                 console.error('[ADMIN_PAYMENTS] stream failed', err);
                 setLoading(false);
                 setError(err?.message || 'Payment approvals stream failed.');
+            }
+        );
+
+        return () => unsubscribe();
+    }, []);
+
+    React.useEffect(() => {
+        const q = query(
+            collection(db, 'payment_transactions'),
+            where('paymentType', '==', 'TENANT_RENT'),
+            where('status', '==', 'PAID'),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+        );
+
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                setCardRows(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+                setCardLoading(false);
+            },
+            (err) => {
+                console.error('[ADMIN_PAYMENTS] card payments stream failed', err);
+                setCardLoading(false);
             }
         );
 
@@ -149,6 +183,30 @@ export default function PaymentApprovalsPage() {
             setError(err?.message || 'Rejection failed.');
         } finally {
             setBusyId(null);
+        }
+    };
+
+    const openRefundDialog = (row: PaymentRecord) => {
+        setRefundTarget(row);
+        setRefundReason('');
+    };
+
+    const submitRefund = async () => {
+        if (!refundTarget?.invoiceId) return;
+        setRefundBusyId(refundTarget.id);
+        setError(null);
+        try {
+            const callable = httpsCallable(functions, 'adminRefundInvoicePayment');
+            await callable({
+                invoiceId: refundTarget.invoiceId,
+                reason: refundReason.trim() || 'Refunded by admin.',
+            });
+            setRefundTarget(null);
+        } catch (err: any) {
+            console.error('[ADMIN_PAYMENTS] refund failed', err);
+            setError(err?.message || 'Refund failed.');
+        } finally {
+            setRefundBusyId(null);
         }
     };
 
@@ -256,6 +314,68 @@ export default function PaymentApprovalsPage() {
                 )}
             </Paper>
 
+            <Paper sx={{ mt: 4, bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                <Box sx={{ p: 3, pb: 2 }}>
+                    <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>
+                        CARD PAYMENTS
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff' }}>
+                        Card Payments (Refundable)
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>
+                        Tenant rent payments made by Stripe card checkout. Refunds are issued directly through Stripe.
+                    </Typography>
+                </Box>
+                {cardLoading ? (
+                    <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}>
+                        <CircularProgress sx={{ color: '#DAA520' }} />
+                    </Box>
+                ) : cardRows.length === 0 ? (
+                    <Box sx={{ p: 6, textAlign: 'center' }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>No card payments yet.</Typography>
+                    </Box>
+                ) : (
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Tenant</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Invoice</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell>
+                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {cardRows.map((row) => (
+                                    <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
+                                        <TableCell>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>{row.tenantId || '—'}</Typography>
+                                        </TableCell>
+                                        <TableCell>{row.invoiceId || '—'}</TableCell>
+                                        <TableCell>{formatMoney(row.amount, row.currency)}</TableCell>
+                                        <TableCell>
+                                            <Chip label={row.status || 'PAID'} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.16)', color: '#34d399', fontWeight: 900 }} />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Button
+                                                size="small"
+                                                startIcon={<RotateCcw size={14} />}
+                                                disabled={refundBusyId === row.id || !row.invoiceId}
+                                                onClick={() => openRefundDialog(row)}
+                                                sx={{ color: '#f87171', fontWeight: 900 }}
+                                            >
+                                                Refund
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
+            </Paper>
+
             <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
                 <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>Confirm Payment & Unlock Owner</DialogTitle>
                 <DialogContent>
@@ -272,6 +392,24 @@ export default function PaymentApprovalsPage() {
                     <Button onClick={() => setApprovalTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
                     <Button onClick={approvePayment} disabled={!approvalTarget || busyId === approvalTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
                         Confirm & Unlock Owner
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(refundTarget)} onClose={() => setRefundTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>Refund Card Payment</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ mt: 1 }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                            This refunds {formatMoney(refundTarget?.amount, refundTarget?.currency)} to the tenant's card via Stripe and marks invoice {refundTarget?.invoiceId || ''} as refunded.
+                        </Typography>
+                        <TextField label="Refund reason" value={refundReason} onChange={(e) => setRefundReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setRefundTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={submitRefund} disabled={!refundTarget || refundBusyId === refundTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
+                        Confirm Refund
                     </Button>
                 </DialogActions>
             </Dialog>

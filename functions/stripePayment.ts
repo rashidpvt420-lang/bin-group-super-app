@@ -26,22 +26,67 @@ function onboardingPaymentId(intakeId: string) {
   return `${intakeId}_mobilization`;
 }
 
+function invoicePaymentId(invoiceId: string) {
+  return `${invoiceId}_stripe`;
+}
+
+const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
+const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "manager", "operations_admin", "finance_admin"]);
+
+async function requireAdmin(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
+  const claims = auth.token || {};
+  if (claims.admin === true || claims.isAdmin === true || ADMIN_ROLES.has(roleOf(claims.role))) return;
+
+  const profile = await db.collection("users").doc(auth.uid).get();
+  const data = profile.data() || {};
+  if (data.isAdmin === true || data.admin === true || ADMIN_ROLES.has(roleOf(data.role))) return;
+
+  throw new HttpsError("permission-denied", "Admin permission required.");
+}
+
 export const createStripeCheckoutSession = onCall({ cors: true }, async (request) => {
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
+
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Login is required to start a payment.");
+  }
+  if (request.auth.uid !== ownerUid) {
+    throw new HttpsError("permission-denied", "You can only pay for your own account.");
+  }
+
   const ownerEmail = cleanEmail(data.ownerEmail);
   const intakeId = String(data.intakeId || "").trim();
   const onboardingSessionId = String(data.onboardingSessionId || "").trim();
   const ticketId = String(data.ticketId || "").trim();
   const designRequestId = String(data.designRequestId || "").trim();
+  const invoiceId = String(data.invoiceId || "").trim();
   const amount = Number(data.amount);
-  
-  if (!intakeId && !ticketId && !designRequestId) {
-    throw new HttpsError("invalid-argument", "Payment must be associated with an intake, ticket, or design request.");
+
+  if (!intakeId && !ticketId && !designRequestId && !invoiceId) {
+    throw new HttpsError("invalid-argument", "Payment must be associated with an intake, ticket, design request, or invoice.");
   }
-  
+
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  }
+
+  if (invoiceId) {
+    const invoiceSnap = await db.collection("invoices").doc(invoiceId).get();
+    if (!invoiceSnap.exists) throw new HttpsError("not-found", "Invoice not found.");
+    const invoiceData = invoiceSnap.data() || {};
+    if (invoiceData.tenantId !== ownerUid) {
+      throw new HttpsError("permission-denied", "This invoice does not belong to you.");
+    }
+    const invoiceStatus = roleOf(invoiceData.status);
+    if (invoiceStatus === "paid" || invoiceStatus === "refunded") {
+      throw new HttpsError("failed-precondition", "This invoice is not awaiting payment.");
+    }
+    const invoiceAmount = Number(invoiceData.amount);
+    if (!Number.isFinite(invoiceAmount) || Math.abs(amount - invoiceAmount) > 0.01) {
+      throw new HttpsError("invalid-argument", "Payment amount does not match the invoice balance.");
+    }
   }
 
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
@@ -53,7 +98,8 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
   }
 
   const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
-  const returnParams = `session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}`;
+  const returnParams = `session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}${invoiceId ? `&invoiceId=${encodeURIComponent(invoiceId)}` : ''}`;
+  const returnPath = invoiceId ? "/tenant/payments" : "/owner/activation";
 
   try {
     const session = await stripeInstance.checkout.sessions.create({
@@ -63,8 +109,8 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
           price_data: {
             currency: "aed",
             product_data: {
-              name: intakeId ? "BIN GROUP Property Onboarding Contract Payment" : (ticketId ? "BIN GROUP Maintenance Service Payment" : "BIN GROUP AI Design Studio Payment"),
-              description: intakeId ? `Intake ID: ${intakeId}` : (ticketId ? `Ticket ID: ${ticketId}` : `Design ID: ${designRequestId}`),
+              name: intakeId ? "BIN GROUP Property Onboarding Contract Payment" : (ticketId ? "BIN GROUP Maintenance Service Payment" : (designRequestId ? "BIN GROUP AI Design Studio Payment" : "BIN GROUP Rent Payment")),
+              description: intakeId ? `Intake ID: ${intakeId}` : (ticketId ? `Ticket ID: ${ticketId}` : (designRequestId ? `Design ID: ${designRequestId}` : `Invoice ID: ${invoiceId}`)),
             },
             unit_amount: Math.round(amount * 100),
           },
@@ -72,8 +118,8 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
         },
       ],
       mode: "payment",
-      success_url: `https://bin-group-57c60.web.app/owner/activation?payment_success=true&${returnParams}`,
-      cancel_url: `https://bin-group-57c60.web.app/owner/activation?payment_failed=true&${returnParams}`,
+      success_url: `https://bin-group-57c60.web.app${returnPath}?payment_success=true&${returnParams}`,
+      cancel_url: `https://bin-group-57c60.web.app${returnPath}?payment_failed=true&${returnParams}`,
       customer_email: ownerEmail,
       metadata: {
         ownerUid,
@@ -81,6 +127,7 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
         ...(onboardingSessionId && { onboardingSessionId }),
         ...(ticketId && { ticketId }),
         ...(designRequestId && { designRequestId }),
+        ...(invoiceId && { invoiceId, paymentId: invoicePaymentId(invoiceId) }),
       },
     });
 
@@ -128,6 +175,7 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
     const intakeId = metadata.intakeId;
     const ticketId = metadata.ticketId;
     const designRequestId = metadata.designRequestId;
+    const invoiceId = metadata.invoiceId;
     const onboardingSessionId = metadata.onboardingSessionId;
     const amount = session.amount_total ? session.amount_total / 100 : 0;
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -292,8 +340,128 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
 
       await batch.commit();
       console.log(`Successfully processed Stripe payment for ticket ${ticketId}`);
+    } else if (ownerUid && invoiceId) {
+      const paymentId = invoicePaymentId(invoiceId);
+      const paymentRef = db.collection("payment_transactions").doc(paymentId);
+      batch.set(paymentRef, {
+        paymentId,
+        tenantId: ownerUid,
+        payerId: ownerUid,
+        ownerId: ownerUid,
+        invoiceId,
+        paymentMethod: "STRIPE",
+        gateway: "STRIPE",
+        paymentType: "TENANT_RENT",
+        amount,
+        currency: "AED",
+        status: "PAID",
+        verificationState: "AUTO_VERIFIED",
+        stripeSessionId: session.id,
+        stripePaymentIntentId: String(session.payment_intent || ""),
+        submittedAt: timestamp,
+        verifiedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const invoiceRef = db.collection("invoices").doc(invoiceId);
+      batch.set(invoiceRef, {
+        status: "paid",
+        paidAt: timestamp,
+        paymentMethod: "STRIPE",
+        stripePaymentIntentId: String(session.payment_intent || ""),
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const auditRef = db.collection("audit_logs").doc();
+      batch.set(auditRef, {
+        action: "STRIPE_RENT_PAYMENT_VERIFIED",
+        tenantId: ownerUid,
+        ownerId: ownerUid,
+        invoiceId,
+        paymentId,
+        paymentMethod: "STRIPE",
+        stripeSessionId: session.id,
+        timestamp,
+        createdAt: timestamp
+      });
+
+      await batch.commit();
+      console.log(`Successfully processed Stripe rent payment for tenant ${ownerUid}, invoice ${invoiceId}`);
     }
   }
 
   response.status(200).json({ received: true });
+});
+
+export const adminRefundInvoicePayment = onCall({ cors: true }, async (request) => {
+  await requireAdmin(request.auth);
+
+  const invoiceId = cleanText(request.data?.invoiceId, "invoiceId", 120);
+  const reason = String(request.data?.reason || "Refunded by admin.").trim();
+
+  const paymentId = invoicePaymentId(invoiceId);
+  const paymentRef = db.collection("payment_transactions").doc(paymentId);
+  const paymentSnap = await paymentRef.get();
+  if (!paymentSnap.exists) {
+    throw new HttpsError("not-found", "Card payment record not found for this invoice.");
+  }
+
+  const payment = paymentSnap.data() || {};
+  if (roleOf(payment.status) === "refunded") {
+    return { status: "SUCCESS", paymentId, idempotent: true };
+  }
+  if (payment.gateway !== "STRIPE" || !payment.stripePaymentIntentId) {
+    throw new HttpsError("failed-precondition", "This payment was not made via Stripe and cannot be refunded here.");
+  }
+
+  const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new HttpsError("failed-precondition", "Stripe is not configured.");
+  }
+  const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
+
+  let refund: Stripe.Refund;
+  try {
+    refund = await stripeInstance.refunds.create({
+      payment_intent: payment.stripePaymentIntentId,
+      reason: "requested_by_customer",
+    });
+  } catch (error: any) {
+    console.error("Stripe refund failed:", error);
+    throw new HttpsError("internal", "Stripe refund could not be processed.");
+  }
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const actorId = request.auth?.uid || "admin";
+  const batch = db.batch();
+
+  batch.set(paymentRef, {
+    status: "REFUNDED",
+    refundId: refund.id,
+    refundReason: reason,
+    refundedBy: actorId,
+    refundedAt: now,
+    updatedAt: now,
+  }, { merge: true });
+
+  batch.set(db.collection("invoices").doc(invoiceId), {
+    status: "refunded",
+    refundedAt: now,
+    updatedAt: now,
+  }, { merge: true });
+
+  batch.set(db.collection("auditLogs").doc(), {
+    action: "ADMIN_REFUND_INVOICE_PAYMENT",
+    actorId,
+    invoiceId,
+    paymentId,
+    refundId: refund.id,
+    reason,
+    createdAt: now,
+  });
+
+  await batch.commit();
+
+  return { status: "SUCCESS", paymentId, refundId: refund.id, idempotent: false };
 });
