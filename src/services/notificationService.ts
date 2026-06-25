@@ -47,6 +47,7 @@ const technicianJobLink = (ticketId: string) => `/technician/job/${ticketId}`;
 const tenantTicketLink = (ticketId: string) => ticketId ? `/tenant/ticket/${ticketId}` : '/tenant/tickets';
 const ownerTicketLink = (ticketId: string) => ticketId ? `/owner/ticket/${ticketId}` : '/owner/tickets';
 const adminTicketLink = (ticketId: string) => ticketId ? `/admin/tickets?ticketId=${encodeURIComponent(ticketId)}` : '/admin/tickets';
+const adminPaymentLink = (paymentId: string) => paymentId ? `/admin/payments?paymentId=${encodeURIComponent(paymentId)}` : '/admin/payments';
 
 // ─── Send a notification through the server-side gatekeeper ──────────────────
 export async function sendNotification(payload: NotificationCreatePayload) {
@@ -113,6 +114,16 @@ export const NotificationEvents = {
                 body: `Mobilization deposit AED ${amount} verified. Operations commencing.`,
                 link: '/owner/financials',
                 metadata: { amount }
+            }),
+        RENT_PAYMENT_SUBMITTED: (userId: string, amount: number, propertyName: string, paymentId: string) =>
+            sendNotification({
+                recipientId: userId,
+                recipientRole: 'owner',
+                type: 'OWNER_RENT_PAYMENT_SUBMITTED',
+                title: 'RENT PAYMENT SENT FOR VERIFICATION',
+                body: `AED ${Number(amount || 0).toLocaleString('en-AE')} rent payment for ${propertyName || 'your property'} is pending admin verification.`,
+                link: '/owner/dashboard',
+                metadata: { amount, propertyName, paymentId }
             }),
         QUOTE_READY: (userId: string, propertyName: string, ticketId: string) =>
             sendNotification({
@@ -191,6 +202,14 @@ export const NotificationEvents = {
                 body: `A new asset (${propertyName}) requires verification.`,
                 link: '/admin/vault',
                 metadata: { propertyName }
+            }),
+        OWNER_RENT_PAYMENT_SUBMITTED: (ownerId: string, propertyName: string, amount: number, paymentId: string) =>
+            notifyAdmins({
+                type: 'OWNER_RENT_PAYMENT_SUBMITTED',
+                title: 'OWNER RENT PAYMENT NEEDS VERIFICATION',
+                body: `Owner ${ownerId} submitted AED ${Number(amount || 0).toLocaleString('en-AE')} rent payment proof for ${propertyName || 'a property'}.`,
+                link: adminPaymentLink(paymentId),
+                metadata: { ownerId, propertyName, amount, paymentId }
             }),
         EMERGENCY_TICKET: (propertyName: string, category: string) =>
             notifyAdmins({
