@@ -26,6 +26,12 @@ type PaymentRecord = {
     proofUrl?: string;
     attachmentUrl?: string;
     proofFileName?: string;
+    referenceFileUrl?: string;
+    referenceFilePath?: string;
+    referenceFileName?: string;
+    referenceFileType?: string;
+    referenceFileSize?: number;
+    referenceUploadError?: string;
     notes?: string;
     adminNotes?: string;
     tenantName?: string;
@@ -51,7 +57,8 @@ const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} 
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
 const isRentPayment = (row: PaymentRecord) => upper(row.recordType) === 'OWNER_RENT_PAYMENT' || upper(row.transactionType) === 'RENT_COLLECTION' || upper(row.paymentType) === 'RENT_COLLECTION';
-const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No proof reference recorded';
+const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No reference recorded';
+const referenceUrl = (row: PaymentRecord) => row.referenceFileUrl || row.receiptUrl || row.proofUrl || row.attachmentUrl || '';
 const submittedAmount = (row: PaymentRecord) => row.amountReceived || row.mobilizationAmount || row.amountPaid || row.rentPaid || row.amount || 0;
 
 export default function PaymentApprovalsPage() {
@@ -115,6 +122,11 @@ export default function PaymentApprovalsPage() {
         }
     };
 
+    const openReference = (row: PaymentRecord) => {
+        const url = referenceUrl(row);
+        if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
     return (
         <Box sx={{ p: 4, color: '#fff' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 4 }}>
@@ -134,17 +146,18 @@ export default function PaymentApprovalsPage() {
                 ) : (
                     <TableContainer>
                         <Table>
-                            <TableHead><TableRow><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Type</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner / Tenant</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Property / Contract</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Method</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Proof / Reference</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell><TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell></TableRow></TableHead>
+                            <TableHead><TableRow><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Type</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner / Tenant</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Property / Contract</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Method</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Reference</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell><TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell></TableRow></TableHead>
                             <TableBody>
                                 {rows.map((row) => {
                                     const rent = isRentPayment(row);
+                                    const hasReferenceFile = Boolean(referenceUrl(row));
                                     return (
                                         <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
                                             <TableCell><Chip label={rent ? 'Rent Collection' : 'Activation'} size="small" sx={{ bgcolor: rent ? 'rgba(16,185,129,0.16)' : 'rgba(218,165,32,0.16)', color: rent ? '#10b981' : '#DAA520', fontWeight: 900 }} /></TableCell>
                                             <TableCell><Typography sx={{ fontWeight: 900 }}>{rent ? (row.tenantName || 'Tenant') : (row.companyName || row.ownerName || 'Owner Submission')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography></TableCell>
                                             <TableCell>{rent ? `${row.propertyName || row.propertyId || 'Property'}${row.unitNumber ? ` · Unit ${row.unitNumber}` : ''}` : (row.contractId || row.intakeId || '—')}</TableCell>
                                             <TableCell>{row.paymentMethod || 'Manual'}</TableCell>
-                                            <TableCell><Typography variant="body2" sx={{ maxWidth: 240, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography>{row.notes && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{row.notes}</Typography>}</TableCell>
+                                            <TableCell><Typography variant="body2" sx={{ maxWidth: 240, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography>{row.notes && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{row.notes}</Typography>}{row.referenceUploadError && <Typography variant="caption" sx={{ color: '#f87171', display: 'block' }}>{row.referenceUploadError}</Typography>}{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open file</Button>}</TableCell>
                                             <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                             <TableCell><Chip label={row.status || row.paymentStatus || row.verificationState || 'pending'} size="small" sx={{ bgcolor: 'rgba(218,165,32,0.16)', color: '#DAA520', fontWeight: 900 }} /></TableCell>
                                             <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? 'Verify Rent' : 'Verify & Unlock'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => rejectPayment(row.id)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject</Button></Stack></TableCell>
@@ -162,7 +175,7 @@ export default function PaymentApprovalsPage() {
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 1 }}>
                         <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isRentPayment(approvalTarget) ? 'This will verify the rent-collection payment only. It will not activate contracts or unlock dashboards.' : 'This will approve the mobilization payment, activate the contract, and unlock the owner dashboard.'}</Typography>
-                        {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>SUBMITTED PROOF</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(approvalTarget)}</Typography>{approvalTarget.notes && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>{approvalTarget.notes}</Typography>}</Paper>}
+                        {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>SUBMITTED REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(approvalTarget)}</Typography>{approvalTarget.referenceUploadError && <Typography variant="body2" sx={{ color: '#f87171', mt: 1 }}>{approvalTarget.referenceUploadError}</Typography>}{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open uploaded file</Button>}{approvalTarget.notes && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>{approvalTarget.notes}</Typography>}</Paper>}
                         <TextField label="Bank reference / transaction ID" value={paymentReferenceId} onChange={(e) => setPaymentReferenceId(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                         <TextField label="Amount received" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                         <TextField label="Internal notes" value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
