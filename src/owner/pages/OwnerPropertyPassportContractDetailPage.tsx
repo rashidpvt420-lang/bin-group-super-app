@@ -202,8 +202,9 @@ export default function OwnerPropertyPassportContractDetailPage() {
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!passport || !propertyLocation) return null;
 
-  const gpsTone = propertyLocation.hasExactCoordinates ? '#10b981' : propertyLocation.hasCoordinates ? '#f59e0b' : '#ef4444';
-  const gpsLabel = propertyLocation.hasExactCoordinates ? 'EXACT GPS PIN' : propertyLocation.hasCoordinates ? 'APPROXIMATE GPS — REVIEW REQUIRED' : 'GPS NOT CONFIGURED';
+  const canOpenMap = propertyLocation.locationQuality !== 'MISSING';
+  const gpsTone = propertyLocation.hasExactCoordinates ? '#10b981' : canOpenMap ? '#f59e0b' : '#ef4444';
+  const gpsLabel = propertyLocation.hasExactCoordinates ? 'EXACT GPS PIN' : canOpenMap ? 'APPROXIMATE GPS — REVIEW REQUIRED' : 'GPS NOT CONFIGURED';
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
@@ -220,7 +221,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
         </Paper>
 
         <Paper sx={{ bgcolor: 'rgba(15,23,42,0.50)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
-          <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, '& .MuiTab-root': { color: 'rgba(255,255,255,0.52)', fontWeight: 950 }, '& .Mui-selected': { color: binThemeTokens.gold }, '& .MuiTabs-indicator': { bgcolor: binThemeTokens.gold } }}>
+          <Tabs value={activeTab} onChange={(_, next) => setActiveTab(next)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, '& .MuiTab-root': { color: 'rgba(255,255,255,0.55)', fontWeight: 950 }, '& .Mui-selected': { color: `${binThemeTokens.gold} !important` }, '& .MuiTabs-indicator': { bgcolor: binThemeTokens.gold } }}>
             <Tab value="map" label="Map / GPS" />
             <Tab value="documents" label={`Documents (${documents.length})`} />
             <Tab value="inspections" label={`Inspections (${inspections.length})`} />
@@ -236,12 +237,12 @@ export default function OwnerPropertyPassportContractDetailPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <Stack spacing={2}>
-                <Alert severity={propertyLocation.hasExactCoordinates ? 'success' : propertyLocation.hasCoordinates ? 'warning' : 'error'} sx={{ bgcolor: alpha(gpsTone, 0.12), color: gpsTone, border: `1px solid ${alpha(gpsTone, 0.22)}`, py: 0.5 }}><Typography variant="caption" fontWeight="950">{gpsLabel}</Typography></Alert>
-                <Metric label="Coordinates" value={propertyLocation.hasCoordinates ? `${propertyLocation.latitude?.toFixed?.(6)}, ${propertyLocation.longitude?.toFixed?.(6)}` : 'Missing'}><MapPin size={20} /></Metric>
+                <Alert severity={propertyLocation.hasExactCoordinates ? 'success' : canOpenMap ? 'warning' : 'error'} sx={{ bgcolor: alpha(gpsTone, 0.12), color: gpsTone, border: `1px solid ${alpha(gpsTone, 0.22)}`, py: 0.5 }}><Typography variant="caption" fontWeight="950">{gpsLabel}</Typography></Alert>
+                <Metric label="Coordinates" value={propertyLocation.hasExactCoordinates ? `${propertyLocation.latitude?.toFixed?.(6)}, ${propertyLocation.longitude?.toFixed?.(6)}` : 'Missing exact GPS'}><MapPin size={20} /></Metric>
                 <Metric label="Units" value={passport.totalUnits || 0}><UsersRound size={20} /></Metric>
                 <Metric label="Floors" value={passport.floors || 0}><Layers size={20} /></Metric>
                 <Metric label="Contract" value={passport.activeContractId || passport.contractId ? 'Linked' : 'Pending'}><FileText size={20} /></Metric>
-                <Button disabled={!propertyLocation.hasCoordinates} variant="contained" onClick={() => propertyLocation.googleMapsUrl && window.open(propertyLocation.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ bgcolor: propertyLocation.hasCoordinates ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: propertyLocation.hasCoordinates ? '#111827' : 'rgba(255,255,255,0.35)', fontWeight: 950 }}>Open Google Maps</Button>
+                <Button disabled={!canOpenMap} variant="contained" onClick={() => propertyLocation.googleMapsUrl && window.open(propertyLocation.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ bgcolor: canOpenMap ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: canOpenMap ? '#111827' : 'rgba(255,255,255,0.35)', fontWeight: 950 }}>Open Google Maps</Button>
               </Stack>
             </Grid>
           </Grid>
