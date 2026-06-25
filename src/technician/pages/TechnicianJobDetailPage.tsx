@@ -14,7 +14,7 @@ import {
     alpha
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Camera, Check, ChevronLeft, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Camera, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
 import { db, doc, functions, getDownloadURL, httpsCallable, onSnapshot, ref, storage, uploadBytes, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -24,9 +24,49 @@ import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
+type OfflineQueueItem = {
+    id: string;
+    type: 'job_action' | 'evidence_upload' | 'checkin_checkout' | 'job_note' | 'mood_checkin';
+    label: string;
+    detail: string;
+    status: 'pending' | 'retrying' | 'failed';
+    attempts: number;
+    createdAt: string;
+    payload?: string;
+};
 
+const QUEUE_KEY = 'bin_offline_queue';
 const norm = (status?: string) => String(status || '').toUpperCase();
 const listLength = (value: any) => Array.isArray(value) ? value.length : 0;
+
+const loadOfflineQueue = (): OfflineQueueItem[] => {
+    try {
+        const raw = localStorage.getItem(QUEUE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+};
+
+const saveOfflineQueue = (items: OfflineQueueItem[]) => {
+    try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(items));
+    } catch {
+        // Browser storage may be full or disabled. The UI will still report the failure.
+    }
+};
+
+const queueOfflineJobAction = (item: Omit<OfflineQueueItem, 'id' | 'status' | 'attempts' | 'createdAt'>) => {
+    const queued: OfflineQueueItem = {
+        ...item,
+        id: `offline_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        status: 'pending',
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+    };
+    saveOfflineQueue([queued, ...loadOfflineQueue()].slice(0, 50));
+    return queued;
+};
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -44,6 +84,7 @@ export default function TechnicianJobDetailPage() {
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [online, setOnline] = useState(() => navigator.onLine);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -65,6 +106,17 @@ export default function TechnicianJobDetailPage() {
         });
         return () => unsub();
     }, [id, user?.uid, navigate]);
+
+    useEffect(() => {
+        const onOnline = () => setOnline(true);
+        const onOffline = () => setOnline(false);
+        window.addEventListener('online', onOnline);
+        window.addEventListener('offline', onOffline);
+        return () => {
+            window.removeEventListener('online', onOnline);
+            window.removeEventListener('offline', onOffline);
+        };
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -100,6 +152,29 @@ export default function TechnicianJobDetailPage() {
     const proofReadyCount = proofChecks.length - closeBlockers.length;
     const canComplete = closeBlockers.length === 0;
 
+    const queueAction = (nextStatus: Step | 'ACCEPTED', reason: string) => {
+        if (!id || !user?.uid) return;
+        const queued = queueOfflineJobAction({
+            type: nextStatus === 'ARRIVED' ? 'checkin_checkout' : 'job_action',
+            label: `Mission ${nextStatus.replace(/_/g, ' ')}`,
+            detail: reason,
+            payload: JSON.stringify({
+                ticketId: id,
+                technicianId: user.uid,
+                status: nextStatus,
+                notes: notes.trim(),
+                materials,
+                ticketSnapshot: {
+                    propertyId: ticket?.propertyId || '',
+                    propertyName: ticket?.propertyName || '',
+                    unitId: ticket?.unitId || '',
+                    unitNumber: ticket?.unitNumber || '',
+                },
+            }),
+        });
+        setMessage(`Saved locally in Offline Sync Queue: ${queued.label}. Redo/confirm once online.`);
+    };
+
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const next = Array.from(e.target.files || []).slice(0, 5);
         previews.forEach((url) => URL.revokeObjectURL(url));
@@ -120,21 +195,33 @@ export default function TechnicianJobDetailPage() {
 
     const acceptJob = async () => {
         if (!id) return;
+        if (!online) {
+            queueAction('ACCEPTED', 'Technician was offline while accepting the mission.');
+            return;
+        }
         setActionLoading(true);
         try {
             const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptTechnicianTicket({ ticketId: id });
             setMessage('Mission accepted.');
         } catch (err: any) {
-            alert(err?.message || 'Could not accept mission.');
+            queueAction('ACCEPTED', err?.message || 'Accept mission failed before confirmation.');
         } finally {
             setActionLoading(false);
         }
     };
+
     const updateLifecycle = async (nextStatus: Step) => {
         if (!id || !user?.uid) return;
         if (nextStatus === 'COMPLETED' && closeBlockers.length > 0) {
             alert(`${tx('tech.job.close_blocked', 'Cannot close mission. Missing proof:')} ${closeBlockers.join(', ')}`);
+            return;
+        }
+        if (!online) {
+            if (nextStatus === 'COMPLETED') {
+                alert('Completion with proof photos requires live connection. Your status action will be queued, but photos must be uploaded once online.');
+            }
+            queueAction(nextStatus, 'Technician was offline while updating mission lifecycle.');
             return;
         }
         setActionLoading(true);
@@ -154,7 +241,6 @@ export default function TechnicianJobDetailPage() {
             }
 
             if (nextStatus === 'ARRIVED') {
-                // Capture GPS coordinates for check-in on arrival
                 navigator.geolocation.getCurrentPosition(
                     async (position) => {
                         const lat = position.coords.latitude;
@@ -165,7 +251,7 @@ export default function TechnicianJobDetailPage() {
                         });
                     },
                     async (err) => {
-                        console.warn("GPS check-in failed, proceeding with fallback timestamp:", err);
+                        console.warn('GPS check-in failed, proceeding with fallback timestamp:', err);
                         await updateDoc(doc(db, 'maintenanceTickets', id), {
                             arrivedAt: serverTimestamp()
                         });
@@ -206,11 +292,12 @@ export default function TechnicianJobDetailPage() {
             setMessage(nextStatus === 'COMPLETED' ? 'Completed. Tenant approval requested.' : `Status updated: ${nextStatus.replace(/_/g, ' ')}`);
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');
         } catch (err: any) {
-            alert(err?.message || 'Status update failed.');
+            queueAction(nextStatus, err?.message || 'Mission lifecycle update failed before confirmation.');
         } finally {
             setActionLoading(false);
         }
     };
+
     if (loading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     }
@@ -223,6 +310,7 @@ export default function TechnicianJobDetailPage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {message && <Alert severity="success" onClose={() => setMessage(null)} sx={{ mb: 2, borderRadius: 3 }}>{message}</Alert>}
+            {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: text lifecycle actions are saved locally. Completion proof photos still require live connection.</Alert>}
             {gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
 
             <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
