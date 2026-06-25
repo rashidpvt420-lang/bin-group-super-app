@@ -68,6 +68,10 @@ const LoginPage: React.FC = () => {
     const intendedRoleKey = intendedRole?.toLowerCase();
 
     useEffect(() => {
+        if (intendedRoleKey === 'admin') navigate('/admin/dashboard', { replace: true });
+    }, [intendedRoleKey, navigate]);
+
+    useEffect(() => {
         if (ownerEmailParam && !email) setEmail(ownerEmailParam.trim().toLowerCase());
     }, [ownerEmailParam, email]);
 
@@ -244,12 +248,12 @@ const LoginPage: React.FC = () => {
         return t(`gateway.role.${intendedRole.toLowerCase()}`);
     };
 
-    if (roleLoading) {
+    if (roleLoading || intendedRoleKey === 'admin') {
         return (
             <Box sx={{ minHeight: '100vh', bgcolor: palette.canvas, display: 'grid', placeItems: 'center', color: palette.ink }}>
                 <Stack alignItems="center" spacing={2}>
                     <CircularProgress sx={{ color: palette.gold }} />
-                    <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{t('common.auth_sync')}</Typography>
+                    <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{intendedRoleKey === 'admin' ? 'Opening Admin Command Center...' : t('common.auth_sync')}</Typography>
                 </Stack>
             </Box>
         );
