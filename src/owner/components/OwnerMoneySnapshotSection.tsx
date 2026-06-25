@@ -7,7 +7,7 @@ import { NotificationEvents } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
-type RentRecordPayload = { tenantName: string; propertyId: string; propertyName: string; unitNumber: string; rentDue: number; rentPaid: number; paymentMethod: string; paymentReference: string; notes: string };
+type RentRecordPayload = { tenantName: string; propertyId: string; propertyName: string; unitNumber: string; rentDue: number; rentPaid: number; paymentMethod: string; paymentReference: string; notes: string; paymentTransactionId?: string; tenantLedgerId?: string };
 type Props = { ledgerSummary: TenantLedgerSummary | null; pendingPayments: number; properties: any[]; onRecordRentPayment: (payload: RentRecordPayload) => Promise<void> };
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
@@ -42,8 +42,9 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
       const balance = Math.max(0, rentDue - rentPaid);
       const propertyName = String(form.propertyName || 'Property');
       const recordId = `owner_rent_${user.uid}_${Date.now()}`;
-      await setDoc(doc(db, 'payment_transactions', recordId), { recordType: 'OWNER_RENT_PAYMENT', transactionType: 'RENT_COLLECTION', paymentId: recordId, ownerId: user.uid, ownerUid: user.uid, ownerEmail: user.email || '', userId: user.uid, payerId: user.uid, tenantName: form.tenantName.trim(), propertyId: String(form.propertyId || ''), propertyName, unitNumber: form.unitNumber.trim(), rentDue, rentPaid, amountDue: rentDue, amountPaid: rentPaid, amount: rentPaid, balance, status: 'pending', paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION', paymentVerified: false, approved: false, contractActivated: false, unlocksDashboard: false, paymentMethod: String(form.paymentMethod || 'BANK_TRANSFER'), paymentReference: form.paymentReference.trim(), notes: form.notes.trim(), lastPaymentDate: new Date().toISOString(), createdByOwnerUid: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      await onRecordRentPayment(form);
+      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId };
+      await setDoc(doc(db, 'payment_transactions', recordId), { recordType: 'OWNER_RENT_PAYMENT', transactionType: 'RENT_COLLECTION', paymentId: recordId, paymentTransactionId: recordId, tenantLedgerId: recordId, ownerId: user.uid, ownerUid: user.uid, ownerEmail: user.email || '', userId: user.uid, payerId: user.uid, tenantName: form.tenantName.trim(), propertyId: String(form.propertyId || ''), propertyName, unitNumber: form.unitNumber.trim(), rentDue, rentPaid, amountDue: rentDue, amountPaid: rentPaid, amount: rentPaid, balance, status: 'pending', paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION', paymentVerified: false, approved: false, contractActivated: false, unlocksDashboard: false, paymentMethod: String(form.paymentMethod || 'BANK_TRANSFER'), paymentReference: form.paymentReference.trim(), notes: form.notes.trim(), lastPaymentDate: new Date().toISOString(), createdByOwnerUid: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      await onRecordRentPayment(linkedPayload);
       await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(user.uid, rentPaid, propertyName, recordId);
       setOpen(false);
       setForm(emptyRentForm(properties));
