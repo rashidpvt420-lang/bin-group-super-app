@@ -22,6 +22,8 @@ import {
   alpha,
 } from '@mui/material';
 import { AlertTriangle, CreditCard, Download, Percent, Plus, ReceiptText } from 'lucide-react';
+import { db, doc, serverTimestamp, setDoc } from '../../lib/firebase';
+import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
@@ -54,6 +56,7 @@ function statusTone(status: string, balance: number, overdueDays: number) {
 }
 
 export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPayments, properties, onRecordRentPayment }: Props) {
+  const { user } = useRole();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<RentRecordPayload>({
@@ -67,16 +70,19 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
     paymentReference: '',
     notes: '',
   });
+  void onRecordRentPayment;
 
   const rows = ledgerSummary?.ledgerRows || [];
   const overdueTenants = useMemo(() => rows.filter((row) => row.overdueDays > 0).length, [rows]);
+  const ledgerPendingPayments = useMemo(() => rows.filter((row) => String(row.status || '').toUpperCase().includes('PENDING')).length, [rows]);
+  const effectivePendingPayments = Math.max(pendingPayments, ledgerPendingPayments);
 
   const cards = [
     { label: 'Rent Due', value: money(ledgerSummary?.totalRentDue || 0), icon: <ReceiptText size={20} />, tone: binThemeTokens.gold },
     { label: 'Rent Collected', value: money(ledgerSummary?.totalRentPaid || 0), icon: <CreditCard size={20} />, tone: '#10b981' },
     { label: 'Balance', value: money(ledgerSummary?.totalRentBalance || 0), icon: <AlertTriangle size={20} />, tone: (ledgerSummary?.totalRentBalance || 0) > 0 ? '#ef4444' : '#10b981' },
     { label: 'Collection Rate', value: `${ledgerSummary?.collectionRate || 0}%`, icon: <Percent size={20} />, tone: (ledgerSummary?.collectionRate || 0) >= 90 ? '#10b981' : '#f59e0b' },
-    { label: 'Pending Verification', value: pendingPayments, icon: <ReceiptText size={20} />, tone: pendingPayments > 0 ? '#f59e0b' : '#10b981' },
+    { label: 'Pending Verification', value: effectivePendingPayments, icon: <ReceiptText size={20} />, tone: effectivePendingPayments > 0 ? '#f59e0b' : '#10b981' },
     { label: 'Overdue Tenants', value: overdueTenants, icon: <AlertTriangle size={20} />, tone: overdueTenants > 0 ? '#ef4444' : '#10b981' },
   ];
 
@@ -94,12 +100,45 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   };
 
   const submit = async () => {
+    if (!user?.uid) throw new Error('Owner login is required before recording rent.');
     setSaving(true);
     try {
-      await onRecordRentPayment({
-        ...form,
-        rentDue: Number(form.rentDue || 0),
-        rentPaid: Number(form.rentPaid || 0),
+      const rentDue = Number(form.rentDue || 0);
+      const rentPaid = Number(form.rentPaid || 0);
+      const balance = Math.max(0, rentDue - rentPaid);
+      const recordId = `owner_rent_${user.uid}_${Date.now()}`;
+      await setDoc(doc(db, 'payment_transactions', recordId), {
+        recordType: 'OWNER_RENT_PAYMENT',
+        transactionType: 'RENT_COLLECTION',
+        paymentId: recordId,
+        ownerId: user.uid,
+        ownerUid: user.uid,
+        ownerEmail: user.email || '',
+        userId: user.uid,
+        payerId: user.uid,
+        tenantName: String(form.tenantName || '').trim(),
+        propertyId: String(form.propertyId || ''),
+        propertyName: String(form.propertyName || 'Property'),
+        unitNumber: String(form.unitNumber || ''),
+        rentDue,
+        rentPaid,
+        amountDue: rentDue,
+        amountPaid: rentPaid,
+        amount: rentPaid,
+        balance,
+        status: 'pending',
+        paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+        paymentVerified: false,
+        approved: false,
+        contractActivated: false,
+        unlocksDashboard: false,
+        paymentMethod: String(form.paymentMethod || 'BANK_TRANSFER'),
+        paymentReference: String(form.paymentReference || ''),
+        notes: String(form.notes || ''),
+        lastPaymentDate: new Date().toISOString(),
+        createdByOwnerUid: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       setOpen(false);
       setForm({
@@ -209,7 +248,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
               <MenuItem value="BANK_TRANSFER">Bank transfer</MenuItem>
               <MenuItem value="CARD">Card</MenuItem>
               <MenuItem value="CHEQUE">Cheque</MenuItem>
-              <MenuItem value="CASH_MANUAL">Cash/manual</MenuItem>
+              <MenuItem value="CASH_MANUAL">Cash manual</MenuItem>
               <MenuItem value="OTHER">Other</MenuItem>
             </TextField>
             <TextField label="Payment reference / receipt" value={form.paymentReference} onChange={(event) => updateForm('paymentReference', event.target.value)} fullWidth />
