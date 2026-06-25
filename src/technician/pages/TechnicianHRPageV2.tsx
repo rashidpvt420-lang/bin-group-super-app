@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
@@ -59,6 +59,7 @@ export default function TechnicianHRPageV2() {
   const [registryError, setRegistryError] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [letters, setLetters] = useState<any[]>([]);
   const [documentType, setDocumentType] = useState('emirates_id');
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
@@ -290,6 +291,17 @@ export default function TechnicianHRPageV2() {
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 2 }}>{eosbEstimate!.disclaimer}</Typography>
           </>
         )}
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>HR Letters</Typography>
+        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR letters yet.</Typography> : <Stack spacing={1.2}>{letters.slice(0, 8).map((letter) => <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.2} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{letter.title || letter.letterType || 'HR Letter'}</Typography><Typography variant="caption" color="textSecondary">{letter.status || 'pending'}</Typography></Box></Stack><Chip label={String(letter.status || 'pending').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+      </Paper>
+
+      <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Heat Stress Season</Typography>
+        <Stack direction="row" spacing={1.2} alignItems="center"><Sun color={heatStress.active ? '#ef4444' : binThemeTokens.gold} /><Typography color="#FFF" fontWeight="900">{heatStress.active ? 'Active heat stress controls required' : 'Outside peak heat stress window'}</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>{heatStress.message}</Typography>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
