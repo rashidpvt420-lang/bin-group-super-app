@@ -1,7 +1,7 @@
 // admin-panel/src/App.tsx
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Box, Button, Typography, CssBaseline, CircularProgress, Stack } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
@@ -78,14 +78,16 @@ function resetAdminSession() {
     } catch {
         // Continue navigation even if storage is blocked.
     }
-    window.location.href = '/login#sso_failed=1';
+    window.location.href = '/login';
 }
 
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
     const { t, isRTL } = useLanguage();
+    const location = useLocation();
     const [safetyReleased, setSafetyReleased] = React.useState(false);
     const [showRecovery, setShowRecovery] = React.useState(false);
+    const isLoginRoute = location.pathname === '/login' || location.pathname.startsWith('/login/');
 
     React.useEffect(() => {
         const recoveryTimer = setTimeout(() => {
@@ -127,7 +129,7 @@ function AppContent() {
         );
     }
 
-    if (error && !isAuthenticated) {
+    if (error && !isAuthenticated && !isLoginRoute) {
         return (
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Typography variant="h4" sx={{ color: '#ff4444', fontWeight: 900, mb: 2 }}>{t('common.sys_init_fault')}</Typography>
@@ -260,13 +262,5 @@ function App() {
                 </AIProvider>
             </ThemeProvider>
         </CacheProvider>
-    );
-}
-
-export default function RootApp() {
-    return (
-        <LanguageProvider>
-            <App />
-        </LanguageProvider>
     );
 }
