@@ -221,6 +221,14 @@ export default function TechnicianHRPageV2() {
   };
 
   const heatStress = useMemo(() => getHeatStressSeasonStatus(), []);
+  const heatStressHeadline = heatStress.inRestrictedWindowNow
+    ? 'Restricted outdoor work window is active now'
+    : heatStress.inSeason
+      ? 'Heat stress season controls are active'
+      : 'Outside peak heat stress season';
+  const heatStressBody = heatStress.inSeason
+    ? `Mandatory midday-break window: ${heatStress.windowLabel}. Season: ${heatStress.seasonLabel}.`
+    : `Next heat stress season: ${heatStress.seasonLabel}; restricted window: ${heatStress.windowLabel}.`;
 
   const eosbBaseSalary = Number(hrProfile?.baseSalary) || 0;
   const eosbJoiningDate = useMemo(
@@ -300,8 +308,8 @@ export default function TechnicianHRPageV2() {
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Heat Stress Season</Typography>
-        <Stack direction="row" spacing={1.2} alignItems="center"><Sun color={heatStress.active ? '#ef4444' : binThemeTokens.gold} /><Typography color="#FFF" fontWeight="900">{heatStress.active ? 'Active heat stress controls required' : 'Outside peak heat stress window'}</Typography></Stack>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>{heatStress.message}</Typography>
+        <Stack direction="row" spacing={1.2} alignItems="center"><Sun color={heatStress.inRestrictedWindowNow ? '#ef4444' : heatStress.inSeason ? '#f59e0b' : binThemeTokens.gold} /><Typography color="#FFF" fontWeight="900">{heatStressHeadline}</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>{heatStressBody}</Typography>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
