@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ClipboardCheck, Eye, Home, ReceiptText, ShieldAlert } from 'lucide-react';
-import { collection, db, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -19,6 +19,8 @@ const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCas
 const money = (value: any) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const hasValue = (value: any) => value !== undefined && value !== null && value !== '';
 const normalizedInspectionType = (inspection: any) => String(inspection.inspectionType || inspection.type || '').toUpperCase().replace(/[-\s]+/g, '_');
+
+type HandoverAction = 'APPROVED' | 'REINSPECTION_REQUESTED' | 'SETTLEMENT_REQUESTED';
 
 const statusColor = (status: any) => {
   const normalized = String(status || '').toUpperCase();
@@ -61,65 +63,84 @@ export default function OwnerInspectionsPage() {
   const [inspections, setInspections] = useState<any[]>([]);
   const [warning, setWarning] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.uid && !user?.email) return;
-    const buckets: Record<string, any[]> = {};
-    const publish = () => {
-      const map = new Map<string, any>();
-      Object.values(buckets).flat().forEach((item) => item?.id && map.set(item.id, item));
-      setInspections(Array.from(map.values()).sort((a, b) => getMillis(b.submittedAt || b.createdAt) - getMillis(a.submittedAt || a.createdAt)));
-    };
-    const sources = [
-      { field: 'ownerId', value: user?.uid },
-      { field: 'ownerUid', value: user?.uid },
-      { field: 'ownerEmail', value: normalizeEmail(user?.email) },
-    ].filter((source) => source.value);
-    const unsubs = sources.map((source) => {
-      const key = `${source.field}:${source.value}`;
-      return onSnapshot(query(collection(db, 'propertyInspections'), where(source.field, '==', source.value)), (snap) => {
-        buckets[key] = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        publish();
-      }, (err) => {
-        console.warn(`[OwnerInspections] listener failed for ${key}:`, err);
-        setWarning(tx('owner.inspections.warning', 'Some inspection evidence could not load. Check property inspection access rules if this remains empty.'));
-      });
-    });
-    return () => unsubs.forEach((unsub) => unsub());
+    let alive = true;
+    async function loadInspections() {
+      if (!user?.uid && !user?.email) {
+        setInspections([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const listOwnerHandoverInspections = httpsCallable(functions, 'listOwnerHandoverInspections');
+        const result = await listOwnerHandoverInspections({});
+        const data = (result.data || {}) as { inspections?: any[] };
+        const rows = Array.isArray(data.inspections) ? data.inspections : [];
+        rows.sort((a, b) => getMillis(b.submittedAt || b.createdAt) - getMillis(a.submittedAt || a.createdAt));
+        if (alive) {
+          setInspections(rows);
+          setWarning('');
+        }
+      } catch (err) {
+        console.warn('[OwnerInspections] callable load failed:', err);
+        if (alive) {
+          setWarning(tx('owner.inspections.warning', 'Some inspection evidence could not load. Check handover callable access if this remains empty.'));
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    void loadInspections();
+    return () => { alive = false; };
   }, [user?.uid, user?.email, tx]);
 
-  const updateInspection = async (inspection: any, action: 'APPROVED' | 'REINSPECTION_REQUESTED' | 'SETTLEMENT_REQUESTED') => {
+  const updateInspection = async (inspection: any, action: HandoverAction) => {
     if (!inspection?.id || !user?.uid) return;
     setBusyId(`${inspection.id}:${action}`);
     try {
-      const payload: Record<string, any> = {
-        status: action,
-        ownerAction: action,
-        ownerActionAt: serverTimestamp(),
-        ownerActionBy: user.uid,
-        ownerActionByEmail: normalizeEmail(user.email),
-        updatedAt: serverTimestamp(),
-      };
-      if (action === 'APPROVED') {
-        payload.approvedByOwner = true;
-        payload.ownerApprovedAt = serverTimestamp();
-        payload.settlementStatus = normalizedInspectionType(inspection) === 'MOVE_OUT' ? 'APPROVED_FOR_SETTLEMENT' : 'NO_SETTLEMENT_REQUIRED';
-      }
-      if (action === 'REINSPECTION_REQUESTED') {
-        payload.damageClaimStatus = 'OWNER_REQUESTED_REINSPECTION';
-        payload.reinspectionRequestedAt = serverTimestamp();
-      }
-      if (action === 'SETTLEMENT_REQUESTED') {
-        const ledger = settlementLedger(inspection);
-        payload.settlementStatus = 'OWNER_REQUESTED_SETTLEMENT';
-        payload.settlementRequestedAt = serverTimestamp();
-        payload.settlementLedger = ledger;
-      }
-      await updateDoc(doc(db, 'propertyInspections', inspection.id), payload);
+      const ledger = action === 'SETTLEMENT_REQUESTED' ? settlementLedger(inspection) : undefined;
+      const updateOwnerHandoverInspection = httpsCallable(functions, 'updateOwnerHandoverInspection');
+      await updateOwnerHandoverInspection({
+        inspectionId: inspection.id,
+        action,
+        ...(ledger ? { settlementLedger: ledger } : {}),
+      });
+
+      const now = new Date().toISOString();
+      setInspections((current) => current.map((item) => {
+        if (item.id !== inspection.id) return item;
+        const next: any = {
+          ...item,
+          status: action,
+          ownerAction: action,
+          ownerActionAt: now,
+          ownerActionBy: user.uid,
+          ownerActionByEmail: normalizeEmail(user.email),
+          updatedAt: now,
+        };
+        if (action === 'APPROVED') {
+          next.approvedByOwner = true;
+          next.ownerApprovedAt = now;
+          next.settlementStatus = normalizedInspectionType(item) === 'MOVE_OUT' ? 'APPROVED_FOR_SETTLEMENT' : 'NO_SETTLEMENT_REQUIRED';
+        }
+        if (action === 'REINSPECTION_REQUESTED') {
+          next.damageClaimStatus = 'OWNER_REQUESTED_REINSPECTION';
+          next.reinspectionRequestedAt = now;
+        }
+        if (action === 'SETTLEMENT_REQUESTED') {
+          next.settlementStatus = 'OWNER_REQUESTED_SETTLEMENT';
+          next.settlementRequestedAt = now;
+          next.settlementLedger = ledger;
+        }
+        return next;
+      }));
       setWarning('');
     } catch (err) {
-      console.error('[OwnerInspections] action failed:', err);
-      setWarning(tx('owner.inspections.actionFailed', 'Could not update this inspection. Check access rules or try again.'));
+      console.error('[OwnerInspections] callable action failed:', err);
+      setWarning(tx('owner.inspections.actionFailed', 'Could not update this inspection. Check callable access or try again.'));
     } finally {
       setBusyId('');
     }
@@ -155,8 +176,9 @@ export default function OwnerInspectionsPage() {
             </Grid>
           ))}
         </Grid>
+        {loading && <Paper sx={{ p: 4, borderRadius: 5, textAlign: 'center', bgcolor: '#fff' }}><CircularProgress size={24} sx={{ color: binThemeTokens.goldHover }} /><Typography sx={{ mt: 1, color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.inspections.loading', 'Loading handover inspections...')}</Typography></Paper>}
         <Grid container spacing={2}>
-          {inspections.map((inspection) => {
+          {!loading && inspections.map((inspection) => {
             const color = statusColor(inspection.status);
             const urls = evidenceUrls(inspection);
             const ledger = settlementLedger(inspection);
@@ -202,7 +224,7 @@ export default function OwnerInspectionsPage() {
               </Grid>
             );
           })}
-          {inspections.length === 0 && (
+          {!loading && inspections.length === 0 && (
             <Grid item xs={12}>
               <Paper sx={{ p: 6, borderRadius: 6, textAlign: 'center', bgcolor: '#fff', border: `1px dashed ${alpha(binThemeTokens.goldHover, 0.22)}` }}>
                 <ClipboardCheck size={44} color={binThemeTokens.goldHover} style={{ margin: '0 auto 12px' }} />
