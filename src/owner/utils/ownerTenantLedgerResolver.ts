@@ -15,6 +15,8 @@ export interface ResolvedTenantLedgerRow {
   tenantLedgerId?: string | null;
   referenceId?: string | null;
   method?: string | null;
+  reviewNote?: string | null;
+  returnReason?: string | null;
 }
 
 export interface TenantLedgerSummary {
@@ -145,7 +147,7 @@ export function resolveTenantLedger(
       name: tenantDisplayName(item),
       property: propertyDisplayName(item, properties),
       unit: item.unitNumber || item.unitId || '—',
-      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.paymentStatus || item.status, 'ACTIVE'),
+      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.verificationState || item.paymentStatus || item.status, 'ACTIVE'),
       due,
       paid,
       balance,
@@ -157,6 +159,8 @@ export function resolveTenantLedger(
       tenantLedgerId: item.tenantLedgerId || null,
       referenceId: item.paymentReference || item.paymentReferenceId || item.referenceId || null,
       method: item.paymentMethod || null,
+      reviewNote: item.adminNotes || item.reviewNote || null,
+      returnReason: item.rejectionReason || item.returnReason || null,
     };
   });
 
