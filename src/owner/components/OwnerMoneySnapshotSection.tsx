@@ -24,6 +24,7 @@ import {
 import { AlertTriangle, CreditCard, Download, Percent, Plus, ReceiptText } from 'lucide-react';
 import { db, doc, serverTimestamp, setDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { NotificationEvents } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
@@ -124,6 +125,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
       const rentDue = Number(form.rentDue || 0);
       const rentPaid = Number(form.rentPaid || 0);
       const balance = Math.max(0, rentDue - rentPaid);
+      const propertyName = String(form.propertyName || 'Property');
       const recordId = `owner_rent_${user.uid}_${Date.now()}`;
       await setDoc(doc(db, 'payment_transactions', recordId), {
         recordType: 'OWNER_RENT_PAYMENT',
@@ -136,7 +138,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         payerId: user.uid,
         tenantName: form.tenantName.trim(),
         propertyId: String(form.propertyId || ''),
-        propertyName: String(form.propertyName || 'Property'),
+        propertyName,
         unitNumber: form.unitNumber.trim(),
         rentDue,
         rentPaid,
@@ -158,6 +160,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(user.uid, rentPaid, propertyName, recordId);
       setOpen(false);
       setForm(emptyRentForm(properties));
     } finally {
