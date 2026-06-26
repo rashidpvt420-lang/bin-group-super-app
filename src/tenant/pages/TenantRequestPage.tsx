@@ -1,11 +1,11 @@
-﻿import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Grid, Stack, Button, TextField, 
+import React, { useState, useEffect } from 'react';
+import {
+    Box, Typography, Paper, Grid, Stack, Button, TextField,
     Select, MenuItem, FormControl, InputLabel, CircularProgress,
-    IconButton, alpha, Divider, Tooltip
+    IconButton, alpha
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Camera, X, MapPin, AlertCircle, ChevronLeft, Info } from 'lucide-react';
+import { Camera, X, AlertCircle, ChevronLeft } from 'lucide-react';
 import { db, storage, collection, addDoc, updateDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -23,14 +23,14 @@ export default function TenantRequestPage() {
         return typeof value === 'string' && value.trim() ? value : fallback;
     };
     const navigate = useNavigate();
-    
+
     const [category, setCategory] = useState('');
     const [priority, setPriority] = useState('normal');
     const [description, setDescription] = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [uploadingPhotos, setUploadingPhotos] = useState(false);
-    
+
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<any>(null);
     const [photos, setPhotos] = useState<File[]>([]);
@@ -41,35 +41,33 @@ export default function TenantRequestPage() {
         const fetchResidence = async () => {
             if (!user?.uid) return;
             try {
-                let unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
+                let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid)));
                 if (unitSnap.empty && user.email) {
-                    unitSnap = await getDocs(query(collection(db, "units"), where("tenantEmail", "==", user.email.toLowerCase())));
+                    unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())));
                 }
-                
+
                 if (!unitSnap.empty) {
                     const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
                     setUnitData(uData);
 
                     if (uData.propertyId) {
-                        const propSnap = await getDoc(doc(db, "properties", uData.propertyId));
+                        const propSnap = await getDoc(doc(db, 'properties', uData.propertyId));
                         if (propSnap.exists()) {
                             const pData: any = { id: propSnap.id, ...propSnap.data() };
                             setPropertyData(pData);
-                            
+
                             if (pData.ownerId) {
-                                const ownerSnap = await getDoc(doc(db, "users", pData.ownerId));
+                                const ownerSnap = await getDoc(doc(db, 'users', pData.ownerId));
                                 if (ownerSnap.exists()) {
                                     const ownerStatus = String(ownerSnap.data()?.status || '').toLowerCase();
-                                    if (ownerStatus === 'suspended') {
-                                        setIsOwnerSuspended(true);
-                                    }
+                                    if (ownerStatus === 'suspended') setIsOwnerSuspended(true);
                                 }
                             }
                         }
                     }
                 }
             } catch (err) {
-                console.error("Fetch failed:", err);
+                console.error('Fetch failed:', err);
             }
         };
         fetchResidence();
@@ -79,7 +77,6 @@ export default function TenantRequestPage() {
         if (e.target.files) {
             const filesArray = Array.from(e.target.files).slice(0, Math.max(5 - photos.length, 0));
             setPhotos(prev => [...prev, ...filesArray].slice(0, 5));
-            
             const newPreviews = filesArray.map(file => URL.createObjectURL(file));
             setPreviews(prev => [...prev, ...newPreviews].slice(0, 5));
         }
@@ -91,10 +88,7 @@ export default function TenantRequestPage() {
     };
 
     const uploadPhotosToStorage = async (ticketId: string): Promise<string[]> => {
-        if (photos.length === 0) {
-            throw new Error('At least one photo is required before dispatch.');
-        }
-
+        if (photos.length === 0) throw new Error('At least one photo is required before dispatch.');
         const photoUrls: string[] = [];
         const timestamp = Date.now();
 
@@ -114,12 +108,11 @@ export default function TenantRequestPage() {
                     },
                 });
 
-                const downloadUrl = await getDownloadURL(fileRef);
-                photoUrls.push(downloadUrl);
+                photoUrls.push(await getDownloadURL(fileRef));
             }
         } catch (err) {
-            console.error("Photo upload failed:", err);
-            throw new Error("Failed to upload evidence photos to secure ticket storage.");
+            console.error('Photo upload failed:', err);
+            throw new Error('Failed to upload evidence photos to secure ticket storage.');
         }
 
         return photoUrls;
@@ -127,11 +120,15 @@ export default function TenantRequestPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const cleanLocation = specificLocation.trim();
         if (!user || !unitData) {
             alert('No property assigned. Cannot create request.');
             return;
         }
-
+        if (cleanLocation.length < 3) {
+            alert('Please enter the exact service location, for example: Kitchen sink, Master bedroom AC, Bathroom ceiling.');
+            return;
+        }
         if (photos.length === 0) {
             alert('Please attach at least one photo before submitting. Photo evidence is required for dispatch.');
             return;
@@ -148,7 +145,7 @@ export default function TenantRequestPage() {
         } : null;
 
         if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
-            alert('Please confirm exact service location before submitting. Property GPS location is missing â€” contact management.');
+            alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
             return;
         }
 
@@ -166,6 +163,12 @@ export default function TenantRequestPage() {
                 tenantUid: user.uid,
                 tenantName: user.displayName || 'Resident',
                 tenantPhone: user.phoneNumber || '',
+                tenantEmail: user.email || '',
+                requesterId: user.uid,
+                requesterEmail: user.email || '',
+                reporterEmail: user.email || '',
+                createdBy: user.uid,
+                createdByUid: user.uid,
                 propertyId: unitData.propertyId || '',
                 propertyName: propertyData?.name || propertyData?.propertyName || '',
                 ownerId: propertyData?.ownerId || '',
@@ -176,8 +179,11 @@ export default function TenantRequestPage() {
                 floor: unitData.floorNumber || '',
                 category,
                 priority,
-                description,
-                specificLocation,
+                description: description.trim(),
+                specificLocation: cleanLocation,
+                serviceLocationDetail: cleanLocation,
+                serviceLocationRequired: true,
+                serviceLocationVerified: true,
                 photos: [],
                 primaryPhotoUrl: null,
                 jobLocation,
@@ -208,12 +214,7 @@ export default function TenantRequestPage() {
             });
 
             if (priority === 'emergency') {
-                notifyEmergency(
-                    docRef.id,
-                    user.displayName || 'Resident',
-                    propertyData?.name || 'Property',
-                    unitData.unitNumber || ''
-                ).catch(console.warn);
+                notifyEmergency(docRef.id, user.displayName || 'Resident', propertyData?.name || 'Property', unitData.unitNumber || '').catch(console.warn);
             } else {
                 notifyTicketCreated(docRef.id, user.displayName || 'Resident', category, priority).catch(console.warn);
             }
@@ -252,12 +253,8 @@ export default function TenantRequestPage() {
                         <Stack direction="row" spacing={2} alignItems="center">
                             <AlertCircle color="#ef4444" size={24} />
                             <Box>
-                                <Typography variant="body1" fontWeight="950" color="#ef4444">
-                                    {tt('dash.tenant.dispatchSuspended', 'MAINTENANCE DISPATCH SUSPENDED')}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
-                                    {tt('dash.tenant.dispatchSuspendedDesc', 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.')}
-                                </Typography>
+                                <Typography variant="body1" fontWeight="950" color="#ef4444">{tt('dash.tenant.dispatchSuspended', 'MAINTENANCE DISPATCH SUSPENDED')}</Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>{tt('dash.tenant.dispatchSuspendedDesc', 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.')}</Typography>
                             </Box>
                         </Stack>
                     </Box>
@@ -293,79 +290,16 @@ export default function TenantRequestPage() {
                             </Grid>
                         </Grid>
 
-                        <TextField 
-                            fullWidth 
-                            label={tt('dash.tenant.specificLocation', 'Specific Location (e.g. Master Bedroom, Kitchen Sink)')}
-                            data-testid="tenant-request-location" 
-                            value={specificLocation} 
-                            onChange={(e) => setSpecificLocation(e.target.value)} 
-                            placeholder={tt('dash.tenant.specificLocationHint', 'Helps our technician find the issue faster')}
-                            disabled={isOwnerSuspended}
-                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
-                        />
+                        <TextField fullWidth required label={tt('dash.tenant.specificLocation', 'Exact Service Location (room / area / asset)')} data-testid="tenant-request-location" value={specificLocation} onChange={(e) => setSpecificLocation(e.target.value)} placeholder={tt('dash.tenant.specificLocationHint', 'Example: Kitchen sink, Master bedroom AC, Bathroom ceiling')} disabled={isOwnerSuspended} helperText={tt('dash.tenant.specificLocationRequired', 'Required for dispatch accuracy. This tells the technician exactly where to go.')} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.45)' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} />
 
-                        <TextField 
-                            fullWidth multiline rows={5} 
-                            label={tt('dash.tenant.issueDesc', 'Issue Description')}
-                            data-testid="tenant-request-description" 
-                            value={description} 
-                            onChange={(e) => setDescription(e.target.value)} 
-                            required 
-                            placeholder={tt('dash.tenant.issueDescHint', 'Please describe the issue in detail...')}
-                            disabled={isOwnerSuspended}
-                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} 
-                        />
+                        <TextField fullWidth multiline rows={5} label={tt('dash.tenant.issueDesc', 'Issue Description')} data-testid="tenant-request-description" value={description} onChange={(e) => setDescription(e.target.value)} required placeholder={tt('dash.tenant.issueDescHint', 'Please describe the issue in detail...')} disabled={isOwnerSuspended} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} />
 
-                        {/* Photo Upload Section */}
                         <Box>
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}
-                            </Typography>
-                            {uploadingPhotos && (
-                                <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <CircularProgress size={20} sx={{ color: binThemeTokens.gold }} />
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to secure ticket evidence storage...</Typography>
-                                </Box>
-                            )}
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}</Typography>
+                            {uploadingPhotos && <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}><CircularProgress size={20} sx={{ color: binThemeTokens.gold }} /><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to secure ticket evidence storage...</Typography></Box>}
                             <Grid container spacing={2}>
-                                {previews.map((src, i) => (
-                                    <Grid item xs={4} md={3} key={i}>
-                                        <Box sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', pt: '100%', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                            <img src={src} alt="issue" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            <IconButton 
-                                                size="small" 
-                                                onClick={() => removePhoto(i)}
-                                                sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,0.5)', color: '#FFF', '&:hover': { bgcolor: '#ef4444' } }}
-                                            >
-                                                <X size={14} />
-                                            </IconButton>
-                                        </Box>
-                                    </Grid>
-                                ))}
-                                {previews.length < 5 && !uploadingPhotos && (
-                                    <Grid item xs={4} md={3}>
-                                        <Button
-                                            component="label"
-                                            disabled={isOwnerSuspended}
-                                            sx={{ 
-                                                width: '100%', 
-                                                pt: '100%', 
-                                                position: 'relative', 
-                                                bgcolor: 'rgba(255,255,255,0.02)', 
-                                                border: '1px dashed rgba(255,255,255,0.1)', 
-                                                borderRadius: 3,
-                                                color: 'rgba(255,255,255,0.3)',
-                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold, color: binThemeTokens.gold }
-                                            }}
-                                        >
-                                            <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                                                <Camera size={24} />
-                                                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 900 }}>{tt('dash.tenant.addPhoto', 'ADD')}</Typography>
-                                            </Box>
-                                            <input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} />
-                                        </Button>
-                                    </Grid>
-                                )}
+                                {previews.map((src, i) => <Grid item xs={4} md={3} key={i}><Box sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', pt: '100%', border: '1px solid rgba(255,255,255,0.1)' }}><img src={src} alt="issue" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /><IconButton size="small" onClick={() => removePhoto(i)} sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,0.5)', color: '#FFF', '&:hover': { bgcolor: '#ef4444' } }}><X size={14} /></IconButton></Box></Grid>)}
+                                {previews.length < 5 && !uploadingPhotos && <Grid item xs={4} md={3}><Button component="label" disabled={isOwnerSuspended} sx={{ width: '100%', pt: '100%', position: 'relative', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 3, color: 'rgba(255,255,255,0.3)', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold, color: binThemeTokens.gold } }}><Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}><Camera size={24} /><Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 900 }}>{tt('dash.tenant.addPhoto', 'ADD')}</Typography></Box><input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} /></Button></Grid>}
                             </Grid>
                         </Box>
 
@@ -374,32 +308,13 @@ export default function TenantRequestPage() {
                                 <AlertCircle size={20} color={binThemeTokens.gold} />
                                 <Box>
                                     <Typography variant="caption" fontWeight="950" sx={{ color: binThemeTokens.gold, display: 'block' }}>{tt('dash.tenant.slaCompliance', 'SLA COMPLIANCE')}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                                        {tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} 
-                                        {priority === 'emergency' && (tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.'))}
-                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} {priority === 'emergency' && tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.')}</Typography>
                                 </Box>
                             </Stack>
                         </Box>
 
-                        <Button 
-                            type="submit"
-                                data-testid="tenant-request-submit" 
-                            variant="contained" 
-                            size="large" 
-                            disabled={submitting || uploadingPhotos || isOwnerSuspended || photos.length === 0} 
-                            sx={{ 
-                                bgcolor: binThemeTokens.gold, 
-                                color: '#000', 
-                                fontWeight: 950, 
-                                py: 2, 
-                                borderRadius: 4,
-                                fontSize: '1.1rem',
-                                boxShadow: `0 12px 24px -8px ${alpha(binThemeTokens.gold, 0.4)}`,
-                                '&:hover': { bgcolor: '#b4954e' }
-                            }}
-                        >
-                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : (tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST'))}
+                        <Button type="submit" data-testid="tenant-request-submit" variant="contained" size="large" disabled={submitting || uploadingPhotos || isOwnerSuspended || photos.length === 0 || specificLocation.trim().length < 3} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4, fontSize: '1.1rem', boxShadow: `0 12px 24px -8px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: '#b4954e' } }}>
+                            {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST')}
                         </Button>
                     </Stack>
                 </form>
@@ -407,4 +322,3 @@ export default function TenantRequestPage() {
         </Box>
     );
 }
-
