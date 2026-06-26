@@ -24,8 +24,37 @@ const statusColor = (value: any) => {
   return '#f59e0b';
 };
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const idValue = (...values: unknown[]) => values.map((value) => String(value || '').trim()).find(Boolean) || '';
 const byId = (rows: Row[]) => new Map(rows.map((row) => [String(row.id), row]));
+const byField = (rows: Row[], field: string) => new Map(rows.map((row) => [String(row[field] || ''), row]).filter(([key]) => key));
 const uniqueRows = (rows: Row[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
+
+function leadIdOf(row: Row | null | undefined) {
+  if (!row) return '';
+  return idValue(row.leadId, row.linkedLeadId, row.sourceLeadId, row.brokerLeadId);
+}
+
+function referralIdOf(row: Row | null | undefined) {
+  if (!row) return '';
+  return idValue(row.referralId, row.referralRef, row.linkedReferralId, row.sourceReferralId);
+}
+
+function attributionIdOf(row: Row | null | undefined) {
+  if (!row) return '';
+  return idValue(row.attributionId, row.sourceAttributionId);
+}
+
+function commissionMatchesReferral(commission: Row, referral: Row) {
+  const commissionReferralId = referralIdOf(commission);
+  if (commissionReferralId && commissionReferralId === referral.id) return true;
+  const commissionLeadId = leadIdOf(commission);
+  const referralLeadId = leadIdOf(referral);
+  if (commissionLeadId && referralLeadId && commissionLeadId === referralLeadId) return true;
+  const commissionAttribution = attributionIdOf(commission);
+  const referralAttribution = attributionIdOf(referral);
+  if (commissionAttribution && referralAttribution && commissionAttribution === referralAttribution) return true;
+  return false;
+}
 
 export default function BrokerAttributionProofPage() {
   const { user } = useRole();
@@ -72,15 +101,30 @@ export default function BrokerAttributionProofPage() {
 
   const chains = useMemo(() => {
     const leadMap = byId(leads);
+    const leadByAttribution = byField(leads, 'attributionId');
     const referralMap = byId(referrals);
+    const referralByAttribution = byField(referrals, 'attributionId');
+
     const referralChains = referrals.map((referral) => {
-      const lead = leadMap.get(String(referral.leadId || referral.brokerLeadId || '')) || null;
-      const relatedCommissions = commissions.filter((commission) => String(commission.referralId || commission.referralRef || '') === referral.id || String(commission.leadId || '') === String(referral.leadId || ''));
+      const referralLeadId = leadIdOf(referral);
+      const attributionId = attributionIdOf(referral);
+      const lead = leadMap.get(referralLeadId) || (attributionId ? leadByAttribution.get(attributionId) : undefined) || null;
+      const relatedCommissions = commissions.filter((commission) => commissionMatchesReferral(commission, referral));
       return { id: referral.id, lead, referral, commissions: relatedCommissions };
     });
+
+    const linkedCommissionIds = new Set(referralChains.flatMap((chain) => chain.commissions.map((commission) => commission.id)));
     const orphanCommissions = commissions
-      .filter((commission) => !referralMap.has(String(commission.referralId || commission.referralRef || '')))
-      .map((commission) => ({ id: `commission-${commission.id}`, lead: leadMap.get(String(commission.leadId || '')) || null, referral: null, commissions: [commission] }));
+      .filter((commission) => !linkedCommissionIds.has(commission.id))
+      .map((commission) => {
+        const commissionLeadId = leadIdOf(commission);
+        const commissionReferralId = referralIdOf(commission);
+        const attributionId = attributionIdOf(commission);
+        const lead = leadMap.get(commissionLeadId) || (attributionId ? leadByAttribution.get(attributionId) : undefined) || null;
+        const referral = referralMap.get(commissionReferralId) || (attributionId ? referralByAttribution.get(attributionId) : undefined) || null;
+        return { id: `commission-${commission.id}`, lead, referral, commissions: [commission] };
+      });
+
     return [...referralChains, ...orphanCommissions];
   }, [leads, referrals, commissions]);
 
@@ -107,15 +151,16 @@ export default function BrokerAttributionProofPage() {
           {chains.map((chain) => {
             const commission = chain.commissions[0];
             const commissionColor = statusColor(commission?.status || (commission?.attributionLocked ? 'LOCKED' : 'PENDING'));
+            const attributionId = attributionIdOf(commission) || attributionIdOf(chain.referral) || attributionIdOf(chain.lead) || 'missing';
             return (
               <Paper key={chain.id} sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(commissionColor, 0.22)}`, bgcolor: '#fff' }}>
                 <Grid container spacing={2} alignItems="stretch">
-                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>1. Lead Source</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{chain.lead?.clientName || chain.lead?.ownerName || chain.referral?.clientName || 'Lead not linked'}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>{chain.lead?.phone || chain.lead?.email || chain.referral?.clientEmail || 'Contact pending'}</Typography><Chip size="small" label={chain.lead ? 'LEAD LINKED' : 'MISSING LEAD'} sx={{ width: 'fit-content', bgcolor: alpha(chain.lead ? '#10b981' : '#f59e0b', 0.12), color: chain.lead ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></Stack></Grid>
-                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>2. Referral / Contract</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{chain.referral?.propertyName || chain.referral?.propertyId || commission?.propertyName || 'Property pending'}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>Contract: {chain.referral?.contractId || commission?.contractId || 'Not linked yet'}</Typography><Chip size="small" label={chain.referral ? String(chain.referral.status || 'SUBMITTED').replace(/_/g, ' ').toUpperCase() : 'NO REFERRAL'} sx={{ width: 'fit-content', bgcolor: alpha(statusColor(chain.referral?.status), 0.12), color: statusColor(chain.referral?.status), fontWeight: 950 }} /></Stack></Grid>
-                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>3. Commission Proof</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{money(commission?.amount || commission?.commissionAmount)}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>Source: {commission?.sourceContractId || commission?.contractId || chain.referral?.contractId || 'Pending contract source'}</Typography><Chip size="small" icon={(commission?.attributionLocked || String(commission?.status || '').toUpperCase().includes('PAID')) ? <CheckCircle2 size={14} /> : undefined} label={commission ? String(commission.status || (commission.attributionLocked ? 'LOCKED' : 'PENDING')).replace(/_/g, ' ').toUpperCase() : 'NO COMMISSION'} sx={{ width: 'fit-content', bgcolor: alpha(commissionColor, 0.12), color: commissionColor, fontWeight: 950 }} /></Stack></Grid>
+                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>1. Lead Source</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{chain.lead?.leadName || chain.lead?.clientName || chain.lead?.ownerName || chain.referral?.clientName || commission?.linkedLeadName || 'Lead not linked'}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>{chain.lead?.phone || chain.lead?.email || chain.referral?.clientEmail || commission?.brokerEmail || 'Contact pending'}</Typography><Chip size="small" label={chain.lead ? 'LEAD LINKED' : 'MISSING LEAD'} sx={{ width: 'fit-content', bgcolor: alpha(chain.lead ? '#10b981' : '#f59e0b', 0.12), color: chain.lead ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></Stack></Grid>
+                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>2. Referral / Contract</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{chain.referral?.propertyName || chain.referral?.propertyId || commission?.propertyName || commission?.linkedProperty || 'Property pending'}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>Contract: {chain.referral?.contractId || commission?.sourceContractId || commission?.contractId || 'Not linked yet'}</Typography><Chip size="small" label={chain.referral ? String(chain.referral.status || 'SUBMITTED').replace(/_/g, ' ').toUpperCase() : 'NO REFERRAL'} sx={{ width: 'fit-content', bgcolor: alpha(statusColor(chain.referral?.status), 0.12), color: statusColor(chain.referral?.status), fontWeight: 950 }} /></Stack></Grid>
+                  <Grid item xs={12} md={4}><Stack spacing={1}><Typography variant="overline" sx={{ color: gold, fontWeight: 950 }}>3. Commission Proof</Typography><Typography sx={{ color: '#111827', fontWeight: 950 }}>{money(commission?.amount || commission?.commissionAmount)}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 800 }}>Source: {commission?.sourceType || commission?.sourceContractId || commission?.contractId || chain.referral?.contractId || 'Pending contract source'}</Typography><Chip size="small" icon={(commission?.attributionLocked || String(commission?.status || '').toUpperCase().includes('PAID')) ? <CheckCircle2 size={14} /> : undefined} label={commission ? String(commission.status || (commission.attributionLocked ? 'LOCKED' : 'PENDING')).replace(/_/g, ' ').toUpperCase() : 'NO COMMISSION'} sx={{ width: 'fit-content', bgcolor: alpha(commissionColor, 0.12), color: commissionColor, fontWeight: 950 }} /></Stack></Grid>
                 </Grid>
                 <Divider sx={{ my: 2 }} />
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><Chip size="small" label={`Referral ID: ${chain.referral?.id || 'missing'}`} /><Chip size="small" label={`Lead ID: ${chain.lead?.id || chain.referral?.leadId || 'missing'}`} /><Chip size="small" label={`Commission IDs: ${chain.commissions.map((item) => item.id).join(', ') || 'missing'}`} /><Button endIcon={<ArrowRight size={14} />} onClick={() => navigate('/broker/commissions')} sx={{ ml: 'auto', color: gold, fontWeight: 950 }}>Open commissions</Button></Stack>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><Chip size="small" label={`Attribution: ${attributionId}`} /><Chip size="small" label={`Referral ID: ${chain.referral?.id || referralIdOf(commission) || 'missing'}`} /><Chip size="small" label={`Lead ID: ${chain.lead?.id || leadIdOf(chain.referral) || leadIdOf(commission) || 'missing'}`} /><Chip size="small" label={`Commission IDs: ${chain.commissions.map((item) => item.id).join(', ') || 'missing'}`} /><Button endIcon={<ArrowRight size={14} />} onClick={() => navigate('/broker/commissions')} sx={{ ml: 'auto', color: gold, fontWeight: 950 }}>Open commissions</Button></Stack>
               </Paper>
             );
           })}
