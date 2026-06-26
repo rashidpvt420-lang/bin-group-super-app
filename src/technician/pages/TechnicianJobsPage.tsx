@@ -21,6 +21,8 @@ import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 
+const OPEN_POOL_STATUSES = ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment', 'EMERGENCY_SUBMITTED', 'emergency_submitted'];
+
 const STATUS_COLOR: Record<string, string> = {
     accepted: '#3b82f6',
     auto_assigned: '#3b82f6',
@@ -67,7 +69,7 @@ export default function TechnicianJobsPage() {
         if (!user?.uid) return;
         const q = query(
             collection(db, 'maintenanceTickets'),
-            where('status', 'in', ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment'])
+            where('status', 'in', OPEN_POOL_STATUSES)
         );
         const unsub = onSnapshot(q, (snap) => {
             setPoolJobs(
