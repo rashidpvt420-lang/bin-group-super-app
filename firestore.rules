@@ -486,8 +486,8 @@ service cloud.firestore {
     }
 
     match /intake_submissions/{intakeId} {
-      allow read: if isAdmin() || ownerCanRead(resource.data);
-      allow create: if signedIn() && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email);
+      allow read: if isAdmin() || ownerCanRead(resource.data) || brokerOwns(resource.data);
+      allow create: if signedIn() && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email || brokerOwns(request.resource.data));
       allow update: if isAdmin() || ownerCanRead(resource.data);
       allow delete: if isAdmin();
     }

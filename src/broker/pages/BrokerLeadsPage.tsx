@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Grid, Stack, Button, CircularProgress, 
-    Chip, TextField, MenuItem, Select, Dialog, DialogTitle, 
-    DialogContent, DialogActions, alpha, InputAdornment, 
-    IconButton, Tooltip, Divider
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    Box, Typography, Paper, Grid, Stack, Button, CircularProgress,
+    Chip, TextField, MenuItem, Select, Dialog, DialogTitle,
+    DialogContent, DialogActions, alpha, InputAdornment,
+    IconButton, Tooltip, Divider, Table, TableHead, TableBody, TableRow, TableCell
 } from '@mui/material';
-import { 
-    Search, Filter, Plus, Users, MapPin, 
+import {
+    Search, Filter, Plus, Users, MapPin,
     DollarSign, Calendar, MoreVertical, ExternalLink,
-    Mail, Phone, MessageSquare, Briefcase, ChevronRight
+    Mail, Phone, MessageSquare, Briefcase, ChevronRight,
+    Building2, Upload, Clock, CheckCircle2, XCircle
 } from 'lucide-react';
+import Papa from 'papaparse';
 import { db, collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, updateDoc, orderBy } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -36,11 +38,24 @@ export default function BrokerLeadsPage() {
     const [budget, setBudget] = useState('');
     const [notes, setNotes] = useState('');
 
+    // Property-owner intake (feeds the real commission pipeline via intake_submissions)
+    const [intakes, setIntakes] = useState<any[]>([]);
+    const [openIntake, setOpenIntake] = useState(false);
+    const [intakeSubmitting, setIntakeSubmitting] = useState(false);
+    const [ownerName, setOwnerName] = useState('');
+    const [ownerPhone, setOwnerPhone] = useState('');
+    const [ownerPropertyName, setOwnerPropertyName] = useState('');
+    const [csvImporting, setCsvImporting] = useState(false);
+    const [csvResult, setCsvResult] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const brokerCode = user?.uid ? `BIN-${user.uid.slice(0, 6).toUpperCase()}` : 'BIN-PENDING';
+
     useEffect(() => {
         if (!user?.uid) return;
         const q = query(
-            collection(db, 'brokerLeads'), 
-            where('brokerId', '==', user.uid), 
+            collection(db, 'brokerLeads'),
+            where('brokerId', '==', user.uid),
             where('status', '!=', 'archived'),
             orderBy('createdAt', 'desc')
         );
@@ -50,6 +65,104 @@ export default function BrokerLeadsPage() {
         });
         return () => unsub();
     }, [user]);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const q = query(
+            collection(db, 'intake_submissions'),
+            where('brokerId', '==', user.uid),
+            orderBy('createdAt', 'desc')
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setIntakes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, [user]);
+
+    const buildIntakeDoc = (overrides: Record<string, any>) => ({
+        companyId: 'BIN_GROUP',
+        brokerId: user!.uid,
+        brokerName: user?.displayName || 'Partner',
+        brokerCode,
+        status: 'PENDING_REVIEW',
+        paymentStatus: 'PENDING',
+        commissionStatus: 'pending_lead',
+        commissionRules: {
+            requiresPaymentVerification: true,
+            requiresFinanceApproval: true,
+            duplicateCommissionBlocked: true,
+            autoPayoutAllowed: false
+        },
+        createdBy: user!.uid,
+        createdByRole: 'broker',
+        visibility: 'broker_admin_finance',
+        auditVersion: 1,
+        createdAt: serverTimestamp(),
+        ...overrides
+    });
+
+    const handleIntakeSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user?.uid || !ownerName.trim()) return;
+        setIntakeSubmitting(true);
+        try {
+            await addDoc(collection(db, 'intake_submissions'), buildIntakeDoc({
+                ownerName,
+                ownerPhone,
+                propertyName: ownerPropertyName,
+                source: 'BROKER_MANUAL_ENTRY'
+            }));
+            setOpenIntake(false);
+            setOwnerName(''); setOwnerPhone(''); setOwnerPropertyName('');
+        } catch (err) {
+            console.error('Failed to register property owner intake', err);
+        } finally {
+            setIntakeSubmitting(false);
+        }
+    };
+
+    const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user?.uid) return;
+        setCsvImporting(true);
+        setCsvResult(null);
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results: any) => {
+                let count = 0;
+                try {
+                    for (const row of results.data as any[]) {
+                        const name = String(row.ownerName || row.OwnerName || row.name || row.Name || '').trim();
+                        if (!name) continue;
+                        await addDoc(collection(db, 'intake_submissions'), buildIntakeDoc({
+                            ownerName: name,
+                            ownerPhone: String(row.ownerPhone || row.OwnerPhone || row.phone || row.Phone || '').trim(),
+                            propertyName: String(row.propertyName || row.PropertyName || row.property || row.Property || '').trim(),
+                            source: 'BROKER_CSV_IMPORT'
+                        }));
+                        count++;
+                    }
+                    setCsvResult(`Imported ${count} property owner lead${count === 1 ? '' : 's'}.`);
+                } catch (err) {
+                    console.error('CSV intake import failed', err);
+                    setCsvResult('Import failed partway through. Check console for details.');
+                } finally {
+                    setCsvImporting(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }
+            }
+        });
+    };
+
+    const getIntakeStatusColor = (status: string) => {
+        switch (status) {
+            case 'PENDING_REVIEW': return '#f59e0b';
+            case 'APPROVED': return '#10b981';
+            case 'REJECTED': return '#ef4444';
+            default: return binThemeTokens.textSecondary;
+        }
+    };
 
     const handleAddLead = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -136,6 +249,88 @@ export default function BrokerLeadsPage() {
                     <Divider orientation="vertical" flexItem sx={{ borderColor: '#E5E7EB' }} />
                     <IconButton sx={{ color: binThemeTokens.textSecondary }}><Filter size={20} /></IconButton>
                 </Stack>
+            </Paper>
+
+            {/* ─── PROPERTY OWNER INTAKE (feeds the real commission pipeline) ─── */}
+            <Paper sx={{ p: 4, mb: 4, bgcolor: binThemeTokens.softCanvas, border: '1px solid #E5E7EB', borderRadius: 4 }}>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ mb: 3, flexWrap: 'wrap' }}>
+                    <Box>
+                        <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>
+                            Property Owner Intake
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700, mt: 0.5 }}>
+                            Register a property owner you've brought to BIN GROUP. Your broker code ({brokerCode}) is stamped on every submission so commission attribution is automatic once it's approved.
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1.5}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Upload size={16} />}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={csvImporting}
+                            sx={{ borderColor: '#E5E7EB', color: binThemeTokens.textPrimary, fontWeight: 900, borderRadius: 3 }}
+                        >
+                            {csvImporting ? <CircularProgress size={16} /> : 'IMPORT CSV'}
+                        </Button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".csv"
+                            hidden
+                            onChange={handleCsvUpload}
+                        />
+                        <Button
+                            variant="contained"
+                            startIcon={<Building2 size={16} />}
+                            onClick={() => setOpenIntake(true)}
+                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3 }}
+                        >
+                            REGISTER PROPERTY OWNER
+                        </Button>
+                    </Stack>
+                </Stack>
+
+                {csvResult && (
+                    <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 800, mb: 2 }}>
+                        {csvResult}
+                    </Typography>
+                )}
+
+                {intakes.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: '#9CA3AF', fontWeight: 700, fontStyle: 'italic' }}>
+                        No property owner intakes submitted yet.
+                    </Typography>
+                ) : (
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ fontWeight: 900, color: binThemeTokens.textSecondary }}>OWNER</TableCell>
+                                <TableCell sx={{ fontWeight: 900, color: binThemeTokens.textSecondary }}>PROPERTY</TableCell>
+                                <TableCell sx={{ fontWeight: 900, color: binThemeTokens.textSecondary }}>SUBMITTED</TableCell>
+                                <TableCell sx={{ fontWeight: 900, color: binThemeTokens.textSecondary }}>STATUS</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {intakes.map(intake => (
+                                <TableRow key={intake.id}>
+                                    <TableCell sx={{ fontWeight: 800, color: binThemeTokens.textPrimary }}>{intake.ownerName || '—'}</TableCell>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{intake.propertyName || '—'}</TableCell>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
+                                        {intake.createdAt?.toDate ? intake.createdAt.toDate().toLocaleDateString() : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            icon={intake.status === 'APPROVED' ? <CheckCircle2 size={14} /> : intake.status === 'REJECTED' ? <XCircle size={14} /> : <Clock size={14} />}
+                                            label={String(intake.status || 'PENDING_REVIEW').replace(/_/g, ' ')}
+                                            size="small"
+                                            sx={{ bgcolor: alpha(getIntakeStatusColor(intake.status), 0.1), color: getIntakeStatusColor(intake.status), fontWeight: 950, fontSize: '0.65rem' }}
+                                        />
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
             </Paper>
 
             {/* ─── LEADS GRID ────────────────────────────────────────────────── */}
@@ -345,6 +540,57 @@ export default function BrokerLeadsPage() {
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3 }}
                         >
                             {submitting ? <CircularProgress size={20} /> : 'INITIALIZE MISSION'}
+                        </Button>
+                    </DialogActions>
+                </form>
+            </Dialog>
+
+            {/* ─── REGISTER PROPERTY OWNER (INTAKE) DIALOG ───────────────────── */}
+            <Dialog
+                open={openIntake}
+                onClose={() => setOpenIntake(false)}
+                PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', minWidth: 500 } }}
+            >
+                <form onSubmit={handleIntakeSubmit}>
+                    <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}>
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Building2 size={24} /> Register Property Owner
+                        </Stack>
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 4 }}>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 4, fontWeight: 700 }}>
+                            This submits directly to BIN GROUP's intake review queue with your broker code attached. Once the owner's property is approved and a contract is signed, your commission is calculated automatically.
+                        </Typography>
+                        <Stack spacing={3}>
+                            <TextField
+                                fullWidth label="Owner Full Name *" required
+                                value={ownerName} onChange={e => setOwnerName(e.target.value)}
+                                variant="filled"
+                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }}
+                            />
+                            <TextField
+                                fullWidth label="Owner Phone Number"
+                                value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)}
+                                variant="filled"
+                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }}
+                            />
+                            <TextField
+                                fullWidth label="Property Name / Address"
+                                value={ownerPropertyName} onChange={e => setOwnerPropertyName(e.target.value)}
+                                variant="filled"
+                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }}
+                            />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Button onClick={() => setOpenIntake(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>ABORT</Button>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            disabled={intakeSubmitting}
+                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3 }}
+                        >
+                            {intakeSubmitting ? <CircularProgress size={20} /> : 'SUBMIT FOR REVIEW'}
                         </Button>
                     </DialogActions>
                 </form>

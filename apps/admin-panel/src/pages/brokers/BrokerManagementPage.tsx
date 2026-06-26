@@ -19,7 +19,11 @@ import {
     Grid,
     Card,
     CardContent,
-    Avatar
+    Avatar,
+    Stack,
+    TextField,
+    Tooltip,
+    CircularProgress
 } from '@mui/material';
 import {
     CheckCircle as CheckCircleIcon,
@@ -28,10 +32,11 @@ import {
     AccountBalance as BankIcon,
     Badge as BadgeIcon,
     TrendingUp as TrendingUpIcon,
-    People as PeopleIcon
+    People as PeopleIcon,
+    VerifiedUser as VerifiedUserIcon
 } from '@mui/icons-material';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 interface Broker {
@@ -47,6 +52,10 @@ interface Broker {
     iban?: string;
     emiratesId?: string;
     kycDocumentUrl?: string; // from signup
+    reraLicense?: string;
+    reraVerified?: boolean;
+    reraStatus?: 'VERIFIED' | 'REJECTED' | string;
+    reraReviewNote?: string;
 }
 
 export default function BrokerManagementPage() {
@@ -54,6 +63,10 @@ export default function BrokerManagementPage() {
     const [brokers, setBrokers] = useState<Broker[]>([]);
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
     const [isViewOpen, setIsViewOpen] = useState(false);
+    const [reraTarget, setReraTarget] = useState<Broker | null>(null);
+    const [reraReason, setReraReason] = useState('');
+    const [reraBusyId, setReraBusyId] = useState<string | null>(null);
+    const [reraError, setReraError] = useState<string | null>(null);
     const [stats, setStats] = useState({
         total: 0,
         pending: 0,
@@ -107,6 +120,42 @@ export default function BrokerManagementPage() {
     const handleView = (broker: Broker) => {
         setSelectedBroker(broker);
         setIsViewOpen(true);
+    };
+
+    const openReraDialog = (broker: Broker) => {
+        setReraTarget(broker);
+        setReraReason('');
+        setReraError(null);
+    };
+
+    const submitReraVerification = async (verified: boolean) => {
+        if (!reraTarget?.id) return;
+        setReraBusyId(reraTarget.id);
+        setReraError(null);
+        try {
+            const callable = httpsCallable(functions, 'setBrokerReraVerification');
+            await callable({ brokerId: reraTarget.id, verified, reason: reraReason.trim() || undefined });
+            setReraTarget(null);
+        } catch (err: any) {
+            console.error('[BROKER_MGT] RERA verification failed', err);
+            setReraError(err?.message || t('broker.rera_verify_failed'));
+        } finally {
+            setReraBusyId(null);
+        }
+    };
+
+    const reraStatusLabel = (broker: Broker | null) => {
+        if (!broker) return '';
+        if (broker.reraVerified) return t('broker.rera_verified');
+        if (broker.reraStatus === 'REJECTED') return t('broker.rera_rejected');
+        return t('broker.rera_pending');
+    };
+
+    const reraStatusColor = (broker: Broker | null): 'success' | 'error' | 'default' => {
+        if (!broker) return 'default';
+        if (broker.reraVerified) return 'success';
+        if (broker.reraStatus === 'REJECTED') return 'error';
+        return 'default';
     };
 
     return (
@@ -183,12 +232,21 @@ export default function BrokerManagementPage() {
                                     <Typography variant="caption" color="text.secondary">{broker.phoneNumber}</Typography>
                                 </TableCell>
                                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Chip 
-                                        label={broker.status || 'PENDING'} 
-                                        color={broker.status === 'APPROVED' ? 'success' : broker.status === 'REJECTED' ? 'error' : 'warning'} 
-                                        size="small" 
-                                        sx={{ fontWeight: 800 }}
-                                    />
+                                    <Stack spacing={0.5} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                                        <Chip
+                                            label={broker.status || 'PENDING'}
+                                            color={broker.status === 'APPROVED' ? 'success' : broker.status === 'REJECTED' ? 'error' : 'warning'}
+                                            size="small"
+                                            sx={{ fontWeight: 800 }}
+                                        />
+                                        <Chip
+                                            label={`${t('broker.rera_label')}: ${reraStatusLabel(broker)}`}
+                                            color={reraStatusColor(broker)}
+                                            variant="outlined"
+                                            size="small"
+                                            sx={{ fontWeight: 700, fontSize: '0.65rem' }}
+                                        />
+                                    </Stack>
                                 </TableCell>
                                 <TableCell align={isRTL ? 'left' : 'right'}>
                                     <IconButton onClick={() => handleView(broker)}><VisibilityIcon /></IconButton>
@@ -198,6 +256,11 @@ export default function BrokerManagementPage() {
                                     {broker.status !== 'REJECTED' && (
                                         <IconButton color="error" onClick={() => handleReject(broker.id)}><CancelIcon /></IconButton>
                                     )}
+                                    <Tooltip title={t('broker.rera_verify_action')}>
+                                        <IconButton color={broker.reraVerified ? 'success' : 'default'} onClick={() => openReraDialog(broker)}>
+                                            <VerifiedUserIcon />
+                                        </IconButton>
+                                    </Tooltip>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -226,6 +289,19 @@ export default function BrokerManagementPage() {
                                 <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="caption" color="text.secondary" display="block">{t('broker.affiliate_code')}</Typography>
                                     <Typography color="secondary" sx={{ fontWeight: 900 }}>{selectedBroker.brokerCode || selectedBroker.affiliateCode}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.rera_license')}</Typography>
+                                    <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{selectedBroker.reraLicense || t('broker.not_provided')}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.rera_current_status')}</Typography>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ mt: 0.5 }}>
+                                        <Chip label={reraStatusLabel(selectedBroker)} color={reraStatusColor(selectedBroker)} size="small" sx={{ fontWeight: 800 }} />
+                                        <Button size="small" startIcon={<VerifiedUserIcon fontSize="small" />} onClick={() => openReraDialog(selectedBroker)} sx={{ fontWeight: 700 }}>
+                                            {t('broker.rera_verify_action')}
+                                        </Button>
+                                    </Stack>
                                 </Box>
                             </Grid>
                             <Grid item xs={12} md={6}>
@@ -273,6 +349,58 @@ export default function BrokerManagementPage() {
                             {t('broker.approve_partner_btn')}
                         </Button>
                     )}
+                </DialogActions>
+            </Dialog>
+
+            {/* RERA Verification Dialog */}
+            <Dialog open={!!reraTarget} onClose={() => setReraTarget(null)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
+                <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+                    {t('broker.rera_dialog_title')}
+                </DialogTitle>
+                <DialogContent dividers>
+                    {reraError && (
+                        <Box sx={{ mb: 2, p: 2, bgcolor: 'error.light', borderRadius: 2 }}>
+                            <Typography sx={{ color: 'error.dark', fontWeight: 700 }}>{reraError}</Typography>
+                        </Box>
+                    )}
+                    <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.rera_license')}</Typography>
+                        <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{reraTarget?.reraLicense || t('broker.not_provided')}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.rera_current_status')}</Typography>
+                        <Chip label={reraStatusLabel(reraTarget)} color={reraStatusColor(reraTarget)} size="small" sx={{ fontWeight: 800, mt: 0.5 }} />
+                    </Box>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        label={t('broker.rera_review_note')}
+                        value={reraReason}
+                        onChange={(e) => setReraReason(e.target.value)}
+                        sx={{ mt: 2 }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Button onClick={() => setReraTarget(null)} sx={{ fontWeight: 700 }}>{t('common.close')}</Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        disabled={reraBusyId === reraTarget?.id}
+                        onClick={() => submitReraVerification(false)}
+                        sx={{ fontWeight: 800, borderRadius: 2 }}
+                    >
+                        {t('broker.rera_reject_btn')}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="success"
+                        disabled={reraBusyId === reraTarget?.id || !reraTarget?.reraLicense}
+                        onClick={() => submitReraVerification(true)}
+                        sx={{ fontWeight: 800, borderRadius: 2 }}
+                    >
+                        {reraBusyId === reraTarget?.id ? <CircularProgress size={18} /> : t('broker.rera_verify_btn')}
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

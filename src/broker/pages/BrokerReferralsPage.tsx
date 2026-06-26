@@ -106,9 +106,6 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                 referralData.contractType = contractType;
                 referralData.estimatedValue = estimatedValue;
                 referralData.signedDate = signedDate;
-                referralData.commissionStatus = 'PENDING';
-                referralData.commissionRate = 0.02;
-                referralData.commissionAmount = Number(estimatedValue) * 0.02;
             } else {
                 referralData.propertyName = propertyName;
                 referralData.propertyType = propertyType;
@@ -126,23 +123,10 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                 timestamp: serverTimestamp()
             });
 
-            // Create a pending commission record as well!
-            if (referralType === 'contract') {
-                await addDoc(collection(db, 'broker_commissions'), {
-                    brokerId: user.uid,
-                    brokerUid: user.uid,
-                    brokerName: user.displayName || 'Partner',
-                    amount: Number(estimatedValue) * 0.02,
-                    percentage: 2,
-                    status: 'PENDING',
-                    linkedReferralId: refRef.id,
-                    linkedReferralName: clientName,
-                    linkedProperty: finalPropertyName,
-                    propertyName: finalPropertyName,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-            }
+            // Note: this does not create a broker_commissions record. Commissions are
+            // created exclusively by the admin/RERA-gated contract-activation pipeline
+            // (functions/brokerCommissions.ts) once a real contract with this broker's
+            // brokerId is signed — this referral doc is a CRM/audit log only.
 
             setOpenAdd(false);
             // Reset

@@ -64,7 +64,7 @@ export default function BrokerDashboardPage() {
   ], [stats, tx]);
 
   const commands = [
-    { label: tx('broker.dash.add_lead', 'Add New Lead'), route: '/broker/leads/new', icon: <PlusCircle size={18} /> },
+    { label: tx('broker.dash.add_lead', 'Add New Lead'), route: '/broker/leads', icon: <PlusCircle size={18} /> },
     { label: tx('broker.dash.submit_referral', 'Submit Referral'), route: '/broker/referrals/new', icon: <Send size={18} /> },
     { label: tx('broker.dash.view_payouts', 'View Payouts'), route: '/broker/commissions', icon: <DollarSign size={18} /> },
     { label: tx('broker.dash.doc_vault', 'Document Vault'), route: '/broker/documents', icon: <FileText size={18} /> },
