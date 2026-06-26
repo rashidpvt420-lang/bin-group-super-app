@@ -32,6 +32,8 @@ const amountOf = (value: unknown) => {
   const parsed = Number(String(value || '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
+const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
 export default function BrokerReferralsPage({ openFormByDefault = false }: { openFormByDefault?: boolean }) {
   const { user } = useRole();
@@ -62,17 +64,36 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
 
   useEffect(() => {
     if (!user?.uid) return;
-    const q = query(collection(db, 'referrals'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setReferrals(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const buckets: Record<string, any[]> = {};
+    const unsubs: Array<() => void> = [];
+    const identitySources = [
+      { field: 'brokerId', value: user.uid },
+      { field: 'brokerUid', value: user.uid },
+      { field: 'createdByUid', value: user.uid },
+      { field: 'brokerEmail', value: normalizeEmail(user.email) },
+    ].filter((source) => source.value);
+
+    const refresh = () => {
+      const rows = uniqueRows(Object.values(buckets).flat()).sort((a, b) => rowTime(b) - rowTime(a));
+      setReferrals(rows);
       setLoading(false);
-    }, (err) => {
-      console.warn('[BrokerReferrals] listener failed:', err);
-      setWarning('Referral records could not load. Check Firestore access if this persists.');
-      setLoading(false);
+    };
+
+    identitySources.forEach((source) => {
+      const key = `${source.field}:${source.value}`;
+      const q = query(collection(db, 'referrals'), where(source.field, '==', source.value), orderBy('createdAt', 'desc'));
+      unsubs.push(onSnapshot(q, (snap) => {
+        buckets[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        refresh();
+      }, (err) => {
+        console.warn(`[BrokerReferrals] ${source.field} listener failed:`, err);
+        setWarning('Some referral records could not load. Check Firestore access if this persists.');
+        setLoading(false);
+      }));
     });
-    return () => unsub();
-  }, [user?.uid]);
+
+    return () => unsubs.forEach((unsub) => unsub());
+  }, [user?.uid, user?.email]);
 
   useEffect(() => {
     const q = query(collection(db, 'properties'));
@@ -268,16 +289,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
       title="Referral Network"
       subtitle="Submit and monitor owner, property, and contract referrals with attribution proof"
       loading={loading}
-      actions={
-        <Button
-          variant="contained"
-          startIcon={<Plus size={18} />}
-          onClick={() => setOpenAdd(true)}
-          sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, boxShadow: `0 10px 20px -5px ${alpha(binThemeTokens.gold, 0.4)}` }}
-        >
-          SUBMIT REFERRAL
-        </Button>
-      }
+      actions={<Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setOpenAdd(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, boxShadow: `0 10px 20px -5px ${alpha(binThemeTokens.gold, 0.4)}` }}>SUBMIT REFERRAL</Button>}
     >
       {warning && <Alert severity="warning" sx={{ mb: 3 }}>{warning}</Alert>}
       {referrals.length === 0 ? (
@@ -329,33 +341,9 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         <form onSubmit={handleAddReferral}>
           <DialogContent>
             <Stack spacing={3} sx={{ mt: 1 }}>
-              <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth>
-                <MenuItem value="property">Property Owner / Asset</MenuItem>
-                <MenuItem value="contract">Contract / Lease Opportunity</MenuItem>
-              </TextField>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}><TextField required label="Client / Owner Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth /></Grid>
-                <Grid item xs={12} md={6}><TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth /></Grid>
-                <Grid item xs={12}><TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth /></Grid>
-              </Grid>
-              {referralType === 'contract' ? (
-                <>
-                  <TextField select label="Select BIN GROUP Property" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>
-                    {propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.propertyName || prop.name || prop.id}</MenuItem>)}
-                  </TextField>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease">Annual Lease</MenuItem><MenuItem value="maintenance_contract">Maintenance Contract</MenuItem><MenuItem value="property_management">Property Management</MenuItem></TextField></Grid>
-                    <Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
-                  </Grid>
-                </>
-              ) : (
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid>
-                  <Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid>
-                  <Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid>
-                  <Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid>
-                </Grid>
-              )}
+              <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth><MenuItem value="property">Property Owner / Asset</MenuItem><MenuItem value="contract">Contract / Lease Opportunity</MenuItem></TextField>
+              <Grid container spacing={2}><Grid item xs={12} md={6}><TextField required label="Client / Owner Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth /></Grid><Grid item xs={12}><TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth /></Grid></Grid>
+              {referralType === 'contract' ? <><TextField select label="Select BIN GROUP Property" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>{propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.propertyName || prop.name || prop.id}</MenuItem>)}</TextField><Grid container spacing={2}><Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease">Annual Lease</MenuItem><MenuItem value="maintenance_contract">Maintenance Contract</MenuItem><MenuItem value="property_management">Property Management</MenuItem></TextField></Grid><Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid></Grid></> : <Grid container spacing={2}><Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid></Grid>}
               <TextField label="Estimated Contract / Asset Value (AED)" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} fullWidth InputProps={{ startAdornment: <DollarSign size={18} /> as any }} />
               <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={3} fullWidth />
             </Stack>
