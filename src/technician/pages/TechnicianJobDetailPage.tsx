@@ -36,6 +36,7 @@ type OfflineQueueItem = {
 };
 
 const QUEUE_KEY = 'bin_offline_queue';
+const ARRIVAL_MAX_GPS_ACCURACY_METERS = 100;
 const norm = (status?: string) => String(status || '').toUpperCase();
 const listLength = (value: any) => Array.isArray(value) ? value.length : 0;
 
@@ -67,6 +68,31 @@ const queueOfflineJobAction = (item: Omit<OfflineQueueItem, 'id' | 'status' | 'a
     saveOfflineQueue([queued, ...loadOfflineQueue()].slice(0, 50));
     return queued;
 };
+
+const getVerifiedArrivalPosition = () => new Promise<GeolocationPosition>((resolve, reject) => {
+    if (!navigator.geolocation) {
+        reject(new Error('GPS is not available on this device. Arrival cannot be confirmed.'));
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            if (position.coords.accuracy > ARRIVAL_MAX_GPS_ACCURACY_METERS) {
+                reject(new Error(`GPS signal is too weak (${Math.round(position.coords.accuracy)}m). Move to an open area and try Arrived again.`));
+                return;
+            }
+            resolve(position);
+        },
+        (error) => {
+            const message = error.code === error.PERMISSION_DENIED
+                ? 'GPS permission is required before marking arrival.'
+                : error.code === error.TIMEOUT
+                    ? 'GPS timed out. Move to an open area and try again.'
+                    : 'GPS position unavailable. Arrival was not recorded.';
+            reject(new Error(message));
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+    );
+});
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -236,28 +262,41 @@ export default function TechnicianJobDetailPage() {
                 setIsTracking(true);
             }
 
-            if (nextStatus !== 'EN_ROUTE' && isTracking) {
-                await stopLiveTracking(user.uid);
+            if (nextStatus === 'ARRIVED') {
+                const position = await getVerifiedArrivalPosition();
+                const arrivalLocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    heading: position.coords.heading,
+                    speed: position.coords.speed,
+                };
+                await updateDoc(doc(db, 'maintenanceTickets', id), {
+                    arrivedAt: serverTimestamp(),
+                    arrivedLocation: arrivalLocation,
+                    technicianLocation: arrivalLocation,
+                    technicianLocationUpdatedAt: serverTimestamp(),
+                    gpsVerified: true,
+                    gpsVerifiedAt: serverTimestamp(),
+                    onSiteVerification: 'GPS_VERIFIED',
+                    updatedAt: serverTimestamp(),
+                });
+                if (isTracking) {
+                    await stopLiveTracking(user.uid, id, 'ARRIVED');
+                    setIsTracking(false);
+                }
+            }
+
+            if (nextStatus === 'IN_PROGRESS' && isTracking) {
+                await stopLiveTracking(user.uid, id, 'WORK_STARTED');
                 setIsTracking(false);
             }
 
-            if (nextStatus === 'ARRIVED') {
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        await updateDoc(doc(db, 'maintenanceTickets', id), {
-                            arrivedAt: serverTimestamp(),
-                            arrivedLocation: { lat, lng }
-                        });
-                    },
-                    async (err) => {
-                        console.warn('GPS check-in failed, proceeding with fallback timestamp:', err);
-                        await updateDoc(doc(db, 'maintenanceTickets', id), {
-                            arrivedAt: serverTimestamp()
-                        });
-                    }
-                );
+            if (nextStatus === 'COMPLETED' && isTracking) {
+                await stopLiveTracking(user.uid, id, 'COMPLETED');
+                setIsTracking(false);
             }
 
             if (nextStatus === 'COMPLETED') {
@@ -293,7 +332,12 @@ export default function TechnicianJobDetailPage() {
             setMessage(nextStatus === 'COMPLETED' ? 'Completed. Tenant approval requested.' : `Status updated: ${nextStatus.replace(/_/g, ' ')}`);
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');
         } catch (err: any) {
-            queueAction(nextStatus, err?.message || 'Mission lifecycle update failed before confirmation.');
+            if (nextStatus === 'ARRIVED') {
+                setGpsError(err?.message || 'GPS arrival verification failed. Arrival was not recorded.');
+                setMessage(null);
+            } else {
+                queueAction(nextStatus, err?.message || 'Mission lifecycle update failed before confirmation.');
+            }
         } finally {
             setActionLoading(false);
         }
