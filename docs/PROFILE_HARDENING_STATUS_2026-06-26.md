@@ -151,16 +151,16 @@ This document tracks what has been added, what is still missing, and what must b
 - Launcher has cards for Owner, Tenant, Technician, Broker, invoice verification, certificate verification, feedback, and demo videos.
 - Launcher now includes profile-specific test missions and pass criteria.
 - Launcher clearly says this is controlled pilot only, not full public commercial launch.
+- Launcher now includes Company, Support, Privacy, Terms, and Feedback footer links so public safeguards remain visible.
 
 ### Still missing / needs fix
 
 - Latest deploy workflow must be confirmed green before sharing the launcher.
-- Legal/support links should be retained on public marketing surfaces.
 - Public company profile should be rebuilt from current `main` in a small safe patch, not by resurrecting PR #213 as-is.
 
 ### Next safe patch
 
-- Add legal/support footer links directly to the pilot launcher.
+- Add a small public company profile improvement from current `main` only if it preserves footer/legal/support safeguards.
 
 ## Final smoke-test checklist
 
