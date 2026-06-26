@@ -15,6 +15,13 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
+const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const clean = (value: unknown) => String(value || '').trim();
+const amountOf = (value: unknown) => {
+    const parsed = Number(String(value || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function BrokerReferralsPage({ openFormByDefault = false }: { openFormByDefault?: boolean }) {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
@@ -76,25 +83,53 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         if (!user?.uid || !clientName.trim()) return;
         setSubmitting(true);
         try {
-            let finalPropertyName = propertyName;
-            let finalLocation = location;
+            let finalPropertyName = clean(propertyName);
+            let finalLocation = clean(location);
             if (referralType === 'contract' && selectedPropertyId) {
                 const matchedProp = propertiesList.find(p => p.id === selectedPropertyId);
                 if (matchedProp) {
-                    finalPropertyName = matchedProp.propertyName || matchedProp.name || '';
-                    finalLocation = matchedProp.location || matchedProp.emirate || '';
+                    finalPropertyName = clean(matchedProp.propertyName || matchedProp.name || '');
+                    finalLocation = clean(matchedProp.location || matchedProp.emirate || '');
                 }
             }
 
+            const brokerId = String(user.uid);
+            const brokerEmail = normalizeEmail(user.email);
+            const brokerName = clean(user.displayName || user.email || 'Broker Partner');
+            const estimatedAmount = amountOf(estimatedValue);
+            const baseAttribution = {
+                attributionSource: 'BROKER_PORTAL_REFERRAL',
+                sourceChannel: 'broker_portal',
+                brokerId,
+                brokerUid: brokerId,
+                brokerEmail,
+                brokerName,
+                brokerDisplayName: brokerName,
+                createdByUid: brokerId,
+                broughtByRole: 'broker',
+                broughtByUid: brokerId,
+                broughtByEmail: brokerEmail,
+                attributionProof: {
+                    clientName: clean(clientName),
+                    phone: clean(phone),
+                    email: normalizeEmail(email),
+                    propertyName: finalPropertyName,
+                    location: finalLocation,
+                    estimatedValue: estimatedAmount,
+                    referralType,
+                    capturedFrom: 'broker_referrals_page',
+                },
+            };
+
             const referralData: any = {
-                brokerId: user.uid,
-                brokerUid: user.uid,
+                ...baseAttribution,
                 referralType,
-                clientName,
-                phone,
-                email,
-                notes,
+                clientName: clean(clientName),
+                phone: clean(phone),
+                email: normalizeEmail(email),
+                notes: clean(notes),
                 status: 'submitted',
+                lifecycleStatus: 'REFERRAL_SUBMITTED',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             };
@@ -104,41 +139,56 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                 referralData.propertyName = finalPropertyName;
                 referralData.location = finalLocation;
                 referralData.contractType = contractType;
-                referralData.estimatedValue = estimatedValue;
+                referralData.estimatedValue = estimatedAmount;
                 referralData.signedDate = signedDate;
                 referralData.commissionStatus = 'PENDING';
                 referralData.commissionRate = 0.02;
-                referralData.commissionAmount = Number(estimatedValue) * 0.02;
+                referralData.commissionAmount = Math.round(estimatedAmount * 0.02);
             } else {
-                referralData.propertyName = propertyName;
-                referralData.propertyType = propertyType;
-                referralData.location = location;
-                referralData.units = units;
-                referralData.estimatedValue = estimatedValue;
+                referralData.propertyName = clean(propertyName);
+                referralData.propertyType = clean(propertyType);
+                referralData.location = clean(location);
+                referralData.units = clean(units);
+                referralData.estimatedValue = estimatedAmount;
             }
 
             const refRef = await addDoc(collection(db, 'referrals'), referralData);
+            const attributionId = `broker_referral_${brokerId}_${refRef.id}`;
 
             await addDoc(collection(db, 'auditLogs'), {
                 action: 'BROKER_REFERRAL_SUBMITTED',
                 referralId: refRef.id,
-                brokerId: user.uid,
+                brokerId,
+                brokerUid: brokerId,
+                brokerEmail,
+                attributionId,
                 timestamp: serverTimestamp()
             });
 
             // Create a pending commission record as well!
             if (referralType === 'contract') {
                 await addDoc(collection(db, 'broker_commissions'), {
-                    brokerId: user.uid,
-                    brokerUid: user.uid,
-                    brokerName: user.displayName || 'Partner',
-                    amount: Number(estimatedValue) * 0.02,
+                    ...baseAttribution,
+                    attributionId,
+                    brokerId,
+                    brokerUid: brokerId,
+                    brokerEmail,
+                    brokerName,
+                    sourceType: 'BROKER_CONTRACT_REFERRAL',
+                    sourceCollection: 'referrals',
+                    referralId: refRef.id,
+                    linkedReferralId: refRef.id,
+                    linkedReferralName: clean(clientName),
+                    linkedProperty: finalPropertyName,
+                    propertyId: selectedPropertyId,
+                    propertyName: finalPropertyName,
+                    commissionBasisAmount: estimatedAmount,
+                    amount: Math.round(estimatedAmount * 0.02),
+                    commissionAmount: Math.round(estimatedAmount * 0.02),
                     percentage: 2,
                     status: 'PENDING',
-                    linkedReferralId: refRef.id,
-                    linkedReferralName: clientName,
-                    linkedProperty: finalPropertyName,
-                    propertyName: finalPropertyName,
+                    payoutStatus: 'PENDING_ADMIN_REVIEW',
+                    evidenceStatus: 'CONTRACT_REFERRAL_PENDING_ADMIN_MATCH',
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
                 });
@@ -258,6 +308,14 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{ref.notes}</Typography>
                                             </Box>
                                         )}
+
+                                        <Divider sx={{ my: 3 }} />
+                                        <Stack direction="row" spacing={2} alignItems="center">
+                                            <Info size={16} color={binThemeTokens.gold} />
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>
+                                                {ref.commissionStatus ? `Commission: ${ref.commissionStatus}` : 'Awaiting Admin Review'}
+                                            </Typography>
+                                        </Stack>
                                     </Grid>
                                 </Grid>
                             </Paper>
@@ -266,213 +324,53 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                 </Stack>
             )}
 
-            {/* ─── ADD REFERRAL DIALOG ────────────────────────────────────────── */}
-            <Dialog 
-                open={openAdd} 
-                onClose={() => setOpenAdd(false)} 
-                PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', minWidth: 600 } }}
-            >
+            {/* Add Referral Dialog */}
+            <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+                <DialogTitle sx={{ fontWeight: 950 }}>Submit New Referral</DialogTitle>
                 <form onSubmit={handleAddReferral}>
-                    <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <Building2 size={24} /> Submit New Referral
-                        </Stack>
-                    </DialogTitle>
-                    <DialogContent sx={{ p: 4 }}>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 4, fontWeight: 700 }}>
-                            Provide asset or owner details for institutional verification. Approved referrals trigger commission allocation.
-                        </Typography>
-                        
-                        <Stack spacing={3}>
-                            <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>REFERRAL TYPE</Typography>
-                                <Select 
-                                    fullWidth
-                                    value={referralType} 
-                                    onChange={e => setReferralType(e.target.value)} 
-                                    variant="filled"
-                                    sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}
-                                >
-                                    <MenuItem value="owner">Owner / Asset Holder</MenuItem>
-                                    <MenuItem value="property">Direct Property Asset</MenuItem>
-                                    <MenuItem value="client">VVIP Client / Tenant</MenuItem>
-                                    <MenuItem value="contract">Lease Contract Referral</MenuItem>
-                                </Select>
-                            </Box>
-
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+                    <DialogContent>
+                        <Stack spacing={3} sx={{ mt: 1 }}>
+                            <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth>
+                                <MenuItem value="property">Property Owner / Asset</MenuItem>
+                                <MenuItem value="contract">Contract / Lease Opportunity</MenuItem>
+                            </TextField>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} md={6}><TextField required label="Client / Owner Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth /></Grid>
+                                <Grid item xs={12} md={6}><TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth /></Grid>
+                                <Grid item xs={12}><TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth /></Grid>
+                            </Grid>
 
                             {referralType === 'contract' ? (
                                 <>
-                                    <Box>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>PROPERTY ASSET *</Typography>
-                                        <Select 
-                                            fullWidth
-                                            value={selectedPropertyId} 
-                                            onChange={e => setSelectedPropertyId(e.target.value)} 
-                                            variant="filled"
-                                            required
-                                            sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}
-                                        >
-                                            {propertiesList.length === 0 ? (
-                                                <MenuItem value="" disabled>No available properties found</MenuItem>
-                                            ) : (
-                                                propertiesList.map(p => (
-                                                    <MenuItem key={p.id} value={p.id}>{p.propertyName || p.name || 'Unnamed Property'}</MenuItem>
-                                                ))
-                                            )}
-                                        </Select>
-                                    </Box>
-
-                                    <TextField 
-                                        fullWidth label="Client Full Name *" required 
-                                        value={clientName} onChange={e => setClientName(e.target.value)} 
-                                        variant="filled"
-                                        sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                    />
-
+                                    <TextField select label="Select BIN GROUP Property" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>
+                                        {propertiesList.map(prop => <MenuItem key={prop.id} value={prop.id}>{prop.propertyName || prop.name || prop.id}</MenuItem>)}
+                                    </TextField>
                                     <Grid container spacing={2}>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Client Email *" required type="email"
-                                                value={email} onChange={e => setEmail(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Client Phone *" required
-                                                value={phone} onChange={e => setPhone(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
+                                        <Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth>
+                                            <MenuItem value="annual_lease">Annual Lease</MenuItem>
+                                            <MenuItem value="maintenance_contract">Maintenance Contract</MenuItem>
+                                            <MenuItem value="property_management">Property Management</MenuItem>
+                                        </TextField></Grid>
+                                        <Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
                                     </Grid>
-
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={6}>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, mb: 1, display: 'block' }}>CONTRACT TYPE *</Typography>
-                                                <Select 
-                                                    fullWidth
-                                                    value={contractType} 
-                                                    onChange={e => setContractType(e.target.value)} 
-                                                    variant="filled"
-                                                    sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}
-                                                >
-                                                    <MenuItem value="annual_lease">Annual Lease</MenuItem>
-                                                    <MenuItem value="short_term">Short Term Lease</MenuItem>
-                                                    <MenuItem value="commercial_lease">Commercial Lease</MenuItem>
-                                                    <MenuItem value="property_management">Property Management</MenuItem>
-                                                </Select>
-                                            </Box>
-                                        </Grid>
-                                        <Grid item xs={6}>
-                                            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                                                <TextField 
-                                                    fullWidth label="Est. Annual Value (AED) *" required type="number"
-                                                    value={estimatedValue} onChange={e => setEstimatedValue(e.target.value)} 
-                                                    variant="filled"
-                                                    sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                                />
-                                            </Box>
-                                        </Grid>
-                                    </Grid>
-
-                                    <TextField 
-                                        fullWidth label="Signed Date *" required type="date"
-                                        value={signedDate} onChange={e => setSignedDate(e.target.value)} 
-                                        variant="filled"
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                    />
                                 </>
                             ) : (
-                                <>
-                                    <TextField 
-                                        fullWidth label="Client / Owner Full Name *" required 
-                                        value={clientName} onChange={e => setClientName(e.target.value)} 
-                                        variant="filled"
-                                        sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                    />
-
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Client Email" type="email"
-                                                value={email} onChange={e => setEmail(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Client Phone" 
-                                                value={phone} onChange={e => setPhone(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                    </Grid>
-
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Property Name / Asset ID" 
-                                                value={propertyName} onChange={e => setPropertyName(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Asset Type (e.g. Penthouse, Commercial)" 
-                                                value={propertyType} onChange={e => setPropertyType(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                    </Grid>
-
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Location / Emirate" 
-                                                value={location} onChange={e => setLocation(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                        <Grid item xs={6}>
-                                            <TextField 
-                                                fullWidth label="Estimated Valuation (AED)" 
-                                                value={estimatedValue} onChange={e => setEstimatedValue(e.target.value)} 
-                                                variant="filled"
-                                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                                            />
-                                        </Grid>
-                                    </Grid>
-                                </>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid>
+                                </Grid>
                             )}
-                            
-                            <TextField 
-                                fullWidth label="Supporting Details / Notes" multiline rows={3} 
-                                value={notes} onChange={e => setNotes(e.target.value)} 
-                                variant="filled"
-                                sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} 
-                            />
+
+                            <TextField label="Estimated Contract / Asset Value (AED)" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} fullWidth InputProps={{ startAdornment: <DollarSign size={18} /> as any }} />
+                            <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={3} fullWidth />
                         </Stack>
                     </DialogContent>
-                    <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
-                        <Button 
-                            type="submit" 
-                            variant="contained" 
-                            disabled={submitting} 
-                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3 }}
-                        >
-                            {submitting ? <CircularProgress size={20} /> : 'INITIALIZE REFERRAL'}
+                    <DialogActions sx={{ p: 3 }}>
+                        <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
+                        <Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                            {submitting ? <CircularProgress size={20} /> : 'Submit Referral'}
                         </Button>
                     </DialogActions>
                 </form>
