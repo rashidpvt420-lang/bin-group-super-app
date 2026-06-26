@@ -1,5 +1,5 @@
-import AdminLiveDashboard from './AdminLiveDashboard';
+import AdminLiveDashboardV2 from './AdminLiveDashboardV2';
 
 export default function DashboardPage() {
-  return <AdminLiveDashboard />;
+  return <AdminLiveDashboardV2 />;
 }
