@@ -67,9 +67,11 @@ export default function PaymentApprovalsPage() {
     const [busyId, setBusyId] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [approvalTarget, setApprovalTarget] = React.useState<PaymentRecord | null>(null);
+    const [rejectTarget, setRejectTarget] = React.useState<PaymentRecord | null>(null);
     const [paymentReferenceId, setPaymentReferenceId] = React.useState('');
     const [amountReceived, setAmountReceived] = React.useState('');
     const [internalNotes, setInternalNotes] = React.useState('');
+    const [rejectReason, setRejectReason] = React.useState('');
 
     React.useEffect(() => {
         const q = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
@@ -92,6 +94,12 @@ export default function PaymentApprovalsPage() {
         setInternalNotes(row.notes || '');
     };
 
+    const openRejectDialog = (row: PaymentRecord) => {
+        setRejectTarget(row);
+        setRejectReason(row.adminNotes || '');
+        setError(null);
+    };
+
     const approvePayment = async () => {
         if (!approvalTarget) return;
         setBusyId(approvalTarget.id);
@@ -108,12 +116,20 @@ export default function PaymentApprovalsPage() {
         }
     };
 
-    const rejectPayment = async (paymentId: string) => {
-        setBusyId(paymentId);
+    const rejectPayment = async () => {
+        if (!rejectTarget) return;
+        const reason = rejectReason.trim();
+        if (reason.length < 8) {
+            setError('Enter a clear return reason before rejecting this payment.');
+            return;
+        }
+        setBusyId(rejectTarget.id);
         setError(null);
         try {
             const callable = httpsCallable(functions, 'adminRejectPayment');
-            await callable({ paymentId, reason: 'Rejected from admin payment approval console.' });
+            await callable({ paymentId: rejectTarget.id, reason, returnReason: reason, reviewNote: reason, internalNotes: reason });
+            setRejectTarget(null);
+            setRejectReason('');
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] rejection failed', err);
             setError(err?.message || 'Rejection failed.');
@@ -160,7 +176,7 @@ export default function PaymentApprovalsPage() {
                                             <TableCell><Typography variant="body2" sx={{ maxWidth: 240, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography>{row.notes && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{row.notes}</Typography>}{row.referenceUploadError && <Typography variant="caption" sx={{ color: '#f87171', display: 'block' }}>{row.referenceUploadError}</Typography>}{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open file</Button>}</TableCell>
                                             <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                             <TableCell><Chip label={row.status || row.paymentStatus || row.verificationState || 'pending'} size="small" sx={{ bgcolor: 'rgba(218,165,32,0.16)', color: '#DAA520', fontWeight: 900 }} /></TableCell>
-                                            <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? 'Verify Rent' : 'Verify & Unlock'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => rejectPayment(row.id)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject</Button></Stack></TableCell>
+                                            <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? 'Verify Rent' : 'Verify & Unlock'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject / Return</Button></Stack></TableCell>
                                         </TableRow>
                                     );
                                 })}
@@ -182,6 +198,18 @@ export default function PaymentApprovalsPage() {
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={approvePayment} disabled={!approvalTarget || busyId === approvalTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Confirm & Unlock Owner'}</Button></DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(rejectTarget)} onClose={() => setRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: '#f87171', fontWeight: 950 }}>Return / Reject Payment Proof</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ mt: 1 }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>Enter the exact reason the proof is being returned. This reason is sent to the rejection callable as return evidence for owner-facing review and audit history.</Typography>
+                        {rejectTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>SUBMITTED REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(rejectTarget)}</Typography>{referenceUrl(rejectTarget) && <Button size="small" onClick={() => openReference(rejectTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open uploaded file</Button>}</Paper>}
+                        <TextField label="Return reason / admin review note" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} fullWidth multiline minRows={4} required InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}><Button onClick={() => setRejectTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={rejectPayment} disabled={!rejectTarget || busyId === rejectTarget?.id || rejectReason.trim().length < 8} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 950 }}>Return / Reject</Button></DialogActions>
             </Dialog>
         </Box>
     );
