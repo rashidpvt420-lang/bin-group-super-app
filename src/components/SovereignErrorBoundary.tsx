@@ -1,4 +1,5 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
+import { db, collection, addDoc, serverTimestamp, auth } from "../lib/firebase";
 import "./ErrorBoundary.css";
 
 // Simple Typography shim if not fully loaded
@@ -115,9 +116,6 @@ class SovereignErrorBoundary extends Component<Props, State> {
     }
     
     try {
-        const { db, collection, addDoc, serverTimestamp } = await import("../lib/firebase");
-        const auth = (await import("../lib/firebase")).auth;
-        
         await addDoc(collection(db, "telemetry_logs"), {
             severity: "CRITICAL",
             type: "FRONTEND_CRASH",

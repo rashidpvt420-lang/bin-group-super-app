@@ -15,26 +15,27 @@ import { useLanguage } from '@bin/shared';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import CeoContactButtons from './CeoContactButtons';
+
 import { useAuth } from '../context/AuthContext';
 
 const Navigation = () => {
     const { t, tx, isRTL } = useLanguage();
     const { user } = useAuth();
     
-    const isHRAuthorized = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'ceo' || user?.role === 'hr_admin' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
+    const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
 
-    const primaryMenu = [
-        { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials/payroll', color: '#6366f1' },
-        { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
-        { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
-        { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
-        { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
-        { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
-        { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
-        { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
-        { text: 'BIN-GPT Engineer', icon: <Sparkles size={20} />, path: '/admin/bin-gpt-engineer', color: '#10b981' },
-    ];
+const primaryMenu = [
+    { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+    { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
+    { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
+    { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
+    { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
+    { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
+    { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
+    { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
+    { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
+    { text: 'BIN-GPT Engineer', icon: <Sparkles size={20} />, path: '/admin/bin-gpt-engineer', color: '#10b981' },
+];
 
     const managementMenu = [
         { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
@@ -43,30 +44,11 @@ const Navigation = () => {
         { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
         { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
-        { text: 'Duty Command Center', icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
+        { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
-        { text: 'WhatsApp Triage', icon: <PendingActionsIcon />, path: '/ops/whatsapp-triage', color: binThemeTokens.gold },
-        { text: 'BIN Connect Inbox', icon: <PendingActionsIcon />, path: '/ops/bin-connect', color: binThemeTokens.gold },
-        { text: 'Pilot Completion', icon: <PendingActionsIcon />, path: '/ops/pilot-completion', color: binThemeTokens.gold },
-        { text: 'Public Launch Command', icon: <PendingActionsIcon />, path: '/ops/public-launch-command', color: binThemeTokens.gold },
-        { text: 'RFQ Trust Workflow', icon: <AccountBalanceWalletIcon />, path: '/ops/rfq', color: binThemeTokens.gold },
-        { text: 'Vendor Command', icon: <PeopleIcon />, path: '/ops/vendors', color: binThemeTokens.gold },
-        { text: 'PDPL Governance', icon: <SecurityIcon />, path: '/ops/data-governance', color: binThemeTokens.gold },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
-        { text: tx('nav.emergency_command', 'Emergency Command'), icon: <SecurityIcon />, path: '/ops/emergency-command', color: '#ef4444' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
         ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
-        // Resident Experience & Building Operations
-        { text: tx('nav.amenity_control', 'Amenity Control'), icon: <PendingActionsIcon />, path: '/ops/amenity-control', color: binThemeTokens.gold },
-        { text: tx('nav.announcements', 'Announcements'), icon: <ReceiptIcon />, path: '/ops/announcements', color: binThemeTokens.gold },
-        { text: tx('nav.document_library', 'Document Library'), icon: <FileTextIcon />, path: '/ops/document-library', color: binThemeTokens.gold },
-        { text: tx('nav.key_register', 'Key Register'), icon: <SecurityIcon />, path: '/ops/key-register', color: binThemeTokens.gold },
-        { text: tx('nav.parcel_desk', 'Parcel Desk'), icon: <PendingActionsIcon />, path: '/ops/parcel-desk', color: binThemeTokens.gold },
-        { text: tx('nav.visitor_parking', 'Visitor Parking'), icon: <PendingActionsIcon />, path: '/ops/visitor-parking', color: binThemeTokens.gold },
-        { text: tx('nav.marketplace_approvals', 'Marketplace Approvals'), icon: <PendingActionsIcon />, path: '/ops/marketplace-approvals', color: binThemeTokens.gold },
-        { text: tx('nav.staff_directory', 'Staff Directory'), icon: <PeopleIcon />, path: '/ops/staff-directory', color: binThemeTokens.gold },
-        { text: tx('nav.messages', 'Messages'), icon: <ReceiptIcon />, path: '/ops/messages', color: binThemeTokens.gold },
-        { text: tx('nav.community_moderation', 'Community Moderation'), icon: <SecurityIcon />, path: '/ops/community-moderation', color: binThemeTokens.gold },
     ];
 
     const systemMenu = [
@@ -80,8 +62,8 @@ const Navigation = () => {
             sx={{
                 width: 280,
                 flexShrink: 0,
-                '& .MuiDrawer-paper': {
-                    width: 280,
+                '& .MuiDrawer-paper': { 
+                    width: 280, 
                     boxSizing: 'border-box',
                     bgcolor: '#020617',
                     borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
@@ -107,11 +89,11 @@ const Navigation = () => {
                     {t('nav.sovereign_core')}
                 </Typography>
                 {primaryMenu.map((item) => (
-                    <ListItem
-                        key={item.text}
-                        component={NavLink}
-                        to={item.path}
-                        sx={{
+                    <ListItem 
+                        key={item.text} 
+                        component={NavLink} 
+                        to={item.path} 
+                        sx={{ 
                             borderRadius: 2, mb: 0.5,
                             flexDirection: isRTL ? 'row-reverse' : 'row',
                             textAlign: isRTL ? 'right' : 'left',
@@ -129,18 +111,18 @@ const Navigation = () => {
                     {t('nav.operations')}
                 </Typography>
                 {managementMenu.map((item) => (
-                    <ListItem
-                        key={item.text}
-                        component={NavLink}
+                    <ListItem 
+                        key={item.text} 
+                        component={NavLink} 
                         to={item.path}
-                        sx={{
+                        sx={{ 
                             borderRadius: 2, mb: 0.5,
                             flexDirection: isRTL ? 'row-reverse' : 'row',
                             textAlign: isRTL ? 'right' : 'left',
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
+                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
                         <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
                 ))}
@@ -149,9 +131,9 @@ const Navigation = () => {
             <Box sx={{ mt: 'auto', p: 2 }}>
                 <List>
                     {systemMenu.map((item) => (
-                        <ListItem
-                            key={item.text}
-                            component={NavLink}
+                        <ListItem 
+                            key={item.text} 
+                            component={NavLink} 
                             to={item.path}
                             sx={{ borderRadius: 2, textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
                         >
@@ -182,13 +164,13 @@ const Navigation = () => {
                     </ListItem>
                     <ListItem
                         button
-                        onClick={() => {
+                        onClick={() => { 
                             const currentLang = localStorage.getItem('bin_language');
                             const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
-                            localStorage.clear();
+                            localStorage.clear(); 
                             if (currentLang) localStorage.setItem('bin_language', currentLang);
                             if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
-                            signOut(auth).then(() => window.location.href = '/');
+                            signOut(auth).then(() => window.location.href = '/'); 
                         }}
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                     >

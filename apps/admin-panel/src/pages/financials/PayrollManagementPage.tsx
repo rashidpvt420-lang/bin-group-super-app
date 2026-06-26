@@ -24,7 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -42,10 +42,9 @@ interface PayrollRecord {
   techId: string;
   techName: string;
   amount: number;
-  month: string; // YYYY-MM
+  month: string;
   status: 'pending' | 'paid';
   processedAt: any;
-  pdfUrl?: string;
 }
 
 export default function PayrollManagementPage() {
@@ -82,7 +81,6 @@ export default function PayrollManagementPage() {
       let processedCount = 0;
 
       for (const tech of techs) {
-        // Check if already processed for this month
         const existing = payroll.find(p => p.techId === tech.uid && p.month === currentMonth);
         if (existing) continue;
 
@@ -104,7 +102,6 @@ export default function PayrollManagementPage() {
           createdAt: serverTimestamp(),
         });
 
-        // Add to transactions ledger as money OUT
         const txRef = doc(collection(db, 'transactions'));
         batch.set(txRef, {
           techId: tech.uid,
@@ -126,7 +123,7 @@ export default function PayrollManagementPage() {
       alert(processedCount === 0 && skippedMsg ? skippedMsg : (skippedMsg ? `${successMsg}\n\n${skippedMsg}` : successMsg));
       setOpenAdd(false);
     } catch (err) {
-      console.error("Payroll failure:", err);
+      console.error('Payroll failure:', err);
     } finally {
       setProcessing(false);
     }
@@ -135,32 +132,19 @@ export default function PayrollManagementPage() {
   const handleSettlePayment = async (record: PayrollRecord) => {
     setProcessing(true);
     try {
-        const generatePayslip = httpsCallable(functions, 'generateAndEmailPayslip');
-        const result: any = await generatePayslip({
-          staffId: record.techId,
-          staffName: record.techName,
-          payPeriod: record.month,
-          basicSalary: record.amount,
-          allowances: 0,
-          overtime: 0,
-          deductions: 0,
-        });
-
-        if (result.data?.success) {
-            await updateDoc(doc(db, 'payroll', record.id), {
-              status: 'paid',
-              pdfUrl: result.data.pdfUrl || null,
-              processedAt: serverTimestamp(),
-            });
-            alert(`Sovereign Pay Advice Secured: ${result.data.pdfUrl}`);
-        } else {
-            alert("Institutional Payroll node failed. Check ledger permissions.");
-        }
+      const payslipNode = httpsCallable(functions, 'generateAndEmailPayslip');
+      const result: any = await payslipNode({ payrollId: record.id });
+      const payload = result?.data || {};
+      if (payload.status === 'SUCCESS' || payload.success !== false) {
+        alert(`Sovereign Pay Advice Secured: ${payload.pdfUrl || payload.url || 'generated'}`);
+      } else {
+        throw new Error(payload.message || 'Payslip generation failed');
+      }
     } catch (err: any) {
-        console.error("Payslip Node Fault:", err);
-        alert("Institutional Payroll node failed. Check ledger permissions.");
+      console.error('Payslip Node Fault:', err);
+      alert(err?.message || 'Institutional Payroll node failed. Check ledger permissions.');
     } finally {
-        setProcessing(false);
+      setProcessing(false);
     }
   };
 
@@ -183,12 +167,7 @@ export default function PayrollManagementPage() {
         <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>
         </Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<Wallet />} 
-          onClick={() => setOpenAdd(true)}
-          sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}
-        >
+        <Button variant="contained" startIcon={<Wallet />} onClick={() => setOpenAdd(true)} sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}>
           {t('fin.gen_payroll_btn')}
         </Button>
       </Box>
@@ -204,75 +183,57 @@ export default function PayrollManagementPage() {
         </Grid>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 3, borderRadius: 4, height: '100%', display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
-              <Clock size={24} />
-            </Box>
+            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}><Clock size={24} /></Box>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="overline" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>{t('fin.pending_disbursement')}</Typography>
               <Typography variant="h5" sx={{ fontWeight: 900 }}>{t('fin.tech_count', { count: payroll.filter(p => p.status === 'pending').length })}</Typography>
             </Box>
           </Paper>
         </Grid>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3, borderRadius: 4, height: '100%', display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}><FileText size={24} /></Box>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+              <Typography variant="overline" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>{t('fin.paid_records')}</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 900 }}>{payroll.filter(p => p.status === 'paid').length}</Typography>
+            </Box>
+          </Paper>
+        </Grid>
       </Grid>
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 4 }}>
-        <Table>
-          <TableHead sx={{ backgroundColor: '#f8fafc' }}>
-            <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.technician')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.month')}</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.table.amount')} ({t('common.currency_aed')})</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{t('fin.log.status')}</TableCell>
-              <TableCell align={isRTL ? 'left' : 'right'} sx={{ fontWeight: 'bold' }}>{t('common.actions')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {payroll.sort((a,b) => b.month.localeCompare(a.month)).map((record) => (
-              <TableRow key={record.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{record.techName}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{record.month}</TableCell>
-                <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{formatAED(record.amount)}</TableCell>
-                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Chip 
-                    label={record.status.toUpperCase()} 
-                    color={record.status === 'paid' ? 'success' : 'warning'} 
-                    size="small" 
-                    sx={{ fontWeight: 'bold', fontSize: 10 }} 
-                  />
-                </TableCell>
-                <TableCell align={isRTL ? 'left' : 'right'}>
-                  {record.status === 'pending' ? (
-                    <Button 
-                        size="small" 
-                        variant="contained" 
-                        color="success" 
-                        onClick={() => handleSettlePayment(record)}
-                        disabled={processing}
-                        startIcon={processing ? <CircularProgress size={14} /> : <Send size={14} />}
-                        sx={{ borderRadius: 100, fontWeight: 900, textTransform: 'none' }}
-                    >
-                        {t('fin.settle_payment') || 'PAY & ADVISE'}
-                    </Button>
-                  ) : (
-                    <Button
-                        size="small"
-                        startIcon={<FileText size={14} />}
-                        sx={{ fontWeight: 900 }}
-                        disabled={!record.pdfUrl}
-                        onClick={() => record.pdfUrl && window.open(record.pdfUrl, '_blank', 'noopener,noreferrer')}
-                    >
-                        VIEW SLIP
-                    </Button>
-                  )}
-                </TableCell>
+      <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }}>
+        <TableContainer>
+          <Table>
+            <TableHead sx={{ bgcolor: '#f8fafc' }}>
+              <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>{t('fin.staff')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>{t('fin.month')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>{t('common.amount')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>{t('dt.table.status')}</TableCell>
+                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>{t('common.action')}</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {payroll.map((record) => (
+                <TableRow key={record.id} hover>
+                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography fontWeight={800}>{record.techName}</Typography></TableCell>
+                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{record.month}</TableCell>
+                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{t('common.currency_aed')} {formatAED(record.amount)}</TableCell>
+                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={record.status} color={record.status === 'paid' ? 'success' : 'warning'} size="small" /></TableCell>
+                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                    <Button size="small" variant="contained" disabled={processing || record.status === 'paid'} onClick={() => handleSettlePayment(record)} startIcon={processing ? <CircularProgress size={14} color="inherit" /> : <Send size={14} />} sx={{ bgcolor: '#10b981', fontWeight: 900 }}>
+                      {t('fin.pay_advise') || 'PAY & ADVISE'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-      <Dialog open={openProcess} onClose={() => setOpenAdd(false)} dir={isRTL ? 'rtl' : 'ltr'}>
-        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('fin.gen_payroll_title', { month: currentMonth })}</DialogTitle>
+      <Dialog open={openProcess} onClose={() => setOpenAdd(false)}>
+        <DialogTitle>{t('fin.generate_payroll')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
             {t('fin.gen_payroll_desc')}
@@ -286,16 +247,9 @@ export default function PayrollManagementPage() {
             </Alert>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <DialogActions>
           <Button onClick={() => setOpenAdd(false)}>{t('common.cancel')}</Button>
-          <Button 
-            variant="contained" 
-            onClick={handleProcessPayroll} 
-            disabled={processing}
-            sx={{ borderRadius: 100, bgcolor: '#6366f1' }}
-          >
-            {t('fin.confirm_execute')}
-          </Button>
+          <Button variant="contained" onClick={handleProcessPayroll} disabled={processing}>{processing ? <CircularProgress size={18} /> : t('common.confirm')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

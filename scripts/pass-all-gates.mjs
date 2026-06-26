@@ -13,7 +13,6 @@ const tester = 'Rashid AbdulGhani';
 const testedAt = new Date().toISOString();
 
 const proofs = {
-  // Provider Gates
   //
   // storageRules and firebaseFunctionsLiveSmoke are deliberately omitted here.
   // Both require proof from a genuine production run (or an explicit `waived`

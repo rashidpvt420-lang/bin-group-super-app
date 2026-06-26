@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Stack, Button, CircularProgress, Divider } from '@mui/material';
+import { Box, Typography, Paper, Stack, Button, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, MessageCircle, Phone } from 'lucide-react';
-
-const WHATSAPP_NUMBER = '971552423233';
+import { AlertTriangle, MapPin } from 'lucide-react';
 import { db, collection, addDoc, serverTimestamp, query, where, getDocs } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -93,33 +91,6 @@ export default function TenantEmergencyPage() {
             >
                 {submitting ? <CircularProgress size={28} color="inherit" /> : (t('dash.tenant.triggerSos') || 'TRIGGER SOS DISPATCH')}
             </Button>
-
-            <Divider sx={{ my: 6, maxWidth: 480, mx: 'auto' }} />
-
-            <Typography variant="h6" fontWeight="900" sx={{ mb: 3 }}>Or contact us directly</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-                <Button
-                    variant="contained"
-                    size="large"
-                    startIcon={<MessageCircle size={20} />}
-                    onClick={() => {
-                        const msg = encodeURIComponent(`EMERGENCY: I need immediate maintenance assistance at my unit.\nTenant: ${user?.displayName || user?.email || ''}\nUnit: ${unitData?.unitNumber || ''}\nProperty: ${propertyData?.name || ''}`);
-                        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
-                    }}
-                    sx={{ bgcolor: '#25D366', color: '#FFF', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3 }}
-                >
-                    WHATSAPP EMERGENCY
-                </Button>
-                <Button
-                    variant="outlined"
-                    size="large"
-                    startIcon={<Phone size={20} />}
-                    href={`tel:+${WHATSAPP_NUMBER}`}
-                    sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3 }}
-                >
-                    CALL NOW
-                </Button>
-            </Stack>
         </Box>
     );
 }

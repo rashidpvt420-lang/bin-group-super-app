@@ -20,7 +20,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth } from '../lib/firebase';
+import { auth, getFirebaseRuntimeDiagnostics } from '../lib/firebase';
 import {
     GoogleAuthProvider,
     browserLocalPersistence,
@@ -30,13 +30,11 @@ import {
     signInWithEmailAndPassword,
     signInWithPopup,
     signInWithRedirect,
-    signOut,
 } from 'firebase/auth';
-import { ArrowLeft, AlertTriangle, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
+import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
-import { CeoContactButtons } from '../components/CeoContactButtons';
 
-type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
+type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string; diagnostic?: string };
 
 const palette = {
     canvas: '#FFFFFF',
@@ -55,8 +53,7 @@ const LoginPage: React.FC = () => {
     const { t, tx, isRTL, lang, setLang } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
-    const { role, isAdmin, loading: roleLoading, status: roleStatus, refreshRole } = useRole();
-    const [signingOut, setSigningOut] = useState(false);
+    const { role, isAdmin, loading: roleLoading, refreshRole } = useRole();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -93,22 +90,53 @@ const LoginPage: React.FC = () => {
         if (!roleLoading && role) navigate(resolvePostLoginTarget(), { replace: Boolean(safeReturnTo) });
     }, [role, isAdmin, roleLoading, navigate, safeReturnTo, intendedRoleKey]);
 
-    const getFriendlyAuthError = (err: any) => {
-        const code = err?.code || '';
+    const buildAuthDiagnostic = (err: any) => {
+        const runtime = getFirebaseRuntimeDiagnostics();
+        const code = err?.code || err?.name || 'auth/unknown';
+        const message = err?.message || String(err || 'Unknown login failure');
+        return [
+            `code=${code}`,
+            `message=${message}`,
+            `projectId=${runtime.projectId}`,
+            `authDomain=${runtime.authDomain}`,
+            `host=${runtime.host}`,
+            `appCheckEnabled=${runtime.appCheckExplicitlyEnabled}`,
+            `appCheckInitialized=${runtime.appCheckInitialized}`,
+        ].join(' | ');
+    };
+
+    const getFriendlyAuthError = (err: any): NoticeState => {
+        const code = err?.code || err?.name || '';
         const message = err?.message || '';
-        if (import.meta.env.DEV) {
-            console.error('[AUTH_DIAGNOSTIC]', { code, authDomain: auth.config?.authDomain, env: import.meta.env.MODE });
-        }
-        if (code === 'auth/invalid-email') return tx('login.error.invalid_email', 'Please enter a valid email address.');
-        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return t('login.error.invalid');
-        if (code === 'auth/too-many-requests') return t('login.error.too_many');
-        if (code === 'auth/popup-closed-by-user') return tx('login.error.popup_closed', 'Google sign-in was closed before completion. Try again or use email and password.');
-        if (code === 'auth/popup-blocked') return tx('login.error.popup_blocked', 'The browser blocked the Google sign-in popup. A redirect sign-in will be attempted.');
-        if (code === 'auth/unauthorized-domain') return tx('login.error.unauthorized_domain', 'This domain is not authorized for Firebase Google sign-in. Add the hosting domain in Firebase Authentication settings.');
-        if (code === 'auth/operation-not-allowed') return tx('login.error.provider_disabled', 'This sign-in method is not enabled in Firebase Authentication. Enable Google or Email/Password sign-in first.');
-        if (code === 'auth/account-exists-with-different-credential') return tx('login.error.account_exists', 'This email already exists with another sign-in method. Sign in using email/password first, then link Google later.');
-        if (code === 'auth/network-request-failed') return t('login.error.network');
-        return tx('login.error.generic', 'Login could not be completed. Please contact BIN GROUP support.');
+        const diagnostic = buildAuthDiagnostic(err);
+        console.error('[AUTH_DIAGNOSTIC]', {
+            code,
+            message,
+            diagnostic,
+            authDomain: auth.config?.authDomain,
+            currentUrl: window.location.href,
+            provider: code.includes('google') || code.includes('popup') || code.includes('redirect') ? 'google.com' : 'password',
+            env: import.meta.env.MODE,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
+        });
+
+        if (code === 'auth/invalid-email') return { type: 'error', text: tx('login.error.invalid_email', 'Please enter a valid email address.'), diagnostic };
+        if (code === 'auth/missing-password') return { type: 'error', text: 'Password is missing. Enter the account password and try again.', diagnostic };
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return { type: 'error', text: t('login.error.invalid'), diagnostic };
+        if (code === 'auth/user-disabled') return { type: 'error', text: 'This Firebase Auth user is disabled. Enable the user in Firebase Authentication → Users.', diagnostic };
+        if (code === 'auth/too-many-requests') return { type: 'error', text: t('login.error.too_many'), diagnostic };
+        if (code === 'auth/popup-closed-by-user') return { type: 'error', text: tx('login.error.popup_closed', 'Google sign-in was closed before completion. Try again or use email and password.'), diagnostic };
+        if (code === 'auth/popup-blocked') return { type: 'error', text: tx('login.error.popup_blocked', 'The browser blocked the Google sign-in popup. A redirect sign-in will be attempted.'), diagnostic };
+        if (code === 'auth/unauthorized-domain') return { type: 'error', text: tx('login.error.unauthorized_domain', 'This domain is not authorized for Firebase sign-in. Add this app domain in Firebase Authentication → Settings → Authorized domains.'), diagnostic };
+        if (code === 'auth/operation-not-allowed') return { type: 'error', text: tx('login.error.provider_disabled', 'This sign-in method is not enabled in Firebase Authentication. Enable Email/Password or Google sign-in first.'), diagnostic };
+        if (code === 'auth/account-exists-with-different-credential') return { type: 'error', text: tx('login.error.account_exists', 'This email already exists with another sign-in method. Sign in using email/password first, then link Google later.'), diagnostic };
+        if (code === 'auth/network-request-failed') return { type: 'error', text: t('login.error.network'), diagnostic };
+        if (code === 'auth/api-key-not-valid' || code === 'auth/invalid-api-key') return { type: 'error', text: 'Firebase rejected the API key. Use the Web API key from project bin-group-57c60, or remove the wrong VITE_FIREBASE_API_KEY from .env.local so the app uses the built-in project fallback.', diagnostic };
+        if (code === 'auth/app-not-authorized') return { type: 'error', text: 'Firebase rejected this app/domain. Add the Codespaces preview domain and production domain in Firebase Authentication → Authorized domains, and check API key browser restrictions.', diagnostic };
+        if (code === 'permission-denied' || code === 'FirebaseError') return { type: 'error', text: 'Firebase signed in but role/profile sync was blocked. Check Firestore rules, App Check enforcement, or the users/{uid} role document.', diagnostic };
+        return { type: 'error', text: `Login blocked by Firebase: ${code || 'unknown error'}. The diagnostic details below show the exact blocker.`, diagnostic };
     };
 
     useEffect(() => {
@@ -132,7 +160,7 @@ const LoginPage: React.FC = () => {
                 else if (storedIntent === 'technician') navigate('/technician/dashboard', { replace: true });
                 else if (storedIntent === 'broker') navigate('/broker/dashboard', { replace: true });
             } catch (err: any) {
-                if (mounted) setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+                if (mounted) setNotice(getFriendlyAuthError(err));
             }
         };
         void completeGoogleRedirect();
@@ -170,7 +198,7 @@ const LoginPage: React.FC = () => {
                 throw popupErr;
             }
         } catch (err: any) {
-            setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+            setNotice(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
     };
@@ -186,7 +214,7 @@ const LoginPage: React.FC = () => {
             await refreshRole();
             if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
         } catch (err: any) {
-            setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+            setNotice(getFriendlyAuthError(err));
             setLocalLoading(false);
         }
     };
@@ -205,7 +233,7 @@ const LoginPage: React.FC = () => {
             await sendPasswordResetEmail(auth, normalizedEmail, { url: resetUrl, handleCodeInApp: false });
             setNotice({ type: 'success', text: tx('login.reset.sent', 'Password reset email sent. Check your inbox or spam folder, then return here to sign in.') });
         } catch (err: any) {
-            setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+            setNotice(getFriendlyAuthError(err));
         } finally {
             setLocalLoading(false);
         }
@@ -223,60 +251,6 @@ const LoginPage: React.FC = () => {
                     <CircularProgress sx={{ color: palette.gold }} />
                     <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{t('common.auth_sync')}</Typography>
                 </Stack>
-            </Box>
-        );
-    }
-
-    if (!role && roleStatus === 'role_required') {
-        const handleTryDifferentAccount = async () => {
-            setSigningOut(true);
-            try {
-                await signOut(auth);
-            } catch (err) {
-                console.error('[AUTH] Sign-out failed while clearing a role_required session.', err);
-            } finally {
-                setSigningOut(false);
-            }
-        };
-        return (
-            <Box sx={{
-                minHeight: '100vh',
-                bgcolor: palette.canvas,
-                display: 'grid',
-                placeItems: 'center',
-                p: 2,
-                direction: isRTL ? 'rtl' : 'ltr',
-            }}>
-                <Container maxWidth="sm">
-                    <Card sx={{
-                        bgcolor: palette.card,
-                        border: `1px solid ${palette.border}`,
-                        borderTop: `3px solid ${palette.gold}`,
-                        borderRadius: 3,
-                        boxShadow: '0 22px 60px rgba(17,24,39,0.12)',
-                    }}>
-                        <CardContent sx={{ p: { xs: 2.5, sm: 4 }, textAlign: 'center' }}>
-                            <SafeIcon icon={AlertTriangle} size={36} style={{ color: palette.gold, marginBottom: 12 }} />
-                            <Typography variant="h6" fontWeight={950} sx={{ color: palette.ink, mb: 1 }}>
-                                {tx('login.role_required.title', 'Account Setup Incomplete')}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: palette.muted, fontWeight: 600, mb: 3 }}>
-                                {tx('login.role_required.body', 'Your account is signed in, but no role has been assigned yet. Please contact support or try a different account.')}
-                            </Typography>
-                            <Stack spacing={1.5} alignItems="center">
-                                <Button
-                                    variant="contained"
-                                    disabled={signingOut}
-                                    onClick={handleTryDifferentAccount}
-                                    sx={{ bgcolor: palette.gold, color: '#111827', fontWeight: 900, px: 3, '&:hover': { bgcolor: palette.gold } }}
-                                >
-                                    {signingOut ? <CircularProgress size={20} sx={{ color: '#111827' }} /> : tx('login.role_required.retry', 'Try a Different Account')}
-                                </Button>
-                                <CeoContactButtons />
-                            </Stack>
-                        </CardContent>
-                    </Card>
-                </Container>
             </Box>
         );
     }
@@ -339,7 +313,16 @@ const LoginPage: React.FC = () => {
                     overflow: 'hidden',
                 }}>
                     <CardContent sx={{ p: { xs: 2.5, sm: 4, md: 5 } }}>
-                        {notice && <Alert severity={notice.type} sx={{ mb: 3 }}>{notice.text}</Alert>}
+                        {notice && (
+                            <Alert severity={notice.type} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
+                                <Typography sx={{ fontWeight: 800 }}>{notice.text}</Typography>
+                                {notice.diagnostic && (
+                                    <Typography component="pre" sx={{ mt: 1, mb: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, fontFamily: 'monospace', color: '#7f1d1d' }}>
+                                        {notice.diagnostic}
+                                    </Typography>
+                                )}
+                            </Alert>
+                        )}
                         <form onSubmit={handleLogin}>
                             <Stack spacing={2.5}>
                                 <TextField

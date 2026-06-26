@@ -369,7 +369,7 @@ export default function OwnerContractsResolvedPage() {
     setSigningId(contract.id);
     setNotice(null);
     try {
-      const signContract = httpsCallable(functions, 'ownerSignContractAndQueuePdf');
+      const signContract = httpsCallable(functions, 'ownerSignContract');
       const result = await signContract({ contractId: contract.id, signatureName: name, acceptedTerms: true });
       const data = result.data as { status?: string; idempotent?: boolean; termSummary?: any };
       setNotice({ type: 'success', text: data?.idempotent ? 'Contract is already signed and ready for activation/payment verification.' : `Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}.` });
