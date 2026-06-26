@@ -169,6 +169,7 @@ export default function TechnicianJobDetailPage() {
                     propertyName: ticket?.propertyName || '',
                     unitId: ticket?.unitId || '',
                     unitNumber: ticket?.unitNumber || '',
+                    serviceLocationDetail: ticket?.serviceLocationDetail || ticket?.specificLocation || '',
                 },
             }),
         });
@@ -306,6 +307,7 @@ export default function TechnicianJobDetailPage() {
 
     const contactPhone = ticket.tenantPhone || ticket.ownerPhone || ticket.requesterPhone;
     const requesterName = ticket.tenantName || ticket.ownerName || 'Resident';
+    const serviceLocationDetail = ticket.serviceLocationDetail || ticket.specificLocation || ticket.roomLocation || ticket.assetLocation || '';
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -340,6 +342,12 @@ export default function TechnicianJobDetailPage() {
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
                                 <Typography variant="h6" fontWeight="900" color="#FFF">{ticket.propertyName || 'Property'}</Typography>
                                 <Typography variant="body2" color="textSecondary">Unit {ticket.unitNumber || ticket.unitLabel || 'N/A'} · Floor {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Paper sx={{ p: 2.25, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 3 }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.exact_service_location', 'EXACT SERVICE LOCATION')}</Typography>
+                                    <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>{serviceLocationDetail || tx('tech.job.service_location_missing', 'Not specified — call tenant before moving to site.')}</Typography>
+                                </Paper>
                             </Grid>
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
@@ -408,6 +416,7 @@ export default function TechnicianJobDetailPage() {
                     <Stack spacing={3}>
                         <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.location', 'Location')}</Typography>
+                            {serviceLocationDetail && <Paper sx={{ mt: 2, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 2 }}><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>SERVICE POINT</Typography><Typography color="#FFF" fontWeight={900}>{serviceLocationDetail}</Typography></Paper>}
                             {resolved.hasExactCoordinates ? (
                                 <Button fullWidth variant="contained" startIcon={<Navigation />} onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                                     {tx('tech.job.navigate', 'Navigate to Tenant Property')}
