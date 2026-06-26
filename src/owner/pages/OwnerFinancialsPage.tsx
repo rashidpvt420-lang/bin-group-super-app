@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, 
-    Grid, alpha, Button, Divider,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow
+import {
+    Box, Typography, Paper, Stack, Chip, CircularProgress,
+    Grid, alpha, Button, Divider, Alert,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField
 } from '@mui/material';
-import { 
-    DollarSign, CreditCard, Download, 
+import {
+    DollarSign, CreditCard, Download,
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, orderBy, limit, addDoc, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -28,12 +29,17 @@ export default function OwnerFinancialsPage() {
         maintenanceDeductions: 0
     });
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [payoutRequests, setPayoutRequests] = useState<any[]>([]);
+    const [payoutDialogOpen, setPayoutDialogOpen] = useState(false);
+    const [payoutNote, setPayoutNote] = useState('');
+    const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+    const [payoutMessage, setPayoutMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
         if (!user?.email) return;
 
         const email = user.email.toLowerCase();
-        
+
         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
         const unsubscribePassports = onSnapshot(passportQ, (snap) => {
             let rev = 0, maint = 0, pending = 0;
@@ -43,7 +49,7 @@ export default function OwnerFinancialsPage() {
                 maint += Number(data.maintenanceCostTotal || data.outstandingMaintenanceInvoices || data.maintenanceDeductions || 0);
                 pending += Number(data.pendingRentVerification || data.pendingVerification || 0);
             });
-            
+
             const fees = rev * MANAGEMENT_FEE_RATE;
             setSummary({
                 totalRevenue: rev,
@@ -52,11 +58,16 @@ export default function OwnerFinancialsPage() {
                 managementFees: fees,
                 maintenanceDeductions: maint
             });
+        }, (err) => {
+            console.warn('[OwnerFinancials] property passport listener failed', err);
         });
 
         const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), orderBy('createdAt', 'desc'), limit(10));
         const unsubscribeTrans = onSnapshot(transQ, (snap) => {
             setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        }, (err) => {
+            console.warn('[OwnerFinancials] payouts listener failed', err);
             setLoading(false);
         });
 
@@ -65,6 +76,46 @@ export default function OwnerFinancialsPage() {
             unsubscribeTrans();
         };
     }, [user?.email]);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const requestsQ = query(collection(db, 'payoutRequests'), where('ownerUid', '==', user.uid), orderBy('createdAt', 'desc'), limit(10));
+        const unsubscribe = onSnapshot(requestsQ, (snap) => {
+            setPayoutRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            console.warn('[OwnerFinancials] payout requests listener failed', err);
+        });
+        return () => unsubscribe();
+    }, [user?.uid]);
+
+    const pendingPayoutRequest = payoutRequests.find(r => r.status === 'requested');
+
+    const handleRequestPayout = async () => {
+        if (!user?.uid || !summary.netPayout) return;
+        setPayoutSubmitting(true);
+        setPayoutMessage(null);
+        try {
+            await addDoc(collection(db, 'payoutRequests'), {
+                ownerId: user.uid,
+                ownerUid: user.uid,
+                ownerEmail: user.email || '',
+                ownerName: user.displayName || 'Owner',
+                amountRequested: summary.netPayout,
+                note: payoutNote.trim(),
+                status: 'requested',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            setPayoutDialogOpen(false);
+            setPayoutNote('');
+            setPayoutMessage({ type: 'success', text: tx('owner.fin.payout_requested', 'Payout request sent to BIN GROUP Finance. You will be notified once it is processed.') });
+        } catch (err: any) {
+            console.error('[OwnerFinancials] payout request failed', err);
+            setPayoutMessage({ type: 'error', text: err?.message || tx('owner.fin.payout_request_failed', 'Could not send payout request. Please try again.') });
+        } finally {
+            setPayoutSubmitting(false);
+        }
+    };
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
@@ -89,9 +140,23 @@ export default function OwnerFinancialsPage() {
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>{tx('owner.fin.export_txn', 'Export TXN')}</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.fin.withdraw', 'Withdraw Funds')}</Button>
+                    <Button
+                        variant="contained"
+                        disabled={!summary.netPayout || Boolean(pendingPayoutRequest)}
+                        onClick={() => setPayoutDialogOpen(true)}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3, '&.Mui-disabled': { bgcolor: alpha(binThemeTokens.gold, 0.25), color: 'rgba(0,0,0,0.5)' } }}
+                    >
+                        {pendingPayoutRequest ? tx('owner.fin.payout_pending', 'Payout Requested') : tx('owner.fin.withdraw', 'Withdraw Funds')}
+                    </Button>
                 </Stack>
             </Box>
+
+            {payoutMessage && <Alert severity={payoutMessage.type} sx={{ mb: 4 }} onClose={() => setPayoutMessage(null)}>{payoutMessage.text}</Alert>}
+            {pendingPayoutRequest && !payoutMessage && (
+                <Alert severity="info" sx={{ mb: 4 }}>
+                    {tx('owner.fin.payout_pending_desc', 'A payout request for')} AED {Number(pendingPayoutRequest.amountRequested || 0).toLocaleString()} {tx('owner.fin.payout_pending_desc2', 'is awaiting BIN GROUP Finance review.')}
+                </Alert>
+            )}
 
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {FINANCIAL_KPIs.map((kpi, idx) => (
@@ -196,6 +261,37 @@ export default function OwnerFinancialsPage() {
                     </Paper>
                 </Grid>
             </Grid>
+
+            <Dialog open={payoutDialogOpen} onClose={() => setPayoutDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { bgcolor: '#0f172a', color: '#fff', borderRadius: 4, border: '1px solid rgba(255,255,255,0.08)' } }}>
+                <DialogTitle sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('owner.fin.request_payout_title', 'Request Payout')}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ mt: 1 }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                            {tx('owner.fin.request_payout_desc', 'This sends a payout request to BIN GROUP Finance for review. Funds are disbursed by bank transfer after finance verifies and processes the request — this is a request, not an instant withdrawal.')}
+                        </Typography>
+                        <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.fin.amount_requested', 'AMOUNT REQUESTED')}</Typography>
+                            <Typography variant="h5" fontWeight={950}>AED {summary.netPayout.toLocaleString()}</Typography>
+                        </Paper>
+                        <TextField
+                            label={tx('owner.fin.payout_note', 'Note for finance (optional)')}
+                            value={payoutNote}
+                            onChange={(e) => setPayoutNote(e.target.value)}
+                            fullWidth
+                            multiline
+                            minRows={2}
+                            InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }}
+                            InputProps={{ sx: { color: '#fff' } }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setPayoutDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{tx('common.cancel', 'Cancel')}</Button>
+                    <Button onClick={handleRequestPayout} disabled={payoutSubmitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                        {payoutSubmitting ? <CircularProgress size={20} sx={{ color: '#000' }} /> : tx('owner.fin.submit_request', 'Submit Request')}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

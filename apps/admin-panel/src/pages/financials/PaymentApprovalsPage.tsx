@@ -23,12 +23,15 @@ import { CheckCircle, XCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import {
     collection,
     db,
+    doc,
     functions,
     httpsCallable,
     limit,
     onSnapshot,
     orderBy,
     query,
+    serverTimestamp,
+    updateDoc,
     where,
 } from '../../lib/firebase';
 
@@ -85,6 +88,18 @@ type PaymentRecord = {
     stripePaymentIntentId?: string;
 };
 
+type PayoutRequestRecord = {
+    id: string;
+    ownerId?: string;
+    ownerUid?: string;
+    ownerEmail?: string;
+    ownerName?: string;
+    amountRequested?: number;
+    note?: string;
+    status?: string;
+    createdAt?: any;
+};
+
 const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
 const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
@@ -108,6 +123,11 @@ export default function PaymentApprovalsPage() {
     const [refundTarget, setRefundTarget] = React.useState<PaymentRecord | null>(null);
     const [refundReason, setRefundReason] = React.useState('');
     const [refundBusyId, setRefundBusyId] = React.useState<string | null>(null);
+    const [payoutRows, setPayoutRows] = React.useState<PayoutRequestRecord[]>([]);
+    const [payoutLoading, setPayoutLoading] = React.useState(true);
+    const [payoutBusyId, setPayoutBusyId] = React.useState<string | null>(null);
+    const [payoutRejectTarget, setPayoutRejectTarget] = React.useState<PayoutRequestRecord | null>(null);
+    const [payoutRejectReason, setPayoutRejectReason] = React.useState('');
 
     React.useEffect(() => {
         const q = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
@@ -146,6 +166,51 @@ export default function PaymentApprovalsPage() {
 
         return () => unsubscribe();
     }, []);
+
+    React.useEffect(() => {
+        const q = query(collection(db, 'payoutRequests'), where('status', '==', 'requested'), orderBy('createdAt', 'desc'), limit(50));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setPayoutRows(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+            setPayoutLoading(false);
+        }, (err) => {
+            console.error('[ADMIN_PAYMENTS] payout requests stream failed', err);
+            setPayoutLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const markPayoutPaid = async (row: PayoutRequestRecord) => {
+        setPayoutBusyId(row.id);
+        setError(null);
+        try {
+            await updateDoc(doc(db, 'payoutRequests', row.id), { status: 'paid', paidAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        } catch (err: any) {
+            console.error('[ADMIN_PAYMENTS] payout mark-paid failed', err);
+            setError(err?.message || 'Could not mark payout as paid.');
+        } finally {
+            setPayoutBusyId(null);
+        }
+    };
+
+    const openPayoutRejectDialog = (row: PayoutRequestRecord) => {
+        setPayoutRejectTarget(row);
+        setPayoutRejectReason('');
+    };
+
+    const submitPayoutReject = async () => {
+        if (!payoutRejectTarget) return;
+        setPayoutBusyId(payoutRejectTarget.id);
+        setError(null);
+        try {
+            await updateDoc(doc(db, 'payoutRequests', payoutRejectTarget.id), { status: 'rejected', rejectionReason: payoutRejectReason.trim() || 'Rejected by finance.', updatedAt: serverTimestamp() });
+            setPayoutRejectTarget(null);
+        } catch (err: any) {
+            console.error('[ADMIN_PAYMENTS] payout reject failed', err);
+            setError(err?.message || 'Could not reject payout request.');
+        } finally {
+            setPayoutBusyId(null);
+        }
+    };
 
     const openApproveDialog = (row: PaymentRecord) => {
         setApprovalTarget(row);
@@ -318,6 +383,60 @@ export default function PaymentApprovalsPage() {
                 )}
             </Paper>
 
+            <Paper sx={{ mt: 4, bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                <Box sx={{ p: 3, pb: 2 }}>
+                    <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>
+                        OWNER PAYOUTS
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff' }}>
+                        Owner Payout Requests
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>
+                        Owners requesting their net rent payout via bank transfer. Mark as paid only after the bank transfer has been sent.
+                    </Typography>
+                </Box>
+                {payoutLoading ? (
+                    <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}>
+                        <CircularProgress sx={{ color: '#DAA520' }} />
+                    </Box>
+                ) : payoutRows.length === 0 ? (
+                    <Box sx={{ p: 6, textAlign: 'center' }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>No pending payout requests.</Typography>
+                    </Box>
+                ) : (
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Note</TableCell>
+                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {payoutRows.map((row) => (
+                                    <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
+                                        <TableCell>
+                                            <Typography sx={{ fontWeight: 900 }}>{row.ownerName || 'Owner'}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography>
+                                        </TableCell>
+                                        <TableCell>{formatMoney(row.amountRequested)}</TableCell>
+                                        <TableCell><Typography variant="body2" sx={{ maxWidth: 280, overflowWrap: 'anywhere', color: 'rgba(255,255,255,0.7)' }}>{row.note || '—'}</Typography></TableCell>
+                                        <TableCell align="right">
+                                            <Stack direction="row" justifyContent="flex-end" gap={1}>
+                                                <Button size="small" startIcon={<CheckCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => markPayoutPaid(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>Mark Paid</Button>
+                                                <Button size="small" startIcon={<XCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => openPayoutRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject</Button>
+                                            </Stack>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
+            </Paper>
+
             <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
                 <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Confirm Payment & Unlock Owner'}</DialogTitle>
                 <DialogContent>
@@ -346,6 +465,24 @@ export default function PaymentApprovalsPage() {
                     <Button onClick={() => setRefundTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
                     <Button onClick={submitRefund} disabled={!refundTarget || refundBusyId === refundTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
                         Confirm Refund
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(payoutRejectTarget)} onClose={() => setPayoutRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>Reject Payout Request</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ mt: 1 }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>
+                            This rejects {formatMoney(payoutRejectTarget?.amountRequested)} requested by {payoutRejectTarget?.ownerName || 'this owner'}. They will see the rejection reason on their dashboard.
+                        </Typography>
+                        <TextField label="Rejection reason" value={payoutRejectReason} onChange={(e) => setPayoutRejectReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setPayoutRejectTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={submitPayoutReject} disabled={!payoutRejectTarget || payoutBusyId === payoutRejectTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
+                        Confirm Rejection
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -458,6 +458,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || hasPermission('canManageContracts') || ownerCanRead(resource.data);
+      allow create: if isAdmin() || hasPermission('canManageContracts');
+      allow update: if isAdmin() || hasPermission('canManageContracts');
+      allow delete: if isAdmin();
+    }
+
+    match /payoutRequests/{requestId} {
+      allow read: if isAdmin() || hasPermission('canManageContracts') || ownerCanRead(resource.data);
+      allow create: if signedIn() && ownerCanRead(request.resource.data) && request.resource.data.status == 'requested';
+      allow update: if isAdmin() || hasPermission('canManageContracts');
+      allow delete: if isAdmin();
+    }
+
     match /tickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
       allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
