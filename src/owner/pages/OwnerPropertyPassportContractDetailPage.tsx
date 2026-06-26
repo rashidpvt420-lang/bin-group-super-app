@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Tab, Tabs, Typography, alpha } from '@mui/material';
 import { Building2, ClipboardCheck, FileText, Layers, MapPin, ShieldCheck, UsersRound, Wrench } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, query, where } from '../../lib/firebase';
@@ -9,7 +9,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import UaePropertyMap from '../../components/maps/UaePropertyMap';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 
-type PassportTab = 'map' | 'documents' | 'inspections' | 'maintenance' | 'systems';
+type PassportTab = 'map' | 'documents' | 'handover' | 'maintenance' | 'systems';
 
 type Row = { id: string; [key: string]: any };
 
@@ -121,6 +121,7 @@ function PassportList({ title, icon, rows, empty }: { title: string; icon: React
 
 export default function OwnerPropertyPassportContractDetailPage() {
   const { passportId = '' } = useParams();
+  const navigate = useNavigate();
   const { user } = useRole();
   const { isRTL } = useLanguage();
   const [loading, setLoading] = useState(true);
@@ -221,10 +222,10 @@ export default function OwnerPropertyPassportContractDetailPage() {
         </Paper>
 
         <Paper sx={{ bgcolor: 'rgba(15,23,42,0.50)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
-          <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, '& .MuiTab-root': { color: 'rgba(255,255,255,0.52)', fontWeight: 950 }, '& .Mui-selected': { color: binThemeTokens.gold }, '& .MuiTabs-indicator': { bgcolor: binThemeTokens.gold } }}>
+          <Tabs value={activeTab} onChange={(_, next) => setActiveTab(next)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, '& .MuiTab-root': { color: 'rgba(255,255,255,0.55)', fontWeight: 950 }, '& .Mui-selected': { color: `${binThemeTokens.gold} !important` }, '& .MuiTabs-indicator': { bgcolor: binThemeTokens.gold } }}>
             <Tab value="map" label="Map / GPS" />
             <Tab value="documents" label={`Documents (${documents.length})`} />
-            <Tab value="inspections" label={`Inspections (${inspections.length})`} />
+            <Tab value="handover" label={`Handover (${inspections.length})`} />
             <Tab value="maintenance" label={`Maintenance (${missions.length})`} />
             <Tab value="systems" label="Systems" />
           </Tabs>
@@ -249,7 +250,14 @@ export default function OwnerPropertyPassportContractDetailPage() {
         )}
 
         {activeTab === 'documents' && <PassportList title="Document Vault" icon={<FileText size={20} />} rows={documents.map((row) => [row.title || row.documentName || row.type || row.id, row.status || row.verificationStatus || 'Pending', fmt(row.expiryDate || row.expiresAt)])} empty="No documents are linked to this property passport yet." />}
-        {activeTab === 'inspections' && <PassportList title="Handover / Inspection Evidence" icon={<ClipboardCheck size={20} />} rows={inspections.map((row) => [row.inspectionType || row.type || 'Inspection', row.unitNumber || row.unitId || 'Property', row.status || fmt(row.createdAt || row.submittedAt)])} empty="No move-in, move-out, or inspection evidence is linked yet." />}
+        {activeTab === 'handover' && (
+          <Stack spacing={2}>
+            <PassportList title="Handover / Inspection Evidence" icon={<ClipboardCheck size={20} />} rows={inspections.map((row) => [row.inspectionType || row.type || 'Inspection', row.unitNumber || row.unitId || 'Property', row.status || fmt(row.createdAt || row.submittedAt)])} empty="No move-in, move-out, or inspection evidence is linked yet." />
+            <Button variant="contained" onClick={() => navigate('/owner/inspections')} sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>
+              Open Owner Handover Center
+            </Button>
+          </Stack>
+        )}
         {activeTab === 'maintenance' && <PassportList title="Maintenance Timeline" icon={<Wrench size={20} />} rows={missions.map((row) => [row.category || row.issueType || row.trade || 'Maintenance', row.status || 'Open', fmt(row.createdAt || row.updatedAt)])} empty="No maintenance tickets are linked to this property passport yet." />}
         {activeTab === 'systems' && <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Building Systems</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.42)' }}>Systems will appear here when the official passport is issued.</Typography></Paper>}
       </Stack>

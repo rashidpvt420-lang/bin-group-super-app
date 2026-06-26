@@ -11,6 +11,15 @@ export interface ResolvedTenantLedgerRow {
   lastPaymentDate: string | null;
   leaseStart: string | null;
   leaseEnd: string | null;
+  paymentTransactionId?: string | null;
+  tenantLedgerId?: string | null;
+  referenceId?: string | null;
+  method?: string | null;
+  reviewNote?: string | null;
+  returnReason?: string | null;
+  referenceFileUrl?: string | null;
+  referenceFileName?: string | null;
+  referenceFilePath?: string | null;
 }
 
 export interface TenantLedgerSummary {
@@ -74,6 +83,16 @@ function uniqBy(items: any[], keyFn: (item: any) => string) {
   return Array.from(map.values());
 }
 
+function isRentPayment(item: any) {
+  const recordType = statusNormalized(item.recordType || '');
+  const transactionType = statusNormalized(item.transactionType || item.paymentType || '');
+  return recordType === 'OWNER_RENT_PAYMENT' || transactionType === 'RENT_COLLECTION';
+}
+
+function paymentLedgerKey(item: any) {
+  return item.tenantLedgerId || item.paymentTransactionId || item.paymentId || item.id || `${item.propertyId || ''}-${item.unitNumber || item.unitId || ''}-${item.tenantName || item.tenantId || ''}`;
+}
+
 export function resolveTenantLedger(
   properties: any[],
   occupancies: any[],
@@ -98,24 +117,23 @@ export function resolveTenantLedger(
   ).length;
 
   const vacantUnits = Math.max(0, totalUnits - activeTenants);
+  const rentPayments = payments.filter(isRentPayment).map((payment) => ({ ...payment, id: paymentLedgerKey(payment) }));
 
-  // Group raw items to form rows
   const rawRows = uniqBy(
-    [...occupancies, ...leases, ...ledger],
-    (item) => item.tenantUid || item.tenantId || item.tenantEmail || item.id || item.leaseId || ''
+    [...occupancies, ...leases, ...ledger, ...rentPayments],
+    (item) => item.tenantLedgerId || item.paymentTransactionId || item.paymentId || item.tenantUid || item.tenantId || item.tenantEmail || item.id || item.leaseId || ''
   );
 
   const ledgerRows: ResolvedTenantLedgerRow[] = rawRows.map((item) => {
     const due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount, 0);
-    const paid = toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount, 0);
-    const balance = Math.max(0, due - paid);
-    
-    // Attempt to determine overdue days
+    const paid = toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amountReceived || item.amount, 0);
+    const storedBalance = toNumber(item.balance, NaN);
+    const balance = Number.isFinite(storedBalance) ? Math.max(0, storedBalance) : Math.max(0, due - paid);
     const dueDate = item.dueDate || item.paymentDueDate || item.nextDueDate || item.leaseEndDate || item.endDate;
     const overdueDays = balance > 0 ? getDaysDifference(dueDate) : 0;
 
     let lastPaymentDate: string | null = null;
-    const itemLastPay = item.lastPaymentDate || item.paymentDate || item.lastPaidAt;
+    const itemLastPay = item.lastPaymentDate || item.paymentDate || item.lastPaidAt || item.receivedAt || item.approvedAt || item.createdAt;
     if (itemLastPay) {
       if (typeof itemLastPay === 'string') {
         lastPaymentDate = itemLastPay;
@@ -132,7 +150,7 @@ export function resolveTenantLedger(
       name: tenantDisplayName(item),
       property: propertyDisplayName(item, properties),
       unit: item.unitNumber || item.unitId || '—',
-      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.status, 'ACTIVE'),
+      status: statusNormalized(item.occupancyStatus || item.leaseStatus || item.verificationState || item.paymentStatus || item.status, 'ACTIVE'),
       due,
       paid,
       balance,
@@ -140,6 +158,15 @@ export function resolveTenantLedger(
       lastPaymentDate,
       leaseStart: leaseStart ? (typeof leaseStart === 'string' ? leaseStart : new Date((leaseStart.seconds || leaseStart._seconds) * 1000).toLocaleDateString('en-GB')) : null,
       leaseEnd: leaseEnd ? (typeof leaseEnd === 'string' ? leaseEnd : new Date((leaseEnd.seconds || leaseEnd._seconds) * 1000).toLocaleDateString('en-GB')) : null,
+      paymentTransactionId: item.paymentTransactionId || item.paymentId || null,
+      tenantLedgerId: item.tenantLedgerId || null,
+      referenceId: item.paymentReference || item.paymentReferenceId || item.referenceId || null,
+      method: item.paymentMethod || null,
+      reviewNote: item.adminNotes || item.reviewNote || null,
+      returnReason: item.rejectionReason || item.returnReason || null,
+      referenceFileUrl: item.referenceFileUrl || item.receiptUrl || item.proofUrl || item.attachmentUrl || null,
+      referenceFileName: item.referenceFileName || item.proofFileName || null,
+      referenceFilePath: item.referenceFilePath || null,
     };
   });
 

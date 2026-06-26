@@ -8,6 +8,7 @@ const db = admin.firestore();
 const ts = () => admin.firestore.FieldValue.serverTimestamp();
 
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
+const upper = (value: unknown) => String(value || "").trim().toUpperCase();
 const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "manager", "operations_admin", "finance_admin"]);
 
 async function requireAdmin(auth: any) {
@@ -24,6 +25,12 @@ async function requireAdmin(auth: any) {
 
 function resolvePaymentId(data: any) {
   return String(data?.paymentId || data?.id || "").trim();
+}
+
+function isRentCollectionPayment(payment: any) {
+  return upper(payment?.recordType) === "OWNER_RENT_PAYMENT" ||
+    upper(payment?.transactionType) === "RENT_COLLECTION" ||
+    upper(payment?.paymentType) === "RENT_COLLECTION";
 }
 
 /**
@@ -55,19 +62,61 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     return { status: "SUCCESS", paymentId, idempotent: true };
   }
 
+  const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || payment.paymentReference || payment.paymentReferenceId || "").trim();
+  const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || payment.amountPaid || payment.rentPaid || 0);
+  const notes = String(request.data?.notes || request.data?.internalNotes || "Approved by admin.").trim();
+  const method = String(request.data?.method || payment.paymentMethod || "").trim();
+  const receivedAt = String(request.data?.receivedAt || "").trim();
+  const now = ts();
+  const actorId = request.auth?.uid || "admin";
+  const actorEmail = request.auth?.token?.email || null;
+
+  if (isRentCollectionPayment(payment)) {
+    await db.runTransaction(async (transaction) => {
+      transaction.set(ref, {
+        status: "APPROVED",
+        paymentStatus: "APPROVED",
+        verificationState: "ADMIN_VERIFIED",
+        paymentVerified: true,
+        approved: true,
+        paymentReferenceId: paymentReferenceId || null,
+        amountReceived,
+        paymentMethod: method || payment.paymentMethod || null,
+        receivedAt: receivedAt || null,
+        adminNotes: notes,
+        approvedBy: actorId,
+        approvedByEmail: actorEmail,
+        approvedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+
+      transaction.set(db.collection("auditLogs").doc(), {
+        action: "ADMIN_APPROVE_RENT_PAYMENT",
+        actorId,
+        actorEmail,
+        paymentId,
+        ownerUid: payment.ownerUid || payment.ownerId || null,
+        tenantName: payment.tenantName || null,
+        propertyId: payment.propertyId || null,
+        propertyName: payment.propertyName || null,
+        paymentReferenceId: paymentReferenceId || null,
+        amountReceived,
+        createdAt: now,
+      });
+    });
+
+    return {
+      status: "SUCCESS",
+      paymentId,
+      paymentKind: "RENT_COLLECTION",
+      idempotent: false,
+    };
+  }
+
   const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
   const contractSnap = contractId ? await db.collection("contracts").doc(contractId).get() : null;
   const contractData = contractSnap?.data() || {};
   const ownerUid = String(request.data?.ownerUid || payment.ownerUid || payment.ownerId || "").trim();
-  const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || "").trim();
-  const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || 0);
-  const notes = String(request.data?.notes || request.data?.internalNotes || "Approved by admin.").trim();
-  const method = String(request.data?.method || payment.paymentMethod || "").trim();
-  const receivedAt = String(request.data?.receivedAt || "").trim();
-
-  const now = ts();
-  const actorId = request.auth?.uid || "admin";
-  const actorEmail = request.auth?.token?.email || null;
   const batch = db.batch();
 
   batch.set(ref, {
@@ -160,10 +209,6 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
 
   await batch.commit();
 
-  // Generate the broker commission record for this deal (if a broker is attached),
-  // exactly once. Non-fatal: a commission failure must never block payment approval.
-  // This is the real admin payment-approval path (apps/admin-panel PaymentApprovalsPage),
-  // distinct from the adminApproveContractActivation callable which has no caller today.
   if (contractId && contractData.commissionGenerated !== true) {
     try {
       const commissionResult = await createBrokerCommissionForContract(contractId, contractData, {
@@ -196,10 +241,40 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
   if (!snap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
   const payment = snap.data() || {};
-  const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
   const reason = String(request.data?.reason || "Rejected by admin.").trim();
   const now = ts();
   const actorId = request.auth?.uid || "admin";
+
+  if (isRentCollectionPayment(payment)) {
+    await db.runTransaction(async (transaction) => {
+      transaction.set(ref, {
+        status: "REJECTED",
+        paymentStatus: "REJECTED",
+        verificationState: "ADMIN_REJECTED",
+        paymentVerified: false,
+        approved: false,
+        rejectionReason: reason,
+        rejectedBy: actorId,
+        rejectedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+
+      transaction.set(db.collection("auditLogs").doc(), {
+        action: "ADMIN_REJECT_RENT_PAYMENT",
+        actorId,
+        paymentId,
+        ownerUid: payment.ownerUid || payment.ownerId || null,
+        tenantName: payment.tenantName || null,
+        propertyId: payment.propertyId || null,
+        reason,
+        createdAt: now,
+      });
+    });
+
+    return { status: "SUCCESS", paymentId, paymentKind: "RENT_COLLECTION", idempotent: false };
+  }
+
+  const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
   const batch = db.batch();
 
   batch.set(ref, {

@@ -26,6 +26,24 @@ const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'SIGNED']);
 const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'SIGNED']);
 const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
 
+const PENDING_PAYMENT_STATES = new Set([
+  'PENDING',
+  'PENDING_VERIFICATION',
+  'PENDING_ADMIN_PAYMENT_VERIFICATION',
+  'ADMIN_VERIFICATION_REQUIRED',
+  'ADMIN_REVIEW',
+  'UNVERIFIED',
+]);
+
+const VERIFIED_PAYMENT_STATES = new Set([
+  'PAID',
+  'VERIFIED',
+  'ADMIN_VERIFIED',
+  'APPROVED',
+  'SETTLED',
+  'RECONCILED',
+]);
+
 type DashboardState = 'loading' | 'locked' | 'pending' | 'active';
 
 type OwnerResolution = {
@@ -38,6 +56,25 @@ type OwnerResolution = {
 };
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const normalizePaymentState = (value: unknown) => String(value || '').trim().replace(/\s+/g, '_').toUpperCase();
+
+const isPendingOwnerPayment = (row: any) => {
+  if (!row) return false;
+  if (row.paymentVerified === true || row.approved === true || row.adminVerified === true) return false;
+
+  const states = [
+    row.status,
+    row.paymentStatus,
+    row.verificationState,
+    row.settlementStatus,
+    row.approvalStatus,
+    row.reviewStatus,
+  ].map(normalizePaymentState).filter(Boolean);
+
+  if (states.some((state) => VERIFIED_PAYMENT_STATES.has(state))) return false;
+  if (row.paymentVerified === false) return true;
+  return states.some((state) => PENDING_PAYMENT_STATES.has(state) || state.includes('PENDING') || state.includes('REVIEW'));
+};
 
 const canonicalEmail = (value: unknown) => {
   const email = normalizeEmail(value);
@@ -289,9 +326,10 @@ export default function OwnerDashboardResolvedPage() {
         }
 
         const allTickets = Array.from(ticketMap.values());
+        const payments = Array.from(paymentMap.values());
         const openTickets = allTickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
         const resolvedComplaints = allTickets.map(resolveOwnerComplaint);
-        const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), Array.from(paymentMap.values()), allTickets);
+        const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), payments, allTickets);
         const resolvedReporters = Array.from(reporterMap.values()).map(resolvePropertyReporter);
         const resolvedLedger = resolveTenantLedger(
           linkedProperties,
@@ -299,11 +337,12 @@ export default function OwnerDashboardResolvedPage() {
           Array.from(invitationMap.values()),
           Array.from(leaseMap.values()),
           Array.from(ledgerMap.values()),
-          Array.from(paymentMap.values())
+          payments
         );
 
         if (alive) {
           setTickets(openTickets);
+          setPendingPayments(payments.filter(isPendingOwnerPayment).length);
           setFinancials(finData);
           setComplaints(resolvedComplaints);
           setReporters(resolvedReporters);
@@ -375,12 +414,14 @@ export default function OwnerDashboardResolvedPage() {
     try {
       const payQuery = query(
         collection(db, 'payment_transactions'),
-        where('ownerId', '==', authUid),
-        where('paymentVerified', '==', false)
+        where('ownerId', '==', authUid)
       );
       const unsubPay = onSnapshot(
         payQuery,
-        (snap) => { setPendingPayments(snap.size); },
+        (snap) => {
+          const pending = snap.docs.filter((doc) => isPendingOwnerPayment(doc.data())).length;
+          setPendingPayments(pending);
+        },
         (err) => {
           if (isPermDenied(err)) warnLiveDenied('pending payment count');
           else console.warn('[OwnerDashboard] Live payment count error:', err);

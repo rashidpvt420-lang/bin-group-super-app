@@ -8,6 +8,7 @@ import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
+import PilotLaunchPage from './pages/public/PilotLaunchPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
@@ -240,6 +241,9 @@ function AppContent() {
         <Route path="/v1" element={publicLanding()} />
         <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/pilot-launch" element={<PilotLaunchPage />} />
+        <Route path="/share" element={<PilotLaunchPage />} />
+        <Route path="/friends" element={<PilotLaunchPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
@@ -291,7 +295,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        <Route path="/admin/*" element={withAuth(<AdminTerminal />, { publicAuth: true, showChrome: false })} />
         <Route path="/verify" element={<InvoiceVerificationPage />} />
         <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />

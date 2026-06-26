@@ -41,6 +41,15 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
     const pathnames = location.pathname.split('/').filter((x) => x);
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
+    const quickButtonSx = {
+        color: shell.gold,
+        border: `1px solid ${shell.gold}`,
+        borderRadius: 2,
+        fontWeight: 900,
+        display: { xs: 'none', md: 'inline-flex' },
+        whiteSpace: 'nowrap',
+        textTransform: 'none',
+    } as const;
 
     return (
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
@@ -97,7 +106,11 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                             <SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD SOVEREIGN - UAE', 'الميدان السيادي - الإمارات')}
                         </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.5 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
+                        <Button onClick={() => navigate('/technician/map')} sx={quickButtonSx}>{label('tech.quick.map', 'Live Map', 'الخريطة')}</Button>
+                        <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
+                        <Button onClick={() => navigate('/technician/support')} sx={quickButtonSx}>{label('tech.quick.support', 'Support', 'الدعم')}</Button>
                         <NotificationBell />
                         <Button onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>
                             Proof
