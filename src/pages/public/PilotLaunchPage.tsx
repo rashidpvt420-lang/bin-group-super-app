@@ -52,6 +52,14 @@ const blockers = [
   'Full live smoke test must pass across Owner, Tenant, Technician, Broker, and internal Operations.',
 ];
 
+const footerLinks = [
+  { label: 'Company', path: '/company-profile' },
+  { label: 'Support', path: '/support' },
+  { label: 'Privacy', path: '/privacy' },
+  { label: 'Terms', path: '/terms' },
+  { label: 'Feedback', path: '/pilot-feedback' },
+];
+
 export default function PilotLaunchPage() {
   const navigate = useNavigate();
 
@@ -138,6 +146,25 @@ export default function PilotLaunchPage() {
             <Typography sx={{ color: '#667085', lineHeight: 1.8 }}>
               Share this only with trusted testers. This is for controlled workflow validation, not full public commercial launch. Do not collect live payments or promise full commercial onboarding until Stripe live keys, App Check production key, branded email, and full smoke testing are confirmed green.
             </Typography>
+          </Paper>
+
+          <Paper sx={{ p: 3, borderRadius: 5, border: '1px solid #E5E7EB', bgcolor: '#FFFFFF' }}>
+            <Stack spacing={2} alignItems="center" textAlign="center">
+              <Typography sx={{ color: '#111827', fontWeight: 950 }}>Legal, support, and tester feedback</Typography>
+              <Typography variant="body2" sx={{ color: '#667085', maxWidth: 760, lineHeight: 1.7 }}>
+                Testers should use Support or Feedback for any issue. Privacy and Terms links stay visible on the pilot page so the launcher does not remove normal public safeguards.
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="center" useFlexGap>
+                {footerLinks.map((link) => (
+                  <Button key={link.path} variant="text" onClick={() => navigate(link.path)} sx={{ color: binThemeTokens.goldHover, fontWeight: 950, textTransform: 'none' }}>
+                    {link.label}
+                  </Button>
+                ))}
+              </Stack>
+              <Typography variant="caption" sx={{ color: '#98A2B3', fontWeight: 800, letterSpacing: 1.2 }}>
+                © 2026 BIN GROUP · Controlled pilot launcher · Made in UAE
+              </Typography>
+            </Stack>
           </Paper>
         </Stack>
       </Container>
