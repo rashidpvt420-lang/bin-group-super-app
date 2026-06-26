@@ -16,6 +16,14 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
+const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const clean = (value: unknown) => String(value || '').trim();
+const numericAmount = (value: unknown) => {
+    const raw = String(value || '').replace(/[^0-9.]/g, '');
+    const amount = Number(raw || 0);
+    return Number.isFinite(amount) ? amount : 0;
+};
+
 export default function BrokerLeadsPage() {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
@@ -51,19 +59,91 @@ export default function BrokerLeadsPage() {
         return () => unsub();
     }, [user]);
 
+    const buildAttributionPacket = (leadId: string) => {
+        const brokerId = String(user?.uid || '').trim();
+        const leadTypeValue = clean(leadType).toLowerCase() || 'owner';
+        return {
+            attributionId: `broker_lead_${brokerId}_${leadId}`,
+            attributionSource: 'BROKER_PORTAL_LEAD',
+            sourceChannel: 'broker_portal',
+            brokerId,
+            brokerUid: brokerId,
+            brokerEmail: normalizeEmail(user?.email),
+            brokerName: clean(user?.displayName || user?.email || 'Broker Partner'),
+            brokerDisplayName: clean(user?.displayName || 'Broker Partner'),
+            broughtByRole: 'broker',
+            broughtByUid: brokerId,
+            broughtByEmail: normalizeEmail(user?.email),
+            leadType: leadTypeValue,
+            leadCategory: leadTypeValue,
+            attributionProof: {
+                leadName: clean(leadName),
+                phone: clean(phone),
+                email: normalizeEmail(email),
+                propertyInterest: clean(propertyInterest),
+                location: clean(location),
+                budget: clean(budget),
+                capturedFrom: 'broker_leads_page',
+            },
+        };
+    };
+
     const handleAddLead = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user?.uid || !leadName.trim()) return;
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'brokerLeads'), {
-                brokerId: user.uid,
-                brokerUid: user.uid,
-                leadName, phone, email, leadType, propertyInterest, location, budget, notes,
+            const tempLeadId = `pending_${Date.now()}`;
+            const attribution = buildAttributionPacket(tempLeadId);
+            const budgetAmount = numericAmount(budget);
+            const leadPayload = {
+                ...attribution,
+                leadName: clean(leadName),
+                phone: clean(phone),
+                email: normalizeEmail(email),
+                propertyInterest: clean(propertyInterest),
+                location: clean(location),
+                budget: clean(budget),
+                budgetAmount,
+                notes: clean(notes),
                 status: 'new',
+                lifecycleStatus: 'LEAD_CAPTURED',
+                commissionEligible: false,
+                commissionStatus: 'NOT_CONVERTED',
+                commissionRate: 0.02,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
+            };
+            const leadRef = await addDoc(collection(db, 'brokerLeads'), leadPayload);
+            await updateDoc(doc(db, 'brokerLeads', leadRef.id), {
+                attributionId: `broker_lead_${user.uid}_${leadRef.id}`,
+                sourceLeadId: leadRef.id,
+                updatedAt: serverTimestamp(),
             });
+            const auditPayload = {
+                actorId: user.uid,
+                actorRole: 'broker',
+                action: 'BROKER_LEAD_CREATED',
+                targetType: 'BROKER_LEAD',
+                targetId: leadRef.id,
+                module: 'broker_leads',
+                status: 'RECORDED',
+                brokerId: user.uid,
+                brokerEmail: normalizeEmail(user.email),
+                attributionId: `broker_lead_${user.uid}_${leadRef.id}`,
+                metadata: {
+                    leadType: leadPayload.leadType,
+                    leadName: leadPayload.leadName,
+                    propertyInterest: leadPayload.propertyInterest,
+                    location: leadPayload.location,
+                    budgetAmount,
+                },
+                createdAt: serverTimestamp(),
+            };
+            await Promise.all([
+                addDoc(collection(db, 'audit_logs'), auditPayload),
+                addDoc(collection(db, 'auditLogs'), { ...auditPayload, timestamp: serverTimestamp() }),
+            ]);
             setOpenAdd(false);
             // Reset form
             setLeadName(''); setPhone(''); setEmail(''); setPropertyInterest(''); setLocation(''); setBudget(''); setNotes('');
@@ -74,11 +154,71 @@ export default function BrokerLeadsPage() {
         }
     };
 
-    const updateLeadStatus = async (id: string, newStatus: string) => {
+    const updateLeadStatus = async (lead: any, newStatus: string) => {
         try {
-            await updateDoc(doc(db, 'brokerLeads', id), {
+            const leadId = String(lead?.id || '');
+            const statusPayload: Record<string, any> = {
                 status: newStatus,
+                lifecycleStatus: newStatus === 'converted' ? 'CONVERTED_TO_BIN_GROUP_OPPORTUNITY' : `LEAD_${String(newStatus).toUpperCase()}`,
                 updatedAt: serverTimestamp()
+            };
+
+            if (newStatus === 'converted') {
+                statusPayload.convertedAt = serverTimestamp();
+                statusPayload.commissionEligible = true;
+                statusPayload.commissionStatus = 'PENDING_REVIEW';
+            }
+
+            await updateDoc(doc(db, 'brokerLeads', leadId), statusPayload);
+
+            const attributionId = lead.attributionId || `broker_lead_${user?.uid}_${leadId}`;
+            const budgetAmount = numericAmount(lead.budgetAmount || lead.budget);
+            if (newStatus === 'converted') {
+                const commissionAmount = Math.round(budgetAmount * 0.02);
+                await addDoc(collection(db, 'broker_commissions'), {
+                    brokerId: user?.uid || lead.brokerId || '',
+                    brokerUid: user?.uid || lead.brokerUid || '',
+                    brokerEmail: normalizeEmail(user?.email || lead.brokerEmail),
+                    brokerName: clean(user?.displayName || lead.brokerName || 'Broker Partner'),
+                    sourceType: 'BROKER_LEAD_CONVERSION',
+                    sourceCollection: 'brokerLeads',
+                    sourceLeadId: leadId,
+                    linkedLeadId: leadId,
+                    linkedLeadName: lead.leadName || 'Broker Lead',
+                    linkedProperty: lead.propertyInterest || lead.location || 'Pending property assignment',
+                    propertyName: lead.propertyInterest || 'Pending property assignment',
+                    attributionId,
+                    attributionSource: lead.attributionSource || 'BROKER_PORTAL_LEAD',
+                    commissionBasisAmount: budgetAmount,
+                    amount: commissionAmount,
+                    percentage: 2,
+                    status: 'PENDING',
+                    payoutStatus: 'PENDING_ADMIN_REVIEW',
+                    evidenceStatus: 'LEAD_CONVERTED_PENDING_CONTRACT_MATCH',
+                    attributionProof: lead.attributionProof || {
+                        leadName: lead.leadName || '',
+                        phone: lead.phone || '',
+                        email: lead.email || '',
+                        propertyInterest: lead.propertyInterest || '',
+                        location: lead.location || '',
+                    },
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+            }
+
+            await addDoc(collection(db, 'audit_logs'), {
+                actorId: user?.uid || lead.brokerId || '',
+                actorRole: 'broker',
+                action: newStatus === 'converted' ? 'BROKER_LEAD_CONVERTED' : 'BROKER_LEAD_STATUS_UPDATED',
+                targetType: 'BROKER_LEAD',
+                targetId: leadId,
+                module: 'broker_leads',
+                status: 'RECORDED',
+                brokerId: user?.uid || lead.brokerId || '',
+                attributionId,
+                metadata: { previousStatus: lead.status, newStatus, commissionCandidate: newStatus === 'converted' },
+                createdAt: serverTimestamp(),
             });
         } catch (err) {
             console.error(err);
@@ -98,8 +238,9 @@ export default function BrokerLeadsPage() {
     };
 
     const filteredLeads = leads.filter(l => 
-        l.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.propertyInterest?.toLowerCase().includes(searchTerm.toLowerCase())
+        String(l.leadName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(l.propertyInterest || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(l.attributionId || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -123,7 +264,7 @@ export default function BrokerLeadsPage() {
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
                     <TextField
                         fullWidth
-                        placeholder="Search leads by name or interest..."
+                        placeholder="Search leads by name, interest, or attribution ID..."
                         variant="standard"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -165,7 +306,7 @@ export default function BrokerLeadsPage() {
                                 {/* Status Header */}
                                 <Box sx={{ p: 1, bgcolor: alpha(getStatusColor(lead.status), 0.05), borderBottom: '1px solid #F1F2F4', display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3 }}>
                                     <Chip
-                                        label={lead.status.toUpperCase()}
+                                        label={String(lead.status || '').toUpperCase()}
                                         size="small"
                                         sx={{ bgcolor: alpha(getStatusColor(lead.status), 0.1), color: getStatusColor(lead.status), fontWeight: 950, fontSize: '0.65rem' }}
                                     />
@@ -178,8 +319,9 @@ export default function BrokerLeadsPage() {
                                     <Stack spacing={2}>
                                         <Box>
                                             <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>{lead.leadName}</Typography>
-                                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                                                <Chip label={lead.leadType.toUpperCase()} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', color: binThemeTokens.textSecondary, borderColor: '#E5E7EB' }} />
+                                            <Stack direction="row" spacing={1} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+                                                <Chip label={String(lead.leadType || 'lead').toUpperCase()} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', color: binThemeTokens.textSecondary, borderColor: '#E5E7EB' }} />
+                                                <Chip label={lead.commissionEligible ? 'COMMISSION CANDIDATE' : 'ATTRIBUTED'} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: lead.commissionEligible ? alpha('#10b981', 0.1) : alpha(binThemeTokens.gold, 0.1), color: lead.commissionEligible ? '#10b981' : binThemeTokens.gold, fontWeight: 900 }} />
                                             </Stack>
                                         </Box>
 
@@ -206,6 +348,9 @@ export default function BrokerLeadsPage() {
                                                 {lead.propertyInterest || 'General Interest'}
                                                 {lead.budget && <Typography component="span" sx={{ color: '#10b981', ml: 1 }}>• AED {lead.budget}</Typography>}
                                             </Typography>
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mt: 1, wordBreak: 'break-all' }}>
+                                                ATTRIBUTION: {lead.attributionId || `broker_lead_${user?.uid}_${lead.id}`}
+                                            </Typography>
                                         </Box>
 
                                         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
@@ -213,7 +358,7 @@ export default function BrokerLeadsPage() {
                                                 fullWidth
                                                 size="small"
                                                 value={lead.status}
-                                                onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
+                                                onChange={(e) => updateLeadStatus(lead, e.target.value)}
                                                 sx={{
                                                     bgcolor: '#FFFFFF',
                                                     color: binThemeTokens.textPrimary,
@@ -230,7 +375,7 @@ export default function BrokerLeadsPage() {
                                                 <MenuItem value="converted">CONVERTED</MenuItem>
                                                 <MenuItem value="rejected">REJECTED</MenuItem>
                                             </Select>
-                                            <Tooltip title="View Details">
+                                            <Tooltip title="View Attribution Details">
                                                 <IconButton sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 2, color: binThemeTokens.textSecondary }}>
                                                     <ExternalLink size={18} />
                                                 </IconButton>
@@ -258,7 +403,7 @@ export default function BrokerLeadsPage() {
                     </DialogTitle>
                     <DialogContent sx={{ p: 4 }}>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 4, fontWeight: 700 }}>
-                            Populate the fields below to initiate a new brokerage mission. Sovereign AI will assist in tracking attribution.
+                            Each lead receives a broker attribution ID. Converted leads generate a pending commission trail for admin review.
                         </Typography>
                         <Stack spacing={3}>
                             <TextField 
