@@ -10,6 +10,9 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
+const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
 export default function BrokerDashboardPage() {
   const { user } = useRole();
@@ -23,38 +26,66 @@ export default function BrokerDashboardPage() {
   useEffect(() => {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
+    const buckets: Record<string, any[]> = {};
+    const identitySources = [
+      { field: 'brokerId', value: user.uid },
+      { field: 'brokerUid', value: user.uid },
+      { field: 'createdByUid', value: user.uid },
+      { field: 'brokerEmail', value: normalizeEmail(user.email) },
+    ].filter((source) => source.value);
+
+    const refreshLeads = () => {
+      const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('brokerLeads:')).flatMap(([, value]) => value)).sort((a, b) => rowTime(b) - rowTime(a));
+      setRecentLeads(rows.slice(0, 5));
+      setStats((prev) => ({ ...prev, leadsActive: rows.filter((row: any) => ['new', 'contacted', 'viewing', 'negotiation'].includes(String(row.status || '').toLowerCase())).length }));
+      setLoading(false);
+    };
+
+    const refreshReferrals = () => {
+      const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('referrals:')).flatMap(([, value]) => value));
+      const pending = rows.filter((row: any) => ['submitted', 'under_review'].includes(String(row.status || '').toLowerCase())).length;
+      setStats((prev) => ({ ...prev, referralsPending: pending }));
+    };
+
+    const refreshCommissions = () => {
+      const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('broker_commissions:')).flatMap(([, value]) => value));
+      let pending = 0;
+      let paid = 0;
+      rows.forEach((row: any) => {
+        const amount = Number(row.amount || row.commissionAmount || 0);
+        const status = String(row.status || '').toLowerCase();
+        if (status === 'paid') paid += amount;
+        else pending += amount;
+      });
+      setStats((prev) => ({ ...prev, commissionPending: pending, commissionPaid: paid }));
+    };
+
+    const bind = (collectionName: string, refresh: () => void, max = 25) => {
+      identitySources.forEach((source) => {
+        const key = `${collectionName}:${source.field}:${source.value}`;
+        const q = query(collection(db, collectionName), where(source.field, '==', source.value), orderBy('createdAt', 'desc'), limit(max));
+        unsubs.push(onSnapshot(q, (snap) => {
+          buckets[key] = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          refresh();
+        }, (err) => {
+          console.warn(`[BrokerDashboard] ${collectionName}.${source.field} failed`, err);
+          setWarning('Some broker data could not load. Check Firestore rules if dashboard numbers look incomplete.');
+          setLoading(false);
+        }));
+      });
+    };
+
     try {
-      unsubs.push(onSnapshot(query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(10)), (snap) => {
-        const rows = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setRecentLeads(rows.slice(0, 5));
-        setStats((prev) => ({ ...prev, leadsActive: rows.filter((row: any) => ['new', 'contacted', 'viewing', 'negotiation'].includes(String(row.status || '').toLowerCase())).length }));
-        setLoading(false);
-      }, (err) => { console.warn('[BrokerDashboard] leads failed', err); setWarning('Some broker lead data could not load.'); setLoading(false); }));
-
-      unsubs.push(onSnapshot(query(collection(db, 'referrals'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(25)), (snap) => {
-        const pending = snap.docs.filter((doc) => ['submitted', 'under_review'].includes(String(doc.data().status || '').toLowerCase())).length;
-        setStats((prev) => ({ ...prev, referralsPending: pending }));
-      }, (err) => { console.warn('[BrokerDashboard] referrals failed', err); setWarning('Some referral data could not load.'); }));
-
-      unsubs.push(onSnapshot(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid)), (snap) => {
-        let pending = 0;
-        let paid = 0;
-        snap.docs.forEach((doc) => {
-          const row: any = doc.data();
-          const amount = Number(row.amount || row.commissionAmount || 0);
-          const status = String(row.status || '').toLowerCase();
-          if (status === 'paid') paid += amount;
-          else pending += amount;
-        });
-        setStats((prev) => ({ ...prev, commissionPending: pending, commissionPaid: paid }));
-      }, (err) => { console.warn('[BrokerDashboard] commissions failed', err); setWarning('Some commission data could not load.'); }));
+      bind('brokerLeads', refreshLeads, 10);
+      bind('referrals', refreshReferrals, 25);
+      bind('broker_commissions', refreshCommissions, 50);
     } catch (err) {
       console.error('[BrokerDashboard] startup failed', err);
       setWarning('Broker dashboard could not start all listeners.');
       setLoading(false);
     }
     return () => unsubs.forEach((unsub) => unsub());
-  }, [user?.uid]);
+  }, [user?.uid, user?.email]);
 
   const statCards = useMemo(() => [
     { label: tx('broker.dash.active_leads', 'Active Leads'), value: stats.leadsActive, icon: <Users size={22} />, route: '/broker/leads', tone: '#10b981' },
