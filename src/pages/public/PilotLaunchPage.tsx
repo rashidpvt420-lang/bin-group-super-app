@@ -48,7 +48,7 @@ const blockers = [
   'Stripe live keys must be configured before real payment collection.',
   'Firebase App Check production key must be active before broad sharing.',
   'Branded email sender must be configured before real customer notifications.',
-  'Technician proof, GPS, and offline job workflow still need verification.',
+  'Broker lead attribution, contract source, and commission trail still need verification.',
   'Full live smoke test must pass across Owner, Tenant, Technician, Broker, and internal Operations.',
 ];
 
