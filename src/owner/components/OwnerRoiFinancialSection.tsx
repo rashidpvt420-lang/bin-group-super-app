@@ -1,13 +1,13 @@
 import React from 'react';
-import { Box, Card, CardContent, Grid, Stack, Typography, alpha, Chip, Button } from '@mui/material';
-import { TrendingUp, Landmark, FileText, AlertCircle, Wrench, Shield, CheckCircle2 } from 'lucide-react';
+import { Box, Card, CardContent, Grid, Stack, Typography, alpha, Button } from '@mui/material';
+import { TrendingUp, Landmark, AlertCircle, Wrench, Shield } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerFinancialState } from '../utils/ownerFinancialResolver';
 
 interface OwnerRoiFinancialSectionProps {
   financials: OwnerFinancialState;
-  onAddRentDetails: () => void;
+  onAddRentDetails?: () => void;
 }
 
 const cardSx = {
@@ -39,8 +39,17 @@ function formatCurrency(amount: number) {
 }
 
 export default function OwnerRoiFinancialSection({ financials, onAddRentDetails }: OwnerRoiFinancialSectionProps) {
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
   const pmEnabled = financials.contractMode === 'PROPERTY_MANAGEMENT_ONLY' || financials.contractMode === 'HYBRID';
+
+  const openRentSetup = () => {
+    const moneySection = typeof document !== 'undefined' ? document.getElementById('owner-money-snapshot') : null;
+    if (moneySection) {
+      moneySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    onAddRentDetails?.();
+  };
 
   const renderMetric = (label: string, value: React.ReactNode, icon?: React.ReactNode, color = '#fff') => (
     <Grid item xs={12} sm={6} md={3}>
@@ -84,7 +93,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
               </Box>
             </Stack>
-            <Button variant="contained" onClick={onAddRentDetails} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
+            <Button variant="contained" onClick={openRentSetup} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
               {t('owner.addRentIncome') || 'Add Rent Income'}
             </Button>
           </Box>
