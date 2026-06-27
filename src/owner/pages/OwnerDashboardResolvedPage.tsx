@@ -620,6 +620,54 @@ export default function OwnerDashboardResolvedPage() {
     });
   };
 
+  const handleAddRentIncome = async (propertyId: string, propertyName: string, annualRent: number) => {
+    const ownerId = String(user?.uid || resolution.contract?.ownerId || resolution.contract?.ownerUid || '').trim();
+    if (!ownerId) throw new Error('Owner UID is required before adding rent income.');
+    if (!propertyId) throw new Error('Select a property before adding rent income.');
+    if (!(annualRent > 0)) throw new Error('Enter a valid annual rent amount.');
+
+    await setDoc(doc(db, 'properties', propertyId), {
+      ownerId,
+      ownerUid: ownerId,
+      propertyName,
+      annualRent,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    await setDoc(doc(db, 'audit_logs', `audit_rent_income_${ownerId}_${Date.now()}`), {
+      actorId: ownerId,
+      actorRole: 'owner',
+      action: 'OWNER_RENT_INCOME_SET',
+      targetType: 'PROPERTY',
+      targetId: propertyId,
+      module: 'owner_roi_financials',
+      status: 'RECORDED',
+      metadata: { propertyId, propertyName, annualRent },
+      createdAt: serverTimestamp(),
+    });
+
+    setProperties((current) => current.map((property) => {
+      const id = String(property.id || property.propertyId || '');
+      return id === propertyId ? { ...property, annualRent } : property;
+    }));
+
+    setFinancials((current: any) => {
+      if (!current) return current;
+      const expectedAnnualRent = Number(current.expectedAnnualRent || 0) + annualRent;
+      const estimatedOwnerRoi = expectedAnnualRent - current.annualContractValue - current.totalMaintenanceCost;
+      const netPropertyPosition = estimatedOwnerRoi + current.totalSlaCredits - current.totalPenalties;
+      return {
+        ...current,
+        hasRentData: true,
+        expectedAnnualRent,
+        propertiesWithRent: current.propertiesWithRent + 1,
+        estimatedOwnerRoi,
+        netPropertyPosition,
+        ownerNetIncome: estimatedOwnerRoi,
+      };
+    });
+  };
+
   if (resolution.state === 'loading') {
     return <Box sx={{ height: '70vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
   }
@@ -713,7 +761,7 @@ export default function OwnerDashboardResolvedPage() {
       
       <Box sx={{ mt: 5 }}><OwnerRentCollectionSection ledgerSummary={ledgerSummary} /></Box>
 
-      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}</Box>
+      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} properties={properties} onSaveRentIncome={handleAddRentIncome} />}</Box>
 
       <Box sx={{ mt: 5 }} id="authorized-property-reporters">
         <OwnerAuthorizedReportersSection properties={properties} reporters={reporters} onAddReporter={handleAddReporter} onRemoveReporter={handleRemoveReporter} loading={loadingExtras} />

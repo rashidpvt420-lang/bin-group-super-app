@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Card, CardContent, Grid, Stack, Typography, alpha, Chip, Button } from '@mui/material';
+import React, { useState } from 'react';
+import { Alert, Box, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Stack, TextField, Typography, alpha, Chip, Button } from '@mui/material';
 import { TrendingUp, Landmark, FileText, AlertCircle, Wrench, Shield, CheckCircle2 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
@@ -7,8 +7,12 @@ import type { OwnerFinancialState } from '../utils/ownerFinancialResolver';
 
 interface OwnerRoiFinancialSectionProps {
   financials: OwnerFinancialState;
-  onAddRentDetails: () => void;
+  properties: any[];
+  onSaveRentIncome: (propertyId: string, propertyName: string, annualRent: number) => Promise<void>;
 }
+
+const propertyIdOf = (property: any) => String(property?.id || property?.propertyId || '');
+const propertyNameOf = (property: any) => String(property?.propertyName || property?.name || propertyIdOf(property) || 'Property');
 
 const cardSx = {
   bgcolor: 'rgba(22,22,24,0.72)',
@@ -38,9 +42,40 @@ function formatCurrency(amount: number) {
   return `AED ${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export default function OwnerRoiFinancialSection({ financials, onAddRentDetails }: OwnerRoiFinancialSectionProps) {
+export default function OwnerRoiFinancialSection({ financials, properties, onSaveRentIncome }: OwnerRoiFinancialSectionProps) {
   const { t, isRTL } = useLanguage();
   const pmEnabled = financials.contractMode === 'PROPERTY_MANAGEMENT_ONLY' || financials.contractMode === 'HYBRID';
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedPropertyId, setSelectedPropertyId] = useState('');
+  const [annualRentInput, setAnnualRentInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const openRentDialog = () => {
+    setSelectedPropertyId(propertyIdOf(properties[0]));
+    setAnnualRentInput('');
+    setSaveError('');
+    setDialogOpen(true);
+  };
+
+  const selectedProperty = properties.find((property) => propertyIdOf(property) === selectedPropertyId);
+  const annualRentValue = Number(annualRentInput);
+  const isRentFormValid = !!selectedPropertyId && annualRentValue > 0;
+
+  const handleSaveRentIncome = async () => {
+    if (!isRentFormValid) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await onSaveRentIncome(selectedPropertyId, propertyNameOf(selectedProperty), annualRentValue);
+      setDialogOpen(false);
+    } catch (error: any) {
+      setSaveError(error?.message || 'Could not save rent income. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const renderMetric = (label: string, value: React.ReactNode, icon?: React.ReactNode, color = '#fff') => (
     <Grid item xs={12} sm={6} md={3}>
@@ -59,6 +94,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
   );
 
   return (
+    <>
     <Card sx={cardSx}>
       <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3, minWidth: 0 }}>
@@ -75,7 +111,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
           </Box>
         </Stack>
 
-        {!financials.hasRentData && pmEnabled && (
+        {!financials.hasRentData && pmEnabled && properties.length > 0 && (
           <Box sx={{ p: 3, mb: 3, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.2)}`, borderRadius: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
             <Stack direction="row" spacing={1.5} alignItems="center">
               <AlertCircle color="#f59e0b" />
@@ -84,7 +120,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
               </Box>
             </Stack>
-            <Button variant="contained" onClick={onAddRentDetails} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
+            <Button variant="contained" onClick={openRentDialog} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
               {t('owner.addRentIncome') || 'Add Rent Income'}
             </Button>
           </Box>
@@ -93,7 +129,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
         <Grid container spacing={3} sx={{ mb: 3 }}>
           {renderMetric(
             pmEnabled ? 'Net Property Position' : 'Net FM Cost Position',
-            pmEnabled ? financials.netPropertyPosition : (financials.totalSlaCredits - financials.totalPenalties - financials.annualContractValue - financials.totalMaintenanceCost),
+            formatCurrency(pmEnabled ? financials.netPropertyPosition : (financials.totalSlaCredits - financials.totalPenalties - financials.annualContractValue - financials.totalMaintenanceCost)),
             <Landmark size={16} />,
             (pmEnabled ? financials.netPropertyPosition : (financials.totalSlaCredits - financials.totalPenalties - financials.annualContractValue - financials.totalMaintenanceCost)) >= 0 ? '#10b981' : '#ef4444'
           )}
@@ -142,5 +178,43 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
         </Box>
       </CardContent>
     </Card>
+
+    <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle>{t('owner.addRentIncome') || 'Add Rent Income'}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.25} sx={{ pt: 1 }}>
+          <TextField
+            select
+            label="Property"
+            value={selectedPropertyId}
+            onChange={(event) => setSelectedPropertyId(event.target.value)}
+            fullWidth
+            required
+          >
+            {properties.map((property) => {
+              const id = propertyIdOf(property);
+              return <MenuItem key={id} value={id}>{propertyNameOf(property)}</MenuItem>;
+            })}
+          </TextField>
+          <TextField
+            type="number"
+            label="Annual rent (AED)"
+            value={annualRentInput}
+            onChange={(event) => setAnnualRentInput(event.target.value)}
+            helperText="Expected or actual annual rent collected from your tenant for this property."
+            fullWidth
+            required
+          />
+          {saveError && <Alert severity="error">{saveError}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSaveRentIncome} disabled={!isRentFormValid || saving} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }
