@@ -1,3 +1,3 @@
-import RoleServiceLandingPage from './RoleServiceLandingPage';
+import SimpleAccessLandingPage from './SimpleAccessLandingPage';
 
-export default RoleServiceLandingPage;
+export default SimpleAccessLandingPage;
