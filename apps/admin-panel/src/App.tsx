@@ -56,7 +56,7 @@ import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import StaffAccessPage from './pages/admin/StaffAccessPage';
-import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsPage';
+import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsResolvedPage';
 import ContractTerminationPage from './pages/admin/ContractTerminationPage';
 import { adminTheme } from './theme/adminTheme';
 
@@ -264,3 +264,5 @@ function App() {
         </CacheProvider>
     );
 }
+
+export default App;
