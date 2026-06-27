@@ -1,284 +1,247 @@
-# Test Suite Documentation
+# BIN GROUP Super App Testing & Launch Verification
 
-## Overview
+This repo is a multi-surface Firebase/React platform. Use the root scripts as the source of truth for validation instead of the old `backend`, `admin-panel`, or `tenant-app` folder commands.
 
-Comprehensive test coverage across all HOME OS applications using industry-standard testing frameworks:
-- **Backend**: Jest (Node.js) for unit and integration tests
-- **Frontend**: Jest + React Testing Library for component tests
-- **E2E**: Jest for end-to-end workflow testing
+## Current app surfaces
 
-## Running Tests
+- Public / main PWA: root Vite app in `src/`
+- Owner portal: `src/owner/`
+- Tenant portal: `src/tenant/`
+- Technician portal: `src/technician/`
+- Broker portal: `src/broker/`
+- Admin bridge inside main app: `src/admin/AdminTerminal.tsx`
+- Dedicated admin panel: `apps/admin-panel/`
+- Dedicated owner app package: `apps/owner-app/`
+- Shared package: `packages/shared/`
+- Firebase Functions: `functions/`
+- Firebase rules / launch scripts: `firestore.rules`, `storage.rules`, `scripts/`, `test/`
 
-### Backend Tests
-
-```bash
-cd backend
-
-# Run all tests
-npm test
-
-# Run specific test file
-npm test tests/unit/services.test.js
-
-# Run with coverage report
-npm test -- --coverage
-
-# Watch mode (re-run on file changes)
-npm test -- --watch
-
-# Run integration tests only
-npm test tests/integration/
-
-# Run E2E tests only
-npm test tests/e2e/
-```
-
-### Admin Panel Tests
+## Install
 
 ```bash
-cd admin-panel
-
-# Run all tests
-npm test
-
-# Run specific test file
-npm test -- DashboardPage.test.tsx
-
-# Run with coverage
-npm test -- --coverage
-
-# Watch mode
-npm test -- --watch
-
-# Update snapshots
-npm test -- -u
+npm install --legacy-peer-deps
 ```
 
-### Tenant App Tests
+For the dedicated admin panel:
 
 ```bash
-cd tenant-app
-
-# Run all tests
-npm test
-
-# Run specific test
-npm test -- LoginScreen.test.tsx
-
-# Run with coverage
-npm test -- --coverage
-
-# Watch mode
-npm test -- --watch
+npm --prefix apps/admin-panel install --legacy-peer-deps
 ```
 
-## Test Structure
-
-### Backend Tests (`backend/tests/`)
-
-#### Unit Tests (`tests/unit/services.test.js`)
-- **calculateEnterpriseDiscount**: 3.3% discount for 4+ buildings
-- **calculateTurnoverQuote**: 1-BED, STUDIO calculations with discounts
-- **applyPartsMarkup**: 20% markup calculation
-- **calculateHealthScore**: Base 100, -5 per open ticket, +10 per completed PPM
-- **processRentWaterfall**: 5% BIN fee, invoice deduction, owner payout
-- **enforceTwoStrike**: Suspension at 2+ unpaid invoices
-
-#### Integration Tests (`tests/integration/api.test.js`)
-- POST /api/tickets/create (with/without photos, emergency charges)
-- GET /api/tickets/:ticketId
-- POST /api/units/moveout-request
-- POST /api/owner/turnover-quotes/:quoteId/approve
-- GET /api/owner/:ownerId/financials
-- POST /api/technician/morning-check-in
-- POST /api/technician/jobs/:jobId/close
-- POST /api/admin/owners/:ownerId/suspend
-- GET /health
-
-#### E2E Tests (`tests/e2e/`)
-- **tenant-workflow.e2e.js**: Register → Login → Create Ticket → Track Status → Move-Out Request
-- **admin-workflow.e2e.js**: Admin Login → Financial Dashboard → Owner Management → Ticket Management
-
-### Admin Panel Tests (`admin-panel/src/__tests__/`)
-
-#### Component Tests
-- **DashboardPage.test.tsx**: KPI display, financial metrics, chart rendering, 30-sec refresh
-- **LiveMapPage.test.tsx**: Technician cards, status color-coding, location display, ETA, job counts
-
-#### Service Tests
-- **api.test.ts**: Login/logout, live map data, financial ticker, owner management, tickets, SOS feed
-
-### Tenant App Tests (`tenant-app/src/__tests__/`)
-
-#### Component Tests
-- **LoginScreen.test.tsx**: Form rendering, credential submission, error alerts, loading states
-- **CreateTicketScreen.test.tsx**: Visual Gate enforcement, SOS warning, photo requirements
-- **HomeScreen.test.tsx**: Dashboard metrics, ticket list, action buttons
-
-#### Service Tests
-- **api.test.ts**: JWT handling, token storage, ticket operations, move-out operations
-
-## Coverage Targets
-
-| Package | Branches | Functions | Lines | Statements |
-|---------|----------|-----------|-------|-----------|
-| backend | 70% | 75% | 75% | 75% |
-| admin-panel | 65% | 70% | 70% | 70% |
-| tenant-app | 60% | 65% | 65% | 65% |
-
-## Key Testing Patterns
-
-### 1. Mocking API Calls
-```typescript
-jest.mock('../../services/api');
-
-(apiClient.get as jest.Mock).mockResolvedValue({
-  data: { /* response data */ }
-});
-```
-
-### 2. Async Rendering
-```typescript
-render(<Component />);
-
-await waitFor(() => {
-  expect(screen.getByText('Expected Text')).toBeTruthy();
-});
-```
-
-### 3. User Interactions
-```typescript
-fireEvent.changeText(input, 'text');
-fireEvent.press(button);
-```
-
-### 4. Firebase Auth Testing
-```typescript
-jest.spyOn(firebase.auth(), 'signInWithEmailAndPassword')
-  .mockResolvedValueOnce({ user: { uid: 'test-uid' } });
-```
-
-## Coverage Reports
-
-Generate coverage after running tests:
+For the dedicated owner app:
 
 ```bash
-# Backend
-npm test -- --coverage
-# View: backend/coverage/lcov-report/index.html
-
-# Admin Panel
-npm test -- --coverage
-# View: admin-panel/coverage/lcov-report/index.html
-
-# Tenant App
-npm test -- --coverage
-# View: tenant-app/coverage/lcov-report/index.html
+npm --prefix apps/owner-app install --legacy-peer-deps
 ```
 
-## Continuous Integration
+## Build commands
 
-### GitHub Actions Workflow
+### Main public / role portal app
 
-Create `.github/workflows/test.yml`:
-
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-      - run: cd backend && npm install && npm test -- --coverage
-      - uses: codecov/codecov-action@v2
-
-  admin:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-      - run: cd admin-panel && npm install && npm test -- --coverage
-      - uses: codecov/codecov-action@v2
-
-  tenant:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-      - run: cd tenant-app && npm install && npm test -- --coverage
-      - uses: codecov/codecov-action@v2
-```
-
-## Testing Checklist
-
-- [x] Unit tests for business logic (services)
-- [x] Integration tests for API endpoints
-- [x] E2E workflow tests (tenant, admin)
-- [x] Component tests (login, create ticket, dashboard)
-- [x] API client service tests
-- [x] Jest configuration for all packages
-- [x] Coverage thresholds defined
-- [ ] Firebase auth mocking in CI
-- [ ] Performance benchmark tests
-- [ ] Security penetration tests
-
-## Debugging Tests
-
-### Run Single Test
 ```bash
-npm test -- --testNamePattern="should create ticket"
+npm run build
 ```
 
-### Debug in Node Inspector
+Low-memory build option:
+
 ```bash
-node --inspect-brk node_modules/.bin/jest --runInBand
+npm run build:lowmem
 ```
 
-### Print Debug Output
-```typescript
-screen.debug(); // React Testing Library
-console.log(response.data); // HTTP responses
+### Shared package
+
+```bash
+npm run build:shared
 ```
 
-## Test Maintenance
+### Dedicated admin panel
 
-- Update tests when business logic changes
-- Mock external dependencies (Firebase, APIs, image picker)
-- Keep test data realistic but minimal
-- Use `beforeEach` to reset mocks
-- Document complex test scenarios
-- Run coverage reports before commits
+```bash
+npm run build:admin
+```
 
-## Next Steps
+Equivalent direct command:
 
-1. **Run backend tests** to verify business logic:
-   ```bash
-   cd backend && npm install && npm test -- --coverage
-   ```
+```bash
+npm --prefix apps/admin-panel run build
+```
 
-2. **Run admin panel tests**:
-   ```bash
-   cd admin-panel && npm install && npm test -- --coverage
-   ```
+### Dedicated owner app
 
-3. **Run tenant app tests**:
-   ```bash
-   cd tenant-app && npm install && npm test -- --coverage
-   ```
+```bash
+npm run build:owner
+```
 
-4. **Check coverage** for all packages (target: 70%+)
+### Firebase Functions
 
-5. **Set up CI/CD** with GitHub Actions
+```bash
+npm run build:functions
+```
 
-6. **Deploy test environment** with Firebase Emulator Suite
+## Typecheck
 
+```bash
+npm run typecheck
+```
+
+## Firestore rules validation
+
+Prepare and harden rules:
+
+```bash
+npm run prepare:rules
+```
+
+Verify rule hardening:
+
+```bash
+npm run verify:rules-hardening
+```
+
+Run rules tests through the emulator:
+
+```bash
+npm run test:rules
+```
+
+Run the node-only rule test path:
+
+```bash
+npm run test:rules:node
+```
+
+## Launch gates
+
+### Pilot clearance
+
+```bash
+npm run test:pilot-clearance
+```
+
+### Public launch clearance
+
+```bash
+npm run test:launch-clearance
+```
+
+### Hard launch readiness
+
+```bash
+npm run test:hard-launch-readiness
+```
+
+### Full hard launch gate
+
+```bash
+npm run launch:hard-gate
+```
+
+## Runtime and stability audits
+
+```bash
+npm run test:runtime-audit
+npm run test:stability
+npm run test:repo-hygiene
+npm run test:mobile-store-readiness
+npm run test:uae-platform-config
+npm run test:hr-smoke
+```
+
+## E2E tests
+
+Verify E2E environment:
+
+```bash
+npm run test:e2e:env
+```
+
+Run public production smoke tests:
+
+```bash
+npm run test:e2e:public
+```
+
+Run local production smoke tests:
+
+```bash
+npm run test:e2e:local
+```
+
+Run launch audit E2E tests:
+
+```bash
+npm run test:e2e:launch-audit
+```
+
+Run business workflow E2E tests for all profiles:
+
+```bash
+npm run test:e2e:business
+```
+
+## Mobile readiness
+
+```bash
+npm run mobile:check
+npm run mobile:sync
+```
+
+Android and iOS shell commands:
+
+```bash
+npm run mobile:add:android
+npm run mobile:open:android
+npm run mobile:add:ios
+npm run mobile:open:ios
+```
+
+## Profile verification checklist
+
+Run or manually verify these surfaces after every launch-blocker fix:
+
+### Owner
+
+- Login resolves owner role and redirects to `/owner/dashboard`.
+- Dashboard unlocks only after active/verified contract state.
+- Owner can see properties, contracts, financials, IBAN, payment proof, tenants, tickets, approvals, documents, property passport, inspections, AI intelligence, and BIN Connect.
+- Owner approval center and pending payment counters match Firestore records.
+
+### Tenant
+
+- Login resolves tenant role and redirects to `/tenant/dashboard`.
+- Tenant can report issue, open tickets, view ticket detail, use emergency/SOS, documents, unit view, gate pass, amenities, payments, and move-in/move-out inspection.
+- Arabic labels and RTL layout remain usable in the tenant shell.
+
+### Technician
+
+- Login resolves technician role and redirects to `/technician/dashboard`.
+- Technician can view jobs, job detail, proof readiness, chat, map, history, profile, HR, offline queue, support, BIN Connect, and pilot completion.
+- Accept / on-site / resolve proof workflow must preserve before/after evidence.
+
+### Broker
+
+- Login resolves broker role and redirects to `/broker/dashboard`.
+- Broker can manage leads, referrals, commissions, attribution, documents, and profile.
+- Commission status and referral attribution must stay linked to broker identity.
+
+### Admin
+
+- Main app `/admin/*` bridge opens the dedicated admin panel.
+- Dedicated admin dashboard loads without React hook errors.
+- Admin can access owners, tenants, tickets, technicians, map, SOS, document vault, audit, payments, broker management, property approvals, unit status, HR, pricing, contract termination, orphan war room, public ops, and reports.
+
+## Required manual production smoke test
+
+After builds pass, run a real five-profile smoke test in Firebase production or staging:
+
+1. Owner onboarding: property intake → quote → contract → payment proof → activation → owner dashboard.
+2. Tenant flow: tenant login/invite → maintenance request with evidence → ticket tracking → verification/dispute path.
+3. Technician flow: job assigned → accept → en route/on site → resolve with before/after proof.
+4. Broker flow: referral/lead submission → attribution proof → commission queue.
+5. Admin flow: owner approval → payment verification → technician approval → broker commission review → audit log check.
+
+## Notes
+
+- Client Firebase config is public Web SDK configuration; service-account secrets must never be committed.
+- App Check should be enabled only when the production site key is configured.
+- Stripe/live payment keys, branded email sender, and admin password rotation remain environment/operations tasks, not source-code-only tasks.
