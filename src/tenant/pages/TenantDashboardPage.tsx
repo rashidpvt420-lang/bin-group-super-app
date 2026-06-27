@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { getContractModeProfile, getPropertyIntelligenceProfile, resolveContractMode } from '../../utils/contractIntelligence';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const CLOSED_TICKET_STATUSES = new Set(['CLOSED', 'DISPUTED', 'COMPLETED', 'CANCELLED', 'CANCELED']);
@@ -241,6 +242,10 @@ export default function TenantDashboardPage() {
         </Box>
 
         <RoleJourneyStrip role="tenant" dark />
+
+        {!unitData && (
+          <TenantUnitLinkFallback compact message={tx('tenant.unitLink.noAssignedUnit', 'No assigned unit is linked to this tenant profile yet. Submit a verification request before unit-specific services are unlocked.')} />
+        )}
 
         <Paper sx={{ p: { xs: 2.5, md: 3 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
           <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>

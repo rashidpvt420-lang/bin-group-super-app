@@ -4,6 +4,7 @@ import { Building2, ClipboardCheck, Home, ShieldCheck, UserRound, Wrench } from 
 import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 
 type UnitDoc = {
   id: string;
@@ -122,7 +123,7 @@ export default function TenantUnitPage() {
   };
 
   if (loading) return <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
-  if (error && !unit) return <Alert severity="warning">{error}</Alert>;
+  if (error && !unit) return <TenantUnitLinkFallback message={error} />;
   if (!unit) return null;
 
   const occupancy = String(unit.occupancyStatus || 'occupied').toUpperCase();

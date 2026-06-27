@@ -27,6 +27,14 @@ import TenantGatePassPage from './pages/TenantGatePassPage';
 import TenantAmenitiesPage from './pages/TenantAmenitiesPage';
 import TenantPaymentsPage from './pages/TenantPaymentsPage';
 import TenantMoveInspectionPage from './pages/TenantMoveInspectionPage';
+import TenantNoticesPage from './pages/TenantNoticesPage';
+import TenantKeysPage from './pages/TenantKeysPage';
+import TenantParcelsPage from './pages/TenantParcelsPage';
+import TenantVisitorParkingPage from './pages/TenantVisitorParkingPage';
+import TenantMarketplacePage from './pages/TenantMarketplacePage';
+import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
+import TenantMessagesPage from './pages/TenantMessagesPage';
+import TenantCommunityPage from './pages/TenantCommunityPage';
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -162,6 +170,14 @@ export default function TenantApp() {
                 <Route path="/payments" element={<TenantPaymentsPage />} />
                 <Route path="/move-inspection" element={<TenantMoveInspectionPage />} />
                 <Route path="/move-inspection/:type" element={<TenantMoveInspectionPage />} />
+                <Route path="/notices" element={<TenantNoticesPage />} />
+                <Route path="/keys" element={<TenantKeysPage />} />
+                <Route path="/parcels" element={<TenantParcelsPage />} />
+                <Route path="/visitor-parking" element={<TenantVisitorParkingPage />} />
+                <Route path="/marketplace" element={<TenantMarketplacePage />} />
+                <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
+                <Route path="/messages" element={<TenantMessagesPage />} />
+                <Route path="/community" element={<TenantCommunityPage />} />
             </Routes>
         </TenantLayout>
     );
