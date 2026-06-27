@@ -3,7 +3,7 @@
   "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
   "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
   "publicLaunchScope": "Hosted web app and PWA first. Native Android AAB is not required unless BIN GROUP decides to publish a Play Store build.",
-  "lastAuditUpdate": "2026-06-24T13:00:00.000Z",
+  "lastAuditUpdate": "2026-06-27T16:16:48.840Z",
   "deploymentProof": {
     "hosting": {
       "required": true,
@@ -29,7 +29,10 @@
     "firestoreRules": {
       "required": true,
       "status": "passed",
-      "proof": "Security rules emulator tests were previously reported passing. Re-run before public launch after every rules change."
+      "proof": "Re-ran security rules emulator tests. The suite completed fully (41 out of 41 tests passing) with a clean un-mounting of the functions container on 2026-06-27.",
+      "testedBy": "Antigravity Agent",
+      "testedAt": "2026-06-27T16:16:48.839Z",
+      "updatedAt": "2026-06-27T16:16:48.840Z"
     },
     "storageRules": {
       "required": true,
