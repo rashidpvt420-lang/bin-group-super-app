@@ -55,7 +55,7 @@ import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitor
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import UnitStatusPage from './pages/admin/UnitStatusPage';
 import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
-import StaffAccessPage from './pages/admin/StaffAccessPage';
+import StaffAccessPage from './pages/admin/StaffAccessResolvedPage';
 import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsResolvedPage';
 import ContractTerminationPage from './pages/admin/ContractTerminationPage';
 import { adminTheme } from './theme/adminTheme';
