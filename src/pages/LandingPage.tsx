@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Container, Stack, Grid, alpha, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { ArrowRight, Shield, Globe, Building, TrendingUp, Crown, Mail, Phone, MapPin, Info, MessageSquare, Zap } from 'lucide-react';
 import { CeoContactButtons } from '../components/CeoContactButtons';
+import RoleEntryGate, {
+    ROLE_GATE_ROUTES,
+    ROLE_GATE_STORAGE_KEY,
+    getRoleFromQueryParam,
+    getStoredRoleGateChoice,
+} from '../components/RoleEntryGate';
 
 type LandingCard = {
     title: string;
@@ -23,6 +29,22 @@ const LandingPage: React.FC = () => {
     const { t, isRTL } = useLanguage();
 
     const copy = (en: string, ar: string) => (isRTL ? ar : en);
+
+    const queryRole = getRoleFromQueryParam();
+    const [showRoleGate, setShowRoleGate] = useState(() => !queryRole && !getStoredRoleGateChoice());
+
+    useEffect(() => {
+        if (!queryRole) return;
+        try {
+            localStorage.setItem(ROLE_GATE_STORAGE_KEY, queryRole);
+        } catch {
+            // localStorage may be unavailable (private mode); redirect still proceeds.
+        }
+        navigate(ROLE_GATE_ROUTES[queryRole], { replace: true });
+    }, [queryRole, navigate]);
+
+    if (queryRole) return null;
+    if (showRoleGate) return <RoleEntryGate onChoose={() => setShowRoleGate(false)} />;
 
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
