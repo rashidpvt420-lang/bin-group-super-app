@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
@@ -5,7 +6,7 @@ import { termFieldsFromStart } from "./ownerContractTerm";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
-const ts = () => admin.firestore.FieldValue.serverTimestamp();
+const ts = () => FieldValue.serverTimestamp();
 const adminRoles = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 
 const s = (v: any, fallback = "") => String(v ?? "").trim() || fallback;

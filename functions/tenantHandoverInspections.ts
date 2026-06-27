@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
@@ -78,7 +79,7 @@ export const submitTenantMoveInspection = onCall({ cors: true }, async (request)
   }
 
   const inspectionType = normalizeInspectionType(payload.inspectionType || payload.type || payload.legacyType);
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const timestamp = FieldValue.serverTimestamp();
   const ownerReviewRef = db.collection("propertyInspections").doc();
   const legacyRef = db.collection("inspections").doc();
 

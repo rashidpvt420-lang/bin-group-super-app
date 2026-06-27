@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
@@ -111,7 +112,7 @@ async function persistInboundMessage(args: {
   const contact = args.value.contacts?.find((item) => item.wa_id === from) || args.value.contacts?.[0];
   const category = inferTicketCategory(text);
   const urgency = inferUrgency(text);
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const timestamp = FieldValue.serverTimestamp();
 
   const intakeRef = db.collection("communication_intake").doc(args.message.id || db.collection("communication_intake").doc().id);
   await intakeRef.set({
@@ -231,7 +232,7 @@ export const whatsappWebhook = onRequest(
               entryId: entry.id || "",
               changeField: change.field || "",
               statuses: value.statuses,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              createdAt: FieldValue.serverTimestamp(),
             });
           }
         }

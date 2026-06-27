@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
@@ -130,7 +131,7 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
     const designRequestId = metadata.designRequestId;
     const onboardingSessionId = metadata.onboardingSessionId;
     const amount = session.amount_total ? session.amount_total / 100 : 0;
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const timestamp = FieldValue.serverTimestamp();
     const batch = db.batch();
 
     if (ownerUid && intakeId) {

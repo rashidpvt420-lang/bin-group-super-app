@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
@@ -95,7 +96,7 @@ export const requestContractSignatureOtp = onCall(
         email,
         status: "DELIVERY_FAILED",
         error: error?.message || "OTP delivery failed",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
       if (error instanceof HttpsError) throw error;
       throw new HttpsError("internal", "OTP delivery failed. Check SMTP provider configuration.");
@@ -115,11 +116,11 @@ export const requestContractSignatureOtp = onCall(
       delivery: {
         provider: "smtp",
         messageId,
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: FieldValue.serverTimestamp(),
       },
       expiresAt,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     await db.collection("contract_signature_otp_audit").add({
@@ -130,7 +131,7 @@ export const requestContractSignatureOtp = onCall(
       channel: "email",
       otpRequestId: requestRef.id,
       status: "OTP_SENT",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return {
@@ -166,7 +167,7 @@ export const verifyContractSignatureOtp = onCall(
     if (attempts >= MAX_ATTEMPTS) throw new HttpsError("resource-exhausted", "Maximum OTP attempts exceeded. Request a new code.");
     const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
     if (!expiresAt || Date.now() > expiresAt) {
-      await ref.set({ status: "EXPIRED", updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await ref.set({ status: "EXPIRED", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       throw new HttpsError("deadline-exceeded", "OTP expired. Request a new code.");
     }
 
@@ -175,9 +176,9 @@ export const verifyContractSignatureOtp = onCall(
     const submittedHash = hashOtp(otp, salt);
     if (submittedHash !== expectedHash) {
       await ref.set({
-        attempts: admin.firestore.FieldValue.increment(1),
-        lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        attempts: FieldValue.increment(1),
+        lastFailedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       throw new HttpsError("permission-denied", "Invalid OTP.");
     }
@@ -185,8 +186,8 @@ export const verifyContractSignatureOtp = onCall(
     await ref.set({
       status: "VERIFIED",
       signature,
-      verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      verifiedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     await db.collection("contract_signature_otp_audit").add({
@@ -196,7 +197,7 @@ export const verifyContractSignatureOtp = onCall(
       otpRequestId: requestId,
       status: "OTP_VERIFIED",
       channel: data.channel || "email",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return {

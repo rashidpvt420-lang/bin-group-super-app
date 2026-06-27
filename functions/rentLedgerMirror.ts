@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
@@ -72,7 +73,7 @@ export const mirrorRentPaymentToTenantLedger = onDocumentWritten("payment_transa
     rejectionReason: payment.rejectionReason || "",
     lastPaymentDate: payment.lastPaymentDate || payment.receivedAt || new Date().toISOString(),
     createdByOwnerUid: payment.createdByOwnerUid || ownerId,
-    createdAt: payment.createdAt || admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: payment.createdAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 });

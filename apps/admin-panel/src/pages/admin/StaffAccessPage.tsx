@@ -171,7 +171,7 @@ export default function StaffAccessPage() {
             } else {
                 // Attempt to create via Cloud Function if available, fallback to Firestore only
                 try {
-                    const createStaff = httpsCallable(functions, 'createStaffUser');
+                    const createStaff = httpsCallable(functions, 'adminCreateUser');
                     await createStaff({
                         displayName: formData.displayName,
                         email: formData.email,

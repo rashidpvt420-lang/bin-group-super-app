@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
@@ -104,7 +105,7 @@ export const normalizeMaintenanceTicketDispatchFields = onDocumentWritten("maint
 
   if (!Object.keys(patch).length) return null;
 
-  patch.normalizedAt = admin.firestore.FieldValue.serverTimestamp();
+  patch.normalizedAt = FieldValue.serverTimestamp();
   patch.normalizedBy = "normalizeMaintenanceTicketDispatchFields";
 
   await afterSnap.ref.set(patch, { merge: true });

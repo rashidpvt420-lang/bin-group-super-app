@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -6,7 +7,7 @@ import { isValidReraFormat } from "./brokerCommissions";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const ts = () => admin.firestore.FieldValue.serverTimestamp();
+const ts = () => FieldValue.serverTimestamp();
 
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 const BROKER_ROLES = new Set(["broker"]);
@@ -35,7 +36,7 @@ function clean(value: any): any {
   if (value === null) return null;
   if (value instanceof admin.firestore.GeoPoint) return value;
   if (value instanceof admin.firestore.Timestamp) return value;
-  if (value instanceof admin.firestore.FieldValue) return value;
+  if (value instanceof FieldValue) return value;
   if (value instanceof Date) return value;
   if (Array.isArray(value)) return value.map(clean);
   if (typeof value === "object") {

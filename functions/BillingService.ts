@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import * as admin from 'firebase-admin';
 
 export const generateAndEmailInvoice = async (contractId: string, ownerId: string, amount: number) => {
@@ -13,7 +14,7 @@ export const generateAndEmailInvoice = async (contractId: string, ownerId: strin
         feeType: 'Property Management Fee',
         status: 'UNPAID',
         currency: 'AED',
-        issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+        issuedAt: FieldValue.serverTimestamp(),
         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
     };
 
@@ -46,7 +47,7 @@ export const generateAndEmailInvoice = async (contractId: string, ownerId: strin
                 </div>
             `
         },
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
     });
 
     console.log(`[Billing] Invoice ${invoiceId} generated and queued for ${ownerData.email}`);

@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
@@ -182,8 +183,8 @@ async function createNotification(record: RenewalRecord, role: RenewalRole, user
     sourceCollection: record.sourceCollection,
     sourceId: record.sourceId,
     expiryAt: admin.firestore.Timestamp.fromDate(record.expiryAt),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     source: "CONTRACT_RENEWAL_PDF_SYSTEM",
   }, { merge: true });
 }
@@ -202,7 +203,7 @@ async function createEmailOutbox(record: RenewalRecord, role: RenewalRole, email
     contractId: record.contractId,
     leaseId: record.leaseId,
     propertyId: record.propertyId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 }
 
@@ -243,8 +244,8 @@ async function createRenewalPdfRecord(record: RenewalRecord) {
     expiryAt: admin.firestore.Timestamp.fromDate(record.expiryAt),
     daysRemaining: record.daysRemaining,
     milestoneDays: record.milestoneDays,
-    generatedAt: pdfUrl ? admin.firestore.FieldValue.serverTimestamp() : null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    generatedAt: pdfUrl ? FieldValue.serverTimestamp() : null,
+    updatedAt: FieldValue.serverTimestamp(),
     source: "CONTRACT_RENEWAL_PDF_SYSTEM",
   }, { merge: true });
 
@@ -277,8 +278,8 @@ async function processRenewalRecord(record: RenewalRecord) {
     pdfUrl: pdfUrl || null,
     notificationCount,
     completed: true,
-    processedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    processedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   await db.collection("audit_logs").add({
@@ -297,7 +298,7 @@ async function processRenewalRecord(record: RenewalRecord) {
       pdfRecordId,
       pdfGenerated: Boolean(pdfUrl),
     },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   return { skipped: false, notificationCount, pdfRecordId, pdfUrl };
@@ -331,7 +332,7 @@ export const runContractRenewalWatch = onSchedule("every 24 hours", async () => 
     skipped,
     scanned: records.length,
     milestones: RENEWAL_MILESTONES,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 });
 

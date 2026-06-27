@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
@@ -6,7 +7,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const serverTimestamp = FieldValue.serverTimestamp;
 
 function cleanText(value: unknown, fieldName: string, maxLength: number) {
   const text = String(value || "").trim();

@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
@@ -5,7 +6,7 @@ import { generateContractPDF } from "./pdfEngine";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const serverTimestamp = FieldValue.serverTimestamp;
 
 function cleanText(value: unknown, label: string, maxLength: number) {
   const output = String(value || "").trim();
@@ -44,7 +45,7 @@ function cleanReference(value: unknown) {
 function cleanPlainValue(value: any): any {
   if (value === undefined) return null;
   if (value === null) return null;
-  if (value instanceof admin.firestore.FieldValue) return value;
+  if (value instanceof FieldValue) return value;
   if (value instanceof admin.firestore.Timestamp) return value;
   if (value instanceof Date) return value;
   if (Array.isArray(value)) return value.map(cleanPlainValue);

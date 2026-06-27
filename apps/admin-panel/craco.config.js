@@ -21,14 +21,6 @@ module.exports = {
         webpackConfig.resolve.plugins.splice(scopePluginIndex, 1);
       }
 
-      // 2. Replace the malformed dashboard module with a production-safe fallback
-      // without importing or parsing the broken source file during admin builds.
-      webpackConfig.plugins.push(
-        new webpack.NormalModuleReplacementPlugin(
-          /\.\/pages\/dashboard\/DashboardPage$/,
-          "./pages/dashboard/DashboardPageStable"
-        )
-      );
 
       // 3. Add shared package to babel-loader include to ensure it's transpiled
       const sharedPath = path.resolve(__dirname, "../../packages/shared");

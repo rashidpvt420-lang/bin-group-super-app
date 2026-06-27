@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
@@ -49,7 +50,7 @@ async function logAudit(data: {
     try {
         await db.collection("audit_logs").add({
             ...data,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
         });
     } catch (err) {
         console.error("Audit Logging Failed:", err);
@@ -94,7 +95,7 @@ function normalizeGeo(source: any) {
         city: source?.geo?.city || source?.city || source?.area || source?.serviceZone || "",
         area: source?.geo?.area || source?.area || source?.serviceZone || "",
         verified: source?.geo?.verified === true,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     };
 }
 
@@ -131,7 +132,7 @@ function cleanPlainValue(value: any): any {
     if (value === undefined) return null;
     if (value === null) return null;
     if (value instanceof admin.firestore.GeoPoint) return value;
-    if (value instanceof admin.firestore.FieldValue) return value;
+    if (value instanceof FieldValue) return value;
     if (value instanceof admin.firestore.Timestamp) return value;
     if (value instanceof Date) return value;
     if (Array.isArray(value)) return value.map(cleanPlainValue);
@@ -199,7 +200,7 @@ function assertOwnerSubmissionGeo(property: any) {
         verifiedAt: null,
         requiresGeoReview: true,
         dispatchReady: false,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     };
 }
 
@@ -331,7 +332,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
     const auditLogId = `${submissionId}_submit`;
     const companyId = "BIN_GROUP";
     const projectId = admin.app().options.projectId || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "UNKNOWN_PROJECT";
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const timestamp = FieldValue.serverTimestamp();
     const planCoverage = getPlanCoverageForSubmission(selectedPlan);
     const estimatedAnnualValue = Number(payload.pricing?.annualContractValue || payload.portfolioSummary?.estimatedACV || 2500);
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
@@ -641,14 +642,14 @@ export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
     const shiftId = userData?.currentShiftId;
     if (!shiftId) throw new HttpsError("failed-precondition", "No active shift found.");
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
 
     const batch = db.batch();
     batch.update(userRef, { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, breakStartedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
         status: "ON_BREAK",
-        breaks: admin.firestore.FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
+        breaks: FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
         updatedAt: now
     });
 
@@ -677,7 +678,7 @@ export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
         }
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const batch = db.batch();
     batch.update(userRef, { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, breakEndedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
@@ -712,7 +713,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
         throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     await ticketRef.update({
         status: 'ACCEPTED',
         assignedTechnicianId: request.auth.uid,
@@ -743,7 +744,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
         throw new HttpsError("permission-denied", "You are not assigned to this mission.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const updateData: any = {
         status,
         updatedAt: now
@@ -838,7 +839,7 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
         throw new HttpsError("permission-denied", "This ticket is not linked to your owner account.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const baseUpdate: any = {
         ownerReviewAction: action,
         ownerReviewReason: reason || null,
@@ -1005,8 +1006,8 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         await event.data?.after.ref.update({
             status: "APPROVED",
             approvalType: "AUTO_REPAIR_THRESHOLD",
-            approvedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            approvedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
         if (ownerId) await dispatchOmniNotification(ownerId, "AUTO-REPAIR ACTIVE", `A minor repair (AED ${after.estimatedCost}) at ${prop} has been auto-approved.`);
         await logAudit({ actorId: "SYSTEM_RULES", actorRole: "system", action: "AUTO_APPROVAL", targetType: "maintenanceTickets", targetId: ticketId, metadata: { cost: after.estimatedCost, threshold: 1000 } });
@@ -1092,8 +1093,8 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 status: "AUTO_ASSIGNED",
                 dispatchStatus: "AUTO_ASSIGNED",
                 trackingStatus: "TECHNICIAN_ASSIGNED",
-                autoAssignedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                autoAssignedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
             });
 
             await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
@@ -1138,7 +1139,7 @@ export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) 
         throw new HttpsError("permission-denied", "You do not own this property.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const ticketRef = db.collection("maintenanceTickets").doc();
     const tradeValue = safeString(trade, "GENERAL");
     await ticketRef.set({
@@ -1193,7 +1194,7 @@ export const approveMaintenanceProposal = onCall({ cors: true }, async (request)
         throw new HttpsError("permission-denied", "You are not authorized to approve this proposal.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     await ticketRef.update({
         status: "OPEN",
         ownerId,
@@ -1316,7 +1317,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
                     subject: `[BIN GROUP] ${title}`,
                     html: `<p>${body}</p>`
                 },
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp()
             });
         }
 
@@ -1697,7 +1698,7 @@ export const notifyRole = onCall({ cors: true }, async (request) => {
             return { status: "SUCCESS", notified: 0 };
         }
 
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FieldValue.serverTimestamp();
         const batch = db.batch();
         usersSnap.forEach(userDoc => {
             const ref = db.collection("notifications").doc();
@@ -1905,16 +1906,16 @@ export const syncOwnerSummary = onDocumentUpdated("maintenanceTickets/{id}", asy
     await db.collection("owner_summaries").doc(ownerId).set({
         openTickets: openCount,
         propertyCount: propsSnap.size,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
 });
 
 export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", async () => {
     const summaryRef = db.collection("admin_summaries").doc("global");
     await summaryRef.update({
-        openTickets: admin.firestore.FieldValue.increment(1),
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-    }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }));
+        openTickets: FieldValue.increment(1),
+        lastUpdated: FieldValue.serverTimestamp()
+    }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: FieldValue.serverTimestamp() }));
 });
 
 export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async (event) => {
@@ -1938,7 +1939,7 @@ export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, 
             subject: mailData.message?.subject || 'Update',
             html: mailData.message?.html || ''
         });
-        await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: admin.firestore.FieldValue.serverTimestamp() } });
+        await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: FieldValue.serverTimestamp() } });
     } catch (err: any) {
         await snap.ref.update({ delivery: { state: 'ERROR', error: err.message } });
     }
@@ -1949,7 +1950,7 @@ export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", asyn
     if (!snap) return;
     const data = snap.data();
     try {
-        await db.collection("properties").add({ propertyName: data.propertyName || 'New Asset', ownerEmail: data.ownerEmail, status: 'PENDING_APPROVAL', createdAt: admin.firestore.FieldValue.serverTimestamp() });
+        await db.collection("properties").add({ propertyName: data.propertyName || 'New Asset', ownerEmail: data.ownerEmail, status: 'PENDING_APPROVAL', createdAt: FieldValue.serverTimestamp() });
         await snap.ref.update({ status: 'PROCESSED' });
     } catch (err) {
         await snap.ref.update({ status: 'ERROR', error: String(err) });
@@ -2035,11 +2036,11 @@ export const sendTenantInvitations = onCall({ cors: true }, async (request) => {
             inviteTokenHash: tokenHash,
             status: 'sent',
             emailStatus: 'queued',
-            emailQueuedAt: admin.firestore.FieldValue.serverTimestamp(),
+            emailQueuedAt: FieldValue.serverTimestamp(),
             mailDocumentId: mailDocumentId,
-            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            sentAt: FieldValue.serverTimestamp(),
             expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         // Email Job
@@ -2087,14 +2088,14 @@ export const sendTenantInvitations = onCall({ cors: true }, async (request) => {
                 unitId: invite.unitId || "N/A",
                 batchId: importBatchId || "manual",
                 createdBy: request.auth.uid,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp()
             }
         });
 
         batch.set(db.collection("tenant_invitation_events").doc(), {
             invitationId: doc.id,
             type: 'SENT',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            timestamp: FieldValue.serverTimestamp(),
             actorId: request.auth.uid
         });
 
@@ -2144,12 +2145,12 @@ export const resendTenantInvitation = onCall({ cors: true }, async (request) => 
         inviteTokenHash: tokenHash,
         status: 'sent',
         emailStatus: 'queued',
-        emailQueuedAt: admin.firestore.FieldValue.serverTimestamp(),
+        emailQueuedAt: FieldValue.serverTimestamp(),
         mailDocumentId: mailDocumentId,
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentAt: FieldValue.serverTimestamp(),
         expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-        resendCount: admin.firestore.FieldValue.increment(1),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        resendCount: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     const inviteLink = "https://bin-groups.com/tenant-invite?token=" + rawToken;
@@ -2172,14 +2173,14 @@ export const resendTenantInvitation = onCall({ cors: true }, async (request) => 
             tenantId: invite.tenantId || "N/A",
             propertyId: invite.propertyId,
             createdBy: request.auth.uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
         }
     });
 
     batch.set(db.collection("tenant_invitation_events").doc(), {
         invitationId,
         type: 'RESENT',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FieldValue.serverTimestamp(),
         actorId: request.auth.uid
     });
 
@@ -2235,8 +2236,8 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         ownerId: ownerId,
         unitId: invite.unitId,
         tenantInvitationId: inviteDoc.id,
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        acceptedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     // Update Unit
@@ -2246,14 +2247,14 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
             tenantName: invite.tenantName,
             tenantEmail: invite.tenantEmail,
             occupancyStatus: "occupied",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
     }
 
     // Update Invitation
     batch.update(inviteDoc.ref, {
         status: 'accepted',
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        acceptedAt: FieldValue.serverTimestamp(),
         acceptedBy: authUid
     });
 
@@ -2277,7 +2278,7 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
     batch.set(db.collection("tenant_invitation_events").doc(), {
         invitationId: inviteDoc.id,
         type: 'ACCEPTED',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FieldValue.serverTimestamp(),
         actorId: authUid
     });
 
@@ -2300,12 +2301,12 @@ export const trackTenantInvitationOpen = onRequest(async (req, res) => {
             if (invite.status === 'sent') {
                 await inviteDoc.ref.update({
                     status: 'opened',
-                    openedAt: admin.firestore.FieldValue.serverTimestamp()
+                    openedAt: FieldValue.serverTimestamp()
                 });
                 await db.collection("tenant_invitation_events").add({
                     invitationId: inviteDoc.id,
                     type: 'OPENED',
-                    timestamp: admin.firestore.FieldValue.serverTimestamp()
+                    timestamp: FieldValue.serverTimestamp()
                 });
             }
         }
@@ -2322,11 +2323,11 @@ export const expireTenantInvitations = onSchedule("0 0 * * *", async (event) => 
 
     const batch = db.batch();
     snap.forEach(doc => {
-        batch.update(doc.ref, { status: 'expired', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        batch.update(doc.ref, { status: 'expired', updatedAt: FieldValue.serverTimestamp() });
         batch.set(db.collection("tenant_invitation_events").doc(), {
             invitationId: doc.id,
             type: 'EXPIRED',
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
+            timestamp: FieldValue.serverTimestamp()
         });
     });
 
@@ -2348,7 +2349,7 @@ export const onMailStatusUpdated = onDocumentUpdated("mail/{docId}", async (even
     await db.collection("tenant_invitations").doc(invitationId).update({
         emailStatus,
         deliveryError: error || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     console.log(`Updated invitation ${invitationId} email status to ${emailStatus}`);
@@ -2390,7 +2391,7 @@ export const onInvitationStatusChanged = onDocumentUpdated("tenant_invitations/{
         failedCount: failed,
         pendingCount: pending,
         acceptedCount: accepted,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     });
 });
 
@@ -2469,7 +2470,7 @@ async function aggregatePassportData(propertyId: string) {
         maintenanceTicketsClosed: closedTickets,
         tenantCount: occupiedUnits,
         passportStatus: 'active',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
 
     console.log(`Updated Property Passport for ${propertyId}`);
@@ -2595,7 +2596,7 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
                 if (!dryRun) {
                     repairs.previousStatus = ticketData.status || 'unknown';
                     repairs.status = 'OPEN'; // Auto-recovery to OPEN status
-                    repairs.repairedAt = admin.firestore.FieldValue.serverTimestamp();
+                    repairs.repairedAt = FieldValue.serverTimestamp();
                     repairs.repairType = 'status_recovery';
                 }
             }
@@ -2604,7 +2605,7 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
                 if (!dryRun) {
                     batch.update(ticketDoc.ref, {
                         ...repairs,
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
                         updatedBy: request.auth.uid,
                         repairMetadata: {
                             source: 'institutionalRepairTrigger',
@@ -2689,7 +2690,7 @@ async function createNotification(recipientId: string, data: {
             recipientId,
             ...data,
             read: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp()
         });
 
         // 2. Dispatch Push Notification (FCM)
@@ -2738,7 +2739,7 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
     const techRef = db.collection("users").doc(techId);
     const techDoc = await techRef.get();
     const techData = techDoc.data() || {};
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
     const gstDate = new Date(nowDate.getTime() + (4 * 60 * 60 * 1000));
     const dateKey = `${gstDate.getUTCFullYear()}${String(gstDate.getUTCMonth() + 1).padStart(2, "0")}${String(gstDate.getUTCDate()).padStart(2, "0")}`;
@@ -2820,7 +2821,7 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
         throw new HttpsError("failed-precondition", "Cannot end duty with an active job. Please complete or reassign your ticket first.");
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
     const shiftId = String(techData.currentShiftId || "");
     const batch = db.batch();
@@ -2831,7 +2832,7 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
         available: false,
         dutyStatus: "OFF_DUTY",
         dutyEndedAt: now,
-        currentShiftId: admin.firestore.FieldValue.delete(),
+        currentShiftId: FieldValue.delete(),
         updatedAt: now
     });
 
@@ -2871,7 +2872,7 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
     const techId = request.auth.uid;
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
     const userRef = db.collection("users").doc(techId);
 
@@ -2950,8 +2951,8 @@ export const startTechnicianWork = onCall({ cors: true }, async (request) => {
     await ticketRef.update({
         status: "IN_PROGRESS",
         technicianStatus: "WORK_STARTED",
-        workStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        workStartedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     await logAudit({
@@ -2988,9 +2989,9 @@ export const pauseTechnicianWork = onCall({ cors: true }, async (request) => {
     await db.collection("maintenanceTickets").doc(ticketId).update({
         status: "on_hold",
         technicianStatus: "WAITING_PARTS",
-        pausedAt: admin.firestore.FieldValue.serverTimestamp(),
+        pausedAt: FieldValue.serverTimestamp(),
         pauseReason: reason || "Waiting for parts",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     await logAudit({
@@ -3034,20 +3035,20 @@ export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
         transaction.update(ticketRef, {
             status: "COMPLETED_PENDING_APPROVAL",
             technicianStatus: "COMPLETED",
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp(),
             beforePhotos,
             afterPhotos,
             completionNotes,
             notes: completionNotes,
             technicianNotes: completionNotes,
             tenantApprovalRequired: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         transaction.update(db.collection("users").doc(techId), {
             dutyStatus: "ON_DUTY",
             currentTicketId: null,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
     });
 
@@ -3087,8 +3088,8 @@ export const closeTechnicianJob = onCall({ cors: true }, async (request) => {
     await db.collection("maintenanceTickets").doc(ticketId).update({
         status: "CLOSED",
         technicianStatus: "CLOSED",
-        closedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        closedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
     });
 
     await logAudit({
@@ -3116,8 +3117,8 @@ export const registerFCMToken = onCall({ cors: true }, async (request) => {
         token,
         platform: platform || "web",
         userAgent: userAgent || "unknown",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
+        lastSeenAt: FieldValue.serverTimestamp()
     }, { merge: true });
 
     return { success: true };
@@ -3139,7 +3140,7 @@ export const triggerIoTEvent = onRequest(async (req, res) => {
             res.status(401).send("Unauthorized Device Node");
             return;
         }
-        const timestamp = admin.firestore.FieldValue.serverTimestamp();
+        const timestamp = FieldValue.serverTimestamp();
         const eventId = `iot_${Date.now()}_${device_id}`;
         await db.collection("telemetry_logs").doc(eventId).set({
             deviceId: device_id, propertyId: property_id, type: event_type,
@@ -3195,7 +3196,7 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
                 </div>
             `
         },
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
     });
 });
 
@@ -3235,7 +3236,7 @@ export const processPayment = onCall({ cors: true }, async (request) => {
             currency: "AED",
             status: "SUCCESS",
             method: paymentMethod || "SOVEREIGN_WALLET",
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            timestamp: FieldValue.serverTimestamp(),
             metadata: {
                 ip: request.rawRequest.ip || "unknown",
                 userAgent: request.rawRequest.headers["user-agent"] || "unknown"
@@ -3245,7 +3246,7 @@ export const processPayment = onCall({ cors: true }, async (request) => {
         // 2. Update Invoice Status
         transaction.update(invoiceRef, {
             status: "PAID",
-            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            paidAt: FieldValue.serverTimestamp(),
             transactionId: txId,
             receiptId
         });
@@ -3255,15 +3256,15 @@ export const processPayment = onCall({ cors: true }, async (request) => {
             receiptId, txId, invoiceId, uid, amount,
             taxAmount: amount * 0.05, // 5% VAT UAE
             netAmount: amount * 0.95,
-            issuedAt: admin.firestore.FieldValue.serverTimestamp(),
+            issuedAt: FieldValue.serverTimestamp(),
             complianceCode: "UAE-VAT-COMPLIANT-2026"
         });
 
         // 4. Update Sovereign Ledger
         const ledgerRef = db.collection("ledgers").doc(uid);
         transaction.set(ledgerRef, {
-            totalPaid: admin.firestore.FieldValue.increment(amount),
-            lastPaymentAt: admin.firestore.FieldValue.serverTimestamp(),
+            totalPaid: FieldValue.increment(amount),
+            lastPaymentAt: FieldValue.serverTimestamp(),
             status: "CURRENT"
         }, { merge: true });
 
@@ -3316,7 +3317,7 @@ export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
     const unitSnap = await unitRef.get();
     if (!unitSnap.exists) throw new HttpsError("not-found", "Unit record not found.");
 
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const timestamp = FieldValue.serverTimestamp();
     const updates: any = {
         updatedAt: timestamp,
         statusUpdatedAt: timestamp,
@@ -3435,15 +3436,15 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
             dateKey,
             clockIn: admin.firestore.Timestamp.fromDate(now),
             status: "working",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
     } 
     else if (beforeStatus === "WORKING" && afterStatus === "BREAK") {
         await attendanceRef.update({
-            breaks: admin.firestore.FieldValue.arrayUnion({ start: now }),
+            breaks: FieldValue.arrayUnion({ start: now }),
             status: "break",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp()
         });
     }
     else if (beforeStatus === "BREAK" && afterStatus === "WORKING") {
@@ -3460,12 +3461,12 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
             await attendanceRef.update({
                 breaks,
                 status: "working",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
             });
         } else {
             await attendanceRef.update({
                 status: "working",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
             });
         }
     }
@@ -3518,7 +3519,7 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
                 totalMinutes,
                 overtimeMinutes,
                 status: "completed",
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
             });
         }
     }
@@ -3565,7 +3566,7 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
         const data = event.data?.data();
         if (!data) return;
 
-        const now = admin.firestore.FieldValue.serverTimestamp();
+        const now = FieldValue.serverTimestamp();
         const isoNow = new Date().toISOString();
 
         const historyEntry = {
@@ -3590,8 +3591,8 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
                 runnerStatus: "WAITING_FOR_SECURE_BACKEND_RUNNER",
                 buildStatus: data.buildStatus || "NOT_STARTED",
                 deploymentStatus: data.deploymentStatus || "NOT_STARTED",
-                commandHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
-                auditTrail: admin.firestore.FieldValue.arrayUnion(auditEntry),
+                commandHistory: FieldValue.arrayUnion(historyEntry),
+                auditTrail: FieldValue.arrayUnion(auditEntry),
                 updatedAt: now
             });
 

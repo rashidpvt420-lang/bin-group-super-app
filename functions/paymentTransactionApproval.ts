@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
@@ -5,7 +6,7 @@ import { createBrokerCommissionForContract } from "./brokerCommissions";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const ts = () => admin.firestore.FieldValue.serverTimestamp();
+const ts = () => FieldValue.serverTimestamp();
 
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();

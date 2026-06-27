@@ -5,3 +5,4 @@ export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTru
 export { listOwnerHandoverInspections, updateOwnerHandoverInspection } from './ownerHandoverInspections';
 export { submitTenantMoveInspection } from './tenantHandoverInspections';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
+export { adminCreateUser, syncStaffCustomClaims } from './adminUserProvisioning';

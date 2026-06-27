@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
@@ -48,14 +49,14 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
 
   // ── Greetings ──
   if (["hi", "hello", "hey", "مرحبا", "السلام", "1"].includes(lower) || !session.step) {
-    await sessionRef.set({ step: "MENU", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await sessionRef.set({ step: "MENU", updatedAt: FieldValue.serverTimestamp() });
     await sendWhatsAppMessage(phoneId, token, from, welcomeMsg(userName));
     return;
   }
 
   // ── Menu routing ──
   if (lower === "1" || lower.includes("maintenance") || lower.includes("repair") || lower.includes("صيانة")) {
-    await sessionRef.set({ step: "MAINTENANCE_FORM", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await sessionRef.set({ step: "MAINTENANCE_FORM", updatedAt: FieldValue.serverTimestamp() });
     await sendWhatsAppMessage(phoneId, token, from, maintenanceFormMsg());
     return;
   }
@@ -101,11 +102,11 @@ async function routeMessage(from: string, text: string, phoneId: string, token: 
       source: "whatsapp",
       reporterPhone: from,
       reporterName: userName || "WhatsApp User",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       ticketNumber: `WA-${Date.now().toString(36).toUpperCase()}`,
     });
 
-    await sessionRef.set({ step: "MENU", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await sessionRef.set({ step: "MENU", updatedAt: FieldValue.serverTimestamp() });
     await sendWhatsAppMessage(phoneId, token, from,
       `✅ *Request Received!*\n\n🎫 Ticket: WA-${Date.now().toString(36).toUpperCase()}\n📍 Property: ${propertyLine.replace(/property:/i, "").trim() || "Not specified"}\n⚡ Priority: ${isUrgent ? "HIGH" : "Normal"}\n\nA BIN GROUP coordinator will contact you within ${isUrgent ? "2 hours" : "24 hours"}.\n\nThank you for trusting BIN GROUP! 🏢`
     );
@@ -171,7 +172,7 @@ export const whatsappBotWebhook = onRequest({
         from,
         type: msg.type,
         text: msg.type === "text" ? msg.text?.body : `[${msg.type}]`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FieldValue.serverTimestamp(),
         raw: JSON.stringify(msg).slice(0, 2000),
       });
 

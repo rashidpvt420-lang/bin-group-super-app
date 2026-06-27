@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
@@ -85,7 +86,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     throw new HttpsError("invalid-argument", `Unsupported staff role: ${role}`);
   }
 
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   let userRecord: admin.auth.UserRecord;
   let createdAuthUser = false;
 
@@ -224,4 +225,55 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
       ? `Staff account created. Ask the user to reset password before first login. Initial Password: ${passwordToUse}`
       : "Existing staff account updated.",
   };
+});
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+
+export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after) return;
+
+  const roleBefore = cleanString(before?.role);
+  const roleAfter = cleanString(after?.role);
+  const staffModulesBefore = JSON.stringify(before?.staffModules || []);
+  const staffModulesAfter = JSON.stringify(after?.staffModules || []);
+  const statusBefore = before?.status;
+  const statusAfter = after?.status;
+
+  if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && statusBefore === statusAfter) {
+    return;
+  }
+
+  const uid = event.params.userId;
+  const role = roleAfter.toLowerCase();
+
+  try {
+    const userRecord = await admin.auth().getUser(uid);
+    const existingClaims = userRecord.customClaims || {};
+    
+    // Revoke access if suspended
+    if (statusAfter === "SUSPENDED") {
+      await admin.auth().setCustomUserClaims(uid, {
+        ...existingClaims,
+        suspended: true,
+      });
+      return;
+    }
+
+    await admin.auth().setCustomUserClaims(uid, {
+      ...existingClaims,
+      role,
+      userRole: role,
+      primaryRole: role,
+      staff: STAFF_ROLES.has(role) || ADMIN_ROLES.has(role),
+      technician: role === "technician",
+      admin: ADMIN_ROLES.has(role),
+      modules: after.staffModules || [],
+      suspended: false,
+    });
+  } catch (error: any) {
+    if (error.code !== "auth/user-not-found") {
+      console.error(`Failed to sync claims for ${uid}`, error);
+    }
+  }
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc, functions, httpsCallable } from '../../lib/firebase';
 
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const closedStates = ['CLOSED', 'CANCELLED', 'EXPIRED'];
@@ -14,6 +14,8 @@ export default function ContractTerminationPage() {
   const [note, setNote] = React.useState('');
   const [message, setMessage] = React.useState('');
   const [closingId, setClosingId] = React.useState('');
+  const [renewals, setRenewals] = React.useState<any[]>([]);
+  const [rebuildLoading, setRebuildLoading] = React.useState(false);
 
   React.useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'contracts'), (snapshot) => {
@@ -23,10 +25,31 @@ export default function ContractTerminationPage() {
       setMessage('Could not load contracts. Check admin Firestore access.');
       setLoading(false);
     });
-    return () => unsubscribe();
+    
+    const unsubscribeRenewals = onSnapshot(collection(db, 'contract_renewal_watch'), (snapshot) => {
+      setRenewals(snapshot.docs.map((item: any) => ({ id: item.id, ...(item.data() || {}) })));
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeRenewals();
+    };
   }, []);
 
   const openContracts = rows.filter(isOpen);
+
+  const rebuildRenewals = async () => {
+    setRebuildLoading(true);
+    try {
+      const runFn = httpsCallable(functions, 'rebuildContractRenewalWatch');
+      const res = await runFn();
+      setMessage(`Renewal engine rebuilt: ${(res.data as any).processed} processed.`);
+    } catch (err: any) {
+      setMessage(`Rebuild failed: ${err.message}`);
+    } finally {
+      setRebuildLoading(false);
+    }
+  };
 
   const closeContract = async (row: any) => {
     if (!note.trim()) {
@@ -76,9 +99,14 @@ export default function ContractTerminationPage() {
   return (
     <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100%', color: '#fff' }}>
       <Stack spacing={3}>
-        <Box>
-          <Typography variant="h4" fontWeight="950">Contract Control</Typography>
-          <Typography color="rgba(255,255,255,0.6)">Close active contracts with reason, note, and audit entry.</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Box>
+            <Typography variant="h4" fontWeight="950">Contract Control & Renewals</Typography>
+            <Typography color="rgba(255,255,255,0.6)">Close active contracts and monitor the renewal/expiry engine.</Typography>
+          </Box>
+          <Button variant="contained" color="secondary" onClick={rebuildRenewals} disabled={rebuildLoading}>
+            {rebuildLoading ? 'Rebuilding...' : 'Force Renewal Rebuild'}
+          </Button>
         </Box>
 
         {message && <Alert severity={message.includes('Could not') || message.includes('required') ? 'error' : 'success'}>{message}</Alert>}
@@ -119,6 +147,27 @@ export default function ContractTerminationPage() {
               {!loading && openContracts.length === 0 && <TableRow><TableCell colSpan={6} align="center">No open contracts found.</TableCell></TableRow>}
             </TableBody>
           </Table>
+        </Paper>
+
+        <Paper sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
+          <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, mb: 2, display: 'block' }}>Renewal Watch Queue ({renewals.length})</Typography>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>Entity ID</TableCell><TableCell>Property</TableCell><TableCell>Days</TableCell><TableCell>Milestone</TableCell><TableCell>Status</TableCell></TableRow></TableHead>
+              <TableBody>
+                {renewals.map((row) => (
+                  <TableRow key={row.id} hover>
+                    <TableCell>{row.sourceCollection}: {row.sourceId}</TableCell>
+                    <TableCell>{row.propertyName}</TableCell>
+                    <TableCell>{row.daysRemaining} days</TableCell>
+                    <TableCell>{row.milestoneDays} days</TableCell>
+                    <TableCell><Chip size="small" label={normalize(row.renewalStatus || 'ACTIVE')} /></TableCell>
+                  </TableRow>
+                ))}
+                {renewals.length === 0 && <TableRow><TableCell colSpan={5} align="center">No active renewals watched.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </Stack>
     </Box>

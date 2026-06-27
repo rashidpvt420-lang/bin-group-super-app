@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -47,8 +48,8 @@ export const submitOwnerApprovalDecision = onCall(
       decision,
       decisionNote,
       ownerDecisionBy: ownerId,
-      decidedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      decidedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     await db.collection("data_governance_events").add({
@@ -62,7 +63,7 @@ export const submitOwnerApprovalDecision = onCall(
       propertyId: data.propertyId || "",
       decision,
       status,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return { ok: true, approvalRequestId: approvalId, decision, status };
@@ -90,8 +91,8 @@ export const onOwnerApprovalDecision = onDocumentUpdated(
         status: derivedStatus,
         ownerDecision: after.decision,
         ownerDecisionNote: after.decisionNote || "",
-        ownerDecisionAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ownerDecisionAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
 
@@ -100,7 +101,7 @@ export const onOwnerApprovalDecision = onDocumentUpdated(
         ownerApprovalStatus: derivedStatus,
         ownerDecision: after.decision,
         ownerDecisionNote: after.decisionNote || "",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
 
@@ -114,7 +115,7 @@ export const onOwnerApprovalDecision = onDocumentUpdated(
       ownerId: after.ownerId || "",
       decision: after.decision || "",
       status: derivedStatus,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     await batch.commit();

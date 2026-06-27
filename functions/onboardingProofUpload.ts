@@ -1,10 +1,11 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const serverTimestamp = FieldValue.serverTimestamp;
 
 function text(value: unknown, label: string, maxLength: number) {
   const output = String(value || "").trim();

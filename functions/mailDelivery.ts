@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
@@ -70,14 +71,14 @@ async function deliverMail(mailId: string, data: any) {
   const replyTo = asText(message.replyTo || message.reply_to || data?.replyTo || data?.reply_to || process.env.MAIL_REPLY_TO || process.env.SMTP_REPLY_TO, "BIN GROUP Admin <ceo@bin-groups.com>");
 
   if (!to?.length) {
-    await ref.set({ delivery: { state: "ERROR", error: "Missing recipient email", attemptedAt: admin.firestore.FieldValue.serverTimestamp(), provider: "cloud_function_smtp" } }, { merge: true });
+    await ref.set({ delivery: { state: "ERROR", error: "Missing recipient email", attemptedAt: FieldValue.serverTimestamp(), provider: "cloud_function_smtp" } }, { merge: true });
     return { skipped: true, reason: "missing_recipient" };
   }
 
   const currentState = asText(data?.delivery?.state).toUpperCase();
   if (currentState === "SUCCESS") return { skipped: true, reason: "already_delivered" };
 
-  await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+  await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: FieldValue.serverTimestamp() } }, { merge: true });
 
   try {
     const info = await createTransporter().sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
@@ -90,9 +91,9 @@ async function deliverMail(mailId: string, data: any) {
         rejected: info.rejected || [],
         from,
         replyTo,
-        deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+        deliveredAt: FieldValue.serverTimestamp(),
       },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     return { delivered: true, messageId: info.messageId || "" };
   } catch (error: any) {
@@ -101,9 +102,9 @@ async function deliverMail(mailId: string, data: any) {
         state: "ERROR",
         provider: "cloud_function_smtp",
         error: error?.message || "SMTP delivery failed",
-        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+        failedAt: FieldValue.serverTimestamp(),
       },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     throw error;
   }

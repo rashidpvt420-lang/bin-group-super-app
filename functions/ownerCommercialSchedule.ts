@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { OWNER_CONTRACT_TERM_MONTHS } from "./ownerContractTerm";
 
@@ -150,7 +151,7 @@ function normalizeInput(input: AnyRecord): AnyRecord {
   const amountReceived = firstPositiveNumber(input.amountReceived, input.amount, payment.amount, mobilizationAmount);
   const remainingBalance = Math.max(firstPositiveNumber(input.remainingBalance, annualContractValue - amountReceived), 0);
   const approvedAt = coerceTimestamp(input.approvedAt || input.approvedTimestamp);
-  const now = input.now || admin.firestore.FieldValue.serverTimestamp();
+  const now = input.now || FieldValue.serverTimestamp();
   return {
     requestData: input.requestData || input.request || {},
     payment,

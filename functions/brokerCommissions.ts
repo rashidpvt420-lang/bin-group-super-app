@@ -1,10 +1,11 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const ts = () => admin.firestore.FieldValue.serverTimestamp();
+const ts = () => FieldValue.serverTimestamp();
 
 // Default brokerage commission rate, matching the 10% figure already used in the
 // broker portal's inline estimate (src/pages/BrokerPortalPage.tsx).

@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
@@ -7,7 +8,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const serverTimestamp = FieldValue.serverTimestamp;
 
 const HR_RECIPIENT_ROLES = ["admin", "super_admin", "ceo", "manager", "hr_admin", "hr_manager", "hr_staff", "operations_manager"];
 const STAFF_ROLES = ["technician", "hr_staff", "hr_manager", "finance_staff", "account_manager", "finance_admin", "dispatcher", "operations_manager"];

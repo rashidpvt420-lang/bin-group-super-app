@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -172,7 +173,7 @@ export const createNotification = onCall({ cors: true, region: "europe-west3" },
 
     const batch = db.batch();
     const notificationIds: string[] = [];
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     recipientIds.forEach((recipientId) => {
         const ref = db.collection("notifications").doc();
@@ -243,11 +244,11 @@ export const deliverNotificationPush = onDocumentCreated("notifications/{notific
         .map(({ token }) => token);
 
     if (invalidTokens.length) {
-        await snap.ref.set({ invalidPushTokens: invalidTokens, pushPrunedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        await snap.ref.set({ invalidPushTokens: invalidTokens, pushPrunedAt: FieldValue.serverTimestamp() }, { merge: true });
     }
 
     await snap.ref.set({
-        pushAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushAttemptedAt: FieldValue.serverTimestamp(),
         pushSuccessCount: response.successCount,
         pushFailureCount: response.failureCount,
     }, { merge: true });

@@ -10,6 +10,7 @@ import {
     Grid,
     LinearProgress,
     Paper,
+    Snackbar,
     Stack,
     Typography,
     alpha,
@@ -216,6 +217,7 @@ export default function TechnicianDashboardPage() {
     const [missionPool, setMissionPool] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
     const [earnings, setEarnings] = useState(0);
+    const [acceptError, setAcceptError] = useState('');
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -353,12 +355,14 @@ export default function TechnicianDashboardPage() {
 
     const handleAcceptJob = async (jobId: string) => {
         if (!user?.uid) return;
+        setAcceptError('');
         try {
             const acceptFn = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptFn({ ticketId: jobId });
             navigate(`/technician/job/${jobId}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to accept job', err);
+            setAcceptError(err.message || 'Mission pool assignment failed. Another technician may have claimed it.');
         }
     };
 
@@ -397,6 +401,17 @@ export default function TechnicianDashboardPage() {
                     </Stack>
                 </Stack>
             </SectionCard>
+
+            <Snackbar
+                open={!!acceptError}
+                autoHideDuration={6000}
+                onClose={() => setAcceptError('')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={() => setAcceptError('')} severity="error" sx={{ width: '100%', fontWeight: 700 }}>
+                    {acceptError}
+                </Alert>
+            </Snackbar>
 
             <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
                 <Grid item xs={6} md={2.4}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>

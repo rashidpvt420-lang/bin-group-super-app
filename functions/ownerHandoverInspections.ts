@@ -1,3 +1,4 @@
+import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
@@ -92,7 +93,7 @@ export const updateOwnerHandoverInspection = onCall({ cors: true }, async (reque
   }
 
   const { ref, data } = await loadOwnerInspection(inspectionId, uid, email);
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = FieldValue.serverTimestamp();
   const update: Record<string, any> = {
     status: action,
     ownerAction: action,
