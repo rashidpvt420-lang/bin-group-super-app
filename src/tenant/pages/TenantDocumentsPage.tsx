@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, Chip, alpha } from '@mui/material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { db, collection, query, where, getDocs, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -67,8 +68,17 @@ async function queryGeneralDocs() {
 
 export default function TenantDocumentsPage() {
     const { user } = useRole();
+    const navigate = useNavigate();
+    const location = useLocation();
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState<any[]>([]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('type') === 'handover') {
+            navigate('/tenant/move-inspection/move-out', { replace: true });
+        }
+    }, [location.search, navigate]);
 
     useEffect(() => {
         let cancelled = false;
