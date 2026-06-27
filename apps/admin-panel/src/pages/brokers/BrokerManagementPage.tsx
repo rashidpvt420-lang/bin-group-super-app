@@ -1,278 +1,478 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+    Alert,
+    Avatar,
     Box,
-    Typography,
+    Button,
+    Card,
+    CardContent,
+    Chip,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    Grid,
+    IconButton,
     Paper,
+    Stack,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    Button,
-    Chip,
-    IconButton,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Grid,
-    Card,
-    CardContent,
-    Avatar
+    TextField,
+    Tooltip,
+    Typography,
+    alpha
 } from '@mui/material';
 import {
-    CheckCircle as CheckCircleIcon,
-    Cancel as CancelIcon,
-    Visibility as VisibilityIcon,
     AccountBalance as BankIcon,
     Badge as BadgeIcon,
+    Cancel as CancelIcon,
+    CheckCircle as CheckCircleIcon,
+    People as PeopleIcon,
     TrendingUp as TrendingUpIcon,
-    People as PeopleIcon
+    Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { Clock, FileCheck2, WalletCards } from 'lucide-react';
+import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
-interface Broker {
+type Broker = {
     id: string;
     displayName?: string;
     email?: string;
     phoneNumber?: string;
     brokerCode?: string;
     affiliateCode?: string;
-    role: string;
-    status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    role?: string;
+    status?: string;
+    approvalStatus?: string;
+    kycStatus?: string;
+    brokerKycStatus?: string;
+    reraLicense?: string;
+    reraStatus?: string;
+    reraVerified?: boolean;
+    companyName?: string;
+    tradeLicenseNumber?: string;
+    emiratesIdNumber?: string;
+    passportNumber?: string;
     bankName?: string;
+    bankAccountHolder?: string;
+    bankIban?: string;
     iban?: string;
-    emiratesId?: string;
-    kycDocumentUrl?: string; // from signup
+    brokerTerritory?: string;
+    commissionAgreementAccepted?: boolean;
+    brokerProfileCompletion?: number;
+    profileCompletionScore?: number;
+    brokerKycReviewReason?: string;
+    rejectionReason?: string;
+    updatedAt?: any;
+};
+
+type BrokerDocument = {
+    id: string;
+    brokerId?: string;
+    title?: string;
+    documentType?: string;
+    fileName?: string;
+    url?: string;
+    downloadUrl?: string;
+    status?: string;
+};
+
+type PayoutRequest = {
+    id: string;
+    brokerId?: string;
+    brokerName?: string;
+    brokerEmail?: string;
+    brokerCode?: string;
+    amount?: number;
+    currency?: string;
+    commissionCount?: number;
+    commissionIds?: string[];
+    status?: string;
+    approvalStatus?: string;
+    paymentStatus?: string;
+    bankName?: string;
+    bankIban?: string;
+    notes?: string;
+    reviewReason?: string;
+    createdAt?: any;
+    requestedAt?: any;
+    updatedAt?: any;
+};
+
+const statusText = (value?: string) => String(value || 'PENDING').replaceAll('_', ' ').toUpperCase();
+
+function chipColor(status?: string) {
+    const normalized = statusText(status);
+    if (['APPROVED', 'VERIFIED', 'PAID'].includes(normalized)) return 'success';
+    if (['REJECTED', 'BLOCKED'].includes(normalized)) return 'error';
+    if (normalized.includes('PENDING') || normalized.includes('REQUESTED')) return 'warning';
+    return 'default';
+}
+
+function dateLabel(value: any) {
+    if (!value) return 'Not recorded';
+    try {
+        const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Recorded' : date.toLocaleString();
+    } catch {
+        return 'Recorded';
+    }
+}
+
+function brokerNeedsReview(broker: Broker) {
+    const status = statusText(broker.status || broker.approvalStatus);
+    const kyc = statusText(broker.brokerKycStatus || broker.kycStatus || broker.reraStatus);
+    return !['APPROVED', 'VERIFIED'].includes(status) || ['PENDING REVIEW', 'PENDING', 'INCOMPLETE'].includes(kyc);
+}
+
+function missingKycItems(broker: Broker) {
+    return [
+        { label: 'RERA license', missing: !broker.reraLicense },
+        { label: 'ID / passport / trade license', missing: !broker.tradeLicenseNumber && !broker.emiratesIdNumber && !broker.passportNumber },
+        { label: 'Bank name', missing: !broker.bankName },
+        { label: 'IBAN', missing: !broker.bankIban && !broker.iban },
+        { label: 'Commission agreement', missing: broker.commissionAgreementAccepted !== true },
+    ].filter((item) => item.missing).map((item) => item.label);
 }
 
 export default function BrokerManagementPage() {
-    const { t, isRTL } = useLanguage();
+    const { isRTL } = useLanguage();
     const [brokers, setBrokers] = useState<Broker[]>([]);
+    const [documents, setDocuments] = useState<Record<string, BrokerDocument[]>>({});
+    const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
-    const [isViewOpen, setIsViewOpen] = useState(false);
-    const [stats, setStats] = useState({
-        total: 0,
-        pending: 0,
-        approved: 0
-    });
+    const [reviewBroker, setReviewBroker] = useState<Broker | null>(null);
+    const [reviewDecision, setReviewDecision] = useState<'APPROVE' | 'REJECT'>('APPROVE');
+    const [reviewReason, setReviewReason] = useState('');
+    const [busy, setBusy] = useState('');
+    const [notice, setNotice] = useState('');
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const q = query(collection(db, 'users'), where('role', '==', 'BROKER'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedBrokers = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Broker[];
-            setBrokers(fetchedBrokers);
-
-            setStats({
-                total: fetchedBrokers.length,
-                pending: fetchedBrokers.filter(b => b.status === 'PENDING' || !b.status).length,
-                approved: fetchedBrokers.filter(b => b.status === 'APPROVED').length
-            });
+        const brokerQuery = query(collection(db, 'users'), where('role', 'in', ['broker', 'BROKER']));
+        const unsubscribe = onSnapshot(brokerQuery, (snapshot) => {
+            const fetched = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as Broker[];
+            setBrokers(fetched.sort((a, b) => statusText(a.status).localeCompare(statusText(b.status))));
+            setLoading(false);
+        }, (error) => {
+            console.error('[BROKER_ADMIN] broker listener failed', error);
+            setNotice(error?.message || 'Broker profiles could not be loaded.');
+            setLoading(false);
         });
-
         return () => unsubscribe();
     }, []);
 
-    const handleApprove = async (id: string) => {
-        try {
-            await updateDoc(doc(db, 'users', id), {
-                status: 'APPROVED',
-                updatedAt: new Date().toISOString()
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, 'brokerDocuments'), (snapshot) => {
+            const grouped: Record<string, BrokerDocument[]> = {};
+            snapshot.docs.forEach((docSnap) => {
+                const item = { id: docSnap.id, ...docSnap.data() } as BrokerDocument;
+                const brokerId = item.brokerId || 'unassigned';
+                grouped[brokerId] = [...(grouped[brokerId] || []), item];
             });
-            alert(t('broker.approve_success'));
-        } catch (err) {
-            console.error(err);
-            alert(t('broker.approve_failed'));
+            setDocuments(grouped);
+        }, (error) => console.warn('[BROKER_ADMIN] broker documents listener failed', error));
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const payoutQuery = query(collection(db, 'broker_payout_requests'), orderBy('createdAt', 'desc'), limit(100));
+        const unsubscribe = onSnapshot(payoutQuery, (snapshot) => {
+            setPayoutRequests(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) as PayoutRequest[]);
+        }, (error) => console.warn('[BROKER_ADMIN] payout request listener failed', error));
+        return () => unsubscribe();
+    }, []);
+
+    const stats = useMemo(() => ({
+        total: brokers.length,
+        pending: brokers.filter(brokerNeedsReview).length,
+        approved: brokers.filter((broker) => statusText(broker.status || broker.approvalStatus) === 'APPROVED').length,
+        payoutPending: payoutRequests.filter((request) => statusText(request.status).includes('PENDING')).length,
+    }), [brokers, payoutRequests]);
+
+    const selectedDocuments = selectedBroker ? documents[selectedBroker.id] || [] : [];
+    const selectedMissing = selectedBroker ? missingKycItems(selectedBroker) : [];
+
+    const openReview = (broker: Broker, decision: 'APPROVE' | 'REJECT') => {
+        setReviewBroker(broker);
+        setReviewDecision(decision);
+        setReviewReason('');
+        setNotice('');
+    };
+
+    const submitKycReview = async () => {
+        if (!reviewBroker) return;
+        if (reviewDecision === 'REJECT' && !reviewReason.trim()) {
+            setNotice('A rejection reason is required.');
+            return;
+        }
+        setBusy(`kyc-${reviewBroker.id}`);
+        try {
+            const callable = httpsCallable(functions, 'adminReviewBrokerKyc');
+            const result = await callable({ brokerId: reviewBroker.id, decision: reviewDecision, reason: reviewReason.trim() });
+            const data = result.data as any;
+            setNotice(`Broker KYC ${reviewDecision.toLowerCase()} saved. Released commissions: ${data?.releasedCommissions || 0}.`);
+            setReviewBroker(null);
+            setSelectedBroker(null);
+        } catch (error: any) {
+            setNotice(error?.message || 'Broker KYC review failed.');
+        } finally {
+            setBusy('');
         }
     };
 
-    const handleReject = async (id: string) => {
-        if (!window.confirm(t('broker.reject_confirm'))) return;
+    const reviewPayout = async (request: PayoutRequest, action: 'APPROVE' | 'REJECT' | 'MARK_PAID') => {
+        const reason = action === 'REJECT'
+            ? window.prompt('Reason for rejecting this payout request?') || ''
+            : action === 'MARK_PAID'
+                ? window.prompt('Payment reference or notes for paid payout?', '') || ''
+                : '';
+        if (action === 'REJECT' && !reason.trim()) return;
+        setBusy(`payout-${request.id}`);
         try {
-            await updateDoc(doc(db, 'users', id), {
-                status: 'REJECTED',
-                updatedAt: new Date().toISOString()
+            const callable = httpsCallable(functions, 'adminReviewBrokerPayoutRequest');
+            await callable({
+                requestId: request.id,
+                action,
+                reason: reason.trim(),
+                paymentReference: action === 'MARK_PAID' ? reason.trim() : '',
             });
-        } catch (err) {
-            console.error(err);
+            setNotice(`Payout request ${action.replace('_', ' ').toLowerCase()} saved.`);
+        } catch (error: any) {
+            setNotice(error?.message || 'Payout request review failed.');
+        } finally {
+            setBusy('');
         }
     };
 
-    const handleView = (broker: Broker) => {
-        setSelectedBroker(broker);
-        setIsViewOpen(true);
-    };
+    if (loading) {
+        return <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+    }
 
     return (
         <Box sx={{ p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
-            <Typography variant="h4" sx={{ fontWeight: 900, mb: 4, letterSpacing: '-0.02em', textAlign: isRTL ? 'right' : 'left' }}>
-                {t('broker.mgt_title')}
-            </Typography>
+            <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 4 }}>
+                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                    <Typography variant="overline" sx={{ color: '#C9A646', fontWeight: 950, letterSpacing: 3 }}>BROKER CONTROL</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 950 }}>Broker KYC & Payout Review</Typography>
+                    <Typography color="text.secondary">Admin-only broker approval, rejection, documents, and payout request workflow.</Typography>
+                </Box>
+                <Chip icon={<FileCheck2 size={16} />} label="ADMIN REVIEW REQUIRED" color="warning" sx={{ fontWeight: 950 }} />
+            </Stack>
 
-            <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <Grid item xs={12} md={4}>
-                    <Card sx={{ bgcolor: '#fff', borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Avatar sx={{ bgcolor: 'primary.main' }}><PeopleIcon /></Avatar>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>{t('broker.total_brokers')}</Typography>
-                                    <Typography variant="h4" sx={{ fontWeight: 900 }}>{stats.total}</Typography>
-                                </Box>
-                            </Box>
-                        </CardContent>
-                    </Card>
+            {notice && <Alert severity={notice.includes('failed') || notice.includes('required') ? 'warning' : 'success'} onClose={() => setNotice('')} sx={{ mb: 3 }}>{notice}</Alert>}
+
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+                {[
+                    { label: 'Total Brokers', value: stats.total, color: 'primary.main', icon: <PeopleIcon /> },
+                    { label: 'KYC Needs Review', value: stats.pending, color: 'warning.main', icon: <TrendingUpIcon /> },
+                    { label: 'Approved Partners', value: stats.approved, color: 'success.main', icon: <CheckCircleIcon /> },
+                    { label: 'Payout Requests', value: stats.payoutPending, color: 'secondary.main', icon: <WalletCards size={22} /> },
+                ].map((stat) => (
+                    <Grid item xs={12} md={3} key={stat.label}>
+                        <Card sx={{ bgcolor: '#fff', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                            <CardContent>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                                    <Avatar sx={{ bgcolor: stat.color }}>{stat.icon}</Avatar>
+                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>{stat.label}</Typography>
+                                        <Typography variant="h4" sx={{ fontWeight: 950 }}>{stat.value}</Typography>
+                                    </Box>
+                                </Stack>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                ))}
+            </Grid>
+
+            <Grid container spacing={3}>
+                <Grid item xs={12} lg={7}>
+                    <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+                        <Table>
+                            <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Broker</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>KYC</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Documents</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Payout Setup</TableCell>
+                                    <TableCell sx={{ fontWeight: 900 }} align={isRTL ? 'left' : 'right'}>Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {brokers.map((broker) => {
+                                    const missing = missingKycItems(broker);
+                                    const brokerDocs = documents[broker.id] || [];
+                                    return (
+                                        <TableRow key={broker.id} hover>
+                                            <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                <Typography sx={{ fontWeight: 900 }}>{broker.displayName || broker.email || 'Broker'}</Typography>
+                                                <Typography variant="caption" color="text.secondary">{broker.email || broker.id}</Typography>
+                                                <Box sx={{ mt: 1 }}><Chip label={broker.brokerCode || broker.affiliateCode || `BIN-${broker.id.slice(0, 6).toUpperCase()}`} size="small" sx={{ fontWeight: 800 }} /></Box>
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                <Stack spacing={0.8}>
+                                                    <Chip label={statusText(broker.brokerKycStatus || broker.kycStatus || broker.status)} color={chipColor(broker.brokerKycStatus || broker.kycStatus || broker.status) as any} size="small" sx={{ fontWeight: 900, width: 'fit-content' }} />
+                                                    <Typography variant="caption" color={missing.length ? 'error' : 'success.main'}>{missing.length ? `Missing: ${missing.join(', ')}` : 'KYC dossier complete'}</Typography>
+                                                </Stack>
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                <Typography sx={{ fontWeight: 900 }}>{brokerDocs.length}</Typography>
+                                                <Typography variant="caption" color="text.secondary">uploaded evidence</Typography>
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                <Chip size="small" label={broker.bankName && (broker.bankIban || broker.iban) ? 'BANK READY' : 'BANK MISSING'} color={broker.bankName && (broker.bankIban || broker.iban) ? 'success' : 'warning'} sx={{ fontWeight: 900 }} />
+                                                <Typography variant="caption" display="block" color={broker.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{broker.commissionAgreementAccepted ? 'Terms accepted' : 'Terms missing'}</Typography>
+                                            </TableCell>
+                                            <TableCell align={isRTL ? 'left' : 'right'}>
+                                                <Tooltip title="View KYC dossier"><IconButton onClick={() => setSelectedBroker(broker)}><VisibilityIcon /></IconButton></Tooltip>
+                                                <Tooltip title="Approve KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="success" onClick={() => openReview(broker, 'APPROVE')}><CheckCircleIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="Reject KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="error" onClick={() => openReview(broker, 'REJECT')}><CancelIcon /></IconButton></span></Tooltip>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {brokers.length === 0 && (
+                                    <TableRow><TableCell colSpan={5} align="center" sx={{ py: 8 }}>No broker profiles found.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
                 </Grid>
-                <Grid item xs={12} md={4}>
-                    <Card sx={{ bgcolor: '#fff', borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Avatar sx={{ bgcolor: 'warning.main' }}><TrendingUpIcon /></Avatar>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>{t('broker.pending_verification')}</Typography>
-                                    <Typography variant="h4" sx={{ fontWeight: 900 }}>{stats.pending}</Typography>
-                                </Box>
-                            </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                    <Card sx={{ bgcolor: '#fff', borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Avatar sx={{ bgcolor: 'success.main' }}><CheckCircleIcon /></Avatar>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>{t('broker.approved_partners')}</Typography>
-                                    <Typography variant="h4" sx={{ fontWeight: 900 }}>{stats.approved}</Typography>
-                                </Box>
-                            </Box>
-                        </CardContent>
-                    </Card>
+
+                <Grid item xs={12} lg={5}>
+                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff', border: '1px solid #e2e8f0' }}>
+                        <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}>
+                            <WalletCards size={20} color="#C9A646" />
+                            <Typography variant="h6" sx={{ fontWeight: 950 }}>Broker Payout Requests</Typography>
+                        </Stack>
+                        <Stack spacing={2}>
+                            {payoutRequests.map((request) => {
+                                const status = statusText(request.status);
+                                return (
+                                    <Box key={request.id} sx={{ p: 2, borderRadius: 2, border: '1px solid #e5e7eb', bgcolor: alpha('#C9A646', 0.03) }}>
+                                        <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 950 }}>{request.brokerName || request.brokerEmail || 'Broker'}</Typography>
+                                                <Typography variant="caption" color="text.secondary">AED {Number(request.amount || 0).toLocaleString()} · {request.commissionCount || request.commissionIds?.length || 0} commission(s)</Typography>
+                                                <Typography variant="caption" display="block" color="text.secondary"><Clock size={12} /> {dateLabel(request.requestedAt || request.createdAt)}</Typography>
+                                            </Box>
+                                            <Chip size="small" label={status} color={chipColor(status) as any} sx={{ fontWeight: 900 }} />
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>Bank: {request.bankName || 'Missing'} · IBAN: {request.bankIban || 'Missing'}</Typography>
+                                        {request.notes && <Typography variant="body2" sx={{ mt: 1 }}>{request.notes}</Typography>}
+                                        {request.reviewReason && <Alert severity="info" sx={{ mt: 1 }}>{request.reviewReason}</Alert>}
+                                        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
+                                            {status.includes('PENDING') && (
+                                                <>
+                                                    <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'APPROVE')} variant="contained" color="success">Approve</Button>
+                                                    <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'REJECT')} color="error">Reject</Button>
+                                                </>
+                                            )}
+                                            {['APPROVED'].includes(status) && (
+                                                <Button size="small" disabled={busy === `payout-${request.id}`} onClick={() => reviewPayout(request, 'MARK_PAID')} variant="contained">Mark paid</Button>
+                                            )}
+                                        </Stack>
+                                    </Box>
+                                );
+                            })}
+                            {payoutRequests.length === 0 && <Alert severity="info">No broker payout requests have been submitted yet.</Alert>}
+                        </Stack>
+                    </Paper>
                 </Grid>
             </Grid>
 
-            <TableContainer component={Paper} sx={{ borderRadius: 4, border: '1px solid #e2e8f0', boxShadow: 'none' }}>
-                <Table>
-                    <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                        <TableRow sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <TableCell sx={{ fontWeight: 800, textAlign: isRTL ? 'right' : 'left' }}>{t('broker.table.name')}</TableCell>
-                            <TableCell sx={{ fontWeight: 800, textAlign: isRTL ? 'right' : 'left' }}>{t('broker.table.code')}</TableCell>
-                            <TableCell sx={{ fontWeight: 800, textAlign: isRTL ? 'right' : 'left' }}>{t('broker.table.contact')}</TableCell>
-                            <TableCell sx={{ fontWeight: 800, textAlign: isRTL ? 'right' : 'left' }}>{t('tech.status')}</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }} align={isRTL ? 'left' : 'right'}>{t('common.actions')}</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {(brokers || []).map((broker) => (
-                            <TableRow key={broker.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography sx={{ fontWeight: 700 }}>{broker.displayName || t('dt.all')}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{broker.id}</Typography>
-                                </TableCell>
-                                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Chip label={broker.brokerCode || broker.affiliateCode || 'PENDING'} size="small" sx={{ fontWeight: 700 }} />
-                                </TableCell>
-                                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="body2">{broker.email}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{broker.phoneNumber}</Typography>
-                                </TableCell>
-                                <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Chip 
-                                        label={broker.status || 'PENDING'} 
-                                        color={broker.status === 'APPROVED' ? 'success' : broker.status === 'REJECTED' ? 'error' : 'warning'} 
-                                        size="small" 
-                                        sx={{ fontWeight: 800 }}
-                                    />
-                                </TableCell>
-                                <TableCell align={isRTL ? 'left' : 'right'}>
-                                    <IconButton onClick={() => handleView(broker)}><VisibilityIcon /></IconButton>
-                                    {broker.status !== 'APPROVED' && (
-                                        <IconButton color="success" onClick={() => handleApprove(broker.id)}><CheckCircleIcon /></IconButton>
-                                    )}
-                                    {broker.status !== 'REJECTED' && (
-                                        <IconButton color="error" onClick={() => handleReject(broker.id)}><CancelIcon /></IconButton>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-
-            {/* View Dialog */}
-            <Dialog open={isViewOpen} onClose={() => setIsViewOpen(false)} maxWidth="md" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
-                <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('broker.dossier_title', { name: selectedBroker?.displayName })}</DialogTitle>
+            <Dialog open={Boolean(selectedBroker)} onClose={() => setSelectedBroker(null)} maxWidth="md" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
+                <DialogTitle sx={{ fontWeight: 950 }}>Broker KYC Dossier</DialogTitle>
                 <DialogContent dividers>
                     {selectedBroker && (
-                        <Grid container spacing={4} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Grid item xs={12} md={6}>
-                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: isRTL ? 'right' : 'left' }}>
-                                    {t('broker.partner_details')}
-                                </Typography>
-                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.legal_name')}</Typography>
-                                    <Typography sx={{ fontWeight: 700 }}>{selectedBroker.displayName}</Typography>
+                        <Stack spacing={3}>
+                            <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
+                                <Box>
+                                    <Typography variant="h5" sx={{ fontWeight: 950 }}>{selectedBroker.displayName || selectedBroker.email}</Typography>
+                                    <Typography color="text.secondary">{selectedBroker.companyName || 'Brokerage company not provided'} · {selectedBroker.brokerTerritory || 'Territory missing'}</Typography>
                                 </Box>
-                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">{t('field.emirate')} ID</Typography>
-                                    <Typography sx={{ fontWeight: 700, fontSpace: 'monospace' }}>{selectedBroker.emiratesId || t('broker.not_provided')}</Typography>
-                                </Box>
-                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.affiliate_code')}</Typography>
-                                    <Typography color="secondary" sx={{ fontWeight: 900 }}>{selectedBroker.brokerCode || selectedBroker.affiliateCode}</Typography>
-                                </Box>
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: isRTL ? 'right' : 'left' }}>
-                                    {t('broker.financial_handshake')}
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                    <BankIcon color="action" />
-                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.settlement_bank')}</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>{selectedBroker.bankName || t('broker.not_configured')}</Typography>
-                                    </Box>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                    <BadgeIcon color="action" />
-                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.iban')}</Typography>
-                                        <Typography sx={{ fontWeight: 700, fontSpace: 'monospace' }}>{selectedBroker.iban || t('broker.not_configured')}</Typography>
-                                    </Box>
-                                </Box>
-                            </Grid>
-                            {selectedBroker.kycDocumentUrl && (
-                                <Grid item xs={12}>
-                                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: isRTL ? 'right' : 'left' }}>
-                                        {t('broker.verification_evidence')}
-                                    </Typography>
-                                    <Button 
-                                        variant="outlined" 
-                                        href={selectedBroker.kycDocumentUrl} 
-                                        target="_blank"
-                                        startIcon={<VisibilityIcon />}
-                                        sx={{ borderRadius: 2, fontWeight: 700 }}
-                                    >
-                                        {t('broker.view_credentials')}
-                                    </Button>
+                                <Chip label={statusText(selectedBroker.brokerKycStatus || selectedBroker.kycStatus || selectedBroker.status)} color={chipColor(selectedBroker.brokerKycStatus || selectedBroker.kycStatus || selectedBroker.status) as any} sx={{ fontWeight: 950, alignSelf: 'flex-start' }} />
+                            </Stack>
+                            {selectedMissing.length > 0 && <Alert severity="warning">Missing before approval: {selectedMissing.join(', ')}</Alert>}
+                            <Grid container spacing={3}>
+                                <Grid item xs={12} md={6}>
+                                    <Paper sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e5e7eb' }}>
+                                        <Typography variant="overline" sx={{ fontWeight: 950 }}>Identity</Typography>
+                                        <Typography sx={{ fontWeight: 900 }}>RERA: {selectedBroker.reraLicense || 'Not provided'}</Typography>
+                                        <Typography variant="body2">Trade license: {selectedBroker.tradeLicenseNumber || 'Not provided'}</Typography>
+                                        <Typography variant="body2">Emirates ID: {selectedBroker.emiratesIdNumber || 'Not provided'}</Typography>
+                                        <Typography variant="body2">Passport: {selectedBroker.passportNumber || 'Not provided'}</Typography>
+                                    </Paper>
                                 </Grid>
-                            )}
-                        </Grid>
+                                <Grid item xs={12} md={6}>
+                                    <Paper sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e5e7eb' }}>
+                                        <Typography variant="overline" sx={{ fontWeight: 950 }}>Settlement</Typography>
+                                        <Stack direction="row" spacing={1.5} alignItems="center"><BankIcon fontSize="small" /><Typography sx={{ fontWeight: 900 }}>{selectedBroker.bankName || 'Bank missing'}</Typography></Stack>
+                                        <Stack direction="row" spacing={1.5} alignItems="center"><BadgeIcon fontSize="small" /><Typography>{selectedBroker.bankIban || selectedBroker.iban || 'IBAN missing'}</Typography></Stack>
+                                        <Typography variant="body2" color={selectedBroker.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{selectedBroker.commissionAgreementAccepted ? 'Commission agreement accepted' : 'Commission agreement not accepted'}</Typography>
+                                    </Paper>
+                                </Grid>
+                            </Grid>
+                            <Divider />
+                            <Box>
+                                <Typography variant="h6" sx={{ fontWeight: 950, mb: 1 }}>Uploaded Broker Documents</Typography>
+                                <Stack spacing={1}>
+                                    {selectedDocuments.map((docItem) => {
+                                        const href = docItem.url || docItem.downloadUrl || '';
+                                        return (
+                                            <Stack key={docItem.id} direction="row" justifyContent="space-between" spacing={2} sx={{ p: 1.5, border: '1px solid #e5e7eb', borderRadius: 2 }}>
+                                                <Box>
+                                                    <Typography sx={{ fontWeight: 900 }}>{docItem.title || docItem.documentType || docItem.fileName || 'Broker document'}</Typography>
+                                                    <Typography variant="caption" color="text.secondary">{statusText(docItem.status)}</Typography>
+                                                </Box>
+                                                {href && <Button href={href} target="_blank" rel="noreferrer" startIcon={<VisibilityIcon />}>Open</Button>}
+                                            </Stack>
+                                        );
+                                    })}
+                                    {selectedDocuments.length === 0 && <Alert severity="info">No broker document records were found for this profile.</Alert>}
+                                </Stack>
+                            </Box>
+                        </Stack>
                     )}
                 </DialogContent>
-                <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Button onClick={() => setIsViewOpen(false)} sx={{ fontWeight: 700 }}>{t('common.close')}</Button>
-                    {selectedBroker?.status !== 'APPROVED' && (
-                        <Button variant="contained" color="success" onClick={() => { handleApprove(selectedBroker!.id); setIsViewOpen(false); }} sx={{ fontWeight: 800, borderRadius: 2 }}>
-                            {t('broker.approve_partner_btn')}
-                        </Button>
-                    )}
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setSelectedBroker(null)}>Close</Button>
+                    {selectedBroker && <Button color="error" onClick={() => openReview(selectedBroker, 'REJECT')}>Reject</Button>}
+                    {selectedBroker && <Button variant="contained" color="success" onClick={() => openReview(selectedBroker, 'APPROVE')}>Approve KYC</Button>}
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={Boolean(reviewBroker)} onClose={() => setReviewBroker(null)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 950 }}>{reviewDecision === 'APPROVE' ? 'Approve broker KYC' : 'Reject broker KYC'}</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Typography>{reviewBroker?.displayName || reviewBroker?.email}</Typography>
+                        {reviewBroker && missingKycItems(reviewBroker).length > 0 && reviewDecision === 'APPROVE' && (
+                            <Alert severity="warning">Approval may fail until missing fields are fixed: {missingKycItems(reviewBroker).join(', ')}</Alert>
+                        )}
+                        <TextField
+                            label={reviewDecision === 'REJECT' ? 'Rejection reason' : 'Review note'}
+                            value={reviewReason}
+                            onChange={(event) => setReviewReason(event.target.value)}
+                            multiline
+                            minRows={3}
+                            required={reviewDecision === 'REJECT'}
+                            fullWidth
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setReviewBroker(null)}>Cancel</Button>
+                    <Button disabled={Boolean(reviewBroker && busy === `kyc-${reviewBroker.id}`)} onClick={submitKycReview} variant="contained" color={reviewDecision === 'APPROVE' ? 'success' : 'error'}>
+                        {busy ? 'Saving...' : reviewDecision === 'APPROVE' ? 'Approve' : 'Reject'}
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

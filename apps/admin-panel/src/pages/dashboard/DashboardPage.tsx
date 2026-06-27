@@ -188,6 +188,7 @@ const reviewPathFor = (item: RecordRow) => {
   if (item.type === 'TECH_ONBOARD') return '/technicians';
   if (item.type === 'PAYMENT_PROOF') return '/manual-approvals';
   if (item.type === 'BROKER_COMMISSION') return '/broker';
+  if (item.type === 'RENEWAL') return '/contracts/termination';
   return '/dashboard';
 };
 
@@ -214,6 +215,7 @@ export default function DashboardPage() {
   const [propertyPassports, setPropertyPassports] = useState(0);
   const [summary, setSummary] = useState<Record<string, any>>({});
   const [systemHealth, setSystemHealth] = useState<Record<string, any>>({});
+  const [renewalQueue, setRenewalQueue] = useState<RecordRow[]>([]);
   const [mrrStats, setMrrStats] = useState<MrrStats>({ currentMonth: 0, previousMonth: 0, trendPercent: null });
   const [streamErrors, setStreamErrors] = useState<Record<string, string>>({});
 
@@ -349,8 +351,15 @@ export default function DashboardPage() {
       setSummary(snap.exists() ? (snap.data() as Record<string, any>) : {});
     });
 
-    listen('system health', doc(db, 'system_health', 'dashboard'), (snap) => {
+    listen('system health', doc(db, 'system_health', 'admin_summaries'), (snap) => {
       setSystemHealth(snap.exists() ? (snap.data() as Record<string, any>) : {});
+    });
+
+    listen('renewal watch', query(collection(db, 'contract_renewal_watch'), where('status', 'in', ['PENDING', 'UPCOMING']), limit(10)), (snap) => {
+      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'RENEWAL', origin: 'Renewal Watch', ...(row.data() as Record<string, any>) })) as RecordRow[];
+      setRenewalQueue(rows
+        .map((row) => ({ ...row, linkedName: row.tenantName || row.ownerName || row.propertyId, createdAt: row.createdAt || row.updatedAt }))
+        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
     });
 
     const now = new Date();
@@ -392,8 +401,8 @@ export default function DashboardPage() {
   );
 
   const actionQueue = useMemo(
-    () => [...approvalQueue, ...paymentQueue, ...commissionQueue].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)).slice(0, 12),
-    [approvalQueue, paymentQueue, commissionQueue],
+    () => [...approvalQueue, ...paymentQueue, ...commissionQueue, ...renewalQueue].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)).slice(0, 12),
+    [approvalQueue, paymentQueue, commissionQueue, renewalQueue],
   );
 
   const activeEmergencyMissions = operationsMissions.filter((mission) => normalizeStatus(mission.priority || mission.severity || mission.category).includes('EMERGENCY'));

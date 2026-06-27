@@ -58,6 +58,7 @@ import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import StaffAccessPage from './pages/admin/StaffAccessPage';
 import AdminPropertyApprovalsPage from './pages/admin/AdminPropertyApprovalsPage';
 import ContractTerminationPage from './pages/admin/ContractTerminationPage';
+import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
 import { adminTheme } from './theme/adminTheme';
 
 const cacheRtl = createCache({
@@ -177,6 +178,7 @@ function AppContent() {
                     <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
@@ -264,3 +266,5 @@ function App() {
         </CacheProvider>
     );
 }
+
+export default App;

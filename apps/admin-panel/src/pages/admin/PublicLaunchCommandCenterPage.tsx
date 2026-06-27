@@ -32,6 +32,26 @@ type LaunchEvidence = {
   createdAt?: any;
 };
 
+type SmokeRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
+
+type SignedInSmokeCheck = {
+  role: SmokeRole;
+  route: string;
+  checkpoints: string;
+};
+
+type SignedInSmokeRecord = {
+  id: string;
+  role: SmokeRole;
+  status: GateStatus;
+  accountEmail?: string;
+  route?: string;
+  proofRef?: string;
+  notes?: string;
+  recordedByEmail?: string | null;
+  createdAt?: any;
+};
+
 const LAUNCH_GATES: LaunchGate[] = [
   { id: 'ownerOnboardingFullPath', group: 'Owner', title: 'Owner onboarding to dashboard unlock', required: true, proofRequired: 'Landing -> quote -> contract -> payment review -> dashboard unlock with active contract visible.' },
   { id: 'ownerPaymentApproveReject', group: 'Owner', title: 'Owner payment approval and rejection paths', required: true, proofRequired: 'Real owner contract proof that approved payment unlocks dashboard and rejected/manual review does not unlock access.' },
@@ -74,6 +94,14 @@ const roles = ['admin', 'owner', 'tenant', 'technician', 'broker'];
 const devices = ['Android PWA', 'iPhone Safari', 'Desktop Chrome', 'Tablet', 'Other'];
 const statuses: GateStatus[] = ['pending', 'passed', 'blocked', 'waived'];
 
+const SIGNED_IN_SMOKE_CHECKS: SignedInSmokeCheck[] = [
+  { role: 'owner', route: '/owner', checkpoints: 'Fresh login, dashboard loads, properties/units visible only for the owner, payment/contract state visible.' },
+  { role: 'tenant', route: '/tenant', checkpoints: 'Fresh login, assigned unit or link fallback visible, service request route opens, tenant cannot see other units.' },
+  { role: 'technician', route: '/technician', checkpoints: 'Fresh login, assigned/open jobs load, duty/action controls do not throw permission errors.' },
+  { role: 'broker', route: '/broker', checkpoints: 'Fresh login, profile KYC state visible, commissions page opens, payout request state shown.' },
+  { role: 'admin', route: '/dashboard', checkpoints: 'Fresh login, owners, tenants, technicians, brokers, payments, tickets, and audit pages load live data.' },
+];
+
 const statusColor: Record<GateStatus, string> = {
   pending: '#f59e0b',
   passed: '#22c55e',
@@ -108,6 +136,15 @@ export default function PublicLaunchCommandCenterPage() {
   const [notice, setNotice] = React.useState('');
   const [evidence, setEvidence] = React.useState<LaunchEvidence[]>([]);
   const [evidenceLoading, setEvidenceLoading] = React.useState(true);
+  const [smokeRecords, setSmokeRecords] = React.useState<SignedInSmokeRecord[]>([]);
+  const [smokeLoading, setSmokeLoading] = React.useState(true);
+  const [selectedSmokeRole, setSelectedSmokeRole] = React.useState<SmokeRole>('owner');
+  const [smokeStatus, setSmokeStatus] = React.useState<GateStatus>('pending');
+  const [smokeAccountEmail, setSmokeAccountEmail] = React.useState('');
+  const [smokeRoute, setSmokeRoute] = React.useState('/owner');
+  const [smokeProofRef, setSmokeProofRef] = React.useState('');
+  const [smokeNotes, setSmokeNotes] = React.useState('');
+  const [smokeBusy, setSmokeBusy] = React.useState(false);
 
   React.useEffect(() => {
     const q = query(collection(db, 'launch_evidence'), orderBy('createdAt', 'desc'), limit(300));
@@ -118,6 +155,19 @@ export default function PublicLaunchCommandCenterPage() {
       console.error('[PUBLIC-LAUNCH] evidence listener failed', error);
       setNotice(error?.message || 'Could not load launch evidence. Check Firestore rules and admin permissions.');
       setEvidenceLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  React.useEffect(() => {
+    const q = query(collection(db, 'signed_in_smoke_checks'), orderBy('createdAt', 'desc'), limit(100));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setSmokeRecords(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<SignedInSmokeRecord, 'id'>) })));
+      setSmokeLoading(false);
+    }, (error) => {
+      console.error('[PUBLIC-LAUNCH] signed-in smoke listener failed', error);
+      setNotice(error?.message || 'Could not load signed-in smoke records.');
+      setSmokeLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -138,6 +188,14 @@ export default function PublicLaunchCommandCenterPage() {
   const readiness = Math.round((passedCount / Math.max(requiredGates.length, 1)) * 100);
   const selected = LAUNCH_GATES.find((gate) => gate.id === selectedGate) || LAUNCH_GATES[0];
   const selectedEvidence = latestByGate.get(selectedGate);
+  const latestSmokeByRole = React.useMemo(() => {
+    const map = new Map<SmokeRole, SignedInSmokeRecord>();
+    for (const item of smokeRecords) {
+      if (!map.has(item.role)) map.set(item.role, item);
+    }
+    return map;
+  }, [smokeRecords]);
+  const smokePassedCount = SIGNED_IN_SMOKE_CHECKS.filter((check) => ['passed', 'waived'].includes(latestSmokeByRole.get(check.role)?.status || 'pending')).length;
   const decision = blockedCount > 0
     ? 'PUBLIC LAUNCH BLOCKED'
     : pendingRequired === 0
@@ -185,6 +243,38 @@ export default function PublicLaunchCommandCenterPage() {
       setNotice(error?.message || 'Could not save launch proof record.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveSmokeProof = async () => {
+    const selectedSmoke = SIGNED_IN_SMOKE_CHECKS.find((item) => item.role === selectedSmokeRole) || SIGNED_IN_SMOKE_CHECKS[0];
+    if (!smokeAccountEmail.trim() || !smokeProofRef.trim()) {
+      setNotice('Signed-in smoke requires tested account email and screenshot/log/proof reference.');
+      return;
+    }
+    try {
+      setSmokeBusy(true);
+      setNotice('');
+      await addDoc(collection(db, 'signed_in_smoke_checks'), {
+        role: selectedSmokeRole,
+        status: smokeStatus,
+        accountEmail: smokeAccountEmail.trim().toLowerCase(),
+        route: smokeRoute.trim() || selectedSmoke.route,
+        requiredRoute: selectedSmoke.route,
+        checkpoints: selectedSmoke.checkpoints,
+        proofRef: smokeProofRef.trim(),
+        notes: smokeNotes.trim(),
+        recordedBy: user?.uid || null,
+        recordedByEmail: user?.email || null,
+        createdAt: serverTimestamp(),
+      });
+      setNotice('Signed-in smoke proof saved.');
+      setSmokeProofRef('');
+      setSmokeNotes('');
+    } catch (error: any) {
+      setNotice(error?.message || 'Could not save signed-in smoke proof.');
+    } finally {
+      setSmokeBusy(false);
     }
   };
 
@@ -252,6 +342,78 @@ export default function PublicLaunchCommandCenterPage() {
           </Grid>
         ))}
       </Grid>
+
+      <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, mb: 4 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+          <Box>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>SIGNED-IN FIVE-ROLE SMOKE</Typography>
+            <Typography variant="h5" fontWeight={950}>Owner, Tenant, Technician, Broker, Admin</Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 880 }}>
+              Record proof from a real signed-in account for each role. This is separate from public launch evidence and should stay blocked until all five roles pass with live data.
+            </Typography>
+          </Box>
+          <Chip
+            label={`${smokeLoading ? '...' : smokePassedCount}/${SIGNED_IN_SMOKE_CHECKS.length} passed`}
+            sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(smokePassedCount === SIGNED_IN_SMOKE_CHECKS.length ? '#22c55e' : '#f59e0b', .15), color: smokePassedCount === SIGNED_IN_SMOKE_CHECKS.length ? '#22c55e' : '#f59e0b', fontWeight: 950 }}
+          />
+        </Stack>
+
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {SIGNED_IN_SMOKE_CHECKS.map((check) => {
+            const latest = latestSmokeByRole.get(check.role);
+            const latestStatus = latest?.status || 'pending';
+            return (
+              <Grid item xs={12} md={2.4} key={check.role}>
+                <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(statusColor[latestStatus], .28)}` }}>
+                  <Stack spacing={1}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography fontWeight={950} textTransform="capitalize">{check.role}</Typography>
+                      <Chip size="small" label={latestStatus} sx={{ bgcolor: alpha(statusColor[latestStatus], .15), color: statusColor[latestStatus], fontWeight: 850 }} />
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{check.route}</Typography>
+                    <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', fontWeight: 800 }}>{latest?.proofRef || 'No proof yet'}</Typography>
+                  </Stack>
+                </Box>
+              </Grid>
+            );
+          })}
+        </Grid>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={2}>
+            <TextField select label="Role" value={selectedSmokeRole} fullWidth onChange={(event) => {
+              const roleValue = event.target.value as SmokeRole;
+              const check = SIGNED_IN_SMOKE_CHECKS.find((item) => item.role === roleValue) || SIGNED_IN_SMOKE_CHECKS[0];
+              setSelectedSmokeRole(roleValue);
+              setSmokeRoute(check.route);
+            }}>
+              {SIGNED_IN_SMOKE_CHECKS.map((check) => <MenuItem key={check.role} value={check.role}>{check.role}</MenuItem>)}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField select label="Status" value={smokeStatus} fullWidth onChange={(event) => setSmokeStatus(event.target.value as GateStatus)}>
+              {statuses.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField label="Tested account email" value={smokeAccountEmail} fullWidth onChange={(event) => setSmokeAccountEmail(event.target.value)} />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField label="Route tested" value={smokeRoute} fullWidth onChange={(event) => setSmokeRoute(event.target.value)} />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField label="Screenshot / log / proof reference" value={smokeProofRef} fullWidth onChange={(event) => setSmokeProofRef(event.target.value)} />
+          </Grid>
+          <Grid item xs={12} md={9}>
+            <TextField label="What was verified / what failed" value={smokeNotes} multiline minRows={2} fullWidth onChange={(event) => setSmokeNotes(event.target.value)} />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Button fullWidth sx={{ height: '100%', minHeight: 56, bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }} disabled={smokeBusy} onClick={saveSmokeProof} variant="contained">
+              {smokeBusy ? 'Saving...' : 'Save smoke proof'}
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
