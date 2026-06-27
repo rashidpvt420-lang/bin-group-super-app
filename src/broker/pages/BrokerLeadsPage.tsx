@@ -24,7 +24,11 @@ const numericAmount = (value: unknown) => {
     return Number.isFinite(amount) ? amount : 0;
 };
 
-export default function BrokerLeadsPage() {
+type BrokerLeadsPageProps = {
+    openFormByDefault?: boolean;
+};
+
+export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLeadsPageProps) {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
     const [leads, setLeads] = useState<any[]>([]);
@@ -43,6 +47,10 @@ export default function BrokerLeadsPage() {
     const [location, setLocation] = useState('');
     const [budget, setBudget] = useState('');
     const [notes, setNotes] = useState('');
+
+    useEffect(() => {
+        if (openFormByDefault) setOpenAdd(true);
+    }, [openFormByDefault]);
 
     useEffect(() => {
         if (!user?.uid) return;

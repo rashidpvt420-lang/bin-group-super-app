@@ -133,6 +133,7 @@ export default function BrokerApp() {
         <Route path="/" element={<BrokerDashboardPage />} />
         <Route path="/dashboard" element={<BrokerDashboardPage />} />
         <Route path="/leads" element={<BrokerLeadsPage />} />
+        <Route path="/leads/new" element={<BrokerLeadsPage openFormByDefault={true} />} />
         <Route path="/referrals" element={<BrokerReferralsPage />} />
         <Route path="/referrals/new" element={<BrokerReferralsPage openFormByDefault={true} />} />
         <Route path="/commissions" element={<BrokerCommissionsPage />} />
