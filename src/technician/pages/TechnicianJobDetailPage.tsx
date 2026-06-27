@@ -110,7 +110,9 @@ export default function TechnicianJobDetailPage() {
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
-    const [online, setOnline] = useState(() => navigator.onLine);
+    const [ppeChecked, setPpeChecked] = useState(false);
+    const [safetyChecked, setSafetyChecked] = useState(false);
+    const [online, setOnline] = useState(navigator.onLine);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -419,11 +421,28 @@ export default function TechnicianJobDetailPage() {
                             {!ticket.assignedTechnicianId ? (
                                 <Button variant="contained" disabled={actionLoading} onClick={acceptJob} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('tech.job.accept_mission', 'Accept Mission')}</Button>
                             ) : (
-                                <>
-                                    <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
-                                    <Button variant="outlined" disabled={actionLoading || status !== 'EN_ROUTE'} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
-                                    <Button variant="outlined" disabled={actionLoading || status !== 'ARRIVED'} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
-                                </>
+                                <Stack spacing={2} sx={{ width: '100%' }}>
+                                    <Stack direction="row" flexWrap="wrap" gap={2}>
+                                        <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || status !== 'EN_ROUTE'} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
+                                    </Stack>
+                                    {status === 'ARRIVED' && (
+                                        <Paper sx={{ p: 2, bgcolor: alpha('#f59e0b', 0.05), border: `1px dashed ${alpha('#f59e0b', 0.3)}`, borderRadius: 3 }}>
+                                            <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 950, display: 'block', mb: 1 }}>{tx('tech.job.safety_check', 'PRE-WORK SAFETY PROTOCOL')}</Typography>
+                                            <Stack spacing={1}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <input type="checkbox" id="ppe" checked={ppeChecked} onChange={(e) => setPpeChecked(e.target.checked)} style={{ transform: 'scale(1.2)', accentColor: '#f59e0b' }} />
+                                                    <label htmlFor="ppe" style={{ color: '#FFF', fontSize: '0.85rem' }}>{tx('tech.job.ppe_confirm', 'I am wearing all required PPE (Personal Protective Equipment)')}</label>
+                                                </Box>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <input type="checkbox" id="safety" checked={safetyChecked} onChange={(e) => setSafetyChecked(e.target.checked)} style={{ transform: 'scale(1.2)', accentColor: '#f59e0b' }} />
+                                                    <label htmlFor="safety" style={{ color: '#FFF', fontSize: '0.85rem' }}>{tx('tech.job.safety_confirm', 'I have assessed the area and confirm it is safe to begin work')}</label>
+                                                </Box>
+                                            </Stack>
+                                        </Paper>
+                                    )}
+                                </Stack>
                             )}
                         </Stack>
 

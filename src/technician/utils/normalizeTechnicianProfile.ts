@@ -23,9 +23,9 @@ const normalizeSkillLevel = (value: unknown) => {
 const normalizeDutyStatus = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase();
   if (['working', 'on_duty', 'on-duty', 'active', 'ready', 'available'].includes(raw)) return 'available';
-  if (['break', 'busy', 'in_progress', 'on_job'].includes(raw)) return 'busy';
+  if (['break', 'on_break', 'on-break', 'busy', 'in_progress', 'on_job'].includes(raw)) return 'busy';
   if (['leave', 'on_leave', 'vacation'].includes(raw)) return 'on_leave';
-  if (['off', 'offline', 'inactive'].includes(raw)) return 'offline';
+  if (['off', 'off_duty', 'off-duty', 'offline', 'inactive'].includes(raw)) return 'offline';
   return raw || 'offline';
 };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+    Alert,
     Avatar,
     Box,
     Button,
@@ -48,9 +49,6 @@ import {
     onSnapshot,
     orderBy,
     query,
-    runTransaction,
-    serverTimestamp,
-    updateDoc,
     where,
     functions,
     httpsCallable
@@ -59,7 +57,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
-import { ALL_TECHNICIAN_ACTIVE_STATUSES, TICKET_AUDIT_ACTIONS, logAuditAction, onSnapshotSplitIn } from '../../shared-exports';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { formatUiDate, normalizeEmail, textOrPending, uniqueRows } from '../utils/technicianDashboardFields';
@@ -209,6 +207,7 @@ export default function TechnicianDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
     const [updating, setUpdating] = useState(false);
+    const [dutyError, setDutyError] = useState('');
     const [profileSources, setProfileSources] = useState<any>({});
     const [certRows, setCertRows] = useState<any[]>([]);
     const [recentCompleted, setRecentCompleted] = useState<any[]>([]);
@@ -316,7 +315,12 @@ export default function TechnicianDashboardPage() {
     const complianceWarnings = (profile.complianceActionItems || []).map(formatMissingTechnicianField);
     const missingDocuments = [visaExpiry, idExpiry, medicalExpiry, passportExpiry].filter((value) => value === 'Pending sync' || value === 'Not set').length;
     const openActionItems = missingDocuments + complianceWarnings.length;
-    const isOnDuty = dutyStatus === 'WORKING' || profile.dutyStatus === 'available';
+    const rawDutyStatus = String(dutyStatus || '').replace(/\s+/g, '_').toUpperCase();
+    const isBreakDuty = rawDutyStatus === 'BREAK' || rawDutyStatus === 'ON_BREAK';
+    const isOffDuty = !rawDutyStatus || ['OFF', 'OFF_DUTY', 'OFFLINE', 'INACTIVE'].includes(rawDutyStatus);
+    const isWorkingDuty = ['WORKING', 'ON_DUTY', 'ACTIVE', 'READY', 'AVAILABLE'].includes(rawDutyStatus);
+    const isOnDuty = isWorkingDuty || profile.dutyStatus === 'available';
+    const dutyDisplay = isBreakDuty ? 'ON BREAK' : isOffDuty ? 'OFF DUTY' : isWorkingDuty ? 'ON DUTY' : String(dutyStatus).replace('_', ' ');
     const vehicleLabel = profile.vehicleAssigned ? profile.vehicleNumber || 'Assigned' : 'Not assigned';
     const toolKitLabel = profile.toolKitIssued ? 'Issued' : 'Not issued';
     const ppeLabel = profile.ppeIssued ? 'Issued' : 'Not issued';
@@ -327,12 +331,21 @@ export default function TechnicianDashboardPage() {
     const handleDutyToggle = async (newStatus: string) => {
         if (!user?.uid) return;
         setUpdating(true);
+        setDutyError('');
         try {
-            await updateDoc(doc(db, 'users', user.uid), { dutyStatus: newStatus, onDuty: newStatus === 'WORKING', isAvailable: newStatus === 'WORKING', updatedAt: serverTimestamp() });
-            await logAuditAction({ action: TICKET_AUDIT_ACTIONS.DUTY_CHANGE, actorId: user.uid, actorRole: 'technician', targetType: 'users', targetId: user.uid, metadata: { newStatus } });
+            const callableName = newStatus === 'ON_BREAK'
+                ? 'takeTechnicianBreak'
+                : newStatus === 'OFF_DUTY'
+                    ? 'endTechnicianDuty'
+                    : isBreakDuty
+                        ? 'resumeTechnicianDuty'
+                        : 'startTechnicianDuty';
+            const dutyFn = httpsCallable(functions, callableName);
+            await dutyFn({ source: 'technician_dashboard' });
             setDutyStatus(newStatus);
         } catch (err) {
             console.error('Failed to update duty status', err);
+            setDutyError((err as any)?.message || 'Duty status update failed. Try again or contact dispatch.');
         } finally {
             setUpdating(false);
         }
@@ -380,7 +393,7 @@ export default function TechnicianDashboardPage() {
                         </Box>
                     </Stack>
                     <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} useFlexGap>
-                        {[String(dutyStatus).replace('_', ' '), `Core sync: ${profile.syncStatus}`, `SLA: ${slaDisplay}`, `Actions: ${openActionItems}`].map((item) => <Chip key={item} label={item} sx={{ bgcolor: '#FFFFFF', color: statusTone(item), border: `1px solid ${alpha(statusTone(item), 0.35)}`, fontWeight: 950 }} />)}
+                        {[dutyDisplay, `Core sync: ${profile.syncStatus}`, `SLA: ${slaDisplay}`, `Actions: ${openActionItems}`].map((item) => <Chip key={item} label={item} sx={{ bgcolor: '#FFFFFF', color: statusTone(item), border: `1px solid ${alpha(statusTone(item), 0.35)}`, fontWeight: 950 }} />)}
                     </Stack>
                 </Stack>
             </SectionCard>
@@ -395,14 +408,16 @@ export default function TechnicianDashboardPage() {
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
+                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={dutyDisplay} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
                 <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
             </Grid>
 
+            {dutyError && <Alert severity="warning" sx={{ mb: 2.5 }}>{dutyError}</Alert>}
+
             <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
                 <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={12} md={6}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{dutyStatus === 'BREAK' ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{String(dutyStatus).replace('_', ' ')}</Typography></Box></Stack></Grid>
-                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{dutyStatus === 'OFF' ? <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(dutyStatus === 'WORKING' ? 'BREAK' : 'WORKING')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{dutyStatus === 'WORKING' ? 'STANDBY / BREAK' : 'RESUME OPS'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
+                    <Grid item xs={12} md={6}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{isBreakDuty ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{dutyDisplay}</Typography></Box></Stack></Grid>
+                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{isOffDuty ? <Button variant="contained" onClick={() => handleDutyToggle('ON_DUTY')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(isBreakDuty ? 'ON_DUTY' : 'ON_BREAK')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{isBreakDuty ? 'RESUME OPS' : 'STANDBY / BREAK'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF_DUTY')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
                 </Grid>
             </SectionCard>
 
