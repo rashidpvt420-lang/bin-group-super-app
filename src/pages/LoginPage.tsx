@@ -68,10 +68,6 @@ const LoginPage: React.FC = () => {
     const intendedRoleKey = intendedRole?.toLowerCase();
 
     useEffect(() => {
-        if (intendedRoleKey === 'admin') navigate('/admin/dashboard', { replace: true });
-    }, [intendedRoleKey, navigate]);
-
-    useEffect(() => {
         if (ownerEmailParam && !email) setEmail(ownerEmailParam.trim().toLowerCase());
     }, [ownerEmailParam, email]);
 
@@ -248,12 +244,12 @@ const LoginPage: React.FC = () => {
         return t(`gateway.role.${intendedRole.toLowerCase()}`);
     };
 
-    if (roleLoading || intendedRoleKey === 'admin') {
+    if (roleLoading) {
         return (
             <Box sx={{ minHeight: '100vh', bgcolor: palette.canvas, display: 'grid', placeItems: 'center', color: palette.ink }}>
                 <Stack alignItems="center" spacing={2}>
                     <CircularProgress sx={{ color: palette.gold }} />
-                    <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{intendedRoleKey === 'admin' ? 'Opening Admin Command Center...' : t('common.auth_sync')}</Typography>
+                    <Typography variant="h6" sx={{ color: palette.gold, fontWeight: 950 }}>{t('common.auth_sync')}</Typography>
                 </Stack>
             </Box>
         );
@@ -390,7 +386,12 @@ const LoginPage: React.FC = () => {
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={TrendingUp} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>INST-GRADE</Typography></Box></Grid>
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Building} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>UAE-SOV</Typography></Box></Grid>
                 </Grid>
-                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 4, color: palette.muted, letterSpacing: 0.8, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>
+                <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 4 }}>
+                    <Button variant="text" size="small" onClick={() => navigate('/security')} sx={{ color: palette.muted, fontWeight: 700, letterSpacing: 0.8 }}>
+                        {lang === 'ar' ? 'أمن المنصة' : 'Platform Security'}
+                    </Button>
+                </Stack>
+                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1, color: palette.muted, letterSpacing: 0.8, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>
             </Container>
         </Box>
     );

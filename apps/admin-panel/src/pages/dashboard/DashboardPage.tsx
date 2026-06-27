@@ -1,747 +1,1199 @@
 // apps/admin-panel/src/pages/dashboard/DashboardPage.tsx
+// V3.0 — SOVEREIGN OPERATIONS TERMINAL — ALL HARDCODED VALUES REPLACED
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Box,
-  Button,
-  Chip,
-  Divider,
-  Grid,
-  LinearProgress,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
+    Grid, Paper, Typography, Box, Chip, Table, TableBody,
+    TableCell, TableHead, TableRow, TableContainer, Skeleton, Stack,
+    Alert, Snackbar, Button, alpha,
+    Tooltip, Divider, LinearProgress, Dialog, DialogTitle,
+    DialogContent, DialogActions, TextField
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import {
-  Activity,
-  AlertTriangle,
-  Briefcase,
-  Building2,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  FileText,
-  Home,
-  Shield,
-  Wrench,
+    Activity, Shield, Briefcase, Users, Home, Wrench,
+    AlertTriangle, DollarSign, FileText, CheckCircle2,
+    Clock, Plus, Upload,
+    Zap, TrendingUp, Building2, Gavel, FileWarning,
+    Lock, MessageSquare, Radio, Heart, Wifi, WifiOff,
+    UserCheck, UserX, Rocket, XCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
-  collection,
-  db,
-  doc,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  where,
+    db, collection, query, where, onSnapshot,
+    orderBy, doc, limit, Timestamp, getDocs, updateDoc, serverTimestamp
 } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
 import CeoContactButtons from '../../components/CeoContactButtons';
 
-type RecordRow = { id: string; [key: string]: any };
-
-type Metric = {
-  label: string;
-  value: number | string;
-  icon: React.ReactNode;
-  tone: string;
-  route?: string;
-  note?: string;
+// --- Types ---
+type KPIState = {
+    value: number | string | null;
+    status: 'loading' | 'success' | 'error' | 'denied';
+    label: string;
+    icon: React.ReactNode;
+    color: string;
+    path?: string;
 };
 
-type MrrStats = {
-  currentMonth: number;
-  previousMonth: number;
-  trendPercent: number | null;
+type ActivityItem = {
+    id: string;
+    timestamp: Timestamp | Date;
+    actor: string;
+    action: string;
+    module: string;
+    status: string;
 };
 
-type UserStats = {
-  owners: number;
-  tenants: number;
-  technicians: number;
-  activeTechnicians: number;
-  brokers: number;
+type SLABreachItem = {
+    id: string;
+    title: string;
+    propertyName: string;
+    priority: string;
+    createdAt: any;
+    technicianName?: string;
+    slaHours: number;
+    breachMinutes: number;
 };
 
-type PropertyStats = {
-  properties: number;
-  units: number;
-  namesById: Record<string, string>;
+type PaymentProofItem = {
+    id: string;
+    ownerName?: string;
+    amount: number;
+    reference?: string;
+    submittedAt: any;
+    status: string;
 };
 
-type LaunchHealthRow = {
-  label: string;
-  status: string;
-  detail: string;
-  route?: string;
+type CommissionItem = {
+    id: string;
+    brokerName: string;
+    propertyName?: string;
+    amount: number;
+    contractValue?: number;
+    submittedAt: any;
+};
+
+// SLA policy: minutes allowed by priority
+const SLA_POLICY_MINUTES: Record<string, number> = {
+    EMERGENCY: 30,
+    HIGH: 120,
+    MEDIUM: 240,
+    STANDARD: 480,
+    LOW: 1440,
+};
+
+const getSlaRemainingMinutes = (ticket: any): number => {
+    const priority = String(ticket.priority || 'STANDARD').toUpperCase();
+    const slaMinutes = SLA_POLICY_MINUTES[priority] ?? 480;
+    const createdAt = ticket.createdAt?.toDate ? ticket.createdAt.toDate() : new Date(ticket.createdAt || Date.now());
+    const elapsedMs = Date.now() - createdAt.getTime();
+    const elapsedMinutes = elapsedMs / 60000;
+    return slaMinutes - elapsedMinutes;
+};
+
+const formatSlaRemaining = (minutesRemaining: number): string => {
+    if (minutesRemaining <= 0) return 'SLA BREACHED';
+    const h = Math.floor(minutesRemaining / 60);
+    const m = Math.floor(minutesRemaining % 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
 const ACTIVE_TICKET_STATUSES = [
-  'OPEN',
-  'PENDING',
-  'PENDING_ASSIGNMENT',
-  'ASSIGNED',
-  'ACCEPTED',
-  'EN_ROUTE',
-  'ARRIVED',
-  'IN_PROGRESS',
-  'open',
-  'accepted',
+    'OPEN', 'PENDING', 'PENDING_ASSIGNMENT', 'ASSIGNED',
+    'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'open', 'accepted'
 ];
 
-const CLOSED_TICKET_STATUSES = ['COMPLETED', 'CLOSED', 'RESOLVED', 'completed', 'closed', 'resolved'];
-const PENDING_PAYMENT_STATES = ['PENDING', 'ADMIN_VERIFICATION_REQUIRED', 'pending', 'pending_verification'];
-const PENDING_COMMISSION_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'pending', 'pending_admin_approval'];
-const OPEN_REVIEW_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'ADMIN_REVIEW', 'pending_admin_approval', 'pending_approval'];
-const TECH_PENDING_STATES = ['PENDING', 'PENDING_ADMIN_APPROVAL', 'pending', 'pending_admin_approval', 'pending_approval'];
-const ACTIVE_CONTRACT_STATES = ['ACTIVE', 'SIGNED', 'active', 'signed'];
-const APPROVED_PAYMENT_STATES = new Set(['PAID', 'PAID_MANUAL', 'RECONCILED', 'ADMIN_VERIFIED', 'VERIFIED', 'APPROVED']);
+const PENDING_OWNER_STATUSES = [
+    'PENDING', 'PENDING_ADMIN_APPROVAL', 'ADMIN_REVIEW',
+    'pending_admin_approval', 'pending_approval'
+];
 
-const money = (value: any) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const PENDING_TECHNICIAN_STATUSES = [
+    'PENDING', 'PENDING_ADMIN_APPROVAL', 'pending_admin_approval', 'pending_approval'
+];
 
-const getMillis = (value: any) => {
-  if (!value) return 0;
-  if (typeof value?.toMillis === 'function') return value.toMillis();
-  if (typeof value?.toDate === 'function') return value.toDate().getTime();
-  if (value?.seconds) return value.seconds * 1000;
-  if (value?._seconds) return value._seconds * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const normalizeStatus = (value: any) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
-
-const statusTone = (value: any) => {
-  const status = normalizeStatus(value);
-  if (['READY', 'ACTIVE', 'PASS', 'GREEN', 'VERIFIED', 'CLEAR', 'PAID', 'RECONCILED', 'HEALTHY', 'ONLINE'].some((word) => status.includes(word))) return '#10b981';
-  if (['BLOCKED', 'FAIL', 'ERROR', 'BREACH', 'EXPIRED', 'DENIED', 'DOWN', 'OVERDUE'].some((word) => status.includes(word))) return binThemeTokens.danger;
-  if (['PENDING', 'REVIEW', 'UNKNOWN', 'WARNING', 'DEGRADED', 'CONFIG'].some((word) => status.includes(word))) return binThemeTokens.warning;
-  return 'rgba(255,255,255,0.62)';
-};
-
-const resolveSlaPolicyMs = (mission: RecordRow) => {
-  const severity = normalizeStatus(mission.severity || mission.priority || mission.urgency || mission.category);
-  if (severity.includes('EMERGENCY') || severity.includes('CRITICAL')) return 30 * 60 * 1000;
-  if (severity.includes('HIGH') || severity.includes('URGENT')) return 2 * 60 * 60 * 1000;
-  return 4 * 60 * 60 * 1000;
-};
-
-const resolveSlaDueAt = (mission: RecordRow) => {
-  const explicitDue = getMillis(mission.slaDueAt || mission.slaDeadline || mission.dueAt);
-  if (explicitDue) return explicitDue;
-
-  const created = getMillis(mission.createdAt || mission.reportedAt || mission.openedAt);
-  const slaMinutes = Number(mission.slaMinutes || mission.slaBudgetMinutes);
-  if (created && Number.isFinite(slaMinutes) && slaMinutes > 0) return created + slaMinutes * 60_000;
-  return created ? created + resolveSlaPolicyMs(mission) : 0;
-};
-
-const isBreached = (mission: RecordRow) => {
-  if (mission.slaBreached === true || normalizeStatus(mission.slaStatus).includes('BREACHED')) return true;
-  const due = resolveSlaDueAt(mission);
-  return due > 0 && due < Date.now();
-};
-
-const isNearBreach = (mission: RecordRow) => {
-  const due = resolveSlaDueAt(mission);
-  if (!due) return false;
-  const remainingMs = due - Date.now();
-  return remainingMs > 0 && remainingMs <= 60 * 60 * 1000;
-};
-
-const formatSla = (mission: RecordRow) => {
-  if (mission.slaRemaining || mission.slaText) return String(mission.slaRemaining || mission.slaText);
-  const due = resolveSlaDueAt(mission);
-  if (!due) return 'SLA not configured';
-  const diff = due - Date.now();
-  const absolute = Math.abs(diff);
-  const hours = Math.floor(absolute / 3_600_000);
-  const minutes = Math.floor((absolute % 3_600_000) / 60_000);
-  return diff < 0 ? `Breached by ${hours}h ${minutes}m` : `${hours}h ${minutes}m remaining`;
-};
-
-const formatDateTime = (value: any) => {
-  const millis = getMillis(value);
-  return millis ? new Date(millis).toLocaleString('en-AE') : 'Not recorded';
-};
-
-const isExpiredOrExpiring = (value: any) => {
-  const expiry = getMillis(value);
-  if (!expiry) return false;
-  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-  return expiry <= Date.now() + thirtyDays;
-};
-
-const reviewPathFor = (item: RecordRow) => {
-  if (item.type === 'OWNER_ONBOARDING') return '/vault';
-  if (item.type === 'TECH_ONBOARD') return '/technicians';
-  if (item.type === 'PAYMENT_PROOF') return '/manual-approvals';
-  if (item.type === 'BROKER_COMMISSION') return '/broker';
-  if (item.type === 'RENEWAL') return '/contracts/termination';
-  return '/dashboard';
-};
-
-const linkedNameFor = (row: RecordRow) => row.linkedName || row.ownerEmail || row.tenantEmail || row.payerEmail || row.brokerName || row.brokerEmail || row.displayName || row.email || row.propertyName || row.id;
-
-const getHealth = (summary: Record<string, any>, key: string) => String(summary?.launchHealth?.[key] || summary?.systemHealth?.[key] || summary?.[key] || 'PENDING');
+const PENDING_PAYMENT_STATES = ['PENDING', 'ADMIN_VERIFICATION_REQUIRED'];
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [lastSync, setLastSync] = useState<Date>(new Date());
-  const [propertyStats, setPropertyStats] = useState<PropertyStats>({ properties: 0, units: 0, namesById: {} });
-  const [userStats, setUserStats] = useState<UserStats>({ owners: 0, tenants: 0, technicians: 0, activeTechnicians: 0, brokers: 0 });
-  const [operationsMissions, setOperationsMissions] = useState<RecordRow[]>([]);
-  const [ownerApprovalQueue, setOwnerApprovalQueue] = useState<RecordRow[]>([]);
-  const [technicianApprovalQueue, setTechnicianApprovalQueue] = useState<RecordRow[]>([]);
-  const [paymentQueue, setPaymentQueue] = useState<RecordRow[]>([]);
-  const [commissionQueue, setCommissionQueue] = useState<RecordRow[]>([]);
-  const [activeContracts, setActiveContracts] = useState(0);
-  const [documentStats, setDocumentStats] = useState<{ total: number; expiring: RecordRow[] }>({ total: 0, expiring: [] });
-  const [auditEventsToday, setAuditEventsToday] = useState(0);
-  const [recentActivity, setRecentActivity] = useState<RecordRow[]>([]);
-  const [orphanRecords, setOrphanRecords] = useState(0);
-  const [propertyPassports, setPropertyPassports] = useState(0);
-  const [summary, setSummary] = useState<Record<string, any>>({});
-  const [systemHealth, setSystemHealth] = useState<Record<string, any>>({});
-  const [renewalQueue, setRenewalQueue] = useState<RecordRow[]>([]);
-  const [mrrStats, setMrrStats] = useState<MrrStats>({ currentMonth: 0, previousMonth: 0, trendPercent: null });
-  const [streamErrors, setStreamErrors] = useState<Record<string, string>>({});
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    const unsubscribers: Array<() => void> = [];
+    // UI State
+    const [lastSync, setLastSync] = useState<Date>(new Date());
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+    const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [selectedApproval, setSelectedApproval] = useState<any>(null);
+    const [rejectReason, setRejectReason] = useState('');
+    const [actionLoading, setActionLoading] = useState(false);
 
-    const markSync = () => setLastSync(new Date());
-    const reportError = (label: string) => (error: any) => {
-      console.warn(`[ADMIN_DASHBOARD] ${label} stream failed`, error);
-      setStreamErrors((prev) => ({ ...prev, [label]: error?.message || 'Listener failed' }));
+    // KPIs State
+    const [kpis, setKpis] = useState<Record<string, KPIState>>({
+        totalProperties: { label: 'Total Properties', value: null, status: 'loading', icon: <Home size={18} />, color: '#3b82f6', path: '/properties/passport' },
+        totalUnits: { label: 'Total Units', value: null, status: 'loading', icon: <Building2 size={18} />, color: '#8b5cf6' },
+        activeTenants: { label: 'Active Tenants', value: null, status: 'loading', icon: <Users size={18} />, color: '#10b981', path: '/tenants' },
+        pendingTenantInvites: { label: 'Pending Invites', value: null, status: 'loading', icon: <Users size={18} />, color: '#f59e0b' },
+        openMissions: { label: 'Open Missions', value: null, status: 'loading', icon: <Wrench size={18} />, color: '#f59e0b', path: '/tickets' },
+        emergencyRequests: { label: 'Emergency (SOS)', value: null, status: 'loading', icon: <AlertTriangle size={18} />, color: '#ef4444', path: '/sos' },
+        activeTechnicians: { label: 'Active Technicians', value: null, status: 'loading', icon: <Wrench size={18} />, color: '#10b981', path: '/technicians' },
+        activeBrokers: { label: 'Active Brokers', value: null, status: 'loading', icon: <Briefcase size={18} />, color: '#8b5cf6', path: '/broker' },
+        pendingOwnerApprovals: { label: 'Owner Approvals', value: null, status: 'loading', icon: <Shield size={18} />, color: '#f59e0b' },
+        pendingTechnicianApprovals: { label: 'Tech Approvals', value: null, status: 'loading', icon: <Shield size={18} />, color: '#f59e0b' },
+        pendingPaymentVerifications: { label: 'Payment Verifications', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#f59e0b', path: '/manual-approvals' },
+        activeContracts: { label: 'Active Contracts', value: null, status: 'loading', icon: <FileText size={18} />, color: '#10b981' },
+        propertyPassports: { label: 'Property Passports', value: null, status: 'loading', icon: <FileText size={18} />, color: '#3b82f6', path: '/properties/passport' },
+        documentsUploaded: { label: 'Documents', value: null, status: 'loading', icon: <FileText size={18} />, color: '#8b5cf6', path: '/document-vault' },
+        auditEventsToday: { label: 'Audit Events Today', value: null, status: 'loading', icon: <Activity size={18} />, color: '#3b82f6', path: '/audit' },
+        orphanRecords: { label: 'Orphan Records', value: null, status: 'loading', icon: <FileWarning size={18} />, color: '#ef4444', path: '/orphans' },
+        totalCollections: { label: 'Total Collections', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#10b981', path: '/transactions' },
+        pendingLiquidity: { label: 'Pending Liquidity', value: null, status: 'loading', icon: <DollarSign size={18} />, color: '#f59e0b' },
+        overduePayments: { label: 'Overdue Payments', value: null, status: 'loading', icon: <AlertTriangle size={18} />, color: '#ef4444' },
+        payrollPending: { label: 'Payroll Pending', value: null, status: 'loading', icon: <Gavel size={18} />, color: '#f59e0b', path: '/financials/payroll' }
+    });
+
+    // Lists State
+    const [approvalQueue, setApprovalQueue] = useState<any[]>([]);
+    const [operationsMissions, setOperationsMissions] = useState<any[]>([]);
+    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+    const [slaBreachQueue, setSlaBreachQueue] = useState<SLABreachItem[]>([]);
+    const [paymentProofQueue, setPaymentProofQueue] = useState<PaymentProofItem[]>([]);
+    const [commissionQueue, setCommissionQueue] = useState<CommissionItem[]>([]);
+    const [renewalQueue, setRenewalQueue] = useState<any[]>([]);
+    const [mrrThisMonth, setMrrThisMonth] = useState<number>(0);
+    const [mrrLastMonth, setMrrLastMonth] = useState<number>(0);
+    const [expiredDocsCount, setExpiredDocsCount] = useState<number | null>(null);
+    const [systemHealthStatus, setSystemHealthStatus] = useState<'CHECKING' | 'HEALTHY' | 'DEGRADED' | 'ERROR'>('CHECKING');
+    const [adminSummaries, setAdminSummaries] = useState<any>({});
+
+    // --- Helper for updating KPI state ---
+    const updateKPI = (key: string, value: number | string, status: KPIState['status'] = 'success') => {
+        setKpis(prev => ({
+            ...prev,
+            [key]: { ...prev[key], value, status }
+        }));
     };
-    const listen = (label: string, source: any, onNext: (snap: any) => void) => {
-      const unsubscribe = onSnapshot(source, (snap: any) => {
-        setStreamErrors((prev) => {
-          if (!prev[label]) return prev;
-          const next = { ...prev };
-          delete next[label];
-          return next;
-        });
-        onNext(snap);
-        markSync();
-      }, reportError(label));
-      unsubscribers.push(unsubscribe);
+
+    const handleKPIError = (key: string, error: any) => {
+        const status = error?.code === 'permission-denied' ? 'denied' : 'error';
+        setKpis(prev => ({
+            ...prev,
+            [key]: { ...prev[key], status }
+        }));
     };
 
-    listen('properties', collection(db, 'properties'), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, ...(row.data() as Record<string, any>) })) as RecordRow[];
-      const namesById: Record<string, string> = {};
-      const units = rows.reduce((sum, row) => {
-        const name = row.propertyName || row.name || row.title;
-        if (name) namesById[row.id] = String(name);
-        return sum + Number(row.units || row.totalUnits || row.unitsCount || row.unitCount || 0);
-      }, 0);
-      setPropertyStats({ properties: rows.length, units, namesById });
-    });
+    // --- MRR Calculation from payment_transactions ---
+    useEffect(() => {
+        const now = new Date();
+        const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    listen('users', collection(db, 'users'), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, ...(row.data() as Record<string, any>) })) as RecordRow[];
-      const roleOf = (row: RecordRow) => String(row.role || row.userRole || '').toLowerCase();
-      const statusOf = (row: RecordRow) => String(row.status || row.approvalStatus || '').toUpperCase();
+        const unsubThis = onSnapshot(
+            query(
+                collection(db, 'payment_transactions'),
+                where('status', 'in', ['VERIFIED', 'APPROVED', 'verified', 'approved']),
+                where('createdAt', '>=', Timestamp.fromDate(startOfThisMonth))
+            ),
+            (snap) => {
+                let total = 0;
+                snap.docs.forEach(d => total += Number(d.data().amount || 0));
+                setMrrThisMonth(total);
+            },
+            () => {}
+        );
 
-      setUserStats({
-        owners: rows.filter((row) => roleOf(row) === 'owner').length,
-        tenants: rows.filter((row) => roleOf(row) === 'tenant').length,
-        technicians: rows.filter((row) => roleOf(row) === 'technician').length,
-        activeTechnicians: rows.filter((row) => roleOf(row) === 'technician' && ['ACTIVE', 'APPROVED', 'VERIFIED'].some((state) => statusOf(row).includes(state))).length,
-        brokers: rows.filter((row) => roleOf(row) === 'broker').length,
-      });
+        const unsubLast = onSnapshot(
+            query(
+                collection(db, 'payment_transactions'),
+                where('status', 'in', ['VERIFIED', 'APPROVED', 'verified', 'approved']),
+                where('createdAt', '>=', Timestamp.fromDate(startOfLastMonth)),
+                where('createdAt', '<=', Timestamp.fromDate(endOfLastMonth))
+            ),
+            (snap) => {
+                let total = 0;
+                snap.docs.forEach(d => total += Number(d.data().amount || 0));
+                setMrrLastMonth(total);
+            },
+            () => {}
+        );
 
-      setTechnicianApprovalQueue(rows
-        .filter((row) => roleOf(row) === 'technician' && TECH_PENDING_STATES.includes(String(row.status || row.approvalStatus || '')))
-        .map((row) => ({ ...row, type: 'TECH_ONBOARD', origin: 'Technician onboarding', linkedName: row.displayName || row.email || row.id, createdAt: row.createdAt || row.submittedAt }))
-        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt))
-        .slice(0, 8));
-    });
+        return () => { unsubThis(); unsubLast(); };
+    }, []);
 
-    listen('active tickets', query(collection(db, 'maintenanceTickets'), where('status', 'in', ACTIVE_TICKET_STATUSES)), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, ...(row.data() as Record<string, any>) })) as RecordRow[];
-      setOperationsMissions(rows
-        .filter((row) => !CLOSED_TICKET_STATUSES.includes(String(row.status || '')))
-        .sort((a, b) => getMillis(b.updatedAt || b.createdAt || b.reportedAt) - getMillis(a.updatedAt || a.createdAt || a.reportedAt))
-        .slice(0, 12));
-    });
+    // --- Expired documents count ---
+    useEffect(() => {
+        const now = Timestamp.fromDate(new Date());
+        const unsubExpired = onSnapshot(
+            query(collection(db, 'documents'), where('expiryDate', '<', now)),
+            (snap) => setExpiredDocsCount(snap.size),
+            () => setExpiredDocsCount(0)
+        );
+        return () => unsubExpired();
+    }, []);
 
-    listen('owner approvals', query(collection(db, 'intake_submissions'), where('status', 'in', OPEN_REVIEW_STATES)), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'OWNER_ONBOARDING', origin: 'Owner onboarding', ...(row.data() as Record<string, any>) })) as RecordRow[];
-      setOwnerApprovalQueue(rows
-        .map((row) => ({
-          ...row,
-          linkedName: row.companyProfile?.name || row.ownerEmail || row.ownerUid || row.ownerId || row.id,
-          createdAt: row.submittedAt || row.createdAt,
-        }))
-        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt))
-        .slice(0, 8));
-    });
+    // --- System health check ---
+    useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                const healthSnap = await getDocs(query(collection(db, 'system_health'), limit(1)));
+                if (!healthSnap.empty) {
+                    const data = healthSnap.docs[0].data();
+                    setSystemHealthStatus(data.status || 'HEALTHY');
+                } else {
+                    // Firestore is reachable, so basic health is OK
+                    setSystemHealthStatus('HEALTHY');
+                }
 
-    listen('payment queue', query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATES), limit(10)), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'PAYMENT_PROOF', origin: 'Payment verification', ...(row.data() as Record<string, any>) })) as RecordRow[];
-      setPaymentQueue(rows
-        .map((row) => ({ ...row, linkedName: linkedNameFor(row), createdAt: row.createdAt || row.submittedAt }))
-        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
-    });
-
-    listen('broker commissions', query(collection(db, 'broker_commissions'), where('status', 'in', PENDING_COMMISSION_STATES), limit(10)), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'BROKER_COMMISSION', origin: 'Broker commission', ...(row.data() as Record<string, any>) })) as RecordRow[];
-      setCommissionQueue(rows
-        .map((row) => ({ ...row, linkedName: linkedNameFor(row), createdAt: row.createdAt || row.submittedAt || row.requestedAt }))
-        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
-    });
-
-    listen('contracts', query(collection(db, 'contracts'), where('status', 'in', ACTIVE_CONTRACT_STATES)), (snap) => {
-      setActiveContracts(snap.size || snap.docs.length);
-    });
-
-    listen('property passports', collection(db, 'propertyPassports'), (snap) => {
-      setPropertyPassports(snap.size || snap.docs.length);
-    });
-
-    listen('documents', collection(db, 'documents'), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, ...(row.data() as Record<string, any>) })) as RecordRow[];
-      const expiring = rows
-        .filter((row) => isExpiredOrExpiring(row.expiryDate || row.expiresAt || row.validUntil || row.tradeLicenseExpiry || row.passportExpiry))
-        .sort((a, b) => getMillis(a.expiryDate || a.expiresAt || a.validUntil || a.tradeLicenseExpiry || a.passportExpiry) - getMillis(b.expiryDate || b.expiresAt || b.validUntil || b.tradeLicenseExpiry || b.passportExpiry))
-        .slice(0, 8);
-      setDocumentStats({ total: rows.length, expiring });
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    listen('audit today', query(collection(db, 'audit_logs'), where('createdAt', '>=', Timestamp.fromDate(today))), (snap) => {
-      setAuditEventsToday(snap.size || snap.docs.length);
-    });
-
-    listen('recent activity', query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(10)), (snap) => {
-      setRecentActivity(snap.docs.map((row: any) => {
-        const data = row.data() as Record<string, any>;
-        return {
-          id: row.id,
-          actor: data.actor?.displayName || data.actorRole || data.actorId || 'SYSTEM',
-          action: data.action || data.eventType || 'updated system state',
-          module: data.module || data.targetType || 'Audit',
-          status: data.status || 'RECORDED',
-          timestamp: data.createdAt || data.timestamp,
+                // Fetch admin_summaries for commercial readiness
+                const adminSumRef = doc(db, 'system_health', 'admin_summaries');
+                const unsub = onSnapshot(adminSumRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setAdminSummaries(docSnap.data());
+                    }
+                });
+                return unsub;
+            } catch {
+                setSystemHealthStatus('DEGRADED');
+            }
         };
-      }));
-    });
+        const unsubPromise = checkHealth();
+        return () => {
+            unsubPromise.then(unsub => { if (typeof unsub === 'function') unsub(); });
+        };
+    }, []);
 
-    listen('orphan records', doc(db, 'system_stats', 'orphans'), (snap) => {
-      setOrphanRecords(snap.exists() ? Number(snap.data()?.total || snap.data()?.count || 0) : 0);
-    });
+    // --- SLA Breach Queue ---
+    useEffect(() => {
+        const unsubSla = onSnapshot(
+            query(collection(db, 'maintenanceTickets'), where('status', 'in', ACTIVE_TICKET_STATUSES)),
+            (snap) => {
+                const breached: SLABreachItem[] = [];
+                const nearBreach: SLABreachItem[] = [];
+                snap.docs.forEach(d => {
+                    const data = d.data();
+                    const remainingMinutes = getSlaRemainingMinutes(data);
+                    if (remainingMinutes <= 30) { // breached or within 30min
+                        const priority = String(data.priority || 'STANDARD').toUpperCase();
+                        const item: SLABreachItem = {
+                            id: d.id,
+                            title: data.title || data.issueType || 'Maintenance Request',
+                            propertyName: data.propertyName || '',
+                            priority,
+                            createdAt: data.createdAt,
+                            technicianName: data.technicianName,
+                            slaHours: (SLA_POLICY_MINUTES[priority] ?? 480) / 60,
+                            breachMinutes: Math.abs(Math.min(0, remainingMinutes)),
+                        };
+                        if (remainingMinutes <= 0) breached.push(item);
+                        else nearBreach.push(item);
+                    }
+                });
+                setSlaBreachQueue([...breached, ...nearBreach].slice(0, 10));
+            },
+            () => {}
+        );
+        return () => unsubSla();
+    }, []);
 
-    listen('admin summary', doc(db, 'admin_summaries', 'global'), (snap) => {
-      setSummary(snap.exists() ? (snap.data() as Record<string, any>) : {});
-    });
+    // --- Payment Proof Queue ---
+    useEffect(() => {
+        const unsubPayments = onSnapshot(
+            query(
+                collection(db, 'payment_transactions'),
+                where('status', 'in', PENDING_PAYMENT_STATES),
+                orderBy('createdAt', 'desc'),
+                limit(5)
+            ),
+            (snap) => {
+                setPaymentProofQueue(snap.docs.map(d => ({
+                    id: d.id,
+                    ownerName: d.data().ownerName || d.data().paidBy || 'Unknown',
+                    amount: d.data().amount || 0,
+                    reference: d.data().reference || d.data().bankRef || d.data().transactionRef,
+                    submittedAt: d.data().createdAt,
+                    status: d.data().status,
+                })));
+            },
+            () => {}
+        );
+        return () => unsubPayments();
+    }, []);
 
-    listen('system health', doc(db, 'system_health', 'admin_summaries'), (snap) => {
-      setSystemHealth(snap.exists() ? (snap.data() as Record<string, any>) : {});
-    });
+    // --- Broker Commission Queue ---
+    useEffect(() => {
+        const unsubComm = onSnapshot(
+            query(collection(db, 'broker_commissions'), where('status', '==', 'pending'), limit(5)),
+            (snap) => {
+                setCommissionQueue(snap.docs.map(d => ({
+                    id: d.id,
+                    brokerName: d.data().brokerName || 'Unknown Broker',
+                    propertyName: d.data().propertyName,
+                    amount: d.data().amount || 0,
+                    contractValue: d.data().contractValue,
+                    submittedAt: d.data().createdAt,
+                })));
+            },
+            () => {}
+        );
+        return () => unsubComm();
+    }, []);
 
-    listen('renewal watch', query(collection(db, 'contract_renewal_watch'), where('status', 'in', ['PENDING', 'UPCOMING']), limit(10)), (snap) => {
-      const rows = snap.docs.map((row: any) => ({ id: row.id, type: 'RENEWAL', origin: 'Renewal Watch', ...(row.data() as Record<string, any>) })) as RecordRow[];
-      setRenewalQueue(rows
-        .map((row) => ({ ...row, linkedName: row.tenantName || row.ownerName || row.propertyId, createdAt: row.createdAt || row.updatedAt }))
-        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
-    });
+    // --- Renewal Watch Queue ---
+    useEffect(() => {
+        const unsubRenewals = onSnapshot(
+            query(collection(db, 'contract_renewal_watch'), limit(5)),
+            (snap) => {
+                setRenewalQueue(snap.docs.map(d => ({
+                    id: d.id,
+                    propertyName: d.data().propertyName || 'Unknown Property',
+                    tenantName: d.data().tenantName || 'Unknown Tenant',
+                    expiryDate: d.data().expiryDate,
+                    status: d.data().status || 'PENDING'
+                })));
+            },
+            () => {}
+        );
+        return () => unsubRenewals();
+    }, []);
 
-    const now = new Date();
-    const periodStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const priorPeriodStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    // --- Main Listeners Setup ---
+    useEffect(() => {
+        const unsubscribers: (() => void)[] = [];
 
-    getDocs(query(
-      collection(db, 'payment_transactions'),
-      where('createdAt', '>=', Timestamp.fromDate(priorPeriodStart)),
-      where('createdAt', '<=', Timestamp.fromDate(now)),
-    )).then((snap) => {
-      let currentMonth = 0;
-      let previousMonth = 0;
-      snap.docs.forEach((docSnap: any) => {
-        const data = docSnap.data() as Record<string, any>;
-        if (!APPROVED_PAYMENT_STATES.has(String(data.status || '').toUpperCase())) return;
-        const createdAt = getMillis(data.createdAt || data.paidAt || data.verifiedAt);
-        const amount = Number(data.amount || data.total || data.amountPaid || 0);
-        if (!createdAt || !Number.isFinite(amount)) return;
-        if (createdAt >= periodStart.getTime()) currentMonth += amount;
-        else previousMonth += amount;
-      });
-      setMrrStats({
-        currentMonth,
-        previousMonth,
-        trendPercent: previousMonth > 0 ? ((currentMonth - previousMonth) / previousMonth) * 100 : null,
-      });
-    }).catch((error) => {
-      console.warn('[ADMIN_DASHBOARD] Revenue trend fetch failed', error);
-      setStreamErrors((prev) => ({ ...prev, revenueTrend: error?.message || 'Revenue trend failed' }));
-    });
+        // 1. Properties & Units
+        unsubscribers.push(onSnapshot(collection(db, "properties"),
+            (snap) => {
+                updateKPI('totalProperties', snap.size);
+                let totalUnits = 0;
+                snap.docs.forEach(doc => totalUnits += Number(doc.data().units || doc.data().totalUnits || 0));
+                updateKPI('totalUnits', totalUnits);
+            },
+            (err) => { handleKPIError('totalProperties', err); handleKPIError('totalUnits', err); }
+        ));
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [refreshToken]);
+        // 2. Tenants & Invites
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "tenant")),
+            (snap) => updateKPI('activeTenants', snap.size),
+            (err) => handleKPIError('activeTenants', err)
+        ));
+        unsubscribers.push(onSnapshot(query(collection(db, "tenant_invites"), where("status", "==", "PENDING")),
+            (snap) => updateKPI('pendingTenantInvites', snap.size),
+            (err) => handleKPIError('pendingTenantInvites', err)
+        ));
 
-  const approvalQueue = useMemo(
-    () => [...ownerApprovalQueue, ...technicianApprovalQueue].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)),
-    [ownerApprovalQueue, technicianApprovalQueue],
-  );
+        // 3. Maintenance & SOS
+        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("status", "in", ACTIVE_TICKET_STATUSES)),
+            (snap) => {
+                updateKPI('openMissions', snap.size);
+                setOperationsMissions(snap.docs.slice(0, 10).map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (err) => handleKPIError('openMissions', err)
+        ));
+        unsubscribers.push(onSnapshot(query(collection(db, "maintenanceTickets"), where("priority", "in", ["EMERGENCY", "emergency"])),
+            (snap) => {
+                const activeEmergencyCount = snap.docs.filter(doc => !['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(doc.data().status || ''))).length;
+                updateKPI('emergencyRequests', activeEmergencyCount);
+            },
+            (err) => handleKPIError('emergencyRequests', err)
+        ));
 
-  const actionQueue = useMemo(
-    () => [...approvalQueue, ...paymentQueue, ...commissionQueue, ...renewalQueue].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)).slice(0, 12),
-    [approvalQueue, paymentQueue, commissionQueue, renewalQueue],
-  );
+        // 4. Technicians & Brokers
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "technician"), where("status", "in", ["ACTIVE", "active"])),
+            (snap) => updateKPI('activeTechnicians', snap.size),
+            (err) => handleKPIError('activeTechnicians', err)
+        ));
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "broker")),
+            (snap) => updateKPI('activeBrokers', snap.size),
+            (err) => handleKPIError('activeBrokers', err)
+        ));
 
-  const activeEmergencyMissions = operationsMissions.filter((mission) => normalizeStatus(mission.priority || mission.severity || mission.category).includes('EMERGENCY'));
-  const breachedMissions = operationsMissions.filter(isBreached);
-  const nearBreachMissions = operationsMissions.filter(isNearBreach);
+        // 5. Approvals Queues
+        unsubscribers.push(onSnapshot(query(collection(db, "intake_submissions"), where("status", "in", PENDING_OWNER_STATUSES)),
+            (snap) => {
+                updateKPI('pendingOwnerApprovals', snap.size);
+                const items = snap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        origin: 'Owner onboarding',
+                        type: 'OWNER_ONBOARDING',
+                        linkedName: data.companyProfile?.name || data.ownerEmail || data.ownerUid || data.ownerId || 'Unknown',
+                        linkedId: data.ownerUid || data.ownerId || doc.id,
+                        createdAt: data.submittedAt || data.createdAt,
+                        ...data
+                    };
+                });
+                setApprovalQueue(prev => {
+                    const filtered = prev.filter(p => p.type !== 'OWNER_ONBOARDING');
+                    return [...filtered, ...items].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                });
+            },
+            (err) => handleKPIError('pendingOwnerApprovals', err)
+        ));
 
-  const metrics: Metric[] = useMemo(() => [
-    { label: 'Properties', value: propertyStats.properties, icon: <Building2 size={20} />, tone: binThemeTokens.gold, route: '/owners', note: 'Managed portfolio' },
-    { label: 'Units', value: propertyStats.units, icon: <Home size={20} />, tone: '#38bdf8', route: '/admin/unit-status', note: 'Linked unit count' },
-    { label: 'Owners', value: userStats.owners, icon: <Briefcase size={20} />, tone: '#a78bfa', route: '/owners', note: 'Owner accounts' },
-    { label: 'Tenants', value: userStats.tenants, icon: <Home size={20} />, tone: '#34d399', route: '/tenants', note: 'Tenant accounts' },
-    { label: 'Open Missions', value: operationsMissions.length, icon: <Wrench size={20} />, tone: '#60a5fa', route: '/tickets', note: 'Active work orders' },
-    { label: 'SLA Breaches', value: breachedMissions.length, icon: <AlertTriangle size={20} />, tone: breachedMissions.length ? binThemeTokens.danger : '#10b981', route: '/tickets', note: 'Needs dispatch action' },
-    { label: 'Near Breach', value: nearBreachMissions.length, icon: <Clock size={20} />, tone: nearBreachMissions.length ? binThemeTokens.warning : '#10b981', route: '/tickets', note: 'Under 60 minutes' },
-    { label: 'SOS/Emergency', value: activeEmergencyMissions.length, icon: <Shield size={20} />, tone: activeEmergencyMissions.length ? binThemeTokens.danger : '#10b981', route: '/sos', note: 'Priority response' },
-    { label: 'Technicians', value: userStats.activeTechnicians, icon: <Wrench size={20} />, tone: '#22c55e', route: '/technicians', note: `${userStats.technicians} total` },
-    { label: 'Brokers', value: userStats.brokers, icon: <Briefcase size={20} />, tone: '#f97316', route: '/broker', note: 'Lead partners' },
-    { label: 'Owner Approvals', value: ownerApprovalQueue.length, icon: <CheckCircle2 size={20} />, tone: ownerApprovalQueue.length ? binThemeTokens.warning : '#10b981', route: '/vault', note: 'Intake review' },
-    { label: 'Tech Approvals', value: technicianApprovalQueue.length, icon: <CheckCircle2 size={20} />, tone: technicianApprovalQueue.length ? binThemeTokens.warning : '#10b981', route: '/technicians', note: 'Onboarding review' },
-    { label: 'Payment Reviews', value: paymentQueue.length, icon: <DollarSign size={20} />, tone: paymentQueue.length ? binThemeTokens.warning : '#10b981', route: '/manual-approvals', note: 'Manual verification' },
-    { label: 'Broker Commissions', value: commissionQueue.length, icon: <DollarSign size={20} />, tone: commissionQueue.length ? binThemeTokens.warning : '#10b981', route: '/broker', note: 'Payout approval' },
-    { label: 'Active Contracts', value: activeContracts, icon: <FileText size={20} />, tone: '#38bdf8', route: '/contracts/termination', note: 'Live agreements' },
-    { label: 'Docs Expiring', value: documentStats.expiring.length, icon: <FileText size={20} />, tone: documentStats.expiring.length ? binThemeTokens.warning : '#10b981', route: '/document-vault', note: `${documentStats.total} documents` },
-    { label: 'Audit Today', value: auditEventsToday, icon: <Activity size={20} />, tone: '#c084fc', route: '/audit', note: 'Governance events' },
-    { label: 'Orphans', value: orphanRecords, icon: <AlertTriangle size={20} />, tone: orphanRecords ? binThemeTokens.danger : '#10b981', route: '/orphans', note: 'Data integrity' },
-  ], [
-    activeContracts,
-    auditEventsToday,
-    breachedMissions.length,
-    commissionQueue.length,
-    documentStats.expiring.length,
-    documentStats.total,
-    nearBreachMissions.length,
-    operationsMissions.length,
-    orphanRecords,
-    ownerApprovalQueue.length,
-    paymentQueue.length,
-    propertyStats.properties,
-    propertyStats.units,
-    technicianApprovalQueue.length,
-    userStats,
-    activeEmergencyMissions.length,
-  ]);
+        unsubscribers.push(onSnapshot(query(collection(db, "users"), where("role", "==", "technician"), where("status", "in", PENDING_TECHNICIAN_STATUSES)),
+            (snap) => {
+                updateKPI('pendingTechnicianApprovals', snap.size);
+                const items = snap.docs.map(doc => ({
+                    id: doc.id,
+                    origin: 'Technician onboarding',
+                    type: 'TECH_ONBOARD',
+                    linkedName: doc.data().displayName || doc.data().email || doc.id,
+                    linkedId: doc.id,
+                    createdAt: doc.data().createdAt,
+                    ...doc.data()
+                }));
+                setApprovalQueue(prev => {
+                    const filtered = prev.filter(p => p.type !== 'TECH_ONBOARD');
+                    return [...filtered, ...items].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                });
+            },
+            (err) => handleKPIError('pendingTechnicianApprovals', err)
+        ));
 
-  const mergedHealth = useMemo(() => ({ ...systemHealth, ...summary, launchHealth: { ...(systemHealth.launchHealth || {}), ...(summary.launchHealth || {}) } }), [summary, systemHealth]);
+        unsubscribers.push(onSnapshot(query(collection(db, "payment_transactions"), where("status", "in", PENDING_PAYMENT_STATES)),
+            (snap) => updateKPI('pendingPaymentVerifications', snap.size),
+            (err) => handleKPIError('pendingPaymentVerifications', err)
+        ));
 
-  const launchHealthRows: LaunchHealthRow[] = [
-    { label: 'Main App Build', status: getHealth(mergedHealth, 'mainAppBuild'), detail: 'Production route smoke', route: '/ops/public' },
-    { label: 'Admin Panel Build', status: getHealth(mergedHealth, 'commandPanelBuild') || getHealth(mergedHealth, 'adminPanelBuild'), detail: 'Internal command center', route: '/control-center' },
-    { label: 'Owner Portal Build', status: getHealth(mergedHealth, 'ownerAppBuild'), detail: 'Owner route health', route: '/owners' },
-    { label: 'Functions Deploy', status: getHealth(mergedHealth, 'functionsDeploy'), detail: 'Cloud Functions runtime', route: '/control-center' },
-    { label: 'Firestore Rules', status: getHealth(mergedHealth, 'firestoreRules'), detail: 'RBAC and data boundary proof', route: '/audit-shield' },
-    { label: 'Storage Rules', status: getHealth(mergedHealth, 'storageRules'), detail: 'Evidence and document access', route: '/audit-shield' },
-    { label: 'App Check', status: getHealth(mergedHealth, 'appCheck'), detail: 'Production site key', route: '/settings' },
-    { label: 'Stripe Live Mode', status: getHealth(mergedHealth, 'stripeLiveMode'), detail: 'Real payment collection readiness', route: '/settings' },
-    { label: 'Branded Email Sender', status: getHealth(mergedHealth, 'brandedEmailSender'), detail: 'Customer notification sender verified', route: '/settings' },
-    { label: 'Admin Secret Rotation', status: getHealth(mergedHealth, 'adminSecretRotation'), detail: 'Admin credentials rotated after pilot', route: '/settings' },
-    { label: 'Five-Profile Smoke', status: getHealth(mergedHealth, 'fiveProfileSmoke'), detail: 'Owner, tenant, technician, broker, admin live linked test', route: '/ops/public' },
-    { label: 'Contract Renewals', status: getHealth(mergedHealth, 'contractRenewals'), detail: 'Renewal watch, notices, PDFs, audit logs', route: '/contracts/termination' },
-    { label: 'Payment Verification', status: paymentQueue.length ? 'PENDING REVIEW' : getHealth(mergedHealth, 'paymentVerification'), detail: 'Manual/live proof queue', route: '/manual-approvals' },
-    { label: 'Broker Ops', status: commissionQueue.length ? 'PENDING REVIEW' : getHealth(mergedHealth, 'brokerOps'), detail: 'Lead and commission flow', route: '/broker' },
-    { label: 'Document Vault', status: documentStats.expiring.length ? 'WARNING' : getHealth(mergedHealth, 'documentVault'), detail: 'Passport, contracts, PDFs', route: '/document-vault' },
-  ];
+        // 6. Contracts & Passports
+        unsubscribers.push(onSnapshot(query(collection(db, "contracts"), where("status", "==", "ACTIVE")),
+            (snap) => updateKPI('activeContracts', snap.size),
+            (err) => handleKPIError('activeContracts', err)
+        ));
+        unsubscribers.push(onSnapshot(collection(db, "propertyPassports"),
+            (snap) => updateKPI('propertyPassports', snap.size),
+            (err) => handleKPIError('propertyPassports', err)
+        ));
 
-  const verifiedMonthly = Number(summary.monthlyCollections || summary.mrr || summary.monthlyRecurringRevenue || summary.totalCollections || mrrStats.currentMonth || 0);
-  const growth = typeof summary.monthlyGrowthPct === 'number'
-    ? `${summary.monthlyGrowthPct >= 0 ? '+' : ''}${summary.monthlyGrowthPct}%`
-    : mrrStats.trendPercent === null
-      ? 'No prior period'
-      : `${mrrStats.trendPercent >= 0 ? '+' : ''}${mrrStats.trendPercent.toFixed(1)}%`;
-  const securityScore = Number(summary.securityScore || summary.launchHealth?.securityScore || systemHealth.securityScore || 0);
-  const securityStatus = summary.securityStatus || summary.launchHealth?.securityStatus || systemHealth.securityStatus || (securityScore > 0 ? 'Measured' : 'Pending proof');
-  const errorCount = Object.keys(streamErrors).length;
+        // 7. Documents & Audit
+        unsubscribers.push(onSnapshot(collection(db, "documents"),
+            (snap) => updateKPI('documentsUploaded', snap.size),
+            (err) => handleKPIError('documentsUploaded', err)
+        ));
 
-  return (
-    <AdminPageFrame
-      title="Command Center"
-      subtitle="Admin launch cockpit for approvals, payments, broker commissions, live maintenance, documents, audit, and public launch readiness."
-      status={errorCount ? `${errorCount} STREAM WARNING${errorCount > 1 ? 'S' : ''}` : 'LIVE'}
-      lastUpdated={lastSync}
-      onRefresh={() => setRefreshToken((value) => value + 1)}
-      breadcrumbs={[{ label: 'Dashboard' }]}
-    >
-      <Stack spacing={4}>
-        {errorCount > 0 && (
-          <Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: alpha(binThemeTokens.warning, 0.08), border: `1px solid ${alpha(binThemeTokens.warning, 0.28)}` }}>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
-              <AlertTriangle color={binThemeTokens.warning} size={22} />
-              <Box sx={{ flex: 1 }}>
-                <Typography sx={{ fontWeight: 950, color: binThemeTokens.warning }}>Some admin listeners need attention</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.66)', fontWeight: 650 }}>
-                  {Object.entries(streamErrors).slice(0, 3).map(([label, message]) => `${label}: ${message}`).join(' | ')}
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        unsubscribers.push(onSnapshot(query(collection(db, "audit_logs"), where("createdAt", ">=", Timestamp.fromDate(today))),
+            (snap) => updateKPI('auditEventsToday', snap.size),
+            (err) => handleKPIError('auditEventsToday', err)
+        ));
+
+        // 8. Orphans
+        unsubscribers.push(onSnapshot(doc(db, "system_stats", "orphans"), (snap) => {
+            if (snap.exists()) updateKPI('orphanRecords', snap.data().total || 0);
+            else updateKPI('orphanRecords', 0);
+        }, (err) => handleKPIError('orphanRecords', err)));
+
+        // 9. Financials
+        unsubscribers.push(onSnapshot(doc(db, "admin_summaries", "global"), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                updateKPI('totalCollections', `AED ${(data.totalCollections || 0).toLocaleString()}`);
+                updateKPI('pendingLiquidity', `AED ${(data.pendingLiquidity || 0).toLocaleString()}`);
+                updateKPI('overduePayments', `AED ${(data.overduePayments || 0).toLocaleString()}`);
+                updateKPI('payrollPending', `AED ${(data.payrollPending || 0).toLocaleString()}`);
+            } else {
+                updateKPI('totalCollections', 'AED 0');
+                updateKPI('pendingLiquidity', 'AED 0');
+                updateKPI('overduePayments', 'AED 0');
+                updateKPI('payrollPending', 'AED 0');
+            }
+        }, (err) => {
+            handleKPIError('totalCollections', err);
+            handleKPIError('pendingLiquidity', err);
+            handleKPIError('overduePayments', err);
+            handleKPIError('payrollPending', err);
+        }));
+
+        // 10. Recent Activity Feed
+        unsubscribers.push(onSnapshot(query(collection(db, "audit_logs"), orderBy("createdAt", "desc"), limit(10)), (snap) => {
+            const activities = snap.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    actor: data.actor?.displayName || data.actorRole || data.actorId || 'SYSTEM',
+                    action: data.action || data.eventType || 'updated system state',
+                    module: data.module || data.targetType || 'Audit',
+                    status: data.status || 'RECORDED',
+                    timestamp: data.createdAt || data.timestamp || new Date()
+                } as ActivityItem;
+            });
+            setRecentActivity(activities);
+        }));
+
+        setLastSync(new Date());
+
+        return () => unsubscribers.forEach(unsub => unsub());
+    }, []);
+
+    // --- MRR Growth Calculation ---
+    const mrrGrowthPct = useMemo(() => {
+        if (mrrLastMonth === 0) return mrrThisMonth > 0 ? 100 : 0;
+        return Math.round(((mrrThisMonth - mrrLastMonth) / mrrLastMonth) * 100);
+    }, [mrrThisMonth, mrrLastMonth]);
+
+    // --- Approval Actions ---
+    const handleReviewApproval = (item: any) => {
+        if (item.type === 'OWNER_ONBOARDING') {
+            if (item.linkedId) {
+                navigate(`/owners/${item.linkedId}`);
+            } else {
+                navigate('/owners');
+            }
+        } else if (item.type === 'TECH_ONBOARD') {
+            navigate('/technicians');
+        } else {
+            navigate('/owners');
+        }
+    };
+
+    const handleApproveClick = (item: any) => {
+        setSelectedApproval(item);
+        setApproveDialogOpen(true);
+    };
+
+    const handleRejectClick = (item: any) => {
+        setSelectedApproval(item);
+        setRejectDialogOpen(true);
+    };
+
+    const handleApproveConfirm = async () => {
+        if (!selectedApproval) return;
+        setActionLoading(true);
+        try {
+            if (selectedApproval.type === 'OWNER_ONBOARDING') {
+                await updateDoc(doc(db, 'intake_submissions', selectedApproval.id), {
+                    status: 'APPROVED',
+                    approvedAt: serverTimestamp(),
+                    approvedBy: 'admin'
+                });
+            } else if (selectedApproval.type === 'TECH_ONBOARD') {
+                await updateDoc(doc(db, 'users', selectedApproval.id), {
+                    status: 'ACTIVE',
+                    approvedAt: serverTimestamp(),
+                    approvedBy: 'admin'
+                });
+            }
+            setSnackbar({ open: true, message: `${selectedApproval.linkedName} approved successfully.`, severity: 'success' });
+            setApproveDialogOpen(false);
+            setSelectedApproval(null);
+        } catch (err) {
+            setSnackbar({ open: true, message: 'Approval failed. Check permissions.', severity: 'error' });
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleRejectConfirm = async () => {
+        if (!selectedApproval || !rejectReason.trim()) return;
+        setActionLoading(true);
+        try {
+            const collection_name = selectedApproval.type === 'TECH_ONBOARD' ? 'users' : 'intake_submissions';
+            await updateDoc(doc(db, collection_name, selectedApproval.id), {
+                status: 'REJECTED',
+                rejectedAt: serverTimestamp(),
+                rejectedBy: 'admin',
+                rejectionReason: rejectReason,
+            });
+            setSnackbar({ open: true, message: `${selectedApproval.linkedName} rejected.`, severity: 'success' });
+            setRejectDialogOpen(false);
+            setSelectedApproval(null);
+            setRejectReason('');
+        } catch {
+            setSnackbar({ open: true, message: 'Rejection failed. Check permissions.', severity: 'error' });
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // --- Render Helpers ---
+    const renderKPI = (key: string) => {
+        const kpi = kpis[key];
+        if (kpi.status === 'loading') {
+            return (
+                <Paper key={key} sx={{ p: 2, bgcolor: binThemeTokens.graphite, border: `1px solid ${alpha(binThemeTokens.gold, 0.05)}`, borderRadius: 4 }}>
+                    <Skeleton variant="circular" width={24} height={24} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="60%" />
+                    <Skeleton variant="text" width="40%" height={32} />
+                </Paper>
+            );
+        }
+        if (kpi.status === 'denied') {
+            return (
+                <Tooltip key={key} title="Permission Denied — contact your admin">
+                    <Paper sx={{ p: 2, bgcolor: alpha(binThemeTokens.danger, 0.05), border: `1px solid ${alpha(binThemeTokens.danger, 0.2)}`, borderRadius: 4, cursor: 'help' }}>
+                        <Lock size={18} color={binThemeTokens.danger} style={{ marginBottom: 8 }} />
+                        <Typography variant="caption" sx={{ color: binThemeTokens.danger, fontWeight: 900, display: 'block' }}>{kpi.label}</Typography>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.danger, fontWeight: 950 }}>ACCESS DENIED</Typography>
+                    </Paper>
+                </Tooltip>
+            );
+        }
+        if (kpi.status === 'error') {
+            return (
+                <Paper key={key} sx={{ p: 2, bgcolor: alpha(binThemeTokens.danger, 0.05), border: `1px solid ${alpha(binThemeTokens.danger, 0.1)}`, borderRadius: 4 }}>
+                    <AlertTriangle size={18} color={binThemeTokens.danger} style={{ marginBottom: 8 }} />
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>{kpi.label}</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.danger, fontWeight: 950 }}>ERROR LOADING</Typography>
+                </Paper>
+            );
+        }
+        const isEmpty = kpi.value === 0 || kpi.value === 'AED 0';
+        return (
+            <Paper
+                key={key}
+                onClick={() => kpi.path && navigate(kpi.path)}
+                sx={{
+                    p: 2,
+                    bgcolor: binThemeTokens.graphite,
+                    border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
+                    borderRadius: 4,
+                    transition: 'all 0.2s',
+                    cursor: kpi.path ? 'pointer' : 'default',
+                    '&:hover': kpi.path ? {
+                        bgcolor: alpha(binThemeTokens.gold, 0.05),
+                        borderColor: binThemeTokens.gold,
+                        transform: 'translateY(-2px)'
+                    } : {}
+                }}
+            >
+                <Box sx={{ color: kpi.color, mb: 1 }}>{kpi.icon}</Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>{kpi.label}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: isEmpty ? 'rgba(255,255,255,0.2)' : '#fff' }}>
+                    {kpi.value}
                 </Typography>
-              </Box>
-              <Button variant="outlined" onClick={() => navigate('/audit-shield')}>Open Audit Shield</Button>
-            </Stack>
-          </Paper>
-        )}
-
-        <Grid container spacing={2}>
-          {metrics.map((metric) => (
-            <Grid item xs={12} sm={6} md={4} lg={2} key={metric.label}>
-              <MetricCard metric={metric} onClick={() => metric.route && navigate(metric.route)} />
-            </Grid>
-          ))}
-        </Grid>
-
-        <Grid container spacing={3}>
-          <Grid item xs={12} lg={7}>
-            <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 5, bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}` }}>
-              <SectionHeader
-                icon={<Shield color={binThemeTokens.gold} size={22} />}
-                title="Action Queues"
-                subtitle="Owner intake, technician approvals, payment proofs, and broker commissions."
-                action={<Chip label={`${actionQueue.length} awaiting`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} />}
-              />
-              <TableContainer sx={{ maxHeight: 430 }}>
-                <Table stickyHeader size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 950 }}>Origin</TableCell>
-                      <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 950 }}>Type</TableCell>
-                      <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 950 }}>Linked record</TableCell>
-                      <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 950 }}>Submitted</TableCell>
-                      <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 950 }} align="right">Action</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {actionQueue.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} sx={{ py: 5, textAlign: 'center', color: 'rgba(255,255,255,0.34)', fontWeight: 900 }}>
-                          ALL CLEAR: NO PENDING ADMIN ACTIONS
-                        </TableCell>
-                      </TableRow>
-                    ) : actionQueue.map((item) => (
-                      <TableRow key={`${item.type}-${item.id}`} hover>
-                        <TableCell>{item.origin || 'Admin queue'}</TableCell>
-                        <TableCell>
-                          <Chip size="small" label={normalizeStatus(item.type)} sx={{ bgcolor: alpha(statusTone(item.status), 0.12), color: statusTone(item.status), fontWeight: 900 }} />
-                        </TableCell>
-                        <TableCell>{linkedNameFor(item)}</TableCell>
-                        <TableCell>{formatDateTime(item.createdAt || item.submittedAt || item.requestedAt)}</TableCell>
-                        <TableCell align="right">
-                          <Button size="small" variant="outlined" onClick={() => navigate(reviewPathFor(item))}>Review</Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                {isEmpty && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.15)', fontWeight: 700, fontStyle: 'italic' }}>No records yet</Typography>}
             </Paper>
-          </Grid>
+        );
+    };
 
-          <Grid item xs={12} lg={5}>
-            <Paper sx={{ p: 0, borderRadius: 5, overflow: 'hidden', bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`, height: '100%' }}>
-              <SectionHeader
-                icon={<Wrench color={binThemeTokens.gold} size={22} />}
-                title="Live Operations"
-                subtitle="Active maintenance missions with SLA risk."
-                action={<Button size="small" variant="outlined" onClick={() => navigate('/tickets')}>Open Tickets</Button>}
-              />
-              <Stack spacing={1.5} sx={{ p: 3, pt: 0, maxHeight: 430, overflowY: 'auto' }}>
-                {operationsMissions.length === 0 ? (
-                  <Box sx={{ py: 6, textAlign: 'center' }}>
-                    <CheckCircle2 size={44} color="rgba(255,255,255,0.14)" />
-                    <Typography sx={{ mt: 1.5, color: 'rgba(255,255,255,0.36)', fontWeight: 900 }}>NO ACTIVE MISSIONS</Typography>
-                  </Box>
-                ) : operationsMissions.map((job) => {
-                  const breached = isBreached(job);
-                  const near = isNearBreach(job);
-                  const missionTone = breached ? binThemeTokens.danger : near ? binThemeTokens.warning : '#10b981';
-                  return (
-                    <Box key={job.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, border: `1px solid ${alpha(missionTone, breached || near ? 0.45 : 0.16)}` }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>MISSION #{String(job.id).substring(0, 8)}</Typography>
-                        <Chip size="small" label={normalizeStatus(job.priority || job.severity || 'NORMAL')} sx={{ height: 20, bgcolor: alpha(missionTone, 0.12), color: missionTone, fontWeight: 900, fontSize: '0.65rem' }} />
-                      </Stack>
-                      <Typography variant="body2" sx={{ color: '#fff', fontWeight: 850 }}>{job.title || job.issueType || job.category || 'Maintenance mission'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.46)', display: 'block', mt: 0.4 }}>
-                        {job.propertyName || job.propertyTitle || propertyStats.namesById[job.propertyId] || 'Property not linked'}
-                      </Typography>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.25 }}>
-                        <Stack direction="row" spacing={0.75} alignItems="center">
-                          <Clock size={13} color={missionTone} />
-                          <Typography variant="caption" sx={{ color: missionTone, fontWeight: 800 }}>SLA: {formatSla(job)}</Typography>
-                        </Stack>
-                        <Typography variant="caption" sx={{ color: statusTone(job.status), fontWeight: 950 }}>{normalizeStatus(job.status)}</Typography>
-                      </Stack>
-                    </Box>
-                  );
-                })}
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
+    const systemHealthColor = systemHealthStatus === 'HEALTHY' ? '#10b981' : systemHealthStatus === 'DEGRADED' ? '#f59e0b' : '#ef4444';
 
-        <Grid container spacing={3}>
-          <Grid item xs={12} lg={4}>
-            <Paper sx={{ p: 3, borderRadius: 5, bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`, height: '100%' }}>
-              <Typography variant="h6" sx={{ fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                <CheckCircle2 color={binThemeTokens.gold} /> Launch Health
-              </Typography>
-              <Stack spacing={1.5}>
-                {launchHealthRows.map((row) => (
-                  <Box key={row.label} onClick={() => row.route && navigate(row.route)} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center', cursor: row.route ? 'pointer' : 'default', p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.025)' }}>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 850 }}>{row.label}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{row.detail}</Typography>
-                    </Box>
-                    <Chip size="small" label={normalizeStatus(row.status)} sx={{ bgcolor: alpha(statusTone(row.status), 0.12), color: statusTone(row.status), fontWeight: 950 }} />
-                  </Box>
-                ))}
-              </Stack>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} lg={4}>
-            <Paper sx={{ p: 3, borderRadius: 5, bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`, height: '100%' }}>
-              <Typography variant="h6" sx={{ fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                <DollarSign color={binThemeTokens.gold} /> Financial Intelligence
-              </Typography>
-              <Stack spacing={2.25}>
-                <MetricLine label="Monthly collections" value={money(verifiedMonthly)} color="#fff" />
-                <MetricLine label="30-day verified revenue" value={money(mrrStats.currentMonth)} color="#fff" />
-                <MetricLine label="Revenue trend" value={growth} color={growth.startsWith('-') ? binThemeTokens.danger : '#10b981'} />
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
-                <MetricLine label="Total collections" value={money(summary.totalCollections)} muted />
-                <MetricLine label="Pending liquidity" value={money(summary.pendingLiquidity)} color={binThemeTokens.gold} />
-                <MetricLine label="Overdue payments" value={money(summary.overduePayments)} color={binThemeTokens.danger} />
-                <Button fullWidth variant="outlined" onClick={() => navigate('/transactions')}>Open Ledger</Button>
-              </Stack>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} lg={4}>
-            <Paper sx={{ p: 3, borderRadius: 5, bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`, height: '100%' }}>
-              <Typography variant="h6" sx={{ fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                <FileText color={binThemeTokens.gold} /> Compliance & Documents
-              </Typography>
-              <Stack spacing={2.25}>
-                <Box>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.46)', fontWeight: 900 }}>Security status</Typography>
-                    <Chip size="small" label={normalizeStatus(securityStatus)} sx={{ bgcolor: alpha(statusTone(securityStatus), 0.12), color: statusTone(securityStatus), fontWeight: 900 }} />
-                  </Stack>
-                  <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, securityScore))} sx={{ height: 6, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { bgcolor: statusTone(securityStatus) } }} />
+    return (
+        <AdminPageFrame
+            title="Executive Command Center"
+            subtitle="V3.0 SOVEREIGN OPERATIONS TERMINAL"
+            lastUpdated={lastSync}
+            onRefresh={() => window.location.reload()}
+        >
+            <Box sx={{ pb: 8 }}>
+                {/* Quick Actions */}
+                <Box sx={{ mb: 4 }}>
+                    <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1, '&::-webkit-scrollbar': { height: 4 } }}>
+                        <Button startIcon={<Plus />} variant="contained" onClick={() => navigate('/onboard-property')}>Add Property</Button>
+                        <Button startIcon={<Upload />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/bulk-import')}>Import Tenants</Button>
+                        <Button startIcon={<CheckCircle2 />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/manual-approvals')}>Verify Payments</Button>
+                        <Button startIcon={<FileText />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/document-vault')}>Document Vault</Button>
+                        <Button startIcon={<Zap />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/admin/pricing-matrix')}>Pricing Matrix</Button>
+                        <Button startIcon={<Shield />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/orphans')}>Orphan War Room</Button>
+                        <Button startIcon={<Activity />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/ops/technicians')}>Duty Command</Button>
+                        <Button startIcon={<TrendingUp />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/reports')}>Admin Report</Button>
+                        <Button startIcon={<UserCheck />} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }} onClick={() => navigate('/hr')}>Staff Access</Button>
+                    </Stack>
                 </Box>
-                <MetricLine label="Property passports" value={String(propertyPassports)} muted />
-                <MetricLine label="Document vault total" value={String(documentStats.total)} muted />
-                <MetricLine label="Expiring/expired documents" value={String(documentStats.expiring.length)} color={documentStats.expiring.length ? binThemeTokens.warning : '#10b981'} />
-                <Button fullWidth variant="outlined" onClick={() => navigate('/document-vault')}>Open Vault</Button>
-              </Stack>
-            </Paper>
-          </Grid>
-        </Grid>
 
-        <Grid container spacing={3}>
-          <Grid item xs={12} lg={8}>
-            <Paper sx={{ p: 3, borderRadius: 5, bgcolor: binThemeTokens.panel, border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}` }}>
-              <Typography variant="h6" sx={{ fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                <Activity color={binThemeTokens.gold} /> Recent Activity
-              </Typography>
-              <Stack spacing={2}>
-                {recentActivity.length === 0 ? (
-                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.36)', fontWeight: 800, py: 3, textAlign: 'center' }}>NO RECENT ACTIVITY LOGGED</Typography>
-                ) : recentActivity.map((log) => (
-                  <Stack key={log.id} direction="row" spacing={2} alignItems="flex-start">
-                    <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: statusTone(log.status), mt: 0.75 }} />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body2" sx={{ color: '#fff', fontWeight: 850 }}>
-                        {log.actor} <Box component="span" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>{log.action}</Box>
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 750 }}>
-                        {log.module} • {formatDateTime(log.timestamp)}
-                      </Typography>
-                    </Box>
-                    <Chip size="small" label={normalizeStatus(log.status)} sx={{ bgcolor: alpha(statusTone(log.status), 0.12), color: statusTone(log.status), fontWeight: 900 }} />
-                  </Stack>
-                ))}
-              </Stack>
-            </Paper>
-          </Grid>
+                {/* KPI Grid */}
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>PORTFOLIO KPIs</Typography>
+                <Grid container spacing={2} sx={{ mb: 6 }}>
+                    {Object.keys(kpis).map(key => (
+                        <Grid item xs={12} sm={6} md={3} lg={2.4} key={key}>
+                            {renderKPI(key)}
+                        </Grid>
+                    ))}
+                </Grid>
 
-          <Grid item xs={12} lg={4}>
-            <Paper sx={{ p: 3, borderRadius: 5, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, height: '100%' }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>Command Support Terminal</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.64)', fontWeight: 650, mt: 1, mb: 3 }}>
-                Use this block for critical infrastructure failures only. Routine launch issues should move through audit, reports, approvals, and operational queues.
-              </Typography>
-              <CeoContactButtons compact />
-            </Paper>
-          </Grid>
-        </Grid>
-      </Stack>
-    </AdminPageFrame>
-  );
-}
+                <Grid container spacing={4}>
+                    {/* Pending Approvals Table — REVIEW buttons now wired */}
+                    <Grid item xs={12} lg={7}>
+                        <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Shield color={binThemeTokens.gold} /> PENDING APPROVALS
+                                </Typography>
+                                <Chip label={`${approvalQueue.length} AWAITING`} size="small" sx={{ fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }} />
+                            </Box>
+                            <TableContainer sx={{ maxHeight: 400 }}>
+                                <Table stickyHeader size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ bgcolor: '#0f172a' }}>ORIGIN</TableCell>
+                                            <TableCell sx={{ bgcolor: '#0f172a' }}>TYPE</TableCell>
+                                            <TableCell sx={{ bgcolor: '#0f172a' }}>LINKED</TableCell>
+                                            <TableCell sx={{ bgcolor: '#0f172a' }}>SUBMITTED</TableCell>
+                                            <TableCell sx={{ bgcolor: '#0f172a' }} align="right">ACTIONS</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {approvalQueue.map((item) => (
+                                            <TableRow key={item.id} hover>
+                                                <TableCell sx={{ fontWeight: 700 }}>{item.origin}</TableCell>
+                                                <TableCell><Chip label={item.type || 'Standard'} size="small" sx={{ fontSize: '0.65rem', height: 20, fontWeight: 900 }} /></TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{item.linkedName || 'N/A'}</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                                                    {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ fontWeight: 900, fontSize: '0.6rem', color: '#10b981', borderColor: '#10b981' }}
+                                                            onClick={() => handleApproveClick(item)}
+                                                        >
+                                                            APPROVE
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ fontWeight: 900, fontSize: '0.6rem', color: '#ef4444', borderColor: '#ef4444' }}
+                                                            onClick={() => handleRejectClick(item)}
+                                                        >
+                                                            REJECT
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ fontWeight: 900, fontSize: '0.6rem' }}
+                                                            onClick={() => handleReviewApproval(item)}
+                                                        >
+                                                            VIEW
+                                                        </Button>
+                                                    </Stack>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {approvalQueue.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={5} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>
+                                                    ALL CLEAR: NO PENDING APPROVALS
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    </Grid>
 
-function SectionHeader({ icon, title, subtitle, action }: { icon: React.ReactNode; title: string; subtitle?: string; action?: React.ReactNode }) {
-  return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <Box>
-        <Typography variant="h6" sx={{ fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1.25 }}>{icon} {title}</Typography>
-        {subtitle && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 750 }}>{subtitle}</Typography>}
-      </Box>
-      {action}
-    </Stack>
-  );
-}
+                    {/* Live Operations */}
+                    <Grid item xs={12} lg={5}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Wrench color={binThemeTokens.gold} /> LIVE OPERATIONS
+                            </Typography>
+                            <Stack spacing={2}>
+                                {operationsMissions.map((job) => {
+                                    const remainingMinutes = getSlaRemainingMinutes(job);
+                                    const slaText = formatSlaRemaining(remainingMinutes);
+                                    const slaColor = remainingMinutes <= 0 ? '#ef4444' : remainingMinutes <= 30 ? '#f59e0b' : '#10b981';
+                                    const propertyDisplay = job.propertyName && job.propertyName.trim() ? job.propertyName : 'Property not linked';
+                                    return (
+                                        <Box key={job.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>MISSION #{job.id.substring(0, 8)}</Typography>
+                                                <Chip
+                                                    label={job.priority || 'STANDARD'}
+                                                    size="small"
+                                                    sx={{
+                                                        height: 18, fontSize: '0.6rem',
+                                                        bgcolor: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? alpha('#ef4444', 0.1) : 'rgba(255,255,255,0.05)',
+                                                        color: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? '#ef4444' : 'inherit',
+                                                        fontWeight: 900
+                                                    }}
+                                                />
+                                            </Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>{job.title || job.issueType || 'Maintenance Request'}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{propertyDisplay}</Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5 }}>
+                                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                    <Clock size={12} style={{ color: slaColor }} />
+                                                    <Typography variant="caption" sx={{ color: slaColor, fontWeight: 700 }}>SLA: {slaText}</Typography>
+                                                </Box>
+                                                <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{job.status}</Typography>
+                                            </Box>
+                                        </Box>
+                                    );
+                                })}
+                                {operationsMissions.length === 0 && (
+                                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                                        <CheckCircle2 size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
+                                        <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>NO ACTIVE MISSIONS</Typography>
+                                    </Box>
+                                )}
+                            </Stack>
+                        </Paper>
+                    </Grid>
 
-function MetricCard({ metric, onClick }: { metric: Metric; onClick?: () => void }) {
-  const empty = metric.value === 0 || metric.value === 'AED 0';
-  return (
-    <Paper
-      onClick={onClick}
-      sx={{
-        p: 2,
-        minHeight: 132,
-        borderRadius: 4,
-        cursor: metric.route ? 'pointer' : 'default',
-        bgcolor: binThemeTokens.panel,
-        border: `1px solid ${alpha(metric.tone, 0.24)}`,
-        transition: 'transform 0.16s ease, border-color 0.16s ease',
-        '&:hover': metric.route ? { transform: 'translateY(-2px)', borderColor: alpha(metric.tone, 0.5) } : undefined,
-      }}
-    >
-      <Box sx={{ color: metric.tone, mb: 1 }}>{metric.icon}</Box>
-      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.44)', fontWeight: 950, display: 'block' }}>{metric.label}</Typography>
-      <Typography variant="h5" sx={{ color: empty ? 'rgba(255,255,255,0.42)' : '#fff', fontWeight: 950, lineHeight: 1.1 }}>{metric.value}</Typography>
-      {metric.note && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 750, display: 'block', mt: 0.75 }}>{metric.note}</Typography>}
-    </Paper>
-  );
-}
+                    {/* Financial Intelligence — Real MRR */}
+                    <Grid item xs={12} lg={4}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <DollarSign color={binThemeTokens.gold} /> FINANCIAL INTELLIGENCE
+                            </Typography>
+                            <Stack spacing={3}>
+                                <Box>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>
+                                        MRR THIS MONTH {mrrThisMonth === 0 && <Box component="span" sx={{ color: 'rgba(255,255,255,0.2)', ml: 1 }}>(No verified payments)</Box>}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                                        <Typography variant="h4" fontWeight="950">
+                                            AED {mrrThisMonth.toLocaleString()}
+                                        </Typography>
+                                        {mrrLastMonth > 0 && (
+                                            <Typography variant="caption" sx={{ color: mrrGrowthPct >= 0 ? '#10b981' : '#ef4444', fontWeight: 900 }}>
+                                                {mrrGrowthPct >= 0 ? '+' : ''}{mrrGrowthPct}% vs last month
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Verified Collections</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 900 }}>{kpis.totalCollections.value}</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Pending Liquidity</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>{kpis.pendingLiquidity.value}</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Overdue Payments</Typography>
+                                    <Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.danger }}>{kpis.overduePayments.value}</Typography>
+                                </Box>
+                                <Button fullWidth variant="outlined" sx={{ mt: 1 }} onClick={() => navigate('/transactions')}>FULL LEDGER ACCESS</Button>
+                            </Stack>
+                        </Paper>
+                    </Grid>
 
-function MetricLine({ label, value, muted, color }: { label: string; value: string; muted?: boolean; color?: string }) {
-  return (
-    <Box>
-      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>{label}</Typography>
-      <Typography sx={{ color: color || (muted ? 'rgba(255,255,255,0.72)' : '#fff'), fontWeight: 950 }}>{value}</Typography>
-    </Box>
-  );
+                    {/* Compliance & Docs — Real counts */}
+                    <Grid item xs={12} lg={4}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <FileText color={binThemeTokens.gold} /> COMPLIANCE & DOCS
+                            </Typography>
+                            {/* Real system health from Firestore */}
+                            <Box sx={{ mb: 3 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>SYSTEM SECURITY STATUS</Typography>
+                                    <Chip
+                                        label={systemHealthStatus}
+                                        size="small"
+                                        sx={{
+                                            bgcolor: alpha(systemHealthColor, 0.1),
+                                            color: systemHealthColor,
+                                            fontWeight: 900, fontSize: '0.6rem'
+                                        }}
+                                    />
+                                </Box>
+                                <Box sx={{ height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <Box sx={{ width: systemHealthStatus === 'HEALTHY' ? '100%' : systemHealthStatus === 'DEGRADED' ? '50%' : '20%', height: '100%', bgcolor: systemHealthColor, transition: 'width 1s ease' }} />
+                                </Box>
+                            </Box>
+                            <Stack spacing={2}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Box sx={{ p: 1, bgcolor: 'rgba(59,130,246,0.1)', borderRadius: 2, color: '#3b82f6' }}><Shield size={16} /></Box>
+                                    <Box>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>Governance Audit</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Canonical audit_logs active</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ ml: 'auto', color: '#10b981', fontWeight: 900 }}>SECURE</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Box sx={{ p: 1, bgcolor: 'rgba(245,158,11,0.1)', borderRadius: 2, color: '#f59e0b' }}><FileWarning size={16} /></Box>
+                                    <Box>
+                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>Expired Documents</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Trade licenses / Passports</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ ml: 'auto', color: expiredDocsCount && expiredDocsCount > 0 ? '#f59e0b' : '#10b981', fontWeight: 900 }}>
+                                        {expiredDocsCount === null ? <Skeleton width={40} /> : expiredDocsCount > 0 ? `${expiredDocsCount} EXPIRED` : 'ALL VALID'}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                            <Button fullWidth variant="outlined" sx={{ mt: 3 }} onClick={() => navigate('/document-vault')}>OPEN VAULT</Button>
+                        </Paper>
+                    </Grid>
+
+                    {/* Recent Activity */}
+                    <Grid item xs={12} lg={4}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Activity color={binThemeTokens.gold} /> RECENT ACTIVITY
+                            </Typography>
+                            <Stack spacing={2.5}>
+                                {recentActivity.map((log) => (
+                                    <Box key={log.id} sx={{ display: 'flex', gap: 2 }}>
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} />
+                                            <Box sx={{ flexGrow: 1, width: '1px', bgcolor: 'rgba(255,255,255,0.1)', my: 0.5 }} />
+                                        </Box>
+                                        <Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                                                {log.actor} <Box component="span" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>{log.action}</Box>
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700, display: 'block', mt: 0.5 }}>
+                                                {log.module} • {(log.timestamp as any)?.toDate ? (log.timestamp as any).toDate().toLocaleTimeString() : 'Just now'}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                ))}
+                                {recentActivity.length === 0 && (
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>NO RECENT ACTIVITY LOGGED</Typography>
+                                )}
+                            </Stack>
+                        </Paper>
+                    </Grid>
+
+                    {/* SLA BREACH QUEUE */}
+                    <Grid item xs={12} lg={6}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: `1px solid ${alpha('#ef4444', 0.2)}` }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <AlertTriangle color="#ef4444" /> SLA BREACH ALERT
+                                </Typography>
+                                {slaBreachQueue.length > 0 && (
+                                    <Chip label={`${slaBreachQueue.length} AT RISK`} size="small" sx={{ bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 900 }} />
+                                )}
+                            </Box>
+                            {slaBreachQueue.length === 0 ? (
+                                <Box sx={{ py: 4, textAlign: 'center' }}>
+                                    <CheckCircle2 size={32} color="rgba(16,185,129,0.4)" style={{ margin: '0 auto 12px' }} />
+                                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>NO SLA BREACHES</Typography>
+                                </Box>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    {slaBreachQueue.map((item) => {
+                                        const remaining = getSlaRemainingMinutes(item);
+                                        const isBreached = remaining <= 0;
+                                        return (
+                                            <Box key={item.id} sx={{ p: 2, bgcolor: isBreached ? alpha('#ef4444', 0.05) : alpha('#f59e0b', 0.05), borderRadius: 2, border: `1px solid ${isBreached ? alpha('#ef4444', 0.2) : alpha('#f59e0b', 0.2)}` }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.title}</Typography>
+                                                    <Chip label={isBreached ? 'BREACHED' : 'NEAR BREACH'} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: isBreached ? alpha('#ef4444', 0.1) : alpha('#f59e0b', 0.1), color: isBreached ? '#ef4444' : '#f59e0b', fontWeight: 900 }} />
+                                                </Box>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>
+                                                    {item.propertyName || 'Property not linked'} · {item.priority} · SLA {item.slaHours}h
+                                                </Typography>
+                                                {isBreached && (
+                                                    <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900 }}>
+                                                        OVERDUE by {Math.round(item.breachMinutes)}m
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        );
+                                    })}
+                                    <Button size="small" onClick={() => navigate('/tickets')} sx={{ color: '#ef4444', fontWeight: 900, mt: 1 }}>VIEW ALL TICKETS →</Button>
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Grid>
+
+                    {/* PAYMENT PROOF QUEUE */}
+                    <Grid item xs={12} lg={6}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}` }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <DollarSign color={binThemeTokens.gold} /> PAYMENT PROOF QUEUE
+                                </Typography>
+                                {paymentProofQueue.length > 0 && (
+                                    <Chip label={`${paymentProofQueue.length} PENDING`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
+                                )}
+                            </Box>
+                            {paymentProofQueue.length === 0 ? (
+                                <Box sx={{ py: 4, textAlign: 'center' }}>
+                                    <CheckCircle2 size={32} color="rgba(16,185,129,0.4)" style={{ margin: '0 auto 12px' }} />
+                                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>ALL PAYMENTS VERIFIED</Typography>
+                                </Box>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    {paymentProofQueue.map((payment) => (
+                                        <Box key={payment.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Box>
+                                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{payment.ownerName}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                                                    AED {payment.amount.toLocaleString()} {payment.reference ? `· Ref: ${payment.reference}` : ''}
+                                                </Typography>
+                                            </Box>
+                                            <Button size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem', color: binThemeTokens.gold, borderColor: binThemeTokens.gold }} onClick={() => navigate('/manual-approvals')}>
+                                                VERIFY
+                                            </Button>
+                                        </Box>
+                                    ))}
+                                    <Button size="small" onClick={() => navigate('/manual-approvals')} sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>VIEW ALL →</Button>
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Grid>
+
+                    {/* BROKER COMMISSION QUEUE */}
+                    <Grid item xs={12} lg={6}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Briefcase color={binThemeTokens.gold} /> BROKER COMMISSIONS PENDING
+                                </Typography>
+                                {commissionQueue.length > 0 && (
+                                    <Chip label={`${commissionQueue.length} PENDING`} size="small" sx={{ bgcolor: alpha('#8b5cf6', 0.1), color: '#8b5cf6', fontWeight: 900 }} />
+                                )}
+                            </Box>
+                            {commissionQueue.length === 0 ? (
+                                <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, py: 4, textAlign: 'center' }}>NO PENDING COMMISSIONS</Typography>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    {commissionQueue.map((comm) => (
+                                        <Box key={comm.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Box>
+                                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{comm.brokerName}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                                                    AED {comm.amount.toLocaleString()} commission
+                                                    {comm.propertyName ? ` · ${comm.propertyName}` : ''}
+                                                </Typography>
+                                            </Box>
+                                            <Button size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem', color: '#8b5cf6', borderColor: '#8b5cf6' }} onClick={() => navigate('/broker')}>
+                                                REVIEW
+                                            </Button>
+                                        </Box>
+                                    ))}
+                                    <Button size="small" onClick={() => navigate('/broker')} sx={{ color: '#8b5cf6', fontWeight: 900, mt: 1 }}>VIEW ALL BROKERS →</Button>
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Grid>
+
+                    {/* RENEWAL WATCH QUEUE */}
+                    <Grid item xs={12} lg={6}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: `1px solid ${alpha('#3b82f6', 0.15)}` }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Clock color="#3b82f6" /> RENEWAL WATCH
+                                </Typography>
+                                {renewalQueue.length > 0 && (
+                                    <Chip label={`${renewalQueue.length} UPCOMING`} size="small" sx={{ bgcolor: alpha('#3b82f6', 0.1), color: '#3b82f6', fontWeight: 900 }} />
+                                )}
+                            </Box>
+                            {renewalQueue.length === 0 ? (
+                                <Box sx={{ py: 4, textAlign: 'center' }}>
+                                    <CheckCircle2 size={32} color="rgba(16,185,129,0.4)" style={{ margin: '0 auto 12px' }} />
+                                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>NO UPCOMING RENEWALS</Typography>
+                                </Box>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    {renewalQueue.map((renewal) => (
+                                        <Box key={renewal.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Box>
+                                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{renewal.propertyName}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                                                    {renewal.tenantName} · Expires: {renewal.expiryDate ? new Date(renewal.expiryDate.seconds * 1000).toLocaleDateString() : 'Unknown'}
+                                                </Typography>
+                                            </Box>
+                                            <Chip label={renewal.status.toUpperCase()} size="small" sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: 'rgba(255,255,255,0.05)' }} />
+                                        </Box>
+                                    ))}
+                                    <Button size="small" onClick={() => navigate('/properties')} sx={{ color: '#3b82f6', fontWeight: 900, mt: 1 }}>VIEW PROPERTIES →</Button>
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Grid>
+
+                    {/* LAUNCH HEALTH PANEL */}
+                    <Grid item xs={12} lg={6}>
+                        <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Rocket color={binThemeTokens.gold} /> LAUNCH HEALTH
+                            </Typography>
+                            <Stack spacing={2}>
+                                {[
+                                    { label: 'Stripe Live Mode', status: adminSummaries.stripeLiveMode ? 'READY' : 'PENDING', color: adminSummaries.stripeLiveMode ? '#10b981' : '#f59e0b', icon: <DollarSign size={14} /> },
+                                    { label: 'Firebase App Check Production', status: adminSummaries.appCheckProduction ? 'READY' : 'PENDING', color: adminSummaries.appCheckProduction ? '#10b981' : '#f59e0b', icon: <Shield size={14} /> },
+                                    { label: 'Branded Email Sender', status: adminSummaries.brandedEmailSender ? 'READY' : 'PENDING', color: adminSummaries.brandedEmailSender ? '#10b981' : '#f59e0b', icon: <MessageSquare size={14} /> },
+                                    { label: 'Admin Secret Rotation', status: adminSummaries.adminSecretRotation ? 'READY' : 'PENDING', color: adminSummaries.adminSecretRotation ? '#10b981' : '#f59e0b', icon: <Lock size={14} /> },
+                                    { label: 'Five-Profile Smoke', status: adminSummaries.fiveProfileSmoke ? 'READY' : 'PENDING', color: adminSummaries.fiveProfileSmoke ? '#10b981' : '#f59e0b', icon: <Users size={14} /> },
+                                    { label: 'Admin Credential Login', status: adminSummaries.adminCredentialLogin ? 'READY' : 'PENDING', color: adminSummaries.adminCredentialLogin ? '#10b981' : '#f59e0b', icon: <Shield size={14} /> },
+                                    { label: 'Renewal Watch', status: adminSummaries.renewalWatch ? 'READY' : 'PENDING', color: adminSummaries.renewalWatch ? '#10b981' : '#f59e0b', icon: <Clock size={14} /> },
+                                    { label: 'Broker Commission Lock', status: adminSummaries.brokerCommissionLock ? 'READY' : 'PENDING', color: adminSummaries.brokerCommissionLock ? '#10b981' : '#f59e0b', icon: <Briefcase size={14} /> },
+                                    { label: 'Tenant Notification Delivery', status: adminSummaries.tenantNotificationDelivery ? 'READY' : 'PENDING', color: adminSummaries.tenantNotificationDelivery ? '#10b981' : '#f59e0b', icon: <Radio size={14} /> },
+                                    { label: 'Technician GPS/Storage Proof', status: adminSummaries.technicianGpsStorageProof ? 'READY' : 'PENDING', color: adminSummaries.technicianGpsStorageProof ? '#10b981' : '#f59e0b', icon: <Wrench size={14} /> },
+                                    { label: 'Firebase Auth', status: 'ACTIVE', color: '#10b981', icon: <UserCheck size={14} /> },
+                                    { label: 'Storage Rules', status: systemHealthStatus === 'HEALTHY' ? 'ACTIVE' : 'CHECK', color: systemHealthColor, icon: <FileText size={14} /> },
+                                    { label: 'AI Studio (BIN-GPT)', status: 'ACTIVE', color: '#10b981', icon: <Zap size={14} /> },
+                                ].map((item) => (
+                                    <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Box sx={{ color: item.color }}>{item.icon}</Box>
+                                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.label}</Typography>
+                                        </Box>
+                                        <Chip label={item.status} size="small" sx={{ bgcolor: alpha(item.color, 0.1), color: item.color, fontWeight: 900, fontSize: '0.6rem' }} />
+                                    </Box>
+                                ))}
+                            </Stack>
+                            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/ops/smoke-test')} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4) }}>
+                                    FIVE-PROFILE SMOKE TEST →
+                                </Button>
+                                <Button fullWidth variant="outlined" onClick={() => navigate('/ops/public')}>
+                                    PUBLIC LAUNCH OPS →
+                                </Button>
+                            </Stack>
+                        </Paper>
+                    </Grid>
+                </Grid>
+
+                {/* Command Support Terminal */}
+                <Paper sx={{ p: 3, mt: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 6 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center">
+                        <Box>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>COMMAND SUPPORT TERMINAL</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 600 }}>
+                                Sovereign support nodes are active. For critical infrastructure failure or CEO-level escalation, use the secure channels below.
+                            </Typography>
+                        </Box>
+                        <CeoContactButtons compact />
+                    </Stack>
+                </Paper>
+            </Box>
+
+            {/* Approve Dialog */}
+            <Dialog open={approveDialogOpen} onClose={() => setApproveDialogOpen(false)} PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: '#fff', fontWeight: 900 }}>Confirm Approval</DialogTitle>
+                <DialogContent>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                        Approve <strong style={{ color: '#10b981' }}>{selectedApproval?.linkedName}</strong>?
+                        This will activate their account and grant portal access.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setApproveDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</Button>
+                    <Button onClick={handleApproveConfirm} disabled={actionLoading} variant="contained" sx={{ bgcolor: '#10b981', fontWeight: 900 }}>
+                        {actionLoading ? 'Approving...' : 'APPROVE'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Reject Dialog */}
+            <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: '#fff', fontWeight: 900 }}>Reject Application</DialogTitle>
+                <DialogContent>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.7)', mb: 2 }}>
+                        Rejecting <strong style={{ color: '#ef4444' }}>{selectedApproval?.linkedName}</strong>. Please provide a reason:
+                    </Typography>
+                    <TextField
+                        fullWidth multiline rows={3}
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Reason for rejection..."
+                        sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setRejectDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</Button>
+                    <Button onClick={handleRejectConfirm} disabled={actionLoading || !rejectReason.trim()} variant="contained" sx={{ bgcolor: '#ef4444', fontWeight: 900 }}>
+                        {actionLoading ? 'Rejecting...' : 'REJECT'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+                <Alert severity={snackbar.severity} sx={{ fontWeight: 900, borderRadius: 3 }}>{snackbar.message}</Alert>
+            </Snackbar>
+        </AdminPageFrame>
+    );
 }

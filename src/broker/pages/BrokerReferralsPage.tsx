@@ -232,38 +232,6 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         addDoc(collection(db, 'auditLogs'), { ...auditPayload, referralId: refRef.id, timestamp: serverTimestamp() }),
       ]);
 
-      if (referralType === 'contract') {
-        await addDoc(collection(db, 'broker_commissions'), {
-          ...baseAttribution,
-          attributionId,
-          brokerId,
-          brokerUid: brokerId,
-          brokerEmail,
-          brokerName,
-          sourceType: 'BROKER_CONTRACT_REFERRAL',
-          sourceCollection: 'referrals',
-          sourceReferralId: refRef.id,
-          referralId: refRef.id,
-          linkedReferralId: refRef.id,
-          linkedReferralName: clean(clientName),
-          linkedProperty: finalPropertyName,
-          propertyId: selectedPropertyId,
-          propertyName: finalPropertyName,
-          ownerId: referralData.ownerId || '',
-          ownerUid: referralData.ownerUid || '',
-          ownerEmail: referralData.ownerEmail || '',
-          commissionBasisAmount: estimatedAmount,
-          amount: Math.round(estimatedAmount * 0.02),
-          commissionAmount: Math.round(estimatedAmount * 0.02),
-          percentage: 2,
-          status: 'PENDING',
-          payoutStatus: 'PENDING_ADMIN_REVIEW',
-          evidenceStatus: 'CONTRACT_REFERRAL_PENDING_ADMIN_MATCH',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-
       setOpenAdd(false);
       resetForm();
     } catch (err) {

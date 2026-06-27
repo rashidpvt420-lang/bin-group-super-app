@@ -8,7 +8,7 @@ import TermsPage from './pages/public/TermsPage';
 import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
-import PilotLaunchPage from './pages/public/PilotLaunchPage';
+import PublicSecurityPage from './pages/public/PublicSecurityPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
@@ -221,10 +221,6 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
-function publicLanding() {
-  return withAuth(<LandingPage />, { publicAuth: true, showChrome: false });
-}
-
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
@@ -236,14 +232,11 @@ function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={publicLanding()} />
+        <Route path="/" element={<PublicMarketingPage page="home" />} />
         <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/v1" element={publicLanding()} />
+        <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/pilot-launch" element={<PilotLaunchPage />} />
-        <Route path="/share" element={<PilotLaunchPage />} />
-        <Route path="/friends" element={<PilotLaunchPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
@@ -264,16 +257,16 @@ function AppContent() {
         <Route path="/malls" element={<PublicMarketingPage page="malls" />} />
         <Route path="/hospitals" element={<PublicMarketingPage page="hospitals" />} />
         <Route path="/government-properties" element={<PublicMarketingPage page="government-properties" />} />
-        <Route path="/security" element={<PublicMarketingPage page="security" />} />
+        <Route path="/security" element={<PublicSecurityPage />} />
         <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
         <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={publicLanding()} />
+        <Route path="/company" element={<CompanyProfilePage />} />
         <Route path="/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/about" element={publicLanding()} />
-        <Route path="/about-us" element={publicLanding()} />
+        <Route path="/about" element={<CompanyProfilePage />} />
+        <Route path="/about-us" element={<CompanyProfilePage />} />
         <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
@@ -295,14 +288,9 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        <Route path="/admin/*" element={withAuth(<AdminTerminal />, { publicAuth: true, showChrome: false })} />
-        <Route path="/verify" element={<InvoiceVerificationPage />} />
-        <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
+        <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
-        <Route path="/verify-cert" element={<CertificateVerificationPage />} />
-        <Route path="/verify-cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
-        <Route path="/verify/certificate/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

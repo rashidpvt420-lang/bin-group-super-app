@@ -175,46 +175,13 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                 statusPayload.convertedAt = serverTimestamp();
                 statusPayload.commissionEligible = true;
                 statusPayload.commissionStatus = 'PENDING_REVIEW';
+                statusPayload.commissionCreationStatus = 'PENDING_ADMIN_CONTRACT_MATCH';
             }
 
             await updateDoc(doc(db, 'brokerLeads', leadId), statusPayload);
 
             const attributionId = lead.attributionId || `broker_lead_${user?.uid}_${leadId}`;
             const budgetAmount = numericAmount(lead.budgetAmount || lead.budget);
-            if (newStatus === 'converted') {
-                const commissionAmount = Math.round(budgetAmount * 0.02);
-                await addDoc(collection(db, 'broker_commissions'), {
-                    brokerId: user?.uid || lead.brokerId || '',
-                    brokerUid: user?.uid || lead.brokerUid || '',
-                    brokerEmail: normalizeEmail(user?.email || lead.brokerEmail),
-                    brokerName: clean(user?.displayName || lead.brokerName || 'Broker Partner'),
-                    sourceType: 'BROKER_LEAD_CONVERSION',
-                    sourceCollection: 'brokerLeads',
-                    sourceLeadId: leadId,
-                    linkedLeadId: leadId,
-                    linkedLeadName: lead.leadName || 'Broker Lead',
-                    linkedProperty: lead.propertyInterest || lead.location || 'Pending property assignment',
-                    propertyName: lead.propertyInterest || 'Pending property assignment',
-                    attributionId,
-                    attributionSource: lead.attributionSource || 'BROKER_PORTAL_LEAD',
-                    commissionBasisAmount: budgetAmount,
-                    amount: commissionAmount,
-                    percentage: 2,
-                    status: 'PENDING',
-                    payoutStatus: 'PENDING_ADMIN_REVIEW',
-                    evidenceStatus: 'LEAD_CONVERTED_PENDING_CONTRACT_MATCH',
-                    attributionProof: lead.attributionProof || {
-                        leadName: lead.leadName || '',
-                        phone: lead.phone || '',
-                        email: lead.email || '',
-                        propertyInterest: lead.propertyInterest || '',
-                        location: lead.location || '',
-                    },
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                });
-            }
-
             await addDoc(collection(db, 'audit_logs'), {
                 actorId: user?.uid || lead.brokerId || '',
                 actorRole: 'broker',

@@ -189,18 +189,7 @@ service cloud.firestore {
         (!('approved' in data) || data.approved == false);
     }
 
-    function safeBrokerPayoutRequestCreate(data) {
-      return signedIn() &&
-        brokerOwns(data) &&
-        data.status == 'PENDING_ADMIN_REVIEW' &&
-        data.approvalStatus == 'PENDING' &&
-        data.paymentStatus == 'REQUESTED' &&
-        (!('approvedAt' in data) || data.approvedAt == null) &&
-        (!('approvedBy' in data) || data.approvedBy == null) &&
-        (!('paidAt' in data) || data.paidAt == null) &&
-        (!('paidBy' in data) || data.paidBy == null) &&
-        (!('commissionIds' in data) || data.commissionIds is list);
-    }
+
 
     function safeTenantUnitLinkRequestCreate(data) {
       return signedIn() &&
@@ -1128,6 +1117,38 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
       allow create: if signedIn() && request.resource.data.tenantId == request.auth.uid;
       allow update: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // ── Broker Pipeline Collections ──────────────────────────────────────────
+    match /brokerLeads/{leadId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid && request.resource.data.brokerId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+    match /referrals/{referralId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid && request.resource.data.brokerId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+    match /broker_commissions/{commissionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /contract_renewal_watch/{watchId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /broker_listing_claims/{claimId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
