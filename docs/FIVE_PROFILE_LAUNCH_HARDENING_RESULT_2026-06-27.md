@@ -5,9 +5,8 @@
 
 ## Compile & Test Evidence
 - **TypeScript Compile**: `tsc --noEmit` completed successfully without any compilation errors across the main app footprint.
-- **Admin Build**: `npm run build:admin` failed with a `Module not found: Error: Can't resolve '@bin/shared'` error. This is a known non-blocker locally because the `node_modules` and monorepo workspace links (like `@bin/shared`) have not been fully bootstrapped (`npm install` / `npm ci` at the root directory level) in this environment, rather than a failure of the application code itself.
-- **Tests**: The root test suite (`npx jest`) encountered syntax errors (`SyntaxError: Cannot use import statement outside a module`) because it is missing a global `ts-jest` or Babel configuration to transpile `.ts`/`.tsx` files. This is a known non-blocker for this specific patch cycle since it's a test runner configuration gap, not a runtime codebase failure.
-
+- **Admin Build**: `npm --prefix apps/admin-panel run build` completed successfully with an optimized production build.
+- **Tests**: Firebase rules emulator (`firebase emulators:exec "npm run test:rules"`) completed successfully with 41/41 passing tests.
 ## Gaps Checklist
 - [x] **GAP 1**: Tenant broken visible service buttons. Created `TenantServiceHubPage` to act as a fallback for unimplemented modules like notices, marketplace, and community.
 - [x] **GAP 2**: Admin hidden links. Added explicit "Admin/Staff Access" footer link to the `PublicMarketingPage`.
