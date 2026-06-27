@@ -25,13 +25,20 @@ const statusColor = (value: any) => {
 };
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const idValue = (...values: unknown[]) => values.map((value) => String(value || '').trim()).find(Boolean) || '';
-const byId = (rows: Row[]) => new Map<string, Row>(rows.map((row) => [String(row.id), row]));
-const byField = (rows: Row[], field: string) => new Map<string, Row>(
+const byId = (rows: Row[]): Map<string, Row> => new Map<string, Row>(rows.map((row) => [String(row.id), row]));
+const byField = (rows: Row[], field: string): Map<string, Row> => new Map<string, Row>(
   rows
     .map((row): [string, Row] => [String(row[field] || ''), row])
     .filter(([key]) => Boolean(key)),
 );
 const uniqueRows = (rows: Row[]) => Array.from(new Map<string, Row>(rows.map((row) => [String(row.id), row])).values());
+
+type AttributionChain = {
+  id: string;
+  lead?: Row | null;
+  referral?: Row | null;
+  commissions: Row[];
+};
 
 function leadIdOf(row: Row | null | undefined) {
   if (!row) return '';
@@ -109,7 +116,7 @@ export default function BrokerAttributionProofPage() {
     const referralMap = byId(referrals);
     const referralByAttribution = byField(referrals, 'attributionId');
 
-    const referralChains = referrals.map((referral) => {
+    const referralChains: AttributionChain[] = referrals.map((referral) => {
       const referralLeadId = leadIdOf(referral);
       const attributionId = attributionIdOf(referral);
       const lead = leadMap.get(referralLeadId) || (attributionId ? leadByAttribution.get(attributionId) : undefined) || null;
@@ -118,7 +125,7 @@ export default function BrokerAttributionProofPage() {
     });
 
     const linkedCommissionIds = new Set(referralChains.flatMap((chain) => chain.commissions.map((commission) => commission.id)));
-    const orphanCommissions = commissions
+    const orphanCommissions: AttributionChain[] = commissions
       .filter((commission) => !linkedCommissionIds.has(commission.id))
       .map((commission) => {
         const commissionLeadId = leadIdOf(commission);

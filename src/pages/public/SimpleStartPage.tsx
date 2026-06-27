@@ -76,6 +76,7 @@ const helperLinks = [
   { labelEn: 'Support', labelAr: 'الدعم', path: '/support' },
   { labelEn: 'Privacy', labelAr: 'الخصوصية', path: '/privacy' },
   { labelEn: 'Terms', labelAr: 'الشروط', path: '/terms' },
+  { labelEn: 'Admin / Staff Access', labelAr: 'دخول الإدارة والموظفين', path: '/login?intendedRole=admin' },
 ];
 
 export default function SimpleStartPage() {

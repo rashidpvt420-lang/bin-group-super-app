@@ -32,7 +32,7 @@
     "verify:rules-hardening": "node scripts/verify-firestore-launch-hardening.mjs",
     "test": "npm run test:rules",
     "test:rules": "npm run prepare:rules && npm run verify:rules-hardening && firebase emulators:exec --only firestore --project bin-group-57c60 \"node --test test/security-rules.test.js\"",
-    "test:rules:node": "npm run prepare:rules && npm run verify:rules-hardening && node --test test/security-rules.test.js",
+    "test:rules:node": "npm run prepare:rules && npm run verify:rules-hardening && firebase emulators:exec --only firestore \"node --test test/security-rules.test.js\"",
     "test:stability": "npm run prepare:rules && npm run verify:rules-hardening && node scripts/production-stability-guard.mjs",
     "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
     "test:mobile-store-readiness": "node scripts/mobile-store-readiness-audit.mjs",

@@ -813,21 +813,6 @@ export default function OwnerDashboardResolvedPage() {
     <Box sx={{ pb: { xs: 12, md: 6 }, pr: { xs: 9, md: 0 }, direction: isRTL ? 'rtl' : 'ltr' }}>
       {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
       {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
-  const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-
-  const KPI_CARDS = [
-    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: annual ? `AED ${annual.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
-    { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
-    { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
-    { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
-    { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <Wallet size={20} />, color: '#f59e0b', to: '/owner/financials' },
-    { label: tx('dash.kpi.pendingApprovals', 'Pending Owner Approvals'), value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: '#8b5cf6', to: '/owner/approvals' },
-  ];
-
-  return (
-    <Box sx={{ pb: { xs: 12, md: 6 }, pr: { xs: 9, md: 0 }, direction: isRTL ? 'rtl' : 'ltr' }}>
-      {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
-      {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>

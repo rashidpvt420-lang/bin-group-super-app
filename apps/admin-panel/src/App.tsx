@@ -245,7 +245,7 @@ function Layout() {
     );
 }
 
-function App() {
+function AdminDirectionalShell() {
     const { isRTL } = useLanguage();
     const cache = isRTL ? cacheRtl : cacheLtr;
     const theme = createTheme({ ...adminTheme, direction: isRTL ? 'rtl' : 'ltr' } as any);
@@ -254,17 +254,23 @@ function App() {
         <CacheProvider value={cache}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <AIProvider>
-                    <AuthProvider>
-                        <Router>
-                            <AppContent />
-                            <SovereignAlertHandler />
-                        </Router>
-                    </AuthProvider>
-                </AIProvider>
+                <Router>
+                    <AppContent />
+                </Router>
             </ThemeProvider>
         </CacheProvider>
     );
 }
 
-export default App;
+export default function App() {
+    return (
+        <LanguageProvider>
+            <AIProvider>
+                <AuthProvider>
+                    <AdminDirectionalShell />
+                    <SovereignAlertHandler />
+                </AuthProvider>
+            </AIProvider>
+        </LanguageProvider>
+    );
+}
