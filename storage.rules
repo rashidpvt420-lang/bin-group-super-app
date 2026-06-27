@@ -37,6 +37,55 @@ service firebase.storage {
       return hasAnyRole(['owner', 'OWNER']);
     }
 
+    function userExists(userId) {
+      return firestore.exists(/databases/(default)/documents/users/$(userId));
+    }
+
+    function userDoc(userId) {
+      return firestore.get(/databases/(default)/documents/users/$(userId)).data;
+    }
+
+    function tenantRecordExists(tenantId) {
+      return firestore.exists(/databases/(default)/documents/tenants/$(tenantId));
+    }
+
+    function tenantRecord(tenantId) {
+      return firestore.get(/databases/(default)/documents/tenants/$(tenantId)).data;
+    }
+
+    function propertyExists(propertyId) {
+      return firestore.exists(/databases/(default)/documents/properties/$(propertyId));
+    }
+
+    function property(propertyId) {
+      return firestore.get(/databases/(default)/documents/properties/$(propertyId)).data;
+    }
+
+    function ownerMatchesTenantProfile(tenantId) {
+      return isAuth() && isOwnerRole() && (
+        (userExists(tenantId) && (
+          userDoc(tenantId).ownerId == request.auth.uid ||
+          userDoc(tenantId).ownerUid == request.auth.uid ||
+          userDoc(tenantId).linkedOwnerId == request.auth.uid ||
+          userDoc(tenantId).ownerEmail == request.auth.token.email
+        )) ||
+        (tenantRecordExists(tenantId) && (
+          tenantRecord(tenantId).ownerId == request.auth.uid ||
+          tenantRecord(tenantId).ownerUid == request.auth.uid ||
+          tenantRecord(tenantId).linkedOwnerId == request.auth.uid ||
+          tenantRecord(tenantId).ownerEmail == request.auth.token.email
+        ))
+      );
+    }
+
+    function ownerMatchesProperty(propertyId) {
+      return isAuth() && propertyExists(propertyId) && (
+        property(propertyId).ownerId == request.auth.uid ||
+        property(propertyId).ownerUid == request.auth.uid ||
+        property(propertyId).ownerEmail == request.auth.token.email
+      );
+    }
+
     function ticketExists(ticketId) {
       return firestore.exists(/databases/(default)/documents/maintenanceTickets/$(ticketId));
     }
@@ -139,7 +188,12 @@ service firebase.storage {
     }
 
     match /inspections/{tenantId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor() || ownerMatchesTenantProfile(tenantId));
+      allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+    }
+
+    match /inspections/{tenantId}/properties/{propertyId}/{fileName} {
+      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor() || ownerMatchesProperty(propertyId));
       allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
     }
 
