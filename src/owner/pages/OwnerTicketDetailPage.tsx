@@ -8,14 +8,15 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Chip, CircularProgress,
-    Button, Divider, IconButton, alpha, Avatar, ImageList, ImageListItem
+    Button, Divider, IconButton, alpha, Avatar, ImageList, ImageListItem,
+    Dialog, DialogActions, DialogContent, DialogTitle, TextField
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ChevronLeft, MapPin, Clock, CheckCircle2, AlertCircle,
-    MessageSquare, Calendar, Info
+    MessageSquare, Calendar, Info, ShieldCheck, RotateCcw
 } from 'lucide-react';
-import { db, doc, onSnapshot } from '../../lib/firebase';
+import { db, doc, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -34,6 +35,22 @@ const STATUS_COLORS: Record<string, string> = {
     emergency: '#ef4444',
 };
 
+type OwnerReviewAction = 'APPROVE_CLOSE' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
+
+const actionLabels: Record<OwnerReviewAction, string> = {
+    APPROVE_CLOSE: 'Approve & Close',
+    DISPUTE: 'Dispute Resolution',
+    REQUEST_REVISIT: 'Request Revisit',
+    ESCALATE: 'Escalate Ticket',
+};
+
+const actionNextStatus: Record<OwnerReviewAction, string> = {
+    APPROVE_CLOSE: 'CLOSED',
+    DISPUTE: 'DISPUTED',
+    REQUEST_REVISIT: 'REOPENED',
+    ESCALATE: 'ESCALATED',
+};
+
 export default function OwnerTicketDetailPage() {
     const { id } = useParams();
     const { user } = useRole();
@@ -43,6 +60,10 @@ export default function OwnerTicketDetailPage() {
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [unauthorized, setUnauthorized] = useState(false);
+    const [reviewAction, setReviewAction] = useState<OwnerReviewAction | null>(null);
+    const [reviewReason, setReviewReason] = useState('');
+    const [reviewError, setReviewError] = useState('');
+    const [reviewBusy, setReviewBusy] = useState(false);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -93,7 +114,59 @@ export default function OwnerTicketDetailPage() {
 
     if (!ticket) return null;
 
-    const statusColor = STATUS_COLORS[ticket.status] || 'rgba(255,255,255,0.4)';
+    const normalizedStatus = String(ticket.status || '').toUpperCase();
+    const statusColor = STATUS_COLORS[ticket.status] || STATUS_COLORS[normalizedStatus] || 'rgba(255,255,255,0.4)';
+    const beforeProofs = [
+        ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),
+        ...(Array.isArray(ticket.photos) ? ticket.photos : []),
+        ...(ticket.beforePhotoUrl ? [ticket.beforePhotoUrl] : []),
+        ...(ticket.photoUrl ? [ticket.photoUrl] : []),
+    ].filter(Boolean);
+    const afterProofs = [
+        ...(Array.isArray(ticket.afterPhotos) ? ticket.afterPhotos : []),
+        ...(Array.isArray(ticket.completionPhotos) ? ticket.completionPhotos : []),
+        ...(Array.isArray(ticket.proofPhotos) ? ticket.proofPhotos : []),
+        ...(Array.isArray(ticket.evidencePhotos) ? ticket.evidencePhotos : []),
+        ...(ticket.afterPhotoUrl ? [ticket.afterPhotoUrl] : []),
+    ].filter(Boolean);
+    const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
+    const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
+    const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
+
+    const openReviewDialog = (action: OwnerReviewAction) => {
+        setReviewAction(action);
+        setReviewReason('');
+        setReviewError('');
+    };
+
+    const submitReview = async () => {
+        if (!reviewAction || !ticket?.id) return;
+        const reason = reviewReason.trim();
+        if (reviewAction !== 'APPROVE_CLOSE' && reason.length < 8) {
+            setReviewError('Enter a clear reason before submitting this action.');
+            return;
+        }
+        setReviewBusy(true);
+        setReviewError('');
+        try {
+            const callable = httpsCallable(functions, 'ownerReviewTicketCompletion');
+            await callable({ ticketId: ticket.id, action: reviewAction, reason });
+            setTicket((current: any) => ({
+                ...current,
+                status: actionNextStatus[reviewAction],
+                ownerReviewAction: reviewAction,
+                ownerReviewReason: reason || null,
+                ownerApproved: reviewAction === 'APPROVE_CLOSE',
+            }));
+            setReviewAction(null);
+            setReviewReason('');
+        } catch (err: any) {
+            console.error('[OwnerTicketDetail] owner review failed:', err);
+            setReviewError(err?.message || 'Could not submit owner review action.');
+        } finally {
+            setReviewBusy(false);
+        }
+    };
 
     return (
         <Box sx={{ maxWidth: 1100, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -223,6 +296,66 @@ export default function OwnerTicketDetailPage() {
                         </Stack>
                     </Paper>
 
+                    {(canReviewCompleted || canEscalateOpen || ticket.ownerReviewAction) && (
+                        <Paper sx={{ p: 4, mb: 4, bgcolor: canReviewCompleted ? alpha('#10b981', 0.06) : 'rgba(15, 23, 42, 0.6)', border: `1px solid ${canReviewCompleted ? alpha('#10b981', 0.35) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6 }}>
+                            <Stack spacing={2.5}>
+                                <Box>
+                                    <Typography variant="overline" sx={{ color: canReviewCompleted ? '#10b981' : binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+                                        OWNER REVIEW
+                                    </Typography>
+                                    <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>
+                                        {canReviewCompleted ? 'Review technician completion proof' : 'Owner action controls'}
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 0.75 }}>
+                                        Approvals, disputes, revisit requests and escalations are submitted through a protected server action and written to the audit trail.
+                                    </Typography>
+                                </Box>
+
+                                {(beforeProofs.length > 0 || afterProofs.length > 0) && (
+                                    <Grid container spacing={2}>
+                                        <Grid item xs={12} md={6}>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>BEFORE / REQUEST EVIDENCE</Typography>
+                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
+                                                {beforeProofs.slice(0, 4).map((url: string, index: number) => (
+                                                    <Box key={`before-${index}`} component="img" src={url} alt={`Before ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
+                                                ))}
+                                            </Stack>
+                                        </Grid>
+                                        <Grid item xs={12} md={6}>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>AFTER / COMPLETION PROOF</Typography>
+                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
+                                                {afterProofs.slice(0, 4).map((url: string, index: number) => (
+                                                    <Box key={`after-${index}`} component="img" src={url} alt={`After ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
+                                                ))}
+                                            </Stack>
+                                        </Grid>
+                                    </Grid>
+                                )}
+
+                                {ticket.ownerReviewAction && (
+                                    <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>LAST OWNER ACTION</Typography>
+                                        <Typography sx={{ color: '#fff', fontWeight: 900 }}>{String(ticket.ownerReviewAction).replace(/_/g, ' ')}</Typography>
+                                        {ticket.ownerReviewReason && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)', mt: 0.5 }}>{ticket.ownerReviewReason}</Typography>}
+                                    </Paper>
+                                )}
+
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap" useFlexGap>
+                                    {canReviewCompleted && (
+                                        <>
+                                            <Button variant="contained" color="success" startIcon={<ShieldCheck size={18} />} onClick={() => openReviewDialog('APPROVE_CLOSE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Approve & Close</Button>
+                                            <Button variant="outlined" color="error" onClick={() => openReviewDialog('DISPUTE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Dispute</Button>
+                                            <Button variant="outlined" color="warning" startIcon={<RotateCcw size={18} />} onClick={() => openReviewDialog('REQUEST_REVISIT')} sx={{ fontWeight: 950, borderRadius: 3 }}>Request Revisit</Button>
+                                        </>
+                                    )}
+                                    {canEscalateOpen && (
+                                        <Button variant="outlined" color="error" onClick={() => openReviewDialog('ESCALATE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Escalate Ticket</Button>
+                                    )}
+                                </Stack>
+                            </Stack>
+                        </Paper>
+                    )}
+
                     {/* Timeline */}
                     <Paper sx={{ p: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 3, display: 'block' }}>
@@ -309,6 +442,37 @@ export default function OwnerTicketDetailPage() {
                     </Paper>
                 </Grid>
             </Grid>
+
+            <Dialog open={Boolean(reviewAction)} onClose={() => !reviewBusy && setReviewAction(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
+                <DialogTitle sx={{ color: reviewAction === 'DISPUTE' || reviewAction === 'ESCALATE' ? '#f87171' : binThemeTokens.gold, fontWeight: 950 }}>
+                    {reviewAction ? actionLabels[reviewAction] : 'Owner Review'}
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.5} sx={{ pt: 1 }}>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
+                            This action updates the ticket through a backend callable and records an audit event.
+                        </Typography>
+                        <TextField
+                            label={selectedActionNeedsReason ? 'Reason required' : 'Optional owner note'}
+                            value={reviewReason}
+                            onChange={(event) => setReviewReason(event.target.value)}
+                            fullWidth
+                            multiline
+                            minRows={4}
+                            required={Boolean(selectedActionNeedsReason)}
+                            InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }}
+                            InputProps={{ sx: { color: '#fff' } }}
+                        />
+                        {reviewError && <Typography variant="body2" sx={{ color: '#f87171', fontWeight: 800 }}>{reviewError}</Typography>}
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setReviewAction(null)} disabled={reviewBusy} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={submitReview} disabled={reviewBusy || Boolean(selectedActionNeedsReason && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: reviewAction === 'DISPUTE' || reviewAction === 'ESCALATE' ? '#ef4444' : binThemeTokens.gold, color: reviewAction === 'DISPUTE' || reviewAction === 'ESCALATE' ? '#fff' : '#000', fontWeight: 950 }}>
+                        {reviewBusy ? 'Submitting...' : 'Submit'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Card, CardContent, Typography, alpha, Stack, Button, Chip, Select, MenuItem, FormControl, InputLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Collapse } from '@mui/material';
+import { Box, Card, CardContent, Typography, alpha, Stack, Button, Chip, Select, MenuItem, FormControl, InputLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import { Wrench, Download, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
 import { exportComplaintsToCsv } from './OwnerComplaintReportExport';
-import { db, doc, updateDoc, addDoc, collection, serverTimestamp } from '../../lib/firebase';
+import { db, functions, httpsCallable, addDoc, collection, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 
 interface OwnerComplaintCommandCenterProps {
@@ -40,6 +40,10 @@ const getStatusColor = (status: string) => {
 
 function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   const [open, setOpen] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [reviewReason, setReviewReason] = useState('');
+  const [reviewError, setReviewError] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
   const { user } = useRole();
 
   const handleEvidenceExport = async () => {
@@ -61,32 +65,38 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
     });
   };
 
-  const handleUpdateStatus = async (newStatus: string) => {
+  const actionForStatus = (newStatus: string) => {
+    if (newStatus === 'CLOSED') return 'APPROVE_CLOSE';
+    if (newStatus === 'DISPUTED') return 'DISPUTE';
+    if (newStatus === 'REOPENED') return 'REQUEST_REVISIT';
+    return 'ESCALATE';
+  };
+
+  const openReview = (newStatus: string) => {
+    setReviewStatus(newStatus);
+    setReviewReason('');
+    setReviewError('');
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!reviewStatus) return;
+    const action = actionForStatus(reviewStatus);
+    const reason = reviewReason.trim();
+    if (action !== 'APPROVE_CLOSE' && reason.length < 8) {
+      setReviewError('Enter a clear reason before submitting this owner action.');
+      return;
+    }
+    setReviewBusy(true);
     try {
-      const ticketRef = doc(db, 'maintenanceTickets', complaint.ticketId);
-      await updateDoc(ticketRef, {
-        status: newStatus,
-        updatedAt: serverTimestamp()
-      });
-
-      await addDoc(collection(db, 'audit_logs'), {
-        actorId: user?.uid || 'owner',
-        actorRole: 'owner',
-        action: `OWNER_${newStatus}`,
-        targetType: 'MAINTENANCE_TICKET',
-        targetId: complaint.ticketId,
-        before: { status: complaint.status },
-        after: { status: newStatus },
-        metadata: { propertyName: complaint.propertyName || '' },
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM',
-        createdAt: serverTimestamp()
-      });
-
-      alert(`Ticket ${complaint.ticketId} status updated to ${newStatus}.`);
+      const callable = httpsCallable(functions, 'ownerReviewTicketCompletion');
+      await callable({ ticketId: complaint.ticketId, action, reason });
+      alert(`Ticket ${complaint.ticketId} owner action submitted.`);
       window.location.reload();
     } catch (err: any) {
       console.error('Failed to update ticket status:', err);
-      alert('Error: ' + err.message);
+      setReviewError(err?.message || 'Owner action failed.');
+    } finally {
+      setReviewBusy(false);
     }
   };
 
@@ -175,15 +185,15 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
               <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }} flexWrap="wrap" useFlexGap>
                 {showReviewActions && (
                   <>
-                    <Button variant="contained" color="success" size="small" onClick={() => handleUpdateStatus('CLOSED')}>Approve & Close</Button>
-                    <Button variant="contained" color="error" size="small" onClick={() => handleUpdateStatus('DISPUTED')}>Dispute Resolution</Button>
-                    <Button variant="outlined" color="warning" size="small" onClick={() => handleUpdateStatus('REOPENED')}>Request Revisit</Button>
+                    <Button variant="contained" color="success" size="small" onClick={() => openReview('CLOSED')}>Approve & Close</Button>
+                    <Button variant="contained" color="error" size="small" onClick={() => openReview('DISPUTED')}>Dispute Resolution</Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('REOPENED')}>Request Revisit</Button>
                   </>
                 )}
                 {showOpenActions && (
                   <>
-                    <Button variant="outlined" color="error" size="small" onClick={() => handleUpdateStatus('ESCALATED')}>Escalate Ticket</Button>
-                    <Button variant="outlined" color="warning" size="small" onClick={() => handleUpdateStatus('DISPUTED')}>Dispute Ticket</Button>
+                    <Button variant="outlined" color="error" size="small" onClick={() => openReview('ESCALATED')}>Escalate Ticket</Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('DISPUTED')}>Dispute Ticket</Button>
                   </>
                 )}
                 <Button variant="outlined" size="small" startIcon={<Download size={14} />} onClick={handleEvidenceExport} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
@@ -194,6 +204,36 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
           </Collapse>
         </TableCell>
       </TableRow>
+      <Dialog open={Boolean(reviewStatus)} onClose={() => !reviewBusy && setReviewStatus(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
+        <DialogTitle sx={{ color: reviewStatus === 'CLOSED' ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#f87171', fontWeight: 950 }}>
+          {reviewStatus === 'CLOSED' ? 'Approve and close ticket' : reviewStatus === 'REOPENED' ? 'Request technician revisit' : reviewStatus === 'ESCALATED' ? 'Escalate ticket' : 'Dispute ticket'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
+              This submits an owner review through the protected ticket callable and records the action in audit logs.
+            </Typography>
+            <TextField
+              label={reviewStatus === 'CLOSED' ? 'Optional owner note' : 'Reason required'}
+              value={reviewReason}
+              onChange={(event) => setReviewReason(event.target.value)}
+              fullWidth
+              multiline
+              minRows={4}
+              required={reviewStatus !== 'CLOSED'}
+              InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }}
+              InputProps={{ sx: { color: '#fff' } }}
+            />
+            {reviewError && <Typography variant="body2" sx={{ color: '#f87171', fontWeight: 800 }}>{reviewError}</Typography>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setReviewStatus(null)} disabled={reviewBusy} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+          <Button onClick={handleUpdateStatus} disabled={reviewBusy || Boolean(reviewStatus !== 'CLOSED' && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: reviewStatus === 'CLOSED' ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#ef4444', color: '#fff', fontWeight: 950 }}>
+            {reviewBusy ? 'Submitting...' : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </React.Fragment>
   );
 }

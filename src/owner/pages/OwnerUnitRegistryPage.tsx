@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, CircularProgress, Grid, InputAdornment, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, alpha } from '@mui/material';
-import { CheckCircle2, Layout, Search } from 'lucide-react';
-import { collection, db, getDocs, query, where } from '../../lib/firebase';
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Grid, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, alpha } from '@mui/material';
+import { CheckCircle2, Layout, Plus, Search } from 'lucide-react';
+import { collection, db, functions, getDocs, httpsCallable, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -28,9 +28,23 @@ export default function OwnerUnitRegistryPage() {
   const { user } = useRole();
   const { tx, isRTL } = useLanguage();
   const [loading, setLoading] = useState(true);
+  const [properties, setProperties] = useState<PropertyDoc[]>([]);
   const [units, setUnits] = useState<UnitDoc[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardSaving, setWizardSaving] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [wizard, setWizard] = useState({
+    propertyId: '',
+    count: 1,
+    prefix: '',
+    startNumber: 1,
+    padding: 0,
+    floor: '',
+    annualRent: 0,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +61,10 @@ export default function OwnerUnitRegistryPage() {
 
       const propertySnaps = await Promise.all(propertyQueries);
       const properties = unique(propertySnaps.flatMap((snap) => snap.docs.map((d) => ({ ...(d.data() as Omit<PropertyDoc, 'id'>), id: d.id } as PropertyDoc))));
+      if (!cancelled) {
+        setProperties(properties);
+        if (properties[0]?.id) setWizard((current) => current.propertyId ? current : ({ ...current, propertyId: properties[0].id }));
+      }
       const propIds = properties.map((p) => p.id);
       const propName = new Map(properties.map((p) => [p.id, p.propertyName || p.name || 'Property']));
 
@@ -67,7 +85,7 @@ export default function OwnerUnitRegistryPage() {
     }
     load().catch((error) => { console.warn('[OwnerUnitRegistry] load failed:', error); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [user?.uid, user?.email]);
+  }, [user?.uid, user?.email, reloadKey]);
 
   const filtered = useMemo(() => units.filter((unit) => {
     const text = `${unit.unitNumber || ''} ${unit.propertyName || ''} ${unit.tenantName || ''} ${unit.tenantEmail || ''}`.toLowerCase();
@@ -81,6 +99,35 @@ export default function OwnerUnitRegistryPage() {
     MAINTENANCE: units.filter((u) => statusOf(u) === 'MAINTENANCE').length,
   };
 
+  const submitWizard = async () => {
+    if (!wizard.propertyId) {
+      setNotice('Select an owned property before generating units.');
+      return;
+    }
+    setWizardSaving(true);
+    setNotice('');
+    try {
+      const callable = httpsCallable(functions, 'ownerGenerateUnits');
+      const result = await callable({
+        propertyId: wizard.propertyId,
+        count: Number(wizard.count || 1),
+        prefix: wizard.prefix.trim(),
+        startNumber: Number(wizard.startNumber || 1),
+        padding: Number(wizard.padding || 0),
+        floor: wizard.floor.trim(),
+        annualRent: Number(wizard.annualRent || 0),
+      });
+      const data = result.data as any;
+      setNotice(`${data?.createdCount || 0} unit(s) generated${data?.skipped?.length ? `; skipped duplicates: ${data.skipped.join(', ')}` : ''}.`);
+      setWizardOpen(false);
+      setReloadKey((value) => value + 1);
+    } catch (error: any) {
+      setNotice(error?.message || 'Unit generation failed.');
+    } finally {
+      setWizardSaving(false);
+    }
+  };
+
   if (loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
   return (
@@ -91,8 +138,15 @@ export default function OwnerUnitRegistryPage() {
           <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.units.registry_title', 'Unit Ledger')}</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{tx('owner.units.subtitle', 'All units linked to your approved properties.')}</Typography>
         </Box>
-        <TextField size="small" placeholder={tx('owner.units.search_placeholder', 'Search unit, tenant, property...')} value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment> }} sx={{ minWidth: 320 }} />
+        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+          <Button variant="contained" startIcon={<Plus size={16} />} disabled={properties.length === 0} onClick={() => setWizardOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
+            {tx('owner.units.generate_units', 'Generate Units')}
+          </Button>
+          <TextField size="small" placeholder={tx('owner.units.search_placeholder', 'Search unit, tenant, property...')} value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment> }} sx={{ minWidth: 320 }} />
+        </Stack>
       </Stack>
+
+      {notice && <Alert severity={notice.includes('failed') || notice.includes('Select') ? 'warning' : 'success'} sx={{ mb: 3 }} onClose={() => setNotice('')}>{notice}</Alert>}
 
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {Object.entries(counts).map(([label, value]) => (
@@ -130,6 +184,38 @@ export default function OwnerUnitRegistryPage() {
           </Table>
         </TableContainer>
       )}
+
+      <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{tx('owner.units.generate_dialog_title', 'Generate property units')}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.25} sx={{ pt: 1 }}>
+            <TextField select label={tx('field.property', 'Property')} value={wizard.propertyId} onChange={(event) => setWizard((current) => ({ ...current, propertyId: event.target.value }))} fullWidth required>
+              {properties.map((property) => <MenuItem key={property.id} value={property.id}>{property.propertyName || property.name || property.id}</MenuItem>)}
+            </TextField>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField type="number" label={tx('owner.units.count', 'Number of units')} value={wizard.count} onChange={(event) => setWizard((current) => ({ ...current, count: Number(event.target.value) }))} inputProps={{ min: 1, max: 100 }} fullWidth />
+              <TextField label={tx('owner.units.prefix', 'Prefix')} value={wizard.prefix} onChange={(event) => setWizard((current) => ({ ...current, prefix: event.target.value.toUpperCase() }))} placeholder="A-" fullWidth />
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField type="number" label={tx('owner.units.start_number', 'Start number')} value={wizard.startNumber} onChange={(event) => setWizard((current) => ({ ...current, startNumber: Number(event.target.value) }))} inputProps={{ min: 1 }} fullWidth />
+              <TextField type="number" label={tx('owner.units.padding', 'Number padding')} value={wizard.padding} onChange={(event) => setWizard((current) => ({ ...current, padding: Number(event.target.value) }))} inputProps={{ min: 0, max: 4 }} fullWidth />
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField label={tx('owner.units.floor', 'Floor')} value={wizard.floor} onChange={(event) => setWizard((current) => ({ ...current, floor: event.target.value }))} fullWidth />
+              <TextField type="number" label={tx('owner.units.annual_rent_optional', 'Annual rent optional')} value={wizard.annualRent} onChange={(event) => setWizard((current) => ({ ...current, annualRent: Number(event.target.value) }))} inputProps={{ min: 0 }} fullWidth />
+            </Stack>
+            <Alert severity="info">
+              {tx('owner.units.generate_security_note', 'Only units for properties owned by your signed-in owner account can be generated. Existing unit numbers are skipped.')}
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWizardOpen(false)}>{tx('common.cancel', 'Cancel')}</Button>
+          <Button disabled={wizardSaving || !wizard.propertyId || Number(wizard.count || 0) < 1} onClick={submitWizard} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+            {wizardSaving ? tx('common.saving', 'Saving...') : tx('owner.units.generate_action', 'Generate')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

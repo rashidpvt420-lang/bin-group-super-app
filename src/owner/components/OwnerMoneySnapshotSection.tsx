@@ -47,7 +47,6 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
       const balance = Math.max(0, rentDue - rentPaid);
       const propertyName = String(form.propertyName || 'Property');
       const recordId = `owner_rent_${user.uid}_${Date.now()}`;
-      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId };
       let referenceFileUrl = '';
       let referenceFilePath = '';
       let referenceFileName = '';
@@ -67,9 +66,9 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
           referenceUploadError = error?.message || 'Reference file upload failed.';
         }
       }
+      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId, referenceFileUrl, referenceFilePath, referenceFileName, referenceUploadError };
       await setDoc(doc(db, 'payment_transactions', recordId), { recordType: 'OWNER_RENT_PAYMENT', transactionType: 'RENT_COLLECTION', paymentId: recordId, paymentTransactionId: recordId, tenantLedgerId: recordId, ownerId: user.uid, ownerUid: user.uid, ownerEmail: user.email || '', userId: user.uid, payerId: user.uid, tenantName: form.tenantName.trim(), propertyId: String(form.propertyId || ''), propertyName, unitNumber: form.unitNumber.trim(), rentDue, rentPaid, amountDue: rentDue, amountPaid: rentPaid, amount: rentPaid, balance, status: 'pending', paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION', paymentVerified: false, approved: false, contractActivated: false, unlocksDashboard: false, paymentMethod: String(form.paymentMethod || 'BANK_TRANSFER'), paymentReference: form.paymentReference.trim(), referenceFileUrl, referenceFilePath, referenceFileName, referenceFileType, referenceFileSize, referenceUploadError, notes: form.notes.trim(), lastPaymentDate: new Date().toISOString(), createdByOwnerUid: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      void onRecordRentPayment;
-      void linkedPayload;
+      await onRecordRentPayment(linkedPayload);
       await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(user.uid, rentPaid, propertyName, recordId);
       setOpen(false);
       setReferenceFile(null);

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, ClipboardCheck, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
@@ -74,6 +74,37 @@ const isPendingOwnerPayment = (row: any) => {
   if (states.some((state) => VERIFIED_PAYMENT_STATES.has(state))) return false;
   if (row.paymentVerified === false) return true;
   return states.some((state) => PENDING_PAYMENT_STATES.has(state) || state.includes('PENDING') || state.includes('REVIEW'));
+};
+
+const isVerifiedIbanRecord = (row: any) => {
+  if (!row) return false;
+  const iban = String(row.iban || row.maskedIban || row.last4 || '').trim();
+  if (!iban) return false;
+
+  const status = String(row.status || row.verificationStatus || row.approvalStatus || '').trim().toUpperCase();
+  return row.verified === true ||
+    row.isVerified === true ||
+    row.adminVerified === true ||
+    ['VERIFIED', 'APPROVED', 'ACTIVE', 'ADMIN_VERIFIED'].includes(status);
+};
+
+const hasVerifiedProfileIban = (profile: any) => {
+  const bankDetails = profile?.bankDetails || profile?.payoutDetails || profile?.paymentDestination || profile?.settlementBank || {};
+  const iban = String(profile?.iban || bankDetails?.iban || '').trim();
+  if (!iban) return false;
+
+  const status = String(
+    profile?.ibanStatus ||
+    profile?.payoutStatus ||
+    bankDetails?.status ||
+    bankDetails?.verificationStatus ||
+    '',
+  ).trim().toUpperCase();
+
+  return profile?.ibanVerified === true ||
+    profile?.payoutVerified === true ||
+    bankDetails?.verified === true ||
+    ['VERIFIED', 'APPROVED', 'ACTIVE', 'ADMIN_VERIFIED'].includes(status);
 };
 
 const canonicalEmail = (value: unknown) => {
@@ -227,6 +258,84 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
   return { state: 'locked', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'No owner profile or contract found for this login.' };
 }
 
+type ActivationStep = { gate: string; status: string; detail: string; tone: string };
+
+const isDoneStatus = (value: unknown) => {
+  const status = String(value || '').trim().toUpperCase().replace(/\s+/g, '_');
+  return ['DONE', 'ACTIVE', 'APPROVED', 'VERIFIED', 'SIGNED', 'COMPLETE', 'COMPLETED', 'READY'].includes(status);
+};
+
+const hasTitleEvidence = (property: any) => Boolean(
+  property?.titleDeedUrl ||
+  property?.titleDeedFileUrl ||
+  property?.titleDeedNumber ||
+  property?.ownershipDocumentUrl ||
+  property?.documents?.titleDeedUrl ||
+  isDoneStatus(property?.titleDeedStatus) ||
+  isDoneStatus(property?.ownershipVerificationStatus)
+);
+
+const hasGeoEvidence = (property: any) => Boolean(
+  property?.geoVerified === true ||
+  property?.gpsVerified === true ||
+  property?.coordinates ||
+  property?.location?.lat ||
+  property?.lat ||
+  property?.latitude
+);
+
+const buildActivationTimeline = (
+  resolution: OwnerResolution,
+  properties: any[],
+  stats: any,
+  ledgerSummary: any,
+  pendingPayments: number,
+  pendingApprovals: number,
+  hasVerifiedIban: boolean,
+): ActivationStep[] => {
+  const profile = resolution.profile || {};
+  const contract = resolution.contract || {};
+  const contractStatus = normalizePaymentState(contract.status || contract.activationStatus || profile.activationStatus);
+  const signatureStatus = normalizePaymentState(contract.signatureStatus || contract.ownerSignatureStatus || profile.signatureStatus);
+  const adminStatus = normalizePaymentState(contract.adminApprovalStatus || contract.binApprovalStatus || contract.approvalStatus || profile.approvalStatus);
+  const paymentVerified = contract.paymentVerified === true || profile.paymentVerified === true || ['PAID', 'VERIFIED', 'ADMIN_VERIFIED', 'APPROVED'].includes(normalizePaymentState(contract.paymentStatus || profile.paymentStatus));
+  const dashboardUnlocked = resolution.state === 'active' || profile.dashboardUnlocked === true || contract.dashboardUnlocked === true;
+  const titleReady = properties.length > 0 && properties.some(hasTitleEvidence);
+  const geoReady = properties.length > 0 && properties.some(hasGeoEvidence);
+  const units = Number(stats?.units || ledgerSummary?.totalUnits || 0);
+  const tenantsLinked = Number(ledgerSummary?.activeTenants || ledgerSummary?.pendingTenants || 0);
+
+  const status = (done: boolean, review: boolean, doneLabel = 'Done') => done
+    ? { status: doneLabel, tone: '#10b981' }
+    : review
+      ? { status: 'In Review', tone: '#f59e0b' }
+      : { status: 'Missing', tone: '#ef4444' };
+
+  const propertyGate = status(properties.length > 0, Boolean(profile.latestIntakeId || contract.propertyId || contract.propertyIds?.length), properties.length > 0 ? `${properties.length} linked` : 'Done');
+  const titleGate = status(titleReady, properties.length > 0);
+  const geoGate = status(geoReady, properties.length > 0);
+  const paymentGate = status(paymentVerified, pendingPayments > 0 || contractStatus.includes('PAYMENT'));
+  const ownerSignatureGate = status(signatureStatus === 'SIGNED' || contract.ownerSigned === true || contract.ownerSignature?.signed === true, Boolean(contract.id || contract.contractId));
+  const binGate = status(adminStatus.includes('APPROVED') || contractStatus === 'ACTIVE' || dashboardUnlocked, pendingApprovals > 0 || adminStatus.includes('PENDING') || adminStatus.includes('REVIEW'));
+  const unlockGate = status(dashboardUnlocked, resolution.state === 'pending');
+  const unitGate = status(units > 0, properties.length > 0);
+  const inviteGate = status(tenantsLinked > 0, units > 0, tenantsLinked > 0 ? `${tenantsLinked} linked` : 'Done');
+  const ibanGate = status(hasVerifiedIban, Boolean(profile.iban || profile.bankDetails?.iban || profile.payoutDetails?.iban));
+
+  return [
+    { gate: 'Property submitted', ...propertyGate, detail: properties.length ? 'Live property/passport records are linked to this owner.' : 'Waiting for property/passport record linkage.' },
+    { gate: 'Title deed verified', ...titleGate, detail: titleReady ? 'Ownership evidence is present or verified.' : 'Upload or admin verification still required.' },
+    { gate: 'Property geo verified', ...geoGate, detail: geoReady ? 'GPS/location data is available for service routing.' : 'GPS coordinates are still missing.' },
+    { gate: '15% payment proof', ...paymentGate, detail: paymentVerified ? 'Mobilization/payment proof is verified.' : pendingPayments ? `${pendingPayments} payment proof item(s) await review.` : 'Payment proof is not verified yet.' },
+    { gate: 'Owner contract signature', ...ownerSignatureGate, detail: ownerSignatureGate.status === 'Done' ? 'Owner signature state is signed.' : 'Owner signature is still pending.' },
+    { gate: 'BIN GROUP approval', ...binGate, detail: binGate.status === 'Done' ? 'Admin/BIN approval gate is complete.' : 'Admin approval queue still needs closure.' },
+    { gate: 'Dashboard unlocked', ...unlockGate, detail: dashboardUnlocked ? 'Owner dashboard is active.' : 'Dashboard remains locked until activation gates close.' },
+    { gate: 'Units generated/imported', ...unitGate, detail: units > 0 ? `${units} unit(s) resolved.` : 'Unit creation or import is still needed.' },
+    { gate: 'Tenant invitations', ...inviteGate, detail: tenantsLinked > 0 ? 'Tenant ledger/invitations are visible.' : 'No accepted or pending tenant links found yet.' },
+    { gate: 'Payout IBAN', ...ibanGate, detail: hasVerifiedIban ? 'Verified payout destination exists.' : 'Verified owner payout IBAN is missing.' },
+  ];
+};
+
 export default function OwnerDashboardResolvedPage() {
   const { user, refreshRole } = useRole();
   const { tx, isRTL } = useLanguage();
@@ -243,6 +352,7 @@ export default function OwnerDashboardResolvedPage() {
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [hasVerifiedIban, setHasVerifiedIban] = useState(false);
   const [permissionWarning, setPermissionWarning] = useState('');
   // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
@@ -327,6 +437,20 @@ export default function OwnerDashboardResolvedPage() {
 
         const allTickets = Array.from(ticketMap.values());
         const payments = Array.from(paymentMap.values());
+        const bankAccounts = new Map<string, any>();
+
+        if (authUid) {
+          for (const account of await getCollectionDocs('ownerBankAccounts', 'ownerId', authUid)) bankAccounts.set(account.id, account);
+          for (const account of await getCollectionDocs('ownerBankAccounts', 'ownerUid', authUid)) bankAccounts.set(account.id, account);
+        }
+
+        for (const email of exactEmails) {
+          for (const account of await getCollectionDocs('ownerBankAccounts', 'ownerEmail', email)) bankAccounts.set(account.id, account);
+        }
+
+        const verifiedIban = hasVerifiedProfileIban(resolved.profile) ||
+          hasVerifiedProfileIban(resolved.contract) ||
+          Array.from(bankAccounts.values()).some(isVerifiedIbanRecord);
         const openTickets = allTickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
         const resolvedComplaints = allTickets.map(resolveOwnerComplaint);
         const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), payments, allTickets);
@@ -343,6 +467,7 @@ export default function OwnerDashboardResolvedPage() {
         if (alive) {
           setTickets(openTickets);
           setPendingPayments(payments.filter(isPendingOwnerPayment).length);
+          setHasVerifiedIban(verifiedIban);
           setFinancials(finData);
           setComplaints(resolvedComplaints);
           setReporters(resolvedReporters);
@@ -470,6 +595,11 @@ export default function OwnerDashboardResolvedPage() {
     return { units, rent, maintenance };
   }, [properties]);
 
+  const activationSteps = useMemo(
+    () => buildActivationTimeline(resolution, properties, stats, ledgerSummary, pendingPayments, pendingApprovals, hasVerifiedIban),
+    [resolution, properties, stats, ledgerSummary, pendingPayments, pendingApprovals, hasVerifiedIban],
+  );
+
   const handleAddReporter = async (reporterData: any) => {
     const ownerId = String(user?.uid || resolution.contract?.ownerId || resolution.contract?.ownerUid || '').trim();
     if (!ownerId) throw new Error('Owner UID is required before adding an authorized reporter.');
@@ -535,13 +665,19 @@ export default function OwnerDashboardResolvedPage() {
     const rentDue = Number(rentData.rentDue || 0);
     const rentPaid = Number(rentData.rentPaid || 0);
     const balance = Math.max(0, rentDue - rentPaid);
-    const recordId = `owner_rent_${ownerId}_${Date.now()}`;
+    const generatedRecordId = `owner_rent_${ownerId}_${Date.now()}`;
+    const recordId = String(rentData.tenantLedgerId || rentData.paymentTransactionId || generatedRecordId);
+    const paymentTransactionId = String(rentData.paymentTransactionId || recordId);
     const ownerEmail = normalizeEmail(user?.email || resolution.profile?.email || resolution.contract?.ownerEmail);
     const todayLabel = new Date().toLocaleDateString('en-GB');
     const status = balance > 0 ? 'PARTIAL' : 'PAID';
 
     const payload = {
       recordType: 'OWNER_RENT_PAYMENT',
+      transactionType: 'RENT_COLLECTION',
+      paymentTransactionId,
+      tenantLedgerId: recordId,
+      paymentId: paymentTransactionId,
       ownerId,
       ownerUid: ownerId,
       ownerEmail,
@@ -557,8 +693,15 @@ export default function OwnerDashboardResolvedPage() {
       balance,
       status,
       paymentStatus: status,
+      verificationState: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+      adminVerificationRequired: true,
+      paymentVerified: false,
       paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER'),
       paymentReference: String(rentData.paymentReference || ''),
+      referenceFileUrl: String(rentData.referenceFileUrl || ''),
+      referenceFilePath: String(rentData.referenceFilePath || ''),
+      referenceFileName: String(rentData.referenceFileName || ''),
+      referenceUploadError: String(rentData.referenceUploadError || ''),
       notes: String(rentData.notes || ''),
       lastPaymentDate: new Date().toISOString(),
       createdByOwnerUid: ownerId,
@@ -599,6 +742,13 @@ export default function OwnerDashboardResolvedPage() {
         lastPaymentDate: todayLabel,
         leaseStart: null,
         leaseEnd: null,
+        paymentTransactionId,
+        tenantLedgerId: recordId,
+        referenceId: payload.paymentReference,
+        method: payload.paymentMethod,
+        referenceFileUrl: payload.referenceFileUrl,
+        referenceFileName: payload.referenceFileName,
+        referenceFilePath: payload.referenceFilePath,
       };
       const ledgerRows = [row, ...(current?.ledgerRows || [])];
       const totalRentDue = ledgerRows.reduce((sum, item) => sum + Number(item.due || 0), 0);
@@ -633,6 +783,7 @@ export default function OwnerDashboardResolvedPage() {
           <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? tx('dash.owner.noLink', 'Owner profile not linked yet') : tx('dash.owner.needsApproval', 'Activation still requires verified approval')}</Typography>
           <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || tx('dash.owner.reasonDefault', 'Your profile was found, but verified activation flags are not complete yet.')}</Typography>
           {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
+          <OwnerActivationTimeline steps={activationSteps} compact />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
             <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.reviewContracts', 'Review Contracts')}</Button>
             <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.refreshIdentity', 'Refresh Identity')}</Button>
@@ -646,7 +797,22 @@ export default function OwnerDashboardResolvedPage() {
   const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
   const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
   const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: ledgerSummary?.totalRentPaid ?? stats.rent, payoutsPending: pendingPayments, maintenanceCost: stats.maintenance };
-  const missingInfo = { iban: false, units: stats.units === 0 };
+  const missingInfo = { iban: !hasVerifiedIban, units: stats.units === 0 };
+  const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+
+  const KPI_CARDS = [
+    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: annual ? `AED ${annual.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
+    { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
+    { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
+    { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <Wallet size={20} />, color: '#f59e0b', to: '/owner/financials' },
+    { label: tx('dash.kpi.pendingApprovals', 'Pending Owner Approvals'), value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: '#8b5cf6', to: '/owner/approvals' },
+  ];
+
+  return (
+    <Box sx={{ pb: { xs: 12, md: 6 }, pr: { xs: 9, md: 0 }, direction: isRTL ? 'rtl' : 'ltr' }}>
+      {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
+      {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
@@ -673,6 +839,7 @@ export default function OwnerDashboardResolvedPage() {
             <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.dlAgreement', 'Download Agreement')}</Button>
           )}
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.contracts', 'Contracts')}</Button>
+          <Button variant="outlined" onClick={() => navigate('/owner/documents')} sx={{ borderColor: '#6366f1', color: '#6366f1', fontWeight: 950 }}>{tx('dash.owner.vault', 'Document Vault')}</Button>
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.propPassport', 'Property Passport')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('owner-money-snapshot')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{tx('dash.owner.money', 'Money')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>{tx('dash.owner.complaints', 'Complaints')}</Button>
@@ -681,6 +848,8 @@ export default function OwnerDashboardResolvedPage() {
       </Box>
 
       <RoleJourneyStrip role="owner" />
+
+      <OwnerActivationTimeline steps={activationSteps} />
 
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {KPI_CARDS.map((card, idx) => (
@@ -735,5 +904,35 @@ export default function OwnerDashboardResolvedPage() {
         />
       </Box>
     </Box>
+  );
+}
+
+function OwnerActivationTimeline({ steps, compact = false }: { steps: ActivationStep[]; compact?: boolean }) {
+  const doneCount = steps.filter((step) => step.tone === '#10b981').length;
+  return (
+    <Paper sx={{ p: compact ? 2 : { xs: 2.25, md: 3 }, mb: compact ? 3 : 5, bgcolor: compact ? 'rgba(255,255,255,.035)' : 'rgba(15,23,42,.50)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: compact ? 4 : 5, textAlign: 'left' }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
+          <Typography variant={compact ? 'subtitle1' : 'h6'} sx={{ color: '#fff', fontWeight: 950 }}>
+            {doneCount}/{steps.length} gates complete
+          </Typography>
+        </Box>
+        <Chip size="small" label={doneCount === steps.length ? 'READY' : 'ACTION NEEDED'} sx={{ bgcolor: alpha(doneCount === steps.length ? '#10b981' : '#f59e0b', 0.12), color: doneCount === steps.length ? '#10b981' : '#f59e0b', fontWeight: 950, width: 'fit-content' }} />
+      </Stack>
+      <Grid container spacing={1.5}>
+        {steps.map((step) => (
+          <Grid item xs={12} sm={compact ? 12 : 6} md={compact ? 12 : 4} key={step.gate}>
+            <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.gate}</Typography>
+                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
+              </Stack>
+              {!compact && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </Paper>
   );
 }
