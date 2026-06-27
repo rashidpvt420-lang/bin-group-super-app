@@ -642,15 +642,18 @@ export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
     if (!shiftId) throw new HttpsError("failed-precondition", "No active shift found.");
 
     const now = admin.firestore.FieldValue.serverTimestamp();
+    const nowDate = new Date();
 
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'BREAK', updatedAt: now });
+    batch.update(userRef, { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, breakStartedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
-        breaks: admin.firestore.FieldValue.arrayUnion({ start: new Date(), type: 'STANDARD' }),
+        status: "ON_BREAK",
+        breaks: admin.firestore.FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
         updatedAt: now
     });
 
     await batch.commit();
+    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_TAKE_BREAK", targetType: "technician_shift", targetId: shiftId });
     return { status: "SUCCESS" };
 });
 
@@ -676,13 +679,15 @@ export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const now = admin.firestore.FieldValue.serverTimestamp();
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'WORKING', updatedAt: now });
+    batch.update(userRef, { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, breakEndedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
+        status: "ACTIVE",
         breaks,
         updatedAt: now
     });
 
     await batch.commit();
+    await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_RESUME_DUTY", targetType: "technician_shift", targetId: shiftId });
     return { status: "SUCCESS" };
 });
 
@@ -800,6 +805,141 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     }
 
     return { status: "SUCCESS" };
+});
+
+export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin", "operations_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
+
+    const ticketId = safeString(request.data?.ticketId);
+    const action = safeString(request.data?.action).toUpperCase();
+    const reason = safeString(request.data?.reason || request.data?.notes);
+    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
+
+    const allowedActions = new Set(["APPROVE_CLOSE", "DISPUTE", "REQUEST_REVISIT", "ESCALATE"]);
+    if (!allowedActions.has(action)) throw new HttpsError("invalid-argument", "Invalid owner review action.");
+    if (action !== "APPROVE_CLOSE" && reason.length < 8) {
+        throw new HttpsError("invalid-argument", "A clear reason is required for dispute, revisit, or escalation.");
+    }
+
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+    const ticketDoc = await ticketRef.get();
+    if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
+    const ticketData = ticketDoc.data() || {};
+    const uid = request.auth.uid;
+    const email = normalizeRole(request.auth.token?.email);
+    const ticketOwnerEmail = normalizeRole(ticketData.ownerEmail);
+    const tokenRole = normalizeRole(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole);
+    const isAdmin = request.auth.token?.admin === true || request.auth.token?.super_admin === true || request.auth.token?.superAdmin === true || ["admin", "super_admin", "operations_admin"].includes(tokenRole);
+    const isTicketOwner = ticketData.ownerId === uid || ticketData.ownerUid === uid || (!!email && ticketOwnerEmail === email);
+
+    if (!isAdmin && !isTicketOwner) {
+        throw new HttpsError("permission-denied", "This ticket is not linked to your owner account.");
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const baseUpdate: any = {
+        ownerReviewAction: action,
+        ownerReviewReason: reason || null,
+        ownerReviewedAt: now,
+        ownerReviewedBy: uid,
+        ownerReviewedByEmail: request.auth.token?.email || null,
+        updatedAt: now,
+        updatedBy: uid,
+        updatedByRole: isAdmin ? "admin" : "owner"
+    };
+
+    if (action === "APPROVE_CLOSE") {
+        Object.assign(baseUpdate, {
+            status: "CLOSED",
+            ownerApproved: true,
+            ownerVerifiedAt: now,
+            tenantApprovalRequired: false,
+            closedAt: now,
+            closureSource: "OWNER_REVIEW"
+        });
+    }
+
+    if (action === "DISPUTE") {
+        Object.assign(baseUpdate, {
+            status: "DISPUTED",
+            ownerApproved: false,
+            ownerDisputeReason: reason,
+            disputeReason: reason,
+            disputedAt: now,
+            disputeSource: "OWNER_REVIEW"
+        });
+    }
+
+    if (action === "REQUEST_REVISIT") {
+        Object.assign(baseUpdate, {
+            status: "REOPENED",
+            ownerApproved: false,
+            revisitRequested: true,
+            revisitReason: reason,
+            technicianStatus: "REVISIT_REQUESTED",
+            reopenedAt: now,
+            reopenSource: "OWNER_REVIEW"
+        });
+    }
+
+    if (action === "ESCALATE") {
+        Object.assign(baseUpdate, {
+            status: "ESCALATED",
+            ownerApproved: false,
+            escalationReason: reason,
+            escalatedAt: now,
+            escalationSource: "OWNER_REVIEW"
+        });
+    }
+
+    await ticketRef.update(baseUpdate);
+
+    await logAudit({
+        actorId: uid,
+        actorRole: isAdmin ? "admin" : "owner",
+        action: `OWNER_TICKET_${action}`,
+        targetType: "maintenanceTickets",
+        targetId: ticketId,
+        before: { status: ticketData.status, ownerApproved: ticketData.ownerApproved },
+        after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved },
+        reason: reason || undefined,
+        metadata: {
+            propertyId: ticketData.propertyId || "",
+            propertyName: ticketData.propertyName || "",
+            assignedTechnicianId: ticketData.assignedTechnicianId || ""
+        }
+    });
+
+    const ref8 = ticketId.substring(0, 8).toUpperCase();
+    const notificationTitle = action === "APPROVE_CLOSE"
+        ? "Owner closed ticket"
+        : action === "DISPUTE"
+            ? "Owner disputed ticket"
+            : action === "REQUEST_REVISIT"
+                ? "Owner requested revisit"
+                : "Owner escalated ticket";
+    const notificationBody = reason
+        ? `${notificationTitle} #${ref8}: ${reason}`
+        : `${notificationTitle} #${ref8}.`;
+
+    const notifyTargets = new Set<string>();
+    if (ticketData.assignedTechnicianId) notifyTargets.add(String(ticketData.assignedTechnicianId));
+    if (ticketData.technicianId) notifyTargets.add(String(ticketData.technicianId));
+    if (ticketData.tenantId) notifyTargets.add(String(ticketData.tenantId));
+    if (ticketData.tenantUid) notifyTargets.add(String(ticketData.tenantUid));
+
+    await Promise.allSettled(Array.from(notifyTargets)
+        .filter((targetId) => targetId && targetId !== uid)
+        .map((targetId) => dispatchOmniNotification(targetId, notificationTitle, notificationBody, {
+            extraData: { ticketId, type: "owner_ticket_review", action },
+            url: targetId === ticketData.assignedTechnicianId || targetId === ticketData.technicianId
+                ? `/technician/job/${ticketId}`
+                : `/tenant/ticket/${ticketId}`
+        })));
+
+    return { status: "SUCCESS", ticketId, action, nextStatus: baseUpdate.status };
 });
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
@@ -2596,21 +2736,55 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const techId = request.auth.uid;
     const techRef = db.collection("users").doc(techId);
+    const techDoc = await techRef.get();
+    const techData = techDoc.data() || {};
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const nowDate = new Date();
+    const gstDate = new Date(nowDate.getTime() + (4 * 60 * 60 * 1000));
+    const dateKey = `${gstDate.getUTCFullYear()}${String(gstDate.getUTCMonth() + 1).padStart(2, "0")}${String(gstDate.getUTCDate()).padStart(2, "0")}`;
+    const existingShiftId = String(techData.currentShiftId || "");
+    const shiftId = existingShiftId || `${techId}_${dateKey}_${nowDate.getTime()}`;
+    const shiftRef = db.collection("technician_shifts").doc(shiftId);
+    const batch = db.batch();
 
-    await techRef.update({
+    const shiftPayload: Record<string, any> = {
+        shiftId,
+        uid: techId,
+        technicianId: techId,
+        email: techData.email || request.auth.token?.email || "",
+        displayName: techData.displayName || techData.fullName || "Technician",
+        dateKey,
+        status: "ACTIVE",
+        clockIn: admin.firestore.Timestamp.fromDate(nowDate),
+        startedAt: admin.firestore.Timestamp.fromDate(nowDate),
+        source: "TECHNICIAN_DUTY_CALLABLE",
+        createdAt: now,
+        updatedAt: now
+    };
+    if (!existingShiftId) shiftPayload.breaks = [];
+
+    batch.set(shiftRef, shiftPayload, { merge: true });
+
+    batch.update(techRef, {
         onDuty: true,
+        isAvailable: true,
+        available: true,
         dutyStatus: "ON_DUTY",
-        dutyStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        dutyStartedAt: now,
+        currentShiftId: shiftId,
+        lastSeenAt: now,
+        updatedAt: now
     });
+
+    await batch.commit();
 
     await logAudit({
         actorId: techId,
         actorRole: "technician",
         action: "TECH_START_DUTY",
         targetType: "user",
-        targetId: techId
+        targetId: techId,
+        metadata: { shiftId, dateKey }
     });
 
     // Notify Admins (simplified)
@@ -2624,7 +2798,7 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
         });
     }
 
-    return { success: true };
+    return { success: true, shiftId };
 });
 
 /**
@@ -2646,22 +2820,42 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
         throw new HttpsError("failed-precondition", "Cannot end duty with an active job. Please complete or reassign your ticket first.");
     }
 
-    await techDoc.ref.update({
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const nowDate = new Date();
+    const shiftId = String(techData.currentShiftId || "");
+    const batch = db.batch();
+
+    batch.update(techDoc.ref, {
         onDuty: false,
+        isAvailable: false,
+        available: false,
         dutyStatus: "OFF_DUTY",
-        dutyEndedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        dutyEndedAt: now,
+        currentShiftId: admin.firestore.FieldValue.delete(),
+        updatedAt: now
     });
+
+    if (shiftId) {
+        batch.set(db.collection("technician_shifts").doc(shiftId), {
+            status: "CLOSED",
+            clockOut: admin.firestore.Timestamp.fromDate(nowDate),
+            endedAt: admin.firestore.Timestamp.fromDate(nowDate),
+            updatedAt: now
+        }, { merge: true });
+    }
+
+    await batch.commit();
 
     await logAudit({
         actorId: techId,
         actorRole: "technician",
         action: "TECH_END_DUTY",
         targetType: "user",
-        targetId: techId
+        targetId: techId,
+        metadata: { shiftId: shiftId || null }
     });
 
-    return { success: true };
+    return { success: true, shiftId: shiftId || null };
 });
 
 /**
@@ -3207,8 +3401,15 @@ export const onTechnicianDutyStatusChanged = onDocumentUpdated("users/{uid}", as
     const role = String(after.role || "").toLowerCase();
     if (role !== "technician") return;
 
-    const beforeStatus = before?.dutyStatus || "OFF";
-    const afterStatus = after.dutyStatus || "OFF";
+    const normalizeDutyLifecycleStatus = (value: any) => {
+        const status = String(value || "OFF").trim().replace(/\s+/g, "_").toUpperCase();
+        if (["ON_DUTY", "WORKING", "ACTIVE", "READY", "AVAILABLE"].includes(status)) return "WORKING";
+        if (["ON_BREAK", "BREAK", "STANDBY"].includes(status)) return "BREAK";
+        if (["OFF_DUTY", "OFF", "OFFLINE", "INACTIVE"].includes(status)) return "OFF";
+        return status;
+    };
+    const beforeStatus = normalizeDutyLifecycleStatus(before?.dutyStatus);
+    const afterStatus = normalizeDutyLifecycleStatus(after.dutyStatus);
     if (beforeStatus === afterStatus) return;
 
     const uid = event.params.uid;

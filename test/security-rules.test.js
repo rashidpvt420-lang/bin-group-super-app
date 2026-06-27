@@ -332,6 +332,142 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantBDb, 'paymentConfirmations/confirm_4')));
   });
 
+  it('broker KYC: broker cannot self-approve verified KYC fields', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/broker_a'), {
+      role: 'broker',
+      status: 'PENDING',
+      reraVerified: false,
+      reraStatus: 'PENDING',
+      brokerKycStatus: 'PENDING_REVIEW',
+    });
+
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();
+    await assertFails(updateDoc(doc(brokerDb, 'users/broker_a'), {
+      status: 'APPROVED',
+      reraVerified: true,
+      reraStatus: 'VERIFIED',
+      brokerKycStatus: 'VERIFIED',
+      updatedAt: new Date().toISOString(),
+    }));
+  });
+
+  it('broker payout requests: broker can create pending own request but cannot approve or pay it', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'broker_payout_requests/request_seed'), {
+      brokerId: 'broker_a',
+      brokerUid: 'broker_a',
+      amount: 2500,
+      status: 'PENDING_ADMIN_REVIEW',
+      approvalStatus: 'PENDING',
+      paymentStatus: 'REQUESTED',
+      commissionIds: ['commission_1'],
+    });
+
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();
+    await assertSucceeds(setDoc(doc(brokerDb, 'broker_payout_requests/request_new'), {
+      brokerId: 'broker_a',
+      brokerUid: 'broker_a',
+      brokerEmail: 'broker-a@example.com',
+      amount: 2500,
+      status: 'PENDING_ADMIN_REVIEW',
+      approvalStatus: 'PENDING',
+      paymentStatus: 'REQUESTED',
+      commissionIds: ['commission_1'],
+    }));
+
+    await assertFails(setDoc(doc(brokerDb, 'broker_payout_requests/request_paid'), {
+      brokerId: 'broker_a',
+      brokerUid: 'broker_a',
+      amount: 2500,
+      status: 'PAID',
+      approvalStatus: 'APPROVED',
+      paymentStatus: 'PAID',
+      paidBy: 'broker_a',
+      commissionIds: ['commission_1'],
+    }));
+
+    await assertFails(updateDoc(doc(brokerDb, 'broker_payout_requests/request_seed'), {
+      status: 'PAID',
+      paymentStatus: 'PAID',
+      paidBy: 'broker_a',
+    }));
+  });
+
+  it('tenant unit link fallback: tenant can request verification but cannot self-link or request for another tenant', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_a', { role: 'tenant', email: 'tenant-a@example.com' }).firestore();
+
+    await assertSucceeds(setDoc(doc(tenantDb, 'tenant_unit_link_requests/request_valid'), {
+      tenantUid: 'tenant_a',
+      tenantId: 'tenant_a',
+      tenantEmail: 'tenant-a@example.com',
+      propertyName: 'Pilot Tower',
+      unitNumber: '1204',
+      status: 'PENDING_ADMIN_REVIEW',
+      verificationState: 'ADMIN_OR_OWNER_VERIFICATION_REQUIRED',
+    }));
+
+    await assertFails(setDoc(doc(tenantDb, 'tenant_unit_link_requests/request_self_approved'), {
+      tenantUid: 'tenant_a',
+      tenantId: 'tenant_a',
+      propertyName: 'Pilot Tower',
+      unitNumber: '1204',
+      status: 'APPROVED',
+      verificationState: 'VERIFIED',
+      linkedUnitId: 'unit_a',
+    }));
+
+    await assertFails(setDoc(doc(tenantDb, 'tenant_unit_link_requests/request_other_tenant'), {
+      tenantUid: 'tenant_b',
+      tenantId: 'tenant_b',
+      propertyName: 'Pilot Tower',
+      unitNumber: '1204',
+      status: 'PENDING_ADMIN_REVIEW',
+      verificationState: 'ADMIN_OR_OWNER_VERIFICATION_REQUIRED',
+    }));
+  });
+
+  it('units owner isolation: owner cannot read or create units for another owner', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'units/owner_b_unit'), {
+      ownerId: 'owner_b',
+      propertyId: 'prop_b',
+      unitNumber: 'B-101',
+    });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a', { role: 'owner', email: 'owner-a@example.com' }).firestore();
+    await assertFails(getDoc(doc(ownerADb, 'units/owner_b_unit')));
+    await assertFails(setDoc(doc(ownerADb, 'units/owner_a_created_directly'), {
+      ownerId: 'owner_a',
+      propertyId: 'prop_a',
+      unitNumber: 'A-101',
+      status: 'VACANT',
+    }));
+  });
+
+  it('signed-in smoke checklist: admin can record proof and non-admin cannot', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await assertSucceeds(setDoc(doc(adminDb, 'signed_in_smoke_checks/admin_owner_smoke'), {
+      role: 'owner',
+      status: 'passed',
+      testerEmail: 'admin@example.com',
+      accountEmail: 'owner@example.com',
+      route: '/owner',
+      proofRef: 'screenshot-owner-dashboard.png',
+    }));
+
+    const tenantDb = testEnv.authenticatedContext('tenant_a', { role: 'tenant' }).firestore();
+    await assertFails(setDoc(doc(tenantDb, 'signed_in_smoke_checks/tenant_fake_smoke'), {
+      role: 'admin',
+      status: 'passed',
+      proofRef: 'fake',
+    }));
+  });
+
   it('amenitySlots: a tenant can claim a free slot but cannot overwrite another tenant\'s lock', async () => {
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();

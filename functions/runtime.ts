@@ -20,6 +20,7 @@ export * from "./aiDesignStudio";
 export * from "./contractSignatureOtp";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
+export * from "./profileP1Workflows";
 
 if (!admin.apps.length) {
   admin.initializeApp();

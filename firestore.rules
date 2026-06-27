@@ -189,6 +189,32 @@ service cloud.firestore {
         (!('approved' in data) || data.approved == false);
     }
 
+    function safeBrokerPayoutRequestCreate(data) {
+      return signedIn() &&
+        brokerOwns(data) &&
+        data.status == 'PENDING_ADMIN_REVIEW' &&
+        data.approvalStatus == 'PENDING' &&
+        data.paymentStatus == 'REQUESTED' &&
+        (!('approvedAt' in data) || data.approvedAt == null) &&
+        (!('approvedBy' in data) || data.approvedBy == null) &&
+        (!('paidAt' in data) || data.paidAt == null) &&
+        (!('paidBy' in data) || data.paidBy == null) &&
+        (!('commissionIds' in data) || data.commissionIds is list);
+    }
+
+    function safeTenantUnitLinkRequestCreate(data) {
+      return signedIn() &&
+        tenantOwns(data) &&
+        data.status == 'PENDING_ADMIN_REVIEW' &&
+        data.verificationState == 'ADMIN_OR_OWNER_VERIFICATION_REQUIRED' &&
+        data.unitNumber is string &&
+        data.unitNumber.size() > 0 &&
+        (!('approvedAt' in data) || data.approvedAt == null) &&
+        (!('approvedBy' in data) || data.approvedBy == null) &&
+        (!('linkedUnitId' in data) || data.linkedUnitId == null) &&
+        (!('linkedAt' in data) || data.linkedAt == null);
+    }
+
     function safeOwnerContractUpdate() {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
@@ -328,7 +354,23 @@ service cloud.firestore {
           'onDuty',
           'companyName',
           'reraLicense',
+          'reraStatus',
+          'reraVerified',
           'primaryRegion',
+          'brokerTerritory',
+          'tradeLicenseNumber',
+          'emiratesIdNumber',
+          'passportNumber',
+          'bankName',
+          'bankAccountHolder',
+          'bankIban',
+          'iban',
+          'commissionAgreementAccepted',
+          'commissionAgreementAcceptedAt',
+          'commissionTermsVersion',
+          'brokerKycStatus',
+          'brokerProfileCompletion',
+          'profileCompletionScore',
           'updatedAt'
         ]) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
@@ -340,6 +382,9 @@ service cloud.firestore {
         (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.super_admin) &&
         (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
         (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
+        (!('reraVerified' in request.resource.data) || request.resource.data.reraVerified == false || request.resource.data.reraVerified == resource.data.reraVerified) &&
+        (!('reraStatus' in request.resource.data) || request.resource.data.reraStatus in ['PENDING', 'NOT_SUBMITTED'] || request.resource.data.reraStatus == resource.data.reraStatus) &&
+        (!('brokerKycStatus' in request.resource.data) || request.resource.data.brokerKycStatus in ['INCOMPLETE', 'PENDING_REVIEW'] || request.resource.data.brokerKycStatus == resource.data.brokerKycStatus) &&
         (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.onboardingComplete) &&
         (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.propertyId) &&
         (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.unitId);
@@ -430,6 +475,13 @@ service cloud.firestore {
       allow delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
+    match /tenant_unit_link_requests/{requestId} {
+      allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (('propertyId' in resource.data) && resource.data.propertyId != null && isPropertyOwner(resource.data.propertyId));
+      allow create: if isAdmin() || safeTenantUnitLinkRequestCreate(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /contracts/{contractId} {
       allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageContracts');
       allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data);
@@ -502,6 +554,20 @@ service cloud.firestore {
     match /systemLogs/{logId} {
       allow read: if isAdmin() || isHr() || (signedIn() && resource.data.type == 'TENANT_NOTICE');
       allow create: if isAdmin() || isHr();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /launch_evidence/{evidenceId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /signed_in_smoke_checks/{checkId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -695,6 +761,13 @@ service cloud.firestore {
     match /broker_commissions/{commissionId} {
       allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /broker_payout_requests/{requestId} {
+      allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
+      allow create: if isAdmin() || safeBrokerPayoutRequestCreate(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
