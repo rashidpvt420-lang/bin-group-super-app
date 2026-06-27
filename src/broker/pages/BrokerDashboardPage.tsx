@@ -95,7 +95,7 @@ export default function BrokerDashboardPage() {
   ], [stats, tx]);
 
   const commands = [
-    { label: tx('broker.dash.add_lead', 'Add New Lead'), route: '/broker/leads/new', icon: <PlusCircle size={18} /> },
+    { label: tx('broker.dash.add_lead', 'Add New Lead'), route: '/broker/leads', icon: <PlusCircle size={18} /> },
     { label: tx('broker.dash.submit_referral', 'Submit Referral'), route: '/broker/referrals/new', icon: <Send size={18} /> },
     { label: tx('broker.dash.view_payouts', 'View Payouts'), route: '/broker/commissions', icon: <DollarSign size={18} /> },
     { label: tx('broker.dash.doc_vault', 'Document Vault'), route: '/broker/documents', icon: <FileText size={18} /> },
@@ -107,9 +107,15 @@ export default function BrokerDashboardPage() {
       <RoleJourneyStrip role="broker" />
       <Stack spacing={3}>
         {warning && <Alert severity="warning">{warning}</Alert>}
+        <Paper sx={{ p: 2.5, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>Broker attribution rule</Typography>
+          <Typography sx={{ color: '#111827', fontWeight: 850, mt: 0.5 }}>
+            Every lead, referral, tenant placement, contract handoff and commission must keep brokerId, brokerUid, brokerEmail, attributionId, source type, linked lead/contract/property, and admin review status.
+          </Typography>
+        </Paper>
         <Grid container spacing={3}>{statCards.map((card) => <Grid item xs={12} sm={6} md={3} key={card.label}><Paper onClick={() => navigate(card.route)} sx={{ p: 3, cursor: 'pointer', borderRadius: 5, bgcolor: alpha(card.tone, 0.06), border: `1px solid ${alpha(card.tone, 0.22)}` }}><Box sx={{ color: card.tone, mb: 1 }}>{card.icon}</Box><Typography variant="h5" fontWeight={950} sx={{ color: '#111827' }}>{card.value}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 950 }}>{card.label.toUpperCase()}</Typography></Paper></Grid>)}</Grid>
         <Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: '1px solid #E5E7EB' }}><Typography variant="h6" fontWeight={950} sx={{ color: '#111827', mb: 2 }}>Broker launcher</Typography><Grid container spacing={2}>{commands.map((action) => <Grid item xs={12} sm={6} md={2.4} key={action.route}><Button fullWidth variant="outlined" startIcon={action.icon} onClick={() => navigate(action.route)} sx={{ py: 1.5, borderColor: binThemeTokens.gold, color: '#111827', fontWeight: 900 }}>{action.label}</Button></Grid>)}</Grid></Paper>
-        <Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: '1px solid #E5E7EB' }}><Typography variant="h6" fontWeight={950} sx={{ color: '#111827', mb: 2 }}>Recent leads</Typography>{recentLeads.length === 0 ? <Typography sx={{ color: '#667085' }}>No recent lead activity yet.</Typography> : <Stack spacing={1.5}>{recentLeads.map((lead) => <Paper key={lead.id} sx={{ p: 2, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 3 }}><Typography fontWeight={900} sx={{ color: '#111827' }}>{lead.leadName || lead.clientName || lead.ownerName || 'Lead'}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><Chip size="small" label={String(lead.status || 'new').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} /><Typography variant="caption" sx={{ color: '#667085' }}>{lead.createdAt?.toDate ? lead.createdAt.toDate().toLocaleDateString() : 'Just now'}</Typography></Stack></Paper>)}</Stack>}</Paper>
+        <Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: '1px solid #E5E7EB' }}><Typography variant="h6" fontWeight={950} sx={{ color: '#111827', mb: 2 }}>Recent leads</Typography>{recentLeads.length === 0 ? <Typography sx={{ color: '#667085' }}>No recent lead activity yet.</Typography> : <Stack spacing={1.5}>{recentLeads.map((lead) => <Paper key={lead.id} sx={{ p: 2, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB', borderRadius: 3 }}><Typography fontWeight={900} sx={{ color: '#111827' }}>{lead.leadName || lead.clientName || lead.ownerName || 'Lead'}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><Chip size="small" label={String(lead.status || 'new').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} /><Typography variant="caption" sx={{ color: '#667085' }}>{lead.attributionId || 'Attribution pending'} · {lead.createdAt?.toDate ? lead.createdAt.toDate().toLocaleDateString() : 'Just now'}</Typography></Stack></Paper>)}</Stack>}</Paper>
       </Stack>
     </BrokerPageFrame>
   );
