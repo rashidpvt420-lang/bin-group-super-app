@@ -21,7 +21,7 @@ import {
   alpha,
 } from '@mui/material';
 import { AlertCircle, Building, Building2, CheckCircle2, Clock, DollarSign, FileText, Info, Plus } from 'lucide-react';
-import { addDoc, collection, db, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../../lib/firebase';
+import { addDoc, collection, db, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
@@ -163,8 +163,12 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         },
       };
 
+      const refRef = doc(collection(db, 'referrals'));
+      const attributionId = `broker_referral_${brokerId}_${refRef.id}`;
       const referralData: any = {
         ...baseAttribution,
+        attributionId,
+        sourceReferralId: refRef.id,
         referralType,
         clientName: clean(clientName),
         phone: clean(phone),
@@ -189,6 +193,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         referralData.commissionStatus = 'PENDING';
         referralData.commissionRate = 0.02;
         referralData.commissionAmount = Math.round(estimatedAmount * 0.02);
+        referralData.commissionCreationStatus = 'PENDING_ADMIN_CONTRACT_MATCH';
       } else {
         referralData.propertyName = clean(propertyName);
         referralData.propertyType = clean(propertyType);
@@ -197,13 +202,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         referralData.estimatedValue = estimatedAmount;
       }
 
-      const refRef = await addDoc(collection(db, 'referrals'), referralData);
-      const attributionId = `broker_referral_${brokerId}_${refRef.id}`;
-      await updateDoc(doc(db, 'referrals', refRef.id), {
-        attributionId,
-        sourceReferralId: refRef.id,
-        updatedAt: serverTimestamp(),
-      });
+      await setDoc(refRef, referralData);
 
       const auditPayload = {
         actorId: brokerId,

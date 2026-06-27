@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { auth, signInWithPopup, signInWithEmailAndPassword } from '../lib/firebase';
+import { auth, browserLocalPersistence, setPersistence, signInWithRedirect, signInWithEmailAndPassword } from '../lib/firebase';
 import { 
     GoogleAuthProvider,
     sendPasswordResetEmail
@@ -45,6 +45,12 @@ export default function UnifiedLogin() {
         if (code === 'auth/popup-closed-by-user') {
             return 'Google sign-in was cancelled.';
         }
+        if (code === 'auth/unauthorized-domain') {
+            return 'This admin domain is not authorized for Firebase sign-in. Add bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com in Firebase Authentication authorized domains.';
+        }
+        if (code === 'auth/operation-not-allowed') {
+            return 'This admin sign-in method is not enabled in Firebase Authentication. Enable Email/Password or Google sign-in.';
+        }
         if (code === 'auth/network-request-failed') {
             return 'Network connection failed. Please try again.';
         }
@@ -56,12 +62,11 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
         try {
             console.log("🔍 [DIAG] Starting Admin Google sign-in...");
-            const result = await signInWithPopup(auth, provider);
-            if (result.user) {
-                console.log("🛡️ [AUTH] Admin Google sign-in successful for:", result.user.email);
-            }
+            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
+            await signInWithRedirect(auth, provider);
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
             setLocalLoading(false);
@@ -74,6 +79,7 @@ export default function UnifiedLogin() {
         setLocalError(null);
         try {
             console.log("🔍 [DIAG] Validating admin credentials...");
+            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
             const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
             if (result.user) {
                 console.log("🛡️ [AUTH] Admin login successful for:", result.user.email);
@@ -140,7 +146,7 @@ export default function UnifiedLogin() {
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
                     
                     <div className="mb-8">
-                        <h2 className="text-xl font-black text-white mb-2">Admin Portal</h2>
+                        <h2 className="text-xl font-black text-white mb-2">Admin Login</h2>
                         <p className="text-sm text-[#64748b] leading-relaxed">
                             Authorized BIN GROUP administrators only.
                         </p>
@@ -205,7 +211,7 @@ export default function UnifiedLogin() {
                     >
                         <div className="flex items-center gap-3">
                             <Globe className="w-5 h-5" />
-                            <span className="uppercase tracking-widest text-sm">{t('login.google')}</span>
+                            <span className="uppercase tracking-widest text-sm">{t('login.google') || 'Sign in with Google'}</span>
                         </div>
                     </button>
 

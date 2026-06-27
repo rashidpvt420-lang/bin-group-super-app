@@ -767,7 +767,7 @@ service cloud.firestore {
 
     match /broker_payout_requests/{requestId} {
       allow read: if isAdmin() || brokerOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || safeBrokerPayoutRequestCreate(request.resource.data);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

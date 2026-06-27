@@ -353,7 +353,7 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
-  it('broker payout requests: broker can create pending own request but cannot approve or pay it', async () => {
+  it('broker payout requests: broker cannot bypass callable review by writing request records directly', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'broker_payout_requests/request_seed'), {
@@ -367,7 +367,8 @@ describe('Firestore Security Rules', () => {
     });
 
     const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();
-    await assertSucceeds(setDoc(doc(brokerDb, 'broker_payout_requests/request_new'), {
+    await assertSucceeds(getDoc(doc(brokerDb, 'broker_payout_requests/request_seed')));
+    await assertFails(setDoc(doc(brokerDb, 'broker_payout_requests/request_new'), {
       brokerId: 'broker_a',
       brokerUid: 'broker_a',
       brokerEmail: 'broker-a@example.com',

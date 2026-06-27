@@ -67,6 +67,7 @@ export default function TenantDashboardPage() {
   const [notices, setNotices] = useState<any[]>([]);
   const [permissionWarning, setPermissionWarning] = useState('');
   const [ticketReadWarning, setTicketReadWarning] = useState('');
+  const [showMoreServices, setShowMoreServices] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,7 +189,7 @@ export default function TenantDashboardPage() {
     { label: tx('service.moving', 'Moving & Packing'), icon: <Truck size={20} />, route: '/tenant/request?category=moving', visible: true },
     { label: showMaintenance ? tx('nav.maintenance', 'Maintenance') : tx('service.contactMgmt', 'Contact Management'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management', visible: true },
     { label: tx('nav.ai_studio', 'AI Design Studio'), icon: <Paintbrush size={20} />, route: '/tenant/design-studio', visible: true },
-    { label: tx('service.handover', 'Move-In / Move-Out'), icon: <Home size={20} />, route: '/tenant/documents?type=handover', visible: true },
+    { label: tx('service.handover', 'Move-In / Move-Out'), icon: <Home size={20} />, route: '/tenant/move-inspection/move-out', visible: true },
     { label: tx('service.gatePass', 'Gate Pass'), icon: <ShieldCheck size={20} />, route: '/tenant/gate-pass', visible: showManagement },
     { label: tx('service.amenities', 'Amenities'), icon: <Dumbbell size={20} />, route: '/tenant/amenities', visible: showManagement },
     { label: tx('service.notices', 'Notices'), icon: <Bell size={20} />, route: '/tenant/notices', visible: true },
@@ -200,6 +201,13 @@ export default function TenantDashboardPage() {
     { label: tx('service.messages', 'Messages'), icon: <MessageSquare size={20} />, route: '/tenant/messages', visible: true },
     { label: tx('service.community', 'Community Board'), icon: <Users size={20} />, route: '/tenant/community', visible: true },
   ].filter((button) => button.visible), [showMaintenance, showManagement, tx]);
+
+  const primaryServiceButtons = useMemo(() => [
+    { label: showMaintenance ? tx('dash.newRequestBtn', 'Report Issue') : tx('dash.managementRequest', 'Management Request'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management' },
+    { label: tx('dash.emergency_dispatch', 'Emergency'), icon: <AlertTriangle size={20} />, route: '/tenant/emergency' },
+    { label: tx('tenant.quick.tickets', 'My Tickets'), icon: <Activity size={20} />, route: '/tenant/tickets' },
+    { label: tx('dash.paymentsDocsReceipts', 'Payments & Documents'), icon: <CreditCard size={20} />, route: '/tenant/payments' },
+  ], [showMaintenance, tx]);
 
   const tenantWorkflowSteps = [
     {
@@ -348,7 +356,31 @@ export default function TenantDashboardPage() {
           <Grid item xs={12} lg={4}>
             <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, mb: 4 }}>
               <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2 }}>{tx('dash.quick_services', 'Quick Services')}</Typography>
-              <Grid container spacing={2}>{serviceButtons.map((service) => <Grid item xs={6} key={service.label}><Button fullWidth variant="outlined" onClick={() => navigate(service.route)} sx={{ minHeight: 112, flexDirection: 'column', gap: 1, borderColor: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 4, fontWeight: 900 }}><Box sx={{ color: binThemeTokens.gold }}>{service.icon}</Box>{service.label}</Button></Grid>)}</Grid>
+              <Grid container spacing={2}>
+                {primaryServiceButtons.map((service) => (
+                  <Grid item xs={6} key={service.label}>
+                    <Button fullWidth variant="outlined" onClick={() => navigate(service.route)} sx={{ minHeight: 104, flexDirection: 'column', gap: 1, borderColor: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 4, fontWeight: 900 }}>
+                      <Box sx={{ color: binThemeTokens.gold }}>{service.icon}</Box>
+                      {service.label}
+                    </Button>
+                  </Grid>
+                ))}
+              </Grid>
+              <Button fullWidth variant="outlined" onClick={() => setShowMoreServices((value) => !value)} sx={{ mt: 2, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+                {showMoreServices ? tx('dash.hide_more_services', 'Hide More Services') : tx('dash.more_services', 'More Services')}
+              </Button>
+              {showMoreServices && (
+                <Grid container spacing={2} sx={{ mt: 0 }}>
+                  {serviceButtons.map((service) => (
+                    <Grid item xs={6} key={service.label}>
+                      <Button fullWidth variant="outlined" onClick={() => navigate(service.route)} sx={{ minHeight: 96, flexDirection: 'column', gap: 1, borderColor: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 4, fontWeight: 900, fontSize: '0.78rem' }}>
+                        <Box sx={{ color: binThemeTokens.gold }}>{service.icon}</Box>
+                        {service.label}
+                      </Button>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
             </Paper>
             <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6 }}>
               <Typography variant="h6" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'flex', gap: 1, alignItems: 'center' }}><FileText size={20} /> {tx('dash.notices', 'Notices')}</Typography>
