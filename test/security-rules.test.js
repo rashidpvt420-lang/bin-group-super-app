@@ -456,6 +456,21 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantADb, 'parcels/parcel_b')));
   });
 
+  it('tenant can mark an announcement as read but cannot edit its content', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
+    await setDoc(doc(adminDb, 'announcements/notice_a'), { propertyId: 'prop_a', title: 'Water shutdown', body: 'Maintenance at 9am', readBy: {} });
+
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    // Tenant can mark it as read (only touching the readBy map)
+    await assertSucceeds(updateDoc(doc(tenantADb, 'announcements/notice_a'), { 'readBy.tenant_a': true }));
+    // Tenant cannot edit the announcement's own content
+    await assertFails(updateDoc(doc(tenantADb, 'announcements/notice_a'), { title: 'Hacked title' }));
+  });
+
   it('admin can manage parcel/parking/amenity records', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });

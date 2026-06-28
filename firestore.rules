@@ -765,7 +765,7 @@ service cloud.firestore {
     match /announcements/{announcementId} {
       allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
       allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && getTenantPropertyId() == resource.data.propertyId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']));
       allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
     }
 
