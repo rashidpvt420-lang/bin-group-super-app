@@ -174,7 +174,7 @@ function AppContent() {
   return (
     <RoleRedirector>
       <Routes>
-        <Route path="/" element={<PublicMarketingPage page="home" />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/owner-landing" element={<OwnerLandingPage />} />
         <Route path="/v1" element={<LandingPage />} />
         <Route path="/gateway" element={<RoleGatewayPage />} />
