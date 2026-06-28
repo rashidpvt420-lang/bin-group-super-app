@@ -54,6 +54,33 @@ describe('Firestore Security Rules', () => {
     await assertFails(updateDoc(doc(ownerADb, 'contracts/contract_1'), { status: 'ACTIVE' }));
   });
 
+  it('unit tenancy registration: Owner can set Ejari/Tawtheeq number on their own unit', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'units/unit_owned'), { ownerId: 'owner_a', tenantId: 'tenant_a', propertyId: 'prop_a' });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
+    await assertSucceeds(updateDoc(doc(ownerADb, 'units/unit_owned'), { tenancyRegistrationNumber: 'EJARI-12345' }));
+  });
+
+  it('unit tenancy registration: Owner cannot use the same write to alter other unit fields', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'units/unit_owned_2'), { ownerId: 'owner_a', tenantId: 'tenant_a', propertyId: 'prop_a', rentAmount: 5000 });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
+    await assertFails(updateDoc(doc(ownerADb, 'units/unit_owned_2'), { tenancyRegistrationNumber: 'EJARI-99999', rentAmount: 99999 }));
+  });
+
+  it('unit tenancy registration: Non-owner cannot set the registration number on another owner\'s unit', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'units/unit_owned_3'), { ownerId: 'owner_b', tenantId: 'tenant_b', propertyId: 'prop_b' });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
+    await assertFails(updateDoc(doc(ownerADb, 'units/unit_owned_3'), { tenancyRegistrationNumber: 'EJARI-00000' }));
+  });
+
   it('payment transaction protection: User cannot create payment transaction with paymentVerified true', async () => {
     const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
     await assertFails(setDoc(doc(ownerADb, 'payment_transactions/pay_1'), { ownerId: 'owner_a', paymentVerified: true }));

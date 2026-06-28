@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, 
-    Table, TableBody, TableCell, TableContainer, TableHead, 
+import {
+    Box, Typography, Paper, Stack, Chip, CircularProgress,
+    Table, TableBody, TableCell, TableContainer, TableHead,
     TableRow, TextField, InputAdornment, alpha, Button,
-    Tooltip, IconButton, Grid
+    Tooltip, IconButton, Grid, Dialog, DialogTitle, DialogContent, DialogActions, Alert
 } from '@mui/material';
-import { 
-    Search, Building2, DollarSign, Users, 
+import {
+    Search, Building2, DollarSign, Users,
     Filter, ArrowUpRight, ChevronRight, Layout,
-    CheckCircle2, AlertCircle, Clock
+    CheckCircle2, AlertCircle, Clock, Pencil
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -24,6 +24,10 @@ export default function OwnerUnitsPage() {
     const [units, setUnits] = useState<any[]>([]);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
+    const [editUnit, setEditUnit] = useState<any | null>(null);
+    const [registrationInput, setRegistrationInput] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
 
     useEffect(() => {
         if (!user?.email) return;
@@ -66,6 +70,38 @@ export default function OwnerUnitsPage() {
         const matchesStatus = filterStatus === 'ALL' || u.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
+
+    const openEditDialog = (unit: any) => {
+        setEditUnit(unit);
+        setRegistrationInput(unit.tenancyRegistrationNumber || '');
+        setSaveError('');
+    };
+
+    const closeEditDialog = () => {
+        if (saving) return;
+        setEditUnit(null);
+        setRegistrationInput('');
+        setSaveError('');
+    };
+
+    const saveRegistration = async () => {
+        if (!editUnit?.id) return;
+        setSaving(true);
+        setSaveError('');
+        try {
+            await updateDoc(doc(db, 'units', editUnit.id), {
+                tenancyRegistrationNumber: registrationInput.trim(),
+                updatedAt: serverTimestamp(),
+            });
+            setUnits(prev => prev.map(u => u.id === editUnit.id ? { ...u, tenancyRegistrationNumber: registrationInput.trim() } : u));
+            setEditUnit(null);
+            setRegistrationInput('');
+        } catch (err: any) {
+            setSaveError(err?.message || 'Failed to save tenancy registration number.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const getStatusColor = (status: string) => {
         switch (status?.toUpperCase()) {
@@ -149,6 +185,9 @@ export default function OwnerUnitsPage() {
                                     <TableCell>
                                         <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900, fontFamily: 'monospace', letterSpacing: 1 }}>{unit.unitNumber}</Typography>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{unit.propertyName} · Level {unit.floorNumber || 1}</Typography>
+                                        <Typography variant="caption" sx={{ color: unit.tenancyRegistrationNumber ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)', display: 'block', mt: 0.5 }}>
+                                            {unit.tenancyRegistrationNumber ? `Ejari/Tawtheeq: ${unit.tenancyRegistrationNumber}` : 'No tenancy registration on file'}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -187,6 +226,11 @@ export default function OwnerUnitsPage() {
                                         </Stack>
                                     </TableCell>
                                     <TableCell align="right">
+                                        <Tooltip title="Edit Ejari / Tawtheeq registration number">
+                                            <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.5)' }} onClick={() => openEditDialog(unit)}>
+                                                <Pencil size={16} />
+                                            </IconButton>
+                                        </Tooltip>
                                         <IconButton size="small" sx={{ color: binThemeTokens.gold }} onClick={() => navigate(`/owner/properties/${unit.propertyId}`)}>
                                             <ChevronRight size={18} />
                                         </IconButton>
@@ -216,6 +260,36 @@ export default function OwnerUnitsPage() {
                     </Grid>
                 </Grid>
             </Paper>
+
+            <Dialog open={Boolean(editUnit)} onClose={closeEditDialog} maxWidth="sm" fullWidth>
+                <DialogTitle>{tx('owner.units.tenancyRegTitle', 'Tenancy Registration Number')}</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                        {tx('owner.units.tenancyRegHelp', 'Enter the Ejari (Dubai) or Tawtheeq (Abu Dhabi) tenancy contract registration number for this unit. Leave blank to clear it.')}
+                        {editUnit?.unitNumber ? ` Unit ${editUnit.unitNumber}.` : ''}
+                    </Typography>
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        label={tx('owner.units.tenancyRegLabel', 'Ejari / Tawtheeq number')}
+                        value={registrationInput}
+                        onChange={e => setRegistrationInput(e.target.value)}
+                        placeholder="e.g. 123456789"
+                    />
+                    {saveError && <Alert severity="error" sx={{ mt: 2 }}>{saveError}</Alert>}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeEditDialog} disabled={saving}>{tx('common.cancel', 'Cancel')}</Button>
+                    <Button
+                        variant="contained"
+                        onClick={saveRegistration}
+                        disabled={saving}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
+                    >
+                        {saving ? tx('common.saving', 'Saving...') : tx('common.save', 'Save')}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

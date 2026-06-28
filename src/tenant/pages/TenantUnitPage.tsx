@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
-import { Building2, ClipboardCheck, Home, ShieldCheck, UserRound, Wrench } from 'lucide-react';
+import { Building2, ClipboardCheck, FileText, Home, ShieldCheck, UserRound, Wrench } from 'lucide-react';
 import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -21,6 +21,7 @@ type UnitDoc = {
   ownerId?: string;
   ownerUid?: string;
   ownerEmail?: string;
+  tenancyRegistrationNumber?: string;
 };
 
 type InspectionForm = {
@@ -154,9 +155,10 @@ export default function TenantUnitPage() {
         </Paper>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><FileText color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>TENANCY REGISTRATION</Typography><Typography sx={{ color: unit.tenancyRegistrationNumber ? '#FFF' : 'rgba(255,255,255,0.3)', fontWeight: 950 }}>{unit.tenancyRegistrationNumber || 'Not yet registered'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Ejari / Tawtheeq</Typography></Paper></Grid>
         </Grid>
 
         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>

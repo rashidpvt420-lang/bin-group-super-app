@@ -196,6 +196,11 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
+    function safeOwnerUnitUpdate() {
+      return signedIn() && ownerCanRead(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tenancyRegistrationNumber', 'updatedAt']);
+    }
+
     function safeTenantEvidenceUpdate() {
       return signedIn() && tenantOwns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photos', 'primaryPhotoUrl', 'tenantPhotos', 'evidenceStatus', 'evidenceUploadedAt', 'evidenceUploadError', 'updatedAt']) &&
@@ -426,7 +431,7 @@ service cloud.firestore {
     match /units/{unitId} {
       allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin() || hasPermission('canManageProperties');
-      allow update: if isAdmin() || hasPermission('canManageProperties');
+      allow update: if isAdmin() || hasPermission('canManageProperties') || safeOwnerUnitUpdate();
       allow delete: if isAdmin() || hasPermission('canManageProperties');
     }
 
