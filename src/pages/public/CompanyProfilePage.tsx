@@ -63,7 +63,7 @@ const content: Record<'en' | 'ar', CompanyContent> = {
       ['Broker', 'Submit a lead, keep attribution visible, and follow commission after the deal is verified.', 'Submit a lead'],
     ],
     whyUsTitle: 'Why owners and tenants choose BIN GROUP',
-    whyUsSubtitle: 'Not a call centre. Not a stack of WhatsApp threads. One licensed company that gives you direct access to your own property.',
+    whyUsSubtitle: 'Not a call centre. Not a stack of WhatsApp threads. One licensed company connecting Owners, Tenants, Technicians, and Brokers inside the same real-time system — so you get direct, full access to your own property, not updates relayed by a manager.',
     whyUs: [
       ['Full access, no middleman', 'Owners get a live login to their own property — costs, contracts, tickets, and history — instead of waiting on a manager to report back.'],
       ['Dispatch, not dispatch-and-pray', 'Maintenance jobs go to a technician with GPS-tracked job status, so owners and tenants both see exactly where the job stands.'],
@@ -104,7 +104,7 @@ const content: Record<'en' | 'ar', CompanyContent> = {
       ['الوسيط', 'أرسل فرصة عقارية، حافظ على وضوح مصدر الإحالة، وتابع العمولة بعد تأكيد الصفقة.', 'أرسل فرصة'],
     ],
     whyUsTitle: 'لماذا يختار الملاك والمستأجرون BIN GROUP',
-    whyUsSubtitle: 'لسنا مركز اتصال، ولسنا سلسلة محادثات واتساب متفرقة. شركة مرخصة واحدة تعطيك دخولاً مباشراً لعقارك.',
+    whyUsSubtitle: 'لسنا مركز اتصال، ولسنا سلسلة محادثات واتساب متفرقة. شركة مرخصة واحدة تربط المالك والمستأجر والفني والوسيط داخل نظام واحد لحظي — لتحصل على دخول مباشر وكامل لعقارك، لا تحديثات يرويها لك مدير.',
     whyUs: [
       ['دخول كامل، بدون وسيط', 'يحصل المالك على بوابة دخول مباشرة لعقاره — التكاليف والعقود والتذاكر والتاريخ — بدلاً من انتظار مدير يرفع له تقريراً.'],
       ['إرسال فني موثّق، لا إرسال بلا تتبع', 'تذهب طلبات الصيانة لفني مع تتبع حالة العمل عبر GPS، فيرى المالك والمستأجر بدقة أين أصبح العمل.'],
