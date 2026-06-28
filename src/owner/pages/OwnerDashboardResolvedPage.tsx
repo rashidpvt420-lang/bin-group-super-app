@@ -244,6 +244,7 @@ export default function OwnerDashboardResolvedPage() {
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [permissionWarning, setPermissionWarning] = useState('');
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
 
@@ -455,6 +456,25 @@ export default function OwnerDashboardResolvedPage() {
       liveUnsubs.current.push(unsubApprovals);
     } catch (e) {
       console.warn('[OwnerDashboard] Could not attach live approval listener:', e);
+    }
+
+    // Live owner bank account / IBAN status (drives the "missing IBAN" action item)
+    try {
+      const bankQuery = query(
+        collection(db, 'ownerBankAccounts'),
+        where('ownerId', '==', authUid)
+      );
+      const unsubBank = onSnapshot(
+        bankQuery,
+        (snap) => { setBankAccounts(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); },
+        (err) => {
+          if (isPermDenied(err)) warnLiveDenied('bank account status');
+          else console.warn('[OwnerDashboard] Live bank account error:', err);
+        }
+      );
+      liveUnsubs.current.push(unsubBank);
+    } catch (e) {
+      console.warn('[OwnerDashboard] Could not attach live bank account listener:', e);
     }
 
     return () => {
@@ -694,7 +714,7 @@ export default function OwnerDashboardResolvedPage() {
   const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
   const mobilization = Number(contract.mobilizationAmount || contract.activationDeposit || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
   const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: ledgerSummary?.totalRentPaid ?? stats.rent, payoutsPending: pendingPayments, maintenanceCost: stats.maintenance };
-  const missingInfo = { iban: false, units: stats.units === 0 };
+  const missingInfo = { iban: !bankAccounts.some((b) => b.verified), units: stats.units === 0 };
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
