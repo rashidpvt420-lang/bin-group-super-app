@@ -169,6 +169,7 @@ const mobilizationOf = (contract: any) => {
     contract?.commercialSchedule?.mobilizationAmount,
     contract?.paymentSchedule?.mobilizationAmount,
     contract?.mobilizationAmount,
+    contract?.activationDeposit,
     contract?.depositAmount,
     contract?.mobilizationFee,
     contract?.upfrontAmount,

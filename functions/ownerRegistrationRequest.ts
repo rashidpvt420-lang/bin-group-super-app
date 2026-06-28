@@ -348,6 +348,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     contractUrl,
     annualContractValue: annualContractValue || amount,
     activationDeposit,
+    mobilizationAmount: activationDeposit,
     status: "PENDING_PAYMENT_ACTIVATION",
     createdAt: timestamp,
     updatedAt: timestamp

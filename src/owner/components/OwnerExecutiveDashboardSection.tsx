@@ -353,7 +353,7 @@ export default function OwnerExecutiveDashboardSection({
   const pmEnabled = canSeePropertyManagement(contractMode);
   const annualContractValue = toNumber(liveContract.annualContractValue || liveContract.annualValue || liveContract.totalValue, 0);
   const mobilization = toNumber(
-    liveContract.mobilizationAmount || liveContract.depositAmount || liveContract.paymentSchedule?.mobilizationAmount,
+    liveContract.mobilizationAmount || liveContract.activationDeposit || liveContract.depositAmount || liveContract.paymentSchedule?.mobilizationAmount,
     annualContractValue ? Math.round(annualContractValue * 0.15) : 0
   );
   const paymentStatus = normalizeStatus(

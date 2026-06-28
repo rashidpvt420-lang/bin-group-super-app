@@ -32,7 +32,7 @@ export function resolveOwnerFinancials(
 ): OwnerFinancialState {
   const contractMode = detectContractMode(contract);
   const annualContractValue = Number(contract?.annualValue || contract?.contractValue || contract?.totalValue || contract?.annualContractValue || 0);
-  const mobilizationAmount = Number(contract?.mobilizationAmount || contract?.depositAmount || (annualContractValue * 0.15));
+  const mobilizationAmount = Number(contract?.mobilizationAmount || contract?.activationDeposit || contract?.depositAmount || (annualContractValue * 0.15));
   const paymentStatus = String(contract?.paymentStatus || 'PENDING').toUpperCase();
 
   let totalPaid = 0;

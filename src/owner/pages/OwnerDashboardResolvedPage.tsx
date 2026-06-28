@@ -692,7 +692,7 @@ export default function OwnerDashboardResolvedPage() {
 
   const contract = resolution.contract || {};
   const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
-  const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
+  const mobilization = Number(contract.mobilizationAmount || contract.activationDeposit || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
   const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: ledgerSummary?.totalRentPaid ?? stats.rent, payoutsPending: pendingPayments, maintenanceCost: stats.maintenance };
   const missingInfo = { iban: false, units: stats.units === 0 };
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });

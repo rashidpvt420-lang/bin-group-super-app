@@ -48,6 +48,7 @@ const contractMobilization = (contract: any, annualValue: number) => firstNumber
   contract?.commercialSchedule?.mobilizationAmount,
   contract?.paymentSchedule?.mobilizationAmount,
   contract?.mobilizationAmount,
+  contract?.activationDeposit,
   contract?.depositAmount,
   contract?.mobilizationFee,
   contract?.upfrontAmount,
