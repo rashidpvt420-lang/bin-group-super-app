@@ -4,7 +4,7 @@ import { ShieldCheck, Plus, Clock, Trash2, Car, Calendar, AlertCircle } from 'lu
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, query, where, getDocs, limit, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, limit, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
@@ -78,7 +78,23 @@ export default function TenantVisitorParkingPage() {
     setSubmitting(true);
     try {
       const passCode = `VP-${Math.floor(100000 + Math.random() * 900000)}`;
+      const vStart = new Date(visitStartAt).getTime();
+      const vEnd = new Date(visitEndAt).getTime();
+      
+      const generateSignedQrPass = httpsCallable(functions, 'generateSignedQrPass');
+      const result = await generateSignedQrPass({
+          propertyId,
+          unitId,
+          type: 'visitor_parking',
+          name: visitorName.trim(),
+          validFrom: vStart,
+          validUntil: vEnd
+      });
+      const { token, passId } = result.data as any;
+
       await addDoc(collection(db, 'visitorParkingRequests'), {
+        passId,
+        qrToken: token,
         propertyId,
         unitId,
         tenantUid: user.uid,
@@ -88,7 +104,6 @@ export default function TenantVisitorParkingPage() {
         visitEndAt,
         status: 'pending',
         passCode,
-        qrPayload: JSON.stringify({ passCode, visitorName, vehiclePlate }),
         createdAt: serverTimestamp()
       });
       setOpenAdd(false);
@@ -179,7 +194,7 @@ export default function TenantVisitorParkingPage() {
                   {isApproved && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
                       <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
-                        <QRCodeSVG value={r.qrPayload || 'invalid'} size={140} fgColor="#0f172a" />
+                        <QRCodeSVG value={r.qrToken || r.qrPayload || 'invalid'} size={140} fgColor="#0f172a" />
                       </Box>
                     </Box>
                   )}

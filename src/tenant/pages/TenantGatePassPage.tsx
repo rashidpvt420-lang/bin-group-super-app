@@ -9,7 +9,7 @@ import { ShieldCheck, Plus, Clock, Trash2, Phone, Calendar } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantGatePassPage() {
@@ -51,7 +51,22 @@ export default function TenantGatePassPage() {
         if (!user?.uid || !visitorName.trim()) return;
         setSubmitting(true);
         try {
+            const validUntil = Date.now() + (parseInt(duration, 10) * 3600 * 1000);
+            
+            const generateSignedQrPass = httpsCallable(functions, 'generateSignedQrPass');
+            const result = await generateSignedQrPass({
+                propertyId: 'default_prop',
+                unitId: 'default_unit',
+                type: visitorType,
+                name: visitorName.trim(),
+                validFrom: Date.now(),
+                validUntil
+            });
+            const { token, passId } = result.data as any;
+
             await addDoc(collection(db, 'gatePasses'), {
+                passId,
+                qrToken: token,
                 tenantUid: user.uid,
                 tenantName: user.displayName || 'Resident',
                 visitorName: visitorName.trim(),
@@ -117,7 +132,7 @@ export default function TenantGatePassPage() {
                             <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
                                     <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
-                                        <QRCodeSVG value={JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName })} size={140} fgColor="#0f172a" />
+                                        <QRCodeSVG value={pass.qrToken || JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName })} size={140} fgColor="#0f172a" />
                                     </Box>
                                 </Box>
                                 <CardContent sx={{ p: 4 }}>

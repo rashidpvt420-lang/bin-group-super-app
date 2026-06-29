@@ -766,6 +766,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /auditLogs/{logId} {
+      allow read: if isAdmin() || isHr() || isAuditor();
+      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /notifications/{notificationId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
       allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));

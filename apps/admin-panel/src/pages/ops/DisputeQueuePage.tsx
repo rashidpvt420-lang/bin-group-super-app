@@ -61,8 +61,33 @@ export default function DisputeQueuePage() {
 
             if (resolutionAction === 'request_revisit') {
                 updates.status = 'disputed_revisit_required';
+                await addDoc(collection(db, 'maintenanceTickets'), {
+                    parentId: selectedDispute.id,
+                    tenantId: selectedDispute.tenantId || null,
+                    tenantUid: selectedDispute.tenantUid || null,
+                    ownerId: selectedDispute.ownerId || null,
+                    propertyId: selectedDispute.propertyId || null,
+                    unitId: selectedDispute.unitId || null,
+                    title: `REVISIT: ${selectedDispute.title || 'Disputed Job'}`,
+                    description: `Admin Revisit Dispatch. Reason: ${resolutionNote || 'No notes'}`,
+                    status: 'OPEN',
+                    priority: 'high',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
             } else if (resolutionAction === 'approve_credit') {
                 updates.status = 'closed_with_credit';
+                if (selectedDispute.ownerId) {
+                    await addDoc(collection(db, 'payment_transactions'), {
+                        ownerId: selectedDispute.ownerId,
+                        type: 'SLA_CREDIT',
+                        amount: 50, // Standard SLA credit or variable
+                        currency: 'AED',
+                        description: `SLA Credit for Disputed Ticket: ${selectedDispute.id}`,
+                        status: 'COMPLETED',
+                        createdAt: serverTimestamp()
+                    });
+                }
             } else if (resolutionAction === 'dismiss') {
                 updates.status = 'closed';
             }

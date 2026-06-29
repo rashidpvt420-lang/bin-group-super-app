@@ -529,32 +529,32 @@ export const approveOwnerActivation = onCall({ cors: true }, async (request) => 
   const now = ts();
 
   // 1. Update intake_submissions
-  batch.update(db.collection("intake_submissions").doc(intakeId), {
+  batch.set(db.collection("intake_submissions").doc(intakeId), {
     status: "APPROVED",
     approvedAt: now,
     approvedBy: adminId
-  });
+  }, { merge: true });
 
   // 2. Update users
-  batch.update(db.collection("users").doc(ownerId), {
+  batch.set(db.collection("users").doc(ownerId), {
     status: "ACTIVE",
     dashboardUnlocked: true,
     activationStatus: "ACTIVE",
     updatedAt: now
-  });
+  }, { merge: true });
 
   // 3. Update owners
-  batch.update(db.collection("owners").doc(ownerId), {
+  batch.set(db.collection("owners").doc(ownerId), {
     paymentVerified: true,
     dashboardUnlocked: true,
     activationStatus: "ACTIVE",
     status: "ACTIVE",
     updatedAt: now
-  });
+  }, { merge: true });
 
   // 4. Update contracts (if provided)
   if (contractId) {
-    batch.update(db.collection("contracts").doc(contractId), {
+    batch.set(db.collection("contracts").doc(contractId), {
       status: "ACTIVE",
       contractStatus: "active",
       paymentVerified: true,
@@ -562,26 +562,26 @@ export const approveOwnerActivation = onCall({ cors: true }, async (request) => 
       approved: true,
       activationStatus: "ACTIVE",
       updatedAt: now
-    });
+    }, { merge: true });
   }
 
   // 5. Update payment (if provided)
   if (paymentId) {
-    batch.update(db.collection("payment_transactions").doc(paymentId), {
+    batch.set(db.collection("payment_transactions").doc(paymentId), {
       status: "VERIFIED",
       verifiedAt: now,
       verifiedBy: adminId,
       updatedAt: now
-    });
+    }, { merge: true });
   }
 
   // 6. Update propertyPassports (if provided)
   if (Array.isArray(propertyIds)) {
     for (const pId of propertyIds) {
-      batch.update(db.collection("propertyPassports").doc(pId), {
+      batch.set(db.collection("propertyPassports").doc(pId), {
         dispatchReady: true,
         updatedAt: now
-      });
+      }, { merge: true });
     }
   }
 

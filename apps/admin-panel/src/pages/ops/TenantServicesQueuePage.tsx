@@ -17,20 +17,49 @@ export default function TenantServicesQueuePage() {
     const [requests, setRequests] = useState<any[]>([]);
 
     useEffect(() => {
-        const q = query(collection(db, 'tenant_services_requests'), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const collections = [
+            { name: 'tenant_services_requests', type: 'service' },
+            { name: 'gatePasses', type: 'visitor_parking' }, // gatePass uses similar icon
+            { name: 'visitorParkingRequests', type: 'visitor_parking' }
+        ];
+
+        let unsubscribes: any[] = [];
+        const stateMap = new Map();
+
+        const updateState = () => {
+            const allDocs = Array.from(stateMap.values()).flat();
+            allDocs.sort((a, b) => {
+                const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                return tb - ta;
+            });
+            setRequests(allDocs);
             setLoading(false);
-        }, (err) => {
-            console.error('Failed to load tenant services:', err);
-            setLoading(false);
+        };
+
+        collections.forEach(col => {
+            const q = query(collection(db, col.name), orderBy('createdAt', 'desc'));
+            const unsub = onSnapshot(q, (snap) => {
+                stateMap.set(col.name, snap.docs.map(d => ({ 
+                    id: d.id, 
+                    _collection: col.name,
+                    _mappedType: col.type,
+                    ...d.data() 
+                })));
+                updateState();
+            }, (err) => {
+                console.error(`Failed to load ${col.name}:`, err);
+                if (collections.indexOf(col) === collections.length - 1) setLoading(false);
+            });
+            unsubscribes.push(unsub);
         });
-        return () => unsubscribe();
+
+        return () => unsubscribes.forEach(fn => fn());
     }, []);
 
-    const handleAction = async (id: string, action: 'approved' | 'rejected') => {
+    const handleAction = async (item: any, action: 'approved' | 'rejected') => {
         try {
-            await updateDoc(doc(db, 'tenant_services_requests', id), {
+            await updateDoc(doc(db, item._collection || 'tenant_services_requests', item.id), {
                 status: action,
                 updatedAt: serverTimestamp()
             });
@@ -96,10 +125,10 @@ export default function TenantServicesQueuePage() {
                             
                             {req.status === 'pending' || !req.status ? (
                                 <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                    <Button onClick={() => handleAction(req.id, 'rejected')} color="error" startIcon={<XCircle size={18} />}>
+                                    <Button onClick={() => handleAction(req, 'rejected')} color="error" startIcon={<XCircle size={18} />}>
                                         REJECT
                                     </Button>
-                                    <Button onClick={() => handleAction(req.id, 'approved')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>
+                                    <Button onClick={() => handleAction(req, 'approved')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>
                                         APPROVE
                                     </Button>
                                 </Stack>

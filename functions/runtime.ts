@@ -21,6 +21,10 @@ export * from "./contractSignatureOtp";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
 export * from "./profileP1Workflows";
+export * from "./userAuditOperations";
+export * from "./tenantTicketReview";
+export * from "./qrSecurity";
+export * from "./technicianOfflineSync";
 
 if (!admin.apps.length) {
   admin.initializeApp();

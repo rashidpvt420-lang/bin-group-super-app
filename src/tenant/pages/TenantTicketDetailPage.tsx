@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, IconButton, Paper, Rating, Stack, TextField, Typography, alpha } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, Calendar, Check, CheckCircle2, ChevronLeft, Info, X } from 'lucide-react';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
@@ -79,23 +79,9 @@ export default function TenantTicketDetailPage() {
         const safeRating = Math.max(1, Math.min(5, Number(rating || 5)));
         const cleanFeedback = clean(feedback) || 'Approved by tenant. Service completed successfully.';
         try {
-            await updateDoc(doc(db, 'maintenanceTickets', id), {
-                status: 'CLOSED',
-                closureStatus: 'TENANT_APPROVED_CLOSED',
-                tenantApproved: true,
-                tenantApprovalStatus: 'APPROVED',
-                tenantReviewedAt: serverTimestamp(),
-                tenantApprovedAt: serverTimestamp(),
-                closedAt: serverTimestamp(),
-                closedByUid: user.uid,
-                closedByRole: 'tenant',
-                rating: safeRating,
-                feedback: cleanFeedback,
-                tenantFeedback: cleanFeedback,
-                finalApproval: { status: 'APPROVED', actorId: user.uid, actorRole: 'tenant', rating: safeRating, feedback: cleanFeedback, submittedAt: serverTimestamp() },
-                updatedAt: serverTimestamp(),
-            });
-            await writeAudit({ action: 'TENANT_APPROVED_COMPLETION_WITH_FEEDBACK', targetType: 'MAINTENANCE_TICKET', targetId: id, ticketId: id, actorId: user.uid, actorRole: 'tenant', module: 'tenant_ticket_closure', status: 'CLOSED', rating: safeRating, feedback: cleanFeedback, createdAt: serverTimestamp() });
+            const tenantReviewTicketCompletion = httpsCallable(functions, 'tenantReviewTicketCompletion');
+            await tenantReviewTicketCompletion({ ticketId: id, action: 'approve', rating: safeRating, feedback: cleanFeedback });
+            
             setTicket((prev: any) => ({ ...prev, status: 'CLOSED', closureStatus: 'TENANT_APPROVED_CLOSED', tenantApproved: true, tenantApprovalStatus: 'APPROVED', rating: safeRating, feedback: cleanFeedback, tenantFeedback: cleanFeedback }));
             notifyTenantApproved(id, user.displayName || 'Tenant').catch(console.warn);
         } catch (err: any) {
@@ -116,27 +102,9 @@ export default function TenantTicketDetailPage() {
         setActionLoading(true);
         setError('');
         try {
-            await updateDoc(doc(db, 'maintenanceTickets', id), {
-                status: 'DISPUTED',
-                closureStatus: 'TENANT_DISPUTED_REOPENED_FOR_REVIEW',
-                tenantApproved: false,
-                tenantApprovalStatus: 'DISPUTED',
-                tenantReviewedAt: serverTimestamp(),
-                tenantDisputedAt: serverTimestamp(),
-                disputeStatus: 'OPEN_ADMIN_REVIEW',
-                disputeRaisedBy: user.uid,
-                disputeRaisedByRole: 'tenant',
-                requiresAdminReview: true,
-                adminReviewStatus: 'PENDING_DISPUTE_REVIEW',
-                rating: rating || 1,
-                feedback: reason,
-                tenantFeedback: reason,
-                rejectionReason: reason,
-                disputeReason: reason,
-                finalApproval: { status: 'DISPUTED', actorId: user.uid, actorRole: 'tenant', rating: rating || 1, reason, submittedAt: serverTimestamp() },
-                updatedAt: serverTimestamp(),
-            });
-            await writeAudit({ action: 'TENANT_DISPUTED_COMPLETION_WITH_FEEDBACK', targetType: 'MAINTENANCE_TICKET', targetId: id, ticketId: id, actorId: user.uid, actorRole: 'tenant', module: 'tenant_ticket_closure', status: 'DISPUTED', rating: rating || 1, reason, createdAt: serverTimestamp() });
+            const tenantReviewTicketCompletion = httpsCallable(functions, 'tenantReviewTicketCompletion');
+            await tenantReviewTicketCompletion({ ticketId: id, action: 'dispute', disputeReason: reason });
+            
             setTicket((prev: any) => ({ ...prev, status: 'DISPUTED', closureStatus: 'TENANT_DISPUTED_REOPENED_FOR_REVIEW', tenantApproved: false, tenantApprovalStatus: 'DISPUTED', disputeStatus: 'OPEN_ADMIN_REVIEW', rating: rating || 1, feedback: reason, rejectionReason: reason, disputeReason: reason }));
             notifyTenantRejected(id, user.displayName || 'Tenant', reason).catch(console.warn);
             setShowRejectInput(false);
