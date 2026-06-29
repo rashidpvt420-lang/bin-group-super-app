@@ -74,15 +74,15 @@ export default function TenantGatePassPage() {
 
     const handleCreatePass = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user?.uid || !visitorName.trim()) return;
+        if (!user?.uid || !visitorName.trim() || !propertyId || !unitId) return;
         setSubmitting(true);
         try {
             const validUntil = Date.now() + (parseInt(duration, 10) * 3600 * 1000);
             
             const generateSignedQrPass = httpsCallable(functions, 'generateSignedQrPass');
             const result = await generateSignedQrPass({
-                propertyId: propertyId || 'default_prop',
-                unitId: unitId || 'default_unit',
+                propertyId,
+                unitId,
                 type: visitorType,
                 name: visitorName.trim(),
                 validFrom: Date.now(),
@@ -160,7 +160,7 @@ export default function TenantGatePassPage() {
                             <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
                                     <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
-                                        <QRCodeSVG value={pass.qrToken || JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName })} size={140} fgColor="#0f172a" />
+                                        <QRCodeSVG value={pass.qrToken ? `${window.location.origin}/verify/pass/${pass.qrToken}` : JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName })} size={140} fgColor="#0f172a" />
                                     </Box>
                                 </Box>
                                 <CardContent sx={{ p: 4 }}>
@@ -199,7 +199,7 @@ export default function TenantGatePassPage() {
                             </Grid>
                         </Stack>
                     </DialogContent>
-                    <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}><Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button><Button type="submit" variant="contained" disabled={submitting || !visitorName.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.2, borderRadius: 3 }}>{submitting ? <CircularProgress size={20} color="inherit" /> : 'GENERATE PASS'}</Button></DialogActions>
+                    <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}><Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button><Button type="submit" variant="contained" disabled={submitting || !visitorName.trim() || !propertyId || !unitId} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.2, borderRadius: 3 }}>{submitting ? <CircularProgress size={20} color="inherit" /> : 'GENERATE PASS'}</Button></DialogActions>
                 </form>
             </Dialog>
         </Container>

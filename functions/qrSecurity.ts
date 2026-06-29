@@ -38,21 +38,17 @@ export const generateSignedQrPass = onCall({ cors: true }, async (request) => {
   hmac.update(payloadStr);
   const signature = hmac.digest("hex");
   
-  const token = Buffer.from(`${payloadStr}|${signature}`).toString("base64");
+  const token = Buffer.from(`${payloadStr}|${signature}`).toString("base64url");
 
   return { passId, token, signature };
 });
 
 export const verifyQrPass = onCall({ cors: true }, async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "User must be authenticated.");
-  }
-
   const { token } = request.data;
   if (!token) throw new HttpsError("invalid-argument", "Missing token.");
 
   try {
-    const decoded = Buffer.from(token, "base64").toString("utf-8");
+    const decoded = Buffer.from(token, "base64url").toString("utf-8");
     const [payloadStr, signature] = decoded.split("|");
     
     const hmac = crypto.createHmac("sha256", QR_SECRET);

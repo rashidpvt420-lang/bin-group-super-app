@@ -194,7 +194,7 @@ export default function TenantVisitorParkingPage() {
                   {isApproved && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
                       <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
-                        <QRCodeSVG value={r.qrToken || r.qrPayload || 'invalid'} size={140} fgColor="#0f172a" />
+                        <QRCodeSVG value={r.qrToken ? `${window.location.origin}/verify/pass/${r.qrToken}` : (r.qrPayload || 'invalid')} size={140} fgColor="#0f172a" />
                       </Box>
                     </Box>
                   )}
