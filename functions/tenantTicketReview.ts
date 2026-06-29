@@ -35,6 +35,13 @@ export const tenantReviewTicketCompletion = onCall({ cors: true }, async (reques
     throw new HttpsError("permission-denied", "Only the tenant can review this ticket.");
   }
 
+  // Verify valid review state
+  const currentStatus = String(data.status || "").toUpperCase();
+  const validReviewStates = ["COMPLETED", "RESOLVED", "PENDING_TENANT_REVIEW", "PENDING TENANT REVIEW"];
+  if (!validReviewStates.includes(currentStatus)) {
+    throw new HttpsError("failed-precondition", "Ticket is not in a valid state for tenant review.");
+  }
+
   if (action === "approve") {
     await ticketRef.update({
       closureStatus: "tenant_approved",

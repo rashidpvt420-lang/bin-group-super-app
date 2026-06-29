@@ -71,6 +71,13 @@ export const syncOfflineActions = onCall({ cors: true }, async (request) => {
                     results.push({ id, status: "processed" });
                 } else if (type === "UPDATE_STATUS") {
                     const newStatus = String(payload.status || "").toUpperCase();
+                    
+                    const allowedStatuses = ["ASSIGNED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "PAUSED"];
+                    if (!allowedStatuses.includes(newStatus)) {
+                        results.push({ id, status: "failed_invalid_status" });
+                        continue;
+                    }
+
                     batch.update(ticketRef, {
                         status: newStatus,
                         offlineSyncTimestamp: timestamp,

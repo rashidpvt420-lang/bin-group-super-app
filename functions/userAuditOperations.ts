@@ -16,7 +16,9 @@ export const logUserAuditAction = onCall({ cors: true }, async (request) => {
   }
 
   const actorId = request.auth.uid;
-  const role = actorRole || "user";
+  
+  const userDoc = await db.collection("users").doc(actorId).get();
+  const role = userDoc.data()?.role || actorRole || "user";
 
   const auditEntry = {
     actorId,

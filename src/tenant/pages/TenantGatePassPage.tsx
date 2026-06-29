@@ -9,7 +9,7 @@ import { ShieldCheck, Plus, Clock, Trash2, Phone, Calendar } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp, functions, httpsCallable } from '../../lib/firebase';
+import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp, functions, httpsCallable, getDocs, limit } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantGatePassPage() {
@@ -23,7 +23,33 @@ export default function TenantGatePassPage() {
     const [visitorPhone, setVisitorPhone] = useState('');
     const [visitorType, setVisitorType] = useState('visitor');
     const [duration, setDuration] = useState('4');
+    const [unitId, setUnitId] = useState('');
+    const [propertyId, setPropertyId] = useState('');
 
+    const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+
+    // 1. Resolve residence info
+    useEffect(() => {
+        async function resolveResidence() {
+            if (!user?.uid) return;
+            try {
+                let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
+                if (unitSnap.empty && user.email) {
+                    unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
+                }
+                if (!unitSnap.empty) {
+                    const uDoc = unitSnap.docs[0];
+                    setUnitId(uDoc.id);
+                    setPropertyId(uDoc.data().propertyId || '');
+                }
+            } catch (err) {
+                console.error('Failed to resolve tenant unit:', err);
+            }
+        }
+        resolveResidence();
+    }, [user]);
+
+    // 2. Listen to gate passes
     useEffect(() => {
         if (!user?.uid) {
             setLoading(false);
@@ -55,8 +81,8 @@ export default function TenantGatePassPage() {
             
             const generateSignedQrPass = httpsCallable(functions, 'generateSignedQrPass');
             const result = await generateSignedQrPass({
-                propertyId: 'default_prop',
-                unitId: 'default_unit',
+                propertyId: propertyId || 'default_prop',
+                unitId: unitId || 'default_unit',
                 type: visitorType,
                 name: visitorName.trim(),
                 validFrom: Date.now(),
@@ -67,6 +93,8 @@ export default function TenantGatePassPage() {
             await addDoc(collection(db, 'gatePasses'), {
                 passId,
                 qrToken: token,
+                propertyId: propertyId || null,
+                unitId: unitId || null,
                 tenantUid: user.uid,
                 tenantName: user.displayName || 'Resident',
                 visitorName: visitorName.trim(),
