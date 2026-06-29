@@ -4,15 +4,37 @@ import {
     Select, MenuItem, FormControl, InputLabel, CircularProgress,
     IconButton, alpha
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, AlertCircle, ChevronLeft } from 'lucide-react';
 import { db, storage, collection, addDoc, updateDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTicketCreated, notifyEmergency } from '../../services/notificationService';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 
 const sanitizeStorageFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
+const CATEGORY_PREFILL: Record<string, string> = {
+    ac: 'AC',
+    cooling: 'AC',
+    electrical: 'electrical',
+    plumbing: 'plumbing',
+    civil: 'civil',
+    handyman: 'civil',
+    cleaning: 'cleaning',
+    moving: 'moving',
+    management: 'management',
+    pest: 'pest control',
+    'pest-control': 'pest control',
+    elevator: 'elevator',
+    security: 'security',
+    other: 'other',
+};
+
+const normalizeCategoryPrefill = (value: string | null) => {
+    const key = String(value || '').trim().toLowerCase();
+    return CATEGORY_PREFILL[key] || '';
+};
 
 export default function TenantRequestPage() {
     const { user } = useRole();
@@ -23,8 +45,10 @@ export default function TenantRequestPage() {
         return typeof value === 'string' && value.trim() ? value : fallback;
     };
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
-    const [category, setCategory] = useState('');
+    const initialCategory = normalizeCategoryPrefill(searchParams.get('category'));
+    const [category, setCategory] = useState(initialCategory);
     const [priority, setPriority] = useState('normal');
     const [description, setDescription] = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
@@ -33,13 +57,17 @@ export default function TenantRequestPage() {
 
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<any>(null);
+    const [residenceChecked, setResidenceChecked] = useState(false);
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
 
     useEffect(() => {
         const fetchResidence = async () => {
-            if (!user?.uid) return;
+            if (!user?.uid) {
+                setResidenceChecked(true);
+                return;
+            }
             try {
                 let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid)));
                 if (unitSnap.empty && user.email) {
@@ -68,10 +96,17 @@ export default function TenantRequestPage() {
                 }
             } catch (err) {
                 console.error('Fetch failed:', err);
+            } finally {
+                setResidenceChecked(true);
             }
         };
         fetchResidence();
     }, [user]);
+
+    useEffect(() => {
+        const nextCategory = normalizeCategoryPrefill(searchParams.get('category'));
+        if (nextCategory) setCategory(nextCategory);
+    }, [searchParams]);
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -247,6 +282,11 @@ export default function TenantRequestPage() {
                 </Box>
             </Stack>
 
+            {residenceChecked && !unitData ? (
+                <TenantUnitLinkFallback
+                    message="A unit must be verified before maintenance, moving, cleaning, or management requests can be dispatched."
+                />
+            ) : (
             <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, backdropFilter: 'blur(10px)' }}>
                 {isOwnerSuspended && (
                     <Box sx={{ p: 3, mb: 4, bgcolor: alpha('#ef4444', 0.1), border: '1px solid #ef4444', borderRadius: 4 }}>
@@ -271,6 +311,8 @@ export default function TenantRequestPage() {
                                         <MenuItem value="plumbing">{tt('dash.tenant.catPlumb', 'Plumbing / Water')}</MenuItem>
                                         <MenuItem value="civil">{tt('dash.tenant.catHandy', 'Handyman / Carpentry')}</MenuItem>
                                         <MenuItem value="cleaning">{tt('dash.tenant.catClean', 'Deep Cleaning')}</MenuItem>
+                                        <MenuItem value="moving">{tt('dash.tenant.catMoving', 'Moving / Packing')}</MenuItem>
+                                        <MenuItem value="management">{tt('dash.tenant.catManagement', 'Management Request')}</MenuItem>
                                         <MenuItem value="pest control">{tt('dash.tenant.catPest', 'Pest Control')}</MenuItem>
                                         <MenuItem value="elevator">{tt('dash.tenant.catElev', 'Elevator Issue')}</MenuItem>
                                         <MenuItem value="security">{tt('dash.tenant.catSec', 'Security / CCTV')}</MenuItem>
@@ -319,6 +361,7 @@ export default function TenantRequestPage() {
                     </Stack>
                 </form>
             </Paper>
+            )}
         </Box>
     );
 }

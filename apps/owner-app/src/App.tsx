@@ -24,6 +24,7 @@ import TurnoverEnginePage from './pages/TurnoverEnginePage';
 import GovernmentPropertyPage from './pages/GovernmentPropertyPage';
 import InvoiceDetailsPage from './pages/InvoiceDetailsPage';
 import PropertyUnitsPage from './pages/PropertyUnitsPage';
+import OwnerHandoverReviewPage from './pages/properties/OwnerHandoverReviewPage';
 import NotificationInboxPage from './pages/NotificationInboxPage';
 import DesignStudioPage from './pages/DesignStudioPage';
 import DesignRequestDetailPage from './pages/DesignRequestDetailPage';
@@ -211,6 +212,7 @@ function AppContent() {
         <Route path="/financials" element={<ProtectedRoute allowedRoles={['owner']}><FinancialDashboardPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute allowedRoles={['owner', 'admin', 'technician']}><MaintenanceCalendarPage /></ProtectedRoute>} />
         <Route path="/properties/:id/health" element={<ProtectedRoute allowedRoles={['owner']}><HealthScorePage /></ProtectedRoute>} />
+        <Route path="/properties/handovers" element={<ProtectedRoute allowedRoles={['owner']}><OwnerHandoverReviewPage /></ProtectedRoute>} />
         <Route path="/analytics/turnover" element={<ProtectedRoute allowedRoles={['owner']}><TurnoverEnginePage /></ProtectedRoute>} />
         <Route path="/properties/:propertyId/units" element={<ProtectedRoute allowedRoles={['owner']}><PropertyUnitsPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute allowedRoles={['owner', 'tenant', 'technician', 'broker']}><NotificationInboxPage /></ProtectedRoute>} />

@@ -512,3 +512,91 @@ export const adminResumeOwner = onCall({ cors: true }, async (request) => {
   await batch.commit();
   return { status: "ACTIVE", ownerId };
 });
+
+export const approveOwnerActivation = onCall({ cors: true }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "User must be authenticated.");
+  const adminId = request.auth.uid;
+  const adminDoc = await db.collection("users").doc(adminId).get();
+  const adminData = adminDoc.data();
+  if (!adminData || !adminRoles.has(adminData.role)) {
+    throw new HttpsError("permission-denied", "Only administrators can perform final owner activation.");
+  }
+
+  const { intakeId, ownerId, contractId, paymentId, propertyIds } = request.data;
+  if (!intakeId || !ownerId) throw new HttpsError("invalid-argument", "Missing required fields: intakeId, ownerId");
+
+  const batch = db.batch();
+  const now = ts();
+
+  // 1. Update intake_submissions
+  batch.update(db.collection("intake_submissions").doc(intakeId), {
+    status: "APPROVED",
+    approvedAt: now,
+    approvedBy: adminId
+  });
+
+  // 2. Update users
+  batch.update(db.collection("users").doc(ownerId), {
+    status: "ACTIVE",
+    dashboardUnlocked: true,
+    activationStatus: "ACTIVE",
+    updatedAt: now
+  });
+
+  // 3. Update owners
+  batch.update(db.collection("owners").doc(ownerId), {
+    paymentVerified: true,
+    dashboardUnlocked: true,
+    activationStatus: "ACTIVE",
+    status: "ACTIVE",
+    updatedAt: now
+  });
+
+  // 4. Update contracts (if provided)
+  if (contractId) {
+    batch.update(db.collection("contracts").doc(contractId), {
+      status: "ACTIVE",
+      contractStatus: "active",
+      paymentVerified: true,
+      adminApproved: true,
+      approved: true,
+      activationStatus: "ACTIVE",
+      updatedAt: now
+    });
+  }
+
+  // 5. Update payment (if provided)
+  if (paymentId) {
+    batch.update(db.collection("payment_transactions").doc(paymentId), {
+      status: "VERIFIED",
+      verifiedAt: now,
+      verifiedBy: adminId,
+      updatedAt: now
+    });
+  }
+
+  // 6. Update propertyPassports (if provided)
+  if (Array.isArray(propertyIds)) {
+    for (const pId of propertyIds) {
+      batch.update(db.collection("propertyPassports").doc(pId), {
+        dispatchReady: true,
+        updatedAt: now
+      });
+    }
+  }
+
+  // 7. Audit log
+  batch.set(db.collection("audit_logs").doc(), {
+    actorId: adminId,
+    actorRole: "admin",
+    action: "APPROVE_OWNER_ACTIVATION",
+    targetType: "owner",
+    targetId: ownerId,
+    metadata: { intakeId, contractId, paymentId, propertyIds },
+    createdAt: now
+  });
+
+  await batch.commit();
+
+  return { success: true, ownerId, message: "Owner fully activated successfully." };
+});

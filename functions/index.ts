@@ -121,6 +121,22 @@ async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>
     return token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole);
 }
 
+function assignedTechnicianId(ticketData: FirebaseFirestore.DocumentData) {
+    return safeString(ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || ticketData.techId);
+}
+
+async function assertTechnicianTicketMutationAccess(authContext: any, ticketData: FirebaseFirestore.DocumentData) {
+    const hasAccess = await hasCallableRoleAccess(authContext, new Set(["technician", "admin", "super_admin", "operations_admin"]));
+    if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
+
+    const isAdminActor = await hasCallableRoleAccess(authContext, new Set(["admin", "super_admin", "operations_admin"]));
+    if (isAdminActor) return;
+
+    const assignedId = assignedTechnicianId(ticketData);
+    if (!assignedId) throw new HttpsError("failed-precondition", "Ticket is not assigned to this technician.");
+    if (assignedId !== authContext.uid) throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+}
+
 function assertPlainObject(value: any, label: string) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw new HttpsError("invalid-argument", `${label} is required.`);
@@ -700,25 +716,31 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketDoc = await ticketRef.get();
-    if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
-    const ticketData = ticketDoc.data()!;
-
-    const existingTechId = ticketData.assignedTechnicianId || ticketData.technicianId || '';
-    if (existingTechId && existingTechId !== request.auth.uid) {
-        throw new HttpsError("failed-precondition", "Ticket is already assigned to another technician.");
-    }
-
-    if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'assigned', 'pending_assignment'].includes(ticketData.status)) {
-        throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
-    }
-
+    const isAdminActor = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "operations_admin"]));
     const now = FieldValue.serverTimestamp();
-    await ticketRef.update({
-        status: 'ACCEPTED',
-        assignedTechnicianId: request.auth.uid,
-        acceptedAt: now,
-        updatedAt: now
+
+    await db.runTransaction(async (transaction) => {
+        const ticketDoc = await transaction.get(ticketRef);
+        if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
+        const ticketData = ticketDoc.data()!;
+        const existingTechId = assignedTechnicianId(ticketData);
+
+        if (existingTechId && existingTechId !== request.auth!.uid && !isAdminActor) {
+            throw new HttpsError("failed-precondition", "Ticket is already assigned to another technician.");
+        }
+
+        if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'ASSIGNED', 'assigned', 'pending_assignment', 'PENDING_ASSIGNMENT'].includes(ticketData.status)) {
+            throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
+        }
+
+        const finalTechId = existingTechId || request.auth!.uid;
+        transaction.update(ticketRef, {
+            status: 'ACCEPTED',
+            assignedTechnicianId: finalTechId,
+            technicianId: finalTechId,
+            acceptedAt: now,
+            updatedAt: now
+        });
     });
 
     await logAudit({
@@ -731,7 +753,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
 
 export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
-    const { ticketId, status, notes, proofType, proofUrl } = request.data;
+    const { ticketId, status, notes, proofType, proofUrl, arrivalLocation } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
     if (!allowedStatuses.includes(status)) throw new HttpsError("invalid-argument", "Invalid status transition.");
 
@@ -739,10 +761,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     const ticketDoc = await ticketRef.get();
     if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
     const ticketData = ticketDoc.data()!;
-
-    if (ticketData.assignedTechnicianId !== request.auth.uid && request.auth.token?.admin !== true) {
-        throw new HttpsError("permission-denied", "You are not assigned to this mission.");
-    }
+    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
 
     const now = FieldValue.serverTimestamp();
     const updateData: any = {
@@ -751,7 +770,31 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     };
 
     if (status === 'EN_ROUTE') updateData.onTheWayAt = now;
-    if (status === 'ARRIVED') updateData.arrivedAt = now;
+    if (status === 'ARRIVED') {
+        updateData.arrivedAt = now;
+        if (arrivalLocation) {
+            const lat = Number(arrivalLocation.lat ?? arrivalLocation.latitude);
+            const lng = Number(arrivalLocation.lng ?? arrivalLocation.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                throw new HttpsError("invalid-argument", "Valid arrival GPS coordinates are required.");
+            }
+            const cleanArrivalLocation = {
+                lat,
+                lng,
+                latitude: lat,
+                longitude: lng,
+                accuracy: Number(arrivalLocation.accuracy || 0),
+                heading: arrivalLocation.heading ?? null,
+                speed: arrivalLocation.speed ?? null,
+            };
+            updateData.arrivedLocation = cleanArrivalLocation;
+            updateData.technicianLocation = cleanArrivalLocation;
+            updateData.technicianLocationUpdatedAt = now;
+            updateData.gpsVerified = true;
+            updateData.gpsVerifiedAt = now;
+            updateData.onSiteVerification = 'GPS_VERIFIED';
+        }
+    }
     if (status === 'IN_PROGRESS') updateData.startedAt = now;
     if (status === 'COMPLETED' || status === 'COMPLETED_PENDING_APPROVAL') {
         const nextBeforePhotoUrl = proofType === 'BEFORE' && proofUrl ? proofUrl : ticketData.beforePhotoUrl;
@@ -2946,7 +2989,9 @@ export const startTechnicianWork = onCall({ cors: true }, async (request) => {
     const techId = request.auth.uid;
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
     const ticketSnap = await ticketRef.get();
+    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
     const ticketData = ticketSnap.data() || {};
+    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
 
     await ticketRef.update({
         status: "IN_PROGRESS",
@@ -2986,7 +3031,12 @@ export const pauseTechnicianWork = onCall({ cors: true }, async (request) => {
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
     const techId = request.auth.uid;
-    await db.collection("maintenanceTickets").doc(ticketId).update({
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+    const ticketSnap = await ticketRef.get();
+    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
+    await assertTechnicianTicketMutationAccess(request.auth, ticketSnap.data() || {});
+
+    await ticketRef.update({
         status: "on_hold",
         technicianStatus: "WAITING_PARTS",
         pausedAt: FieldValue.serverTimestamp(),
@@ -3029,7 +3079,9 @@ export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
     const techId = request.auth.uid;
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
     const ticketSnap = await ticketRef.get();
+    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
     const ticketData = ticketSnap.data() || {};
+    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
 
     await db.runTransaction(async (transaction) => {
         transaction.update(ticketRef, {
@@ -3615,3 +3667,7 @@ export { assessDamage } from "./damageAssessment";
 export { runSovereignAI } from "./aiAssistant";
 export { whatsappBotWebhook } from "./whatsappBot";
 
+
+export * from "./adminOwnerOperations";
+
+export * from "./technicianOfflineSync";

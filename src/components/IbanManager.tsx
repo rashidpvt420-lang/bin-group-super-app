@@ -58,6 +58,8 @@ export const IbanManager: React.FC = () => {
             
             await addDoc(collection(db, 'auditLogs'), {
                 action: 'UPDATE_IBAN',
+                actorId: user?.uid,
+                actorRole: 'owner',
                 ownerId: user?.uid,
                 status: 'PENDING',
                 timestamp: serverTimestamp()

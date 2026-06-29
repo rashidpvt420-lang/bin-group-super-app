@@ -256,6 +256,8 @@ export default function TechnicianJobDetailPage() {
         setActionLoading(true);
         setGpsError(null);
         try {
+            const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
+
             if (nextStatus === 'EN_ROUTE') {
                 startLiveTracking(id, user.uid, () => undefined, (err) => {
                     setGpsError(err);
@@ -275,16 +277,7 @@ export default function TechnicianJobDetailPage() {
                     heading: position.coords.heading,
                     speed: position.coords.speed,
                 };
-                await updateDoc(doc(db, 'maintenanceTickets', id), {
-                    arrivedAt: serverTimestamp(),
-                    arrivedLocation: arrivalLocation,
-                    technicianLocation: arrivalLocation,
-                    technicianLocationUpdatedAt: serverTimestamp(),
-                    gpsVerified: true,
-                    gpsVerifiedAt: serverTimestamp(),
-                    onSiteVerification: 'GPS_VERIFIED',
-                    updatedAt: serverTimestamp(),
-                });
+                lifecyclePayload.arrivalLocation = arrivalLocation;
                 if (isTracking) {
                     await stopLiveTracking(user.uid, id, 'ARRIVED');
                     setIsTracking(false);
@@ -330,7 +323,7 @@ export default function TechnicianJobDetailPage() {
             }
 
             const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
-            await updateTicketLifecycle({ ticketId: id, status: nextStatus, notes: notes.trim() });
+            await updateTicketLifecycle(lifecyclePayload);
             setMessage(nextStatus === 'COMPLETED' ? 'Completed. Tenant approval requested.' : `Status updated: ${nextStatus.replace(/_/g, ' ')}`);
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');
         } catch (err: any) {

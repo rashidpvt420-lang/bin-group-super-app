@@ -50,6 +50,19 @@ import HRManagementPage from './pages/admin/HRManagementPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
+import TenantServicesQueuePage from './pages/ops/TenantServicesQueuePage';
+import DisputeQueuePage from './pages/ops/DisputeQueuePage';
+import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
+import AdminBrokerAttributionQueuePage from './pages/ops/AdminBrokerAttributionQueuePage';
+import MessagesPage from './pages/ops/MessagesPage';
+import BrokerCommissionHubPage from './pages/brokers/BrokerCommissionHubPage';
+import BinConnectInboxPage from './pages/admin/BinConnectInboxPage';
+import PilotCompletionCommandPage from './pages/admin/PilotCompletionCommandPage';
+import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
+import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
+import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
+import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
+import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
@@ -124,6 +137,12 @@ function AppContent() {
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
                     <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
+                    <Route path="/tenant-services" element={<ProtectedRoute><TenantServicesQueuePage /></ProtectedRoute>} />
+                    <Route path="/disputes" element={<ProtectedRoute><DisputeQueuePage /></ProtectedRoute>} />
+                    <Route path="/unit-links" element={<ProtectedRoute><TenantUnitLinkQueuePage /></ProtectedRoute>} />
+                    <Route path="/broker-attributions" element={<ProtectedRoute><AdminBrokerAttributionQueuePage /></ProtectedRoute>} />
+                    <Route path="/broker-commissions" element={<ProtectedRoute adminOnly><BrokerCommissionHubPage /></ProtectedRoute>} />
+                    <Route path="/ops/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
@@ -138,6 +157,13 @@ function AppContent() {
                     <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
                     <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
                     <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/bin-connect" element={<ProtectedRoute adminOnly><BinConnectInboxPage /></ProtectedRoute>} />
+                    <Route path="/ops/pilot-completion" element={<ProtectedRoute adminOnly><PilotCompletionCommandPage /></ProtectedRoute>} />
+                    <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
+                    <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />
                     <Route path="/ops/smoke-test" element={<ProtectedRoute adminOnly><SmokeTestPage /></ProtectedRoute>} />
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
@@ -152,7 +178,6 @@ function AppContent() {
                     <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                     <Route path="/staff-access" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
-                    <Route path="/hr" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
                 </Route>
             )}
 

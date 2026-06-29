@@ -8,9 +8,9 @@ import {
     TableHead, TableRow, alpha, Divider, TextField, Dialog,
     DialogTitle, DialogContent, DialogActions, InputAdornment
 } from '@mui/material';
-import { DollarSign, Upload, FileText, CheckCircle2, Clock, AlertTriangle, CreditCard } from 'lucide-react';
+import { CreditCard, DollarSign, CheckCircle2, Clock, Upload, FileText, Download, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db, collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, storage, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
@@ -24,6 +24,8 @@ type Payment = {
     createdAt: any;
     verifiedAt?: any;
     receiptUrl?: string;
+    receiptPath?: string;
+    receiptHash?: string;
     notes?: string;
 };
 
@@ -31,9 +33,19 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     VERIFIED: { label: 'VERIFIED', color: '#10b981' },
     APPROVED: { label: 'APPROVED', color: '#10b981' },
     PENDING: { label: 'PENDING VERIFICATION', color: '#f59e0b' },
+    PENDING_ADMIN_PAYMENT_VERIFICATION: { label: 'AWAITING ADMIN', color: '#f59e0b' },
     ADMIN_VERIFICATION_REQUIRED: { label: 'AWAITING ADMIN', color: '#f59e0b' },
     REJECTED: { label: 'REJECTED', color: '#ef4444' },
     OVERDUE: { label: 'OVERDUE', color: '#ef4444' },
+};
+
+const PAYMENT_PENDING_STATUSES = ['PENDING', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED'];
+const sanitizeReceiptName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'receipt';
+
+const hashReceiptFile = async (file: File) => {
+    if (!window.crypto?.subtle) return '';
+    const digest = await window.crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
 export default function TenantPaymentsPage() {
@@ -45,6 +57,7 @@ export default function TenantPaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [receiptFile, setReceiptFile] = useState<File | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
 
     // Upload proof form
@@ -73,6 +86,8 @@ export default function TenantPaymentsPage() {
                     createdAt: d.data().createdAt,
                     verifiedAt: d.data().verifiedAt,
                     receiptUrl: d.data().receiptUrl,
+                    receiptPath: d.data().receiptPath,
+                    receiptHash: d.data().receiptHash,
                     notes: d.data().notes,
                 })));
                 setLoading(false);
@@ -98,6 +113,8 @@ export default function TenantPaymentsPage() {
                                     createdAt: d.data().createdAt,
                                     verifiedAt: d.data().verifiedAt,
                                     receiptUrl: d.data().receiptUrl,
+                                    receiptPath: d.data().receiptPath,
+                                    receiptHash: d.data().receiptHash,
                                     notes: d.data().notes,
                                 });
                             }
@@ -115,10 +132,34 @@ export default function TenantPaymentsPage() {
 
     const handleSubmitProof = async () => {
         if (!proofForm.amount.trim() || !user?.uid) return;
+        if (!receiptFile) {
+            setSnackbar({ open: true, message: 'A receipt or transfer screenshot is required before admin verification.', error: true });
+            return;
+        }
+        if (receiptFile.size > 10 * 1024 * 1024) {
+            setSnackbar({ open: true, message: 'Receipt file must be 10MB or smaller.', error: true });
+            return;
+        }
         setUploading(true);
         try {
+            let receiptUrl = '';
+            const receiptHash = await hashReceiptFile(receiptFile);
+            const receiptPath = `receipts/${user.uid}/${Date.now()}_${sanitizeReceiptName(receiptFile.name)}`;
+            const storageRef = ref(storage, receiptPath);
+            await uploadBytes(storageRef, receiptFile, {
+                contentType: receiptFile.type || 'application/octet-stream',
+                customMetadata: {
+                    tenantId: user.uid,
+                    evidenceType: 'tenant_payment_receipt',
+                    receiptHash,
+                },
+            });
+            receiptUrl = await getDownloadURL(storageRef);
+
             await addDoc(collection(db, 'payment_transactions'), {
                 tenantId: user.uid,
+                payerId: user.uid,
+                userId: user.uid,
                 tenantEmail: user.email || '',
                 tenantName: user.displayName || '',
                 amount: parseFloat(proofForm.amount),
@@ -126,16 +167,30 @@ export default function TenantPaymentsPage() {
                 bankName: proofForm.bankName.trim(),
                 period: proofForm.period.trim(),
                 notes: proofForm.notes.trim(),
-                status: 'ADMIN_VERIFICATION_REQUIRED',
+                receiptUrl,
+                receiptPath,
+                receiptHash,
+                evidence: {
+                    receiptUrl,
+                    receiptPath,
+                    receiptHash,
+                    fileName: receiptFile.name,
+                    contentType: receiptFile.type || 'application/octet-stream',
+                    size: receiptFile.size,
+                },
+                status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
                 paymentVerified: false,
                 submittedByTenant: true,
+                transferDestination: 'OWNER_DIRECT_IBAN',
+                binGroupFundsCustody: false,
                 createdAt: serverTimestamp(),
             });
             setSnackbar({ open: true, message: 'Payment proof submitted. Admin will verify within 24 hours.', error: false });
             setUploadDialogOpen(false);
             setProofForm({ amount: '', reference: '', bankName: '', period: '', notes: '' });
-        } catch {
-            setSnackbar({ open: true, message: 'Failed to submit payment proof.', error: true });
+            setReceiptFile(null);
+        } catch (error: any) {
+            setSnackbar({ open: true, message: error?.message || 'Failed to submit payment proof.', error: true });
         } finally {
             setUploading(false);
         }
@@ -148,7 +203,7 @@ export default function TenantPaymentsPage() {
     };
 
     const totalPaid = payments.filter(p => ['VERIFIED', 'APPROVED'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
-    const totalPending = payments.filter(p => ['PENDING', 'ADMIN_VERIFICATION_REQUIRED'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+    const totalPending = payments.filter(p => PAYMENT_PENDING_STATUSES.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 8 }}>
@@ -197,9 +252,9 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 4 }}>
                 <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>HOW TO SUBMIT PAYMENT</Typography>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem' }}>
-                    <Typography variant="body2">1. Transfer rent to the BIN Group bank account (see your contract for details)</Typography>
-                    <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF" and enter the transfer reference</Typography>
-                    <Typography variant="body2">3. Admin will verify within 24 hours and update your status</Typography>
+                    <Typography variant="body2">1. Transfer rent directly to the Owner's bank account (see your contract for details)</Typography>
+                    <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF" and upload your transfer receipt</Typography>
+                    <Typography variant="body2">3. Admin will verify the transfer within 24 hours and update your status</Typography>
                 </Stack>
             </Paper>
 
@@ -295,6 +350,24 @@ export default function TenantPaymentsPage() {
                             onChange={e => setProofForm(p => ({ ...p, notes: e.target.value }))}
                             sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         />
+                        <Button
+                            variant="outlined"
+                            component="label"
+                            startIcon={<Upload size={18} />}
+                            sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)', py: 1.5 }}
+                        >
+                            {receiptFile ? receiptFile.name : 'UPLOAD RECEIPT / SCREENSHOT *'}
+                            <input
+                                type="file"
+                                hidden
+                                accept="image/*,.pdf"
+                                onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        setReceiptFile(e.target.files[0]);
+                                    }
+                                }}
+                            />
+                        </Button>
                         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.05), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 3 }}>
                             Admin will verify your payment within 24 hours. You will be notified once confirmed.
                         </Alert>
@@ -302,7 +375,7 @@ export default function TenantPaymentsPage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                     <Button onClick={() => setUploadDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
-                    <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || !proofForm.amount.trim()}
+                    <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || !proofForm.amount.trim() || !receiptFile}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                     >
                         {uploading ? 'SUBMITTING...' : 'SUBMIT PROOF'}

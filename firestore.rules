@@ -61,6 +61,15 @@ service cloud.firestore {
       ));
     }
 
+    function isAuditor() {
+      return isAdmin() || (signedIn() && (
+        ('role' in request.auth.token && request.auth.token.role in ['auditor', 'AUDITOR']) ||
+        ('userRole' in request.auth.token && request.auth.token.userRole in ['auditor', 'AUDITOR']) ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['auditor', 'AUDITOR']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['auditor', 'AUDITOR'])
+      ));
+    }
+
     function hasPermission(permission) {
       return isAdmin() || (signedIn() && 'permissions' in request.auth.token && permission in request.auth.token.permissions && request.auth.token.permissions[permission] == true);
     }
@@ -175,7 +184,7 @@ service cloud.firestore {
 
     function paymentDraftCreate(data) {
       return signedIn() && (owns(data) || tenantOwns(data) || data.payerId == request.auth.uid || data.userId == request.auth.uid) &&
-        (!('status' in data) || data.status in ['draft', 'payment_pending', 'pending', 'PENDING_PAYMENT', 'PENDING_ADMIN_PAYMENT_VERIFICATION']) &&
+        (!('status' in data) || data.status in ['draft', 'payment_pending', 'pending', 'PENDING_PAYMENT', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED']) &&
         (!('paymentVerified' in data) || data.paymentVerified == false) &&
         (!('approved' in data) || data.approved == false) &&
         (!('contractActivated' in data) || data.contractActivated == false) &&
@@ -245,16 +254,28 @@ service cloud.firestore {
           'technicianNotes',
           'techNotes',
           'workNotes',
+          'notes',
           'startedAt',
           'completedAt',
           'arrivedAt',
           'beforePhotos',
           'afterPhotos',
+          'afterPhotoUrl',
           'proofPhotos',
           'completionPhotos',
+          'evidencePhotos',
           'evidenceStatus',
           'resolutionSummary',
-          'materialsUsed'
+          'materialsUsed',
+          'partsDisposition',
+          'proofReadiness',
+          'tenantApprovalStatus',
+          'arrivedLocation',
+          'technicianLocation',
+          'technicianLocationUpdatedAt',
+          'gpsVerified',
+          'gpsVerifiedAt',
+          'onSiteVerification'
         ]) &&
         (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.assignedTechnicianId) &&
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.technicianId) &&
@@ -282,6 +303,67 @@ service cloud.firestore {
         (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
         (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
         (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+    }
+
+    function ownerBankOwner(data) {
+      return signedIn() && (
+        data.ownerId == request.auth.uid ||
+        data.ownerUid == request.auth.uid ||
+        data.ownerEmail == request.auth.token.email
+      );
+    }
+
+    function safeOwnerBankAccountCreate(data) {
+      return ownerBankOwner(data) &&
+        data.keys().hasOnly([
+          'ownerId',
+          'ownerUid',
+          'ownerEmail',
+          'iban',
+          'maskedIban',
+          'last4',
+          'bankName',
+          'accountHolder',
+          'accountHolderName',
+          'verificationStatus',
+          'status',
+          'verified',
+          'approved',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        (!('verified' in data) || data.verified == false) &&
+        (!('approved' in data) || data.approved == false) &&
+        (!('verifiedAt' in data)) &&
+        (!('verifiedBy' in data)) &&
+        (!('approvedAt' in data)) &&
+        (!('approvedBy' in data)) &&
+        (!('status' in data) || data.status in ['PENDING_VERIFICATION', 'PENDING', 'SUBMITTED']) &&
+        (!('verificationStatus' in data) || data.verificationStatus in ['PENDING', 'PENDING_VERIFICATION']);
+    }
+
+    function safeOwnerBankAccountUpdate() {
+      return ownerBankOwner(resource.data) &&
+        ownerBankOwner(request.resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'iban',
+          'maskedIban',
+          'last4',
+          'bankName',
+          'accountHolder',
+          'accountHolderName',
+          'verificationStatus',
+          'status',
+          'updatedAt'
+        ]) &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == resource.data.verified) &&
+        (!('approved' in request.resource.data) || request.resource.data.approved == resource.data.approved) &&
+        (!('verifiedAt' in request.resource.data) || request.resource.data.verifiedAt == resource.data.verifiedAt) &&
+        (!('verifiedBy' in request.resource.data) || request.resource.data.verifiedBy == resource.data.verifiedBy) &&
+        (!('approvedAt' in request.resource.data) || request.resource.data.approvedAt == resource.data.approvedAt) &&
+        (!('approvedBy' in request.resource.data) || request.resource.data.approvedBy == resource.data.approvedBy) &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['PENDING_VERIFICATION', 'PENDING', 'SUBMITTED']) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['PENDING', 'PENDING_VERIFICATION']);
     }
 
     function safeUserBootstrapCreate(data, userId) {
@@ -671,14 +753,14 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
-      allow read: if isAdmin() || isHr();
+      allow read: if isAdmin() || isHr() || isAuditor();
       allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /audit_logs/{logId} {
-      allow read: if isAdmin() || isHr();
+      allow read: if isAdmin() || isHr() || isAuditor();
       allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -938,9 +1020,9 @@ service cloud.firestore {
     }
 
     match /ownerBankAccounts/{accountId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerEmail == request.auth.token.email));
-      allow create: if signedIn() && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email);
-      allow update: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerEmail == request.auth.token.email));
+      allow read: if isAdmin() || ownerBankOwner(resource.data);
+      allow create: if isAdmin() || safeOwnerBankAccountCreate(request.resource.data);
+      allow update: if isAdmin() || safeOwnerBankAccountUpdate();
       allow delete: if isAdmin();
     }
 

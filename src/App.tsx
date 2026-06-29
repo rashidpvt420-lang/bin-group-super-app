@@ -51,7 +51,6 @@ const OwnerLandingPage = lazyWithRetry(() => import('./pages/OwnerLandingPage'))
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
-const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
@@ -263,10 +262,10 @@ function AppContent() {
         <Route path="/request-demo" element={<DemoVideosPage />} />
         <Route path="/videos" element={<DemoVideosPage />} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<CompanyProfilePage />} />
-        <Route path="/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/about" element={<CompanyProfilePage />} />
-        <Route path="/about-us" element={<CompanyProfilePage />} />
+        <Route path="/company" element={<Navigate to="/#company-profile" replace />} />
+        <Route path="/company-profile" element={<Navigate to="/#company-profile" replace />} />
+        <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
+        <Route path="/about-us" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />

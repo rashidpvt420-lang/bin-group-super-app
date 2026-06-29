@@ -20,7 +20,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
     db, collection, query, where, onSnapshot,
-    orderBy, doc, limit, Timestamp, getDocs, updateDoc, serverTimestamp
+    orderBy, doc, limit, Timestamp, getDocs, updateDoc, serverTimestamp,
+    functions, httpsCallable
 } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
@@ -322,7 +323,7 @@ export default function DashboardPage() {
     // --- Broker Commission Queue ---
     useEffect(() => {
         const unsubComm = onSnapshot(
-            query(collection(db, 'broker_commissions'), where('status', '==', 'pending'), limit(5)),
+            query(collection(db, 'broker_commissions'), where('status', 'in', ['PENDING', 'pending']), limit(5)),
             (snap) => {
                 setCommissionQueue(snap.docs.map(d => ({
                     id: d.id,
@@ -563,10 +564,13 @@ export default function DashboardPage() {
         setActionLoading(true);
         try {
             if (selectedApproval.type === 'OWNER_ONBOARDING') {
-                await updateDoc(doc(db, 'intake_submissions', selectedApproval.id), {
-                    status: 'APPROVED',
-                    approvedAt: serverTimestamp(),
-                    approvedBy: 'admin'
+                const approveActivation = httpsCallable(functions, 'approveOwnerActivation');
+                await approveActivation({
+                    intakeId: selectedApproval.id,
+                    ownerId: selectedApproval.ownerUid || selectedApproval.ownerId || selectedApproval.linkedId,
+                    contractId: selectedApproval.contractId,
+                    paymentId: selectedApproval.paymentId,
+                    propertyIds: selectedApproval.propertyIds
                 });
             } else if (selectedApproval.type === 'TECH_ONBOARD') {
                 await updateDoc(doc(db, 'users', selectedApproval.id), {

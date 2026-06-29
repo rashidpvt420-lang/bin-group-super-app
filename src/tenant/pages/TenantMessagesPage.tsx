@@ -113,10 +113,13 @@ export default function TenantMessagesPage() {
     const handleCreateConversation = async () => {
         if (!user?.uid || !propertyId) return;
         try {
+            const assignedQueue = convType === 'tenant_technician' ? 'technician_dispatch_queue' : 'support_admin_queue';
+            const assignedRole = convType === 'tenant_technician' ? 'dispatcher' : 'admin';
+
             const docRef = await addDoc(collection(db, 'conversations'), {
                 propertyId,
-                participantUids: [user.uid, 'admin_user'], // default to chat with admin
-                participantRoles: ['tenant', 'admin'],
+                participantUids: [user.uid, assignedQueue],
+                participantRoles: ['tenant', assignedRole],
                 type: convType,
                 status: 'open',
                 lastMessageAt: serverTimestamp(),

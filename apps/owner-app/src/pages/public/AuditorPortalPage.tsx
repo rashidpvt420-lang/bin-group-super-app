@@ -19,7 +19,8 @@ export default function AuditorPortalPage() {
     const [auditData, setAuditData] = useState<any[]>([]);
 
     React.useEffect(() => {
-        if (!loading && (!user || !role || !['AUDITOR', 'ADMIN'].includes(role as string))) {
+        const normalizedRole = String(role || '').toLowerCase();
+        if (!loading && (!user || !role || !['auditor', 'admin', 'super_admin', 'ceo'].includes(normalizedRole))) {
             navigate('/dashboard');
             return;
         }
@@ -50,7 +51,8 @@ export default function AuditorPortalPage() {
         </Box>
     );
 
-    if (!user || !role || !['AUDITOR', 'ADMIN'].includes(role as string)) return null;
+    const normalizedRole = String(role || '').toLowerCase();
+    if (!user || !role || !['auditor', 'admin', 'super_admin', 'ceo'].includes(normalizedRole)) return null;
 
     if (!isReady) {
         return (

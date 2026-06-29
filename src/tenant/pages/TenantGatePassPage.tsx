@@ -6,6 +6,7 @@ import {
     CircularProgress, IconButton, Chip
 } from '@mui/material';
 import { ShieldCheck, Plus, Clock, Trash2, Phone, Calendar } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp } from '../../lib/firebase';
@@ -115,7 +116,9 @@ export default function TenantGatePassPage() {
                         <Grid item xs={12} md={6} lg={4} key={pass.id}>
                             <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
-                                    <Box component="img" src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=0f172a&data=${encodeURIComponent(JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName }))}`} alt="Security QR Code" sx={{ width: 140, height: 140, borderRadius: 2 }} />
+                                    <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
+                                        <QRCodeSVG value={JSON.stringify({ passId: pass.id, type: pass.visitorType, name: pass.visitorName })} size={140} fgColor="#0f172a" />
+                                    </Box>
                                 </Box>
                                 <CardContent sx={{ p: 4 }}>
                                     <Stack spacing={2}>

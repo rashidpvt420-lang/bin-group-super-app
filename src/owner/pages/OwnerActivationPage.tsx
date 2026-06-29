@@ -17,6 +17,15 @@ const SIGNABLE_STATUSES = [
 ];
 
 const READY_STATUSES = ['READY_FOR_ACTIVATION', 'OWNER_SIGNED', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'SIGNED'];
+const VERIFIED_PAYMENT_STATUSES = ['PAID', 'VERIFIED', 'ADMIN_VERIFIED', 'APPROVED', 'SETTLED', 'RECONCILED'];
+const PENDING_PAYMENT_STATUSES = ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'ADMIN_REVIEW'];
+
+type ActivationGate = {
+  label: string;
+  status: string;
+  detail: string;
+  tone: string;
+};
 
 const firstNumber = (...values: any[]) => {
   for (const value of values) {
@@ -61,6 +70,62 @@ const contractMobilization = (contract: any, annualValue: number) => firstNumber
 
 const hasCommercialSchedule = (contract: any) =>
   Boolean(contract?.commercialSchedule || contract?.paymentSchedule || contract?.commercialScheduleLocked);
+
+const normalizeGateStatus = (value: unknown) => String(value || '').trim().replace(/\s+/g, '_').toUpperCase();
+
+const isTruthyVerified = (...values: any[]) => values.some((value) => value === true || ['TRUE', 'YES', 'VERIFIED', 'APPROVED', 'ACTIVE', 'SIGNED', 'DONE', 'COMPLETE', 'COMPLETED'].includes(normalizeGateStatus(value)));
+
+const hasTitleEvidence = (contract: any) => {
+  const properties = Array.isArray(contract?.properties) ? contract.properties : [];
+  return isTruthyVerified(contract?.titleDeedVerified, contract?.ownershipVerified, contract?.ownershipVerificationStatus, contract?.titleDeedStatus) ||
+    Boolean(contract?.titleDeedUrl || contract?.titleDeedFileUrl || contract?.ownershipDocumentUrl || contract?.proofDocuments?.propertyProof) ||
+    properties.some((property: any) => Boolean(property?.titleDeedUrl || property?.titleDeedFileUrl || property?.ownershipDocumentUrl || isTruthyVerified(property?.titleDeedStatus, property?.ownershipVerificationStatus)));
+};
+
+const hasPropertyDetails = (contract: any) => {
+  const properties = Array.isArray(contract?.properties) ? contract.properties : [];
+  return properties.length > 0 || Boolean(contract?.propertyId || contract?.propertyName || contract?.propertyDetails || contract?.assetProfile);
+};
+
+const totalContractUnits = (contract: any) => {
+  const properties = Array.isArray(contract?.properties) ? contract.properties : [];
+  const direct = firstNumber(contract?.totalUnits, contract?.units, contract?.unitCount, contract?.propertyDetails?.units);
+  if (direct > 0) return direct;
+  return properties.reduce((sum: number, property: any) => sum + firstNumber(property?.totalUnits, property?.units, property?.unitCount, property?.numberOfUnits), 0);
+};
+
+const gate = (label: string, done: boolean, review: boolean, doneDetail: string, reviewDetail: string, missingDetail: string): ActivationGate => {
+  if (done) return { label, status: 'Done', detail: doneDetail, tone: '#10b981' };
+  if (review) return { label, status: 'In Review', detail: reviewDetail, tone: '#f59e0b' };
+  return { label, status: 'Missing', detail: missingDetail, tone: '#ef4444' };
+};
+
+function buildActivationGates(contract: any, profile: any, activated: boolean, mobilization: number): ActivationGate[] {
+  const paymentStatus = normalizeGateStatus(contract?.paymentStatus || profile?.paymentStatus || contract?.status);
+  const signatureStatus = normalizeGateStatus(contract?.signatureStatus || contract?.ownerSignatureStatus || profile?.signatureStatus);
+  const approvalStatus = normalizeGateStatus(contract?.adminApprovalStatus || contract?.binApprovalStatus || contract?.approvalStatus || profile?.approvalStatus);
+  const units = totalContractUnits(contract);
+  const tenantInviteCount = firstNumber(contract?.tenantInvitationCount, contract?.tenantInvitationsSent, contract?.pendingTenantInvitations, profile?.tenantInvitationCount);
+  const ibanPresent = Boolean(profile?.iban || profile?.bankDetails?.iban || profile?.payoutDetails?.iban || contract?.iban || contract?.bankDetails?.iban);
+  const ibanVerified = isTruthyVerified(profile?.ibanVerified, profile?.payoutVerified, profile?.bankDetails?.verified, profile?.ibanStatus, contract?.ibanVerified, contract?.payoutVerified);
+  const ownerSigned = contract?.ownerSigned === true || contract?.ownerSignature?.signed === true || signatureStatus === 'OWNER_SIGNED' || signatureStatus === 'SIGNED';
+  const paymentVerified = contract?.paymentVerified === true || profile?.paymentVerified === true || VERIFIED_PAYMENT_STATUSES.includes(paymentStatus);
+  const paymentInReview = PENDING_PAYMENT_STATUSES.includes(paymentStatus) || paymentStatus.includes('PENDING') || paymentStatus.includes('REVIEW') || mobilization > 0;
+  const adminApproved = approvalStatus.includes('APPROVED') || normalizeGateStatus(contract?.activationStatus) === 'ACTIVE' || activated;
+
+  return [
+    gate('Property submitted', hasPropertyDetails(contract), Boolean(contract?.id), 'Property details are attached to the contract.', 'Contract exists; property details are under admin review.', 'Property details are not linked yet.'),
+    gate('Title deed verified', hasTitleEvidence(contract), hasPropertyDetails(contract), 'Ownership evidence is present or verified.', 'Ownership evidence is under review.', 'Title deed or ownership proof still needs upload/review.'),
+    gate('15% payment proof', paymentVerified, paymentInReview, 'Mobilization/payment proof is verified.', 'Payment proof is waiting for admin verification.', 'Payment proof has not been submitted.'),
+    gate('Contract signed by owner', ownerSigned, Boolean(contract?.id), 'Owner signature is recorded.', 'Contract is ready for owner signature.', 'No signable contract found.'),
+    gate('BIN GROUP approved', adminApproved, approvalStatus.includes('PENDING') || approvalStatus.includes('REVIEW') || Boolean(contract?.id), 'BIN GROUP/admin approval is complete.', 'BIN GROUP/admin approval is pending.', 'Admin approval has not started.'),
+    gate('Dashboard unlocked', activated, paymentVerified || adminApproved, 'Owner dashboard access is active.', 'Dashboard unlock is waiting for final admin/payment closure.', 'Dashboard remains locked.'),
+    gate('Properties copied to live records', hasPropertyDetails(contract), Boolean(contract?.id), 'Property records are visible from the contract.', 'Property copy/linkage is in review.', 'Property records are not live yet.'),
+    gate('Units generated/imported', units > 0, hasPropertyDetails(contract), `${units} unit(s) resolved.`, 'Property is present; units still need generation or import.', 'Units are not configured.'),
+    gate('Tenant invitations', tenantInviteCount > 0, units > 0, `${tenantInviteCount} tenant invitation(s) tracked.`, 'Units exist; tenant invitations can be sent next.', 'Tenant invitations are not ready until units exist.'),
+    gate('Payout IBAN', ibanVerified, ibanPresent, 'Verified owner payout destination exists.', 'IBAN submitted and waiting for verification.', 'Owner payout IBAN is missing.'),
+  ];
+}
 
 const moneyLabel = (value: number, contract: any) => {
   if (value > 0) return `AED ${Math.round(value).toLocaleString()}`;
@@ -171,6 +236,7 @@ export default function OwnerActivationPage() {
   const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
   const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0 && !hasCommercialSchedule(primaryContract);
   const canSubmitPaymentRequest = !!primaryContract?.id && !activated && !canSign && signedWaitingActivation;
+  const activationGates = buildActivationGates(primaryContract, profile, activated, mobilization);
 
   const refreshAfterAction = async () => {
     await refreshRole?.();
@@ -308,6 +374,8 @@ export default function OwnerActivationPage() {
         )}
         {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
 
+        <ActivationTimeline gates={activationGates} />
+
         <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Grid item xs={12} md={7}>
             <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.64)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
@@ -402,5 +470,43 @@ export default function OwnerActivationPage() {
         </Grid>
       </Stack>
     </Box>
+  );
+}
+
+function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
+  const doneCount = gates.filter((step) => step.status === 'Done').length;
+
+  return (
+    <Paper sx={{ p: { xs: 2.25, md: 3 }, bgcolor: 'rgba(15,23,42,0.52)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={1.5} sx={{ mb: 2.5 }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+            OWNER ACTIVATION TIMELINE
+          </Typography>
+          <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>
+            {doneCount}/{gates.length} gates complete
+          </Typography>
+        </Box>
+        <Chip
+          label={doneCount === gates.length ? 'READY' : 'ACTION NEEDED'}
+          sx={{ bgcolor: alpha(doneCount === gates.length ? '#10b981' : '#f59e0b', 0.12), color: doneCount === gates.length ? '#10b981' : '#f59e0b', fontWeight: 950 }}
+        />
+      </Stack>
+      <Grid container spacing={1.5}>
+        {gates.map((step) => (
+          <Grid item xs={12} sm={6} md={4} key={step.label}>
+            <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
+              <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
+                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.label}</Typography>
+                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
+              </Stack>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.58)', fontWeight: 700 }}>
+                {step.detail}
+              </Typography>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </Paper>
   );
 }

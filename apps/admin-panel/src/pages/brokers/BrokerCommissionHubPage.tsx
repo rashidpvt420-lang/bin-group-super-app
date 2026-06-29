@@ -3,6 +3,8 @@ import { Container, Typography, Box, Paper, Grid, Button, alpha, CircularProgres
 import { db, collection, query, getDocs, orderBy, limit, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
+const commissionStatus = (value: unknown) => String(value || '').trim().toUpperCase();
+
 export default function BrokerCommissionHubPage() {
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -24,9 +26,10 @@ export default function BrokerCommissionHubPage() {
                 let p = 0; let a = 0; let paid = 0;
                 data.forEach((c: any) => {
                     const amount = Number(c.amount || 0);
-                    if (c.status === 'PENDING') p += amount;
-                    else if (c.status === 'APPROVED') a += amount;
-                    else if (c.status === 'PAID') paid += amount;
+                    const status = commissionStatus(c.status);
+                    if (status === 'PENDING') p += amount;
+                    else if (status === 'APPROVED') a += amount;
+                    else if (status === 'PAID') paid += amount;
                 });
                 setStats({ pending: p, approved: a, paid: paid });
             } catch (err) {
@@ -42,9 +45,10 @@ export default function BrokerCommissionHubPage() {
         let p = 0; let a = 0; let paid = 0;
         data.forEach((c: any) => {
             const amount = Number(c.amount || 0);
-            if (c.status === 'PENDING') p += amount;
-            else if (c.status === 'APPROVED') a += amount;
-            else if (c.status === 'PAID') paid += amount;
+            const status = commissionStatus(c.status);
+            if (status === 'PENDING') p += amount;
+            else if (status === 'APPROVED') a += amount;
+            else if (status === 'PAID') paid += amount;
         });
         setStats({ pending: p, approved: a, paid });
     };
@@ -148,12 +152,12 @@ export default function BrokerCommissionHubPage() {
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                                         <Chip 
-                                            label={c.status} 
+                                            label={commissionStatus(c.status) || 'UNKNOWN'} 
                                             size="small" 
                                             sx={{ 
                                                 fontWeight: 900, fontSize: '0.6rem',
-                                                bgcolor: c.status === 'PAID' ? alpha('#10b981', 0.1) : (c.status === 'APPROVED' ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.05)'),
-                                                color: c.status === 'PAID' ? '#10b981' : (c.status === 'APPROVED' ? binThemeTokens.gold : 'rgba(255,255,255,0.5)')
+                                                bgcolor: commissionStatus(c.status) === 'PAID' ? alpha('#10b981', 0.1) : (commissionStatus(c.status) === 'APPROVED' ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.05)'),
+                                                color: commissionStatus(c.status) === 'PAID' ? '#10b981' : (commissionStatus(c.status) === 'APPROVED' ? binThemeTokens.gold : 'rgba(255,255,255,0.5)')
                                             }} 
                                         />
                                     </TableCell>
@@ -161,13 +165,13 @@ export default function BrokerCommissionHubPage() {
                                         {Number(c.amount || 0).toLocaleString()}
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="center">
-                                        {c.status === 'PENDING' && (
+                                        {commissionStatus(c.status) === 'PENDING' && (
                                             <Button size="small" disabled={busyId === c.id} onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>APPROVE</Button>
                                         )}
-                                        {c.status === 'APPROVED' && (
+                                        {commissionStatus(c.status) === 'APPROVED' && (
                                             <Button size="small" disabled={busyId === c.id} onClick={() => handleMarkPaid(c.id)} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>MARK PAID</Button>
                                         )}
-                                        {c.status === 'PAID' && (
+                                        {commissionStatus(c.status) === 'PAID' && (
                                             <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>PAID</Typography>
                                         )}
                                     </TableCell>

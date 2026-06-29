@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { ShieldCheck, Plus, Clock, Trash2, Car, Calendar, AlertCircle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { db, collection, query, where, getDocs, limit, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
@@ -177,7 +178,9 @@ export default function TenantVisitorParkingPage() {
                 }}>
                   {isApproved && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, bgcolor: '#FFF' }}>
-                      <Box component="img" src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=0f172a&data=${encodeURIComponent(r.qrPayload || '')}`} alt="Parking Pass QR" sx={{ width: 140, height: 140, borderRadius: 2 }} />
+                      <Box sx={{ p: 1, bgcolor: '#fff', borderRadius: 2 }}>
+                        <QRCodeSVG value={r.qrPayload || 'invalid'} size={140} fgColor="#0f172a" />
+                      </Box>
                     </Box>
                   )}
                   <Box sx={{ p: 3 }}>

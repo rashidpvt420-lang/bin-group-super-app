@@ -43,7 +43,12 @@ const primaryMenu = [
     const managementMenu = [
         { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
+        { text: 'Broker Attribution Queue', icon: <PendingActionsIcon />, path: '/broker-attributions', color: binThemeTokens.gold },
+        { text: 'Broker Commission Hub', icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
+        { text: 'Tenant Unit Links', icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
+        { text: 'Tenant Services', icon: <ReceiptIcon />, path: '/tenant-services', color: '#38bdf8' },
+        { text: 'Operations Messages', icon: <ReceiptIcon />, path: '/ops/messages', color: '#8b5cf6' },
         { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
         { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },

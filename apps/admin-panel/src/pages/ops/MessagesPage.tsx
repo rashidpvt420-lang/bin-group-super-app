@@ -5,9 +5,11 @@ import { db, doc, collection, addDoc, serverTimestamp, query, orderBy, onSnapsho
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
+import { useAuth } from '../../context/AuthContext';
 
 export default function MessagesPage() {
     const { isRTL } = useLanguage();
+    const { user } = useAuth();
     const [conversations, setConversations] = useState<any[]>([]);
     const [selectedConv, setSelectedConv] = useState<any>(null);
     const [messages, setMessages] = useState<any[]>([]);
@@ -53,13 +55,14 @@ export default function MessagesPage() {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !selectedConv?.id) return;
+        if (!newMessage.trim() || !selectedConv?.id || !user?.uid) return;
         const body = newMessage;
         setNewMessage('');
         try {
             await addDoc(collection(db, `conversations/${selectedConv.id}/messages`), {
-                senderUid: 'admin_user',
+                senderUid: user.uid,
                 senderRole: 'admin',
+                senderEmail: user.email || '',
                 body,
                 createdAt: serverTimestamp()
             });
