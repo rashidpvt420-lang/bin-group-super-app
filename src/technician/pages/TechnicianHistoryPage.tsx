@@ -15,6 +15,7 @@ import {
     orderBy, limit, onSnapshot 
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TechnicianHistoryPage() {
@@ -28,6 +29,7 @@ export default function TechnicianHistoryPage() {
         avgRating: 0,
         slaCompliance: 0
     });
+    const { tx, isRTL } = useLanguage();
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -79,11 +81,11 @@ export default function TechnicianHistoryPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {/* Header */}
             <Box sx={{ mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>MISSION ARCHIVE</Typography>
-                <Typography variant="h4" fontWeight="950" color="#FFF">Work History & KPIs</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('technician.history.missionArchive', 'MISSION ARCHIVE')}</Typography>
+                <Typography variant="h4" fontWeight="950" color="#FFF">{tx('technician.history.workHistoryKpis', 'Work History & KPIs')}</Typography>
             </Box>
 
             {/* KPI Performance Section */}
@@ -95,7 +97,7 @@ export default function TechnicianHistoryPage() {
                                 <TrendingUp size={32} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MISSION SUCCESS</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('technician.history.missionSuccess', 'MISSION SUCCESS')}</Typography>
                                 <Typography variant="h5" fontWeight="950" color="#FFF">{stats.success}%</Typography>
                             </Box>
                         </Stack>
@@ -106,8 +108,8 @@ export default function TechnicianHistoryPage() {
                                 <ShieldCheck size={32} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>SLA COMPLIANCE</Typography>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.slaCompliance > 0 || stats.total > 0 ? `${stats.slaCompliance}%` : 'No data yet'}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('technician.history.slaCompliance', 'SLA COMPLIANCE')}</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.slaCompliance > 0 || stats.total > 0 ? `${stats.slaCompliance}%` : tx('technician.history.noDataYet', 'No data yet')}</Typography>
                             </Box>
                         </Stack>
                     </Grid>
@@ -117,8 +119,8 @@ export default function TechnicianHistoryPage() {
                                 <Star size={32} fill={binThemeTokens.gold} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>QUALITY SCORE</Typography>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.avgRating > 0 ? `${stats.avgRating}/5` : 'No ratings yet'}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('technician.history.qualityScore', 'QUALITY SCORE')}</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.avgRating > 0 ? `${stats.avgRating}/5` : tx('technician.history.noRatingsYet', 'No ratings yet')}</Typography>
                             </Box>
                         </Stack>
                     </Grid>
@@ -128,7 +130,7 @@ export default function TechnicianHistoryPage() {
                                 <History size={32} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>TOTAL MISSIONS</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('technician.history.totalMissions', 'TOTAL MISSIONS')}</Typography>
                                 <Typography variant="h5" fontWeight="950" color="#FFF">{stats.total}</Typography>
                             </Box>
                         </Stack>
@@ -137,13 +139,13 @@ export default function TechnicianHistoryPage() {
             </Paper>
 
             <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Calendar size={20} color={binThemeTokens.gold} /> MISSION LOG
+                <Calendar size={20} color={binThemeTokens.gold} /> {tx('technician.history.missionLog', 'MISSION LOG')}
             </Typography>
 
             {history.length === 0 ? (
                 <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.05)' }}>
-                    <Typography color="textSecondary" variant="h6" fontWeight="900">NO COMPLETED MISSIONS ARCHIVED</Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', mt: 1 }}>Missions will appear here once they are completed or closed.</Typography>
+                    <Typography color="textSecondary" variant="h6" fontWeight="900">{tx('technician.history.noCompletedMissionsArchived', 'NO COMPLETED MISSIONS ARCHIVED')}</Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.2)', mt: 1 }}>{tx('technician.history.missionsWillAppear', 'Missions will appear here once they are completed or closed.')}</Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3}>
@@ -162,30 +164,30 @@ export default function TechnicianHistoryPage() {
                             <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems="center" spacing={3}>
                                 <Box sx={{ flex: 1 }}>
                                     <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>REF #{job.id.substring(0,8)}</Typography>
-                                        <Chip 
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('technician.history.refPrefix', 'REF #')}{job.id.substring(0,8)}</Typography>
+                                        <Chip
                                             size="small"
-                                            label={job.status?.toUpperCase().replace('_', ' ')} 
-                                            sx={{ 
+                                            label={job.status?.toUpperCase().replace('_', ' ')}
+                                            sx={{
                                                 bgcolor: job.status === 'CLOSED' ? alpha('#4ade80', 0.1) : alpha(binThemeTokens.gold, 0.1),
                                                 color: job.status === 'CLOSED' ? '#4ade80' : binThemeTokens.gold,
                                                 fontWeight: 950,
                                                 fontSize: '0.65rem'
-                                            }} 
+                                            }}
                                         />
                                     </Stack>
-                                    <Typography variant="h6" fontWeight="950" color="#FFF">{job.category || 'Maintenance'}</Typography>
+                                    <Typography variant="h6" fontWeight="950" color="#FFF">{job.category || tx('technician.history.maintenance', 'Maintenance')}</Typography>
                                     <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                                        <MapPin size={14} /> {job.propertyName} · Unit {job.unitNumber}
+                                        <MapPin size={14} /> {job.propertyName} · {tx('technician.history.unitLabel', 'Unit')} {job.unitNumber}
                                     </Typography>
                                 </Box>
 
                                 <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, borderColor: 'rgba(255,255,255,0.05)' }} />
 
                                 <Box sx={{ width: { xs: '100%', sm: '200px' } }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, mb: 1, display: 'block' }}>COMPLETION DATE</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, mb: 1, display: 'block' }}>{tx('technician.history.completionDate', 'COMPLETION DATE')}</Typography>
                                     <Typography variant="body1" fontWeight="950" color="#FFF">
-                                        {job.completedAt?.toDate ? job.completedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                        {job.completedAt?.toDate ? job.completedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : tx('technician.history.notAvailable', 'N/A')}
                                     </Typography>
                                 </Box>
 

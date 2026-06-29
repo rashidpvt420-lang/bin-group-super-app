@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, CheckCircle2, FileText, ShieldCheck } from 'lucide-react';
 import { collection, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 
@@ -32,6 +33,7 @@ const proofStateFor = (job: JobRow) => {
 export default function TechnicianProofReadinessPage() {
   const { user } = useRole();
   const navigate = useNavigate();
+  const { tx, isRTL } = useLanguage();
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [warning, setWarning] = useState('');
 
@@ -42,7 +44,7 @@ export default function TechnicianProofReadinessPage() {
       setWarning('');
     }, (err: any) => {
       console.warn('[TechnicianProofReadiness] active jobs unavailable:', err);
-      setWarning('Could not load active job proof readiness. Check ticket access rules or try again.');
+      setWarning(tx('technician.proof.loadError', 'Could not load active job proof readiness. Check ticket access rules or try again.'));
     });
     return () => unsub();
   }, [user?.uid]);
@@ -57,27 +59,27 @@ export default function TechnicianProofReadinessPage() {
   const missingParts = rows.filter((row) => !row.proof.parts).length;
 
   return (
-    <Box>
+    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>TECHNICIAN PROOF COMMAND</Typography>
-          <Typography variant="h3" sx={{ color: ui.ink, fontWeight: 950, mt: 1 }}>Proof Readiness</Typography>
-          <Typography sx={{ color: ui.muted, mt: 1, fontWeight: 700 }}>Every active job must have before evidence, after proof, resolution notes, and parts/materials disposition before close.</Typography>
+          <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('technician.proof.header', 'TECHNICIAN PROOF COMMAND')}</Typography>
+          <Typography variant="h3" sx={{ color: ui.ink, fontWeight: 950, mt: 1 }}>{tx('technician.proof.title', 'Proof Readiness')}</Typography>
+          <Typography sx={{ color: ui.muted, mt: 1, fontWeight: 700 }}>{tx('technician.proof.subtitle', 'Every active job must have before evidence, after proof, resolution notes, and parts/materials disposition before close.')}</Typography>
         </Box>
         {warning && <Alert severity="warning">{warning}</Alert>}
 
         <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${alpha(blocked ? ui.gold : ui.green, 0.28)}`, bgcolor: alpha(blocked ? ui.gold : ui.green, 0.06) }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
             <Box>
-              <Typography variant="h4" sx={{ color: ui.ink, fontWeight: 950 }}>{ratio}% ready</Typography>
-              <Typography sx={{ color: ui.muted, fontWeight: 800 }}>{ready}/{rows.length} active jobs have complete close proof</Typography>
+              <Typography variant="h4" sx={{ color: ui.ink, fontWeight: 950 }}>{tx('technician.proof.readyRatio', '{{ratio}}% ready', { ratio })}</Typography>
+              <Typography sx={{ color: ui.muted, fontWeight: 800 }}>{tx('technician.proof.activeJobsSummary', '{{ready}}/{{total}} active jobs have complete close proof', { ready, total: rows.length })}</Typography>
             </Box>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip label={`Blocked: ${blocked}`} sx={{ bgcolor: '#fff', color: blocked ? ui.red : ui.green, fontWeight: 950 }} />
-              <Chip label={`Before missing: ${missingBefore}`} sx={{ bgcolor: '#fff', color: missingBefore ? ui.gold : ui.green, fontWeight: 950 }} />
-              <Chip label={`After missing: ${missingAfter}`} sx={{ bgcolor: '#fff', color: missingAfter ? ui.red : ui.green, fontWeight: 950 }} />
-              <Chip label={`Notes missing: ${missingNotes}`} sx={{ bgcolor: '#fff', color: missingNotes ? ui.gold : ui.green, fontWeight: 950 }} />
-              <Chip label={`Parts missing: ${missingParts}`} sx={{ bgcolor: '#fff', color: missingParts ? ui.gold : ui.green, fontWeight: 950 }} />
+              <Chip label={tx('technician.proof.blockedCount', 'Blocked: {{count}}', { count: blocked })} sx={{ bgcolor: '#fff', color: blocked ? ui.red : ui.green, fontWeight: 950 }} />
+              <Chip label={tx('technician.proof.beforeMissingCount', 'Before missing: {{count}}', { count: missingBefore })} sx={{ bgcolor: '#fff', color: missingBefore ? ui.gold : ui.green, fontWeight: 950 }} />
+              <Chip label={tx('technician.proof.afterMissingCount', 'After missing: {{count}}', { count: missingAfter })} sx={{ bgcolor: '#fff', color: missingAfter ? ui.red : ui.green, fontWeight: 950 }} />
+              <Chip label={tx('technician.proof.notesMissingCount', 'Notes missing: {{count}}', { count: missingNotes })} sx={{ bgcolor: '#fff', color: missingNotes ? ui.gold : ui.green, fontWeight: 950 }} />
+              <Chip label={tx('technician.proof.partsMissingCount', 'Parts missing: {{count}}', { count: missingParts })} sx={{ bgcolor: '#fff', color: missingParts ? ui.gold : ui.green, fontWeight: 950 }} />
             </Stack>
           </Stack>
           <LinearProgress variant="determinate" value={ratio} sx={{ height: 10, borderRadius: 5, mt: 2, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: blocked ? ui.gold : ui.green } }} />
@@ -89,19 +91,23 @@ export default function TechnicianProofReadinessPage() {
               <Paper onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2.5, borderRadius: 4, cursor: 'pointer', border: `1px solid ${alpha(proof.ready ? ui.green : ui.gold, 0.28)}`, bgcolor: '#fff', '&:hover': { borderColor: ui.gold } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
                   <Box>
-                    <Typography sx={{ color: ui.ink, fontWeight: 950 }}>{job.category || job.issueType || 'Maintenance Mission'}</Typography>
-                    <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 800 }}>#{String(job.id).slice(0, 8)} · {job.propertyName || job.address || 'Property not linked'}</Typography>
+                    <Typography sx={{ color: ui.ink, fontWeight: 950 }}>{job.category || job.issueType || tx('technician.proof.defaultMissionName', 'Maintenance Mission')}</Typography>
+                    <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 800 }}>#{String(job.id).slice(0, 8)} · {job.propertyName || job.address || tx('technician.proof.propertyNotLinked', 'Property not linked')}</Typography>
                   </Box>
-                  <Chip icon={proof.ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} label={`Proof ${proof.score}/${proof.total}`} sx={{ bgcolor: alpha(proof.ready ? ui.green : ui.gold, 0.12), color: proof.ready ? ui.green : ui.gold, fontWeight: 950 }} />
+                  <Chip icon={proof.ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} label={tx('technician.proof.scoreLabel', 'Proof {{score}}/{{total}}', { score: proof.score, total: proof.total })} sx={{ bgcolor: alpha(proof.ready ? ui.green : ui.gold, 0.12), color: proof.ready ? ui.green : ui.gold, fontWeight: 950 }} />
                 </Stack>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
                   {['before', 'after', 'notes', 'parts'].map((item) => {
                     const ok = Boolean((proof as any)[item]);
-                    return <Chip key={item} size="small" label={`${ok ? '✓' : '•'} ${item}`} sx={{ bgcolor: alpha(ok ? ui.green : ui.gold, 0.1), color: ok ? ui.green : ui.gold, fontWeight: 900 }} />;
+                    const itemLabel = item === 'before' ? tx('technician.proof.itemBefore', 'before')
+                      : item === 'after' ? tx('technician.proof.itemAfter', 'after')
+                      : item === 'notes' ? tx('technician.proof.itemNotes', 'notes')
+                      : tx('technician.proof.itemParts', 'parts');
+                    return <Chip key={item} size="small" label={`${ok ? '✓' : '•'} ${itemLabel}`} sx={{ bgcolor: alpha(ok ? ui.green : ui.gold, 0.1), color: ok ? ui.green : ui.gold, fontWeight: 900 }} />;
                   })}
                 </Stack>
-                {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}>Missing: {proof.missing.join(', ')}</Typography>}
-                <Button endIcon={<ArrowRight size={14} />} sx={{ mt: 1.5, color: ui.gold, fontWeight: 950 }}>Open job</Button>
+                {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}>{tx('technician.proof.missingLabel', 'Missing:')} {proof.missing.join(', ')}</Typography>}
+                <Button endIcon={<ArrowRight size={14} />} sx={{ mt: 1.5, color: ui.gold, fontWeight: 950 }}>{tx('technician.proof.openJob', 'Open job')}</Button>
               </Paper>
             </Grid>
           ))}
@@ -109,8 +115,8 @@ export default function TechnicianProofReadinessPage() {
             <Grid item xs={12}>
               <Paper sx={{ p: 6, borderRadius: 4, textAlign: 'center', border: `1px dashed ${alpha(ui.gold, 0.25)}` }}>
                 <ShieldCheck size={44} color={ui.gold} style={{ margin: '0 auto 12px' }} />
-                <Typography sx={{ color: ui.ink, fontWeight: 950 }}>No active jobs assigned</Typography>
-                <Typography sx={{ color: ui.muted, mt: 1 }}>Proof readiness will appear when jobs are assigned or accepted.</Typography>
+                <Typography sx={{ color: ui.ink, fontWeight: 950 }}>{tx('technician.proof.noActiveJobs', 'No active jobs assigned')}</Typography>
+                <Typography sx={{ color: ui.muted, mt: 1 }}>{tx('technician.proof.noActiveJobsHelper', 'Proof readiness will appear when jobs are assigned or accepted.')}</Typography>
               </Paper>
             </Grid>
           )}

@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import { db, doc, getDoc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TechnicianChatPage() {
@@ -15,6 +16,7 @@ export default function TechnicianChatPage() {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const { tx, isRTL } = useLanguage();
 
     useEffect(() => {
         const fetchTicket = async () => {
@@ -63,9 +65,9 @@ export default function TechnicianChatPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                Chat: {ticket?.tenantName || 'Tenant'}
+                {tx('technician.chat.title', 'Chat')}: {ticket?.tenantName || tx('technician.chat.tenantFallback', 'Tenant')}
             </Typography>
 
             <Paper sx={{ flex: 1, p: 3, mb: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflowY: 'auto' }}>
@@ -88,7 +90,7 @@ export default function TechnicianChatPage() {
                     })}
                     {messages.length === 0 && (
                         <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 10 }}>
-                            Send a message to the tenant.
+                            {tx('technician.chat.emptyState', 'Send a message to the tenant.')}
                         </Typography>
                     )}
                     <div ref={messagesEndRef} />
@@ -97,10 +99,10 @@ export default function TechnicianChatPage() {
 
             <form onSubmit={handleSendMessage}>
                 <Paper sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 10, display: 'flex', alignItems: 'center' }}>
-                    <TextField 
-                        fullWidth 
-                        placeholder="Type your message..." 
-                        variant="standard" 
+                    <TextField
+                        fullWidth
+                        placeholder={tx('technician.chat.placeholder', 'Type your message...')}
+                        variant="standard"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         sx={{ px: 2, '& .MuiInput-root': { color: '#FFF' }, '& .MuiInput-root:before, & .MuiInput-root:after': { display: 'none' } }}

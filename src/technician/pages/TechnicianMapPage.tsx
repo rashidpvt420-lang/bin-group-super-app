@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, Compass, Info, ExternalLink, LocateFixed, ShieldAlert, Wifi, WifiOff, Clock } from 'lucide-react';
 import { collection, doc, onSnapshot, query, where, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, getTechnicianLocation, getTicketJobLocation, isLocationStale } from '../../utils/liveTracking';
@@ -39,6 +40,7 @@ export default function TechnicianMapPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [techProfile, setTechProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { tx, isRTL } = useLanguage();
 
   useEffect(() => {
     if (!user?.uid) {
@@ -80,23 +82,23 @@ export default function TechnicianMapPage() {
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 20 }}>
         <CircularProgress sx={{ color: binThemeTokens.gold, mb: 2 }} />
         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-          INITIALIZING GPS DATA...
+          {tx('technician.map.initializingGpsData', 'INITIALIZING GPS DATA...')}
         </Typography>
       </Box>
     );
   }
 
   return (
-    <Box>
+    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 5 }}>
         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
-          FIELD OPERATIONS
+          {tx('technician.map.fieldOperations', 'FIELD OPERATIONS')}
         </Typography>
         <Typography variant="h4" fontWeight="950" color="#FFF">
-          Mission Control & Navigation
+          {tx('technician.map.missionControlTitle', 'Mission Control & Navigation')}
         </Typography>
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.46)', mt: 1, maxWidth: 720 }}>
-          Live GPS tracking is active only when you press ON THE WAY. Your location is only shared with the requester of your assigned ticket.
+          {tx('technician.map.liveGpsNotice', 'Live GPS tracking is active only when you press ON THE WAY. Your location is only shared with the requester of your assigned ticket.')}
         </Typography>
       </Box>
 
@@ -106,13 +108,13 @@ export default function TechnicianMapPage() {
             {isLocationStale(techProfile.currentLocation?.updatedAt) ? <WifiOff size={22} color="#f87171" /> : <Wifi size={22} color="#4ade80" />}
             <Box>
               <Typography variant="body2" fontWeight="900" color="#FFF">
-                Your GPS: {isLocationStale(techProfile.currentLocation?.updatedAt) ? 'Stale / Offline' : 'Live'}
+                {tx('technician.map.yourGps', 'Your GPS:')} {isLocationStale(techProfile.currentLocation?.updatedAt) ? tx('technician.map.staleOffline', 'Stale / Offline') : tx('technician.map.live', 'Live')}
               </Typography>
               <Typography variant="caption" color="textSecondary">
                 {techProfile.currentLocation?.lat?.toFixed?.(5)}, {techProfile.currentLocation?.lng?.toFixed?.(5)} · {getStaleLabel(techProfile.currentLocation?.updatedAt)}
               </Typography>
             </Box>
-            {techProfile.isTracking && <Chip size="small" label="TRACKING ON" sx={{ ml: 'auto', bgcolor: alpha('#10b981', 0.15), color: '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
+            {techProfile.isTracking && <Chip size="small" label={tx('technician.map.trackingOn', 'TRACKING ON')} sx={{ ml: 'auto', bgcolor: alpha('#10b981', 0.15), color: '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
           </Stack>
         </Paper>
       )}
@@ -120,12 +122,12 @@ export default function TechnicianMapPage() {
       {jobs.length === 0 ? (
         <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.1)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}><Compass size={64} color="rgba(255,255,255,0.1)" /></Box>
-          <Typography color="#FFF" variant="h6" fontWeight="950">NO ACTIVE MISSIONS REQUIRING NAVIGATION</Typography>
+          <Typography color="#FFF" variant="h6" fontWeight="950">{tx('technician.map.noActiveMissions', 'NO ACTIVE MISSIONS REQUIRING NAVIGATION')}</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1, maxWidth: 400, mx: 'auto' }}>
-            Accept a job from the Mission Pool or your Active Queue to begin a new operation.
+            {tx('technician.map.acceptJobPrompt', 'Accept a job from the Mission Pool or your Active Queue to begin a new operation.')}
           </Typography>
           <Button variant="outlined" onClick={() => navigate('/technician/jobs')} sx={{ mt: 4, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
-            GO TO JOB LIST
+            {tx('technician.map.goToJobList', 'GO TO JOB LIST')}
           </Button>
         </Paper>
       ) : (
@@ -151,11 +153,11 @@ export default function TechnicianMapPage() {
                         ) : null}
                         <Stack spacing={1.5} alignItems="center" sx={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
                           {resolved.hasExactCoordinates ? <Navigation size={44} color={binThemeTokens.gold} /> : <ShieldAlert size={44} color="#ef4444" />}
-                          <Typography variant="h6" fontWeight="950" color="#FFF">{resolved.hasExactCoordinates ? 'Navigation Ready' : 'GPS Location Warning'}</Typography>
-                          {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Arrives in ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#000', fontWeight: 950, '& .MuiChip-icon': { color: '#000' } }} />}
-                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{dist.toFixed(1)} km away</Typography>}
+                          <Typography variant="h6" fontWeight="950" color="#FFF">{resolved.hasExactCoordinates ? tx('technician.map.navigationReady', 'Navigation Ready') : tx('technician.map.gpsLocationWarning', 'GPS Location Warning')}</Typography>
+                          {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={tx('technician.map.arrivesInMin', 'Arrives in ~{{eta}} min', { eta })} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#000', fontWeight: 950, '& .MuiChip-icon': { color: '#000' } }} />}
+                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{tx('technician.map.distanceAway', '{{dist}} km away', { dist: dist.toFixed(1) })}</Typography>}
                           <Button variant="contained" onClick={() => openMap(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
-                            OPEN IN GOOGLE MAPS
+                            {tx('technician.map.openInGoogleMaps', 'OPEN IN GOOGLE MAPS')}
                           </Button>
                         </Stack>
                       </Box>
@@ -168,18 +170,18 @@ export default function TechnicianMapPage() {
                           </Box>
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
-                              <Chip size="small" label={String(job.status || 'MISSION').replace(/_/g, ' ').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.65rem' }} />
-                              {isOnTheWay && <Chip size="small" icon={locationStale ? <WifiOff size={11} /> : <Wifi size={11} />} label={locationStale ? 'GPS STALE' : 'GPS LIVE'} sx={{ bgcolor: locationStale ? alpha('#ef4444', 0.1) : alpha('#10b981', 0.1), color: locationStale ? '#f87171' : '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
+                              <Chip size="small" label={String(job.status || tx('technician.map.mission', 'MISSION')).replace(/_/g, ' ').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.65rem' }} />
+                              {isOnTheWay && <Chip size="small" icon={locationStale ? <WifiOff size={11} /> : <Wifi size={11} />} label={locationStale ? tx('technician.map.gpsStale', 'GPS STALE') : tx('technician.map.gpsLive', 'GPS LIVE')} sx={{ bgcolor: locationStale ? alpha('#ef4444', 0.1) : alpha('#10b981', 0.1), color: locationStale ? '#f87171' : '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
                             </Stack>
-                            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{job.propertyName || 'Assigned Property'}</Typography>
-                            <Typography variant="body1" color="textSecondary" sx={{ mt: 0.5, fontWeight: 600 }}>Unit {job.unitNumber || 'N/A'} · {job.category || job.complaintCategory || 'Maintenance'}</Typography>
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}><MapPin size={13} />{resolved.address || job.jobLocation?.address || 'No address saved'} · {resolved.emirate}</Typography>
+                            <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{job.propertyName || tx('technician.map.assignedProperty', 'Assigned Property')}</Typography>
+                            <Typography variant="body1" color="textSecondary" sx={{ mt: 0.5, fontWeight: 600 }}>{tx('technician.map.unitLabel', 'Unit')} {job.unitNumber || 'N/A'} · {job.category || job.complaintCategory || 'Maintenance'}</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}><MapPin size={13} />{resolved.address || job.jobLocation?.address || tx('technician.map.noAddressSaved', 'No address saved')} · {resolved.emirate}</Typography>
                           </Box>
                         </Stack>
                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.06)' }} />
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                          <Button fullWidth variant="outlined" onClick={() => navigate(`/technician/job/${job.id}`)} startIcon={<Info size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 950, borderRadius: 4 }}>JOB DETAILS</Button>
-                          <Button fullWidth variant="contained" onClick={() => openMap(job)} startIcon={<ExternalLink size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>OPEN MAP</Button>
+                          <Button fullWidth variant="outlined" onClick={() => navigate(`/technician/job/${job.id}`)} startIcon={<Info size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 950, borderRadius: 4 }}>{tx('technician.map.jobDetails', 'JOB DETAILS')}</Button>
+                          <Button fullWidth variant="contained" onClick={() => openMap(job)} startIcon={<ExternalLink size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>{tx('technician.map.openMap', 'OPEN MAP')}</Button>
                         </Stack>
                       </Box>
                     </Grid>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { addDoc, collection, db, doc, getDoc, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
@@ -24,19 +25,6 @@ const quickPrompts = [
   'Kailangan ko po ng payslip',
 ];
 
-const documentTypes = [
-  ['emirates_id', 'Emirates ID'],
-  ['passport', 'Passport'],
-  ['residency_visa', 'Residency Visa'],
-  ['medical_certificate', 'Medical / Sick Certificate'],
-  ['insurance_card', 'Insurance Card'],
-  ['labour_card', 'Labour Card'],
-  ['trade_certificate', 'Trade Certificate'],
-  ['driving_license', 'Driving Licence'],
-  ['signed_acknowledgement', 'Signed Acknowledgement'],
-  ['hr_support_file', 'HR Support File'],
-];
-
 const requestTitle = (value: string) => String(value || 'hr_support').replace(/_/g, ' ');
 const safeFileName = (value: string) => String(value || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
 const sortByNewest = (items: any[]) => [...items].sort((a, b) => {
@@ -53,6 +41,27 @@ const toJsDate = (value: any): Date | null => {
 
 export default function TechnicianHRPageV2() {
   const { user } = useRole();
+  const { tx, isRTL } = useLanguage();
+  const documentTypes = useMemo(() => [
+    ['emirates_id', tx('technician.hr.doc.emirates_id', 'Emirates ID')],
+    ['passport', tx('technician.hr.doc.passport', 'Passport')],
+    ['residency_visa', tx('technician.hr.doc.residency_visa', 'Residency Visa')],
+    ['medical_certificate', tx('technician.hr.doc.medical_certificate', 'Medical / Sick Certificate')],
+    ['insurance_card', tx('technician.hr.doc.insurance_card', 'Insurance Card')],
+    ['labour_card', tx('technician.hr.doc.labour_card', 'Labour Card')],
+    ['trade_certificate', tx('technician.hr.doc.trade_certificate', 'Trade Certificate')],
+    ['driving_license', tx('technician.hr.doc.driving_license', 'Driving Licence')],
+    ['signed_acknowledgement', tx('technician.hr.doc.signed_acknowledgement', 'Signed Acknowledgement')],
+    ['hr_support_file', tx('technician.hr.doc.hr_support_file', 'HR Support File')],
+  ], [tx]);
+  const moodLabels: Record<string, string> = useMemo(() => ({
+    okay: tx('technician.hr.mood.okay', 'okay'),
+    tired: tx('technician.hr.mood.tired', 'tired'),
+    sick: tx('technician.hr.mood.sick', 'sick'),
+    stressed: tx('technician.hr.mood.stressed', 'stressed'),
+    angry: tx('technician.hr.mood.angry', 'angry'),
+    urgent: tx('technician.hr.mood.urgent', 'urgent'),
+  }), [tx]);
   const [message, setMessage] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
@@ -238,37 +247,37 @@ export default function TechnicianHRPageV2() {
   }, [eosbBaseSalary, eosbJoiningDate, eosbScenario]);
 
   return (
-    <Box sx={{ pb: 6 }}>
-      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
-      <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>AI-Driven Multilingual Blue-Collar Workforce ESS</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>Trained for {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.</Typography>
+    <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('technician.hr.headerPrefix', 'BIN PEOPLE AI ·')} {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
+      <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>{tx('technician.hr.heroTitle', 'AI-Driven Multilingual Blue-Collar Workforce ESS')}</Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>{tx('technician.hr.heroDesc', 'Trained for {{languages}}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.', { languages: BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ') })}</Typography>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">People AI Intent Router</Typography></Stack>
-            <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language" sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
-            <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'CREATE AI HR CASE'}</Button>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">{tx('technician.hr.intentRouterTitle', 'People AI Intent Router')}</Typography></Stack>
+            <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={tx('technician.hr.intentPlaceholder', 'Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language')} sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
+            <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : tx('technician.hr.createCaseBtn', 'CREATE AI HR CASE')}</Button>
             {answer && <Alert severity={answer.includes('could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
           </Paper>
         </Grid>
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><HeartPulse color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Wellbeing Check-In</Typography></Stack>
-            <Grid container spacing={1}>{['okay', 'tired', 'sick', 'stressed', 'angry', 'urgent'].map((item) => <Grid item xs={6} key={item}><Button fullWidth variant="outlined" onClick={() => mood(item)} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{item.toUpperCase()}</Button></Grid>)}</Grid>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><HeartPulse color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">{tx('technician.hr.wellbeingTitle', 'Wellbeing Check-In')}</Typography></Stack>
+            <Grid container spacing={1}>{['okay', 'tired', 'sick', 'stressed', 'angry', 'urgent'].map((item) => <Grid item xs={6} key={item}><Button fullWidth variant="outlined" onClick={() => mood(item)} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{moodLabels[item].toUpperCase()}</Button></Grid>)}</Grid>
           </Paper>
         </Grid>
       </Grid>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Staff Document Upload Vault</Typography></Stack>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">{tx('technician.hr.uploadVaultTitle', 'Staff Document Upload Vault')}</Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>{tx('technician.hr.uploadVaultDesc', 'Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.')}</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
-          <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}>
+          <TextField select label={tx('technician.hr.documentTypeLabel', 'Document Type')} value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}>
             {documentTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
           </TextField>
           <Button component="label" variant="contained" disabled={uploading} startIcon={uploading ? <CircularProgress size={18} sx={{ color: '#000' }} /> : <CloudUpload size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-            {uploading ? 'UPLOADING...' : 'UPLOAD DOCUMENT'}
+            {uploading ? tx('technician.hr.uploading', 'UPLOADING...') : tx('technician.hr.uploadDocumentBtn', 'UPLOAD DOCUMENT')}
             <input hidden type="file" accept="application/pdf,image/*" onChange={(e) => uploadStaffDocument(e.target.files?.[0] || null)} />
           </Button>
         </Stack>
@@ -277,47 +286,47 @@ export default function TechnicianHRPageV2() {
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Wallet color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Estimated End-of-Service Gratuity</Typography></Stack>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Wallet color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">{tx('technician.hr.eosbTitle', 'Estimated End-of-Service Gratuity')}</Typography></Stack>
         {!eosbBaseSalary || !eosbJoiningDate ? (
-          <Typography color="rgba(255,255,255,0.5)">Your basic salary and/or joining date are not on file yet. Ask HR to update your profile to see an estimate here.</Typography>
+          <Typography color="rgba(255,255,255,0.5)">{tx('technician.hr.eosbMissingData', 'Your basic salary and/or joining date are not on file yet. Ask HR to update your profile to see an estimate here.')}</Typography>
         ) : (
           <>
             <Stack direction="row" spacing={1.2} sx={{ mb: 2 }}>
-              <Button size="small" variant={eosbScenario === 'resignation' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('resignation')} sx={eosbScenario === 'resignation' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>IF I RESIGN</Button>
-              <Button size="small" variant={eosbScenario === 'employer_terminated' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('employer_terminated')} sx={eosbScenario === 'employer_terminated' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>CONTRACT END / EMPLOYER-INITIATED</Button>
+              <Button size="small" variant={eosbScenario === 'resignation' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('resignation')} sx={eosbScenario === 'resignation' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{tx('technician.hr.eosbResignation', 'IF I RESIGN')}</Button>
+              <Button size="small" variant={eosbScenario === 'employer_terminated' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('employer_terminated')} sx={eosbScenario === 'employer_terminated' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{tx('technician.hr.eosbEmployerTerminated', 'CONTRACT END / EMPLOYER-INITIATED')}</Button>
             </Stack>
             <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.gold }}>AED {eosbEstimate!.finalEstimateAed.toLocaleString()}</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 1 }}>{eosbEstimate!.note} Based on {eosbEstimate!.serviceYears} years of service to date.</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 1 }}>{eosbEstimate!.note} {tx('technician.hr.eosbServiceYears', 'Based on {{years}} years of service to date.', { years: eosbEstimate!.serviceYears })}</Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 2 }}>{eosbEstimate!.disclaimer}</Typography>
           </>
         )}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Sun color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Midday Heat-Stress Work Ban</Typography></Stack>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Sun color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">{tx('technician.hr.heatStressTitle', 'Midday Heat-Stress Work Ban')}</Typography></Stack>
         {heatStress.inRestrictedWindowNow ? (
-          <Alert severity="error">Outdoor direct-sun work is banned right now ({heatStress.windowLabel}, {heatStress.seasonLabel}). Stop outdoor work and move to shade until the window ends.</Alert>
+          <Alert severity="error">{tx('technician.hr.heatStressBannedNow', 'Outdoor direct-sun work is banned right now ({{window}}, {{season}}). Stop outdoor work and move to shade until the window ends.', { window: heatStress.windowLabel, season: heatStress.seasonLabel })}</Alert>
         ) : heatStress.inSeason ? (
-          <Alert severity="warning">Heat-stress season is active ({heatStress.seasonLabel}). Outdoor direct-sun work is banned daily {heatStress.windowLabel}.</Alert>
+          <Alert severity="warning">{tx('technician.hr.heatStressSeasonActive', 'Heat-stress season is active ({{season}}). Outdoor direct-sun work is banned daily {{window}}.', { season: heatStress.seasonLabel, window: heatStress.windowLabel })}</Alert>
         ) : (
-          <Alert severity="success">Outside heat-stress season right now. The daily {heatStress.windowLabel} outdoor work ban applies {heatStress.seasonLabel}.</Alert>
+          <Alert severity="success">{tx('technician.hr.heatStressOutOfSeason', 'Outside heat-stress season right now. The daily {{window}} outdoor work ban applies {{season}}.', { window: heatStress.windowLabel, season: heatStress.seasonLabel })}</Alert>
         )}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>HR Letters</Typography>
-        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR letters yet.</Typography> : <Stack spacing={1.2}>{letters.slice(0, 8).map((letter) => <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.2} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{letter.title || letter.letterType || 'HR Letter'}</Typography><Typography variant="caption" color="textSecondary">{letter.status || 'pending'}</Typography></Box></Stack><Chip label={String(letter.status || 'pending').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>{tx('technician.hr.lettersTitle', 'HR Letters')}</Typography>
+        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">{tx('technician.hr.noLettersYet', 'No HR letters yet.')}</Typography> : <Stack spacing={1.2}>{letters.slice(0, 8).map((letter) => <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.2} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{letter.title || letter.letterType || tx('technician.hr.letterFallback', 'HR Letter')}</Typography><Typography variant="caption" color="textSecondary">{letter.status || tx('technician.hr.statusPending', 'pending')}</Typography></Box></Stack><Chip label={String(letter.status || 'pending').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Quick Training Tests</Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>{tx('technician.hr.quickTestsTitle', 'Quick Training Tests')}</Typography>
         <Grid container spacing={1.2}>{quickPrompts.map((prompt) => <Grid item xs={12} sm={6} md={4} key={prompt}><Button fullWidth variant="outlined" startIcon={<Plus size={14} />} onClick={() => createAiCase(prompt)} sx={{ justifyContent: 'flex-start', color: '#fff', borderColor: 'rgba(255,255,255,0.14)', fontWeight: 800, textTransform: 'none' }}>{prompt}</Button></Grid>)}</Grid>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>AI HR Request Registry</Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>{tx('technician.hr.registryTitle', 'AI HR Request Registry')}</Typography>
         {registryError && <Alert severity="warning" sx={{ mb: 2 }}>{registryError}</Alert>}
-        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR cases yet.</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">{tx('technician.hr.noCasesYet', 'No HR cases yet.')}</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
     </Box>
   );
