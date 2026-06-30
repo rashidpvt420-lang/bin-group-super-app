@@ -3,9 +3,11 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
 const db = admin.firestore();
-const ts = admin.firestore.FieldValue.serverTimestamp;
 
-const QR_SECRET = process.env.QR_SIGNING_SECRET || "fallback_dev_secret_key_change_in_prod";
+const QR_SECRET = process.env.QR_SIGNING_SECRET;
+if (!QR_SECRET) {
+  throw new Error("QR signing secret is not configured in production environment.");
+}
 
 export const generateSignedQrPass = onCall({ cors: true }, async (request) => {
   if (!request.auth?.uid) {
@@ -67,17 +69,14 @@ export const verifyQrPass = onCall({ cors: true }, async (request) => {
     
     // Live Status Check
     let passDoc: admin.firestore.DocumentData | null = null;
-    let collectionName = "";
     
     const gatePassSnap = await db.collection("gatePasses").where("passId", "==", payload.passId).limit(1).get();
     if (!gatePassSnap.empty) {
       passDoc = gatePassSnap.docs[0].data();
-      collectionName = "gatePasses";
     } else {
       const parkingSnap = await db.collection("visitorParkingRequests").where("passId", "==", payload.passId).limit(1).get();
       if (!parkingSnap.empty) {
         passDoc = parkingSnap.docs[0].data();
-        collectionName = "visitorParkingRequests";
       }
     }
 
@@ -116,10 +115,18 @@ export const verifyQrPass = onCall({ cors: true }, async (request) => {
       } catch(e) {}
     }
 
-    payload.propertyName = propertyName;
-    payload.unitName = unitName;
-    
-    return { valid: true, payload };
+    return { 
+      valid: true, 
+      payload: {
+        passId: payload.passId,
+        type: payload.type,
+        name: payload.name,
+        validFrom: payload.validFrom,
+        validUntil: payload.validUntil,
+        propertyName,
+        unitName
+      } 
+    };
   } catch (err: any) {
     throw new HttpsError("invalid-argument", `Pass verification failed: ${err.message}`);
   }

@@ -9,7 +9,7 @@ export const logUserAuditAction = onCall({ cors: true }, async (request) => {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  const { action, targetType, targetId, metadata, actorRole } = request.data;
+  const { action, targetType, targetId, metadata } = request.data;
   
   if (!action || !targetType || !targetId) {
     throw new HttpsError("invalid-argument", "Missing required fields: action, targetType, targetId");
