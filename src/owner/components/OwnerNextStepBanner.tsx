@@ -27,7 +27,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       title: 'Verify IBAN',
       desc: 'Add your verified bank details so we can transfer rent collections.',
       action: 'Add IBAN',
-      href: '/owner/payouts',
+      href: '/owner/iban',
       color: '#f59e0b'
     };
   } else if (pendingPayments > 0) {

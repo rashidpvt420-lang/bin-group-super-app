@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, ClipboardCheck, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
+import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, functions } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -713,9 +714,8 @@ export default function OwnerDashboardResolvedPage() {
     };
 
     await setDoc(doc(db, 'tenant_ledger', recordId), payload);
-    await setDoc(doc(db, 'audit_logs', `audit_${recordId}`), {
-      actorId: ownerId,
-      actorRole: 'owner',
+    const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+    await logUserAuditAction({
       action: 'OWNER_RENT_PAYMENT_RECORDED',
       targetType: 'TENANT_LEDGER',
       targetId: recordId,
@@ -728,7 +728,6 @@ export default function OwnerDashboardResolvedPage() {
         amountPaid: rentPaid,
         balance,
       },
-      createdAt: serverTimestamp(),
     });
 
     setLedgerSummary((current: any) => {
