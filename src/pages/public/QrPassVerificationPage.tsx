@@ -80,15 +80,15 @@ export default function QrPassVerificationPage() {
                             <Box display="flex" alignItems="center" gap={2}>
                                 <Building size={20} color={binThemeTokens.gold} />
                                 <Box>
-                                    <Typography variant="caption" color="text.secondary">Property ID</Typography>
-                                    <Typography variant="body1" color="#FFF">{result?.propertyId || 'N/A'}</Typography>
+                                    <Typography variant="caption" color="text.secondary">Property</Typography>
+                                    <Typography variant="body1" color="#FFF">{result?.propertyName || 'Unknown Property'}</Typography>
                                 </Box>
                             </Box>
                             <Box display="flex" alignItems="center" gap={2}>
                                 <MapPin size={20} color={binThemeTokens.gold} />
                                 <Box>
-                                    <Typography variant="caption" color="text.secondary">Unit ID</Typography>
-                                    <Typography variant="body1" color="#FFF">{result?.unitId || 'N/A'}</Typography>
+                                    <Typography variant="caption" color="text.secondary">Unit</Typography>
+                                    <Typography variant="body1" color="#FFF">{result?.unitName || '***'}</Typography>
                                 </Box>
                             </Box>
                             <Box display="flex" alignItems="center" gap={2}>

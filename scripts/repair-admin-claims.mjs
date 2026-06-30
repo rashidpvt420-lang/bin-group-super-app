@@ -7,13 +7,8 @@ initializeApp({
   projectId: "bin-group-57c60",
 });
 
-const uid = "PASTE_ADMIN_UID_HERE";
-const email = "PASTE_ADMIN_EMAIL_HERE";
-
-if (uid === "PASTE_ADMIN_UID_HERE" || email === "PASTE_ADMIN_EMAIL_HERE") {
-  console.error("ERROR: Please open scripts/repair-admin-claims.mjs and replace PASTE_ADMIN_UID_HERE and PASTE_ADMIN_EMAIL_HERE with your real values.");
-  process.exit(1);
-}
+const uid = "X8gbUpPrCqagLZ54Ufmzju9kaUi1";
+const email = "ceo@bin-groups.com";
 
 try {
   await getAuth().setCustomUserClaims(uid, {

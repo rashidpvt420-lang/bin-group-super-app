@@ -761,14 +761,14 @@ service cloud.firestore {
 
     match /audit_logs/{logId} {
       allow read: if isAdmin() || isHr() || isAuditor();
-      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
+      allow create: if false; // Block client writes, force through Cloud Functions
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /auditLogs/{logId} {
       allow read: if isAdmin() || isHr() || isAuditor();
-      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
+      allow create: if false; // Block client writes, force through Cloud Functions
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

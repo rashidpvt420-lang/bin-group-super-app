@@ -65,6 +65,60 @@ export const verifyQrPass = onCall({ cors: true }, async (request) => {
       throw new HttpsError("failed-precondition", "Pass has expired.");
     }
     
+    // Live Status Check
+    let passDoc: admin.firestore.DocumentData | null = null;
+    let collectionName = "";
+    
+    const gatePassSnap = await db.collection("gatePasses").where("passId", "==", payload.passId).limit(1).get();
+    if (!gatePassSnap.empty) {
+      passDoc = gatePassSnap.docs[0].data();
+      collectionName = "gatePasses";
+    } else {
+      const parkingSnap = await db.collection("visitorParkingRequests").where("passId", "==", payload.passId).limit(1).get();
+      if (!parkingSnap.empty) {
+        passDoc = parkingSnap.docs[0].data();
+        collectionName = "visitorParkingRequests";
+      }
+    }
+
+    if (!passDoc) {
+      throw new HttpsError("not-found", "Pass record not found.");
+    }
+
+    const status = String(passDoc.status || "active").toLowerCase();
+    if (status !== "active" && status !== "approved") {
+      throw new HttpsError("failed-precondition", `Pass is not active (Status: ${status}).`);
+    }
+    if (passDoc.revokedAt || passDoc.deleted || passDoc.rejectedAt) {
+      throw new HttpsError("failed-precondition", "Pass has been revoked or deleted.");
+    }
+
+    // Payload Enrichment
+    let propertyName = "Unknown Property";
+    let unitName = "***";
+
+    if (payload.propertyId && payload.propertyId !== "default_prop") {
+      try {
+        const propSnap = await db.collection("properties").doc(payload.propertyId).get();
+        if (propSnap.exists) {
+          propertyName = propSnap.data()?.name || propSnap.data()?.title || "Property";
+        }
+      } catch(e) {}
+    }
+
+    if (payload.unitId && payload.unitId !== "default_unit") {
+      try {
+        const unitSnap = await db.collection("units").doc(payload.unitId).get();
+        if (unitSnap.exists) {
+          const uData = unitSnap.data();
+          unitName = uData?.unitNumber || uData?.name || "***";
+        }
+      } catch(e) {}
+    }
+
+    payload.propertyName = propertyName;
+    payload.unitName = unitName;
+    
     return { valid: true, payload };
   } catch (err: any) {
     throw new HttpsError("invalid-argument", `Pass verification failed: ${err.message}`);
