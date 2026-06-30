@@ -139,7 +139,19 @@ service firebase.storage {
     }
 
     match /inspections/{tenantId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
+      allow read: if isAuth() && (
+        request.auth.uid == tenantId || 
+        isAdmin() || 
+        isAuditor() || 
+        (firestore.exists(/databases/(default)/documents/users/$(tenantId)) && (
+          firestore.get(/databases/(default)/documents/users/$(tenantId)).data.ownerId == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/users/$(tenantId)).data.ownerUid == request.auth.uid
+        )) ||
+        (firestore.exists(/databases/(default)/documents/tenants/$(tenantId)) && (
+          firestore.get(/databases/(default)/documents/tenants/$(tenantId)).data.ownerId == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
+        ))
+      );
       allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
     }
 

@@ -144,15 +144,6 @@ const copy = {
     ],
     cards: [
       ['Home OS Concept', 'Replace scattered calls, chats, and invoices with one prompt-to-workflow operating layer.'],
-    proofDesc: 'BIN GROUP replaces scattered WhatsApp messages, manual invoices, missing evidence, delayed coordination, and unclear owner reporting with one audited workflow across owners, tenants, technicians, brokers, finance, and admin.',
-    command: [
-      ['Home OS Intake', 'One intelligent prompt instead of scattered calls', 'START'],
-      ['Instant Quote', 'Maintenance, management, or hybrid contract scope', 'QUOTE'],
-      ['Total Care Hybrid', 'Tenant registry, rent ledger waterfall, 5% fee logic', 'CARE'],
-      ['No-Call Operations', 'AI triage, SLA timers, photo proof, owner reports', 'LIVE'],
-    ],
-    cards: [
-      ['Home OS Concept', 'Replace scattered calls, chats, and invoices with one prompt-to-workflow operating layer.'],
       ['Total Care Hybrid', 'Handle tenant registry, rent ledger waterfall, management fee logic, maintenance deductions, and owner payout visibility.'],
       ['Sovereign Property Intelligence', 'Adapt the SOP by asset type: tower, villa, Majlis, residential building, commercial asset, or portfolio.'],
       ['Agentic No-Call Efficiency', 'Classify issues, enforce SLA timers, dispatch technicians, and require before-and-after proof automatically.'],
@@ -168,7 +159,8 @@ const copy = {
     heroRealEstate: 'REAL ESTATE',
     heroTenantDesc: 'Report issues, access documents, and manage your home.',
     heroLandlordDesc: 'Onboard properties, track rent, and view reports.',
-    heroRealEstateDesc: 'Register leads and track your commissions.'
+    heroRealEstateDesc: 'Register leads and track your commissions.',
+    navSecurity: 'Security'
   },
   ar: {
     brand: 'مجموعة بن',
@@ -285,7 +277,8 @@ const copy = {
     heroRealEstate: 'وسيط عقاري',
     heroTenantDesc: 'أبلغ عن الأعطال، استعرض المستندات، وأدِر منزلك.',
     heroLandlordDesc: 'سجّل عقاراتك، تتبع الإيجارات، وشاهد التقارير.',
-    heroRealEstateDesc: 'سجل العملاء وتتبع عمولاتك.'
+    heroRealEstateDesc: 'سجل العملاء وتتبع عمولاتك.',
+    navSecurity: 'الأمان والثقة'
   },
 };
 
@@ -354,7 +347,7 @@ function Nav({ c }: { c: CopyShape }) {
           </Stack>
         </Button>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>          
-          <ActionButton href="/security" icon={<ShieldCheck size={17} />}>Security</ActionButton>
+          <ActionButton href="/security" icon={<ShieldCheck size={17} />}>{c.navSecurity}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
           <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
             {lang === 'ar' ? 'EN' : 'AR'}

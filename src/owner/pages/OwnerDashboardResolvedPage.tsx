@@ -10,6 +10,8 @@ import OwnerExecutiveDashboardSection from '../components/OwnerExecutiveDashboar
 import OwnerRoiFinancialSection from '../components/OwnerRoiFinancialSection';
 import OwnerRentCollectionSection from '../components/OwnerRentCollectionSection';
 import OwnerAuthorizedReportersSection from '../components/OwnerAuthorizedReportersSection';
+import OwnerEvidenceSection from '../components/OwnerEvidenceSection';
+import OwnerNextStepBanner from '../components/OwnerNextStepBanner';
 import OwnerComplaintCommandCenter from '../components/OwnerComplaintCommandCenter';
 import OwnerContractIntelligenceSection from '../components/OwnerContractIntelligenceSection';
 import OwnerContractModeMatrix from '../components/OwnerContractModeMatrix';
@@ -354,6 +356,7 @@ export default function OwnerDashboardResolvedPage() {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [hasVerifiedIban, setHasVerifiedIban] = useState(false);
   const [permissionWarning, setPermissionWarning] = useState('');
+  const [rentDialogOpen, setRentDialogOpen] = useState(false);
   // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
 
@@ -836,6 +839,16 @@ export default function OwnerDashboardResolvedPage() {
 
       <OwnerActivationTimeline steps={activationSteps} />
 
+      <Box sx={{ mb: 4 }}>
+        <OwnerNextStepBanner
+          missingTitleDeed={!properties.every(hasTitleEvidence)}
+          hasVerifiedIban={hasVerifiedIban}
+          pendingPayments={pendingPayments}
+          pendingApprovals={pendingApprovals}
+          overdueTenants={ledgerSummary?.ledgerRows?.filter((row: any) => row.overdueDays > 0).length || 0}
+        />
+      </Box>
+
       <Grid container spacing={3} sx={{ mb: 5 }}>
         {KPI_CARDS.map((card, idx) => (
           <Grid item xs={12} sm={6} md={3} key={idx}>
@@ -858,7 +871,11 @@ export default function OwnerDashboardResolvedPage() {
       </Box>
 
       <Box sx={{ mt: 5 }} id="owner-money-snapshot">
-        <OwnerMoneySnapshotSection ledgerSummary={ledgerSummary} pendingPayments={pendingPayments} properties={properties} onRecordRentPayment={handleRecordRentPayment} />
+        <OwnerMoneySnapshotSection ledgerSummary={ledgerSummary} pendingPayments={pendingPayments} properties={properties} onRecordRentPayment={handleRecordRentPayment} isExternalOpen={rentDialogOpen} onCloseExternal={() => setRentDialogOpen(false)} />
+      </Box>
+
+      <Box sx={{ mt: 5 }}>
+        <OwnerEvidenceSection properties={properties} />
       </Box>
 
       <Box sx={{ mt: 5 }}>
@@ -867,7 +884,7 @@ export default function OwnerDashboardResolvedPage() {
       
       <Box sx={{ mt: 5 }}><OwnerRentCollectionSection ledgerSummary={ledgerSummary} /></Box>
 
-      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => alert('Rent update flow triggered.')} />}</Box>
+      <Box sx={{ mt: 5 }}>{financials && <OwnerRoiFinancialSection financials={financials} onAddRentDetails={() => setRentDialogOpen(true)} />}</Box>
 
       <Box sx={{ mt: 5 }} id="authorized-property-reporters">
         <OwnerAuthorizedReportersSection properties={properties} reporters={reporters} onAddReporter={handleAddReporter} onRemoveReporter={handleRemoveReporter} loading={loadingExtras} />

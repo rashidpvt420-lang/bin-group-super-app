@@ -1,5 +1,5 @@
-import PublicMarketingPage from './public/PublicMarketingPage';
+import SimpleStartPage from './public/SimpleStartPage';
 
 export default function LandingPage() {
-  return <PublicMarketingPage />;
+  return <SimpleStartPage />;
 }
