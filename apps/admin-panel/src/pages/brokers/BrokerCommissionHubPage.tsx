@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Paper, Grid, Button, alpha, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { db, collection, query, getDocs, orderBy, limit, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useLanguage } from '@bin/shared';
 
 export default function BrokerCommissionHubPage() {
+    const { t, isRTL } = useLanguage();
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -95,30 +97,30 @@ export default function BrokerCommissionHubPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>ADMINISTRY OPERATIONS</Typography>
-                <Typography variant="h3" fontWeight="950" color="#FFF">Broker <Box component="span" sx={{ color: binThemeTokens.gold }}>Commission Hub</Box></Typography>
-                <Typography variant="body1" color="rgba(255,255,255,0.5)">Lead attribution and payout verification for the BIN GROUP Broker Network.</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{t('admin.commission_hub.administry_operations')}</Typography>
+                <Typography variant="h3" fontWeight="950" color="#FFF">{t('admin.commission_hub.page_title')} <Box component="span" sx={{ color: binThemeTokens.gold }}>{t('admin.commission_hub.page_title_suffix')}</Box></Typography>
+                <Typography variant="body1" color="rgba(255,255,255,0.5)">{t('admin.commission_hub.page_subtitle')}</Typography>
             </Box>
 
             <Grid container spacing={4} sx={{ mb: 6 }}>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Typography variant="caption" color="textSecondary">PENDING APPROVAL</Typography>
-                        <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>AED {stats.pending.toLocaleString()}</Typography>
+                        <Typography variant="caption" color="textSecondary">{t('admin.commission_hub.pending_approval')}</Typography>
+                        <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>{t('admin.commission_hub.amount_aed', { amount: stats.pending.toLocaleString() })}</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Typography variant="caption" color="textSecondary">APPROVED PIPELINE</Typography>
-                        <Typography variant="h4" fontWeight="950" color="#10b981">AED {stats.approved.toLocaleString()}</Typography>
+                        <Typography variant="caption" color="textSecondary">{t('admin.commission_hub.approved_pipeline')}</Typography>
+                        <Typography variant="h4" fontWeight="950" color="#10b981">{t('admin.commission_hub.amount_aed', { amount: stats.approved.toLocaleString() })}</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Typography variant="caption" color="textSecondary">TOTAL DISBURSED</Typography>
-                        <Typography variant="h4" fontWeight="950" color="#FFF">AED {stats.paid.toLocaleString()}</Typography>
+                        <Typography variant="caption" color="textSecondary">{t('admin.commission_hub.total_disbursed')}</Typography>
+                        <Typography variant="h4" fontWeight="950" color="#FFF">{t('admin.commission_hub.amount_aed', { amount: stats.paid.toLocaleString() })}</Typography>
                     </Paper>
                 </Grid>
             </Grid>
@@ -128,11 +130,11 @@ export default function BrokerCommissionHubPage() {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>BROKER</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>REF / CONTRACT</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>STATUS</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="right">AMOUNT (AED)</TableCell>
-                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="center">ACTIONS</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.commission_hub.col_broker')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.commission_hub.col_ref_contract')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.commission_hub.col_status')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="right">{t('admin.commission_hub.col_amount_aed')}</TableCell>
+                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="center">{t('admin.commission_hub.col_actions')}</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -140,7 +142,7 @@ export default function BrokerCommissionHubPage() {
                                 <TableRow key={c.id}>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                                         <Typography fontWeight="900" color="#FFF">{c.brokerName}</Typography>
-                                        <Typography variant="caption" color="textSecondary">Code: {c.brokerCode}</Typography>
+                                        <Typography variant="caption" color="textSecondary">{t('admin.commission_hub.broker_code', { code: c.brokerCode })}</Typography>
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                                         <Typography variant="body2" color="#FFF">{c.contractId?.substring(0,8)}</Typography>
@@ -162,19 +164,19 @@ export default function BrokerCommissionHubPage() {
                                     </TableCell>
                                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="center">
                                         {c.status === 'PENDING' && (
-                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>APPROVE</Button>
+                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleApprove(c.id)} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.commission_hub.approve')}</Button>
                                         )}
                                         {c.status === 'APPROVED' && (
-                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleMarkPaid(c.id)} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>MARK PAID</Button>
+                                            <Button size="small" disabled={busyId === c.id} onClick={() => handleMarkPaid(c.id)} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{t('admin.commission_hub.mark_paid')}</Button>
                                         )}
                                         {c.status === 'PAID' && (
-                                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>PAID</Typography>
+                                            <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{t('admin.commission_hub.paid')}</Typography>
                                         )}
                                     </TableCell>
                                 </TableRow>
                             ))}
                             {commissions.length === 0 && (
-                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.2)' }}>No commissions pending in the network.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.2)' }}>{t('admin.commission_hub.empty_state')}</TableCell></TableRow>
                             )}
                         </TableBody>
                     </Table>

@@ -20,6 +20,7 @@ import {
 import { collection, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion } from 'framer-motion';
+import { useLanguage } from '@bin/shared';
 
 interface CFOStats {
     mrr: number;
@@ -36,6 +37,7 @@ interface CFOStats {
 }
 
 export default function CFODashboard() {
+    const { t, isRTL } = useLanguage();
     const [stats, setStats] = useState<CFOStats | null>(null);
     const [snapshotData, setSnapshotData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -92,26 +94,26 @@ export default function CFODashboard() {
     if (loading) return <Skeleton variant="rectangular" height="80vh" />;
 
     return (
-        <Container maxWidth={false} sx={{ py: 6, bgcolor: '#f8fafc', minHeight: '100vh' }}>
+        <Container maxWidth={false} sx={{ py: 6, bgcolor: '#f8fafc', minHeight: '100vh', direction: isRTL ? 'rtl' : 'ltr' }}>
             {/* ── 1. DASHBOARD HEADER ── */}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
                     <Typography variant="overline" color="primary" sx={{ fontWeight: 900, letterSpacing: 4 }}>
-                        Institutional Treasury
+                        {t('admin.profitability.institutional_treasury')}
                     </Typography>
                     <Typography variant="h3" fontWeight={900} sx={{ letterSpacing: -2, color: '#0f172a', mt: 1 }}>
-                        BIN-CFO<Typography component="span" sx={{ color: '#1976d2', fontWeight: 'inherit', letterSpacing: 'inherit' }}>™</Typography> Alpha
+                        BIN-CFO<Typography component="span" sx={{ color: '#1976d2', fontWeight: 'inherit', letterSpacing: 'inherit' }}>™</Typography> {t('admin.profitability.alpha')}
                     </Typography>
                     <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
-                        Real-time Revenue & Portfolio Margin Orchestration · FY 2026
+                        {t('admin.profitability.header_subtitle')}
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button variant="outlined" startIcon={<ReceiptLong />} sx={{ borderRadius: 3, fontWeight: 900, px: 3 }}>
-                        Export Audit
+                        {t('admin.profitability.export_audit')}
                     </Button>
                     <Button variant="contained" startIcon={<NorthEast />} sx={{ borderRadius: 3, fontWeight: 900, px: 3, boxShadow: '0 10px 30px rgba(25,118,210,0.3)' }}>
-                        Revenue Forecast
+                        {t('admin.profitability.revenue_forecast')}
                     </Button>
                 </Box>
             </Box>
@@ -121,29 +123,29 @@ export default function CFODashboard() {
                 <Grid item xs={12} lg={8}>
                     <Grid container spacing={3}>
                         <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Annual Recurring Revenue" 
-                                value={`AED ${(stats?.arr || 0).toLocaleString()}`} 
-                                delta="+12.4%" 
-                                icon={<AccountBalance />} 
-                                color="#1e293b" 
+                            <MetricCard
+                                label={t('admin.profitability.annual_recurring_revenue')}
+                                value={`${t('common.currency_aed')} ${(stats?.arr || 0).toLocaleString()}`}
+                                delta="+12.4%"
+                                icon={<AccountBalance />}
+                                color="#1e293b"
                             />
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Net Profit Margin" 
-                                value={`${stats?.profitMargin}%`} 
-                                delta="+2.1%" 
-                                icon={<PieChart />} 
-                                color="#16a34a" 
+                            <MetricCard
+                                label={t('admin.profitability.net_profit_margin')}
+                                value={`${stats?.profitMargin}%`}
+                                delta="+2.1%"
+                                icon={<PieChart />}
+                                color="#16a34a"
                             />
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Mrr (Active Coverage)" 
-                                value={`AED ${(stats?.mrr || 0).toLocaleString()}`} 
-                                icon={<Payments />} 
-                                color="#1976d2" 
+                            <MetricCard
+                                label={t('admin.profitability.mrr_active_coverage')}
+                                value={`${t('common.currency_aed')} ${(stats?.mrr || 0).toLocaleString()}`}
+                                icon={<Payments />}
+                                color="#1976d2"
                             />
                         </Grid>
                     </Grid>
@@ -152,32 +154,32 @@ export default function CFODashboard() {
                     <Card sx={{ mt: 4, borderRadius: 6, border: '1px solid #e2e8f0', boxShadow: 'none', overflow: 'hidden' }}>
                         <CardContent sx={{ p: 4 }}>
                             <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Scale color="primary" /> Revenue Risk Horizon
+                                <Scale color="primary" /> {t('admin.profitability.revenue_risk_horizon')}
                             </Typography>
                             <Divider sx={{ my: 2 }} />
                             <Grid container spacing={4} sx={{ mt: 1 }}>
                                 <Grid item xs={12} md={6}>
                                     <Box sx={{ p: 3, bgcolor: '#fff', border: '1px solid #f1f5f9', borderRadius: 4 }}>
                                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
-                                            Outstanding Invoices
+                                            {t('admin.profitability.outstanding_invoices')}
                                         </Typography>
                                         <Typography variant="h4" fontWeight={900} color="#fbbf24">
-                                            AED {stats?.outstandingInvoices.toLocaleString()}
+                                            {t('common.currency_aed')} {stats?.outstandingInvoices.toLocaleString()}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={70} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Expected settlement within 14 days</Typography>
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>{t('admin.profitability.expected_settlement')}</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <Box sx={{ p: 3, bgcolor: '#fff', border: '1px solid #fee2e2', borderRadius: 4 }}>
                                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
-                                            Overdue Recovery
+                                            {t('admin.profitability.overdue_recovery')}
                                         </Typography>
                                         <Typography variant="h4" fontWeight={900} color="#ef4444">
-                                            AED {stats?.overdueInvoices.toLocaleString()}
+                                            {t('common.currency_aed')} {stats?.overdueInvoices.toLocaleString()}
                                         </Typography>
                                         <LinearProgress variant="determinate" value={28} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#ef4444' }}>⚠️ Enforcement actions required</Typography>
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#ef4444' }}>⚠️ {t('admin.profitability.enforcement_actions_required')}</Typography>
                                     </Box>
                                 </Grid>
                             </Grid>
@@ -190,19 +192,19 @@ export default function CFODashboard() {
                     <Card sx={{ borderRadius: 6, bgcolor: '#0f172a', color: 'white', height: '100%', p: 2 }}>
                         <CardContent>
                             <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Security sx={{ color: '#fbbf24' }} /> Alpha Insights
+                                <Security sx={{ color: '#fbbf24' }} /> {t('admin.profitability.alpha_insights')}
                             </Typography>
                             <Box sx={{ mt: 4, spaceY: 4 }}>
-                                <InsightRow label="Client Churn Rate" value="1.25%" status="OPTIMAL" />
-                                <InsightRow label="Portfolio ARR Density" value="94.2%" status="HIGH" />
-                                <InsightRow label="Service Margin" value="55.8%" status="GROWING" />
-                                <InsightRow label="Asset Health Correlation" value="0.88" status="STRONG" />
+                                <InsightRow label={t('admin.profitability.client_churn_rate')} value="1.25%" status="OPTIMAL" />
+                                <InsightRow label={t('admin.profitability.portfolio_arr_density')} value="94.2%" status="HIGH" />
+                                <InsightRow label={t('admin.profitability.service_margin')} value="55.8%" status="GROWING" />
+                                <InsightRow label={t('admin.profitability.asset_health_correlation')} value="0.88" status="STRONG" />
                             </Box>
-                            
+
                             <Box sx={{ mt: 8, p: 3, bgcolor: '#1e293b', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>Forecast Alpha</Typography>
+                                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>{t('admin.profitability.forecast_alpha')}</Typography>
                                 <Typography variant="body2" sx={{ mt: 1, color: '#e2e8f0', lineHeight: 1.6 }}>
-                                    Predictive models suggest an <strong>8.4% increase</strong> in gross margins next quarter due to advanced preventive HVAC loops.
+                                    {t('admin.profitability.forecast_alpha_desc')}
                                 </Typography>
                             </Box>
                         </CardContent>
@@ -213,27 +215,27 @@ export default function CFODashboard() {
                 <Grid item xs={12}>
                     <TableContainer component={Paper} sx={{ borderRadius: 6, boxShadow: 'none', border: '1px solid #e2e8f0' }}>
                         <Box sx={{ p: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6" fontWeight={900}>Portfolio Profitability Audit</Typography>
-                            <Chip label={`${stats?.portfolioCount} Active Assets`} sx={{ fontWeight: 900, bgcolor: '#f1f5f9' }} />
+                            <Typography variant="h6" fontWeight={900}>{t('admin.profitability.portfolio_profitability_audit')}</Typography>
+                            <Chip label={t('admin.profitability.active_assets_count', { count: stats?.portfolioCount })} sx={{ fontWeight: 900, bgcolor: '#f1f5f9' }} />
                         </Box>
                         <Table sx={{ minWidth: 650 }}>
                             <TableHead sx={{ bgcolor: '#f8fafc' }}>
                                 <TableRow>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Property Asset</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Contract Value</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Op Costs</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Net Proft</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Margin %</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Status</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.property_asset')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.contract_value')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.op_costs')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.net_profit')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.margin_percent')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>{t('admin.profitability.status')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {stats?.portfolioCount ? snapshotData.map((row: any) => (
                                     <TableRow key={row.id} hover>
-                                        <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || 'Unnamed Asset'}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || t('admin.profitability.unnamed_asset')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t('common.currency_aed')} {(row.annualAMC || 0).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>{t('common.currency_aed')} {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>{t('common.currency_aed')} {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
                                         <TableCell>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                 <Typography variant="body2" fontWeight={800}>60%</Typography>
@@ -243,22 +245,22 @@ export default function CFODashboard() {
                                             </Box>
                                         </TableCell>
                                         <TableCell>
-                                            <Chip 
-                                                label="ACTIVE" 
-                                                size="small" 
-                                                sx={{ 
-                                                    fontWeight: 900, 
-                                                    fontSize: 9, 
+                                            <Chip
+                                                label={t('admin.profitability.active_status')}
+                                                size="small"
+                                                sx={{
+                                                    fontWeight: 900,
+                                                    fontSize: 9,
                                                     bgcolor: '#dcfce7',
                                                     color: '#166534'
-                                                }} 
+                                                }}
                                             />
                                         </TableCell>
                                     </TableRow>
                                 )) : (
                                     <TableRow>
                                         <TableCell colSpan={6} align="center">
-                                            <Typography variant="body2" sx={{ py: 4, color: 'textSecondary' }}>No active portfolio data available.</Typography>
+                                            <Typography variant="body2" sx={{ py: 4, color: 'textSecondary' }}>{t('admin.profitability.no_portfolio_data')}</Typography>
                                         </TableCell>
                                     </TableRow>
                                 )}

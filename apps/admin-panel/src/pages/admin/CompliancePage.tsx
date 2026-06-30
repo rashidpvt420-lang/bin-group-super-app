@@ -15,6 +15,7 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useLanguage } from '@bin/shared';
 
 interface AuditLog {
     id: string;
@@ -41,6 +42,7 @@ function downloadJSON(data: any, filename: string) {
 }
 
 export default function CompliancePage() {
+    const { t, isRTL } = useLanguage();
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
@@ -63,7 +65,7 @@ export default function CompliancePage() {
             setSummary(report.summary);
             downloadJSON(report, `BIN_Group_Compliance_Report_${new Date().toISOString().slice(0, 10)}.json`);
         } catch (e: any) {
-            alert(`Export failed: ${e.message}`);
+            alert(t('admin.compliance.export_failed', { message: e.message }));
         } finally {
             setExporting(false);
         }
@@ -73,16 +75,16 @@ export default function CompliancePage() {
     const warnCount = logs.filter(l => l.severity === 'WARN').length;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Container maxWidth="xl" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
                         <ShieldIcon sx={{ color: '#6366f1', fontSize: 28 }} />
-                        <Typography variant="h4" fontWeight="black">Compliance & Audit Log</Typography>
+                        <Typography variant="h4" fontWeight="black">{t('admin.compliance.page_title')}</Typography>
                     </Box>
                     <Typography variant="body2" color="text.secondary">
-                        ISO 27001 · UAE PDPL Compliant · Real-time tamper-evident log
+                        {t('admin.compliance.page_subtitle')}
                     </Typography>
                 </Box>
                 <Button
@@ -93,7 +95,7 @@ export default function CompliancePage() {
                     onClick={handleExport}
                     sx={{ bgcolor: '#0f172a', fontWeight: 'bold', borderRadius: 3, px: 4 }}
                 >
-                    {exporting ? 'Generating Report...' : 'Export 12-Month Compliance Report'}
+                    {exporting ? t('admin.compliance.generating_report') : t('admin.compliance.export_report_btn')}
                 </Button>
             </Box>
 
@@ -101,11 +103,11 @@ export default function CompliancePage() {
             {summary && (
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 2, mb: 4 }}>
                     {[
-                        { label: 'Total Events', value: summary.totalAuditEvents, color: '#6366f1' },
-                        { label: 'Contract Events', value: summary.contractEvents, color: '#0ea5e9' },
-                        { label: 'SLA Compliance', value: `${summary.slaCompliancePct}%`, color: '#10b981' },
-                        { label: 'SLA Breaches', value: summary.slaBreaches, color: '#ef4444' },
-                        { label: 'Critical Events', value: summary.criticalEvents, color: '#f59e0b' },
+                        { label: t('admin.compliance.total_events'), value: summary.totalAuditEvents, color: '#6366f1' },
+                        { label: t('admin.compliance.contract_events'), value: summary.contractEvents, color: '#0ea5e9' },
+                        { label: t('admin.compliance.sla_compliance'), value: `${summary.slaCompliancePct}%`, color: '#10b981' },
+                        { label: t('admin.compliance.sla_breaches'), value: summary.slaBreaches, color: '#ef4444' },
+                        { label: t('admin.compliance.critical_events'), value: summary.criticalEvents, color: '#f59e0b' },
                     ].map(c => (
                         <Paper key={c.label} sx={{ p: 3, borderRadius: 3, textAlign: 'center', border: `2px solid ${c.color}20` }}>
                             <Typography fontWeight="black" fontSize={28} color={c.color}>{c.value}</Typography>
@@ -119,17 +121,17 @@ export default function CompliancePage() {
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <VerifiedIcon sx={{ color: '#10b981', fontSize: 18 }} />
-                    <Typography variant="body2" fontWeight="bold" color="#10b981">UAE PDPL Compliant</Typography>
+                    <Typography variant="body2" fontWeight="bold" color="#10b981">{t('admin.compliance.pdpl_compliant')}</Typography>
                 </Box>
                 <Divider orientation="vertical" flexItem />
                 <Typography variant="body2" color="text.secondary" fontWeight="bold">
-                    {logs.length} audit events loaded
+                    {t('admin.compliance.events_loaded', { count: logs.length })}
                 </Typography>
                 {criticalCount > 0 && (
-                    <Chip label={`${criticalCount} Critical`} color="error" size="small" sx={{ fontWeight: 700 }} />
+                    <Chip label={t('admin.compliance.critical_count', { count: criticalCount })} color="error" size="small" sx={{ fontWeight: 700 }} />
                 )}
                 {warnCount > 0 && (
-                    <Chip label={`${warnCount} Warnings`} color="warning" size="small" sx={{ fontWeight: 700 }} />
+                    <Chip label={t('admin.compliance.warnings_count', { count: warnCount })} color="warning" size="small" sx={{ fontWeight: 700 }} />
                 )}
             </Box>
 
@@ -141,7 +143,14 @@ export default function CompliancePage() {
                     <Table size="small">
                         <TableHead sx={{ bgcolor: '#f8fafc' }}>
                             <TableRow>
-                                {['Timestamp', 'User', 'Action', 'Resource', 'Property', 'Severity'].map(h => (
+                                {[
+                                    t('admin.compliance.col_timestamp'),
+                                    t('admin.compliance.col_user'),
+                                    t('admin.compliance.col_action'),
+                                    t('admin.compliance.col_resource'),
+                                    t('admin.compliance.col_property'),
+                                    t('admin.compliance.col_severity'),
+                                ].map(h => (
                                     <TableCell key={h} sx={{ fontWeight: 800, fontSize: 11, letterSpacing: 0.5, color: '#64748b', textTransform: 'uppercase' }}>
                                         {h}
                                     </TableCell>
@@ -152,7 +161,7 @@ export default function CompliancePage() {
                             {logs.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={6} align="center" sx={{ py: 6, color: '#94a3b8' }}>
-                                        No audit events yet. Events are logged automatically as operations occur.
+                                        {t('admin.compliance.empty_state')}
                                     </TableCell>
                                 </TableRow>
                             ) : logs.map(log => (

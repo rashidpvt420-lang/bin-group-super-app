@@ -11,8 +11,10 @@ import {
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useLanguage } from '@bin/shared';
 
 export default function TechnicianDutyMonitorPage() {
+    const { t, isRTL } = useLanguage();
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -39,19 +41,19 @@ export default function TechnicianDutyMonitorPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
                 <Box>
-                    <Typography variant="h3" fontWeight="950" color="#FFF">TECHNICIAN COMMAND</Typography>
-                    <Typography variant="body1" color="rgba(255,255,255,0.5)">Real-time operational grid of field forces</Typography>
+                    <Typography variant="h3" fontWeight="950" color="#FFF">{t('admin.duty_monitor.page_title')}</Typography>
+                    <Typography variant="body1" color="rgba(255,255,255,0.5)">{t('admin.duty_monitor.page_subtitle')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Paper sx={{ p: 2, bgcolor: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 4 }}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>ONLINE</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{t('admin.duty_monitor.online')}</Typography>
                         <Typography variant="h4" fontWeight="950" color="#FFF">{technicians.filter(t => t.onDuty).length}</Typography>
                     </Paper>
                     <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 }}>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950, display: 'block' }}>ON JOB</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950, display: 'block' }}>{t('admin.duty_monitor.on_job')}</Typography>
                         <Typography variant="h4" fontWeight="950" color="#FFF">{technicians.filter(t => t.dutyStatus === 'ON_JOB').length}</Typography>
                     </Paper>
                 </Stack>
@@ -61,11 +63,11 @@ export default function TechnicianDutyMonitorPage() {
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>TECHNICIAN</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>STATUS</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>CURRENT MISSION</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>LAST SEEN</TableCell>
-                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>ACTIONS</TableCell>
+                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>{t('admin.duty_monitor.col_technician')}</TableCell>
+                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>{t('admin.duty_monitor.col_status')}</TableCell>
+                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>{t('admin.duty_monitor.col_current_mission')}</TableCell>
+                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>{t('admin.duty_monitor.col_last_seen')}</TableCell>
+                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}>{t('admin.duty_monitor.col_actions')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -77,7 +79,7 @@ export default function TechnicianDutyMonitorPage() {
                                             <UserCheck size={20}/>
                                         </Box>
                                         <Box>
-                                            <Typography variant="body1" fontWeight="950" color="#FFF">{tech.displayName || 'Unnamed Tech'}</Typography>
+                                            <Typography variant="body1" fontWeight="950" color="#FFF">{tech.displayName || t('admin.duty_monitor.unnamed_tech')}</Typography>
                                             <Typography variant="caption" color="rgba(255,255,255,0.3)">{tech.email}</Typography>
                                         </Box>
                                     </Stack>
@@ -98,36 +100,36 @@ export default function TechnicianDutyMonitorPage() {
                                     {tech.currentTicketId ? (
                                         <Stack direction="row" spacing={1} alignItems="center">
                                             <Typography variant="body2" color={binThemeTokens.gold} fontWeight="950">#{tech.currentTicketId.substring(0,8)}</Typography>
-                                            <Tooltip title="View Ticket">
+                                            <Tooltip title={t('admin.duty_monitor.view_ticket')}>
                                                 <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
                                                     <ExternalLink size={14}/>
                                                 </IconButton>
                                             </Tooltip>
                                         </Stack>
                                     ) : (
-                                        <Typography variant="body2" color="rgba(255,255,255,0.2)">STANDBY</Typography>
+                                        <Typography variant="body2" color="rgba(255,255,255,0.2)">{t('admin.duty_monitor.standby')}</Typography>
                                     )}
                                 </TableCell>
                                 <TableCell>
                                     <Stack spacing={0.5}>
                                         <Typography variant="body2" color="#FFF" sx={{ display: 'flex', alignItems: 'center' }}>
                                             <Clock size={14} style={{ marginRight: 4, color: binThemeTokens.gold }}/>
-                                            {tech.lastSeenAt?.toDate?.()?.toLocaleTimeString() || 'Unknown'}
+                                            {tech.lastSeenAt?.toDate?.()?.toLocaleTimeString() || t('admin.duty_monitor.unknown')}
                                         </Typography>
                                         <Typography variant="caption" color="rgba(255,255,255,0.3)" sx={{ display: 'flex', alignItems: 'center' }}>
                                             <MapPin size={12} style={{ marginRight: 4 }}/>
-                                            {tech.emirate || 'Global Grid'}
+                                            {tech.emirate || t('admin.duty_monitor.global_grid')}
                                         </Typography>
                                     </Stack>
                                 </TableCell>
                                 <TableCell>
                                     <Stack direction="row" spacing={1}>
-                                        <Tooltip title="Emergency Alert">
+                                        <Tooltip title={t('admin.duty_monitor.emergency_alert')}>
                                             <IconButton size="small" sx={{ color: '#ff4444', bgcolor: 'rgba(255,68,68,0.05)' }}>
                                                 <ShieldAlert size={18}/>
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title="Force Sync">
+                                        <Tooltip title={t('admin.duty_monitor.force_sync')}>
                                             <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.5)' }}>
                                                 <RefreshCcw size={18}/>
                                             </IconButton>

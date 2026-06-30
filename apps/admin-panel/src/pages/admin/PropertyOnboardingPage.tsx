@@ -17,10 +17,12 @@ import {
 import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { ShieldCheck } from 'lucide-react';
+import { useLanguage } from '@bin/shared';
 
 const EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 
 export default function PropertyOnboardingPage() {
+    const { t, isRTL } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export default function PropertyOnboardingPage() {
         
         // 1. Strict Validation
         if (!formData.tenantEmail || !validateEmail(formData.tenantEmail)) {
-            setError("V4 Protocol Violation: A valid tenant email address is required for identity provisioning.");
+            setError(t('admin.property_onboarding.email_required'));
             return;
         }
 
@@ -111,27 +113,27 @@ export default function PropertyOnboardingPage() {
             });
         } catch (err: any) {
             console.error("Onboarding failed:", err);
-            setError("Failed to onboard property and invite tenant. See console.");
+            setError(t('admin.property_onboarding.submit_failed'));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Container maxWidth="md" sx={{ py: 6 }}>
+        <Container maxWidth="md" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1 }}>
-                    V4 ASSET & TENANT INTAKE
+                    {t('admin.property_onboarding.page_title')}
                 </Typography>
                 <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>
-                    Instantiate a new property record and securely invite a tenant to the Sovereign Portal.
+                    {t('admin.property_onboarding.page_subtitle')}
                 </Typography>
             </Box>
 
             <Paper sx={{ p: 4, bgcolor: binThemeTokens.graphite, border: `1px solid ${binThemeTokens.gold}33`, borderRadius: 4 }}>
                 {success && (
                     <Alert severity="success" sx={{ mb: 4, bgcolor: 'rgba(76, 175, 80, 0.1)', color: '#4CAF50' }}>
-                        Asset provisioned successfully. Invitation email dispatched to <b>{lastSubmittedEmail}</b>.
+                        {t('admin.property_onboarding.success_message', { email: lastSubmittedEmail })}
                     </Alert>
                 )}
                 {error && (
@@ -141,68 +143,68 @@ export default function PropertyOnboardingPage() {
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={3}>
                         <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 1 }}>
-                            1. Property Details
+                            {t('admin.property_onboarding.section_property_details')}
                         </Typography>
-                        
-                        <TextField 
-                            fullWidth label="Property Name (e.g. Marina Heights)" name="propertyName" 
-                            value={formData.propertyName} onChange={handleChange} required 
+
+                        <TextField
+                            fullWidth label={t('admin.property_onboarding.property_name_label')} name="propertyName"
+                            value={formData.propertyName} onChange={handleChange} required
                         />
-                        
+
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                             <FormControl fullWidth required>
-                                <InputLabel>Emirate</InputLabel>
-                                <Select name="emirate" value={formData.emirate} onChange={handleChange as any} label="Emirate">
+                                <InputLabel>{t('admin.property_onboarding.emirate_label')}</InputLabel>
+                                <Select name="emirate" value={formData.emirate} onChange={handleChange as any} label={t('admin.property_onboarding.emirate_label')}>
                                     {EMIRATES.map(e => <MenuItem key={e} value={e}>{e}</MenuItem>)}
                                 </Select>
                             </FormControl>
-                            <TextField 
-                                fullWidth label="Service Zone (e.g. Dubai Marina)" name="serviceZone" 
-                                value={formData.serviceZone} onChange={handleChange} required 
+                            <TextField
+                                fullWidth label={t('admin.property_onboarding.service_zone_label')} name="serviceZone"
+                                value={formData.serviceZone} onChange={handleChange} required
                             />
                         </Stack>
 
-                        <TextField 
-                            fullWidth label="Full Physical Address" name="address" 
-                            value={formData.address} onChange={handleChange} required 
+                        <TextField
+                            fullWidth label={t('admin.property_onboarding.address_label')} name="address"
+                            value={formData.address} onChange={handleChange} required
                         />
 
                         <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 1, mt: 4 }}>
-                            2. Unit & Tenant Details
+                            {t('admin.property_onboarding.section_unit_tenant_details')}
                         </Typography>
 
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                            <TextField 
-                                fullWidth label="Floor Number" name="floorNumber" 
-                                value={formData.floorNumber} onChange={handleChange} required 
+                            <TextField
+                                fullWidth label={t('admin.property_onboarding.floor_number_label')} name="floorNumber"
+                                value={formData.floorNumber} onChange={handleChange} required
                             />
-                            <TextField 
-                                fullWidth label="Unit / Room Number" name="unitNumber" 
-                                value={formData.unitNumber} onChange={handleChange} required 
+                            <TextField
+                                fullWidth label={t('admin.property_onboarding.unit_number_label')} name="unitNumber"
+                                value={formData.unitNumber} onChange={handleChange} required
                             />
                         </Stack>
 
                         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                            <TextField 
-                                fullWidth label="Tenant Full Name" name="tenantName" 
-                                value={formData.tenantName} onChange={handleChange} required 
+                            <TextField
+                                fullWidth label={t('admin.property_onboarding.tenant_name_label')} name="tenantName"
+                                value={formData.tenantName} onChange={handleChange} required
                             />
-                            <TextField 
+                            <TextField
                                 error={formData.tenantEmail !== '' && !validateEmail(formData.tenantEmail)}
-                                fullWidth type="email" label="Tenant Email Address" name="tenantEmail" 
-                                value={formData.tenantEmail} onChange={handleChange} required 
-                                helperText={formData.tenantEmail !== '' && !validateEmail(formData.tenantEmail) ? "Invalid email format" : ""}
+                                fullWidth type="email" label={t('admin.property_onboarding.tenant_email_label')} name="tenantEmail"
+                                value={formData.tenantEmail} onChange={handleChange} required
+                                helperText={formData.tenantEmail !== '' && !validateEmail(formData.tenantEmail) ? t('admin.property_onboarding.invalid_email_format') : ""}
                             />
                         </Stack>
 
-                        <Button 
-                            type="submit" 
-                            variant="contained" 
+                        <Button
+                            type="submit"
+                            variant="contained"
                             disabled={loading || !formData.tenantEmail || !validateEmail(formData.tenantEmail)}
                             startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <ShieldCheck />}
                             sx={{ mt: 4, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#E6C77A' } }}
                         >
-                            Execute V4 Provisioning Handshake
+                            {t('admin.property_onboarding.submit_button')}
                         </Button>
                     </Stack>
                 </form>

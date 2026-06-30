@@ -7,8 +7,10 @@ import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
 import { db, collection, getDocs, doc, writeBatch, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
+import { useLanguage } from '@bin/shared';
 
 export default function GeoRepairCommandCenter() {
+    const { t, isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [properties, setProperties] = useState<any[]>([]);
     const [tickets, setTickets] = useState<any[]>([]);
@@ -81,11 +83,11 @@ export default function GeoRepairCommandCenter() {
                 
                 await batch.commit();
                 await fetchAnomalies();
-                setNotice({ open: true, message: `${prop.propertyName || prop.id} is now verified and locked.`, severity: 'success' });
+                setNotice({ open: true, message: t('admin.geo_repair.verified_and_locked', { name: prop.propertyName || prop.id }), severity: 'success' });
             }
         } catch (error) {
             console.error(error);
-            setNotice({ open: true, message: error instanceof Error ? error.message : 'Geo repair failed. Select a verified pin and retry.', severity: 'error' });
+            setNotice({ open: true, message: error instanceof Error ? error.message : t('admin.geo_repair.repair_failed'), severity: 'error' });
         } finally {
             setRepairing(null);
         }
@@ -94,10 +96,10 @@ export default function GeoRepairCommandCenter() {
     if (loading) return <Box sx={{ p: 5, textAlign: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 6 }}>
-                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>GEO-ANCHOR REPAIR CENTER</Typography>
-                <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>Systematic resolution of legacy location data.</Typography>
+                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{t('admin.geo_repair.page_title')}</Typography>
+                <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>{t('admin.geo_repair.page_subtitle')}</Typography>
             </Box>
 
             <Grid container spacing={4}>
@@ -105,24 +107,24 @@ export default function GeoRepairCommandCenter() {
                     <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                             <MapPin color="#ef4444" />
-                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>Property Anomalies ({properties.length})</Typography>
+                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{t('admin.geo_repair.property_anomalies', { count: properties.length })}</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Properties missing strict coordinates or emirate tags.</Typography>
-                        
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>{t('admin.geo_repair.property_anomalies_desc')}</Typography>
+
                         <Stack spacing={2}>
                             {properties.map(p => (
                                 <Paper key={p.id} sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="body1" fontWeight="900" sx={{ color: '#FFF' }}>{p.propertyName || 'Unnamed Property'}</Typography>
+                                    <Typography variant="body1" fontWeight="900" sx={{ color: '#FFF' }}>{p.propertyName || t('admin.geo_repair.unnamed_property')}</Typography>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mb: 1 }}>{p.id}</Typography>
-                                    <Button 
-                                        size="small" 
-                                        variant="outlined" 
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
                                         onClick={() => repairProperty(p)}
                                         disabled={repairing === p.id}
                                         startIcon={repairing === p.id ? <CircularProgress size={14} /> : <Crosshair size={14} />}
                                         sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}
                                     >
-                                        Auto-Repair Node
+                                        {t('admin.geo_repair.auto_repair_node')}
                                     </Button>
                                 </Paper>
                             ))}
@@ -134,10 +136,10 @@ export default function GeoRepairCommandCenter() {
                     <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                             <AlertTriangle color="#f59e0b" />
-                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>Ticket Anomalies ({tickets.length})</Typography>
+                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{t('admin.geo_repair.ticket_anomalies', { count: tickets.length })}</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Dispatches blocking auto-assignment due to missing spatial data.</Typography>
-                        <Typography variant="caption" sx={{ color: '#f59e0b' }}>* Repair the underlying property first. Tickets will auto-sync.</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>{t('admin.geo_repair.ticket_anomalies_desc')}</Typography>
+                        <Typography variant="caption" sx={{ color: '#f59e0b' }}>{t('admin.geo_repair.ticket_anomalies_note')}</Typography>
                     </Paper>
                 </Grid>
 
@@ -145,9 +147,9 @@ export default function GeoRepairCommandCenter() {
                     <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                             <Navigation color="#3b82f6" />
-                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>Technician Anomalies ({technicians.length})</Typography>
+                            <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{t('admin.geo_repair.technician_anomalies', { count: technicians.length })}</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Field staff missing operation zones.</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>{t('admin.geo_repair.technician_anomalies_desc')}</Typography>
                     </Paper>
                 </Grid>
             </Grid>

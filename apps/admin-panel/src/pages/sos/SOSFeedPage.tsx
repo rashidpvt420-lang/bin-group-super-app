@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useLanguage } from '@bin/shared';
 
 interface SOSEvent {
   sosId: string;
@@ -76,6 +77,7 @@ function sosFromDoc(id: string, data: any): SOSEvent {
 }
 
 export default function SOSFeedPage() {
+  const { t, isRTL } = useLanguage();
   const [sosEvents, setSOSEvents] = useState<SOSEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -96,7 +98,7 @@ export default function SOSFeedPage() {
       setLoading(false);
     }, (error) => {
       console.error('[ADMIN-SOS] Firestore SOS sync failed:', error);
-      setActionError(`SOS feed sync failed: ${error.message || error.code || 'unknown error'}`);
+      setActionError(t('admin.sos_feed.sync_failed', { error: error.message || error.code || t('admin.sos_feed.unknown_error') }));
       setLoading(false);
     });
 
@@ -113,10 +115,10 @@ export default function SOSFeedPage() {
         respondedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      setActionSuccess('SOS acknowledged.');
+      setActionSuccess(t('admin.sos_feed.sos_acknowledged'));
     } catch (error: any) {
       console.error('Failed to respond to SOS:', error);
-      setActionError(error?.message || 'Failed to respond to SOS.');
+      setActionError(error?.message || t('admin.sos_feed.respond_failed'));
     }
   };
 
@@ -130,10 +132,10 @@ export default function SOSFeedPage() {
         resolvedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      setActionSuccess('SOS resolved.');
+      setActionSuccess(t('admin.sos_feed.sos_resolved'));
     } catch (error: any) {
       console.error('Failed to resolve SOS:', error);
-      setActionError(error?.message || 'Failed to resolve SOS.');
+      setActionError(error?.message || t('admin.sos_feed.resolve_failed'));
     }
   };
 
@@ -157,9 +159,9 @@ export default function SOSFeedPage() {
 
   const getMinutesSince = (date: string) => {
     const mins = Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60));
-    if (mins < 1) return 'Now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
+    if (mins < 1) return t('admin.sos_feed.time_now');
+    if (mins < 60) return t('admin.sos_feed.time_minutes_ago', { mins });
+    return t('admin.sos_feed.time_hours_ago', { hours: Math.floor(mins / 60) });
   };
 
   const activeCount = (sosEvents || []).filter((e) => e.status === 'ACTIVE').length;
@@ -167,15 +169,15 @@ export default function SOSFeedPage() {
   const resolvedCount = (sosEvents || []).filter((e) => e.status === 'RESOLVED').length;
 
   if (loading) {
-    return <Typography>Loading SOS Feed...</Typography>;
+    return <Typography>{t('admin.sos_feed.loading')}</Typography>;
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">SOS Emergency Feed (LIVE)</Typography>
+        <Typography variant="h4">{t('admin.sos_feed.page_title')}</Typography>
         <Button variant={autoRefresh ? 'contained' : 'outlined'} onClick={() => setAutoRefresh(!autoRefresh)}>
-          {autoRefresh ? '🔴 Live' : '⚪ Paused'}
+          {autoRefresh ? `🔴 ${t('admin.sos_feed.live')}` : `⚪ ${t('admin.sos_feed.paused')}`}
         </Button>
       </Box>
 
@@ -185,19 +187,19 @@ export default function SOSFeedPage() {
       <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={4}>
           <Paper sx={{ p: 2, backgroundColor: '#ffebee', borderLeft: '4px solid #d32f2f' }}>
-            <Typography color="textSecondary" gutterBottom>Active Emergencies</Typography>
+            <Typography color="textSecondary" gutterBottom>{t('admin.sos_feed.active_emergencies')}</Typography>
             <Typography variant="h5" color="error">{activeCount}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <Paper sx={{ p: 2, backgroundColor: '#fff3e0', borderLeft: '4px solid #f57c00' }}>
-            <Typography color="textSecondary" gutterBottom>Responded</Typography>
+            <Typography color="textSecondary" gutterBottom>{t('admin.sos_feed.responded')}</Typography>
             <Typography variant="h5" style={{ color: '#f57c00' }}>{respondedCount}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
           <Paper sx={{ p: 2, backgroundColor: '#e8f5e9', borderLeft: '4px solid #4caf50' }}>
-            <Typography color="textSecondary" gutterBottom>Resolved</Typography>
+            <Typography color="textSecondary" gutterBottom>{t('admin.sos_feed.resolved')}</Typography>
             <Typography variant="h5" color="success">{resolvedCount}</Typography>
           </Paper>
         </Grid>
@@ -205,8 +207,8 @@ export default function SOSFeedPage() {
 
       {sosEvents.length === 0 && (
         <Paper sx={{ p: 4, mb: 3, textAlign: 'center', borderRadius: 2 }}>
-          <Typography variant="h6">No live SOS tickets found.</Typography>
-          <Typography variant="body2" color="textSecondary">This panel reads real maintenanceTickets flagged as SOS/emergency/critical.</Typography>
+          <Typography variant="h6">{t('admin.sos_feed.no_live_tickets')}</Typography>
+          <Typography variant="body2" color="textSecondary">{t('admin.sos_feed.panel_desc')}</Typography>
         </Paper>
       )}
 
@@ -228,7 +230,7 @@ export default function SOSFeedPage() {
               secondary={
                 <Box>
                   <Typography variant="body2" sx={{ mb: 1 }}>
-                    <strong>Unit:</strong> {event.unitId} | <strong>Charge:</strong> AED {event.emergencyChargeApplied}
+                    <strong>{t('admin.sos_feed.unit_label')}</strong> {event.unitId} | <strong>{t('admin.sos_feed.charge_label')}</strong> {t('common.currency_aed')} {event.emergencyChargeApplied}
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 1 }}>{event.description}</Typography>
                   <Typography variant="caption" color="textSecondary">
@@ -236,7 +238,7 @@ export default function SOSFeedPage() {
                   </Typography>
                   {event.assignedTechnician && (
                     <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
-                      👨‍🔧 Assigned to: {event.assignedTechnician}
+                      👨‍🔧 {t('admin.sos_feed.assigned_to', { name: event.assignedTechnician })}
                     </Typography>
                   )}
                 </Box>
@@ -246,50 +248,50 @@ export default function SOSFeedPage() {
             <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
               {event.status === 'ACTIVE' && (
                 <>
-                  <Button size="small" variant="contained" color="warning" onClick={() => handleRespond(event.sosId)}>Respond</Button>
-                  <Button size="small" variant="contained" color="success" onClick={() => handleResolve(event.sosId)}>Resolve</Button>
+                  <Button size="small" variant="contained" color="warning" onClick={() => handleRespond(event.sosId)}>{t('admin.sos_feed.respond_btn')}</Button>
+                  <Button size="small" variant="contained" color="success" onClick={() => handleResolve(event.sosId)}>{t('admin.sos_feed.resolve_btn')}</Button>
                 </>
               )}
               {event.status === 'RESPONDED' && (
-                <Button size="small" variant="contained" color="success" onClick={() => handleResolve(event.sosId)}>Resolve</Button>
+                <Button size="small" variant="contained" color="success" onClick={() => handleResolve(event.sosId)}>{t('admin.sos_feed.resolve_btn')}</Button>
               )}
-              {event.status === 'RESOLVED' && <Chip label="✓ Resolved" color="success" />}
+              {event.status === 'RESOLVED' && <Chip label={`✓ ${t('admin.sos_feed.resolved')}`} color="success" />}
             </Box>
           </ListItem>
         ))}
       </List>
 
       <Box sx={{ mt: 8 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: '#0f172a' }}>Risk Management Controls</Typography>
+        <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: '#0f172a' }}>{t('admin.sos_feed.risk_management_controls')}</Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Tenant Access Review</Typography>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{t('admin.sos_feed.tenant_access_review')}</Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Account restrictions must be handled from verified tenant records with an audit reason. This SOS page does not change user access from a simulated list.
+                {t('admin.sos_feed.tenant_access_review_desc')}
               </Typography>
               <List>
                 <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
-                  <ListItemText primary="Verified tenant record required" secondary="Use Tenant Management to review tenancy status, payment records, complaint history, and supporting evidence." />
+                  <ListItemText primary={t('admin.sos_feed.verified_tenant_record_required')} secondary={t('admin.sos_feed.verified_tenant_record_required_desc')} />
                 </ListItem>
                 <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
-                  <ListItemText primary="Audit reason required" secondary="Any restriction must be linked to an authenticated admin action and preserved in the audit log." />
+                  <ListItemText primary={t('admin.sos_feed.audit_reason_required')} secondary={t('admin.sos_feed.audit_reason_required_desc')} />
                 </ListItem>
               </List>
-              <Button variant="outlined" color="inherit" size="small" disabled>Use Tenant Management for audited restrictions</Button>
+              <Button variant="outlined" color="inherit" size="small" disabled>{t('admin.sos_feed.use_tenant_management_btn')}</Button>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>Technician Safety Monitor</Typography>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{t('admin.sos_feed.technician_safety_monitor')}</Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Live tracking must come from technician location telemetry. This panel does not display simulated field pulses.
+                {t('admin.sos_feed.technician_safety_monitor_desc')}
               </Typography>
               <Box sx={{ p: 2, bgcolor: '#0f172a', color: '#fff', borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: '#10b981', display: 'block' }}>Telemetry source required</Typography>
-                <Typography variant="caption" sx={{ color: '#fff', opacity: 0.7 }}>Last pulse appears only after a real technician location update.</Typography>
+                <Typography variant="caption" sx={{ color: '#10b981', display: 'block' }}>{t('admin.sos_feed.telemetry_source_required')}</Typography>
+                <Typography variant="caption" sx={{ color: '#fff', opacity: 0.7 }}>{t('admin.sos_feed.telemetry_source_required_desc')}</Typography>
               </Box>
-              <Button variant="outlined" fullWidth sx={{ mt: 2 }} disabled>Live tracker pending telemetry</Button>
+              <Button variant="outlined" fullWidth sx={{ mt: 2 }} disabled>{t('admin.sos_feed.live_tracker_pending')}</Button>
             </Paper>
           </Grid>
         </Grid>

@@ -15,8 +15,10 @@ import {
 import SecurityIcon from '@mui/icons-material/Security';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { useLanguage } from '@bin/shared';
 
 export default function AuditShieldPage() {
+    const { t, isRTL } = useLanguage();
     const [logs, setLogs] = useState<any[]>([]);
     const [stats, setStats] = useState({ total: 0, verified: 0 });
 
@@ -50,30 +52,30 @@ export default function AuditShieldPage() {
     }, []);
 
     return (
-        <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white' }}>
+        <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
                 <SecurityIcon sx={{ fontSize: 40, color: '#3b82f6' }} />
                 <Typography variant="h4" fontWeight="900" textTransform="uppercase">
-                    Audit Shield <Typography component="span" variant="h4" color="#64748b" fontWeight="900">Observer</Typography>
+                    {t('admin.audit_shield.page_title')} <Typography component="span" variant="h4" color="#64748b" fontWeight="900">{t('admin.audit_shield.page_title_suffix')}</Typography>
                 </Typography>
             </Box>
 
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
-                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>Total Evidence Blocks</Typography>
+                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>{t('admin.audit_shield.total_evidence_blocks')}</Typography>
                         <Typography variant="h3" fontWeight="900">{stats.total}</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
-                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>Forensic Verification</Typography>
+                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>{t('admin.audit_shield.forensic_verification')}</Typography>
                         <Typography variant="h3" fontWeight="900" color="#10b981">{stats.verified}</Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 3, bgcolor: '#0f172a', border: '1px solid #1e293b', borderRadius: 4 }}>
-                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>Institutional Status</Typography>
+                        <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900 }}>{t('admin.audit_shield.institutional_status')}</Typography>
                         <Typography variant="h3" fontWeight="900" color="#3b82f6">DLD-AA+</Typography>
                     </Paper>
                 </Grid>
@@ -82,28 +84,28 @@ export default function AuditShieldPage() {
             <Paper sx={{ bgcolor: '#0f172a', p: 4, borderRadius: 6, border: '1px solid #1e293b', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
-                        <Typography variant="h6" color="white" fontWeight="900">AuditShield™ Immutable Ledger</Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b' }}>Real-time cryptographic verification of forensic evidence chains.</Typography>
+                        <Typography variant="h6" color="white" fontWeight="900">{t('admin.audit_shield.ledger_title')}</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>{t('admin.audit_shield.ledger_subtitle')}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 2 }}>
                         <Button variant="outlined" sx={{ borderRadius: 2, borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 900 }}>
-                             Verify Hashes
+                             {t('admin.audit_shield.verify_hashes')}
                         </Button>
                         <Button variant="contained" sx={{ borderRadius: 2, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 900 }}>
-                            Export Bundle
+                            {t('admin.audit_shield.export_bundle')}
                         </Button>
                     </Box>
                 </Box>
-                
+
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>EVENT ID</TableCell>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>ACTION TYPE</TableCell>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>ACTOR / TARGET</TableCell>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>FORENSIC HASH</TableCell>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>TIMESTAMP</TableCell>
-                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b', textAlign: 'right' }}>STATUS</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>{t('admin.audit_shield.col_event_id')}</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>{t('admin.audit_shield.col_action_type')}</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>{t('admin.audit_shield.col_actor_target')}</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>{t('admin.audit_shield.col_forensic_hash')}</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b' }}>{t('admin.audit_shield.col_timestamp')}</TableCell>
+                            <TableCell sx={{ color: '#64748b', fontWeight: 900, borderBottom: '1px solid #1e293b', textAlign: 'right' }}>{t('admin.audit_shield.col_status')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -113,10 +115,10 @@ export default function AuditShieldPage() {
                                     {row.id.slice(0, 8)}
                                 </TableCell>
                                 <TableCell sx={{ color: 'white', borderBottom: '1px solid #1e293b' }}>
-                                    <Chip 
-                                        size="small" 
-                                        label={row.eventType || 'SYSTEM'} 
-                                        sx={{ 
+                                    <Chip
+                                        size="small"
+                                        label={row.eventType || t('admin.audit_shield.system')}
+                                        sx={{
                                             bgcolor: (row.eventType?.includes('KYC') || row.eventType?.includes('ROLE')) ? '#ef444433' : '#3b82f633', 
                                             color: (row.eventType?.includes('KYC') || row.eventType?.includes('ROLE')) ? '#ef4444' : '#3b82f6', 
                                             fontWeight: 900,
@@ -125,7 +127,7 @@ export default function AuditShieldPage() {
                                     />
                                 </TableCell>
                                 <TableCell sx={{ color: 'white', borderBottom: '1px solid #1e293b' }}>
-                                    {row.actor?.displayName || row.actor?.uid?.slice(0, 10) || row.actorRole || 'SYSTEM'}
+                                    {row.actor?.displayName || row.actor?.uid?.slice(0, 10) || row.actorRole || t('admin.audit_shield.system')}
                                 </TableCell>
                                 <TableCell sx={{ color: '#64748b', borderBottom: '1px solid #1e293b', fontSize: '0.7rem', fontFamily: 'monospace' }}>
                                     {row.forensicHash ? (
@@ -136,7 +138,7 @@ export default function AuditShieldPage() {
                                     ) : (
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                             <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#64748b' }} />
-                                            LEGACY_LOG
+                                            {t('admin.audit_shield.legacy_log')}
                                         </Box>
                                     )}
                                 </TableCell>
@@ -144,10 +146,10 @@ export default function AuditShieldPage() {
                                     {row.timestamp}
                                 </TableCell>
                                 <TableCell sx={{ borderBottom: '1px solid #1e293b', textAlign: 'right' }}>
-                                    <Chip 
-                                        size="small" 
-                                        label={row.forensicHash ? 'VERIFIED' : 'PENDING'} 
-                                        sx={{ 
+                                    <Chip
+                                        size="small"
+                                        label={row.forensicHash ? t('admin.audit_shield.verified') : t('admin.audit_shield.pending')}
+                                        sx={{
                                             bgcolor: row.forensicHash ? '#10b98133' : '#64748b33', 
                                             color: row.forensicHash ? '#10b981' : '#94a3b8', 
                                             fontWeight: 900,
@@ -163,7 +165,7 @@ export default function AuditShieldPage() {
                 {logs.length === 0 && (
                     <Box sx={{ textAlign: 'center', py: 10 }}>
                         <Typography variant="body2" sx={{ color: '#64748b', fontStyle: 'italic' }}>
-                            Awaiting operational telemetry for AuditShield™ verification...
+                            {t('admin.audit_shield.empty_state')}
                         </Typography>
                     </Box>
                 )}

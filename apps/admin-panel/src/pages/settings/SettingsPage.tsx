@@ -16,6 +16,7 @@ import {
   CardContent,
 } from '@mui/material';
 import { apiClient } from '../../services/api';
+import { useLanguage } from '@bin/shared';
 
 interface SystemSettings {
   maintenanceMode: boolean;
@@ -32,6 +33,7 @@ interface SystemSettings {
 }
 
 export default function SettingsPage() {
+  const { t, isRTL } = useLanguage();
   const [settings, setSettings] = useState<SystemSettings>({
     maintenanceMode: false,
     autoDispatchEnabled: true,
@@ -62,25 +64,25 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error('Failed to save settings:', error);
-      alert('Failed to save settings');
+      alert(t('admin.settings.save_failed'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="md" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" sx={{ mb: 4 }}>
-        System Settings
+        {t('admin.settings.page_title')}
       </Typography>
 
-      {saved && <Alert severity="success" sx={{ mb: 2 }}>Settings saved successfully!</Alert>}
+      {saved && <Alert severity="success" sx={{ mb: 2 }}>{t('admin.settings.saved_success')}</Alert>}
 
       {/* System Status */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            System Status
+            {t('admin.settings.system_status')}
           </Typography>
           <FormControlLabel
             control={
@@ -91,11 +93,11 @@ export default function SettingsPage() {
             }
             label={
               <Box>
-                <Typography variant="body1">Maintenance Mode</Typography>
+                <Typography variant="body1">{t('admin.settings.maintenance_mode')}</Typography>
                 <Typography variant="caption" color="textSecondary">
                   {settings.maintenanceMode
-                    ? 'Users cannot access the system'
-                    : 'System is operating normally'}
+                    ? t('admin.settings.maintenance_mode_on_desc')
+                    : t('admin.settings.maintenance_mode_off_desc')}
                 </Typography>
               </Box>
             }
@@ -107,7 +109,7 @@ export default function SettingsPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Operational Settings
+            {t('admin.settings.operational_settings')}
           </Typography>
 
           <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -119,14 +121,14 @@ export default function SettingsPage() {
                     onChange={(e) => handleChange('autoDispatchEnabled', e.target.checked)}
                   />
                 }
-                label="Auto-Dispatch Tickets"
+                label={t('admin.settings.auto_dispatch_tickets')}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 type="number"
-                label="Max Tickets per Technician"
+                label={t('admin.settings.max_tickets_per_technician')}
                 value={settings.maxTicketsPerTechnician}
                 onChange={(e) => handleChange('maxTicketsPerTechnician', parseInt(e.target.value))}
               />
@@ -138,7 +140,7 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="SOS Response Time (minutes)"
+                label={t('admin.settings.sos_response_time')}
                 value={settings.sosResponseTimeMinutes}
                 onChange={(e) => handleChange('sosResponseTimeMinutes', parseInt(e.target.value))}
               />
@@ -151,7 +153,7 @@ export default function SettingsPage() {
                     onChange={(e) => handleChange('turnoverQuoteAutoGeneration', e.target.checked)}
                   />
                 }
-                label="Auto-Generate Turnover Quotes"
+                label={t('admin.settings.auto_generate_turnover_quotes')}
               />
             </Grid>
           </Grid>
@@ -162,7 +164,7 @@ export default function SettingsPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Financial Settings
+            {t('admin.settings.financial_settings')}
           </Typography>
 
           <Grid container spacing={2}>
@@ -170,26 +172,26 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="BIN Group Fee (%)"
+                label={t('admin.settings.bin_group_fee_percent')}
                 value={settings.binGroupFeePercent}
                 onChange={(e) => handleChange('binGroupFeePercent', parseFloat(e.target.value))}
                 inputProps={{ step: 0.1 }}
               />
               <Typography variant="caption" color="textSecondary">
-                Deducted from rent collections
+                {t('admin.settings.deducted_from_rent')}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 type="number"
-                label="Parts Markup (%)"
+                label={t('admin.settings.parts_markup_percent')}
                 value={settings.partsMarkupPercent}
                 onChange={(e) => handleChange('partsMarkupPercent', parseFloat(e.target.value))}
                 inputProps={{ step: 0.1 }}
               />
               <Typography variant="caption" color="textSecondary">
-                Added to technician costs
+                {t('admin.settings.added_to_technician_costs')}
               </Typography>
             </Grid>
           </Grid>
@@ -201,24 +203,24 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="number"
-                label="Payment Reminder (days)"
+                label={t('admin.settings.payment_reminder_days')}
                 value={settings.paymentReminderDays}
                 onChange={(e) => handleChange('paymentReminderDays', parseInt(e.target.value))}
               />
               <Typography variant="caption" color="textSecondary">
-                Send reminder after X days
+                {t('admin.settings.send_reminder_after_days')}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 type="number"
-                label="Suspension Threshold"
+                label={t('admin.settings.suspension_threshold')}
                 value={settings.suspensionThreshold}
                 onChange={(e) => handleChange('suspensionThreshold', parseInt(e.target.value))}
               />
               <Typography variant="caption" color="textSecondary">
-                Unpaid invoices before suspension
+                {t('admin.settings.unpaid_invoices_before_suspension')}
               </Typography>
             </Grid>
           </Grid>
@@ -229,7 +231,7 @@ export default function SettingsPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Notification Settings
+            {t('admin.settings.notification_settings')}
           </Typography>
 
           <FormControlLabel
@@ -239,7 +241,7 @@ export default function SettingsPage() {
                 onChange={(e) => handleChange('emailNotificationsEnabled', e.target.checked)}
               />
             }
-            label="Email Notifications"
+            label={t('admin.settings.email_notifications')}
           />
           <FormControlLabel
             control={
@@ -248,7 +250,7 @@ export default function SettingsPage() {
                 onChange={(e) => handleChange('smsNotificationsEnabled', e.target.checked)}
               />
             }
-            label="SMS Notifications"
+            label={t('admin.settings.sms_notifications')}
           />
         </CardContent>
       </Card>
@@ -256,36 +258,36 @@ export default function SettingsPage() {
       {/* Action Buttons */}
       <Box sx={{ display: 'flex', gap: 2 }}>
         <Button variant="contained" onClick={handleSave} disabled={loading}>
-          {loading ? 'Saving...' : 'Save Settings'}
+          {loading ? t('admin.settings.saving') : t('admin.settings.save_settings')}
         </Button>
         <Button
           variant="outlined"
-          onClick={() => alert('Settings reset to defaults')}
+          onClick={() => alert(t('admin.settings.reset_to_defaults_alert'))}
         >
-          Reset to Defaults
+          {t('admin.settings.reset_to_defaults')}
         </Button>
       </Box>
 
       {/* System Information */}
       <Paper sx={{ p: 3, mt: 4, backgroundColor: '#f5f5f5' }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          System Information
+          {t('admin.settings.system_information')}
         </Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2">
-              <strong>Version:</strong> 1.0.0
+              <strong>{t('admin.settings.version_label')}</strong> 1.0.0
             </Typography>
             <Typography variant="body2">
-              <strong>Database:</strong> Firebase Firestore
+              <strong>{t('admin.settings.database_label')}</strong> {t('admin.settings.database_value')}
             </Typography>
           </Grid>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2">
-              <strong>API Server:</strong> Production
+              <strong>{t('admin.settings.api_server_label')}</strong> {t('admin.settings.api_server_value')}
             </Typography>
             <Typography variant="body2">
-              <strong>Last Updated:</strong> {new Date().toLocaleString()}
+              <strong>{t('admin.settings.last_updated_label')}</strong> {new Date().toLocaleString()}
             </Typography>
           </Grid>
         </Grid>

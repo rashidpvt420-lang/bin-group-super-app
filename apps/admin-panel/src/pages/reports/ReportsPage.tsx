@@ -27,6 +27,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { apiClient } from '../../services/api';
 import { db, collection, query, getDocs, orderBy, limit } from '../../lib/firebase';
+import { useLanguage } from '@bin/shared';
 
 interface ReportData {
   date: string;
@@ -40,6 +41,7 @@ const formatAED = (value: number) => `AED ${Math.round(Number(value || 0)).toLoc
 const reportFileDate = () => new Date().toISOString().split('T')[0];
 
 export default function ReportsPage() {
+  const { t, isRTL } = useLanguage();
   const [startDate, setStartDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportType, setReportType] = useState('financial');
@@ -68,7 +70,7 @@ export default function ReportsPage() {
       }
     } catch (error) {
       console.error('Failed to generate report:', error);
-      alert('Failed to generate report');
+      alert(t('admin.reports.generate_failed'));
     } finally {
       setLoading(false);
     }
@@ -108,7 +110,7 @@ export default function ReportsPage() {
       const hasSlaRows = reportType === 'sla_breaches' && breaches.length > 0;
       const hasReportRows = reportType !== 'sla_breaches' && data.length > 0;
       if (!hasSlaRows && !hasReportRows) {
-        alert('Generate a report before exporting PDF.');
+        alert(t('admin.reports.export_pdf_requires_data'));
         return;
       }
 
@@ -178,7 +180,7 @@ export default function ReportsPage() {
       doc.save(`BIN_GROUP_${reportType}_Report_${reportFileDate()}.pdf`);
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      alert('PDF export failed. Please retry or contact technical support.');
+      alert(t('admin.reports.export_pdf_failed'));
     }
   };
 
@@ -189,28 +191,28 @@ export default function ReportsPage() {
   const hasExportableRows = data.length > 0 || breaches.length > 0;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" sx={{ mb: 4, fontWeight: 900 }}>
-        Reports & Analytics
+        {t('admin.reports.page_title')}
       </Typography>
 
       <Paper sx={{ p: 3, mb: 4 }}>
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid item xs={12} sm={4}>
-            <TextField fullWidth label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+            <TextField fullWidth label={t('admin.reports.start_date_label')} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} />
           </Grid>
           <Grid item xs={12} sm={4}>
-            <TextField fullWidth label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+            <TextField fullWidth label={t('admin.reports.end_date_label')} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} />
           </Grid>
           <Grid item xs={12} sm={4}>
             <FormControl fullWidth>
-              <InputLabel>Report Type</InputLabel>
-              <Select value={reportType} onChange={(e) => setReportType(e.target.value)} label="Report Type">
-                <MenuItem value="financial">Financial</MenuItem>
-                <MenuItem value="operational">Operational</MenuItem>
-                <MenuItem value="performance">Performance</MenuItem>
-                <MenuItem value="owner">Owner Summary</MenuItem>
-                <MenuItem value="sla_breaches">SLA Breaches & Credits</MenuItem>
+              <InputLabel>{t('admin.reports.report_type_label')}</InputLabel>
+              <Select value={reportType} onChange={(e) => setReportType(e.target.value)} label={t('admin.reports.report_type_label')}>
+                <MenuItem value="financial">{t('admin.reports.type_financial')}</MenuItem>
+                <MenuItem value="operational">{t('admin.reports.type_operational')}</MenuItem>
+                <MenuItem value="performance">{t('admin.reports.type_performance')}</MenuItem>
+                <MenuItem value="owner">{t('admin.reports.type_owner')}</MenuItem>
+                <MenuItem value="sla_breaches">{t('admin.reports.type_sla_breaches')}</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -218,12 +220,12 @@ export default function ReportsPage() {
 
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button variant="contained" onClick={handleGenerateReport} disabled={loading}>
-            {loading ? 'Generating...' : 'Generate Report'}
+            {loading ? t('admin.reports.generating_button') : t('admin.reports.generate_button')}
           </Button>
           {hasExportableRows && (
             <>
-              <Button variant="outlined" onClick={handleExportCSV}>Export CSV</Button>
-              <Button variant="outlined" onClick={handleExportPDF}>Export PDF</Button>
+              <Button variant="outlined" onClick={handleExportCSV}>{t('admin.reports.export_csv_button')}</Button>
+              <Button variant="outlined" onClick={handleExportPDF}>{t('admin.reports.export_pdf_button')}</Button>
             </>
           )}
         </Box>
@@ -232,27 +234,27 @@ export default function ReportsPage() {
       {data.length > 0 && (
         <>
           <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>Total Revenue</Typography><Typography variant="h5">AED {totalRevenue.toLocaleString()}</Typography></CardContent></Card></Grid>
-            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>Total Costs</Typography><Typography variant="h5">AED {totalCosts.toLocaleString()}</Typography></CardContent></Card></Grid>
-            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>Profit</Typography><Typography variant="h5" color={totalRevenue - totalCosts >= 0 ? 'success' : 'error'}>AED {(totalRevenue - totalCosts).toLocaleString()}</Typography></CardContent></Card></Grid>
-            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>Total Tickets</Typography><Typography variant="h5">{totalTickets}</Typography></CardContent></Card></Grid>
-            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>Completed Jobs</Typography><Typography variant="h5" color="secondary">{totalCompleted}</Typography></CardContent></Card></Grid>
+            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>{t('admin.reports.card_total_revenue')}</Typography><Typography variant="h5">AED {totalRevenue.toLocaleString()}</Typography></CardContent></Card></Grid>
+            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>{t('admin.reports.card_total_costs')}</Typography><Typography variant="h5">AED {totalCosts.toLocaleString()}</Typography></CardContent></Card></Grid>
+            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>{t('admin.reports.card_profit')}</Typography><Typography variant="h5" color={totalRevenue - totalCosts >= 0 ? 'success' : 'error'}>AED {(totalRevenue - totalCosts).toLocaleString()}</Typography></CardContent></Card></Grid>
+            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>{t('admin.reports.card_total_tickets')}</Typography><Typography variant="h5">{totalTickets}</Typography></CardContent></Card></Grid>
+            <Grid item xs={12} sm={6} md={2.4}><Card><CardContent sx={{ textAlign: 'center' }}><Typography color="textSecondary" gutterBottom>{t('admin.reports.card_completed_jobs')}</Typography><Typography variant="h5" color="secondary">{totalCompleted}</Typography></CardContent></Card></Grid>
           </Grid>
 
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Revenue vs Costs</Typography>
+                <Typography variant="h6" sx={{ mb: 2 }}>{t('admin.reports.chart_revenue_vs_costs')}</Typography>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis /><Tooltip /><Legend /><Bar dataKey="revenue" fill="#4caf50" /><Bar dataKey="costs" fill="#f44336" /></BarChart>
+                  <BarChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis /><Tooltip /><Legend /><Bar dataKey="revenue" name={t('admin.reports.card_total_revenue')} fill="#4caf50" /><Bar dataKey="costs" name={t('admin.reports.card_total_costs')} fill="#f44336" /></BarChart>
                 </ResponsiveContainer>
               </Paper>
             </Grid>
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Tickets & Completed Jobs</Typography>
+                <Typography variant="h6" sx={{ mb: 2 }}>{t('admin.reports.chart_tickets_and_completed')}</Typography>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="tickets" stroke="#2196f3" /><Line type="monotone" dataKey="completedJobs" stroke="#ff9800" /></LineChart>
+                  <LineChart data={data}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="tickets" name={t('admin.reports.table_tickets')} stroke="#2196f3" /><Line type="monotone" dataKey="completedJobs" name={t('admin.reports.card_completed_jobs')} stroke="#ff9800" /></LineChart>
                 </ResponsiveContainer>
               </Paper>
             </Grid>
@@ -260,7 +262,7 @@ export default function ReportsPage() {
 
           <Paper>
             <Table>
-              <TableHead sx={{ backgroundColor: '#f5f5f5' }}><TableRow><TableCell>Date</TableCell><TableCell align="right">Revenue</TableCell><TableCell align="right">Costs</TableCell><TableCell align="center">Tickets</TableCell><TableCell align="center">Completed</TableCell><TableCell align="right">Profit</TableCell></TableRow></TableHead>
+              <TableHead sx={{ backgroundColor: '#f5f5f5' }}><TableRow><TableCell>{t('admin.reports.table_date')}</TableCell><TableCell align="right">{t('admin.reports.table_revenue')}</TableCell><TableCell align="right">{t('admin.reports.table_costs')}</TableCell><TableCell align="center">{t('admin.reports.table_tickets')}</TableCell><TableCell align="center">{t('admin.reports.table_completed')}</TableCell><TableCell align="right">{t('admin.reports.table_profit')}</TableCell></TableRow></TableHead>
               <TableBody>{data.map((row) => (<TableRow key={row.date}><TableCell>{row.date}</TableCell><TableCell align="right">AED {row.revenue.toLocaleString()}</TableCell><TableCell align="right">AED {row.costs.toLocaleString()}</TableCell><TableCell align="center">{row.tickets}</TableCell><TableCell align="center">{row.completedJobs}</TableCell><TableCell align="right">AED {(row.revenue - row.costs).toLocaleString()}</TableCell></TableRow>))}</TableBody>
             </Table>
           </Paper>
@@ -269,11 +271,11 @@ export default function ReportsPage() {
 
       {reportType === 'sla_breaches' && breaches.length > 0 && (
           <Box sx={{ mt: 4 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 900 }}>INSTITUTIONAL SLA BREACH LEDGER</Typography>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 900 }}>{t('admin.reports.sla_ledger_title')}</Typography>
               <TableContainer component={Paper}>
                   <Table>
-                      <TableHead sx={{ bgcolor: '#f8fafc' }}><TableRow><TableCell sx={{ fontWeight: 900 }}>TICKET ID</TableCell><TableCell sx={{ fontWeight: 900 }}>OWNER ID</TableCell><TableCell sx={{ fontWeight: 900 }}>TIER</TableCell><TableCell sx={{ fontWeight: 900 }}>PENALTY</TableCell><TableCell sx={{ fontWeight: 900 }}>DETECTED AT</TableCell></TableRow></TableHead>
-                      <TableBody>{breaches.map((b) => (<TableRow key={b.id}><TableCell>{b.ticketId?.substring(0,8)}</TableCell><TableCell>{b.ownerId?.substring(0,8)}</TableCell><TableCell><Chip label={b.tier?.toUpperCase()} size="small" variant="outlined" /></TableCell><TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>AED {b.penaltyAmount}</TableCell><TableCell>{b.detectedAt?.toDate ? b.detectedAt.toDate().toLocaleString() : 'Recent'}</TableCell></TableRow>))}</TableBody>
+                      <TableHead sx={{ bgcolor: '#f8fafc' }}><TableRow><TableCell sx={{ fontWeight: 900 }}>{t('admin.reports.sla_table_ticket_id')}</TableCell><TableCell sx={{ fontWeight: 900 }}>{t('admin.reports.sla_table_owner_id')}</TableCell><TableCell sx={{ fontWeight: 900 }}>{t('admin.reports.sla_table_tier')}</TableCell><TableCell sx={{ fontWeight: 900 }}>{t('admin.reports.sla_table_penalty')}</TableCell><TableCell sx={{ fontWeight: 900 }}>{t('admin.reports.sla_table_detected_at')}</TableCell></TableRow></TableHead>
+                      <TableBody>{breaches.map((b) => (<TableRow key={b.id}><TableCell>{b.ticketId?.substring(0,8)}</TableCell><TableCell>{b.ownerId?.substring(0,8)}</TableCell><TableCell><Chip label={b.tier?.toUpperCase()} size="small" variant="outlined" /></TableCell><TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>AED {b.penaltyAmount}</TableCell><TableCell>{b.detectedAt?.toDate ? b.detectedAt.toDate().toLocaleString() : t('admin.reports.recent_fallback')}</TableCell></TableRow>))}</TableBody>
                   </Table>
               </TableContainer>
           </Box>
@@ -281,7 +283,7 @@ export default function ReportsPage() {
 
       {!loading && data.length === 0 && breaches.length === 0 && (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography color="textSecondary">Generate a report to see data here</Typography>
+          <Typography color="textSecondary">{t('admin.reports.empty_state')}</Typography>
         </Paper>
       )}
     </Container>
