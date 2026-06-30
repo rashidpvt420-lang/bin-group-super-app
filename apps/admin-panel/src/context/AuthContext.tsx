@@ -37,9 +37,13 @@ const STAFF_ROLES = new Set([
     'operations_manager',
 ]);
 
+const founderEmailsStr = import.meta.env.VITE_FOUNDER_ADMIN_EMAILS || '';
+const envFounderEmails = founderEmailsStr.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean);
+
 const DEFAULT_FOUNDER_ADMIN_EMAILS = [
     'ceo@bin-groups.com',
     'ceo@bin-group.com',
+    ...envFounderEmails
 ];
 
 const canonicalEmail = (value: unknown) => {

@@ -21,6 +21,7 @@
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "preview": "vite preview",
+    "repair-admin": "node scripts/repair-admin-claims.mjs",
     "deploy": "npm run prepare:rules && firebase deploy --project bin-group-57c60",
     "deploy:raw": "firebase deploy --project bin-group-57c60",
     "normalize:rules": "node scripts/normalize-firestore-rules.mjs",
