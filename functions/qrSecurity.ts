@@ -1,15 +1,21 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
 const db = admin.firestore();
+const QR_SIGNING_SECRET = defineSecret("QR_SIGNING_SECRET");
 
-const QR_SECRET = process.env.QR_SIGNING_SECRET;
-if (!QR_SECRET) {
-  throw new Error("QR signing secret is not configured in production environment.");
+function getQrSecret() {
+  const secret = QR_SIGNING_SECRET.value();
+  if (!secret) {
+    throw new HttpsError("failed-precondition", "QR signing secret is not configured.");
+  }
+  return secret;
 }
 
-export const generateSignedQrPass = onCall({ cors: true }, async (request) => {
+export const generateSignedQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
+  const QR_SECRET = getQrSecret();
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -45,7 +51,8 @@ export const generateSignedQrPass = onCall({ cors: true }, async (request) => {
   return { passId, token, signature };
 });
 
-export const verifyQrPass = onCall({ cors: true }, async (request) => {
+export const verifyQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
+  const QR_SECRET = getQrSecret();
   const { token } = request.data;
   if (!token) throw new HttpsError("invalid-argument", "Missing token.");
 
