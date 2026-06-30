@@ -39,6 +39,7 @@ import OwnerDamageEstimatePage from './pages/OwnerDamageEstimatePage';
 import OwnerPLReportPage from './pages/OwnerPLReportPage';
 import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
+import OwnerStatementsPage from './pages/OwnerStatementsPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -162,6 +163,7 @@ export default function OwnerApp() {
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="owner" />} />
+                <Route path="/statements" element={<OwnerStatementsPage />} />
             </Routes>
         </OwnerLayout>
     );

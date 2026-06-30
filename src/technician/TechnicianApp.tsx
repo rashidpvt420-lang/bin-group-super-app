@@ -23,6 +23,7 @@ import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import SupportPage from '../pages/public/SupportPage';
+import TechnicianEarningsPage from './pages/TechnicianEarningsPage';
 
 const shell = {
     ink: '#111827',
@@ -109,6 +110,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
                         <Button onClick={() => navigate('/technician/map')} sx={quickButtonSx}>{label('tech.quick.map', 'Live Map', 'الخريطة')}</Button>
+                        <Button onClick={() => navigate('/technician/earnings')} sx={quickButtonSx}>{label('tech.quick.earnings', 'Earnings', 'الأرباح')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
                         <Button onClick={() => navigate('/technician/support')} sx={quickButtonSx}>{label('tech.quick.support', 'Support', 'الدعم')}</Button>
                         <NotificationBell />
@@ -171,6 +173,7 @@ export default function TechnicianApp() {
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="technician" />} />
+                <Route path="/earnings" element={<TechnicianEarningsPage />} />
             </Routes>
         </TechnicianLayout>
     );

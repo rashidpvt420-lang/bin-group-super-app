@@ -58,6 +58,13 @@ import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
 import StaffAccessPage from './pages/admin/StaffAccessPage';
 import SmokeTestPage from './pages/smoke-test/SmokeTestPage';
 import { adminTheme } from './theme/adminTheme';
+import BinConnectInboxPage from './pages/admin/BinConnectInboxPage';
+import PilotCompletionCommandPage from './pages/admin/PilotCompletionCommandPage';
+import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
+import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
+import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
+import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
+import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
 
 // Create RTL/LTR Caches
 const cacheRtl = createCache({
@@ -153,6 +160,13 @@ function AppContent() {
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                     <Route path="/staff-access" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
                     <Route path="/hr" element={<ProtectedRoute adminOnly><StaffAccessPage /></ProtectedRoute>} />
+                    <Route path="/ops/bin-connect" element={<ProtectedRoute adminOnly><BinConnectInboxPage /></ProtectedRoute>} />
+                    <Route path="/ops/pilot-completion" element={<ProtectedRoute adminOnly><PilotCompletionCommandPage /></ProtectedRoute>} />
+                    <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
+                    <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />
                 </Route>
             )}
 

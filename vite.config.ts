@@ -5,6 +5,14 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5000,
+    host: '0.0.0.0',
+    allowedHosts: true,
+    watch: {
+      ignored: ['**/node_modules/**', '**/.local/**', '**/dist/**'],
+    },
+  },
   envPrefix: ['VITE_', 'REACT_APP_'],
   resolve: {
     alias: {
