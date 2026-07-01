@@ -32,7 +32,6 @@ const amountOf = (value: unknown) => {
   const parsed = Number(String(value || '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const BROKER_COMMISSION_RATE = 0.10;
 const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
 const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
@@ -58,10 +57,23 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
   const [contractType, setContractType] = useState('annual_lease');
   const [signedDate, setSignedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [brokerCommissionRate, setBrokerCommissionRate] = useState(0.10);
 
   useEffect(() => {
     if (openFormByDefault) setOpenAdd(true);
   }, [openFormByDefault]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'companyProfile'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (typeof data.brokerCommissionRate === 'number') {
+          setBrokerCommissionRate(data.brokerCommissionRate);
+        }
+      }
+    }, (err) => console.warn('[BrokerReferrals] settings listener failed:', err));
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -192,8 +204,8 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         referralData.estimatedValue = estimatedAmount;
         referralData.signedDate = signedDate;
         referralData.commissionStatus = 'PENDING';
-        referralData.commissionRate = BROKER_COMMISSION_RATE;
-        referralData.commissionAmount = Math.round(estimatedAmount * BROKER_COMMISSION_RATE);
+        referralData.commissionRate = brokerCommissionRate;
+        referralData.commissionAmount = Math.round(estimatedAmount * brokerCommissionRate);
         referralData.commissionCreationStatus = 'PENDING_ADMIN_CONTRACT_MATCH';
       } else {
         referralData.propertyName = clean(propertyName);

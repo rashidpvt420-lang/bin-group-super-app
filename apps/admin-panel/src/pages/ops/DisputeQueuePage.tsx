@@ -84,7 +84,9 @@ export default function DisputeQueuePage() {
                         amount: 50, // Standard SLA credit or variable
                         currency: 'AED',
                         description: `SLA Credit for Disputed Ticket: ${selectedDispute.id}`,
-                        status: 'COMPLETED',
+                        status: 'PENDING_APPROVAL',
+                        approved: false,
+                        paymentVerified: false,
                         createdAt: serverTimestamp()
                     });
                 }
