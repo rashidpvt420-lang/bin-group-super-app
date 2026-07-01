@@ -12,6 +12,7 @@ import PublicSecurityPage from './pages/public/PublicSecurityPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
+import { ToastProvider } from './context/ToastContext';
 import { SovereignAIChat } from './components/SovereignAIChat';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 
@@ -306,10 +307,12 @@ export default function App() {
       <LanguageProvider>
         <CustomThemeProvider>
           <AIProvider>
-            <CssBaseline />
-            <AppContent />
-            <PublicSovereignAIEntry />
-            <IOSPwaGuardian />
+            <ToastProvider>
+              <CssBaseline />
+              <AppContent />
+              <PublicSovereignAIEntry />
+              <IOSPwaGuardian />
+            </ToastProvider>
           </AIProvider>
         </CustomThemeProvider>
       </LanguageProvider>
