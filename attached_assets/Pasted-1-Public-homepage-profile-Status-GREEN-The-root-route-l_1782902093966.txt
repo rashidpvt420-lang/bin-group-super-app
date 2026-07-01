@@ -1,0 +1,180 @@
+1. Public / homepage profile
+Status: GREEN
+
+The root route loads LandingPage, and LandingPage now renders SimpleStartPage.
+
+The public role funnel exists for Tenant, Owner/Landlord, Broker, and Technician, with English/Arabic labels and role-specific paths.
+
+Still missing / add later
+Priority	Missing	Why
+P1	Production visual smoke test	Need confirm live / opens the role-first homepage after deploy.
+P1	Full Arabic QA of all public pages	SimpleStartPage is bilingual, but every marketing/deep page should be checked visually.
+P2	Simple-mode switch	Good for older landlords: “Simple View / Full View.”
+2. Owner profile
+Status: GREEN for known P0s
+
+Owner route coverage is strong: dashboard, activation, properties, contracts, financials, payment proof, IBAN, profile, ROI, units, tenants, property passport, documents, inspections, design studio, complaint, tickets, AI intelligence, damage estimate, P/L report, contractor marketplace, approvals, BIN Connect, and pilot completion.
+
+Owner Phase 2 exists: OwnerEvidenceSection, OwnerNextStepBanner, rent collection, external rent dialog trigger, and owner evidence routing are all wired into the dashboard.
+
+Owner inspection access is now properly linked through tenant ownerId / ownerUid, not broad owner-role access.
+
+Still missing / add next
+Priority	Missing	Why
+P1	Move-in vs move-out side-by-side comparison	Current evidence section lists inspection records and PDFs; it does not yet show room-by-room comparison directly.
+P1	Owner handover action buttons on dashboard	Backend supports approve, reinspection, and settlement actions, but dashboard UI mostly links to /owner/inspections.
+P1	Move rent recording fully server-side	Current rent flow still writes payment_transactions / tenant_ledger from client before calling audit. Better hard-live architecture is one callable that writes payment, ledger, notification, and audit atomically.
+P1	Owner monthly report export	Add one-click PDF/CSV: rent, payments, maintenance, evidence, deductions, approvals.
+P2	Owner “simple dashboard” mode	Hide technical sections unless owner clicks “Advanced.”
+3. Tenant profile
+Status: GREEN in code, pending live smoke
+
+Tenant has dashboard, unit, request, tickets, ticket detail, chat, emergency, profile, documents, design studio, gate pass, amenities, payments, move inspection, notices, keys, parcels, visitor parking, marketplace, staff directory, messages, and community routes.
+
+Still missing / add next
+Priority	Missing	Why
+P0 runtime	Live ticket creation smoke test	Need prove tenant can create ticket with photo in production.
+P0 runtime	Tenant approve/dispute completion smoke test	Need prove full Tenant → Technician → Tenant verification loop.
+P1	“More Services” grouping	Tenant portal has many services; older users may still feel lost.
+P1	Simple “what happens next” tracker	Add large timeline: submitted → assigned → on way → on site → proof uploaded → approve/dispute.
+P1	WhatsApp fallback path	For non-digital tenants: “Send request by WhatsApp” but still create ticket internally.
+P2	Tenant satisfaction trend	Add rating trend after ticket completion.
+4. Technician profile
+Status: GREEN in code, pending live smoke
+
+Technician has dashboard, jobs, job detail, proof readiness, chat, map, history, profile, HR, offline queue, support, BIN Connect, and pilot completion.
+
+Still missing / add next
+Priority	Missing	Why
+P0 runtime	Live dispatch smoke test	Need prove ticket appears for technician and can be accepted/completed.
+P0 runtime	Before/after proof smoke test	Need prove completion is blocked unless proof is uploaded.
+P1	GPS/geofence check-in	Stronger proof that technician reached the property.
+P1	Material/parts request workflow	Technician should request parts; admin/owner approves above threshold.
+P1	Offline conflict resolver	If job changes while technician is offline, app should handle conflict cleanly.
+P2	Technician performance leaderboard	MTTR, SLA success, proof quality, callbacks.
+5. Broker profile
+Status: GREEN in code, pending live smoke
+
+Broker has dashboard, leads, new lead, referrals, new referral, commissions, attribution, documents, and profile.
+
+Still missing / add next
+Priority	Missing	Why
+P0 runtime	Broker attribution smoke test	Need prove lead/referral → admin attribution → commission.
+P1	Contract-level attribution lock	Every contract from a broker should store brokerUid, brokerCode, leadId, referralId, and attributionLockedAt.
+P1	Broker dispute workflow	If two brokers claim same owner/tenant, admin decides with timestamp evidence.
+P1	Broker signed agreement PDF	Broker should accept commission terms before payout.
+P2	Owner-approved broker marketplace	Owners can allow brokers to bring tenants/contracts to listed properties.
+6. Admin profile
+Status: GREEN in code, pending live smoke
+
+Admin has dashboard, financials, payroll, transactions, broker management, owners, tenants, production control, property passport, tickets, tenant services, disputes, unit links, broker attribution, broker commissions, messages, technicians, live map, SOS, document vault, audit, reports, settings, payment approvals, profitability, compliance, pilot/public ops, WhatsApp triage, RFQ, vendors, data governance, smoke test, HR, pricing matrix, units, BIN GPT engineer, and staff access.
+
+Still missing / add next
+Priority	Missing	Why
+P0 runtime	Admin production login proof	Need verify deployed admin login opens dashboard.
+P0 runtime	Payment approval smoke test	Need prove admin can verify owner/tenant payment.
+P1	Launch Health widget on main dashboard	Show deployed SHA, Functions, Firestore rules, Storage rules, QR secret, App Check, smoke status.
+P1	5-profile smoke status panel	Admin should see Owner/Tenant/Technician/Broker/Admin health after each deploy.
+P1	WhatsApp webhook health	Show latest inbound/outbound, signature status, failures.
+P1	Staff access templates	Finance, Dispatcher, HR, Auditor, Ops Manager, Support, Supervisor.
+P2	Incident banner	Red banner if Functions/Auth/Firestore errors spike.
+7. Auditor profile
+Status: likely GREEN, pending live smoke
+
+Audit logs are now server-written through callable or backend Admin SDK. Firestore rules block client creation into audit logs and allow read to admin/HR/auditor only.
+
+Still missing / add next
+Priority	Missing	Why
+P0 runtime	Auditor read-only smoke test	Need prove auditor can read logs and cannot mutate data.
+P1	Audit export pack	PDF/CSV export for legal/compliance review.
+P1	Audit filtering	By user, property, ticket, payment, contract, broker attribution.
+8. QR / gate pass / visitor parking
+Status: GREEN in code, blocked by deploy secret
+
+QR functions use defineSecret, secrets: [QR_SIGNING_SECRET], and runtime .value().
+
+QR verification checks signature, expiry, live pass record, active/approved status, revoked/deleted/rejected flags, and returns sanitized public fields.
+
+Still missing / add next
+Priority	Missing	Why
+P0 infra	Blaze billing	Secret Manager cannot set QR secret without Blaze.
+P0 runtime	Valid QR scan smoke test	Need prove live /verify/pass/:token works.
+P0 runtime	Revoked QR fail test	Need prove revoked/deleted pass fails immediately.
+P1	Public scan analytics	Track scan time, result, property, security/reception user if available.
+9. Firebase / production infrastructure
+Status: NOT fully ready
+
+firebase.json is configured for Firestore rules, indexes, Functions, app hosting, admin hosting, and Storage rules.
+
+But production launch still requires deploy proof.
+
+Still missing / required before public hard launch
+Priority	Missing	Why
+P0	Firebase Blaze billing	Required for Secret Manager / Functions secret binding.
+P0	QR_SIGNING_SECRET set successfully	QR functions fail closed without it.
+P0	Firebase deploy complete	Need production app/admin/functions/rules/storage/indexes deployed.
+P0	Live 5-profile smoke test	Code coverage is not runtime proof.
+P0	Clean working tree before deploy	You still had three uncommitted local files earlier; either commit or restore before deploy.
+P1	App Check enforcement proof	Needed for public abuse protection.
+P1	Backups / export schedule	Needed before real user production data.
+P1	Monitoring alerts	Functions errors, Auth abuse, Firestore denied spikes, Storage failures.
+10. Local dirty files still need a decision
+
+Your earlier git status showed these uncommitted files:
+
+apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx
+apps/owner-app/src/pages/public/AuditorPortalPage.tsx
+src/broker/pages/BrokerReferralsPage.tsx
+
+They were not included in commit 18d080e.
+
+Before deploy, run:
+
+git status
+
+If they are still modified, either commit them or restore them.
+
+If intentional
+git add apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx apps/owner-app/src/pages/public/AuditorPortalPage.tsx src/broker/pages/BrokerReferralsPage.tsx
+git commit -m "Finalize dispute auditor and broker referral updates"
+git push origin main
+If accidental
+git restore apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx apps/owner-app/src/pages/public/AuditorPortalPage.tsx src/broker/pages/BrokerReferralsPage.tsx
+Final missing list
+Must fix / prove before public hard launch
+1. Enable Firebase Blaze billing.
+2. Set QR_SIGNING_SECRET successfully.
+3. Deploy app, admin, functions, Firestore rules, Storage rules, indexes.
+4. Confirm Deploy complete.
+5. Run live 5-profile smoke test.
+6. Confirm admin login after deploy.
+7. Confirm owner rent payment saves with server audit log.
+8. Confirm tenant ticket/photo workflow.
+9. Confirm technician before/after proof workflow.
+10. Confirm broker attribution and commission workflow.
+11. Confirm QR valid scan and revoked scan failure.
+12. Confirm auditor read-only audit access.
+13. Clean or commit remaining local modified files before deploy.
+Should add next, but not full-launch blockers
+1. Admin Launch Health widget.
+2. Admin 5-profile smoke status panel.
+3. Owner move-in vs move-out comparison UI.
+4. Owner handover action buttons directly on dashboard.
+5. Owner monthly PDF/CSV report.
+6. Tenant Simple Mode / More Services grouping.
+7. Technician geofence check-in.
+8. Technician parts/material request approval.
+9. Broker contract-level attribution lock.
+10. Broker attribution dispute workflow.
+11. WhatsApp webhook health panel.
+12. App Check enforcement dashboard proof.
+13. Backup and monitoring dashboard.
+14. Full Arabic visual QA across all profiles.
+Final hard-launch decision
+
+Codebase: GO for known P0/P1 blockers.
+Full public hard launch: NO-GO until Blaze billing, deploy success, and live smoke test.
+
+After those pass:
+
+GO for phased UAE public launch.

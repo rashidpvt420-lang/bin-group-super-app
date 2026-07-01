@@ -1,0 +1,2 @@
+- [App structure & routing quirks](app-structure.md) — live vs dead nav systems, legacy apps/ duplicates, how sub-apps mount, how to find genuine broken links.
+- [Firestore rules & indexes gotcha](firestore-rules-indexes.md) — new collections read by non-admins need a rules match block + composite indexes or they break only in production.

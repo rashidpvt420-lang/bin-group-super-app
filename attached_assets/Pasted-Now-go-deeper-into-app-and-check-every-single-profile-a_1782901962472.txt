@@ -1,0 +1,68 @@
+Now go deeper into app and check every single profile and check what is really missing now to add
+Verified commit 18d080e
+I verified commit 18d080ea40e2759c5ed2eff2e3794bc2b91a857c: “Fix owner audit logging and IBAN next-step route.”
+Both fixes landed correctly.
+What is now fixed
+1. Owner IBAN route fixed
+OwnerNextStepBanner.tsx now sends the IBAN action to:
+/owner/iban
+instead of the non-existent /owner/payouts.
+Status: GREEN.
+2. Client audit-log write removed
+OwnerDashboardResolvedPage.tsx no longer writes directly to:
+audit_logs
+from the browser. The commit replaces that direct setDoc(doc(db, 'audit_logs'...)) call with the callable:
+logUserAuditAction
+The callable exists in functions/userAuditOperations.ts, requires authentication, reads the actor role from Firestore, and writes the audit entry server-side using Admin SDK.
+Status: GREEN.
+Current hard-launch decision
+Codebase on GitHub main: GREEN for known P0/P1 blockers
+The last known blocker — client-side audit logging into immutable audit_logs — is fixed.
+Production hard launch: NO-GO until Blaze + deploy + smoke test
+The only remaining blocker is infrastructure/runtime proof:
+Firebase Blaze billing
+QR_SIGNING_SECRET set successfully
+Firebase deploy succeeds
+5-profile live production smoke test passes
+Important local warning before deploy
+Your git status showed three remaining uncommitted files:
+apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx
+apps/owner-app/src/pages/public/AuditorPortalPage.tsx
+src/broker/pages/BrokerReferralsPage.tsx
+These were not included in commit 18d080e.
+Before deploying from your laptop, do one of these:
+Option A — if those changes are intentional
+git add apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx apps/owner-app/src/pages/public/AuditorPortalPage.tsx src/broker/pages/BrokerReferralsPage.tsx
+git commit -m "Finalize dispute auditor and broker referral updates"
+git push origin main
+Option B — if those changes are accidental or experimental
+git restore apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx apps/owner-app/src/pages/public/AuditorPortalPage.tsx src/broker/pages/BrokerReferralsPage.tsx
+Do not deploy with a dirty working tree unless you are intentionally deploying uncommitted code.
+Final deploy sequence after Blaze is enabled
+git status
+npm run typecheck
+npm run build
+npm --prefix functions run build
+npm run test:rules
+firebase functions:secrets:set QR_SIGNING_SECRET
+firebase deploy --project bin-group-57c60 --only "hosting,functions,firestore:rules,storage,firestore:indexes"
+You need to see:
+Deploy complete!
+Final smoke test
+After deploy:
+1. Public homepage opens role-first funnel
+2. Admin login opens dashboard
+3. Owner dashboard opens
+4. Owner records rent payment and no audit-log permission error appears
+5. Tenant creates ticket with photo
+6. Technician accepts, arrives, uploads before/after proof, completes
+7. Tenant approves/disputes proof
+8. Owner sees ticket/payment/evidence
+9. Broker submits lead/referral
+10. Admin attributes broker lead and approves commission
+11. QR pass scans valid
+12. Revoked QR pass fails
+13. Auditor reads audit logs only
+Final verdict
+Code: GO.
+Public hard launch: GO only after Blaze billing, successful deploy, and live 5-profile smoke test.

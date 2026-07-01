@@ -99,7 +99,7 @@ export default function OwnerPropertiesPage() {
                                                 <Typography variant="caption" sx={{ fontWeight: 700 }}>{prop.emirate} · {prop.unitsCount || 0} Units</Typography>
                                             </Box>
                                         </Box>
-                                        <IconButton sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.1) }} onClick={() => navigate(`/owner/properties/${prop.id}`)}>
+                                        <IconButton sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.1) }} onClick={() => navigate(`/owner/property-passport/${prop.id}`)}>
                                             <ArrowUpRight size={20} />
                                         </IconButton>
                                     </Box>

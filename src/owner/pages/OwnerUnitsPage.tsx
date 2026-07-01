@@ -187,7 +187,7 @@ export default function OwnerUnitsPage() {
                                         </Stack>
                                     </TableCell>
                                     <TableCell align="right">
-                                        <IconButton size="small" sx={{ color: binThemeTokens.gold }} onClick={() => navigate(`/owner/properties/${unit.propertyId}`)}>
+                                        <IconButton size="small" sx={{ color: binThemeTokens.gold }} onClick={() => navigate(`/owner/property-passport/${unit.propertyId}`)}>
                                             <ChevronRight size={18} />
                                         </IconButton>
                                     </TableCell>

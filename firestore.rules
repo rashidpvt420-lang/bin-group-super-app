@@ -279,6 +279,7 @@ service cloud.firestore {
 
     function safeTicketMessageCreate(ticketId) {
       return canAccessMaintenanceTicket(ticketId) &&
+        (!('senderUid' in request.resource.data) || request.resource.data.senderUid == request.auth.uid) &&
         (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
         (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
         (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
@@ -1149,6 +1150,22 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
       allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Owner Payout Statements ──────────────────────────────────────────────
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || isFinance() || ownerCanRead(resource.data);
+      allow create: if isAdmin() || isFinance();
+      allow update: if isAdmin() || isFinance();
+      allow delete: if isAdmin();
+    }
+
+    // ── Technician Payout Ledger ─────────────────────────────────────────────
+    match /technicianPayouts/{payoutId} {
+      allow read: if isAdmin() || isFinance() || isTechnicianId(resource.data.technicianId);
+      allow create: if isAdmin() || isFinance();
+      allow update: if isAdmin() || isFinance();
       allow delete: if isAdmin();
     }
 

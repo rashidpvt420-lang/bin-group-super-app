@@ -40,6 +40,7 @@ import OwnerPLReportPage from './pages/OwnerPLReportPage';
 import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 import OwnerStatementsPage from './pages/OwnerStatementsPage';
+import OwnerChatPage from './pages/OwnerChatPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -156,6 +157,7 @@ export default function OwnerApp() {
                 <Route path="/complaint" element={<OwnerComplaintPage />} />
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
+                <Route path="/chat/:ticketId" element={<OwnerChatPage />} />
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />
                 <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
                 <Route path="/p-l-report" element={<OwnerPLReportPage />} />
