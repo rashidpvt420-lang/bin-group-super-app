@@ -272,7 +272,7 @@ export default function OwnerActivationPage() {
     setError(null);
     setSuccess(null);
     try {
-      const signContract = httpsCallable(functions, 'ownerSignContract');
+      const signContract = httpsCallable(functions, 'ownerSignContractAndQueuePdf');
       const result = await signContract({
         contractId: primaryContract.id,
         signatureName: signatureName.trim(),
