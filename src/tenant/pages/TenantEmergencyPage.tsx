@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Stack, Button, CircularProgress } from '@mui/material';
+import { Box, Typography, Paper, Stack, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, MapPin } from 'lucide-react';
 import { db, collection, addDoc, serverTimestamp, query, where, getDocs } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useToast } from '../../context/ToastContext';
 
 export default function TenantEmergencyPage() {
     const { user } = useRole();
@@ -13,6 +14,8 @@ export default function TenantEmergencyPage() {
     const [submitting, setSubmitting] = useState(false);
     const [unitData, setUnitData] = useState<any>(null);
     const [propertyData, setPropertyData] = useState<any>(null);
+    const { showToast } = useToast();
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     useEffect(() => {
         const fetchResidence = async () => {
@@ -34,8 +37,12 @@ export default function TenantEmergencyPage() {
         fetchResidence();
     }, [user]);
 
+    const triggerConfirm = () => {
+        setConfirmOpen(true);
+    };
+
     const handleEmergencyTrigger = async () => {
-        if (!window.confirm("Are you sure you want to trigger a Priority 1 Emergency SOS?")) return;
+        setConfirmOpen(false);
         if (!user || !unitData) return;
 
         setSubmitting(true);
@@ -62,7 +69,7 @@ export default function TenantEmergencyPage() {
             navigate(`/tenant/ticket/${docRef.id}`);
         } catch (err) {
             console.error(err);
-            alert("Failed to trigger SOS.");
+            showToast("Failed to trigger SOS. Please try again or call emergency support.", "error");
         } finally {
             setSubmitting(false);
         }
@@ -79,7 +86,7 @@ export default function TenantEmergencyPage() {
             <Button 
                 variant="contained" 
                 size="large" 
-                onClick={handleEmergencyTrigger}
+                onClick={triggerConfirm}
                 disabled={submitting || !unitData}
                 sx={{ 
                     bgcolor: '#ef4444', color: '#FFF', 
@@ -91,6 +98,17 @@ export default function TenantEmergencyPage() {
             >
                 {submitting ? <CircularProgress size={28} color="inherit" /> : (t('dash.tenant.triggerSos') || 'TRIGGER SOS DISPATCH')}
             </Button>
+
+            <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+                <DialogTitle>Confirm Emergency SOS</DialogTitle>
+                <DialogContent>
+                    <Typography>Are you sure you want to trigger a Priority 1 Emergency SOS?</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+                    <Button onClick={handleEmergencyTrigger} color="error" variant="contained">Trigger SOS</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

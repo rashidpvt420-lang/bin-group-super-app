@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import {
     Container, Paper, Typography, Box, Grid, Card,
-    Button, Divider, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, CircularProgress, Stack
+    Button, Divider, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, CircularProgress, Stack, Snackbar
 } from '@mui/material';
 import { ShieldCheck, Lock, Download, Bell, Activity, Database, Key } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
@@ -15,6 +15,7 @@ export default function AuditorPortalPage() {
     const { role, loading, user } = useRole();
     const navigate = useNavigate();
     const [generating, setGenerating] = useState(false);
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
 
     const [isReady, setIsReady] = useState(false);
     const [auditData, setAuditData] = useState<any[]>([]);
@@ -81,7 +82,7 @@ export default function AuditorPortalPage() {
         setGenerating(true);
         setTimeout(() => {
             setGenerating(false);
-            alert("Audit Bundle Generation restricted. Contact Federation HQ for secure key transfer.");
+            setSnackbarOpen(true);
         }, 1500);
     };
 
@@ -263,6 +264,16 @@ export default function AuditorPortalPage() {
                     <Lock size={14} /> SECURE AUDIT SESSION • END-TO-END ENCRYPTED (AES-256) • BIN-OS V1.19
                 </Typography>
             </Box>
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={6000}
+                onClose={() => setSnackbarOpen(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={() => setSnackbarOpen(false)} severity="error" sx={{ width: '100%', borderRadius: 3, fontWeight: 700 }}>
+                    Audit Bundle Generation restricted. Contact Federation HQ for secure key transfer.
+                </Alert>
+            </Snackbar>
         </Container>
     );
 }

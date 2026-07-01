@@ -178,6 +178,15 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                                 </Typography>
                             </Box>
                         )}
+
+                        {method === 'BANK_TRANSFER' && (
+                            <Box>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>Offline Bank Transfer Instruction</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
+                                    Proceed with manual wire transfer to the BIN GROUP corporate account. Upload the bank receipt in the next step.
+                                </Typography>
+                            </Box>
+                        )}
                     </Stack>
                 </Box>
             </Box>
@@ -308,6 +317,28 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                                         <Button
                                             variant="outlined"
                                             fullWidth
+                                            onClick={() => handleGenerateManifest('BANK_TRANSFER')}
+                                            disabled={isGenerating || !hasValidAmount}
+                                            sx={{
+                                                py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)',
+                                                color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
+                                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                                '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
+                                            }}
+                                        >
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                                <Banknote size={24} color={binThemeTokens.gold} />
+                                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                    <Typography fontWeight={700}>Offline Bank Transfer</Typography>
+                                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Manual Verification</Typography>
+                                                </Box>
+                                            </Box>
+                                            <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
+                                        </Button>
+
+                                        <Button
+                                            variant="outlined"
+                                            fullWidth
                                             onClick={() => handleGenerateManifest('STRIPE')}
                                             disabled={isGenerating || !hasValidAmount}
                                             sx={{
@@ -345,7 +376,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                                             {readable(t('onboarding.payment.initiation_desc'), 'Continue to upload proof and submit the package for admin verification.')}
                                         </Typography>
 
-                                        {(paymentMethod === 'CASH' || paymentMethod === 'CHEQUE') && (
+                                        {(paymentMethod === 'CASH' || paymentMethod === 'CHEQUE' || paymentMethod === 'BANK_TRANSFER') && (
                                             <Button
                                                 fullWidth
                                                 variant="contained"

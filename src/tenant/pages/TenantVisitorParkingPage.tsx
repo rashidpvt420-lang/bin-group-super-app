@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Snackbar, Alert } from '@mui/material';
 import { ShieldCheck, Plus, Clock, Trash2, Car, Calendar, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -23,6 +23,7 @@ export default function TenantVisitorParkingPage() {
   const [visitEndAt, setVisitEndAt] = useState('');
   const [unitId, setUnitId] = useState('');
   const [propertyId, setPropertyId] = useState('');
+  const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -113,7 +114,7 @@ export default function TenantVisitorParkingPage() {
       setVisitEndAt('');
     } catch (err) {
       console.error('Failed to create parking request:', err);
-      alert('Failed to request parking: ' + (err instanceof Error ? err.message : String(err)));
+      setSnackbar({ open: true, message: 'Failed to request parking: ' + (err instanceof Error ? err.message : String(err)), severity: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -127,7 +128,7 @@ export default function TenantVisitorParkingPage() {
       });
     } catch (err) {
       console.error('Failed to cancel request:', err);
-      alert('Failed to cancel request.');
+      setSnackbar({ open: true, message: 'Failed to cancel request.', severity: 'error' });
     }
   };
 
@@ -285,6 +286,11 @@ export default function TenantVisitorParkingPage() {
           </DialogActions>
         </form>
       </Dialog>
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%', borderRadius: 3 }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

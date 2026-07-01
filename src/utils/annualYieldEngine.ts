@@ -35,8 +35,8 @@ export function calculateAnnualYieldMetrics(data: PortfolioData) {
     // Here we use a standard ROI calculation based on net/gross
     const netIncome = totalCollected - totalCosts;
     
-    // Mocking an asset base value for ROI if not present (AED 1.5M average)
-    const estimatedAssetExposure = data.properties.length * 1500000;
+    // Calculate total actual asset value for ROI calculation
+    const estimatedAssetExposure = data.properties.reduce((sum, p) => sum + (p.purchasePrice || p.estimatedValue || p.value || 0), 0);
     const grossROI = estimatedAssetExposure > 0 ? (totalGVC / estimatedAssetExposure) * 100 : 0;
     const netROI = estimatedAssetExposure > 0 ? (netIncome / estimatedAssetExposure) * 100 : 0;
 
@@ -67,7 +67,7 @@ export function calculateAnnualYieldMetrics(data: PortfolioData) {
             renewalsProcessed,
             resolvedTickets,
             resolutionRate: parseFloat(resolutionRate.toFixed(1)),
-            avgVacancyDays: 14 // Mocked for now
+            avgVacancyDays: 0 // Default to 0 until actual vacancy tracking is implemented
         }
     };
 }

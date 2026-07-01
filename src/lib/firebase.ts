@@ -47,6 +47,7 @@ import {
   getCountFromServer,
   documentId,
   Timestamp,
+  enableIndexedDbPersistence,
   type Firestore,
   type DocumentData,
   type DocumentReference,
@@ -125,6 +126,14 @@ if (typeof window !== 'undefined') {
   void setPersistence(auth, browserLocalPersistence).catch((error) => {
     console.warn('[Firebase] Auth persistence setup failed. Continuing with SDK default persistence:', error);
   });
+
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+        console.warn('[Firebase] Multiple tabs open, persistence can only be enabled in one tab at a time.');
+    } else if (err.code === 'unimplemented') {
+        console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
+    }
+  });
 }
 
 export const storage: FirebaseStorage = getStorage(app);
@@ -195,6 +204,7 @@ export {
   getCountFromServer,
   documentId,
   Timestamp,
+  enableIndexedDbPersistence,
   // Storage
   ref,
   uploadBytes,

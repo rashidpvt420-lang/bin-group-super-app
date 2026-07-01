@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha } from '@mui/material';
+import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, Snackbar, Alert } from '@mui/material';
 import { Package, CheckCircle, Clock, Truck, FileCheck2, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
@@ -12,6 +12,7 @@ export default function TenantParcelsPage() {
   const { user } = useRole();
   const [loading, setLoading] = useState(true);
   const [parcels, setParcels] = useState<any[]>([]);
+  const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -48,7 +49,7 @@ export default function TenantParcelsPage() {
       });
     } catch (err) {
       console.error('Failed to confirm collection:', err);
-      alert('Error confirming collection: ' + (err instanceof Error ? err.message : String(err)));
+      setSnackbar({ open: true, message: 'Error confirming collection: ' + (err instanceof Error ? err.message : String(err)), severity: 'error' });
     }
   };
 
@@ -173,6 +174,11 @@ export default function TenantParcelsPage() {
           </Typography>
         </Paper>
       )}
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%', borderRadius: 3 }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

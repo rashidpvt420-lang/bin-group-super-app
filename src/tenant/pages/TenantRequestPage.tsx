@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Button, TextField,
     Select, MenuItem, FormControl, InputLabel, CircularProgress,
-    IconButton, alpha
+    IconButton, alpha, Snackbar, Alert
 } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, AlertCircle, ChevronLeft } from 'lucide-react';
@@ -61,6 +61,7 @@ export default function TenantRequestPage() {
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
+    const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
 
     useEffect(() => {
         const fetchResidence = async () => {
@@ -107,92 +108,6 @@ export default function TenantRequestPage() {
         const nextCategory = normalizeCategoryPrefill(searchParams.get('category'));
         if (nextCategory) setCategory(nextCategory);
     }, [searchParams]);
-
-    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const filesArray = Array.from(e.target.files).slice(0, Math.max(5 - photos.length, 0));
-            setPhotos(prev => [...prev, ...filesArray].slice(0, 5));
-            const newPreviews = filesArray.map(file => URL.createObjectURL(file));
-            setPreviews(prev => [...prev, ...newPreviews].slice(0, 5));
-        }
-    };
-
-    const removePhoto = (index: number) => {
-        setPhotos(prev => prev.filter((_, i) => i !== index));
-        setPreviews(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const uploadPhotosToStorage = async (ticketId: string): Promise<string[]> => {
-        if (photos.length === 0) throw new Error('At least one photo is required before dispatch.');
-        const photoUrls: string[] = [];
-        const timestamp = Date.now();
-
-        try {
-            for (let i = 0; i < photos.length; i++) {
-                const file = photos[i];
-                const fileName = `${timestamp}_${i + 1}_${sanitizeStorageFileName(file.name)}`;
-                const storagePath = `maintenanceTickets/${ticketId}/tenant/${fileName}`;
-                const fileRef = ref(storage, storagePath);
-
-                await uploadBytes(fileRef, file, {
-                    contentType: file.type || 'image/jpeg',
-                    customMetadata: {
-                        ticketId,
-                        uploadedBy: user?.uid || '',
-                        evidenceRole: 'tenant',
-                    },
-                });
-
-                photoUrls.push(await getDownloadURL(fileRef));
-            }
-        } catch (err) {
-            console.error('Photo upload failed:', err);
-            throw new Error('Failed to upload evidence photos to secure ticket storage.');
-        }
-
-        return photoUrls;
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const cleanLocation = specificLocation.trim();
-        if (!user || !unitData) {
-            alert('No property assigned. Cannot create request.');
-            return;
-        }
-        if (cleanLocation.length < 3) {
-            alert('Please enter the exact service location, for example: Kitchen sink, Master bedroom AC, Bathroom ceiling.');
-            return;
-        }
-        if (photos.length === 0) {
-            alert('Please attach at least one photo before submitting. Photo evidence is required for dispatch.');
-            return;
-        }
-
-        const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
-        const jobLocation = locationSource ? {
-            lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-            lng: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-            latitude: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-            longitude: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-            address: propertyData?.address || propertyData?.locationAddress || '',
-            source: 'property',
-        } : null;
-
-        if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
-            alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
-            return;
-        }
-
-        if (!unitData.propertyId) {
-            alert('Property ID is missing. Cannot create request.');
-            return;
-        }
-
-        setSubmitting(true);
-        let createdTicketId = '';
-        try {
-            const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
                 requesterRole: 'tenant',
                 tenantId: user.uid,
                 tenantUid: user.uid,
@@ -263,7 +178,7 @@ export default function TenantRequestPage() {
                     updatedAt: serverTimestamp(),
                 }).catch(console.warn);
             }
-            alert('Failed to submit request: ' + (err instanceof Error ? err.message : String(err)));
+            setSnackbar({ open: true, message: 'Failed to submit request: ' + (err instanceof Error ? err.message : String(err)), severity: 'error' });
         } finally {
             setSubmitting(false);
             setUploadingPhotos(false);
@@ -362,6 +277,11 @@ export default function TenantRequestPage() {
                 </form>
             </Paper>
             )}
+            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%', borderRadius: 3 }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }

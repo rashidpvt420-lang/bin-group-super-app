@@ -136,9 +136,9 @@ export default function PropertyUnitsPage() {
                                         const unitTickets = tickets.filter(t => t.unitId === unit.id);
                                         const latestTicket = unitTickets[0];
                                         
-                                        // Mock PM Data if not provided (for demonstration of PM flow)
-                                        const expectedRent = (unit as any).expectedRent || Math.floor(Math.random() * 50000) + 50000;
-                                        const collected = (unit as any).collectedRent || (unit.occupancyStatus === 'OCCUPIED' ? expectedRent : 0);
+                                        // Use actual PM data, default to 0 if not provided
+                                        const expectedRent = (unit as any).expectedRent || 0;
+                                        const collected = (unit as any).collectedRent || 0;
                                         const balance = expectedRent - collected;
 
                                         return (

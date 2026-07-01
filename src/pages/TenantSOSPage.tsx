@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Box, TextField, Button, 
     Paper, Grid, MenuItem, Select, InputLabel, FormControl, 
-    Stack, Alert, CircularProgress, Chip, Divider, alpha
+    Stack, Alert, CircularProgress, Chip, Divider, alpha,
+    Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -20,6 +21,7 @@ import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../utils/geoAnchor';
 import { CeoContactButtons } from '../components/CeoContactButtons';
 import { logAuditAction } from '@bin/shared';
+import { useToast } from '../context/ToastContext';
 
 interface UnitData {
     id: string;
@@ -38,6 +40,8 @@ export default function TenantSOSPage() {
     const navigate = useNavigate();
     const { user, propertyId: sessionPropertyId } = useRole();
     const { setPageContext } = useAI();
+    const { showToast } = useToast();
+    const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
     const [category, setCategory] = useState('');
     const [description, setDescription] = useState('');
     const [preferredTiming, setPreferredTiming] = useState('');
@@ -230,43 +234,51 @@ export default function TenantSOSPage() {
 
     const handleRequestMoveOut = async () => {
         if (!unitData || unitData.id === 'UNASSOCIATED') {
-            alert("Move-out unavailable until tenancy record is fully linked.");
+            showToast("Move-out unavailable until tenancy record is fully linked.", "error");
             return;
         }
-        if (!window.confirm("Initialize Move-Out Protocol? This will notify your owner and property management team.")) return;
-
-        setRequestingMoveOut(true);
-        try {
-            await addDoc(collection(db, 'move_out_requests'), {
-                companyId: 'BIN_GROUP',
-                userId: user?.uid,
-                tenantId: user?.uid,
-                tenantName: user?.displayName,
-                propertyId: unitData.propertyId,
-                propertyName: propertyData?.name || propertyData?.propertyName,
-                unitId: unitData.id,
-                unitNumber: unitData.unitNumber,
-                status: 'REQUESTED',
-                checklistStatus: 'PENDING_INSPECTION',
-                readinessStatus: 'MOVE_OUT_REVIEW_REQUIRED',
-                requiredChecklist: {
-                    keysReturned: false,
-                    accessCardsReturned: false,
-                    utilityFinalBillUploaded: false,
-                    photosAfterMoveOut: false,
-                    meterReadingsCaptured: false,
-                    tenantSignature: false,
-                    adminSignature: false
-                },
-                auditVersion: 1,
-                createdAt: serverTimestamp(),
-            });
-            alert("Move-out request submitted. Our team will review your clearance certificates.");
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setRequestingMoveOut(false);
-        }
+        
+        setConfirmDialog({
+            open: true,
+            title: "Initialize Move-Out Protocol?",
+            message: "This will notify your owner and property management team.",
+            onConfirm: async () => {
+                setConfirmDialog(null);
+                setRequestingMoveOut(true);
+                try {
+                    await addDoc(collection(db, 'move_out_requests'), {
+                        companyId: 'BIN_GROUP',
+                        userId: user?.uid,
+                        tenantId: user?.uid,
+                        tenantName: user?.displayName,
+                        propertyId: unitData.propertyId,
+                        propertyName: propertyData?.name || propertyData?.propertyName,
+                        unitId: unitData.id,
+                        unitNumber: unitData.unitNumber,
+                        status: 'REQUESTED',
+                        checklistStatus: 'PENDING_INSPECTION',
+                        readinessStatus: 'MOVE_OUT_REVIEW_REQUIRED',
+                        requiredChecklist: {
+                            keysReturned: false,
+                            accessCardsReturned: false,
+                            utilityFinalBillUploaded: false,
+                            photosAfterMoveOut: false,
+                            meterReadingsCaptured: false,
+                            tenantSignature: false,
+                            adminSignature: false
+                        },
+                        auditVersion: 1,
+                        createdAt: serverTimestamp(),
+                    });
+                    showToast("Move-out request submitted. Our team will review your clearance certificates.", "success");
+                } catch (err) {
+                    console.error(err);
+                    showToast("Failed to submit move-out request.", "error");
+                } finally {
+                    setRequestingMoveOut(false);
+                }
+            }
+        });
     };
 
     const isPMEnabled = propertyData?.contractType === 'pm_only' || propertyData?.contractType === 'hybrid';
@@ -373,7 +385,7 @@ export default function TenantSOSPage() {
         
         // 🚨 STRICT RELATIONAL ENFORCEMENT
         if (!unitData || !unitData.propertyId) {
-            alert("Sovereign Protocol Violation: Your account is not currently linked to a verified asset node. Mission dispatch aborted.");
+            showToast("Sovereign Protocol Violation: Your account is not currently linked to a verified asset node. Mission dispatch aborted.", "error");
             return;
         }
 
@@ -810,6 +822,16 @@ export default function TenantSOSPage() {
                     <CeoContactButtons />
                 </Box>
             </Box>
+            <Dialog open={!!confirmDialog?.open} onClose={() => setConfirmDialog(null)}>
+                <DialogTitle>{confirmDialog?.title}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>{confirmDialog?.message}</DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDialog(null)} color="inherit" sx={{ fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={() => confirmDialog?.onConfirm()} color="primary" variant="contained" sx={{ fontWeight: 900 }}>Confirm</Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }
