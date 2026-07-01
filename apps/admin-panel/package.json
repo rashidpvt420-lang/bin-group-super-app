@@ -69,5 +69,19 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "axios-mock-adapter": "^2.1.0"
+  },
+  "overrides": {
+    "dompurify": "^3.4.11",
+    "form-data": "^4.0.6",
+    "uuid": "^11.1.1",
+    "js-yaml": "^3.15.0",
+    "underscore": "^1.13.8",
+    "serialize-javascript": "^7.0.5",
+    "nth-check": "^2.1.1",
+    "webpack-dev-server": "^5.2.5",
+    "http-proxy-middleware": "^2.0.10",
+    "brace-expansion": "^2.0.2",
+    "protobufjs": "^7.6.4",
+    "@tootallnate/once": "^2.0.1"
   }
 }

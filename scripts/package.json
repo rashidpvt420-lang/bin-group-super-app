@@ -3,6 +3,6 @@
     "version": "1.0.0",
     "dependencies": {
         "csv-parser": "^3.0.0",
-        "firebase-admin": "^11.0.0"
+        "firebase-admin": "^13.10.0"
     }
 }
